@@ -1,10 +1,10 @@
 import cv2
 import numpy
 
-from aligner import Aligner
-from model import autoencoder_A
-from model import autoencoder_B
-from model import encoder, decoder_A, decoder_B
+from .aligner import Aligner
+from .model import autoencoder_A
+from .model import autoencoder_B
+from .model import encoder, decoder_A, decoder_B
 
 encoder  .load_weights( "models/encoder.h5"   )
 decoder_A.load_weights( "models/decoder_A.h5" )
