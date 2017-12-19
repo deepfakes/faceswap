@@ -18,3 +18,12 @@ RUN pip --no-cache-dir install \
     pathlib \
     scandir \
     h5py
+
+RUN apt-get install -y \
+    cmake \
+    libboost-all-dev
+
+RUN pip --no-cache-dir install \
+    scikit-image \
+    # boost \
+    dlib
