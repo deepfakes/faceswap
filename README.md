@@ -65,3 +65,10 @@ You also need a modern GPU with CUDA support for best performance
 
 Reuse existing models will train much faster than start from nothing.  
 If there are not enough training data, start with someone looks similar, then switch the data.
+
+#### Docker
+If you prefer using Docker, You can start the project with:
+ - Build: `docker build -t deepfakes .`
+ - Run: `docker run --rm --name deepfakes -v [src_folder]:/srv -it deepfakes bash` . `bash` can be replaced by your command line 
+Note that the Dockerfile does not have all good requirments, so it will fail on some python 3 commands.
+Also note that it does not have a GUI output, so the train.py will fail on showing image. You can comment this, or save it as a file.
