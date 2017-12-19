@@ -2,13 +2,12 @@ import cv2
 import numpy
 from pathlib import Path
 
-from utils import get_image_paths
-from faces_detect import crop_faces
+from lib.utils import get_image_paths, get_folder
+from lib.faces_detect import crop_faces
 
-images_SRC = get_image_paths( "src" )
+output_dir = get_folder( 'extract' )
 
-output_dir = Path( 'extract' )
-output_dir.mkdir( parents=True, exist_ok=True )
+images_SRC = get_image_paths( 'src' )
 
 for fn in images_SRC:
     image = cv2.imread(fn)
