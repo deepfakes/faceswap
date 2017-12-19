@@ -1,5 +1,8 @@
 This is the code from [deepfakes' faceswap project](https://www.reddit.com/user/deepfakes/).
 
+**Notice** this is NOT the repo of reddit.com/user/deepfakes . This is a purposely created repo/user for this project.
+(If deepfakes want to take ownership of this repo he is welcomed to do so. (Just raise an issue))
+
 # deepfakes_faceswap
 You'll find here the code for the project. The original code is in the first commits of the master.
 
