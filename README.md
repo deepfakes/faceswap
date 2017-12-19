@@ -1,10 +1,13 @@
 This is the code from [deepfakes' faceswap project](https://www.reddit.com/user/deepfakes/).
 
-**Notice** this is NOT the repo of reddit.com/user/deepfakes . This is a purposely created repo/user for this project.
-(If deepfakes want to take ownership of this repo he is welcomed to do so. (Just raise an issue))
+---
+**Important Notice** this is NOT the repo of https://reddit.com/user/deepfakes . This is a repo/user created on for this project.
+(If deepfakes want to take ownership of this repo he is welcomed to do so. (Simply raise an issue))
+---
 
 # deepfakes_faceswap
 You'll find here the code for the project. The original code is in the first commits of the master.
+Follow new features here: https://github.com/deepfakes/faceswap/projects/1
 
 ## How to contribute
 
@@ -15,7 +18,7 @@ You'll find here the code for the project. The original code is in the first com
  - Play with it
  - Check issues with the 'dev' tag
  
-### For command-line aware contributors
+### For non-dev advanced users
  - Read this README entirely
  - Clone the repo
  - Download the data with the link provided below
@@ -27,7 +30,7 @@ Sadly the project is not yet ready to use for non technical people, it will impr
 What you can do for now is collect the photos you want to see processed and shere them with others. Submit them with a comment [here](https://github.com/deepfakes/faceswap/issues/1)
 
 ### For haters
-Sorry no time for you
+Sorry no time for that
 
 ## Overview
 The project has multiple entry points. You will have to:
