@@ -39,9 +39,7 @@ def show_sample( test_A, test_B ):
 
     figure = numpy.clip( figure * 255, 0, 255 ).astype('uint8')
 
-    cv2.imshow( '', figure )
-    # If run from Docker, imshow won't work. Use:
-    # cv2.imwrite( '_sample.jpg', figure )
+    cv2.imwrite( '_sample.jpg', figure )
 
 images_A = get_image_paths( 'data/trump' )
 images_B = get_image_paths( 'data/cage'  )
