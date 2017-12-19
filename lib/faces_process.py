@@ -14,7 +14,7 @@ autoencoder = autoencoder_B
 
 # landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 # unzip it in the same folder as the main scripts
-aligner = Aligner("shape_predictor_68_face_landmarks.dat")
+aligner = Aligner("shape_predictor_68_face_landmarks.dat","mmod_human_face_detector.dat")
 
 def convert_one_image( image ):
     assert image.shape == (256,256,3)

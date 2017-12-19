@@ -7,19 +7,19 @@ import dlib
 import numpy as np
 
 class Aligner:
-    def __init__(self, pred):
-        self.detector = dlib.get_frontal_face_detector()
+    def __init__(self, pred, detect):
+        self.detector = dlib.cnn_face_detection_model_v1(detect)
         self.predictor = dlib.shape_predictor(pred)
 
     def get_rects(self, img):
-        rects = self.detector(img)
+        rects = self.detector(img, 1)
         #print("[+] Number of faces found:", len(rects))
         return rects
 
     def get_first_rect(self, img):
         rects = self.get_rects(img)
         if len(rects) > 0:
-            return rects[0]
+            return rects[0].rect
         else:
             return None
 
@@ -62,6 +62,7 @@ class Aligner:
         return output_im
 
     def align(self, ref_img, img):
+        # TODO optimize with a one step detection for both images
         ref_rect = self.get_first_rect(ref_img)
         if ref_rect is None:
             return None
