@@ -1,7 +1,7 @@
 This is the code from [deepfakes' faceswap project](https://www.reddit.com/user/deepfakes/).
 
 ---
-**Important Notice** this is NOT the repo of https://reddit.com/user/deepfakes . This is a repo/user created on for this project.
+**Important Notice** this is NOT the repo of https://reddit.com/user/deepfakes . This is a repo/user created on purpose for this project.
 (If deepfakes want to take ownership of this repo he is welcomed to do so. (Simply raise an issue))
 ---
 
