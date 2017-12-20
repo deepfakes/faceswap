@@ -1,9 +1,16 @@
 import cv2
 import numpy
+import argparse
 import os
 
 from pathlib import Path
 from scandir import scandir
+
+
+class FullPaths(argparse.Action):
+    """Expand user- and relative-paths"""
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, os.path.abspath(os.path.expanduser(values)))
 
 
 def get_folder(path):
