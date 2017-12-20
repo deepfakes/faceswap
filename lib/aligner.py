@@ -13,7 +13,7 @@ class Aligner:
 
     def get_rects(self, img):
         rects = self.detector(img, 1)
-        #print("[+] Number of faces found:", len(rects))
+        # print("[+] Number of faces found:", len(rects))
         return rects
 
     def get_first_rect(self, img):
