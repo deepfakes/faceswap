@@ -88,3 +88,10 @@ ENV/
 env.bak/
 venv.bak/
 
+data/
+extract/
+models/
+modified/
+original/
+output/
+src/

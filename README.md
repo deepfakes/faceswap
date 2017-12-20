@@ -1,4 +1,10 @@
-This is the code from [deepfakes' faceswap project](https://www.reddit.com/user/deepfakes/).
+The code here is a rework of [deepfakes' faceswap project](https://www.reddit.com/user/deepfakes/).
+
+---
+**Important Notice** this is a NON-OFFICIAL repo! It is maintained by actively involved fan of the project.
+
+If you want to know more about github.com/deepfakes, please look at the section at the end of the file
+---
 
 ---
 **Important Notice** this is NOT the repo of https://reddit.com/user/deepfakes . This is a repo/user created on purpose for this project.
@@ -11,12 +17,16 @@ Follow new features here: https://github.com/deepfakes/faceswap/projects/1
 
 ## How to contribute
 
+### For people interested in the generative models
+ - Go to the 'faceswap-model' to discuss/suggest/commit alternatives to the current algorithm.
+
 ### For devs
  - Read this README entirely
  - Fork the repo
  - Download the data with the link provided below
  - Play with it
  - Check issues with the 'dev' tag
+ - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvments
  
 ### For non-dev advanced users
  - Read this README entirely
@@ -24,10 +34,12 @@ Follow new features here: https://github.com/deepfakes/faceswap/projects/1
  - Download the data with the link provided below
  - Play with it
  - Check issues with the 'advuser' tag
- 
+ - Also go to the 'faceswap-playground' repo and help others.
+
 ### For end-users
-Sadly the project is not yet ready to use for non technical people, it will improve over time, so check for updates regularly and discuss with other.
-What you can do for now is collect the photos you want to see processed and shere them with others. Submit them with a comment [here](https://github.com/deepfakes/faceswap/issues/1)
+ - Get the code here and play with it if you can
+ - You can also go to the 'faceswap-playground' repo and help or get help from others.
+ - **Notice** Any issue related to running the code has to be open in the 'faceswap-playground' project!
 
 ### For haters
 Sorry no time for that
@@ -78,3 +90,19 @@ If you prefer using Docker, You can start the project with:
  - Run: `docker run --rm --name deepfakes -v [src_folder]:/srv -it deepfakes bash` . `bash` can be replaced by your command line 
 Note that the Dockerfile does not have all good requirments, so it will fail on some python 3 commands.
 Also note that it does not have a GUI output, so the train.py will fail on showing image. You can comment this, or save it as a file.
+
+# About github.com/deepfakes
+
+## What is this repo?
+It is a fan-made repo for active users.
+
+## Why this repo?
+The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front of url has not been solved since days.
+
+## Why is it named 'deepfakes' if it is not /u/deepfakes?
+ 1. Because a typosquat would have happened sooner or later as project grows
+ 2. Because all glory go to /u/deepfakes
+ 3. Because it will better federate contributors and users
+ 
+## What if /u/deepfakes feels bad about that?
+This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit).
