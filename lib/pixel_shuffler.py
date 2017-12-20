@@ -6,6 +6,7 @@ from keras.utils import conv_utils
 from keras.engine.topology import Layer
 import keras.backend as K
 
+
 class PixelShuffler(Layer):
     def __init__(self, size=(2, 2), data_format=None, **kwargs):
         super(PixelShuffler, self).__init__(**kwargs)

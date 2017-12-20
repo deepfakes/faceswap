@@ -12,7 +12,8 @@
 
 import numpy as np
 
-def umeyama( src, dst, estimate_scale ):
+
+def umeyama(src, dst, estimate_scale):
     """Estimate N-D similarity transformation with or without scaling.
     Parameters
     ----------
@@ -81,4 +82,3 @@ def umeyama( src, dst, estimate_scale ):
     T[:dim, :dim] *= scale
 
     return T
-
