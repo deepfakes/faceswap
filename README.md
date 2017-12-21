@@ -6,11 +6,6 @@ The code here is a rework of [deepfakes' faceswap project](https://www.reddit.co
 If you want to know more about github.com/deepfakes, please look at the section at the end of the file
 ---
 
----
-**Important Notice** this is NOT the repo of https://reddit.com/user/deepfakes . This is a repo/user created on purpose for this project.
-(If deepfakes want to take ownership of this repo he is welcomed to do so. (Simply raise an issue))
----
-
 # deepfakes_faceswap
 You'll find here the code for the project. The original code is in the first commits of the master.
 Follow new features here: https://github.com/deepfakes/faceswap/projects/1
