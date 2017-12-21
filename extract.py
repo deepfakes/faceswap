@@ -49,20 +49,20 @@ for fn in images_SRC:
 
     try:
         image = cv2.imread(fn)
-        for (idx, (p1, p2, img)) in enumerate(crop_faces(image)):
+        for (idx, face) in enumerate(crop_faces(image)):
             if idx > 0 and arguments.verbose:
                 print('- Found more than one face!')
                 verify_output = True
 
             # resize and save
-            final = cv2.resize(img, (256, 256))
+            final = cv2.resize(face.image, (256, 256))
             output_file = output_dir / Path(fn).stem
             cv2.imwrite(str(output_file) + str(idx) + Path(fn).suffix, final)
             faces_detected = faces_detected + 1
 
         images_processed = images_processed + 1
     except Exception as e:
-        print('Failed to extract from image: {}' . fn)
+        print('Failed to extract from image: {}. reason: {}'.format(fn,e))
 
 print('-------------------------')
 print('Images found:        {}'.format(images_found))
