@@ -1,5 +1,5 @@
 import cv2
-from lib.cli import DirectoryProcessor
+from lib.cli import DirectoryProcessor, FullPaths
 from pathlib import Path
 from lib.faces_process import convert_one_image
 from lib.faces_detect import crop_faces
@@ -7,6 +7,15 @@ from lib.faces_detect import crop_faces
 
 class ConvertImage(DirectoryProcessor):
     filename = ''
+
+    def add_optional_arguments(self, parser):
+        parser.add_argument('-m', '--model-dir',
+                            action=FullPaths,
+                            dest="model_dir",
+                            default="models",
+                            help="Model directory. A directory containing the trained model \
+                    you wish to process. Defaults to 'models'")
+        return parser
 
     def process_image(self, filename):
         try:
@@ -16,7 +25,7 @@ class ConvertImage(DirectoryProcessor):
                     print('- Found more than one face!')
                     self.verify_output = True
 
-                new_face = convert_one_image(cv2.resize(face.image, (256, 256)))
+                new_face = convert_one_image(cv2.resize(face.image, (256, 256)), self.arguments.model_dir)
                 image[slice(face.y, face.y + face.h), slice(face.x, face.x + face.w)] = cv2.resize(new_face, (face.w, face.h))
                 self.faces_detected = self.faces_detected + 1
             output_file = self.output_dir / Path(filename).name

@@ -12,7 +12,7 @@ class FullPaths(argparse.Action):
         setattr(namespace, self.dest, os.path.abspath(os.path.expanduser(values)))
 
 
-class DirectoryProcessor():
+class DirectoryProcessor(object):
     '''
     Abstract class that processes a directory of images
     and writes output to the specified folder
