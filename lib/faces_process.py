@@ -6,18 +6,19 @@ from .model import autoencoder_A
 from .model import autoencoder_B
 from .model import encoder, decoder_A, decoder_B
 
-encoder.load_weights("models/encoder.h5")
-decoder_A.load_weights("models/decoder_A.h5")
-decoder_B.load_weights("models/decoder_B.h5")
 
-autoencoder = autoencoder_B
+def convert_one_image(image, model_dir="models"):
 
-# landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
-# unzip it in the same folder as the main scripts
-aligner = Aligner("shape_predictor_68_face_landmarks.dat", "mmod_human_face_detector.dat")
+    encoder.load_weights(model_dir + "/encoder.h5")
+    decoder_A.load_weights(model_dir + "/decoder_A.h5")
+    decoder_B.load_weights(model_dir + "/decoder_B.h5")
 
+    autoencoder = autoencoder_B
 
-def convert_one_image(image):
+    # landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
+    # unzip it in the same folder as the main scripts
+    aligner = Aligner("shape_predictor_68_face_landmarks.dat", "mmod_human_face_detector.dat")
+
     assert image.shape == (256, 256, 3)
     crop = slice(48, 208)
     face = image[crop, crop]
