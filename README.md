@@ -53,9 +53,12 @@ From your setup folder, run `python extract.py`. This will take photos from `src
 From your setup folder, run `python train.py`. This will take photos from `data/trump` and `data/cage` folder and train a model that will be saved inside the `models` folder.
 
 ### Convert
-From your setup folder, run `python convert_photo.py`. This will take photos from `original` folder and apply new faces into `modified` folder.
+From your setup folder, run `python convert.py`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
-Note: there is no conversion for video yet. You can use MJPG to convert video into photos,, process images, and convert images back to video
+#### General notes:
+- All of the scripts mentioned have `-h`/`--help` options with a arguments that they will accept. You're smart, you can figure out how this works, right?!
+
+Note: there is no conversion for video yet. You can use MJPG to convert video into photos, process images, and convert images back to video
 
 ## Training Data  
 **Whole project with training images and trained model (~300MB):**  
@@ -101,3 +104,15 @@ The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front
  
 ## What if /u/deepfakes feels bad about that?
 This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit).
+
+# About machine learning
+
+## How does a computer know how to recognise/shape a faces? How does machine learning work? What is a neural network?
+
+It's complicated. Here's a good video that makes the process understandable:
+[!How Machines Learn](https://img.youtube.com/vi/R9OHn5ZF4Uo/0.jpg)](https://www.youtube.com/watch?v=R9OHn5ZF4Uo)
+
+Here's a slightly more in depth video that tries to explain the basic functioning of a neural network:
+[!How Machines Learn](https://img.youtube.com/vi/aircAruvnKk/0.jpg)](https://www.youtube.com/watch?v=aircAruvnKk)
+
+tl;dr: training data + trial and error
