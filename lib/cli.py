@@ -37,6 +37,7 @@ class TrainingProcessor(object):
             decoder_B.load_weights(self.arguments.model_dir + '/decoder_B.h5')
         except Exception as e:
             print('Not loading existing training data.')
+            print(e)
 
         self.process()
 
@@ -62,7 +63,7 @@ class TrainingProcessor(object):
         parser.add_argument('-m', '--model-dir',
                             action=FullPaths,
                             dest="model_dir",
-                            default="model",
+                            default="models",
                             help="Model directory. This is where the training data will \
                                 be stored. Defaults to 'model'")
         parser.add_argument('-p', '--preview',
@@ -113,8 +114,8 @@ class TrainingProcessor(object):
             cv2.imwrite('_sample.jpg', figure)
 
     def process(self):
-        images_A = get_image_paths(self.arguments.images_A)
-        images_B = get_image_paths(self.arguments.images_B)
+        images_A = get_image_paths(self.arguments.input_A)
+        images_B = get_image_paths(self.arguments.input_B)
         images_A = load_images(images_A) / 255.0
         images_B = load_images(images_B) / 255.0
 
