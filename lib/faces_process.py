@@ -6,7 +6,6 @@ from .model import autoencoder_A
 from .model import autoencoder_B
 from .model import encoder, decoder_A, decoder_B
 
-
 def convert_one_image(image, model_dir="models"):
 
     encoder.load_weights(model_dir + "/encoder.h5")
@@ -27,12 +26,13 @@ def convert_one_image(image, model_dir="models"):
     new_face = autoencoder.predict(face / 255.0)[0]
     new_face = numpy.clip(new_face * 255, 0, 255).astype(image.dtype)
     new_face = cv2.resize(new_face, (160, 160))
-    result = aligner.align(image.copy(), new_face)
-    if result is None:
-        return superpose(image, new_face, crop)
-    else:
-        return result
-
+    return superpose(image, new_face, crop)
+    # Aligner is not ready to use yet
+    # result = aligner.align(image.copy(), new_face)
+    # if result is None:
+    #     return superpose(image, new_face, crop)
+    # else:
+    #     return result
 
 def superpose(image, new_face, crop):
     new_image = image.copy()
