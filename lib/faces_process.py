@@ -18,7 +18,7 @@ def convert_one_image(image, model_dir="models"):
     
     shapePredictor = "contrib/shape_predictor_68_face_landmarks.dat"
     humanFaceDetector = "contrib/mmod_human_face_detector.dat"
-    if not os.path.isfile(shapePredictor):
+    if not os.path.exists(shapePredictor):
         print("{} file not found.\n"
               "Landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2"
               "\nUnzip it in the contrib/ folder.".format(shapePredictor))
