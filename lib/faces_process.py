@@ -1,10 +1,12 @@
 import cv2
 import numpy
+import os
 
 from .aligner import Aligner
 from .model import autoencoder_A
 from .model import autoencoder_B
 from .model import encoder, decoder_A, decoder_B
+
 
 def convert_one_image(image, model_dir="models"):
 
@@ -13,10 +15,15 @@ def convert_one_image(image, model_dir="models"):
     decoder_B.load_weights(model_dir + "/decoder_B.h5")
 
     autoencoder = autoencoder_B
-
-    # landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
-    # unzip it in the same folder as the main scripts
-    aligner = Aligner("contrib/shape_predictor_68_face_landmarks.dat", "contrib/mmod_human_face_detector.dat")
+    
+    shapePredictor = "contrib/shape_predictor_68_face_landmarks.dat"
+    humanFaceDetector = "contrib/mmod_human_face_detector.dat"
+    if not os.path.exists(shapePredictor):
+        print("{} file not found.\n"
+              "Landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2"
+              "\nUnzip it in the contrib/ folder.".format(shapePredictor))
+        return
+    aligner = Aligner(shapePredictor, humanFaceDetector)
 
     assert image.shape == (256, 256, 3)
     crop = slice(48, 208)
@@ -33,6 +40,7 @@ def convert_one_image(image, model_dir="models"):
     #     return superpose(image, new_face, crop)
     # else:
     #     return result
+
 
 def superpose(image, new_face, crop):
     new_image = image.copy()
