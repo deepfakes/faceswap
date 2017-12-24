@@ -5,3 +5,4 @@
 !Dockerfile*
 !requirements*
 !lib/*.py
+!scripts
