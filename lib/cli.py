@@ -22,10 +22,12 @@ class FullPaths(argparse.Action):
 class TrainingProcessor(object):
     arguments = None
 
-    def __init__(self, description='default'):
+    def __init__(self, subparser, command, description='default'):
         print('Initializing')
-        self.parse_arguments(description)
+        self.parse_arguments(description, subparser, command)
 
+    def process_arguments(self, arguments):
+        self.arguments = arguments
         print("Model A Directory: {}".format(self.arguments.input_A))
         print("Model B Directory: {}".format(self.arguments.input_B))
         print("Training data directory: {}".format(self.arguments.model_dir))
@@ -41,8 +43,9 @@ class TrainingProcessor(object):
 
         self.process()
 
-    def parse_arguments(self, description):
-        parser = argparse.ArgumentParser(
+    def parse_arguments(self, description, subparser, command):
+        parser = subparser.add_parser(
+            command,
             description=description,
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground"
@@ -78,7 +81,7 @@ class TrainingProcessor(object):
                             default=False,
                             help="Show verbose output")
         parser = self.add_optional_arguments(parser)
-        self.arguments = parser.parse_args()
+        parser.set_defaults(func=self.process_arguments)
 
     def add_optional_arguments(self, parser):
         # Override this for custom arguments
@@ -159,10 +162,12 @@ class DirectoryProcessor(object):
     images_processed = 0
     faces_detected = 0
 
-    def __init__(self, description='default'):
+    def __init__(self, subparser, command, description='default'):
         print('Initializing')
-        self.parse_arguments(description)
+        self.parse_arguments(description, subparser, command)
 
+    def process_arguments(self, arguments):
+        self.arguments = arguments
         print("Input Directory: {}".format(self.arguments.input_dir))
         print("Output Directory: {}".format(self.arguments.output_dir))
         print('Starting, this may take a while...')
@@ -176,6 +181,9 @@ class DirectoryProcessor(object):
 
         self.images_found = len(self.input_dir)
 
+        self.process_directory()
+
+    def process_directory(self):
         for filename in self.input_dir:
             if self.arguments.verbose:
                 print('Processing: {}'.format(os.path.basename(filename)))
@@ -185,8 +193,9 @@ class DirectoryProcessor(object):
 
         self.finalize()
 
-    def parse_arguments(self, description):
-        parser = argparse.ArgumentParser(
+    def parse_arguments(self, description, subparser, command):
+        parser = subparser.add_parser(
+            command,
             description=description,
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground"
@@ -210,7 +219,7 @@ class DirectoryProcessor(object):
                             default=False,
                             help="Show verbose output")
         parser = self.add_optional_arguments(parser)
-        self.arguments = parser.parse_args()
+        parser.set_defaults(func=self.process_arguments)
 
     def add_optional_arguments(self, parser):
         # Override this for custom arguments
