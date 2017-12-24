@@ -23,7 +23,6 @@ class TrainingProcessor(object):
     arguments = None
 
     def __init__(self, subparser, command, description='default'):
-        print('Initializing')
         self.parse_arguments(description, subparser, command)
 
     def process_arguments(self, arguments):
@@ -165,7 +164,6 @@ class DirectoryProcessor(object):
     faces_detected = 0
 
     def __init__(self, subparser, command, description='default'):
-        print('Initializing')
         self.create_parser(subparser, command, description)
         self.parse_arguments(description, subparser, command)
 
