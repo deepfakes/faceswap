@@ -5,19 +5,22 @@ from .umeyama import umeyama
 
 
 def random_transform(image, rotation_range, zoom_range, shift_range, random_flip):
-    h,w = image.shape[0:2]
+    h, w = image.shape[0:2]
     rotation = numpy.random.uniform(-rotation_range, rotation_range)
     scale = numpy.random.uniform(1 - zoom_range, 1 + zoom_range)
     tx = numpy.random.uniform(-shift_range, shift_range) * w
     ty = numpy.random.uniform(-shift_range, shift_range) * h
     mat = cv2.getRotationMatrix2D((w // 2, h // 2), rotation, scale)
     mat[:, 2] += (tx, ty)
-    result = cv2.warpAffine(image, mat, (w, h), borderMode=cv2.BORDER_REPLICATE)
+    result = cv2.warpAffine(
+        image, mat, (w, h), borderMode=cv2.BORDER_REPLICATE)
     if numpy.random.random() < random_flip:
         result = result[:, ::-1]
     return result
 
 # get pair of random warped images from aligened face image
+
+
 def random_warp(image):
     assert image.shape == (256, 256, 3)
     range_ = numpy.linspace(128 - 80, 128 + 80, 5)
@@ -39,4 +42,3 @@ def random_warp(image):
     target_image = cv2.warpAffine(image, mat, (64, 64))
 
     return warped_image, target_image
-

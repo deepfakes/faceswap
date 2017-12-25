@@ -15,7 +15,7 @@ def convert_one_image(image, model_dir="models"):
     decoder_B.load_weights(model_dir + "/decoder_B.h5")
 
     autoencoder = autoencoder_B
-    
+
     shapePredictor = "contrib/shape_predictor_68_face_landmarks.dat"
     humanFaceDetector = "contrib/mmod_human_face_detector.dat"
     if not os.path.exists(shapePredictor):
