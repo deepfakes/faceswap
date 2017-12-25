@@ -7,7 +7,15 @@ from lib.faces_detect import crop_faces
 
 class ConvertImage(DirectoryProcessor):
     filename = ''
-
+    def create_parser(self, subparser, command, description):
+        self.parser = subparser.add_parser(
+            command,
+            help="Convert a source image to a new one with the face swapped.",
+            description=description,
+            epilog="Questions and feedback: \
+            https://github.com/deepfakes/faceswap-playground"
+        )
+    
     def add_optional_arguments(self, parser):
         parser.add_argument('-m', '--model-dir',
                             action=FullPaths,
@@ -34,4 +42,3 @@ class ConvertImage(DirectoryProcessor):
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
 
 
-extract_cli = ConvertImage(description='Swaps faces for images in a directory')
