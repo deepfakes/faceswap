@@ -47,13 +47,13 @@ The project has multiple entry points. You will have to:
  - **Convert** your sources with the model
 
 ### Extract
-From your setup folder, run `python extract.py`. This will take photos from `src` folder and extract faces into `extract` folder.
+From your setup folder, run `python faceswap.py extract`. This will take photos from `src` folder and extract faces into `extract` folder.
 
 ### Train
-From your setup folder, run `python train.py`. This will take photos from `data/trump` and `data/cage` folder and train a model that will be saved inside the `models` folder.
+From your setup folder, run `python faceswap.py train`. This will take photos from two folders containing pictures of both faces and train a model that will be saved inside the `models` folder.
 
 ### Convert
-From your setup folder, run `python convert.py`. This will take photos from `original` folder and apply new faces into `modified` folder.
+From your setup folder, run `python faceswap.py convert`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
 #### General notes:
 - All of the scripts mentioned have `-h`/`--help` options with a arguments that they will accept. You're smart, you can figure out how this works, right?!
