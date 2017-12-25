@@ -7,7 +7,7 @@ random_transform_args = {
     'zoom_range': 0.05,
     'shift_range': 0.05,
     'random_flip': 0.4,
-    }
+}
 
 
 def get_training_data(images, batch_size):
@@ -18,8 +18,10 @@ def get_training_data(images, batch_size):
         warped_img, target_img = random_warp(image)
 
         if i == 0:
-            warped_images = numpy.empty((batch_size,) + warped_img.shape, warped_img.dtype)
-            target_images = numpy.empty((batch_size,) + target_img.shape, warped_img.dtype)
+            warped_images = numpy.empty(
+                (batch_size,) + warped_img.shape, warped_img.dtype)
+            target_images = numpy.empty(
+                (batch_size,) + target_img.shape, warped_img.dtype)
 
         warped_images[i] = warped_img
         target_images[i] = target_img

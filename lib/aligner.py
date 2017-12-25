@@ -6,6 +6,7 @@ import cv2
 import dlib
 import numpy as np
 
+
 class Aligner:
     def __init__(self, pred, detect):
         self.detector = dlib.cnn_face_detection_model_v1(detect)
@@ -45,8 +46,8 @@ class Aligner:
         R = (U * Vt).T
 
         return np.vstack([np.hstack(((s2 / s1) * R,
-                            c2.T - (s2 / s1) * R * c1.T)),
-                            np.matrix([0., 0., 1.])])
+                                     c2.T - (s2 / s1) * R * c1.T)),
+                          np.matrix([0., 0., 1.])])
 
     def warp_im(self, im, ref, M):
         dshape = ref.shape
@@ -73,7 +74,8 @@ class Aligner:
             return None
         landmarks = self.get_landmarks(img, rect)
 
-        transformation_matrix = self.transformation_from_points(ref_landmarks, landmarks)
+        transformation_matrix = self.transformation_from_points(
+            ref_landmarks, landmarks)
         warped_img = self.warp_im(img, ref_img, transformation_matrix)
 
         #cv2.imwrite( 'modified/_aligned.png', warped_img )
