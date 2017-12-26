@@ -38,7 +38,7 @@ https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https:
 
 Clone the repo and setup you environment. There is a Dockerfile that should kickstart you. Otherwise you can setup things manually, see in the Dockerfiles for dependencies.
 
-Check out [../blob/master/INSTALL.md](INSTALL.md) for basic information on how to configure virtualenv and
+Check out [../blob/master/INSTALL.md](INSTALL.md) and [../blob/master/USAGE.md](USAGE.md) for basic information on how to configure virtualenv and use the program.
 
 You also need a modern GPU with CUDA support for best performance
 

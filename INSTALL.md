@@ -111,13 +111,13 @@ To reactive your environment on Windows, you can use `workon faceswap`. On Mac a
 
 With your virtualenv activated, install the dependencies from the requirements files. Like so:
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
 If you want to use your GPU instead of your CPU, substitute `requirements.txt` with `requirements-gpu.txt`:
 
-```
+```bash
 pip install -r requirements-gpu.txt
 ```
 
@@ -125,9 +125,11 @@ Should you choose the GPU version, Tensorflow might ask you to install the CUDA 
 
 Once all these requirements are installed, you can attempt to run the faceswap tools. Use the `-h` or `--help` options for a list of options.
 
-```
+```bash
 python faceswap.py -h
 ```
+
+Proceed to [../blob/master/USAGE.md](USAGE.md)
 
 ## Notes
 
