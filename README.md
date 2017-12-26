@@ -1,43 +1,11 @@
-The code here is a rework of [deepfakes' faceswap project](https://www.reddit.com/user/deepfakes/).
 
----
-**Important Notice** this is a NON-OFFICIAL repo! It is maintained by actively involved fan of the project.
+**Notice:** This repository is not operated or maintained by [/u/deepfakes](https://www.reddit.com/user/deepfakes/). Please read the explanation below for details.
 
-If you want to know more about github.com/deepfakes, please look at the section at the end of the file
 ---
 
 # deepfakes_faceswap
-You'll find here the code for the project. The original code is in the first commits of the master.
-Follow new features here: https://github.com/deepfakes/faceswap/projects/1
 
-## How to contribute
-
-### For people interested in the generative models
- - Go to the 'faceswap-model' to discuss/suggest/commit alternatives to the current algorithm.
-
-### For devs
- - Read this README entirely
- - Fork the repo
- - Download the data with the link provided below
- - Play with it
- - Check issues with the 'dev' tag
- - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvments
- 
-### For non-dev advanced users
- - Read this README entirely
- - Clone the repo
- - Download the data with the link provided below
- - Play with it
- - Check issues with the 'advuser' tag
- - Also go to the 'faceswap-playground' repo and help others.
-
-### For end-users
- - Get the code here and play with it if you can
- - You can also go to the 'faceswap-playground' repo and help or get help from others.
- - **Notice** Any issue related to running the code has to be open in the 'faceswap-playground' project!
-
-### For haters
-Sorry no time for that
+Faceswap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
 
 ## Overview
 The project has multiple entry points. You will have to:
@@ -66,21 +34,18 @@ https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https:
 
 ## How To setup and run the project
 
-### Setup
-Clone the repo and setup you environment. There is a Dockerfile that should kickstart you. Otherwise you can setup things manually, see in the Dockerfiles for dependencies
+### Setup 
 
-**Main Requirements:**
-    Python 3
-    Opencv 3
-    Tensorflow 1.3+(?)
-    Keras 2
+Clone the repo and setup you environment. There is a Dockerfile that should kickstart you. Otherwise you can setup things manually, see in the Dockerfiles for dependencies.
+
+Check out [../blob/master/INSTALL.md](INSTALL.md) and [../blob/master/USAGE.md](USAGE.md) for basic information on how to configure virtualenv and use the program.
 
 You also need a modern GPU with CUDA support for best performance
 
 **Some tips:**
 
-Reuse existing models will train much faster than start from nothing.  
-If there are not enough training data, start with someone looks similar, then switch the data.
+Reusing existing models will train much faster than starting from nothing.  
+If there is not enough training data, start with someone who looks similar, then switch the data.
 
 #### Docker
 If you prefer using Docker, You can start the project with:
@@ -89,10 +54,40 @@ If you prefer using Docker, You can start the project with:
 Note that the Dockerfile does not have all good requirments, so it will fail on some python 3 commands.
 Also note that it does not have a GUI output, so the train.py will fail on showing image. You can comment this, or save it as a file.
 
+## How to contribute
+
+### For people interested in the generative models
+ - Go to the 'faceswap-model' to discuss/suggest/commit alternatives to the current algorithm.
+
+### For devs
+ - Read this README entirely
+ - Fork the repo
+ - Download the data with the link provided below
+ - Play with it
+ - Check issues with the 'dev' tag
+ - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvments
+ 
+### For non-dev advanced users
+ - Read this README entirely
+ - Clone the repo
+ - Download the data with the link provided below
+ - Play with it
+ - Check issues with the 'advuser' tag
+ - Also go to the 'faceswap-playground' repo and help others.
+
+### For end-users
+ - Get the code here and play with it if you can
+ - You can also go to the 'faceswap-playground' repo and help or get help from others.
+ - Be patient. This is relatively new technology for developers as well. Much effort is already being put into making this program easy to use for the average user. It just takes time!
+ - **Notice** Any issue related to running the code has to be open in the 'faceswap-playground' project!
+
+### For haters
+Sorry no time for that
+
 # About github.com/deepfakes
 
 ## What is this repo?
-It is a fan-made repo for active users.
+It is a community repository for active users.
 
 ## Why this repo?
 The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front of url has not been solved since days.
@@ -103,7 +98,7 @@ The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front
  3. Because it will better federate contributors and users
  
 ## What if /u/deepfakes feels bad about that?
-This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit).
+This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit). Please do not send /u/deepfakes messages for help with the code you find here.
 
 # About machine learning
 
