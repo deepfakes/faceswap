@@ -23,6 +23,11 @@ class ConvertImage(DirectoryProcessor):
                             default="models",
                             help="Model directory. A directory containing the trained model \
                     you wish to process. Defaults to 'models'")
+        parser.add_argument('-s', '--swap-model',
+                            action="store_true",
+                            dest="swap_model",
+                            default=False,
+                            help="Swap the model. Instead of A -> B, swap B -> A.")
         return parser
 
     def process_image(self, filename):
@@ -33,7 +38,7 @@ class ConvertImage(DirectoryProcessor):
                     print('- Found more than one face!')
                     self.verify_output = True
 
-                new_face = convert_one_image(cv2.resize(face.image, (256, 256)), self.arguments.model_dir)
+                new_face = convert_one_image(cv2.resize(face.image, (256, 256)), self.arguments.model_dir, self.arguments.swap_model)
                 image[slice(face.y, face.y + face.h), slice(face.x, face.x + face.w)] = cv2.resize(new_face, (face.w, face.h))
                 self.faces_detected = self.faces_detected + 1
             output_file = self.output_dir / Path(filename).name
