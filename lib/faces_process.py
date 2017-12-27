@@ -10,8 +10,8 @@ from .model import encoder, decoder_A, decoder_B
 
 def convert_one_image(image, model_dir="models", swap_model=False, use_aligner=False):
 
-    face_A = 'decoder_A.h5' if not swap_model else 'decoder_B.h5'
-    face_B = 'decoder_B.h5' if not swap_model else 'decoder_A.h5'
+    face_A = '/decoder_A.h5' if not swap_model else '/decoder_B.h5'
+    face_B = '/decoder_B.h5' if not swap_model else '/decoder_A.h5'
 
     encoder.load_weights(model_dir + "/encoder.h5")
     decoder_A.load_weights(model_dir + face_A)
