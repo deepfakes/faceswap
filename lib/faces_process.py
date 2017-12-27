@@ -16,12 +16,12 @@ def adjust_avg_color(img_old,img_new):
         for m in range(img_new.shape[0]):
             for n in range(img_new.shape[1]):
                 temp = (img_new[m,n,i] + diff_int)
-                if temp > 0 and temp < 255 :
-                    img_new[n,m,i] = temp
-                elif temp < 0:
-                    img_new[n,m,i] = 0
+                if temp < 0:
+                    img_new[m,n,i] = 0
                 elif temp > 255:
-                    img_new[n,m,i] = 255
+                    img_new[m,n,i] = 255
+                else:
+                    img_new[m,n,i] = temp
 
 def smooth_mask(img_old,img_new):
     w,h,c = img_new.shape
