@@ -13,16 +13,23 @@ def adjust_avg_color(img_old,img_new):
         old_avg = img_old[:, :, i].mean()
         new_avg = img_new[:, :, i].mean()
         diff_int = (int)(old_avg - new_avg)
-        diff_np = numpy.zeros( (w,h) ) - diff_int
-        img_new[:, :, i] -= diff_np.astype(img_new.dtype)
+        for m in range(img_new.shape[0]):
+            for n in range(img_new.shape[1]):
+                temp = (img_new[m,n,i] + diff_int)
+                if temp > 0 and temp < 255 :
+                    img_new[n,m,i] = temp
+                elif temp < 0:
+                    img_new[n,m,i] = 0
+                elif temp > 255:
+                    img_new[n,m,i] = 255
 
 def smooth_mask(img_old,img_new):
     w,h,c = img_new.shape
-    crop2 = slice(0,w)
+    crop = slice(0,w)
     mask = numpy.zeros_like(img_new)
     mask[h//15:-h//15,w//15:-w//15,:] = 255
     mask = cv2.GaussianBlur(mask,(15,15),10)
-    img_new[crop2,crop2] = mask/255*img_new + (1-mask/255)*img_old
+    img_new[crop,crop] = mask/255*img_new + (1-mask/255)*img_old
 
 def convert_one_image(image, model_dir="models"):
     use_avg_color_adjust = True
