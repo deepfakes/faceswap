@@ -31,13 +31,18 @@ def smooth_mask(img_old,img_new):
     mask = cv2.GaussianBlur(mask,(15,15),10)
     img_new[crop,crop] = mask/255*img_new + (1-mask/255)*img_old
 
-def convert_one_image(image, model_dir="models"):
-    use_avg_color_adjust = True
-    use_smooth_mask = True
+def convert_one_image(image, 
+                      model_dir="models",
+                      swap_model=False,
+                      use_aligner=False,
+                      use_smooth_mask=True,
+                      use_avg_color_adjust=True):
+    face_A = '/decoder_A.h5' if not swap_model else '/decoder_B.h5'
+    face_B = '/decoder_B.h5' if not swap_model else '/decoder_A.h5'
 
     encoder.load_weights(model_dir + "/encoder.h5")
-    decoder_A.load_weights(model_dir + "/decoder_A.h5")
-    decoder_B.load_weights(model_dir + "/decoder_B.h5")
+    decoder_A.load_weights(model_dir + face_A)
+    decoder_B.load_weights(model_dir + face_B)
 
     autoencoder = autoencoder_B
 
@@ -48,7 +53,8 @@ def convert_one_image(image, model_dir="models"):
               "Landmark file can be found in http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2"
               "\nUnzip it in the contrib/ folder.".format(shapePredictor))
         return
-    aligner = Aligner(shapePredictor, humanFaceDetector)
+    if use_aligner:
+        aligner = Aligner(shapePredictor, humanFaceDetector)
 
     assert image.shape == (256, 256, 3)
     crop = slice(48, 208)
@@ -66,13 +72,11 @@ def convert_one_image(image, model_dir="models"):
     if use_smooth_mask:
         smooth_mask(old_face,new_face)
 
-    return superpose(image, new_face, crop)
     # Aligner is not ready to use yet
-    # result = aligner.align(image.copy(), new_face)
-    # if result is None:
-    #     return superpose(image, new_face, crop)
-    # else:
-    #     return result
+    if use_aligner:
+        return aligner.align(image.copy(), new_face)
+    else:
+        return superpose(image, new_face, crop)
 
 
 def superpose(image, new_face, crop):
