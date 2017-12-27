@@ -36,9 +36,9 @@ We specify our photo input directory and the output folder where our training da
 The training process will take the longest, especially on CPU. We specify the folders where the two faces are, and where we will save our training model. It will start hammering the training data one you run the command. I personally really like to go by the preview and quit the processing once I'm happy with the results.
 
 ```bash
-python faceswap.py -A ~/faceswap/data/trump -B ~/faceswap/data/cage -m ~/faceswap/models/
+python faceswap.py train -A ~/faceswap/data/trump -B ~/faceswap/data/cage -m ~/faceswap/models/
 # or -p to show a preview
-python faceswap.py -A ~/faceswap/data/trump -B ~/faceswap/data/cage -m ~/faceswap/models/ -p 
+python faceswap.py train -A ~/faceswap/data/trump -B ~/faceswap/data/cage -m ~/faceswap/models/ -p 
 ````
 
 If you use the preview feature, select the preview window and press Q to save your processed data and quit gracefully. Without the preview enabled, you might have to forcefully quit by hitting Ctrl+C to cancel the command. Note that it will save the model once it's gone through about 100 iterations, which can take quite a while. So make sure you save before stopping the process.
@@ -52,7 +52,7 @@ Now that we're happy with our trained model, we can convert our video. How does 
 Remember those initial pictures we had of Trump? Let's try swapping a face there. We will use that directory as our input directory, create a new folder where the output will be saved, and tell them which model to use.
 
 ```bash
-python faceswap.py -i ~/faceswap/photo/trump/ -o ~/faceswap/output/ -m ~/faceswap/models/
+python faceswap.py convert -i ~/faceswap/photo/trump/ -o ~/faceswap/output/ -m ~/faceswap/models/
 ```
 
 It should now start swapping faces of all these pictures.
