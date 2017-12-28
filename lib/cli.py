@@ -2,6 +2,7 @@ import argparse
 import os
 import cv2
 import numpy
+import time
 
 from lib.utils import get_image_paths, get_folder, load_images, stack_images
 from lib.faces_detect import crop_faces
@@ -142,6 +143,7 @@ class TrainingProcessor(object):
         for epoch in range(1000000):
             if self.arguments.verbose:
                 print("Iteration number {}".format(epoch + 1))
+                start_time = time.time()
             warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
             warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
 
@@ -157,6 +159,12 @@ class TrainingProcessor(object):
             if key == ord('q'):
                 self.save_model_weights()
                 exit()
+            if self.arguments.verbose:
+                end_time = time.time()
+                time_elapsed = int(round((end_time - start_time)))
+                m, s = divmod(time_elapsed, 60)
+                h, m = divmod(m, 60)
+                print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
 
 
 class DirectoryProcessor(object):
