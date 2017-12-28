@@ -8,10 +8,8 @@ RUN apt-get update -qq \
     # install essentials
 	build-essential \ 
 	cmake \
-	g++ \ 
-	git \ 
-	libboost-all-dev \
-	openssh-client \ 
+	# Boost for dlib
+	libboost-all-dev \ 
 	# install python 3
 	python3.5 \ 
 	python3-pip \ 
@@ -22,11 +20,9 @@ RUN apt-get update -qq \
 	python3-h5py \
 	python3-yaml \
 	python3-pydot \
+	python3-setuptools \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
-
-# mandatory ?
-RUN pip3 install --upgrade setuptools
 
 COPY ./requirements.txt .
 RUN pip3 --no-cache-dir install -r ./requirements.txt
