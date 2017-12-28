@@ -2,6 +2,7 @@ import argparse
 import os
 import cv2
 import numpy
+import time
 
 from lib.utils import get_image_paths, get_folder, load_images, stack_images
 from lib.faces_detect import crop_faces
@@ -80,6 +81,16 @@ class TrainingProcessor(object):
                             dest="verbose",
                             default=False,
                             help="Show verbose output")
+        parser.add_argument('-s', '--save-interval',
+                            type=int,
+                            dest="save_interval",
+                            default=100,
+                            help="Sets the number of iterations before saving the model.")
+        parser.add_argument('-w', '--write-image',
+                            action="store_true",
+                            dest="write_image",
+                            default=False,
+                            help="Writes the training result to a file even on preview mode.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -113,7 +124,7 @@ class TrainingProcessor(object):
 
         if self.arguments.preview is True:
             cv2.imshow('', figure)
-        else:
+        if not self.arguments.preview or self.arguments.write_image:
             cv2.imwrite('_sample.jpg', figure)
 
     def process(self):
@@ -130,6 +141,9 @@ class TrainingProcessor(object):
         BATCH_SIZE = 64
 
         for epoch in range(1000000):
+            if self.arguments.verbose:
+                print("Iteration number {}".format(epoch + 1))
+                start_time = time.time()
             warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
             warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
 
@@ -137,7 +151,7 @@ class TrainingProcessor(object):
             loss_B = autoencoder_B.train_on_batch(warped_B, target_B)
             print(loss_A, loss_B)
 
-            if epoch % 100 == 0:
+            if epoch % self.arguments.save_interval == 0:
                 self.save_model_weights()
                 self.show_sample(target_A[0:14], target_B[0:14])
 
@@ -145,6 +159,12 @@ class TrainingProcessor(object):
             if key == ord('q'):
                 self.save_model_weights()
                 exit()
+            if self.arguments.verbose:
+                end_time = time.time()
+                time_elapsed = int(round((end_time - start_time)))
+                m, s = divmod(time_elapsed, 60)
+                h, m = divmod(m, 60)
+                print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
 
 
 class DirectoryProcessor(object):
