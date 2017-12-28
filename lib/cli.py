@@ -80,6 +80,11 @@ class TrainingProcessor(object):
                             dest="verbose",
                             default=False,
                             help="Show verbose output")
+        parser.add_argument('-s', '--save-interval',
+                            type=int,
+                            dest="save_interval",
+                            default=100,
+                            help="Sets the number of iterations before saving the model.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -130,6 +135,8 @@ class TrainingProcessor(object):
         BATCH_SIZE = 64
 
         for epoch in range(1000000):
+            if self.arguments.verbose:
+                print("Iteration number {}".format(epoch + 1))
             warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
             warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
 
@@ -137,7 +144,7 @@ class TrainingProcessor(object):
             loss_B = autoencoder_B.train_on_batch(warped_B, target_B)
             print(loss_A, loss_B)
 
-            if epoch % 100 == 0:
+            if epoch % self.arguments.save_interval == 0:
                 self.save_model_weights()
                 self.show_sample(target_A[0:14], target_B[0:14])
 
