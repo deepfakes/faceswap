@@ -85,6 +85,11 @@ class TrainingProcessor(object):
                             dest="save_interval",
                             default=100,
                             help="Sets the number of iterations before saving the model.")
+        parser.add_argument('-w', '--write-image',
+                            action="store_true",
+                            dest="write_image",
+                            default=False,
+                            help="Writes the training result to a file even on preview mode.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -118,7 +123,7 @@ class TrainingProcessor(object):
 
         if self.arguments.preview is True:
             cv2.imshow('', figure)
-        else:
+        if not self.arguments.preview or self.arguments.write_image:
             cv2.imwrite('_sample.jpg', figure)
 
     def process(self):
