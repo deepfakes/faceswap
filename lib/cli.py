@@ -27,6 +27,17 @@ class TrainingProcessor(object):
     def __init__(self, subparser, command, description='default'):
         self.parse_arguments(description, subparser, command)
 
+        self.models = [{
+            'file': 'encoder.h5',
+            'container': encoder
+        }, {
+            'file': 'decoder_A.h5',
+            'container': decoder_A
+        }, {
+            'file': 'decoder_B.h5',
+            'container': decoder_B
+        }]
+
     def process_arguments(self, arguments):
         self.arguments = arguments
         print("Model A Directory: {}".format(self.arguments.input_A))
@@ -34,13 +45,13 @@ class TrainingProcessor(object):
         print("Training data directory: {}".format(self.arguments.model_dir))
         print('Starting, this may take a while...')
 
-        try:
-            encoder.load_weights(self.arguments.model_dir + '/encoder.h5')
-            decoder_A.load_weights(self.arguments.model_dir + '/decoder_A.h5')
-            decoder_B.load_weights(self.arguments.model_dir + '/decoder_B.h5')
-        except Exception as e:
-            print('Not loading existing training data.')
-            print(e)
+        for model in self.models:
+            file_path = os.path.join(self.arguments.model_dir, model['file'])
+            if os.path.isfile(file_path):
+                model['container'].load_weights(file_path)
+            else:
+                print("Model file {} is not exists, creating...".format(model['file']))
+                model['container'].save_weights(file_path)
 
         try:
             self.process()
@@ -107,10 +118,10 @@ class TrainingProcessor(object):
         return parser
 
     def save_model_weights(self):
-        encoder.save_weights(self.arguments.model_dir + '/encoder.h5')
-        decoder_A.save_weights(self.arguments.model_dir + '/decoder_A.h5')
-        decoder_B.save_weights(self.arguments.model_dir + '/decoder_B.h5')
-        print('save model weights')
+        for model in self.models:
+            file_path = os.path.join(self.arguments.model_dir, model['file'])
+            model['container'].save_weights(file_path)
+        print('Model weights are saved')
 
     def show_sample(self, test_A, test_B):
         figure_A = numpy.stack([
@@ -144,13 +155,13 @@ class TrainingProcessor(object):
         images_A += images_B.mean(axis=(0, 1, 2)) - \
             images_A.mean(axis=(0, 1, 2))
 
-        print('press "q" to stop training and save model')
+        print('Press "q" to stop training and save model')
 
         BATCH_SIZE = 64
 
-        for epoch in range(1000000):
+        for epoch in range(1, 1000000):
             if self.arguments.verbose:
-                print("Iteration number {}".format(epoch + 1))
+                print("Iteration number {}".format(1))
                 start_time = time.time()
             warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
             warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
