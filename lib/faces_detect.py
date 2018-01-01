@@ -1,7 +1,7 @@
 import face_recognition
 from .DetectedFace import DetectedFace
 
-def crop_faces(frame):
+def detect_faces(frame):
     face_locations = face_recognition.face_locations(frame)
     #face_encodings = face_recognition.face_encodings(frame, face_locations)
 

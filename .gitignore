@@ -6,3 +6,4 @@
 !requirements*
 !lib/*.py
 !scripts
+!plugins
