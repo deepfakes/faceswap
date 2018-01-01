@@ -2,6 +2,7 @@ import argparse
 import os
 import cv2
 import numpy
+import sys
 import time
 
 from lib.utils import get_image_paths, get_folder, load_images, stack_images
@@ -41,7 +42,14 @@ class TrainingProcessor(object):
             print('Not loading existing training data.')
             print(e)
 
-        self.process()
+        try:
+            self.process()
+        except KeyboardInterrupt:
+            try:
+                self.save_model_weights()
+            except KeyboardInterrupt:
+                print('Saving model weights is cancelled')
+            sys.exit(0)
 
     def parse_arguments(self, description, subparser, command):
         parser = subparser.add_parser(
