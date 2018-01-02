@@ -161,7 +161,7 @@ class TrainingProcessor(object):
 
         for epoch in range(1, 1000000):
             if self.arguments.verbose:
-                print("Iteration number {}".format(1))
+                print("Iteration number {}".format(epoch))
                 start_time = time.time()
             warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
             warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
