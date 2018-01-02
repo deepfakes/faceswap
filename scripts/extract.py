@@ -3,7 +3,7 @@ import cv2
 from pathlib import Path
 from lib.cli import DirectoryProcessor
 from lib.faces_detect import detect_faces
-from plugins.Extract_Crop import Extract
+from plugins.Extract_Align import Extract
 
 class ExtractTrainingData(DirectoryProcessor):
     def create_parser(self, subparser, command, description):
@@ -24,7 +24,7 @@ class ExtractTrainingData(DirectoryProcessor):
                     print('- Found more than one face!')
                     self.verify_output = True
 
-                resized_image = extractor.extract(image, face, (256, 256))
+                resized_image = extractor.extract(image, face, 256)
                 output_file = self.output_dir / Path(filename).stem
                 cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
                 self.faces_detected = self.faces_detected + 1

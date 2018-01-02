@@ -12,7 +12,7 @@ def get_folder(path):
 
 
 def get_image_paths(directory):
-    return [x.path for x in scandir(directory) if x.name.endswith('.jpg') or x.name.endswith('.png')]
+    return [x.path for x in scandir(directory) if x.name.endswith('.jpg') or x.name.endswith('.jpeg') or x.name.endswith('.png')]
 
 
 def load_images(image_paths, convert=None):

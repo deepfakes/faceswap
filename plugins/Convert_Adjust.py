@@ -2,28 +2,16 @@ import cv2
 import numpy
 import os
 
-from lib.model import autoencoder_A
-from lib.model import autoencoder_B
-from lib.model import encoder, decoder_A, decoder_B
-
 class Convert(object):
-    def __init__(self,
-                model_dir="models",
-                swap_model=False,
-                use_aligner=False):
-        face_A = '/decoder_A.h5' if not swap_model else '/decoder_B.h5'
-        face_B = '/decoder_B.h5' if not swap_model else '/decoder_A.h5'
+    def __init__(self, autoencoder):
+        self.autoencoder = autoencoder
+         
+        self.use_smooth_mask=True
+        self.use_avg_color_adjust=True
 
-        encoder.load_weights(model_dir + "/encoder.h5")
-        decoder_A.load_weights(model_dir + face_A)
-        decoder_B.load_weights(model_dir + face_B)
-
-        self.autoencoder = autoencoder_B
-
-    def convert_one_image(self,image, 
-                        use_smooth_mask=True,
-                        use_avg_color_adjust=True):
-        assert image.shape == (256, 256, 3)
+    def convert_one_image( self, original, face_detected ):
+        #assert image.shape == (256, 256, 3)
+        image = cv2.resize(face_detected.image, (256, 256))
         crop = slice(48, 208)
         face = image[crop, crop]
         old_face = face.copy()
@@ -34,12 +22,14 @@ class Convert(object):
         new_face = numpy.clip(new_face * 255, 0, 255).astype(image.dtype)
         new_face = cv2.resize(new_face, (160, 160))
 
-        if use_avg_color_adjust:
+        if self.use_avg_color_adjust:
             self.adjust_avg_color(old_face,new_face)
-        if use_smooth_mask:
+        if self.use_smooth_mask:
             self.smooth_mask(old_face,new_face)
 
-        return self.superpose(image, new_face, crop)
+        new_face = self.superpose(image, new_face, crop)
+        original[slice(face_detected.y, face_detected.y + face_detected.h), slice(face_detected.x, face_detected.x + face_detected.w)] = cv2.resize(new_face, (face_detected.w, face_detected.h))
+        return original
 
     def adjust_avg_color(self,img_old,img_new):
         w,h,c = img_new.shape
