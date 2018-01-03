@@ -19,7 +19,7 @@ class Convert():
         self.seamlessClone = False
         self.maskType = 'Rect' # Choose in 'FaceHullAndRect','FaceHull','Rect'
 
-    def convert_one_image( self, image, face_detected ):
+    def patch_image( self, image, face_detected ):
         size = 64
         image_size = image.shape[1], image.shape[0]
 
@@ -29,6 +29,9 @@ class Convert():
 
         image_mask = self.get_image_mask( image, new_face, face_detected, mat, image_size )
 
+        return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
+
+    def apply_new_face(self, image, new_face, image_mask, mat, image_size, size):
         base_image = numpy.copy( image )
         new_image = numpy.copy( image )
 

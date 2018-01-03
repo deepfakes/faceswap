@@ -3,7 +3,7 @@ import cv2
 from pathlib import Path
 from lib.cli import DirectoryProcessor
 from lib.faces_detect import detect_faces
-from plugins.Extract_Align import Extract
+from plugins.PluginLoader import PluginLoader
 
 class ExtractTrainingData(DirectoryProcessor):
     def create_parser(self, subparser, command, description):
@@ -16,7 +16,8 @@ class ExtractTrainingData(DirectoryProcessor):
         )
         
     def process_image(self, filename):
-        extractor = Extract()
+        extractor = PluginLoader.get_extractor("Align")()
+
         try:
             image = cv2.imread(filename)
             for (idx, face) in enumerate(detect_faces(image)):

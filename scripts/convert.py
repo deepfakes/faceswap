@@ -8,8 +8,7 @@ from lib.model import autoencoder_A
 from lib.model import autoencoder_B
 from lib.model import encoder, decoder_A, decoder_B
 
-#from plugins.Convert_Adjust import Convert
-from plugins.Convert_Masked import Convert
+from plugins.PluginLoader import PluginLoader
 
 class ConvertImage(DirectoryProcessor):
     filename = ''
@@ -45,7 +44,7 @@ class ConvertImage(DirectoryProcessor):
         decoder_A.load_weights(model_dir + face_A)
         decoder_B.load_weights(model_dir + face_B)
 
-        converter = Convert(autoencoder_B)
+        converter = PluginLoader.get_converter("Masked")(autoencoder_B)
 
         try:
             image = cv2.imread(filename)
@@ -54,7 +53,7 @@ class ConvertImage(DirectoryProcessor):
                     print('- Found more than one face!')
                     self.verify_output = True
 
-                image = converter.convert_one_image(image, face)
+                image = converter.patch_image(image, face)
                 self.faces_detected = self.faces_detected + 1
 
             output_file = self.output_dir / Path(filename).name

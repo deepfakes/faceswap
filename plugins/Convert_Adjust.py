@@ -9,7 +9,7 @@ class Convert(object):
         self.use_smooth_mask=True
         self.use_avg_color_adjust=True
 
-    def convert_one_image( self, original, face_detected ):
+    def patch_image( self, original, face_detected ):
         #assert image.shape == (256, 256, 3)
         image = cv2.resize(face_detected.image, (256, 256))
         crop = slice(48, 208)
