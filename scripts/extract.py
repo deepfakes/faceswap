@@ -16,7 +16,8 @@ class ExtractTrainingData(DirectoryProcessor):
         )
         
     def process_image(self, filename):
-        extractor = PluginLoader.get_extractor("Align")()
+        extractor_name = "Align" # TODO Pass as argument
+        extractor = PluginLoader.get_extractor(extractor_name)()
 
         try:
             image = cv2.imread(filename)

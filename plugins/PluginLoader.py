@@ -11,5 +11,15 @@ class PluginLoader():
         return getattr(module, "Convert")
     
     @staticmethod
+    def get_model(name="Original"):
+        module = PluginLoader._import("Model_{0}".format(name))
+        return getattr(module, "Model")
+    
+    @staticmethod
+    def get_trainer(name="Original"):
+        module = PluginLoader._import("Model_{0}".format(name))
+        return getattr(module, "Trainer")
+    
+    @staticmethod
     def _import(name):
         return __import__(name, globals(), locals(), [], 1)

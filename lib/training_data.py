@@ -1,5 +1,6 @@
 import cv2
 import numpy
+from random import shuffle
 
 from .umeyama import umeyama
 
@@ -10,23 +11,43 @@ random_transform_args = {
     'random_flip': 0.4,
 }
 
-def get_training_data(images, batch_size):
-    indices = numpy.random.randint(len(images), size=batch_size)
-    for i, index in enumerate(indices):
-        image = images[index]
-        image = random_transform(image, **random_transform_args)
-        warped_img, target_img = random_warp(image)
+# GAN
+# random_transform_args = {
+#     'rotation_range': 20,
+#     'zoom_range': 0.1,
+#     'shift_range': 0.05,
+#     'random_flip': 0.5,
+#     }
+def read_image(fn, random_transform_args=random_transform_args):
+    image = cv2.imread(fn)
+    image = cv2.resize(image, (256,256)) / 255 * 2 - 1
+    image = random_transform( image, **random_transform_args )
+    warped_img, target_img = random_warp( image )
+    
+    return warped_img, target_img
 
-        if i == 0:
-            warped_images = numpy.empty(
-                (batch_size,) + warped_img.shape, warped_img.dtype)
-            target_images = numpy.empty(
-                (batch_size,) + target_img.shape, warped_img.dtype)
+# A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
+def minibatch(data, batchsize):
+    length = len(data)
+    epoch = i = 0
+    tmpsize = None  
+    shuffle(data)
+    while True:
+        size = tmpsize if tmpsize else batchsize
+        if i+size > length:
+            shuffle(data)
+            i = 0
+            epoch+=1        
+        rtn = numpy.float32([read_image(data[j]) for j in range(i,i+size)])
+        i+=size
+        tmpsize = yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
 
-        warped_images[i] = warped_img
-        target_images[i] = target_img
-
-    return warped_images, target_images
+def minibatchAB(images, batchsize):
+    batch = minibatch(images, batchsize)
+    tmpsize = None
+    while True:
+        ep1, warped_img, target_img = batch.send(tmpsize)
+        tmpsize = yield ep1, warped_img, target_img
 
 def random_transform(image, rotation_range, zoom_range, shift_range, random_flip):
     h, w = image.shape[0:2]
@@ -42,8 +63,7 @@ def random_transform(image, rotation_range, zoom_range, shift_range, random_flip
         result = result[:, ::-1]
     return result
 
-# get pair of random warped images from aligened face image
-
+# get pair of random warped images from aligned face image
 def random_warp(image):
     assert image.shape == (256, 256, 3)
     range_ = numpy.linspace(128 - 80, 128 + 80, 5)
