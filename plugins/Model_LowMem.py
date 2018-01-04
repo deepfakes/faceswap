@@ -1,3 +1,5 @@
+# Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
+
 from keras.models import Model as KerasModel
 from keras.layers import Input, Dense, Flatten, Reshape
 from keras.layers.advanced_activations import LeakyReLU
@@ -20,6 +22,10 @@ class Model(ModelBase):
 
         self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
         self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
+
+    def converter(self, swap):
+        autoencoder = self.autoencoder_B if not swap else self.autoencoder_A 
+        return lambda img: autoencoder.predict(img)
 
     def conv(self, filters):
         def block(x):

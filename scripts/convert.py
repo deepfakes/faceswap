@@ -32,10 +32,13 @@ class ConvertImage(DirectoryProcessor):
         return parser
 
     def process_image(self, filename):
-        model = PluginLoader.get_model("Original")(self.arguments.model_dir)
+        model_name = "GAN"  # Original          # GAN
+        conv_name = "GAN"   # Adjust, Masked    # GAN
+
+        model = PluginLoader.get_model(model_name)(self.arguments.model_dir)
         model.load(self.arguments.swap_model)
 
-        converter = PluginLoader.get_converter("Masked")(model.autoencoder_B)
+        converter = PluginLoader.get_converter(conv_name)(model.converter(False))
 
         try:
             image = cv2.imread(filename)

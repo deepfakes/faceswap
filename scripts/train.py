@@ -2,12 +2,9 @@ import cv2
 import numpy
 import time
 
-from lib.training_data import get_training_data, stack_images
-from lib.utils import get_image_paths, get_folder, load_images
+from lib.utils import get_image_paths
 from lib.cli import FullPaths
 from plugins.PluginLoader import PluginLoader
-
-BATCH_SIZE = 64
 
 class TrainingProcessor(object):
     arguments = None
@@ -78,41 +75,16 @@ class TrainingProcessor(object):
         # Override this for custom arguments
         return parser
 
-    def show_sample(self, test_A, test_B):
-        figure_A = numpy.stack([
-            test_A,
-            self.model.autoencoder_A.predict(test_A),
-            self.model.autoencoder_B.predict(test_A),
-        ], axis=1)
-        figure_B = numpy.stack([
-            test_B,
-            self.model.autoencoder_B.predict(test_B),
-            self.model.autoencoder_A.predict(test_B),
-        ], axis=1)
-
-        figure = numpy.concatenate([figure_A, figure_B], axis=0)
-        figure = figure.reshape((4, 7) + figure.shape[1:])
-        figure = stack_images(figure)
-
-        figure = numpy.clip(figure * 255, 0, 255).astype('uint8')
-
-        if self.arguments.preview is True:
-            cv2.imshow('', figure)
-        if not self.arguments.preview or self.arguments.write_image:
-            cv2.imwrite('_sample.jpg', figure)
-
     def process(self):
-
+        variant = "GAN"
+        
         print('Loading data, this may take a while...')
-        self.model = PluginLoader.get_model("Original")(self.arguments.model_dir)
-        self.model.load(False)
+        model = PluginLoader.get_model(variant)(self.arguments.model_dir)
+        model.load(swapped=False)
 
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
-        images_A = load_images(images_A) / 255.0
-        images_B = load_images(images_B) / 255.0
-
-        images_A += images_B.mean(axis=(0, 1, 2)) - images_A.mean(axis=(0, 1, 2))
+        trainer = PluginLoader.get_trainer(variant)(model, images_A, images_B)
 
         print('Starting. Press "q" to stop training and save model')
 
@@ -120,20 +92,16 @@ class TrainingProcessor(object):
             if self.arguments.verbose:
                 print("Iteration number {}".format(epoch + 1))
                 start_time = time.time()
-            warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
-            warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
 
-            loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-            loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
-            print(loss_A, loss_B)
+            sample_gen = trainer.train_one_step(epoch)
 
             if epoch % self.arguments.save_interval == 0:
-                self.model.save_weights()
-                self.show_sample(target_A[0:14], target_B[0:14])
+                model.save_weights()
+                self.show(sample_gen)
 
             key = cv2.waitKey(1)
             if key == ord('q'):
-                self.model.save_weights()
+                model.save_weights()
                 exit()
             if self.arguments.verbose:
                 end_time = time.time()
@@ -141,3 +109,9 @@ class TrainingProcessor(object):
                 m, s = divmod(time_elapsed, 60)
                 h, m = divmod(m, 60)
                 print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
+
+    def show(self, image_gen):
+        if self.arguments.preview:
+            cv2.imshow('', image_gen())
+        elif self.arguments.write_image:
+            cv2.imwrite('_sample.jpg', image_gen())

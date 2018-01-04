@@ -2,7 +2,7 @@ import argparse
 import os
 import time
 
-from lib.utils import get_image_paths, get_folder, load_images
+from lib.utils import get_image_paths, get_folder
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
