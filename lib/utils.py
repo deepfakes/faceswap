@@ -6,6 +6,7 @@ from pathlib import Path
 from scandir import scandir
 
 image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+video_extensions = [".mp4", ".avi", ".mpg", ".mov"]
 
 def get_folder(path):
     output_dir = Path(path)
@@ -44,6 +45,10 @@ def rotate_image(image, angle):
     else:
         print('Unsupported image rotation angle: {}. Image unmodified'.format(angle))
     return image
+
+def get_video_paths(directory):
+    return [x.path for x in scandir(directory) if
+     any(map(lambda ext: x.name.lower().endswith(ext), video_extensions))]
 
 # From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
 import threading

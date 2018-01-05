@@ -4,8 +4,9 @@ import cv2
 import numpy
 
 from lib.aligner import get_align_mat
+from lib.Converter import Converter
 
-class Convert():
+class Convert(Converter):
     def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, sharpen_image=None, **kwargs):
         self.encoder = encoder
         self.trainer = trainer
@@ -22,8 +23,7 @@ class Convert():
         self.match_histogram = match_histogram
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
 
-    def patch_image( self, image, face_detected, size ):
-
+    def patch_one_face( self, image, face_detected, size ):
         image_size = image.shape[1], image.shape[0]
 
         mat = numpy.array(get_align_mat(face_detected, size, should_align_eyes=False)).reshape(2,3)
