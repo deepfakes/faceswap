@@ -46,20 +46,19 @@ class DirectoryProcessor(object):
 
         self.images_found = len(self.input_dir)
 
-        self.process_directory()
+        self.process(self.read_directory)
+        self.finalize()
 
-    def process_directory(self):
+    def read_directory(self):
         for filename in self.input_dir:
             if self.arguments.verbose:
                 print('Processing: {}'.format(os.path.basename(filename)))
 
-            self.process_image(filename)
+            yield filename
             self.images_processed = self.images_processed + 1
 
-        self.finalize()
-
     # for now, we limit this class responsability to the read of files. images and faces are processed outside this class
-    def process_image(self, filename):
+    def process(self, reader):
         # implement your image processing!
         raise NotImplementedError()
 

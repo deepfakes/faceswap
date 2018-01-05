@@ -76,7 +76,7 @@ class TrainingProcessor(object):
         return parser
 
     def process(self):
-        variant = "GAN"
+        variant = "GAN" # TODO Pass as argument
         
         print('Loading data, this may take a while...')
         model = PluginLoader.get_model(variant)(self.arguments.model_dir)
@@ -115,7 +115,7 @@ class TrainingProcessor(object):
                 model.save_weights()
             except KeyboardInterrupt:
                 print('Saving model weights has been cancelled!')
-            sys.exit(0)
+            exit(0)
 
     def show(self, image_gen):
         if self.arguments.preview:

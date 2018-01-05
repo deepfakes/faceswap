@@ -31,9 +31,16 @@ class ConvertImage(DirectoryProcessor):
                             help="Swap the model. Instead of A -> B, swap B -> A.")
         return parser
 
-    def process_image(self, filename):
-        model_name = "GAN"  # Original          # GAN
-        conv_name = "GAN"   # Adjust, Masked    # GAN
+    def process(self, reader):
+        # Original model goes with Adjust or Masked converter
+        # GAN converter & model must go together
+        model_name = "GAN" # TODO Pass as argument
+        conv_name = "GAN" # TODO Pass as argument
+
+        if conv_name.startswith("GAN"):
+            assert model_name.startswith("GAN") is True, "GAN converter can only be used with GAN model!"
+        else:
+            assert model_name.startswith("GAN") is False, "GAN model can only be used with GAN converter!"
 
         model = PluginLoader.get_model(model_name)(self.arguments.model_dir)
         model.load(self.arguments.swap_model)
@@ -41,17 +48,18 @@ class ConvertImage(DirectoryProcessor):
         converter = PluginLoader.get_converter(conv_name)(model.converter(False))
 
         try:
-            image = cv2.imread(filename)
-            for (idx, face) in enumerate(detect_faces(image)):
-                if idx > 0 and self.arguments.verbose:
-                    print('- Found more than one face!')
-                    self.verify_output = True
+            for filename in reader():
+                image = cv2.imread(filename)
+                for (idx, face) in enumerate(detect_faces(image)):
+                    if idx > 0 and self.arguments.verbose:
+                        print('- Found more than one face!')
+                        self.verify_output = True
 
-                image = converter.patch_image(image, face)
-                self.faces_detected = self.faces_detected + 1
+                    image = converter.patch_image(image, face)
+                    self.faces_detected = self.faces_detected + 1
 
-            output_file = self.output_dir / Path(filename).name
-            cv2.imwrite(str(output_file), image)
+                output_file = self.output_dir / Path(filename).name
+                cv2.imwrite(str(output_file), image)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 

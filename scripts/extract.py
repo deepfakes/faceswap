@@ -15,19 +15,21 @@ class ExtractTrainingData(DirectoryProcessor):
             https://github.com/deepfakes/faceswap-playground"
         )
         
-    def process_image(self, filename):
-        extractor = PluginLoader.get_extractor("Align")()
+    def process(self, reader):
+        extractor_name = "Align" # TODO Pass as argument
+        extractor = PluginLoader.get_extractor(extractor_name)()
 
         try:
-            image = cv2.imread(filename)
-            for (idx, face) in enumerate(detect_faces(image)):
-                if idx > 0 and self.arguments.verbose:
-                    print('- Found more than one face!')
-                    self.verify_output = True
+            for filename in reader():
+                image = cv2.imread(filename)
+                for (idx, face) in enumerate(detect_faces(image)):
+                    if idx > 0 and self.arguments.verbose:
+                        print('- Found more than one face!')
+                        self.verify_output = True
 
-                resized_image = extractor.extract(image, face, 256)
-                output_file = self.output_dir / Path(filename).stem
-                cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
-                self.faces_detected = self.faces_detected + 1
+                    resized_image = extractor.extract(image, face, 256)
+                    output_file = self.output_dir / Path(filename).stem
+                    cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
+                    self.faces_detected = self.faces_detected + 1
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
