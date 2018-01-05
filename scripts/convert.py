@@ -31,7 +31,7 @@ class ConvertImage(DirectoryProcessor):
                             help="Swap the model. Instead of A -> B, swap B -> A.")
         return parser
 
-    def process(self, reader):
+    def process(self):
         # Original model goes with Adjust or Masked converter
         # GAN converter & model must go together
         model_name = "GAN" # TODO Pass as argument
@@ -48,15 +48,11 @@ class ConvertImage(DirectoryProcessor):
         converter = PluginLoader.get_converter(conv_name)(model.converter(False))
 
         try:
-            for filename in reader():
+            for filename in self.read_directory():
+                print('Loading %s' % (filename))
                 image = cv2.imread(filename)
-                for (idx, face) in enumerate(detect_faces(image)):
-                    if idx > 0 and self.arguments.verbose:
-                        print('- Found more than one face!')
-                        self.verify_output = True
-
+                for idx, face in self.get_faces(image):
                     image = converter.patch_image(image, face)
-                    self.faces_detected = self.faces_detected + 1
 
                 output_file = self.output_dir / Path(filename).name
                 cv2.imwrite(str(output_file), image)

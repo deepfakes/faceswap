@@ -64,7 +64,7 @@ class Convert():
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
         if 'Hull' in self.maskType:
-            hull = cv2.convexHull( numpy.array( face_detected.landmarks ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
+            hull = cv2.convexHull( numpy.array( face_detected.landmarksAsXY() ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
             cv2.fillConvexPoly( hull_mask,hull,(1,1,1) )
 
         if self.maskType == 'Rect':

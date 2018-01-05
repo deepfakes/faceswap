@@ -2,6 +2,9 @@ import argparse
 import os
 import time
 
+from pathlib import Path
+from lib.FaceFilter import FaceFilter
+from lib.faces_detect import detect_faces
 from lib.utils import get_image_paths, get_folder
 
 class FullPaths(argparse.Action):
@@ -45,8 +48,8 @@ class DirectoryProcessor(object):
             exit(1)
 
         self.images_found = len(self.input_dir)
-
-        self.process(self.read_directory)
+        self.filter = self.load_filter()
+        self.process()
         self.finalize()
 
     def read_directory(self):
@@ -56,6 +59,28 @@ class DirectoryProcessor(object):
 
             yield filename
             self.images_processed = self.images_processed + 1
+    
+    def get_faces(self, image):
+        faces_count = 0
+        for face in detect_faces(image):
+            if self.filter is not None and not self.filter.check(face):
+                print('Skipping not recognized face!')
+                continue
+
+            yield faces_count, face
+
+            self.faces_detected = self.faces_detected + 1
+            faces_count +=1
+        
+        if faces_count > 0 and self.arguments.verbose:
+            print('Note: Found more than one face in an image!')
+            self.verify_output = True
+    
+    def load_filter(self):
+        filter_file = "filter.jpg" # TODO Pass as argument
+        if Path(filter_file).exists():
+            print('Loading reference image for filtering')
+            return FaceFilter(filter_file)
 
     # for now, we limit this class responsability to the read of files. images and faces are processed outside this class
     def process(self, reader):

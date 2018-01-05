@@ -2,7 +2,6 @@ import cv2
 
 from pathlib import Path
 from lib.cli import DirectoryProcessor
-from lib.faces_detect import detect_faces
 from plugins.PluginLoader import PluginLoader
 
 class ExtractTrainingData(DirectoryProcessor):
@@ -15,21 +14,18 @@ class ExtractTrainingData(DirectoryProcessor):
             https://github.com/deepfakes/faceswap-playground"
         )
         
-    def process(self, reader):
-        extractor_name = "Align" # TODO Pass as argument
-        extractor = PluginLoader.get_extractor(extractor_name)()
+    def process(self):
+        variant = "Align" # TODO Pass as argument
+        extractor = PluginLoader.get_extractor(variant)()
 
         try:
-            for filename in reader():
+            for filename in self.read_directory():
+                print('Loading %s' % (filename))
                 image = cv2.imread(filename)
-                for (idx, face) in enumerate(detect_faces(image)):
-                    if idx > 0 and self.arguments.verbose:
-                        print('- Found more than one face!')
-                        self.verify_output = True
-
+                for idx, face in self.get_faces(image):
                     resized_image = extractor.extract(image, face, 256)
                     output_file = self.output_dir / Path(filename).stem
                     cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
-                    self.faces_detected = self.faces_detected + 1
+                
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
