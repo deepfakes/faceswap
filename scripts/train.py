@@ -86,29 +86,36 @@ class TrainingProcessor(object):
         images_B = get_image_paths(self.arguments.input_B)
         trainer = PluginLoader.get_trainer(variant)(model, images_A, images_B)
 
-        print('Starting. Press "q" to stop training and save model')
+        try:
+            print('Starting. Press "q" to stop training and save model')
 
-        for epoch in range(1000000):
-            if self.arguments.verbose:
-                print("Iteration number {}".format(epoch + 1))
-                start_time = time.time()
+            for epoch in range(1, 1000000): # Note starting at 1 may change behavior of tests on "epoch % n == 0"
+                if self.arguments.verbose:
+                    print("Iteration number {}".format(epoch))
+                    start_time = time.time()
 
-            sample_gen = trainer.train_one_step(epoch)
+                sample_gen = trainer.train_one_step(epoch)
 
-            if epoch % self.arguments.save_interval == 0:
+                if epoch % self.arguments.save_interval == 0:
+                    model.save_weights()
+                    self.show(sample_gen)
+
+                key = cv2.waitKey(1)
+                if key == ord('q'):
+                    model.save_weights()
+                    exit()
+                if self.arguments.verbose:
+                    end_time = time.time()
+                    time_elapsed = int(round((end_time - start_time)))
+                    m, s = divmod(time_elapsed, 60)
+                    h, m = divmod(m, 60)
+                    print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
+        except KeyboardInterrupt:
+            try:
                 model.save_weights()
-                self.show(sample_gen)
-
-            key = cv2.waitKey(1)
-            if key == ord('q'):
-                model.save_weights()
-                exit()
-            if self.arguments.verbose:
-                end_time = time.time()
-                time_elapsed = int(round((end_time - start_time)))
-                m, s = divmod(time_elapsed, 60)
-                h, m = divmod(m, 60)
-                print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
+            except KeyboardInterrupt:
+                print('Saving model weights has been cancelled!')
+            sys.exit(0)
 
     def show(self, image_gen):
         if self.arguments.preview:

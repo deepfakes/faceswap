@@ -7,10 +7,17 @@ from keras.activations import relu
 from keras.initializers import RandomNormal
 from keras.applications import *
 import tensorflow as tf
-
 import numpy as np
+
 from lib.PixelShuffler import PixelShuffler
+from lib.utils import ensure_file_exists
 from .Trainable import Trainable
+
+encoderH5 = 'encoder_GAN.h5'
+decoder_AH5 = 'decoder_A_GAN.h5'
+decoder_BH5 = 'decoder_B_GAN.h5'
+netDAH5 = 'netDA_GAN.h5'
+netDBH5 = 'netDB_GAN.h5'
 
 #channel_axis=-1
 #channel_first = False
@@ -149,20 +156,16 @@ class Model():
         return lambda img : converter.swap_face(img)
 
     def load(self, swapped):
-        try:
-            self.encoder.load_weights(self.model_dir + "/encoder_GAN.h5")
-            self.decoder_A.load_weights(self.model_dir + "/decoder_A_GAN.h5")
-            self.decoder_B.load_weights(self.model_dir + "/decoder_B_GAN.h5")
-            self.netDA.load_weights(self.model_dir + "/netDA_GAN.h5") 
-            self.netDB.load_weights(self.model_dir + "/netDB_GAN.h5") 
-            print ("model loaded.")
-        except:
-            print ("Weights file not found.")
-            pass
+        self.encoder.load_weights(ensure_file_exists(self.model_dir, encoderH5))
+        self.decoder_A.load_weights(ensure_file_exists(self.model_dir, decoder_AH5))
+        self.decoder_B.load_weights(ensure_file_exists(self.model_dir, decoder_BH5))
+        self.netDA.load_weights(ensure_file_exists(self.model_dir, netDAH5))
+        self.netDB.load_weights(ensure_file_exists(self.model_dir, netDBH5))
+        print ("model loaded.")
 
     def save_weights(self):
-        self.encoder.save_weights(self.model_dir + "/encoder_GAN.h5")
-        self.decoder_A.save_weights(self.model_dir + "/decoder_A_GAN.h5" )
-        self.decoder_B.save_weights(self.model_dir + "/decoder_B_GAN.h5" )
-        self.netDA.save_weights(self.model_dir + "/netDA_GAN.h5")
-        self.netDB.save_weights(self.model_dir + "/netDB_GAN.h5")
+        self.encoder.save_weights(ensure_file_exists(self.model_dir, encoderH5))
+        self.decoder_A.save_weights(ensure_file_exists(self.model_dir, decoder_AH5))
+        self.decoder_B.save_weights(ensure_file_exists(self.model_dir, decoder_BH5))
+        self.netDA.save_weights(ensure_file_exists(self.model_dir, netDAH5))
+        self.netDB.save_weights(ensure_file_exists(self.model_dir, netDBH5))

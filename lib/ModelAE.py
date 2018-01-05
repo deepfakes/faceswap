@@ -1,7 +1,14 @@
+# AutoEncoder base classes
+
 import numpy
 from lib.training_data import minibatchAB
+from lib.utils import ensure_file_exists
 
-class ModelBase:
+encoderH5 = 'encoder.h5'
+decoder_AH5 = 'decoder_A.h5'
+decoder_BH5 = 'decoder_B.h5'
+
+class ModelAE:
     def __init__(self, model_dir):
 
         self.model_dir = model_dir
@@ -13,24 +20,20 @@ class ModelBase:
         self.initModel()
 
     def load(self, swapped):
-        (face_A,face_B) = ('/decoder_A.h5', '/decoder_B.h5') if not swapped else ('/decoder_B.h5', '/decoder_A.h5')
+        (face_A,face_B) = (decoder_AH5, decoder_BH5) if not swapped else (decoder_BH5, decoder_AH5)
 
-        try:
-            self.encoder.load_weights(self.model_dir + '/encoder.h5')
-            self.decoder_A.load_weights(self.model_dir + face_A)
-            self.decoder_B.load_weights(self.model_dir + face_B)
-            print('loaded model weights')
-        except Exception as e:
-            print('Failed loading existing training data.')
-            print(e)
+        self.encoder.load_weights(ensure_file_exists(self.model_dir, encoderH5))
+        self.decoder_A.load_weights(ensure_file_exists(self.model_dir, face_A))
+        self.decoder_B.load_weights(ensure_file_exists(self.model_dir, face_B))
+        print('loaded model weights')
 
     def save_weights(self):
-        self.encoder.save_weights(self.model_dir + '/encoder.h5')
-        self.decoder_A.save_weights(self.model_dir + '/decoder_A.h5')
-        self.decoder_B.save_weights(self.model_dir + '/decoder_B.h5')
+        self.encoder.save_weights(ensure_file_exists(self.model_dir, encoderH5))
+        self.decoder_A.save_weights(ensure_file_exists(self.model_dir, decoder_AH5))
+        self.decoder_B.save_weights(ensure_file_exists(self.model_dir, decoder_BH5))
         print('saved model weights')
 
-class TrainerBase():
+class TrainerAE():
     BATCH_SIZE = 64
 
     def __init__(self, model, fn_A, fn_B):
