@@ -4,5 +4,6 @@
 !*.txt
 !Dockerfile*
 !requirements*
-!lib/*.py
+!lib
 !scripts
+!plugins

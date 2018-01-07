@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 from scripts.extract import ExtractTrainingData
-from lib.cli import TrainingProcessor
+from scripts.train import TrainingProcessor
 from scripts.convert import ConvertImage
 
 if __name__ == "__main__":
