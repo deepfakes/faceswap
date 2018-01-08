@@ -37,7 +37,9 @@ class ConvertImage(DirectoryProcessor):
         conv_name = "Masked" # TODO Pass as argument
 
         model = PluginLoader.get_model(model_name)(self.arguments.model_dir)
-        model.load(self.arguments.swap_model)
+        if not model.load(self.arguments.swap_model):
+            print('Model Not Found! A valid model must be provided to continue!')
+            exit(1)
 
         converter = PluginLoader.get_converter(conv_name)(model.converter(False))
 

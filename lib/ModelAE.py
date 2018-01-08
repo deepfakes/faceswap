@@ -4,9 +4,9 @@ import numpy
 from lib.training_data import minibatchAB
 from lib.utils import ensure_file_exists
 
-encoderH5 = 'encoder.h5'
-decoder_AH5 = 'decoder_A.h5'
-decoder_BH5 = 'decoder_B.h5'
+encoderH5 = '/encoder.h5'
+decoder_AH5 = '/decoder_A.h5'
+decoder_BH5 = '/decoder_B.h5'
 
 class ModelAE:
     def __init__(self, model_dir):
@@ -27,9 +27,11 @@ class ModelAE:
             self.decoder_A.load_weights(self.model_dir + face_A)
             self.decoder_B.load_weights(self.model_dir + face_B)
             print('loaded model weights')
+            return True
         except Exception as e:
             print('Failed loading existing training data.')
             print(e)
+            return False
 
     def save_weights(self):
         self.encoder.save_weights(self.model_dir + encoderH5)
@@ -51,7 +53,7 @@ class TrainerAE():
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
-        print(loss_A, loss_B)
+        print("[%s] [#%d] loss_A: %f, loss_B: %f"  % (time.strftime("%H:%M:%S"), iter, loss_A, loss_B))
 
         return lambda: self.show_sample(target_A[0:14], target_B[0:14])
 

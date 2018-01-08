@@ -30,24 +30,21 @@ def read_image(fn, random_transform_args=random_transform_args):
 def minibatch(data, batchsize):
     length = len(data)
     epoch = i = 0
-    tmpsize = None  
     shuffle(data)
     while True:
-        size = tmpsize if tmpsize else batchsize
+        size = batchsize
         if i+size > length:
             shuffle(data)
             i = 0
             epoch+=1        
         rtn = numpy.float32([read_image(data[j]) for j in range(i,i+size)])
         i+=size
-        tmpsize = yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
+        yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
 
 def minibatchAB(images, batchsize):
-    batch = minibatch(images, batchsize)
-    tmpsize = None
-    while True:
-        ep1, warped_img, target_img = batch.send(tmpsize)
-        tmpsize = yield ep1, warped_img, target_img
+    batch = BackgroundGenerator(minibatch(images, batchsize))
+    for ep1, warped_img, target_img in batch.iterator():
+        yield ep1, warped_img, target_img
 
 def random_transform(image, rotation_range, zoom_range, shift_range, random_flip):
     h, w = image.shape[0:2]
@@ -86,7 +83,6 @@ def random_warp(image):
 
     return warped_image, target_image
 
-
 def get_transpose_axes(n):
     if n % 2 == 0:
         y_axes = list(range(1, n - 1, 2))
@@ -96,7 +92,6 @@ def get_transpose_axes(n):
         x_axes = list(range(1, n - 1, 2))
     return y_axes, x_axes, [n - 1]
 
-
 def stack_images(images):
     images_shape = numpy.array(images.shape)
     new_axes = get_transpose_axes(len(images_shape))
@@ -105,3 +100,28 @@ def stack_images(images):
         images,
         axes=numpy.concatenate(new_axes)
         ).reshape(new_shape)
+
+# From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
+import threading
+import queue as Queue
+class BackgroundGenerator(threading.Thread):
+    def __init__(self, generator):
+        threading.Thread.__init__(self)
+        self.queue = Queue.Queue(1)
+        self.generator = generator
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        # Put until queue size is reached. Note: put blocks only if put is called while queue has already reached max size
+        # => this makes 2 prefetched items! One in the queue, one waiting for insertion!
+        for item in self.generator:
+            self.queue.put(item)
+        self.queue.put(None)
+
+    def iterator(self):
+        while True:
+            next_item = self.queue.get()
+            if next_item is None:
+                break
+            yield next_item
