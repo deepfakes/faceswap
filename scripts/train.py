@@ -103,22 +103,12 @@ class TrainingProcessor(object):
             print('Starting. Press "Enter" to stop training and save model')
 
             for epoch in range(1, 1000000): # Note starting at 1 may change behavior of tests on "epoch % n == 0"
-                if self.arguments.verbose:
-                    print("Iteration number {}".format(epoch))
-                    start_time = time.time()
 
                 sample_gen = trainer.train_one_step(epoch)
 
                 if epoch % self.arguments.save_interval == 0:
                     model.save_weights()
                     self.show(sample_gen)
-
-                if self.arguments.verbose:
-                    end_time = time.time()
-                    time_elapsed = int(round((end_time - start_time)))
-                    m, s = divmod(time_elapsed, 60)
-                    h, m = divmod(m, 60)
-                    print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
 
                 if self.stop:
                     model.save_weights()
