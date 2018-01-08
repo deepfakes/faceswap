@@ -76,6 +76,19 @@ class TrainingProcessor(object):
         return parser
 
     def process(self):
+        import threading
+        self.stop = False
+
+        thr = threading.Thread(target=self.processThread, args=(), kwargs={})
+        thr.start()
+
+        input() # TODO how to catch a specific key instead of Enter?
+
+        print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
+        self.stop = True
+        thr.join() # waits until thread finishes
+    
+    def processThread(self):
         variant = "Original" # TODO Pass as argument
         
         print('Loading data, this may take a while...')
@@ -87,7 +100,7 @@ class TrainingProcessor(object):
         trainer = PluginLoader.get_trainer(variant)(model, images_A, images_B)
 
         try:
-            print('Starting. Press "q" to stop training and save model')
+            print('Starting. Press "Enter" to stop training and save model')
 
             for epoch in range(1, 1000000): # Note starting at 1 may change behavior of tests on "epoch % n == 0"
                 if self.arguments.verbose:
@@ -100,16 +113,17 @@ class TrainingProcessor(object):
                     model.save_weights()
                     self.show(sample_gen)
 
-                key = cv2.waitKey(1)
-                if key == ord('q'):
-                    model.save_weights()
-                    exit()
                 if self.arguments.verbose:
                     end_time = time.time()
                     time_elapsed = int(round((end_time - start_time)))
                     m, s = divmod(time_elapsed, 60)
                     h, m = divmod(m, 60)
                     print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
+
+                if self.stop:
+                    model.save_weights()
+                    exit()
+
         except KeyboardInterrupt:
             try:
                 model.save_weights()
