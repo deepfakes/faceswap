@@ -1,19 +1,13 @@
+import dlib
 import face_recognition
 import face_recognition_models
-import dlib
-from .DetectedFace import DetectedFace
 
 def detect_faces(frame):
     face_locations = face_recognition.face_locations(frame)
     landmarks = _raw_face_landmarks(frame, face_locations)
-    landmarks_as_tuples = [[(p.x, p.y) for p in landmark.parts()] for landmark in landmarks]
 
-    for ((top, right, bottom, left), landmarks) in zip(face_locations, landmarks_as_tuples):
-        x = left
-        y = top
-        w = right - left
-        h = bottom - top
-        yield DetectedFace(frame[y: y + h, x: x + w], x, w, y, h, landmarks)
+    for ((y, right, bottom, x), landmarks) in zip(face_locations, landmarks):
+        yield DetectedFace(frame[y: bottom, x: right], x, right - x, y, bottom - y, landmarks)
 
 # Copy/Paste (mostly) from private method in face_recognition
 predictor_68_point_model = face_recognition_models.pose_predictor_model_location()
@@ -26,3 +20,15 @@ def _raw_face_landmarks(face_image, face_locations):
 def _css_to_rect(css):
     return dlib.rectangle(css[3], css[0], css[1], css[2])
 # end of Copy/Paste
+
+class DetectedFace(object):
+    def __init__(self, image, x, w, y, h, landmarks):
+        self.image = image
+        self.x = x
+        self.w = w
+        self.y = y
+        self.h = h
+        self.landmarks = landmarks
+    
+    def landmarksAsXY(self):
+        return [(p.x, p.y) for p in self.landmarks.parts()]

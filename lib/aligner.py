@@ -23,4 +23,4 @@ mean_face_y = numpy.array([
 landmarks_2D = numpy.stack( [ mean_face_x, mean_face_y ], axis=1 )
 
 def get_align_mat(face):
-    return umeyama( numpy.array(face.landmarks[17:]), landmarks_2D, True )[0:2]
+    return umeyama( numpy.array(face.landmarksAsXY()[17:]), landmarks_2D, True )[0:2]
