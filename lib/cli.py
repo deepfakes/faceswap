@@ -132,6 +132,9 @@ class MultiProcessDirectoryProcessor(DirectoryProcessor):
                             help="Jobs number. Should be between 1 and number of cpu cores.")
 
     def process_directory(self):
+        if self.maximum_jobs_count == 1:
+            super().process_directory()
+            return
         jobs = []
         for filename in self.input_dir:
             if self.arguments.verbose:
@@ -139,7 +142,7 @@ class MultiProcessDirectoryProcessor(DirectoryProcessor):
             p = multiprocessing.Process(target=self.process_image, args=(filename,))
             jobs.append(p)
             p.start()
-            if len(jobs) > self.maximum_jobs_count:
+            if len(jobs) >= self.maximum_jobs_count:
                 for job in jobs:
                     job.join()
                 jobs = []
