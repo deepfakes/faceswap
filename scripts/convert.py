@@ -1,7 +1,7 @@
 import cv2
 
 from pathlib import Path
-from lib.cli import DirectoryProcessor, FullPaths
+from lib.cli import MultiProcessDirectoryProcessor, FullPaths
 from lib.faces_detect import detect_faces
 
 from lib.model import autoencoder_A
@@ -10,7 +10,7 @@ from lib.model import encoder, decoder_A, decoder_B
 
 from plugins.PluginLoader import PluginLoader
 
-class ConvertImage(DirectoryProcessor):
+class ConvertImage(MultiProcessDirectoryProcessor):
     filename = ''
     def create_parser(self, subparser, command, description):
         self.parser = subparser.add_parser(
@@ -35,14 +35,18 @@ class ConvertImage(DirectoryProcessor):
                             help="Swap the model. Instead of A -> B, swap B -> A.")
         return parser
 
-    def process_image(self, filename):
-        # TODO move the model load and the converter creation in a method called on init, but after the arg parsing
-        (face_A,face_B) = ('/decoder_A.h5', '/decoder_B.h5') if not self.arguments.swap_model else ('/decoder_B.h5', '/decoder_A.h5')
+    def process_arguments(self, arguments):
+        if not arguments.swap_model:
+            self.face_A, self.face_B = ('/decoder_A.h5', '/decoder_B.h5')
+        else:
+            self.face_A, self.face_B = ('/decoder_B.h5', '/decoder_A.h5')
+        super().process_arguments(arguments)
 
+    def process_image(self, filename):
         model_dir = self.arguments.model_dir
         encoder.load_weights(model_dir + "/encoder.h5")
-        decoder_A.load_weights(model_dir + face_A)
-        decoder_B.load_weights(model_dir + face_B)
+        decoder_A.load_weights(model_dir + self.face_A)
+        decoder_B.load_weights(model_dir + self.face_B)
 
         converter = PluginLoader.get_converter("Masked")(autoencoder_B)
 

@@ -116,6 +116,21 @@ class DirectoryProcessor(object):
 
 class MultiProcessDirectoryProcessor(DirectoryProcessor):
 
+    maximum_jobs_count = 1
+
+    def process_arguments(self, arguments):
+        self.maximum_jobs_count = arguments.jobs
+        print("Parallel jobs: {}".format(self.maximum_jobs_count))
+        super().process_arguments(arguments)
+
+    def parse_arguments(self, description, subparser, command):
+        super().parse_arguments(description, subparser, command)
+        self.parser.add_argument('-j', '--jobs',
+                            dest="jobs",
+                            type=int,
+                            default=1,
+                            help="Jobs number. Should be between 1 and number of cpu cores.")
+
     def process_directory(self):
         jobs = []
         for filename in self.input_dir:
@@ -124,7 +139,7 @@ class MultiProcessDirectoryProcessor(DirectoryProcessor):
             p = multiprocessing.Process(target=self.process_image, args=(filename,))
             jobs.append(p)
             p.start()
-            if len(jobs) > multiprocessing.cpu_count():
+            if len(jobs) > self.maximum_jobs_count:
                 for job in jobs:
                     job.join()
                 jobs = []
