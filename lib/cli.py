@@ -147,5 +147,7 @@ class MultiProcessDirectoryProcessor(DirectoryProcessor):
                     job.join()
                 jobs = []
             self.images_processed = self.images_processed + 1
-
+        # Process last jobs left in queue
+        for job in jobs:
+            job.join()
         self.finalize()
