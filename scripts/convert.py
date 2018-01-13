@@ -2,6 +2,7 @@ import cv2
 
 from pathlib import Path
 from lib.cli import DirectoryProcessor, FullPaths
+from lib.utils import BackgroundGenerator
 from lib.faces_detect import detect_faces
 
 from plugins.PluginLoader import PluginLoader
@@ -43,16 +44,24 @@ class ConvertImage(DirectoryProcessor):
 
         converter = PluginLoader.get_converter(conv_name)(model.converter(False))
 
+        batch = BackgroundGenerator(self.prepare_images(), 1)
+        for item in batch.iterator():
+            self.convert(converter, item)
+        
+    def convert(self, converter, item):
         try:
-            for filename in self.read_directory():
-                print('Processing %s' % (filename))
-                image = cv2.imread(filename)
-                for idx, face in self.get_faces(image):
-                    image = converter.patch_image(image, face)
+            (filename, image, faces) = item
+            print('Processing %s' % (filename))
+            for idx, face in faces:
+                image = converter.patch_image(image, face)
 
-                output_file = self.output_dir / Path(filename).name
-                cv2.imwrite(str(output_file), image)
+            output_file = self.output_dir / Path(filename).name
+            cv2.imwrite(str(output_file), image)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
-
+    def prepare_images(self):
+        for filename in self.read_directory():
+            print('Preparing %s' % (filename))
+            image = cv2.imread(filename)
+            yield filename, image, self.get_faces(image)

@@ -2,6 +2,7 @@ import cv2
 import numpy
 from random import shuffle
 
+from .utils import BackgroundGenerator
 from .umeyama import umeyama
 
 random_transform_args = {
@@ -42,7 +43,7 @@ def minibatch(data, batchsize):
         yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
 
 def minibatchAB(images, batchsize):
-    batch = BackgroundGenerator(minibatch(images, batchsize))
+    batch = BackgroundGenerator(minibatch(images, batchsize), 1)
     for ep1, warped_img, target_img in batch.iterator():
         yield ep1, warped_img, target_img
 
@@ -100,28 +101,3 @@ def stack_images(images):
         images,
         axes=numpy.concatenate(new_axes)
         ).reshape(new_shape)
-
-# From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
-import threading
-import queue as Queue
-class BackgroundGenerator(threading.Thread):
-    def __init__(self, generator):
-        threading.Thread.__init__(self)
-        self.queue = Queue.Queue(1)
-        self.generator = generator
-        self.daemon = True
-        self.start()
-
-    def run(self):
-        # Put until queue size is reached. Note: put blocks only if put is called while queue has already reached max size
-        # => this makes 2 prefetched items! One in the queue, one waiting for insertion!
-        for item in self.generator:
-            self.queue.put(item)
-        self.queue.put(None)
-
-    def iterator(self):
-        while True:
-            next_item = self.queue.get()
-            if next_item is None:
-                break
-            yield next_item
