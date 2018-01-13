@@ -1,7 +1,7 @@
 # AutoEncoder base classes
 
 import numpy
-from lib.training_data import minibatchAB
+from lib.training_data import minibatchAB, stack_images
 from lib.utils import ensure_file_exists
 
 encoderH5 = '/encoder.h5'
