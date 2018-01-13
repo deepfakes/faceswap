@@ -83,7 +83,7 @@ class DirectoryProcessor(object):
             return FaceFilter(filter_file)
 
     # for now, we limit this class responsability to the read of files. images and faces are processed outside this class
-    def process(self, reader):
+    def process(self):
         # implement your image processing!
         raise NotImplementedError()
 
