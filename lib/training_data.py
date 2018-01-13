@@ -5,6 +5,8 @@ from random import shuffle
 from .utils import BackgroundGenerator
 from .umeyama import umeyama
 
+coverage = 220 # Coverage of the face for training. Larger value will cover more features. @shaoanlu recommends 220. Original is 160
+
 random_transform_args = {
     'rotation_range': 10,
     'zoom_range': 0.05,
@@ -64,7 +66,7 @@ def random_transform(image, rotation_range, zoom_range, shift_range, random_flip
 # get pair of random warped images from aligned face image
 def random_warp(image):
     assert image.shape == (256, 256, 3)
-    range_ = numpy.linspace(128 - 80, 128 + 80, 5)
+    range_ = numpy.linspace(128 - coverage//2, 128 + coverage//2, 5)
     mapx = numpy.broadcast_to(range_, (5, 5))
     mapy = mapx.T
 
