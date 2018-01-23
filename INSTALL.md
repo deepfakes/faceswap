@@ -41,6 +41,8 @@ The developers are also not responsible for any damage you might cause to your o
 
 ### Python 3.6
 
+Note that you will need the 64bit version of Python, especially to setup the GPU version!
+
 #### Windows
 
 Download the latest version of Python 3 from Python.org: https://www.python.org/downloads/release/python-364/
