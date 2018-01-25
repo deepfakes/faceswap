@@ -48,7 +48,7 @@ class TrainerAE():
         self.images_A = minibatchAB(fn_A, self.BATCH_SIZE)
         self.images_B = minibatchAB(fn_B, self.BATCH_SIZE)
 
-    def train_one_step(self, iter):
+    def train_one_step(self, iter, viewer):
         epoch, warped_A, target_A = next(self.images_A)
         epoch, warped_B, target_B = next(self.images_B)
 
@@ -56,7 +56,8 @@ class TrainerAE():
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
         print("[%s] [#%d] loss_A: %f, loss_B: %f"  % (time.strftime("%H:%M:%S"), iter, loss_A, loss_B))
 
-        return lambda: self.show_sample(target_A[0:14], target_B[0:14])
+        if viewer is not None:
+            viewer(self.show_sample(target_A[0:14], target_B[0:14]), "training")
 
     def show_sample(self, test_A, test_B):
         figure_A = numpy.stack([

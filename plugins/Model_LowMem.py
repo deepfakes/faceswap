@@ -52,7 +52,7 @@ class Model(ModelAE):
         x = Dense(ENCODER_DIM)(Flatten()(x))
         x = Dense(4 * 4 * 1024)(x)
         x = Reshape((4, 4, 1024))(x)
-        x = upscale(512)(x)
+        x = self.upscale(512)(x)
         return KerasModel(input_, x)
 
     def Decoder(self):

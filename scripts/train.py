@@ -82,7 +82,17 @@ class TrainingProcessor(object):
         thr = threading.Thread(target=self.processThread, args=(), kwargs={})
         thr.start()
 
-        input() # TODO how to catch a specific key instead of Enter?
+        if self.arguments.preview:
+            print('Using live preview')
+            while True:
+                for name, image in self.preview_buffer.items():
+                    cv2.imshow(name, image)
+
+                key = cv2.waitKey(1000)
+                if key == ord('\n') or key == ord('\r'):
+                    break
+        else:
+            input() # TODO how to catch a specific key instead of Enter?
 
         print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
         self.stop = True
@@ -104,11 +114,12 @@ class TrainingProcessor(object):
 
             for epoch in range(1, 1000000): # Note starting at 1 may change behavior of tests on "epoch % n == 0"
 
-                sample_gen = trainer.train_one_step(epoch)
+                save_iteration = epoch % self.arguments.save_interval == 0
 
-                if epoch % self.arguments.save_interval == 0:
+                trainer.train_one_step(epoch, self.show if save_iteration else None)
+
+                if save_iteration:
                     model.save_weights()
-                    self.show(sample_gen)
 
                 if self.stop:
                     model.save_weights()
@@ -121,8 +132,14 @@ class TrainingProcessor(object):
                 print('Saving model weights has been cancelled!')
             exit(0)
 
-    def show(self, image_gen):
-        if self.arguments.preview:
-            cv2.imshow('', image_gen())
-        elif self.arguments.write_image:
-            cv2.imwrite('_sample.jpg', image_gen())
+    preview_buffer = {}
+
+    def show(self, image, name=''):
+        try:
+            if self.arguments.preview:
+                self.preview_buffer[name] = image
+            elif self.arguments.write_image:
+                cv2.imwrite('_sample_{}.jpg'.format(name), image)
+        except Exception as e:
+            print("could not preview sample")
+            print(e)
