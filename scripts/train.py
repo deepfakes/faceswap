@@ -112,7 +112,7 @@ class TrainingProcessor(object):
         try:
             print('Starting. Press "Enter" to stop training and save model')
 
-            for epoch in range(1, 1000000): # Note starting at 1 may change behavior of tests on "epoch % n == 0"
+            for epoch in range(0, 1000000):
 
                 save_iteration = epoch % self.arguments.save_interval == 0
 
