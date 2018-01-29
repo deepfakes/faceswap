@@ -1,11 +1,11 @@
 import cv2
 
 from pathlib import Path
-from lib.cli import DirectoryProcessor
+from lib.cli import MultiProcessDirectoryProcessor
 from lib.faces_detect import detect_faces
 from plugins.PluginLoader import PluginLoader
 
-class ExtractTrainingData(DirectoryProcessor):
+class ExtractTrainingData(MultiProcessDirectoryProcessor):
     def create_parser(self, subparser, command, description):
         self.parser = subparser.add_parser(
             command,

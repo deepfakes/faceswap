@@ -1,8 +1,10 @@
 import argparse
+import multiprocessing
 import os
 import time
 
 from lib.utils import get_image_paths, get_folder, load_images
+
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
@@ -10,6 +12,7 @@ class FullPaths(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
             os.path.expanduser(values)))
+
 
 class DirectoryProcessor(object):
     '''
@@ -52,7 +55,6 @@ class DirectoryProcessor(object):
         for filename in self.input_dir:
             if self.arguments.verbose:
                 print('Processing: {}'.format(os.path.basename(filename)))
-
             self.process_image(filename)
             self.images_processed = self.images_processed + 1
 
@@ -65,22 +67,22 @@ class DirectoryProcessor(object):
 
     def parse_arguments(self, description, subparser, command):
         self.parser.add_argument('-i', '--input-dir',
-                            action=FullPaths,
-                            dest="input_dir",
-                            default="input",
-                            help="Input directory. A directory containing the files \
+                                 action=FullPaths,
+                                 dest="input_dir",
+                                 default="input",
+                                 help="Input directory. A directory containing the files \
                             you wish to process. Defaults to 'input'")
         self.parser.add_argument('-o', '--output-dir',
-                            action=FullPaths,
-                            dest="output_dir",
-                            default="output",
-                            help="Output directory. This is where the converted files will \
+                                 action=FullPaths,
+                                 dest="output_dir",
+                                 default="output",
+                                 help="Output directory. This is where the converted files will \
                                 be stored. Defaults to 'output'")
         self.parser.add_argument('-v', '--verbose',
-                            action="store_true",
-                            dest="verbose",
-                            default=False,
-                            help="Show verbose output")
+                                 action="store_true",
+                                 dest="verbose",
+                                 default=False,
+                                 help="Show verbose output")
         self.parser = self.add_optional_arguments(self.parser)
         self.parser.set_defaults(func=self.process_arguments)
 
@@ -110,3 +112,42 @@ class DirectoryProcessor(object):
             print('Double check your results.')
             print('-------------------------')
         print('Done!')
+
+
+class MultiProcessDirectoryProcessor(DirectoryProcessor):
+
+    maximum_jobs_count = 1
+
+    def process_arguments(self, arguments):
+        self.maximum_jobs_count = arguments.jobs
+        print("Parallel jobs: {}".format(self.maximum_jobs_count))
+        super().process_arguments(arguments)
+
+    def parse_arguments(self, description, subparser, command):
+        super().parse_arguments(description, subparser, command)
+        self.parser.add_argument('-j', '--jobs',
+                            dest="jobs",
+                            type=int,
+                            default=1,
+                            help="Jobs number. Should be between 1 and number of cpu cores.")
+
+    def process_directory(self):
+        if self.maximum_jobs_count == 1:
+            super().process_directory()
+            return
+        jobs = []
+        for filename in self.input_dir:
+            if self.arguments.verbose:
+                print('Processing: {}'.format(os.path.basename(filename)))
+            p = multiprocessing.Process(target=self.process_image, args=(filename,))
+            jobs.append(p)
+            p.start()
+            if len(jobs) >= self.maximum_jobs_count:
+                for job in jobs:
+                    job.join()
+                jobs = []
+            self.images_processed = self.images_processed + 1
+        # Process last jobs left in queue
+        for job in jobs:
+            job.join()
+        self.finalize()
