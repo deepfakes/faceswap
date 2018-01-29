@@ -1,4 +1,4 @@
-**Before attempting any of this, please make sure you have read, understood and completed ../blob/master/INSTALL.md](the installation instructions). If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository instead of the main repo.**
+**Before attempting any of this, please make sure you have read, understood and completed [the installation instructions](../blob/master/INSTALL.md). If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository instead of the main repo.**
 
 # Workflow
 
@@ -29,11 +29,11 @@ python faceswap.py extract -i ~/faceswap/photo/trump -o ~/faceswap/data/trump
 python faceswap.py extract -i ~/faceswap/photo/cage -o ~/faceswap/data/cage
 ```
 
-We specify our photo input directory and the output folder where our training data will be saved. The script will then try its best to recognize face landmarks, crop the image to that size, and save it to the output folder. Note: this script will make grabbing test data much easier, but it is not perfect. It will (incorrectl) detect multiple faces in some photos and does not recognize if the face is the person who we want to swap. Therefore: **Always check your training data before you start training.** The training data will influence how good your model will be at swapping.
+We specify our photo input directory and the output folder where our training data will be saved. The script will then try its best to recognize face landmarks, crop the image to that size, and save it to the output folder. Note: this script will make grabbing test data much easier, but it is not perfect. It will (incorrectly) detect multiple faces in some photos and does not recognize if the face is the person who we want to swap. Therefore: **Always check your training data before you start training.** The training data will influence how good your model will be at swapping.
 
 ## Training
 
-The training process will take the longest, especially on CPU. We specify the folders where the two faces are, and where we will save our training model. It will start hammering the training data one you run the command. I personally really like to go by the preview and quit the processing once I'm happy with the results.
+The training process will take the longest, especially on CPU. We specify the folders where the two faces are, and where we will save our training model. It will start hammering the training data once you run the command. I personally really like to go by the preview and quit the processing once I'm happy with the results.
 
 ```bash
 python faceswap.py train -A ~/faceswap/data/trump -B ~/faceswap/data/cage -m ~/faceswap/models/
