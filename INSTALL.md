@@ -17,7 +17,7 @@ The type of computations that the process does are well suited for graphics card
       Desktop cards later than the 7xx series are most likely supported.
 - **A lot of patience**
 
-##Supported operating systems:
+## Supported operating systems:
 
 - **Windows 10**
   Windows 7 and 8 might work. Your milage may vary
@@ -75,14 +75,14 @@ Alternative, if your Linux distribution provides its own virtualenv through apt 
 
 #### Windows specific:
 
-`virtualenvwrapper-win` is a package that makes virtualenvs easier to manage on windows.
+`virtualenvwrapper-win` is a package that makes virtualenvs easier to manage on Windows.
 
 ```pip install virtualenvwrapper-win```
 
 
 ## Getting the faceswap code
 
-Simply download the code from http://github.com/deepfakes/faceswap/ - For development is recommended to use git instead of downloading the code and extracting it.
+Simply download the code from http://github.com/deepfakes/faceswap/ - For development it is recommended to use git instead of downloading the code and extracting it.
 
 For now, extract the code to a directory where you're comfortable working with it. Navigate to it with the command line. For our example we will use `~/faceswap/` as our project directory.
 
@@ -96,7 +96,7 @@ We will now initialize our virtualenv:
 virtualenv faceswap_env/
 ```
 
-On windows you can use: 
+On Windows you can use: 
 
 ```
 mkvirtualenv faceswap
@@ -105,9 +105,9 @@ setprojectdir .
 
 This will create a folder with python, pip, and setuptools all ready to go in its own little environment.            It will also activate the Virtual Environment which is indicated with the (faceswap) on the left side of the prompt. Anything we install now will be specific to this project. And available to the projects we connect to this environment. 
 
-Let say you’re content with the work you’ve contributed to this project and you want to move onto something else in the command line. Simply type `deactivate` to deactivate your environment. 
+Let's say you’re content with the work you’ve contributed to this project and you want to move onto something else in the command line. Simply type `deactivate` to deactivate your environment. 
 
-To reactive your environment on Windows, you can use `workon faceswap`. On Mac and linux, you can use `source ./faceswap_env/bin/activate`. Note that the Mac/Linux command is relative to the project and virtualenv directory.
+To reactive your environment on Windows, you can use `workon faceswap`. On Mac and Linux, you can use `source ./faceswap_env/bin/activate`. Note that the Mac/Linux command is relative to the project and virtualenv directory.
 
 ### Setting up for our project
 
