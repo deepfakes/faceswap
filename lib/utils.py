@@ -4,6 +4,7 @@ import numpy
 from pathlib import Path
 from scandir import scandir
 
+image_extensions = [".jpg", ".jpeg", ".png"]
 
 def get_folder(path):
     output_dir = Path(path)
@@ -12,7 +13,8 @@ def get_folder(path):
 
 
 def get_image_paths(directory):
-    return [x.path for x in scandir(directory) if x.name.endswith('.jpg') or x.name.endswith('.jpeg') or x.name.endswith('.png')]
+    return [x.path for x in scandir(directory) if
+     any(map(lambda ext: x.name.lower().endswith(ext), image_extensions))]
 
 
 def load_images(image_paths, convert=None):

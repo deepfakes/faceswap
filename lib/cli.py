@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+from tqdm import tqdm
 
 from lib.utils import get_image_paths, get_folder, load_images
 
@@ -49,7 +50,7 @@ class DirectoryProcessor(object):
         self.process_directory()
 
     def process_directory(self):
-        for filename in self.input_dir:
+        for filename in tqdm(self.input_dir):
             if self.arguments.verbose:
                 print('Processing: {}'.format(os.path.basename(filename)))
 
