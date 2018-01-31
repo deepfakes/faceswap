@@ -1,10 +1,13 @@
+# Based on the original https://www.reddit.com/r/deepfakes/ code sample
+# Adjust code made by https://github.com/yangchen8710
+
 import cv2
 import numpy
 import os
 
 class Convert(object):
-    def __init__(self, autoencoder):
-        self.autoencoder = autoencoder
+    def __init__(self, encoder):
+        self.encoder = encoder
          
         self.use_smooth_mask=True
         self.use_avg_color_adjust=True
@@ -18,7 +21,7 @@ class Convert(object):
 
         face = cv2.resize(face, (64, 64))
         face = numpy.expand_dims(face, 0)
-        new_face = self.autoencoder.predict(face / 255.0)[0]
+        new_face = self.encoder(face / 255.0)[0]
         new_face = numpy.clip(new_face * 255, 0, 255).astype(image.dtype)
         new_face = cv2.resize(new_face, (160, 160))
 
