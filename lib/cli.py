@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+from tqdm import tqdm
 
 from pathlib import Path
 from lib.FaceFilter import FaceFilter
@@ -51,9 +52,9 @@ class DirectoryProcessor(object):
         self.filter = self.load_filter()
         self.process()
         self.finalize()
-
+        
     def read_directory(self):
-        for filename in self.input_dir:
+        for filename in tqdm(self.input_dir):
             if self.arguments.verbose:
                 print('Processing: {}'.format(os.path.basename(filename)))
 

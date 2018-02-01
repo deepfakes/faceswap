@@ -68,6 +68,14 @@ class TrainingProcessor(object):
                             dest="write_image",
                             default=False,
                             help="Writes the training result to a file even on preview mode.")
+        parser.add_argument('-t', '--trainer',
+                            type=str, choices=("Original","LowMem"),
+                            default="Original",
+                            help="Select which trainer to use, LowMem for cards < 2gb.")
+        parser.add_argument('-bs', '--batch-size',
+                            type=int,
+                            default=64,
+                            help="Batch size, as a power of 2 (64, 128, 256, etc)")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -78,6 +86,7 @@ class TrainingProcessor(object):
     def process(self):
         import threading
         self.stop = False
+        self.save_now = False
 
         thr = threading.Thread(target=self.processThread, args=(), kwargs={})
         thr.start()
@@ -85,29 +94,36 @@ class TrainingProcessor(object):
         if self.arguments.preview:
             print('Using live preview')
             while True:
-                for name, image in self.preview_buffer.items():
-                    cv2.imshow(name, image)
+                try:
+                    for name, image in self.preview_buffer.items():
+                        cv2.imshow(name, image)
 
-                key = cv2.waitKey(1000)
-                if key == ord('\n') or key == ord('\r'):
+                    key = cv2.waitKey(1000)
+                    if key == ord('\n') or key == ord('\r'):
+                        break
+                    if key == ord('s'):
+                        self.save_now = True
+                except KeyboardInterrupt:
                     break
         else:
             input() # TODO how to catch a specific key instead of Enter?
+            # there isnt a good multiplatform solution: https://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
 
         print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
         self.stop = True
         thr.join() # waits until thread finishes
-    
+
     def processThread(self):
-        variant = "Original" # TODO Pass as argument
-        
         print('Loading data, this may take a while...')
-        model = PluginLoader.get_model(variant)(self.arguments.model_dir)
+        model = PluginLoader.get_model(self.arguments.trainer)(self.arguments.model_dir)
         model.load(swapped=False)
 
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
-        trainer = PluginLoader.get_trainer(variant)(model, images_A, images_B)
+        trainer = PluginLoader.get_trainer(self.arguments.trainer)(model,
+                                                                   images_A,
+                                                                   images_B,
+                                                                   batch_size=self.arguments.batch_size)
 
         try:
             print('Starting. Press "Enter" to stop training and save model')
@@ -116,7 +132,7 @@ class TrainingProcessor(object):
 
                 save_iteration = epoch % self.arguments.save_interval == 0
 
-                trainer.train_one_step(epoch, self.show if save_iteration else None)
+                trainer.train_one_step(epoch, self.show if (save_iteration or self.save_now) else None)
 
                 if save_iteration:
                     model.save_weights()
@@ -124,6 +140,10 @@ class TrainingProcessor(object):
                 if self.stop:
                     model.save_weights()
                     exit()
+
+                if self.save_now:
+                    model.save_weights()
+                    self.save_now = False
 
         except KeyboardInterrupt:
             try:

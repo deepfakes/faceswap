@@ -4,13 +4,16 @@ import sys
 from pathlib import Path
 from scandir import scandir
 
+image_extensions = [".jpg", ".jpeg", ".png"]
+
 def get_folder(path):
     output_dir = Path(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
 def get_image_paths(directory):
-    return [x.path for x in scandir(directory) if x.name.endswith('.jpg') or x.name.endswith('.jpeg') or x.name.endswith('.png')]
+    return [x.path for x in scandir(directory) if
+     any(map(lambda ext: x.name.lower().endswith(ext), image_extensions))]
 
 class FullHelpArgumentParser(argparse.ArgumentParser):
     """

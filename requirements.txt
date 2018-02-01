@@ -7,3 +7,4 @@ tensorflow==1.4.1
 scikit-image
 dlib
 face_recognition
+tqdm
