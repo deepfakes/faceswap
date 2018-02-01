@@ -47,7 +47,7 @@ class ConvertImage(DirectoryProcessor):
                             action="store_true",
                             dest="seamless_clone",
                             default=False,
-                            help="Seamless mode. (Masked converter only)") # doesnt this disable blur?
+                            help="Seamless mode. (Masked converter only)")
 
         parser.add_argument('-M', '--mask-type',
                             type=str.lower, #lowercase this, because its just a string later on.
@@ -66,13 +66,13 @@ class ConvertImage(DirectoryProcessor):
                             action="store_true",
                             dest="smooth_mask",
                             default=True,
-                            help="Seamless mode. (Adjust converter only)") # doesnt this disable blur?
+                            help="Smooth mask (Adjust converter only)")
 
         parser.add_argument('-aca', '--avg-color-adjust',
                             action="store_true",
                             dest="avg_color_adjust",
                             default=True,
-                            help="Seamless mode. (Adjust converter only)") # doesnt this disable blur?
+                            help="Average color adjust. (Adjust converter only)")
 
         return parser
 
@@ -98,7 +98,7 @@ class ConvertImage(DirectoryProcessor):
         batch = BackgroundGenerator(self.prepare_images(), 1)
         for item in batch.iterator():
             self.convert(converter, item)
-        
+
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
