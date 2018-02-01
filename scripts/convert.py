@@ -100,7 +100,7 @@ class ConvertImage(DirectoryProcessor):
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
-        
+
         converter = PluginLoader.get_converter(conv_name)(model.converter(False),
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
@@ -127,16 +127,19 @@ class ConvertImage(DirectoryProcessor):
 
         for item in batch.iterator():
             self.convert(converter, item)
-
-
+    
     def check_skip(self, filename):
-        idx = int(self.imageidxre.findall(filename)[0])
-        return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
+        try:
+            idx = int(self.imageidxre.findall(filename)[0])
+            return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
+        except:
+            return False
+
 
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
-
+            
             skip = self.check_skip(filename)
 
             if not skip: # process as normal
