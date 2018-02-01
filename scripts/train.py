@@ -69,7 +69,8 @@ class TrainingProcessor(object):
                             default=False,
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
-                            type=str, choices=("Original","LowMem"),
+                            type=str,
+                            choices=("Original", "LowMem"),
                             default="Original",
                             help="Select which trainer to use, LowMem for cards < 2gb.")
         parser.add_argument('-bs', '--batch-size',
@@ -115,12 +116,15 @@ class TrainingProcessor(object):
 
     def processThread(self):
         print('Loading data, this may take a while...')
-        model = PluginLoader.get_model(self.arguments.trainer)(self.arguments.model_dir)
+        # this is so that you can enter case insensitive values for trainer
+        trainer = self.arguments.trainer
+        trainer = trainer if trainer != "Lowmem" else "LowMem"
+        model = PluginLoader.get_model(trainer)(self.arguments.model_dir)
         model.load(swapped=False)
 
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
-        trainer = PluginLoader.get_trainer(self.arguments.trainer)(model,
+        trainer = PluginLoader.get_trainer(trainer)(model,
                                                                    images_A,
                                                                    images_B,
                                                                    batch_size=self.arguments.batch_size)
