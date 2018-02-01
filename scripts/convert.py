@@ -89,13 +89,13 @@ class ConvertImage(DirectoryProcessor):
                             help="Average color adjust. (Adjust converter only)")
 
         return parser
-
+    
     def process(self):
         # Original model goes with Adjust or Masked converter
         # does the LowMem one work with only one?
         model_name = "Original" # TODO Pass as argument
         conv_name = self.arguments.converter
-
+        
         model = PluginLoader.get_model(model_name)(self.arguments.model_dir)
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
@@ -127,7 +127,7 @@ class ConvertImage(DirectoryProcessor):
 
         for item in batch.iterator():
             self.convert(converter, item)
-
+    
     def check_skip(self, filename):
         try:
             idx = int(self.imageidxre.findall(filename)[0])
@@ -135,9 +135,11 @@ class ConvertImage(DirectoryProcessor):
         except:
             return False
 
+
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
+            
             skip = self.check_skip(filename)
 
             if not skip: # process as normal
