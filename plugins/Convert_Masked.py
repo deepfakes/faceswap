@@ -1,13 +1,13 @@
+# Based on: https://gist.github.com/anonymous/d3815aba83a8f79779451262599b0955 found on https://www.reddit.com/r/deepfakes/
+
 import cv2
 import numpy
 
 from lib.aligner import get_align_mat
 
-# Based on: https://gist.github.com/anonymous/d3815aba83a8f79779451262599b0955
-
 class Convert():
-    def __init__(self, autoencoder):
-        self.autoencoder = autoencoder
+    def __init__(self, encoder):
+        self.encoder = encoder
 
         # if args.erosionKernelSize > 0:
         #     self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(args.erosionKernelSize,args.erosionKernelSize))
@@ -51,7 +51,7 @@ class Convert():
     def get_new_face(self, image, mat, size):
         face = cv2.warpAffine( image, mat, (size,size) )
         face = numpy.expand_dims( face, 0 )
-        new_face = self.autoencoder.predict( face / 255.0 )[0]
+        new_face = self.encoder( face / 255.0 )[0]
 
         return numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
 
@@ -64,7 +64,7 @@ class Convert():
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
         if 'Hull' in self.maskType:
-            hull = cv2.convexHull( numpy.array( face_detected.landmarks ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
+            hull = cv2.convexHull( numpy.array( face_detected.landmarksAsXY() ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
             cv2.fillConvexPoly( hull_mask,hull,(1,1,1) )
 
         if self.maskType == 'Rect':

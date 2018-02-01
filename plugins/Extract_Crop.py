@@ -1,3 +1,5 @@
+# Based on the original https://www.reddit.com/r/deepfakes/ code sample
+
 import cv2
 
 class Extract(object):
