@@ -20,7 +20,6 @@ class ExtractTrainingData(DirectoryProcessor):
 
         try:
             for filename in self.read_directory():
-                print('Processing %s' % (filename))
                 image = cv2.imread(filename)
                 for idx, face in self.get_faces(image):
                     resized_image = extractor.extract(image, face, 256)
