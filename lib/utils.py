@@ -1,4 +1,5 @@
 import argparse
+import time
 import sys
 
 from pathlib import Path
@@ -40,12 +41,18 @@ class BackgroundGenerator(threading.Thread):
         # Put until queue size is reached. Note: put blocks only if put is called while queue has already reached max size
         # => this makes 2 prefetched items! One in the queue, one waiting for insertion!
         for item in self.generator:
+            start_time = time.time()
             self.queue.put(item)
+            elapsed_time = time.time() - start_time
+            print("put in queue took {}".format(elapsed_time))
         self.queue.put(None)
 
     def iterator(self):
         while True:
+            start_time = time.time()
             next_item = self.queue.get()
+            elapsed_time = time.time() - start_time
+            print("get from queue took {}".format(elapsed_time))
             if next_item is None:
                 break
             yield next_item
