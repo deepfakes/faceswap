@@ -1,8 +1,8 @@
 import argparse
+import sys
 
 from pathlib import Path
 from scandir import scandir
-import sys
 
 image_extensions = [".jpg", ".jpeg", ".png"]
 
