@@ -40,12 +40,11 @@ class ModelAE:
         print('saved model weights')
 
 class TrainerAE():
-    BATCH_SIZE = 64
-
-    def __init__(self, model, fn_A, fn_B):
+    def __init__(self, model, fn_A, fn_B, batch_size=64):
+        self.batch_size = batch_size
         self.model = model
-        self.images_A = minibatchAB(fn_A, self.BATCH_SIZE)
-        self.images_B = minibatchAB(fn_B, self.BATCH_SIZE)
+        self.images_A = minibatchAB(fn_A, self.batch_size)
+        self.images_B = minibatchAB(fn_B, self.batch_size)
 
     def train_one_step(self, iter, viewer):
         epoch, warped_A, target_A = next(self.images_A)
@@ -53,7 +52,7 @@ class TrainerAE():
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
-        print("[%s] [#%d] loss_A: %f, loss_B: %f"  % (time.strftime("%H:%M:%S"), iter, loss_A, loss_B))
+        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(time.strftime("%H:%M:%S"), iter, loss_A, loss_B))
 
         if viewer is not None:
             viewer(self.show_sample(target_A[0:14], target_B[0:14]), "training")
