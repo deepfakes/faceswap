@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 from pathlib import Path
 from scandir import scandir
