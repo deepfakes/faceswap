@@ -130,10 +130,12 @@ class ConvertImage(DirectoryProcessor):
 
 
     def check_skip(self, filename):
-        if not self.frame_ranges:
+        try:
+            idx = int(self.imageidxre.findall(filename)[0])
+            return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
+        except:
             return False
-        idx = int(self.imageidxre.findall(filename)[0])
-        return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
+
 
 
     def convert(self, converter, item):
