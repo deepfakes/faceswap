@@ -1,5 +1,5 @@
 import cv2
-
+import re
 from pathlib import Path
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.utils import BackgroundGenerator
@@ -17,7 +17,7 @@ class ConvertImage(DirectoryProcessor):
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground"
         )
-    
+
     def add_optional_arguments(self, parser):
         parser.add_argument('-m', '--model-dir',
                             action=FullPaths,
@@ -37,6 +37,20 @@ class ConvertImage(DirectoryProcessor):
                             choices=("Masked", "Adjust"), # case sensitive because this is used to load a plugin.
                             default="Masked",
                             help="Converter to use.")
+
+        parser.add_argument('-fr', '--frame-ranges',
+                            nargs="+",
+                            type=str,
+                            help="""frame ranges to apply transfer to. eg for frames 10 to 50 and 90 to 100 use --frame-ranges 10-50 90-100.
+                            Files must have the framenumber as the last number in the name!"""
+                            )
+
+        parser.add_argument('-d', '--discard-frames',
+                            action="store_true",
+                            dest="discard_frames",
+                            default=False,
+                            help="when use with --frame-ranges discards frames that are not processed instead of writing them out unchanged."
+                            )
 
         parser.add_argument('-b', '--blur-size',
                             type=int,
@@ -86,6 +100,7 @@ class ConvertImage(DirectoryProcessor):
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
+        
         converter = PluginLoader.get_converter(conv_name)(model.converter(False),
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
@@ -96,16 +111,44 @@ class ConvertImage(DirectoryProcessor):
         )
 
         batch = BackgroundGenerator(self.prepare_images(), 1)
+
+        # frame ranges stuff...
+        self.frame_ranges = None
+        # split out the frame ranges and parse out "min" and "max" values
+        minmax = {
+            "min": 0, # never any frames less than 0
+            "max": float("inf")
+        }
+        if self.arguments.frame_ranges:
+            self.frame_ranges = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-"))) for v in self.arguments.frame_ranges]
+
+        # last number regex. I know regex is hacky, but its reliablyhacky(tm).
+        self.imageidxre = re.compile(r'(\d+)(?!.*\d)')
+
         for item in batch.iterator():
             self.convert(converter, item)
 
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
-            for idx, face in faces:
-                image = converter.patch_image(image, face)
+            skip = False
+            try:
+                if self.frame_ranges is not None:
+                    # grab the index with last number regex
+                    idx = int(self.imageidxre.findall(filename)[0])
+                    # only skip if the current index is not between any of the frame ranges.
+                    skip = not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
+            except:
+                # if we error, dont skip
+                skip = False
+
+            if not skip: # process as normal
+                for idx, face in faces:
+                    image = converter.patch_image(image, face)
 
             output_file = self.output_dir / Path(filename).name
+            if self.arguments.discard_frames and skip:
+                return
             cv2.imwrite(str(output_file), image)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
