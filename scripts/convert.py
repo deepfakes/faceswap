@@ -100,7 +100,7 @@ class ConvertImage(DirectoryProcessor):
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
-
+        
         converter = PluginLoader.get_converter(conv_name)(model.converter(False),
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
