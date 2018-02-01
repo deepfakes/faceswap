@@ -39,11 +39,17 @@ class ConvertImage(DirectoryProcessor):
                             help="Converter to use.")
 
         parser.add_argument('-fr', '--frame-ranges',
-                            # action="append",
                             nargs="+",
                             type=str,
                             help="""frame ranges to apply transfer to. eg for frames 10 to 50 and 90 to 100 use --frame-ranges 10-50 90-100.
                             Files must have the framenumber as the last number in the name!"""
+                            )
+
+        parser.add_argument('-d', '--discard-frames',
+                            action="store_true",
+                            dest="discard_frames",
+                            default=False,
+                            help="when use with --frame-ranges discards frames that are not processed instead of writing them out unchanged."
                             )
 
         parser.add_argument('-b', '--blur-size',
@@ -118,7 +124,7 @@ class ConvertImage(DirectoryProcessor):
 
         # last number regex. I know regex is hacky, but its reliablyhacky(tm).
         self.imageidxre = re.compile(r'(\d+)(?!.*\d)')
-        
+
         for item in batch.iterator():
             self.convert(converter, item)
 
@@ -141,6 +147,8 @@ class ConvertImage(DirectoryProcessor):
                     image = converter.patch_image(image, face)
 
             output_file = self.output_dir / Path(filename).name
+            if self.arguments.discard_frames and skip:
+                return
             cv2.imwrite(str(output_file), image)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
