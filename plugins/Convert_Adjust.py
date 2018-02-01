@@ -6,11 +6,11 @@ import numpy
 import os
 
 class Convert(object):
-    def __init__(self, encoder):
+    def __init__(self, encoder, smooth_mask=True, avg_color_adjust=True, **kwargs):
         self.encoder = encoder
-         
-        self.use_smooth_mask=True
-        self.use_avg_color_adjust=True
+        
+        self.use_smooth_mask = smooth_mask
+        self.use_avg_color_adjust = avg_color_adjust
 
     def patch_image( self, original, face_detected ):
         #assert image.shape == (256, 256, 3)
