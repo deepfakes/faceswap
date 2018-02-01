@@ -100,7 +100,7 @@ class ConvertImage(DirectoryProcessor):
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
-        
+
         converter = PluginLoader.get_converter(conv_name)(model.converter(False),
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
@@ -128,25 +128,22 @@ class ConvertImage(DirectoryProcessor):
         for item in batch.iterator():
             self.convert(converter, item)
 
+
+    def check_skip(self, filename):
+        idx = int(self.imageidxre.findall(filename)[0])
+        return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
+
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
-            skip = False
-            try:
-                if self.frame_ranges is not None:
-                    # grab the index with last number regex
-                    idx = int(self.imageidxre.findall(filename)[0])
-                    # only skip if the current index is not between any of the frame ranges.
-                    skip = not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
-            except:
-                # if we error, dont skip
-                skip = False
+            skip = self.check_skip(filename)
 
             if not skip: # process as normal
                 for idx, face in faces:
                     image = converter.patch_image(image, face)
 
             output_file = self.output_dir / Path(filename).name
+
             if self.arguments.discard_frames and skip:
                 return
             cv2.imwrite(str(output_file), image)
