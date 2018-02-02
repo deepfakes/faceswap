@@ -7,3 +7,4 @@ tensorflow-gpu==1.4.0
 scikit-image
 dlib
 face_recognition
+tqdm

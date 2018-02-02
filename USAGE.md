@@ -1,4 +1,4 @@
-**Before attempting any of this, please make sure you have read, understood and completed [the installation instructions](../blob/master/INSTALL.md). If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository instead of the main repo.**
+**Before attempting any of this, please make sure you have read, understood and completed [the installation instructions](../master/INSTALL.md). If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository instead of the main repo.**
 
 # Workflow
 

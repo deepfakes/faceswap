@@ -2,12 +2,9 @@ import cv2
 import numpy
 import time
 
-from lib.training_data import get_training_data, stack_images
-from lib.utils import get_image_paths, get_folder, load_images
-
-from lib.model import autoencoder_A, autoencoder_B
-from lib.model import encoder, decoder_A, decoder_B
+from lib.utils import get_image_paths
 from lib.cli import FullPaths
+from plugins.PluginLoader import PluginLoader
 
 class TrainingProcessor(object):
     arguments = None
@@ -20,14 +17,6 @@ class TrainingProcessor(object):
         print("Model A Directory: {}".format(self.arguments.input_A))
         print("Model B Directory: {}".format(self.arguments.input_B))
         print("Training data directory: {}".format(self.arguments.model_dir))
-
-        try:
-            encoder.load_weights(self.arguments.model_dir + '/encoder.h5')
-            decoder_A.load_weights(self.arguments.model_dir + '/decoder_A.h5')
-            decoder_B.load_weights(self.arguments.model_dir + '/decoder_B.h5')
-        except Exception as e:
-            print('Not loading existing training data.')
-            print(e)
 
         self.process()
 
@@ -79,6 +68,15 @@ class TrainingProcessor(object):
                             dest="write_image",
                             default=False,
                             help="Writes the training result to a file even on preview mode.")
+        parser.add_argument('-t', '--trainer',
+                            type=str,
+                            choices=("Original", "LowMem"),
+                            default="Original",
+                            help="Select which trainer to use, LowMem for cards < 2gb.")
+        parser.add_argument('-bs', '--batch-size',
+                            type=int,
+                            default=64,
+                            help="Batch size, as a power of 2 (64, 128, 256, etc)")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -86,6 +84,7 @@ class TrainingProcessor(object):
         # Override this for custom arguments
         return parser
 
+<<<<<<< HEAD
     def save_model_weights(self):
         encoder.save_weights(self.arguments.model_dir + '/encoder.h5')
         decoder_A.save_weights(self.arguments.model_dir + '/decoder_A.h5')
@@ -118,10 +117,49 @@ class TrainingProcessor(object):
         if not self.arguments.preview or self.arguments.write_image:
             cv2.imwrite('_sample.jpg', figure)
 
+=======
+>>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
     def process(self):
-        print('Starting, this may take a while...')
+        import threading
+        self.stop = False
+        self.save_now = False
+
+        thr = threading.Thread(target=self.processThread, args=(), kwargs={})
+        thr.start()
+
+        if self.arguments.preview:
+            print('Using live preview')
+            while True:
+                try:
+                    for name, image in self.preview_buffer.items():
+                        cv2.imshow(name, image)
+
+                    key = cv2.waitKey(1000)
+                    if key == ord('\n') or key == ord('\r'):
+                        break
+                    if key == ord('s'):
+                        self.save_now = True
+                except KeyboardInterrupt:
+                    break
+        else:
+            input() # TODO how to catch a specific key instead of Enter?
+            # there isnt a good multiplatform solution: https://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
+
+        print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
+        self.stop = True
+        thr.join() # waits until thread finishes
+
+    def processThread(self):
+        print('Loading data, this may take a while...')
+        # this is so that you can enter case insensitive values for trainer
+        trainer = self.arguments.trainer
+        trainer = trainer if trainer != "Lowmem" else "LowMem"
+        model = PluginLoader.get_model(trainer)(self.arguments.model_dir)
+        model.load(swapped=False)
+
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
+<<<<<<< HEAD
         images_A = load_images(images_A) / 255.0
         images_B = load_images(images_B) / 255.0
 
@@ -156,3 +194,48 @@ class TrainingProcessor(object):
                 m, s = divmod(time_elapsed, 60)
                 h, m = divmod(m, 60)
                 print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
+=======
+        trainer = PluginLoader.get_trainer(trainer)(model,
+                                                                   images_A,
+                                                                   images_B,
+                                                                   batch_size=self.arguments.batch_size)
+
+        try:
+            print('Starting. Press "Enter" to stop training and save model')
+
+            for epoch in range(0, 1000000):
+
+                save_iteration = epoch % self.arguments.save_interval == 0
+
+                trainer.train_one_step(epoch, self.show if (save_iteration or self.save_now) else None)
+
+                if save_iteration:
+                    model.save_weights()
+
+                if self.stop:
+                    model.save_weights()
+                    exit()
+
+                if self.save_now:
+                    model.save_weights()
+                    self.save_now = False
+
+        except KeyboardInterrupt:
+            try:
+                model.save_weights()
+            except KeyboardInterrupt:
+                print('Saving model weights has been cancelled!')
+            exit(0)
+
+    preview_buffer = {}
+
+    def show(self, image, name=''):
+        try:
+            if self.arguments.preview:
+                self.preview_buffer[name] = image
+            elif self.arguments.write_image:
+                cv2.imwrite('_sample_{}.jpg'.format(name), image)
+        except Exception as e:
+            print("could not preview sample")
+            print(e)
+>>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b

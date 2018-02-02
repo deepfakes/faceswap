@@ -1,23 +1,27 @@
+# Based on: https://gist.github.com/anonymous/d3815aba83a8f79779451262599b0955 found on https://www.reddit.com/r/deepfakes/
+
 import cv2
 import numpy
 
 from lib.aligner import get_align_mat
 
-# Based on: https://gist.github.com/anonymous/d3815aba83a8f79779451262599b0955
-
 class Convert():
-    def __init__(self, autoencoder):
-        self.autoencoder = autoencoder
-
-        # if args.erosionKernelSize > 0:
-        #     self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(args.erosionKernelSize,args.erosionKernelSize))
-        # else:
-        #     self.erosion_kernel = None
+    def __init__(self, encoder, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, **kwargs):
+        self.encoder = encoder
 
         self.erosion_kernel = None
+<<<<<<< HEAD
         self.blurSize = 2
         self.seamlessClone = True
         self.maskType = 'Rect' # Choose in 'FaceHullAndRect','FaceHull','Rect'
+=======
+        if erosion_kernel_size is not None:
+            self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(erosion_kernel_size,erosion_kernel_size))
+
+        self.blur_size = blur_size
+        self.seamless_clone = seamless_clone
+        self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
+>>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
 
 
     def patch_image( self, image, face_detected ):
@@ -38,7 +42,7 @@ class Convert():
 
         cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
         outImage = None
-        if self.seamlessClone:
+        if self.seamless_clone:
             masky,maskx = cv2.transform( numpy.array([ size/2,size/2 ]).reshape(1,1,2) ,cv2.invertAffineTransform(mat) ).reshape(2).astype(int)
             outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),base_image.astype(numpy.uint8),(image_mask*255).astype(numpy.uint8),(masky,maskx) , cv2.NORMAL_CLONE )
         else:
@@ -51,25 +55,25 @@ class Convert():
     def get_new_face(self, image, mat, size):
         face = cv2.warpAffine( image, mat, (size,size) )
         face = numpy.expand_dims( face, 0 )
-        new_face = self.autoencoder.predict( face / 255.0 )[0]
+        new_face = self.encoder( face / 255.0 )[0]
 
         return numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
 
     def get_image_mask(self, image, new_face, face_detected, mat, image_size):
 
         face_mask = numpy.zeros(image.shape,dtype=float)
-        if 'Rect' in self.maskType:
-            face_src = numpy.ones(new_face.shape,dtype=float) 
+        if 'rect' in self.mask_type:
+            face_src = numpy.ones(new_face.shape,dtype=float)
             cv2.warpAffine( face_src, mat, image_size, face_mask, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
-        if 'Hull' in self.maskType:
-            hull = cv2.convexHull( numpy.array( face_detected.landmarks ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
+        if 'hull' in self.mask_type:
+            hull = cv2.convexHull( numpy.array( face_detected.landmarksAsXY() ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
             cv2.fillConvexPoly( hull_mask,hull,(1,1,1) )
 
-        if self.maskType == 'Rect':
+        if self.mask_type == 'rect':
             image_mask = face_mask
-        elif self.maskType == 'FaceHull':
+        elif self.mask_type == 'faceHull':
             image_mask = hull_mask
         else:
             image_mask = ((face_mask*hull_mask))
@@ -78,7 +82,7 @@ class Convert():
         if self.erosion_kernel is not None:
             image_mask = cv2.erode(image_mask,self.erosion_kernel,iterations = 1)
 
-        if self.blurSize!=0:
-            image_mask = cv2.blur(image_mask,(self.blurSize,self.blurSize))
+        if self.blur_size!=0:
+            image_mask = cv2.blur(image_mask,(self.blur_size,self.blur_size))
 
         return image_mask
