@@ -84,41 +84,6 @@ class TrainingProcessor(object):
         # Override this for custom arguments
         return parser
 
-<<<<<<< HEAD
-    def save_model_weights(self):
-        encoder.save_weights(self.arguments.model_dir + '/encoder.h5')
-        decoder_A.save_weights(self.arguments.model_dir + '/decoder_A.h5')
-        decoder_B.save_weights(self.arguments.model_dir + '/decoder_B.h5')
-        print('save model weights')
-
-    def show_sample(self, test_A, test_B, epoch):
-        figure_A = numpy.stack([
-            test_A,
-            autoencoder_A.predict(test_A),
-            autoencoder_B.predict(test_A),
-        ], axis=1)
-        figure_B = numpy.stack([
-            test_B,
-            autoencoder_B.predict(test_B),
-            autoencoder_A.predict(test_B),
-        ], axis=1)
-
-        figure = numpy.concatenate([figure_A, figure_B], axis=0)
-        figure = figure.reshape((4, 7) + figure.shape[1:])
-        figure = stack_images(figure)
-
-        figure = numpy.clip(figure * 255, 0, 255).astype('uint8')
-
-        if self.arguments.preview is True:
-            _file = '/home/rnd/git/faceswap/_protocol/epoch_{0}.png'.format(epoch)
-            cv2.imwrite(_file, figure)
-            cv2.imshow('', figure)
-
-        if not self.arguments.preview or self.arguments.write_image:
-            cv2.imwrite('_sample.jpg', figure)
-
-=======
->>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
     def process(self):
         import threading
         self.stop = False
@@ -159,46 +124,7 @@ class TrainingProcessor(object):
 
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
-<<<<<<< HEAD
-        images_A = load_images(images_A) / 255.0
-        images_B = load_images(images_B) / 255.0
-
-        images_A += images_B.mean(axis=(0, 1, 2)) - images_A.mean(axis=(0, 1, 2))
-
-        print('press "q" to stop training and save model')
-
-        BATCH_SIZE = 64
-
-        for epoch in range(1000000):
-            if self.arguments.verbose:
-                print("Iteration number {}".format(epoch + 1))
-                start_time = time.time()
-            warped_A, target_A = get_training_data(images_A, BATCH_SIZE)
-            warped_B, target_B = get_training_data(images_B, BATCH_SIZE)
-
-            loss_A = autoencoder_A.train_on_batch(warped_A, target_A)
-            loss_B = autoencoder_B.train_on_batch(warped_B, target_B)
-            print(loss_A, loss_B)
-
-            if epoch % self.arguments.save_interval == 0:
-                self.save_model_weights()
-                self.show_sample(target_A[0:14], target_B[0:14], epoch)
-
-            key = cv2.waitKey(1)
-            if key == ord('q'):
-                self.save_model_weights()
-                exit()
-            if self.arguments.verbose:
-                end_time = time.time()
-                time_elapsed = int(round((end_time - start_time)))
-                m, s = divmod(time_elapsed, 60)
-                h, m = divmod(m, 60)
-                print("Iteration done in {:02d}h{:02d}m{:02d}s".format(h, m, s))
-=======
-        trainer = PluginLoader.get_trainer(trainer)(model,
-                                                                   images_A,
-                                                                   images_B,
-                                                                   batch_size=self.arguments.batch_size)
+        trainer = PluginLoader.get_trainer(trainer)(model,images_A,images_B,batch_size=self.arguments.batch_size)
 
         try:
             print('Starting. Press "Enter" to stop training and save model')
@@ -238,4 +164,3 @@ class TrainingProcessor(object):
         except Exception as e:
             print("could not preview sample")
             print(e)
->>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b

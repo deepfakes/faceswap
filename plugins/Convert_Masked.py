@@ -10,18 +10,12 @@ class Convert():
         self.encoder = encoder
 
         self.erosion_kernel = None
-<<<<<<< HEAD
-        self.blurSize = 2
-        self.seamlessClone = True
-        self.maskType = 'Rect' # Choose in 'FaceHullAndRect','FaceHull','Rect'
-=======
         if erosion_kernel_size is not None:
             self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(erosion_kernel_size,erosion_kernel_size))
 
         self.blur_size = blur_size
         self.seamless_clone = seamless_clone
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
->>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
 
 
     def patch_image( self, image, face_detected ):

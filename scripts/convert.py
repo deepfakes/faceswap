@@ -115,13 +115,8 @@ class ConvertImage(DirectoryProcessor):
             avg_color_adjust=self.arguments.avg_color_adjust
         )
 
-<<<<<<< HEAD
-    def process_image(self, filename, session_info):
-        # TODO move the model load and the converter creation in a method called on init, but after the arg parsing
-        (face_A,face_B) = ('/decoder_A.h5', '/decoder_B.h5') if not self.arguments.swap_model else ('/decoder_B.h5', '/decoder_A.h5')
-=======
+
         batch = BackgroundGenerator(self.prepare_images(), 1)
->>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
 
         # frame ranges stuff...
         self.frame_ranges = None
@@ -133,18 +128,6 @@ class ConvertImage(DirectoryProcessor):
         if self.arguments.frame_ranges:
             self.frame_ranges = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-"))) for v in self.arguments.frame_ranges]
 
-<<<<<<< HEAD
-        converter = PluginLoader.get_converter("Masked")(autoencoder_B)
-        start = time.time()
-        try:
-            image = cv2.imread(filename)
-            print ("converting {0}/{1}".format(session_info[0],
-                                   session_info[1]))
-            for (idx, face) in enumerate(detect_faces(image)):
-                if idx > 0 and self.arguments.verbose:
-                    print('- Found more than one face!')
-                    self.verify_output = True
-=======
         # last number regex. I know regex is hacky, but its reliablyhacky(tm).
         self.imageidxre = re.compile(r'(\d+)(?!.*\d)')
 
@@ -164,7 +147,6 @@ class ConvertImage(DirectoryProcessor):
             (filename, image, faces) = item
             
             skip = self.check_skip(filename)
->>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
 
             if not skip: # process as normal
                 for idx, face in faces:
