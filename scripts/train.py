@@ -92,7 +92,7 @@ class TrainingProcessor(object):
         decoder_B.save_weights(self.arguments.model_dir + '/decoder_B.h5')
         print('save model weights')
 
-    def show_sample(self, test_A, test_B):
+    def show_sample(self, test_A, test_B, epoch):
         figure_A = numpy.stack([
             test_A,
             autoencoder_A.predict(test_A),
@@ -111,7 +111,10 @@ class TrainingProcessor(object):
         figure = numpy.clip(figure * 255, 0, 255).astype('uint8')
 
         if self.arguments.preview is True:
+            _file = '/home/rnd/git/faceswap/_protocol/epoch_{0}.png'.format(epoch)
+            cv2.imwrite(_file, figure)
             cv2.imshow('', figure)
+
         if not self.arguments.preview or self.arguments.write_image:
             cv2.imwrite('_sample.jpg', figure)
 
@@ -141,7 +144,7 @@ class TrainingProcessor(object):
 
             if epoch % self.arguments.save_interval == 0:
                 self.save_model_weights()
-                self.show_sample(target_A[0:14], target_B[0:14])
+                self.show_sample(target_A[0:14], target_B[0:14], epoch)
 
             key = cv2.waitKey(1)
             if key == ord('q'):

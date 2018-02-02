@@ -16,8 +16,9 @@ class Convert():
 
         self.erosion_kernel = None
         self.blurSize = 2
-        self.seamlessClone = False
+        self.seamlessClone = True
         self.maskType = 'Rect' # Choose in 'FaceHullAndRect','FaceHull','Rect'
+
 
     def patch_image( self, image, face_detected ):
         size = 64
@@ -36,7 +37,6 @@ class Convert():
         new_image = numpy.copy( image )
 
         cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
-
         outImage = None
         if self.seamlessClone:
             masky,maskx = cv2.transform( numpy.array([ size/2,size/2 ]).reshape(1,1,2) ,cv2.invertAffineTransform(mat) ).reshape(2).astype(int)

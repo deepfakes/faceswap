@@ -1,5 +1,5 @@
 import cv2
-
+import time
 from pathlib import Path
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.faces_detect import detect_faces
@@ -12,6 +12,7 @@ from plugins.PluginLoader import PluginLoader
 
 class ConvertImage(DirectoryProcessor):
     filename = ''
+    _init_time = None
     def create_parser(self, subparser, command, description):
         self.parser = subparser.add_parser(
             command,
@@ -35,7 +36,7 @@ class ConvertImage(DirectoryProcessor):
                             help="Swap the model. Instead of A -> B, swap B -> A.")
         return parser
 
-    def process_image(self, filename):
+    def process_image(self, filename, session_info):
         # TODO move the model load and the converter creation in a method called on init, but after the arg parsing
         (face_A,face_B) = ('/decoder_A.h5', '/decoder_B.h5') if not self.arguments.swap_model else ('/decoder_B.h5', '/decoder_A.h5')
 
@@ -45,9 +46,11 @@ class ConvertImage(DirectoryProcessor):
         decoder_B.load_weights(model_dir + face_B)
 
         converter = PluginLoader.get_converter("Masked")(autoencoder_B)
-
+        start = time.time()
         try:
             image = cv2.imread(filename)
+            print ("converting {0}/{1}".format(session_info[0],
+                                   session_info[1]))
             for (idx, face) in enumerate(detect_faces(image)):
                 if idx > 0 and self.arguments.verbose:
                     print('- Found more than one face!')
@@ -58,6 +61,8 @@ class ConvertImage(DirectoryProcessor):
 
             output_file = self.output_dir / Path(filename).name
             cv2.imwrite(str(output_file), image)
+            tt = time.time() - start
+            print ("takes {0}".format(tt))
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
