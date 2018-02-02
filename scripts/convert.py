@@ -26,6 +26,12 @@ class ConvertImage(DirectoryProcessor):
                             help="Model directory. A directory containing the trained model \
                     you wish to process. Defaults to 'models'")
 
+        parser.add_argument('-t', '--trainer',
+                            type=str,
+                            choices=("Original", "LowMem"), # case sensitive because this is used to load a plug-in.
+                            default="Original",
+                            help="Select the trainer that was used to create the model.")
+                            
         parser.add_argument('-s', '--swap-model',
                             action="store_true",
                             dest="swap_model",
@@ -34,28 +40,29 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-c', '--converter',
                             type=str,
-                            choices=("Masked", "Adjust"), # case sensitive because this is used to load a plugin.
+                            choices=("Masked", "Adjust"), # case sensitive because this is used to load a plug-in.
                             default="Masked",
                             help="Converter to use.")
 
         parser.add_argument('-fr', '--frame-ranges',
                             nargs="+",
                             type=str,
-                            help="""frame ranges to apply transfer to. eg for frames 10 to 50 and 90 to 100 use --frame-ranges 10-50 90-100.
-                            Files must have the framenumber as the last number in the name!"""
+                            help="frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use --frame-ranges 10-50 90-100. \
+                            Files must have the frame-number as the last number in the name!"
                             )
 
         parser.add_argument('-d', '--discard-frames',
                             action="store_true",
                             dest="discard_frames",
                             default=False,
-                            help="when use with --frame-ranges discards frames that are not processed instead of writing them out unchanged."
+                            help="When used with --frame-ranges discards frames that are not processed instead of writing them out unchanged."
                             )
 
         parser.add_argument('-b', '--blur-size',
                             type=int,
                             default=2,
                             help="Blur size. (Masked converter only)")
+
 
         parser.add_argument('-S', '--seamless',
                             action="store_true",
@@ -87,13 +94,14 @@ class ConvertImage(DirectoryProcessor):
                             dest="avg_color_adjust",
                             default=True,
                             help="Average color adjust. (Adjust converter only)")
-
         return parser
     
     def process(self):
         # Original model goes with Adjust or Masked converter
-        # does the LowMem one work with only one?
-        model_name = "Original" # TODO Pass as argument
+        # does the LowMem one work with only one? 
+        # seems to work with both in testing - although Adjust with LowMem 
+        # looks a real mess - you can see that it is "working"
+        model_name = self.arguments.trainer
         conv_name = self.arguments.converter
         
         model = PluginLoader.get_model(model_name)(self.arguments.model_dir)
@@ -114,11 +122,13 @@ class ConvertImage(DirectoryProcessor):
 
         # frame ranges stuff...
         self.frame_ranges = None
+        
         # split out the frame ranges and parse out "min" and "max" values
         minmax = {
             "min": 0, # never any frames less than 0
             "max": float("inf")
         }
+        
         if self.arguments.frame_ranges:
             self.frame_ranges = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-"))) for v in self.arguments.frame_ranges]
 
@@ -134,7 +144,6 @@ class ConvertImage(DirectoryProcessor):
             return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
         except:
             return False
-
 
     def convert(self, converter, item):
         try:
