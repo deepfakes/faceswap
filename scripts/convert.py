@@ -97,10 +97,7 @@ class ConvertImage(DirectoryProcessor):
         return parser
     
     def process(self):
-        # Original model goes with Adjust or Masked converter
-        # does the LowMem one work with only one? 
-        # seems to work with both in testing - although Adjust with LowMem 
-        # looks a real mess - you can see that it is "working"
+        # Original & LowMem models go with Adjust or Masked converter
         model_name = self.arguments.trainer
         conv_name = self.arguments.converter
         

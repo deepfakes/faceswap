@@ -2,7 +2,7 @@
 
 import time
 import numpy
-from lib.training_data import minibatchAB, stack_images
+from lib.training_data import TrainingDataGenerator, stack_images
 
 encoderH5 = '/encoder.h5'
 decoder_AH5 = '/decoder_A.h5'
@@ -40,11 +40,20 @@ class ModelAE:
         print('saved model weights')
 
 class TrainerAE():
+    random_transform_args = {
+        'rotation_range': 10,
+        'zoom_range': 0.05,
+        'shift_range': 0.05,
+        'random_flip': 0.4,
+    }
+
     def __init__(self, model, fn_A, fn_B, batch_size=64):
         self.batch_size = batch_size
         self.model = model
-        self.images_A = minibatchAB(fn_A, self.batch_size)
-        self.images_B = minibatchAB(fn_B, self.batch_size)
+
+        generator = TrainingDataGenerator(self.random_transform_args, 160)
+        self.images_A = generator.minibatchAB(fn_A, self.batch_size)
+        self.images_B = generator.minibatchAB(fn_B, self.batch_size)
 
     def train_one_step(self, iter, viewer):
         epoch, warped_A, target_A = next(self.images_A)
