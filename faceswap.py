@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+import sys
+if  sys.version_info[0] < 3:
+    raise Exception("This program requires at least python3.2")
+if sys.version_info[0] == 3 and sys.version_info[1] < 2:
+    raise Exception("This program requires at least python3.2")
+
 from lib.utils import FullHelpArgumentParser
 
 from scripts.extract import ExtractTrainingData
