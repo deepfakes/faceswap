@@ -14,6 +14,10 @@ The project has multiple entry points. You will have to:
  - **Train** a model on your photos (or use the one provided in the training data provided below)
  - **Convert** your sources with the model
 
+### Download custom Google Images or use Face datasets  
+run `python google-images-download.py --keywords "keywordA, keywordB, keywordC" --limit 20` in lib/download_image/ [Repo](https://github.com/ArashHosseini/google-images-download)
+[Face dataset](https://jansenh.stackstorage.com/s/UayUugaE0GSda0y)
+
 ### Extract
 From your setup folder, run `python faceswap.py extract`. This will take photos from `src` folder and extract faces into `extract` folder.
 
