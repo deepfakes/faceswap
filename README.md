@@ -15,7 +15,7 @@ The project has multiple entry points. You will have to:
  - **Convert** your sources with the model
 
 ### Download custom Google Images or use Face datasets  
-run `python google-images-download.py --keywords "keywordA, keywordB, keywordC" --limit 20` in lib/download_image/ 
+run `python google-images-download.py --keywords "keywordA, keywordB, keywordC" --limit 20` in lib/ 
 [Repo](https://github.com/ArashHosseini/google-images-download)
 
 or Face dataset includes Phoenix Marie, Hillary Clinton, Charlize Theron.
