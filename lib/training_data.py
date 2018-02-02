@@ -7,30 +7,16 @@ from .umeyama import umeyama
 
 coverage = 220 # Coverage of the face for training. Larger value will cover more features. @shaoanlu recommends 220. Original is 160
 
-random_transform_args = {
-    'rotation_range': 10,
-    'zoom_range': 0.05,
-    'shift_range': 0.05,
-    'random_flip': 0.4,
-}
-
-# GAN
-# random_transform_args = {
-#     'rotation_range': 20,
-#     'zoom_range': 0.1,
-#     'shift_range': 0.05,
-#     'random_flip': 0.5,
-#     }
-def read_image(fn, random_transform_args=random_transform_args):
-    image = cv2.imread(fn) / 255.0
-    image = cv2.resize(image, (256,256))
+def read_image(fn, random_transform_args):
+    image = cv2.imread(fn)
+    image = cv2.resize(image, (256,256)) / 255 * 2 - 1
     image = random_transform( image, **random_transform_args )
     warped_img, target_img = random_warp( image )
     
     return warped_img, target_img
 
 # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
-def minibatch(data, batchsize):
+def minibatch(data, batchsize, args):
     length = len(data)
     epoch = i = 0
     shuffle(data)
@@ -40,12 +26,12 @@ def minibatch(data, batchsize):
             shuffle(data)
             i = 0
             epoch+=1        
-        rtn = numpy.float32([read_image(data[j]) for j in range(i,i+size)])
+        rtn = numpy.float32([read_image(data[j], args) for j in range(i,i+size)])
         i+=size
         yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
 
-def minibatchAB(images, batchsize):
-    batch = BackgroundGenerator(minibatch(images, batchsize), 1)
+def minibatchAB(images, batchsize, args):
+    batch = BackgroundGenerator(minibatch(images, batchsize, args))
     for ep1, warped_img, target_img in batch.iterator():
         yield ep1, warped_img, target_img
 

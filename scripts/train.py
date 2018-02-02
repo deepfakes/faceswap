@@ -70,7 +70,7 @@ class TrainingProcessor(object):
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem"),
+                            choices=("Original", "LowMem", "GAN"),
                             default="Original",
                             help="Select which trainer to use, LowMem for cards < 2gb.")
         parser.add_argument('-bs', '--batch-size',
@@ -118,7 +118,7 @@ class TrainingProcessor(object):
         print('Loading data, this may take a while...')
         # this is so that you can enter case insensitive values for trainer
         trainer = self.arguments.trainer
-        trainer = trainer if trainer != "Lowmem" else "LowMem"
+        trainer = trainer if trainer.lower() != "lowmem" else "LowMem"
         model = PluginLoader.get_model(trainer)(self.arguments.model_dir)
         model.load(swapped=False)
 
@@ -155,6 +155,9 @@ class TrainingProcessor(object):
             except KeyboardInterrupt:
                 print('Saving model weights has been cancelled!')
             exit(0)
+        except Exception as e:
+            print(e)
+            exit(1)
 
     preview_buffer = {}
 
