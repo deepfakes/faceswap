@@ -3,7 +3,6 @@ import re
 from pathlib import Path
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.utils import BackgroundGenerator
-from lib.faces_detect import detect_faces
 
 from plugins.PluginLoader import PluginLoader
 
@@ -43,6 +42,12 @@ class ConvertImage(DirectoryProcessor):
                             choices=("Masked", "Adjust"), # case sensitive because this is used to load a plug-in.
                             default="Masked",
                             help="Converter to use.")
+
+        parser.add_argument('-D', '--detector',
+                            type=str,
+                            choices=("hog", "cnn"), # case sensitive because this is used to load a plugin.
+                            default="hog",
+                            help="Detector to use. 'cnn' detects much more angles but will be much more resource intensive and may fail on large files.")
 
         parser.add_argument('-fr', '--frame-ranges',
                             nargs="+",
