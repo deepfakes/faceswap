@@ -123,7 +123,7 @@ If you want to use your GPU instead of your CPU, substitute `requirements.txt` w
 pip install -r requirements-gpu.txt
 ```
 
-Should you choose the GPU version, Tensorflow might ask you to install the CUDA Toolkit and the cuDNN libraries. Instructions on installing those can be found on Nvidia's website.
+Should you choose the GPU version, Tensorflow might ask you to install the CUDA Toolkit and the cuDNN libraries. Instructions on installing those can be found on Nvidia's website. (For Ubuntu, maybe all Linux, see: https://yangcha.github.io/Install-CUDA8/)
 
 Once all these requirements are installed, you can attempt to run the faceswap tools. Use the `-h` or `--help` options for a list of options.
 
