@@ -44,7 +44,7 @@ class DirectoryProcessor(object):
         self.output_dir = get_folder(self.arguments.output_dir)
         try:
             self.input_dir = get_image_paths(self.arguments.input_dir)
-        except:
+        except (FileNotFoundError, StopIteration):
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
