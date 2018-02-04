@@ -78,7 +78,7 @@ class DirectoryProcessor(object):
             self.verify_output = True
     
     def load_filter(self):
-        filter_file = "filter.jpg" # TODO Pass as argument
+        filter_file = self.arguments.filter
         if Path(filter_file).exists():
             print('Loading reference image for filtering')
             return FaceFilter(filter_file)

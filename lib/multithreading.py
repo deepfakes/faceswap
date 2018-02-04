@@ -10,7 +10,7 @@ def pool_process(method_to_run, data, processes=None):
     pool = mp.Pool(processes=processes)
 
     for i in pool.imap_unordered(runner, data):
-        yield(i)
-        
+        yield i if i is not None else 0
+    
 def runner(item):
     return method(item)

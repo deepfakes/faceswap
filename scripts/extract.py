@@ -22,6 +22,14 @@ class ExtractTrainingData(DirectoryProcessor):
                             choices=("hog", "cnn"), # case sensitive because this is used to load a plugin.
                             default="hog",
                             help="Detector to use. 'cnn' detects much more angles but will be much more resource intensive and may fail on large files.")
+
+        parser.add_argument('-f', '--filter',
+                            type=str,
+                            dest="filter",
+                            default="filter.jpg",
+                            help="Reference image for the person you want to process. Should be a front portrait"
+                            )
+
         parser.add_argument('-j', '--processes',
                             type=int,
                             help="Number of processes to use.")

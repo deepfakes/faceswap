@@ -63,6 +63,13 @@ class ConvertImage(DirectoryProcessor):
                             help="When used with --frame-ranges discards frames that are not processed instead of writing them out unchanged."
                             )
 
+        parser.add_argument('-f', '--filter',
+                            type=str,
+                            dest="filter",
+                            default="filter.jpg",
+                            help="Reference image for the person you want to process. Should be a front portrait"
+                            )
+
         parser.add_argument('-b', '--blur-size',
                             type=int,
                             default=2,
