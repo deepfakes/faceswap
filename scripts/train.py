@@ -3,7 +3,7 @@ import numpy
 import time
 
 from threading import Lock
-from lib.utils import get_image_paths
+from lib.utils import get_image_paths, get_folder
 from lib.cli import FullPaths
 from plugins.PluginLoader import PluginLoader
 
@@ -122,7 +122,7 @@ class TrainingProcessor(object):
         # this is so that you can enter case insensitive values for trainer
         trainer = self.arguments.trainer
         trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
-        model = PluginLoader.get_model(trainer)(self.arguments.model_dir)
+        model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
         model.load(swapped=False)
 
         images_A = get_image_paths(self.arguments.input_A)

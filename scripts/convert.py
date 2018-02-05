@@ -1,8 +1,11 @@
 import cv2
 import re
+
 from pathlib import Path
+from tqdm import tqdm
+
 from lib.cli import DirectoryProcessor, FullPaths
-from lib.utils import BackgroundGenerator
+from lib.utils import BackgroundGenerator, get_folder
 
 from plugins.PluginLoader import PluginLoader
 
@@ -113,7 +116,7 @@ class ConvertImage(DirectoryProcessor):
         model_name = self.arguments.trainer
         conv_name = self.arguments.converter
         
-        model = PluginLoader.get_model(model_name)(self.arguments.model_dir)
+        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir))
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
@@ -147,7 +150,7 @@ class ConvertImage(DirectoryProcessor):
         for item in batch.iterator():
             self.convert(converter, item)
     
-    def check_skip(self, filename):
+    def check_skipframe(self, filename):
         try:
             idx = int(self.imageidxre.findall(filename)[0])
             return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
@@ -157,22 +160,21 @@ class ConvertImage(DirectoryProcessor):
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
-            
-            skip = self.check_skip(filename)
 
+            skip = self.check_skip(filename)
+            if self.arguments.discard_frames and skip:
+                return
+            
             if not skip: # process as normal
                 for idx, face in faces:
                     image = converter.patch_image(image, face)
-
-            output_file = self.output_dir / Path(filename).name
-
-            if self.arguments.discard_frames and skip:
-                return
+            
+            output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
     def prepare_images(self):
-        for filename in self.read_directory():
+        for filename in tqdm(self.read_directory()):
             image = cv2.imread(filename)
             yield filename, image, self.get_faces(image)
