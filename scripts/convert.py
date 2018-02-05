@@ -1,9 +1,6 @@
 import cv2
-<<<<<<< HEAD
 import time
-=======
 import re
->>>>>>> 68ef3b992674d87d0c73da9c29a4c5a0e735f04b
 from pathlib import Path
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.utils import BackgroundGenerator
