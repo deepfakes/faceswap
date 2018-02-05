@@ -1,203 +1,181 @@
-# In[ ]:
-#  coding: utf-8
-
-###### Searching and Downloading Google Images to the local disk ######
-
-# Import Libraries
-import time  # Importing the time library to check the time of code execution
-import sys  # Importing the System Library
+import time 
+import sys 
 import os
 import argparse
 import ssl
+import uuid
+import ctypes
+import multiprocessing
+import selenium
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 
 # Taking command line arguments from users
 parser = argparse.ArgumentParser()
 parser.add_argument('-k', '--keywords', help='delimited list input', type=str, required=True)
-parser.add_argument('-l', '--limit', help='delimited list input', type=str, required=False)
+parser.add_argument('-o', '--output', help='output directory', type=str, required=False)
+parser.add_argument('-m', '--max', help='maximal download images', type=int, required=False, default=1000)
+parser.add_argument('-t', '--thread', help='download workers range', type=int, required=False, default=6)
+parser.add_argument('-s', '--scroll', help='scroll range', type=int, required=False, default=1000)
 parser.add_argument('-c', '--color', help='filter on color', type=str, required=False, choices=['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'white', 'gray', 'black', 'brown'])
 args = parser.parse_args()
 search_keyword = [str(item) for item in args.keywords.split(',')]
-#setting limit on number of images to be downloaded
-if args.limit:
-    limit = int(args.limit)
-    if int(args.limit) >= 100:
-        limit = 100
-else:
-    limit = 100
 
 # This list is used to further add suffix to your search term. Each element of the list will help you download 100 images. First element is blank which denotes that no suffix is added to the search keyword of the above list. You can edit the list by adding/deleting elements from it.So if the first element of the search_keyword is 'Australia' and the second element of keywords is 'high resolution', then it will search for 'Australia High Resolution'
 keywords = [' high resolution']
 
-
-# Downloading entire Web Document (Raw Page Content)
-def download_page(url):
-    version = (3, 0)
-    cur_version = sys.version_info
-    if cur_version >= version:  # If the Current Version of Python is 3.0 or above
-        import urllib.request  # urllib library for Extracting web pages
-        try:
-            headers = {}
-            headers[
-                'User-Agent'] = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"
-            req = urllib.request.Request(url, headers=headers)
-            resp = urllib.request.urlopen(req)
-            respData = str(resp.read())
-            return respData
-        except Exception as e:
-            print(str(e))
-    else:  # If the Current Version of Python is 2.x
-        import urllib2
-        try:
-            headers = {}
-            headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-            req = urllib2.Request(url, headers=headers)
-            try:
-                response = urllib2.urlopen(req)
-            except URLError: # Handling SSL certificate failed
-                context = ssl._create_unverified_context()
-                response = urlopen(req,context=context)
-            page = response.read()
-            return page
-        except:
-            return "Page Not found"
-
-
-# Finding 'Next Image' from the given raw page
-def _images_get_next_item(s):
-    start_line = s.find('rg_di')
-    if start_line == -1:  # If no links are found then give an error!
-        end_quote = 0
-        link = "no_links"
-        return link, end_quote
+def get_folder(path):
+    try:
+        os.makedirs(path)
+    except OSError as e:
+        if e.errno != 17:
+            return 
     else:
-        start_line = s.find('"class="rg_meta"')
-        start_content = s.find('"ou"', start_line + 1)
-        end_content = s.find(',"ow"', start_content + 1)
-        content_raw = str(s[start_content + 6:end_content - 1])
-        return content_raw, end_content
-
-
-# Getting all links with the help of '_images_get_next_image'
-def _images_get_all_items(page):
-    items = []
-    while True:
-        item, end_content = _images_get_next_item(page)
-        if item == "no_links":
-            break
-        else:
-            items.append(item)  # Append all the links in the list named 'Links'
-            time.sleep(0.1)  # Timer could be used to slow down the request for image downloads
-            page = page[end_content:]
-    return items
-
-
-############## Main Program ############
-t0 = time.time()  # start the timer
-
+        return True
 
 version = (3,0)
 cur_version = sys.version_info
 if cur_version >= version:  # If the Current Version of Python is 3.0 or above
     # urllib library for Extracting web pages
+    import urllib
     from urllib.request import Request, urlopen
     from urllib.request import URLError, HTTPError
 
 else:  # If the Current Version of Python is 2.x
     # urllib library for Extracting web pages
+    import urllib2
     from urllib2 import Request, urlopen
     from urllib2 import URLError, HTTPError
 
-# Download Image Links
 errorCount = 0
 i = 0
-while i < len(search_keyword):
-    items = []
-    iteration = "\n" + "Item no.: " + str(i + 1) + " -->" + " Item name = " + str(search_keyword[i])
-    print (iteration)
-    print ("Evaluating...")
-    search_term = search_keyword[i]
-    search = search_term.replace(' ', '%20')
-    dir_name = search_term + ('-' + args.color if args.color else '')
+def collector(url, html_link_queue, end):
+    browser = webdriver.Firefox()
+    browser.get(url)
+    main_mem = []
+    while True:     
+        browser.execute_script("window.scrollBy(0,{0})".format(int(args.scroll)))
+        mem = []
+        for x in browser.find_elements_by_xpath("//a[@class='rg_l']"):
+            xx = x.get_attribute("href")
+            if xx:
+                html_link_queue.put(xx)
 
-    # make a search keyword  directory
-    try:
-        os.makedirs(dir_name)
-    except OSError as e:
-        if e.errno != 17:
-            raise
-            # time.sleep might help here
-        pass
+        if end.value:
+            break
+    browser.close()
 
-    j = 0
-    color_param = ('&tbs=ic:specific,isc:' + args.color) if args.color else ''
-    url = 'https://www.google.com/search?q=' + search + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch' + color_param + '&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
-    raw_html = (download_page(url))
-    time.sleep(0.1)
-    items = items + (_images_get_all_items(raw_html))
-    print ("Total Image Links = " + str(len(items)))
 
-    # This allows you to write all the links into a test file. This text file will be created in the same directory as your code. You can comment out the below 3 lines to stop writing the output to the text file.
-    info = open('output.txt', 'a')  # Open the text file called database.txt
-    info.write(str(i) + ': ' + str(search_keyword[i - 1]) + ": " + str(items))  # Write the title of the page
-    info.close()  # Close the file
-
-    t1 = time.time()  # stop the timer
-    total_time = t1 - t0  # Calculating the total time required to crawl, find and download all the links of 60,000 images
-    print("Total time taken: " + str(total_time) + " Seconds")
-    print ("Starting Download...")
-
-    ## To save imges to the same directory
-    # IN this saving process we are just skipping the URL if there is any error
-    k = 0
-    while (k < limit):
+def download_worker(args):
+    end = args[0]
+    html_link_queue = args[1]
+    thread = args[2]
+    dir_name = args[3]
+    while True:
+        link = html_link_queue.get()
         try:
-            req = Request(items[k], headers={
+            img_abs_link = link.split("=")[1].replace("%2F", "/").replace("%3A", ":").split("&")[0]
+            image_name = os.path.basename(img_abs_link).split(".")
+            if len(image_name)==2: image_name, ext = zip(image_name)
+            else: 
+                ext = ["jpg"]
+            _file = "{0}.{1}".format(str(image_name[0]),str(ext[0]))
+            _file = os.path.join(dir_name, _file)
+            if os.path.exists(_file):
+                continue
+            req = Request(img_abs_link, headers={
                 "User-Agent": "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"})
             response = urlopen(req, None, 15)
-            image_name = str(items[k][(items[k].rfind('/'))+1:])
-            if '?' in image_name:
-                image_name = image_name[:image_name.find('?')]
-            if ".jpg" in image_name or ".png" in image_name or ".jpeg" in image_name or ".svg" in image_name:
-                output_file = open(dir_name + "/" + str(k + 1) + ". " + image_name, 'wb')
-            else:
-                output_file = open(dir_name + "/" + str(k + 1) + ". " + image_name + ".jpg", 'wb')
-                image_name = image_name + ".jpg"
-
+            #if args.endless:
+            output_file = open(_file, 'wb')
             data = response.read()
             output_file.write(data)
             response.close()
 
-            print("completed ====> " + str(k + 1) + ". " + image_name)
+            print("theard ", thread,"completed ====> ", str(_file))
 
-            k = k + 1
-
-        except IOError:  # If there is any IOError
-
-            errorCount += 1
-            print("IOError on image " + str(k + 1))
-            k = k + 1
+        except IOError as e:  # If there is any IOError
+            print("failed IOError on image ", e)
 
         except HTTPError as e:  # If there is any HTTPError
+            print("failed HTTPError  ", e)
 
-            errorCount += 1
-            print("HTTPError" + str(k))
-            k = k + 1
         except URLError as e:
+            print("failed URLError ", e)
 
-            errorCount += 1
-            print("URLError " + str(k))
-            k = k + 1
         except ssl.CertificateError as e:
+            print("failed CertificateError ", e)       
 
-            errorCount += 1
-            print("CertificateError " + str(k))
-            k = k + 1
+        except Exception as e:
+            print (e)
+
+        if end.value:
+            break
+
+
+while i < len(search_keyword):
+    search_term = search_keyword[i]
+    search = search_term.replace(' ', '%20')
+    if args.output:
+        if not os.path.exists(args.output): raise Exception("path not valid!!!")
+        dir_name = os.path.join(args.output, search_term)
+    else:
+        #calc default path
+        file_path = os.path.dirname(os.path.realpath(__file__))
+        dir_name = new_path = os.path.join(file_path[:-len(os.path.basename(file_path))],\
+         "data/raw_downloaded_image/{0}".format("{0}-{1}".format(search_term, str(args.color)) if args.color\
+          else search_term))
+
+    if not os.path.exists(dir_name):
+        if not get_folder(dir_name):
+            raise Exception("cant create folder!!!")
+    else:
+        if os.listdir(dir_name):
+            dir_name = os.path.join(dir_name, str(uuid.uuid4()))
+            if not get_folder(dir_name):
+                raise Exception("cant create folder!!!")
+
+    print ("Saving Files in {0}".format(dir_name))
+    color_param = ('&tbs=ic:specific,isc:' + args.color) if args.color else ''
+    url = 'https://www.google.com/search?q=' + search + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch' + color_param + '&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
+    print ("Starting Download Process...")
+
+    manager = multiprocessing.Manager()
+    #pool = multiprocessing.Pool()
+    lifetime_end = manager.Value(ctypes.c_char_p, False)
+    running_process = []
+    html_link_queue = manager.Queue()    
+    link_queue = manager.Queue()  
+    search_links = multiprocessing.Process(target=collector, args=(url, html_link_queue,lifetime_end, ))
+    running_process.append(search_links)
+    search_links.start()
+
+    download_workers = multiprocessing.Pool()
+    threads = args.thread
+    result = download_workers.map_async(download_worker, [(lifetime_end, link_queue, "Thread {0}".format(n), dir_name) for n in range(int(threads))])
+    while len(os.listdir(dir_name))<=int(args.max):
+        try:
+            link = html_link_queue.get()
+            if link_queue.empty():
+                link_queue.put(link)
+        except KeyboardInterrupt as e:
+            print (e)
+            lifetime_end.value = True
+            print ("clean up")
+            for p in running_process:
+                print ("collector end ", p)
+                p.join()
+            download_workers.close()
+            print ("download_workers end ")
+        except Exception as e:
+            print (e)
+
+    lifetime_end.value = True
+    for p in running_process:
+        print ("collector end ", p)
+        p.join()
+    download_workers.close()
+    print ("download_workers end ")
 
     i = i + 1
 
-print("\n")
-print("Everything downloaded!")
-print("Total Errors: "+ str(errorCount) + "\n")
-
-# ----End of the main program ----#
-# In[ ]:
