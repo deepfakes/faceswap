@@ -1,6 +1,9 @@
 import cv2
 import re
+
 from pathlib import Path
+from tqdm import tqdm
+
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.utils import BackgroundGenerator
 
@@ -147,7 +150,7 @@ class ConvertImage(DirectoryProcessor):
         for item in batch.iterator():
             self.convert(converter, item)
     
-    def check_skip(self, filename):
+    def check_skipframe(self, filename):
         try:
             idx = int(self.imageidxre.findall(filename)[0])
             return not any(map(lambda b: b[0]<=idx<=b[1], self.frame_ranges))
@@ -158,9 +161,7 @@ class ConvertImage(DirectoryProcessor):
         try:
             (filename, image, faces) = item
             
-            skip = self.check_skip(filename)
-
-            if not skip: # process as normal
+            if not self.check_skipframe(filename): # process as normal
                 for idx, face in faces:
                     image = converter.patch_image(image, face)
 
@@ -173,6 +174,6 @@ class ConvertImage(DirectoryProcessor):
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
     def prepare_images(self):
-        for filename in self.read_directory():
+        for filename in tqdm(self.read_directory()):
             image = cv2.imread(filename)
             yield filename, image, self.get_faces(image)
