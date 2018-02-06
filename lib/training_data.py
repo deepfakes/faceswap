@@ -22,13 +22,16 @@ random_transform_args = {
 #     'random_flip': 0.5,
 #     }
 def read_image(fn, random_transform_args=random_transform_args):
-    image = cv2.imread(fn) / 255.0
+    try:
+        image = cv2.imread(fn) / 255.0
+    except TypeError:
+        raise Exception("Error while reading image",fn)
     image = cv2.resize(image, (256,256))
     image = random_transform( image, **random_transform_args )
     warped_img, target_img = random_warp( image )
     
     return warped_img, target_img
-
+ 
 # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
 def minibatch(data, batchsize):
     length = len(data)
