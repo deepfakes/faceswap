@@ -14,8 +14,8 @@ The project has multiple entry points. You will have to:
  - **Train** a model on your photos (or use the one provided in the training data provided below)
  - **Convert** your sources with the model
 
-### endless Download Google Images or use Face datasets  
-run `python google-images-download.py --keywords "heisenberg, einstein" --max 20 --scroll 1000 --thread 6`
+### Build Face datasets
+run `python google-images-download.py --keywords "Neil Armstrong, nasa astronaut neil armstrong, apollo neil armstrong" --max 500 --scroll 200 --thread 6 --proxy ip:port --type face`
 
 [Source Repository](https://github.com/ArashHosseini/google-images-download)
 
