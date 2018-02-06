@@ -31,7 +31,7 @@ def read_image(fn, random_transform_args=random_transform_args):
     warped_img, target_img = random_warp( image )
     
     return warped_img, target_img
- 
+
 # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
 def minibatch(data, batchsize):
     length = len(data)
