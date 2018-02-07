@@ -72,7 +72,7 @@ Also note that it does not have a GUI output, so the train.py will fail on showi
  - Clone the repo
  - Download the data with the link provided below
  - Play with it
- - Check issues with the 'advuser' tag
+ - Check issues with the 'adviser' tag
  - Also go to the 'faceswap-playground' repo and help others.
 
 ### For end-users
