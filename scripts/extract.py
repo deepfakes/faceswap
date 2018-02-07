@@ -4,6 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from lib.cli import DirectoryProcessor
+from lib.utils import get_folder
 from lib.multithreading import pool_process
 from plugins.PluginLoader import PluginLoader
 
@@ -33,6 +34,7 @@ class ExtractTrainingData(DirectoryProcessor):
 
         parser.add_argument('-j', '--processes',
                             type=int,
+                            default=1,
                             help="Number of processes to use.")
         return parser
 
@@ -65,7 +67,7 @@ class ExtractTrainingData(DirectoryProcessor):
         for idx, face in self.get_faces(image):
             count = idx
             resized_image = self.extractor.extract(image, face, 256)
-            output_file = self.output_dir / Path(filename).stem
+            output_file = get_folder(self.output_dir) / Path(filename).stem
             cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
         return count + 1
 

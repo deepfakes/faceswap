@@ -25,9 +25,9 @@ class DirectoryProcessor(object):
     input_dir = None
     output_dir = None
 
-    verify_output = False
     images_found = 0
     faces_detected = 0
+    verify_output = False
 
     def __init__(self, subparser, command, description='default'):
         self.create_parser(subparser, command, description)
@@ -64,9 +64,9 @@ class DirectoryProcessor(object):
             yield faces_count, face
 
             self.faces_detected = self.faces_detected + 1
-            faces_count +=1
+            faces_count += 1
         
-        if faces_count > 0 and self.arguments.verbose:
+        if faces_count > 1 and self.arguments.verbose:
             print('Note: Found more than one face in an image!')
             self.verify_output = True
     
