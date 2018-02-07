@@ -10,10 +10,10 @@ from keras.optimizers import Adam
 
 from lib.PixelShuffler import PixelShuffler
 
-netGAH5 = '/netGA_GAN.h5'
-netGBH5 = '/netGB_GAN.h5'
-netDAH5 = '/netDA_GAN.h5'
-netDBH5 = '/netDB_GAN.h5'
+netGAH5 = 'netGA_GAN.h5'
+netGBH5 = 'netGB_GAN.h5'
+netDAH5 = 'netDA_GAN.h5'
+netDBH5 = 'netDB_GAN.h5'
 
 class GANModel():
     img_size = 64 
@@ -130,8 +130,8 @@ class GANModel():
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))           
         try:
-            netGA.load_weights(self.model_dir + netGAH5)
-            netGB.load_weights(self.model_dir + netGBH5)
+            netGA.load_weights(str(self.model_dir / netGAH5))
+            netGB.load_weights(str(self.model_dir / netGBH5))
             print ("Generator models loaded.")
         except:
             print ("Generator weights files not found.")
@@ -157,8 +157,8 @@ class GANModel():
         netDA = Discriminator(self.img_shape)
         netDB = Discriminator(self.img_shape)        
         try:
-            netDA.load_weights(self.model_dir + netDAH5) 
-            netDB.load_weights(self.model_dir + netDBH5) 
+            netDA.load_weights(str(self.model_dir / netDAH5))
+            netDB.load_weights(str(self.model_dir / netDBH5))
             print ("Discriminator models loaded.")
         except:
             print ("Discriminator weights files not found.")
@@ -172,8 +172,8 @@ class GANModel():
         return True
     
     def save_weights(self):
-        self.netGA.save_weights(self.model_dir + netGAH5)
-        self.netGB.save_weights(self.model_dir + netGBH5)
-        self.netDA.save_weights(self.model_dir + netDAH5)
-        self.netDB.save_weights(self.model_dir + netDBH5)
+        self.netGA.save_weights(str(self.model_dir / netGAH5))
+        self.netGB.save_weights(str(self.model_dir /  netGBH5))
+        self.netDA.save_weights(str(self.model_dir /  netDAH5))
+        self.netDB.save_weights(str(self.model_dir /  netDBH5))
         print ("Models saved.")
