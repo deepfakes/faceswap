@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from scandir import scandir
 
-image_extensions = [".jpg", ".jpeg", ".png"]
+image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
 
 def get_folder(path):
     output_dir = Path(path)
