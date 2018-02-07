@@ -1,7 +1,6 @@
 import argparse
 import os
 import time
-from tqdm import tqdm
 
 from pathlib import Path
 from lib.FaceFilter import FaceFilter
@@ -26,10 +25,9 @@ class DirectoryProcessor(object):
     input_dir = None
     output_dir = None
 
-    verify_output = False
     images_found = 0
-    images_processed = 0
     faces_detected = 0
+    verify_output = False
 
     def __init__(self, subparser, command, description='default'):
         self.create_parser(subparser, command, description)
@@ -47,25 +45,17 @@ class DirectoryProcessor(object):
         except:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
-
-        self.images_found = len(self.input_dir)
-
-
         self.filter = self.load_filter()
         self.process()
         self.finalize()
         
     def read_directory(self):
-        for filename in tqdm(self.input_dir):
-            if self.arguments.verbose:
-                print('Processing: {}'.format(os.path.basename(filename)))
-
-            yield filename
-            self.images_processed = self.images_processed + 1
+        self.images_found = len(self.input_dir)
+        return self.input_dir
     
     def get_faces(self, image):
         faces_count = 0
-        for face in detect_faces(image):
+        for face in detect_faces(image, self.arguments.detector):
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
                 continue
@@ -73,14 +63,14 @@ class DirectoryProcessor(object):
             yield faces_count, face
 
             self.faces_detected = self.faces_detected + 1
-            faces_count +=1
+            faces_count += 1
         
-        if faces_count > 0 and self.arguments.verbose:
+        if faces_count > 1 and self.arguments.verbose:
             print('Note: Found more than one face in an image!')
             self.verify_output = True
     
     def load_filter(self):
-        filter_file = "filter.jpg" # TODO Pass as argument
+        filter_file = self.arguments.filter
         if Path(filter_file).exists():
             print('Loading reference image for filtering')
             return FaceFilter(filter_file)
@@ -128,7 +118,6 @@ class DirectoryProcessor(object):
     def finalize(self):
         print('-------------------------')
         print('Images found:        {}'.format(self.images_found))
-        print('Images processed:    {}'.format(self.images_processed))
         print('Faces detected:      {}'.format(self.faces_detected))
         print('-------------------------')
 

@@ -2,8 +2,8 @@ import dlib
 import face_recognition
 import face_recognition_models
 
-def detect_faces(frame):
-    face_locations = face_recognition.face_locations(frame)
+def detect_faces(frame, model="hog"):
+    face_locations = face_recognition.face_locations(frame, model=model)
     landmarks = _raw_face_landmarks(frame, face_locations)
 
     for ((y, right, bottom, x), landmarks) in zip(face_locations, landmarks):

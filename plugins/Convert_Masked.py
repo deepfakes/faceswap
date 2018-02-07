@@ -34,15 +34,29 @@ class Convert():
         base_image = numpy.copy( image )
         new_image = numpy.copy( image )
 
-        cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
+
+        cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
+
         outImage = None
         if self.seamless_clone:
-            masky,maskx = cv2.transform( numpy.array([ size/2,size/2 ]).reshape(1,1,2) ,cv2.invertAffineTransform(mat) ).reshape(2).astype(int)
-            outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),base_image.astype(numpy.uint8),(image_mask*255).astype(numpy.uint8),(masky,maskx) , cv2.NORMAL_CLONE )
-        else:
-            foreground = cv2.multiply(image_mask, new_image.astype(float))
-            background = cv2.multiply(1.0 - image_mask, base_image.astype(float))
-            outimage = cv2.add(foreground, background)
+            unitMask = numpy.clip( image_mask * 365, 0, 255 ).astype(numpy.uint8)
+      
+            maxregion = numpy.argwhere(unitMask==255)
+      
+            if maxregion.size > 0:
+              miny,minx = maxregion.min(axis=0)[:2]
+              maxy,maxx = maxregion.max(axis=0)[:2]
+              lenx = maxx - minx;
+              leny = maxy - miny;
+              masky = int(minx+(lenx//2))
+              maskx = int(miny+(leny//2))
+              outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),base_image.astype(numpy.uint8),unitMask,(masky,maskx) , cv2.NORMAL_CLONE )
+              
+              return outimage
+              
+        foreground = cv2.multiply(image_mask, new_image.astype(float))
+        background = cv2.multiply(1.0 - image_mask, base_image.astype(float))
+        outimage = cv2.add(foreground, background)
 
         return outimage
 
@@ -58,7 +72,7 @@ class Convert():
         face_mask = numpy.zeros(image.shape,dtype=float)
         if 'rect' in self.mask_type:
             face_src = numpy.ones(new_face.shape,dtype=float)
-            cv2.warpAffine( face_src, mat, image_size, face_mask, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
+            cv2.warpAffine( face_src, mat, image_size, face_mask, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
         if 'hull' in self.mask_type:
