@@ -1,4 +1,5 @@
 import cv2
+import time
 import re
 
 from pathlib import Path
@@ -11,6 +12,7 @@ from plugins.PluginLoader import PluginLoader
 
 class ConvertImage(DirectoryProcessor):
     filename = ''
+    _init_time = None
     def create_parser(self, subparser, command, description):
         self.parser = subparser.add_parser(
             command,
@@ -137,6 +139,7 @@ class ConvertImage(DirectoryProcessor):
             avg_color_adjust=self.arguments.avg_color_adjust
         )
 
+
         batch = BackgroundGenerator(self.prepare_images(), 1)
 
         # frame ranges stuff...
@@ -178,6 +181,8 @@ class ConvertImage(DirectoryProcessor):
             
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
+            tt = time.time() - start
+            print ("takes {0}".format(tt))
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 

@@ -45,7 +45,6 @@ class DirectoryProcessor(object):
         except:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
-
         self.filter = self.load_filter()
         self.process()
         self.finalize()
@@ -77,6 +76,7 @@ class DirectoryProcessor(object):
             return FaceFilter(filter_file)
 
     # for now, we limit this class responsability to the read of files. images and faces are processed outside this class
+
     def process(self):
         # implement your image processing!
         raise NotImplementedError()

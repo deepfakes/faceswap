@@ -127,6 +127,7 @@ class TrainingProcessor(object):
 
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
+
         trainer = PluginLoader.get_trainer(trainer)
         trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
 

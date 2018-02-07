@@ -20,7 +20,6 @@ def _raw_face_landmarks(face_image, face_locations):
 def _css_to_rect(css):
     return dlib.rectangle(css[3], css[0], css[1], css[2])
 # end of Copy/Paste
-
 class DetectedFace(object):
     def __init__(self, image, x, w, y, h, landmarks):
         self.image = image
@@ -32,3 +31,4 @@ class DetectedFace(object):
     
     def landmarksAsXY(self):
         return [(p.x, p.y) for p in self.landmarks.parts()]
+
