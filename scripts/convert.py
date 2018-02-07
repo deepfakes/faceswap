@@ -168,7 +168,7 @@ class ConvertImage(DirectoryProcessor):
         try:
             (filename, image, faces) = item
 
-            skip = self.check_skip(filename)
+            skip = self.check_skipframe(filename)
             if self.arguments.discard_frames and skip:
                 return
             
