@@ -72,7 +72,7 @@ class TrainingProcessor(object):
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem"),
+                            choices=("Original", "LowMem", "GAN"),
                             default="Original",
                             help="Select which trainer to use, LowMem for cards < 2gb.")
         parser.add_argument('-bs', '--batch-size',
