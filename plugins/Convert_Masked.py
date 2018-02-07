@@ -33,7 +33,7 @@ class Convert():
         base_image = numpy.copy( image )
         new_image = numpy.copy( image )
 
-        cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
+        cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
 
         outImage = None
         if self.seamless_clone:
@@ -58,7 +58,7 @@ class Convert():
         face_mask = numpy.zeros(image.shape,dtype=float)
         if 'rect' in self.mask_type:
             face_src = numpy.ones(new_face.shape,dtype=float)
-            cv2.warpAffine( face_src, mat, image_size, face_mask, cv2.WARP_INVERSE_MAP, cv2.BORDER_TRANSPARENT )
+            cv2.warpAffine( face_src, mat, image_size, face_mask, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
         if 'hull' in self.mask_type:
