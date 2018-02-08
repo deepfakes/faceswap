@@ -173,7 +173,7 @@ class GANModel():
     
     def save_weights(self):
         self.netGA.save_weights(str(self.model_dir / netGAH5))
-        self.netGB.save_weights(str(self.model_dir /  netGBH5))
-        self.netDA.save_weights(str(self.model_dir /  netDAH5))
-        self.netDB.save_weights(str(self.model_dir /  netDBH5))
+        self.netGB.save_weights(str(self.model_dir / netGBH5))
+        self.netDA.save_weights(str(self.model_dir / netDAH5))
+        self.netDB.save_weights(str(self.model_dir / netDBH5))
         print ("Models saved.")

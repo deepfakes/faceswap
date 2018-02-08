@@ -43,7 +43,7 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-c', '--converter',
                             type=str,
-                            choices=("Masked", "Adjust", "GAN"), # case sensitive because this is used to load a plugin.
+                            choices=("Masked", "Adjust", "GAN", "GAN128"), # case sensitive because this is used to load a plugin.
                             default="Masked",
                             help="Converter to use.")
 

@@ -72,7 +72,7 @@ class TrainingProcessor(object):
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem", "GAN"),
+                            choices=("Original", "LowMem", "GAN", "GAN128"),
                             default="Original",
                             help="Select which trainer to use, LowMem for cards < 2gb.")
         parser.add_argument('-bs', '--batch-size',
@@ -160,9 +160,6 @@ class TrainingProcessor(object):
             except KeyboardInterrupt:
                 print('Saving model weights has been cancelled!')
             exit(0)
-        except Exception as e:
-            print(e)
-            exit(1)
     
     preview_buffer = {}
 
