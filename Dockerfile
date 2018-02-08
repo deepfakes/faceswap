@@ -23,7 +23,7 @@ RUN apt-get update -qq \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-COPY ./requirements.txt .
-RUN pip3 --no-cache-dir install -r ./requirements.txt
+COPY ./requirements-python35.txt .
+RUN pip3 --no-cache-dir install -r ./requirements-python35.txt
 
 WORKDIR /srv/
