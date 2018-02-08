@@ -15,6 +15,10 @@ class PluginLoader():
     @staticmethod
     def get_trainer(name):
         return PluginLoader._import("Trainer", "Model_{0}".format(name))
+		
+    @staticmethod
+    def get_loss_function(name):
+        return PluginLoader._import("LossFunction", "LossFunction_{0}".format(name))		
     
     @staticmethod
     def _import(attr, name):

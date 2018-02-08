@@ -79,6 +79,16 @@ class TrainingProcessor(object):
                             type=int,
                             default=64,
                             help="Batch size, as a power of 2 (64, 128, 256, etc)")
+        parser.add_argument('-l', '--loss-function',
+                            type=str,
+                            choices=("l1", "l2", "ssim+l1", "ssim+l2"),
+                            default="l1",
+                            help="Select which loss function to use (l1 = mean absolute error, l2 = mean squared error, ssim = structural image similarity")
+        parser.add_argument('-lm', '--loss-mix',
+                            type=float,
+                            dest="loss_mix",
+                            default=0.005,
+                            help="Sets the loss mix value for the first factor (only applicable in 2-factor loss functions like ssim)")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -122,7 +132,10 @@ class TrainingProcessor(object):
         # this is so that you can enter case insensitive values for trainer
         trainer = self.arguments.trainer
         trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
-        model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
+        loss_function = PluginLoader.get_loss_function(self.arguments.loss_function)(self.arguments.loss_mix)
+
+        model = PluginLoader.get_model(trainer)(self.arguments.model_dir, self.arguments.trainer)
+        model.set_loss_function(loss_function)
         model.load(swapped=False)
 
         images_A = get_image_paths(self.arguments.input_A)

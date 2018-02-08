@@ -3,28 +3,36 @@
 import time
 import numpy
 from lib.training_data import TrainingDataGenerator, stack_images
+from keras.losses import *
 
-encoderH5 = 'encoder.h5'
-decoder_AH5 = 'decoder_A.h5'
-decoder_BH5 = 'decoder_B.h5'
 
 class ModelAE:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, filename_modifier):
+
         self.model_dir = model_dir
+        self.encoder_filename = self.model_dir + '/encoder_' + filename_modifier + '.h5'
+        self.decoder_A_filename = self.model_dir + '/decoder_A_' + filename_modifier + '.h5'
+        self.decoder_B_filename = self.model_dir + '/decoder_B_' + filename_modifier + '.h5'
 
         self.encoder = self.Encoder()
         self.decoder_A = self.Decoder()
         self.decoder_B = self.Decoder()
-
+        self.loss_function = mean_absolute_error
         self.initModel()
+        
+    #
+    # set_loss_function has to be called *before* the model is initialized!
+    #
+    def set_loss_function(self, loss_function):
+        self.loss_function = loss_function
 
     def load(self, swapped):
-        (face_A,face_B) = (decoder_AH5, decoder_BH5) if not swapped else (decoder_BH5, decoder_AH5)
+        (decoder_A,decoder_B) = (self.decoder_A_filename, self.decoder_B_filename) if not swapped else (self.decoder_B_filename, self.decoder_A_filename)
 
         try:
-            self.encoder.load_weights(str(self.model_dir / encoderH5))
-            self.decoder_A.load_weights(str(self.model_dir / face_A))
-            self.decoder_B.load_weights(str(self.model_dir / face_B))
+            self.encoder.load_weights(self.encoder_filename)
+            self.decoder_A.load_weights(decoder_A)
+            self.decoder_B.load_weights(decoder_B)
             print('loaded model weights')
             return True
         except Exception as e:
@@ -33,9 +41,9 @@ class ModelAE:
             return False
 
     def save_weights(self):
-        self.encoder.save_weights(str(self.model_dir / encoderH5))
-        self.decoder_A.save_weights(str(self.model_dir / decoder_AH5))
-        self.decoder_B.save_weights(str(self.model_dir / decoder_BH5))
+        self.encoder.save_weights(self.encoder_filename)
+        self.decoder_A.save_weights(self.decoder_A_filename)
+        self.decoder_B.save_weights(self.decoder_B_filename)
         print('saved model weights')
 
 class TrainerAE():
@@ -60,7 +68,9 @@ class TrainerAE():
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
-        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(time.strftime("%H:%M:%S"), iter, loss_A, loss_B),
+		
+		# We need quite a bit of precision when printing the loss factors as the results of the squared loss functions can become quite small
+        print("[{0}] [#{1:05d}] loss_A: {2:.7f}, loss_B: {3:.7f}".format(time.strftime("%H:%M:%S"), iter, loss_A, loss_B),
             end='\r')
 
         if viewer is not None:
