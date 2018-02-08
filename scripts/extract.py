@@ -41,33 +41,46 @@ class ExtractTrainingData(DirectoryProcessor):
     def process(self):
         extractor_name = "Align" # TODO Pass as argument
         self.extractor = PluginLoader.get_extractor(extractor_name)()
-        self.faces_detected = 0
         processes = self.arguments.processes
-        if processes != 1:
-            files = list(self.read_directory())
-            for _ in tqdm(pool_process(self.processFiles, files, processes=processes), total = len(files)):
-                self.faces_detected +=1
-        else:
-            try:
-                for filename in tqdm(self.read_directory()):
-                    self.handleImage(filename)
-
-            except Exception as e:
-                print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+        try:
+            if processes != 1:
+                files = list(self.read_directory())
+                for fn, faces in tqdm(pool_process(self.processFiles, files, processes=processes), total = len(files)):
+                    self.num_faces_detected += 1
+                    self.faces_detected[fn] = faces
+            else:
+                try:
+                    for filename in tqdm(self.read_directory()):
+                         self.faces_detected[filename] = self.handleImage(filename)[1]
+                except Exception as e:
+                    print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+        finally:
+            self.write_alignments()
 
     def processFiles(self, filename):
         try:
             return self.handleImage(filename)
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
-    
+
     def handleImage(self, filename):
         count = 0
+
         image = cv2.imread(filename)
-        for idx, face in self.get_faces(image):
+        faces = self.get_faces(image)
+        rvals = []
+        for idx, face in faces:
             count = idx
+
             resized_image = self.extractor.extract(image, face, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
             cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
-        return count + 1
-
+            f = {
+                "x": face.x,
+                "w": face.w,
+                "y": face.y,
+                "h": face.h,
+                "landmarksXY": face.landmarksAsXY()
+            }
+            rvals.append(f)
+        return filename, rvals
