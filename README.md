@@ -24,7 +24,7 @@ From your setup folder, run `python faceswap.py train`. This will take photos fr
 From your setup folder, run `python faceswap.py convert`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
 #### General notes:
-- All of the scripts mentioned have `-h`/`--help` options with a arguments that they will accept. You're smart, you can figure out how this works, right?!
+- All of the scripts mentioned have `-h`/`--help` options with arguments that they will accept. You're smart, you can figure out how this works, right?!
 
 Note: there is no conversion for video yet. You can use MJPG to convert video into photos, process images, and convert images back to video
 
