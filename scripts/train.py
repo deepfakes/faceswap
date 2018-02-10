@@ -79,6 +79,10 @@ class TrainingProcessor(object):
                             type=int,
                             default=64,
                             help="Batch size, as a power of 2 (64, 128, 256, etc)")
+        parser.add_argument('-ep', '--epochs',
+                            type=int,
+                            default=1000000,
+                            help="Length of training in epochs.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -133,7 +137,7 @@ class TrainingProcessor(object):
         try:
             print('Starting. Press "Enter" to stop training and save model')
 
-            for epoch in range(0, 1000000):
+            for epoch in range(0, self.arguments.epochs):
 
                 save_iteration = epoch % self.arguments.save_interval == 0
 
