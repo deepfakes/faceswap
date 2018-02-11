@@ -64,7 +64,7 @@ class DirectoryProcessor(object):
 
     def read_alignments(self):
 
-        fn = os.path.join(self.arguments.input_dir,"alignments.{}".format(self.serializer.ext))
+        fn = os.path.join(str(self.arguments.input_dir),"alignments.{}".format(self.serializer.ext))
         if self.arguments.alignments_path is not None:
             fn = self.arguments.alignments_path
 
@@ -79,7 +79,7 @@ class DirectoryProcessor(object):
 
     def write_alignments(self):
 
-        fn = os.path.join(self.output_dir,"alignments.{}".format(self.serializer.ext))
+        fn = os.path.join(str(self.input_dir), "alignments.{}".format(self.serializer.ext))
         if self.arguments.alignments_path is not None:
             fn = self.arguments.alignments_path
         try:
@@ -100,7 +100,7 @@ class DirectoryProcessor(object):
 
     def get_faces_alignments(self, filename, image):
         faces_count = 0
-        faces = self.faces_detected[filename]
+        faces = self.faces_detected[os.path.basename(filename)]
         for rawface in faces:
             face = DetectedFace(**rawface)
             face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]

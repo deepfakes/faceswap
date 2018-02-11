@@ -45,13 +45,13 @@ class ExtractTrainingData(DirectoryProcessor):
         try:
             if processes != 1:
                 files = list(self.read_directory())
-                for fn, faces in tqdm(pool_process(self.processFiles, files, processes=processes), total = len(files)):
+                for filename, faces in tqdm(pool_process(self.processFiles, files, processes=processes), total = len(files)):
                     self.num_faces_detected += 1
-                    self.faces_detected[fn] = faces
+                    self.faces_detected[os.path.basename(filename)] = faces
             else:
                 try:
                     for filename in tqdm(self.read_directory()):
-                         self.faces_detected[filename] = self.handleImage(filename)[1]
+                         self.faces_detected[os.path.basename(filename)] = self.handleImage(filename)[1]
                 except Exception as e:
                     print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
         finally:
