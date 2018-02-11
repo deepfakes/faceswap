@@ -2,6 +2,7 @@ import cv2
 
 from pathlib import Path
 from tqdm import tqdm
+import os
 
 from lib.cli import DirectoryProcessor
 from lib.utils import get_folder
