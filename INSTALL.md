@@ -39,7 +39,7 @@ The developers are also not responsible for any damage you might cause to your o
 
 ## Installing dependencies
 
-### Python 3.6
+### Python >= 3.2
 
 Note that you will need the 64bit version of Python, especially to setup the GPU version!
 
@@ -49,9 +49,9 @@ Download the latest version of Python 3 from Python.org: https://www.python.org/
 
 #### macOS
 
-By default, macOS comes with Python 2.7. For best usage, need Python 3.6. The easiest way to do so is to install it through `Homebrew`. If you are not familiar with `homebrew`, read more about it here: https://brew.sh/
+By default, macOS comes with Python 2.7. For best usage, need at least Python 3.2.  The easiest way to do so is to install it through `Homebrew`. If you are not familiar with `homebrew`, read more about it here: https://brew.sh/
 
-To install Python 3.6:
+To install Python 3.2:
 
 ```
 brew install python3
