@@ -98,11 +98,12 @@ class DirectoryProcessor(object):
     def have_face(self, filename):
         return filename in self.faces_detected
 
-    def get_faces_alignments(self, filename):
+    def get_faces_alignments(self, filename, image):
         faces_count = 0
         faces = self.faces_detected[filename]
         for rawface in faces:
             face = DetectedFace(**rawface)
+            face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
                 continue

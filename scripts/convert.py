@@ -187,7 +187,7 @@ class ConvertImage(DirectoryProcessor):
             image = cv2.imread(filename)
 
             if self.have_face(filename):
-                faces = self.get_faces_alignments(filename)
+                faces = self.get_faces_alignments(filename, image)
             else:
                 faces = self.get_faces(image)
             yield filename, image, faces
