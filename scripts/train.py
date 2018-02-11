@@ -89,6 +89,10 @@ class TrainingProcessor(object):
                             dest="loss_mix",
                             default=0.005,
                             help="Sets the loss mix value for the first factor (only applicable in 2-factor loss functions like ssim)")
+        parser.add_argument('-ep', '--epochs',
+                            type=int,
+                            default=1000000,
+                            help="Length of training in epochs.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -146,7 +150,7 @@ class TrainingProcessor(object):
         try:
             print('Starting. Press "Enter" to stop training and save model')
 
-            for epoch in range(0, 1000000):
+            for epoch in range(0, self.arguments.epochs):
 
                 save_iteration = epoch % self.arguments.save_interval == 0
 
