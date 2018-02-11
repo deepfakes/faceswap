@@ -1,10 +1,8 @@
-
 **Notice:** This repository is not operated or maintained by [/u/deepfakes](https://www.reddit.com/user/deepfakes/). Please read the explanation below for details.
 
 ---
 
 # deepfakes_faceswap
-
 Faceswap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
 
 ## Overview
@@ -24,18 +22,17 @@ From your setup folder, run `python faceswap.py train`. This will take photos fr
 From your setup folder, run `python faceswap.py convert`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
 #### General notes:
-- All of the scripts mentioned have `-h`/`--help` options with a arguments that they will accept. You're smart, you can figure out how this works, right?!
+- All of the scripts mentioned have `-h`/`--help` options with arguments that they will accept. You're smart, you can figure out how this works, right?!
 
-Note: there is no conversion for video yet. You can use MJPG to convert video into photos, process images, and convert images back to video
+Note: there is no conversion for video yet. You can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
 
-## Training Data  
-**Whole project with training images and trained model (~300MB):**  
+## Training Data
+**Whole project with training images and trained model (~300MB):**
 https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
 ## How To setup and run the project
 
-### Setup 
-
+### Setup
 Clone the repo and setup you environment. There is a Dockerfile that should kickstart you. Otherwise you can setup things manually, see in the Dockerfiles for dependencies.
 
 Check out [../blob/master/INSTALL.md](INSTALL.md) and [../blob/master/USAGE.md](USAGE.md) for basic information on how to configure virtualenv and use the program.
@@ -82,7 +79,7 @@ Also note that it does not have a GUI output, so the train.py will fail on showi
  - **Notice** Any issue related to running the code has to be open in the 'faceswap-playground' project!
 
 ### For haters
-Sorry no time for that
+Sorry, no time for that.
 
 # About github.com/deepfakes
 
@@ -90,7 +87,7 @@ Sorry no time for that
 It is a community repository for active users.
 
 ## Why this repo?
-The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front of url has not been solved since days.
+The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front of urls have not been solved since days.
 
 ## Why is it named 'deepfakes' if it is not /u/deepfakes?
  1. Because a typosquat would have happened sooner or later as project grows
@@ -103,7 +100,6 @@ This is a friendly typosquat, and it is fully dedicated to the project. If /u/de
 # About machine learning
 
 ## How does a computer know how to recognise/shape a faces? How does machine learning work? What is a neural network?
-
 It's complicated. Here's a good video that makes the process understandable:
 [![How Machines Learn](https://img.youtube.com/vi/R9OHn5ZF4Uo/0.jpg)](https://www.youtube.com/watch?v=R9OHn5ZF4Uo)
 
