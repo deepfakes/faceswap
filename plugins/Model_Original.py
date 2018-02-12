@@ -20,8 +20,8 @@ class Model(ModelAE):
         self.autoencoder_A = KerasModel(x, self.decoder_A(self.encoder(x)))
         self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))
 
-        self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
+        self.autoencoder_A.compile(optimizer=optimizer, loss=self.loss_function)
+        self.autoencoder_B.compile(optimizer=optimizer, loss=self.loss_function)
 
     def converter(self, swap):
         autoencoder = self.autoencoder_B if not swap else self.autoencoder_A 

@@ -14,14 +14,16 @@ ENCODER_DIM = 512
 
 class Model(ModelAE):
     def initModel(self):
+        
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        
         x = Input(shape=IMAGE_SHAPE)
 
         self.autoencoder_A = KerasModel(x, self.decoder_A(self.encoder(x)))
         self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))
 
-        self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
+        self.autoencoder_A.compile(optimizer=optimizer, loss=self.loss_function)
+        self.autoencoder_B.compile(optimizer=optimizer, loss=self.loss_function)
 
     def converter(self, swap):
         autoencoder = self.autoencoder_B if not swap else self.autoencoder_A 
