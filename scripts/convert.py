@@ -1,5 +1,6 @@
 import cv2
 import re
+import os
 
 from pathlib import Path
 from tqdm import tqdm
@@ -33,7 +34,7 @@ class ConvertImage(DirectoryProcessor):
                             choices=("Original", "LowMem", "GAN"), # case sensitive because this is used to load a plug-in.
                             default="Original",
                             help="Select the trainer that was used to create the model.")
-                            
+
         parser.add_argument('-s', '--swap-model',
                             action="store_true",
                             dest="swap_model",
@@ -110,14 +111,14 @@ class ConvertImage(DirectoryProcessor):
                             default=True,
                             help="Average color adjust. (Adjust converter only)")
         return parser
-    
+
     def process(self):
         # Original & LowMem models go with Adjust or Masked converter
         # GAN converter & model must go together
         # Note: GAN prediction outputs a mask + an image, while other predicts only an image
         model_name = self.arguments.trainer
         conv_name = self.arguments.converter
-        
+
         if conv_name.startswith("GAN"):
             assert model_name.startswith("GAN") is True, "GAN converter can only be used with GAN model!"
         else:
@@ -141,13 +142,13 @@ class ConvertImage(DirectoryProcessor):
 
         # frame ranges stuff...
         self.frame_ranges = None
-        
+
         # split out the frame ranges and parse out "min" and "max" values
         minmax = {
             "min": 0, # never any frames less than 0
             "max": float("inf")
         }
-        
+
         if self.arguments.frame_ranges:
             self.frame_ranges = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-"))) for v in self.arguments.frame_ranges]
 
@@ -156,7 +157,7 @@ class ConvertImage(DirectoryProcessor):
 
         for item in batch.iterator():
             self.convert(converter, item)
-    
+
     def check_skipframe(self, filename):
         try:
             idx = int(self.imageidxre.findall(filename)[0])
@@ -171,17 +172,28 @@ class ConvertImage(DirectoryProcessor):
             skip = self.check_skipframe(filename)
             if self.arguments.discard_frames and skip:
                 return
-            
+
             if not skip: # process as normal
                 for idx, face in faces:
                     image = converter.patch_image(image, face)
-            
+
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
     def prepare_images(self):
+        self.read_alignments()
+        is_have_alignments = self.have_alignments()
         for filename in tqdm(self.read_directory()):
             image = cv2.imread(filename)
-            yield filename, image, self.get_faces(image)
+
+            if is_have_alignments:
+                if self.have_face(filename):
+                    faces = self.get_faces_alignments(filename, image)
+                else:
+                    print ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
+                    continue
+            else:
+                faces = self.get_faces(image)
+            yield filename, image, faces
