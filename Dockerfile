@@ -3,6 +3,8 @@ FROM debian:stretch
 # install debian packages
 ENV DEBIAN_FRONTEND noninteractive
 
+RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+
 RUN apt-get update -qq \
  && apt-get install --no-install-recommends -y \
     # install essentials
