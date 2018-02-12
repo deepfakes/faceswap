@@ -79,7 +79,7 @@ class DirectoryProcessor(object):
 
     def write_alignments(self):
 
-        fn = os.path.join(str(self.input_dir), "alignments.{}".format(self.serializer.ext))
+        fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
         if self.arguments.alignments_path is not None:
             fn = self.arguments.alignments_path
         try:
