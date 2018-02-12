@@ -96,7 +96,7 @@ class DirectoryProcessor(object):
         return self.input_dir
 
     def have_face(self, filename):
-        return filename in self.faces_detected
+        return os.path.basename(filename) in self.faces_detected
 
     def have_alignments(self):
         fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
