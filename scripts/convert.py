@@ -183,11 +183,16 @@ class ConvertImage(DirectoryProcessor):
 
     def prepare_images(self):
         self.read_alignments()
+        is_have_alignments = self.have_alignments()
         for filename in tqdm(self.read_directory()):
             image = cv2.imread(filename)
 
-            if self.have_face(filename):
-                faces = self.get_faces_alignments(filename, image)
+            if is_have_alignments:
+                if self.have_face(filename):
+                    faces = self.get_faces_alignments(filename, image)
+                else:
+                    print ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
+                    continue
             else:
                 faces = self.get_faces(image)
             yield filename, image, faces

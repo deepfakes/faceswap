@@ -98,6 +98,10 @@ class DirectoryProcessor(object):
     def have_face(self, filename):
         return filename in self.faces_detected
 
+    def have_alignments(self):
+        fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
+        return os.path.exists(fn)
+
     def get_faces_alignments(self, filename, image):
         faces_count = 0
         faces = self.faces_detected[os.path.basename(filename)]
