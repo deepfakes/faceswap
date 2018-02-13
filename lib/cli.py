@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import time
 
 from pathlib import Path
@@ -14,6 +15,16 @@ class FullPaths(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
             os.path.expanduser(values)))
+
+class FullHelpArgumentParser(argparse.ArgumentParser):
+    """
+    Identical to the built-in argument parser, but on error
+    it prints full help message instead of just usage information
+    """
+    def error(self, message):
+        self.print_help(sys.stderr)
+        args = {'prog': self.prog, 'message': message}
+        self.exit(2, '%(prog)s: error: %(message)s\n' % args)
 
 class DirectoryProcessor(object):
     '''

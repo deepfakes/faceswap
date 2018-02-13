@@ -2,9 +2,9 @@
 
 import cv2
 
-from lib.aligner import get_align_mat
+from .aligner import get_align_mat
 
-class Extract(object):
+class Extract:
     def extract(self, image, face, size):
         if face.landmarks == None:
             print("Warning! landmarks not found. Switching to crop!")

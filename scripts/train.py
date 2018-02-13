@@ -122,19 +122,19 @@ class TrainingProcessor(object):
         thr.join() # waits until thread finishes
 
     def processThread(self):
-        print('Loading data, this may take a while...')
-        # this is so that you can enter case insensitive values for trainer
-        trainer = self.arguments.trainer
-        trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
-        model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
-        model.load(swapped=False)
-
-        images_A = get_image_paths(self.arguments.input_A)
-        images_B = get_image_paths(self.arguments.input_B)
-        trainer = PluginLoader.get_trainer(trainer)
-        trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
-
         try:
+            print('Loading data, this may take a while...')
+            # this is so that you can enter case insensitive values for trainer
+            trainer = self.arguments.trainer
+            trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
+            model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
+            model.load(swapped=False)
+
+            images_A = get_image_paths(self.arguments.input_A)
+            images_B = get_image_paths(self.arguments.input_B)
+            trainer = PluginLoader.get_trainer(trainer)
+            trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
+
             print('Starting. Press "Enter" to stop training and save model')
 
             for epoch in range(0, self.arguments.epochs):

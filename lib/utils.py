@@ -1,4 +1,3 @@
-import argparse
 import sys
 
 from pathlib import Path
@@ -14,16 +13,6 @@ def get_folder(path):
 def get_image_paths(directory):
     return [x.path for x in scandir(directory) if
      any(map(lambda ext: x.name.lower().endswith(ext), image_extensions))]
-
-class FullHelpArgumentParser(argparse.ArgumentParser):
-    """
-    Identical to the built-in argument parser, but on error
-    it prints full help message instead of just usage information
-    """
-    def error(self, message):
-        self.print_help(sys.stderr)
-        args = {'prog': self.prog, 'message': message}
-        self.exit(2, '%(prog)s: error: %(message)s\n' % args)
 
 # From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
 import threading
