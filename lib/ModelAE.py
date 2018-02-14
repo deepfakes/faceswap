@@ -22,9 +22,9 @@ class ModelAE:
         (face_A,face_B) = (decoder_AH5, decoder_BH5) if not swapped else (decoder_BH5, decoder_AH5)
 
         try:
-            self.encoder.load_weights(self.model_dir / encoderH5)
-            self.decoder_A.load_weights(self.model_dir / face_A)
-            self.decoder_B.load_weights(self.model_dir / face_B)
+            self.encoder.load_weights(str(self.model_dir / encoderH5))
+            self.decoder_A.load_weights(str(self.model_dir / face_A))
+            self.decoder_B.load_weights(str(self.model_dir / face_B))
             print('loaded model weights')
             return True
         except Exception as e:
@@ -33,9 +33,9 @@ class ModelAE:
             return False
 
     def save_weights(self):
-        self.encoder.save_weights(self.model_dir / encoderH5)
-        self.decoder_A.save_weights(self.model_dir / decoder_AH5)
-        self.decoder_B.save_weights(self.model_dir / decoder_BH5)
+        self.encoder.save_weights(str(self.model_dir / encoderH5))
+        self.decoder_A.save_weights(str(self.model_dir / decoder_AH5))
+        self.decoder_B.save_weights(str(self.model_dir / decoder_BH5))
         print('saved model weights')
 
 class TrainerAE():

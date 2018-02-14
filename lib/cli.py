@@ -4,8 +4,9 @@ import time
 
 from pathlib import Path
 from lib.FaceFilter import FaceFilter
-from lib.faces_detect import detect_faces
+from lib.faces_detect import detect_faces, DetectedFace
 from lib.utils import get_image_paths, get_folder
+from lib import Serializer
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
@@ -26,17 +27,28 @@ class DirectoryProcessor(object):
     output_dir = None
 
     images_found = 0
-    faces_detected = 0
+    num_faces_detected = 0
+    faces_detected = dict()
     verify_output = False
 
     def __init__(self, subparser, command, description='default'):
         self.create_parser(subparser, command, description)
         self.parse_arguments(description, subparser, command)
 
+
     def process_arguments(self, arguments):
         self.arguments = arguments
         print("Input Directory: {}".format(self.arguments.input_dir))
         print("Output Directory: {}".format(self.arguments.output_dir))
+        self.serializer = None
+        if self.arguments.serializer is None and self.arguments.alignments_path is not None:
+            ext = os.path.splitext(self.arguments.alignments_path)[-1]
+            self.serializer = Serializer.get_serializer_fromext(ext)
+            print(self.serializer, self.arguments.alignments_path)
+        else:
+            self.serializer = Serializer.get_serializer(self.arguments.serializer or "json")
+        print("Using {} serializer".format(self.serializer.ext))
+
         print('Starting, this may take a while...')
 
         self.output_dir = get_folder(self.arguments.output_dir)
@@ -49,27 +61,81 @@ class DirectoryProcessor(object):
         self.filter = self.load_filter()
         self.process()
         self.finalize()
-        
+
+    def read_alignments(self):
+
+        fn = os.path.join(str(self.arguments.input_dir),"alignments.{}".format(self.serializer.ext))
+        if self.arguments.alignments_path is not None:
+            fn = self.arguments.alignments_path
+
+        try:
+            print("Reading alignments from: {}".format(fn))
+            with open(fn, self.serializer.roptions) as f:
+                self.faces_detected = self.serializer.unmarshal(f.read())
+        except Exception as e:
+            print("{} not read!".format(fn))
+            print(str(e))
+            self.faces_detected = dict()
+
+    def write_alignments(self):
+
+        fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
+        if self.arguments.alignments_path is not None:
+            fn = self.arguments.alignments_path
+        try:
+            print("Writing alignments to: {}".format(fn))
+            with open(fn, self.serializer.woptions) as fh:
+                fh.write(self.serializer.marshal(self.faces_detected))
+        except Exception as e:
+            print("{} not written!".format(fn))
+            print(str(e))
+            self.faces_detected = dict()
+
     def read_directory(self):
         self.images_found = len(self.input_dir)
         return self.input_dir
-    
-    def get_faces(self, image):
+
+    def have_face(self, filename):
+        return os.path.basename(filename) in self.faces_detected
+
+    def have_alignments(self):
+        fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
+        return os.path.exists(fn)
+
+    def get_faces_alignments(self, filename, image):
         faces_count = 0
-        for face in detect_faces(image, self.arguments.detector):
+        faces = self.faces_detected[os.path.basename(filename)]
+        for rawface in faces:
+            face = DetectedFace(**rawface)
+            face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
                 continue
 
             yield faces_count, face
-
-            self.faces_detected = self.faces_detected + 1
+            self.num_faces_detected += 1
             faces_count += 1
-        
         if faces_count > 1 and self.arguments.verbose:
             print('Note: Found more than one face in an image!')
             self.verify_output = True
-    
+
+    def get_faces(self, image):
+        faces_count = 0
+        faces = detect_faces(image, self.arguments.detector)
+
+        for face in faces:
+            if self.filter is not None and not self.filter.check(face):
+                print('Skipping not recognized face!')
+                continue
+            yield faces_count, face
+
+            self.num_faces_detected += 1
+            faces_count += 1
+
+        if faces_count > 1 and self.arguments.verbose:
+            print('Note: Found more than one face in an image!')
+            self.verify_output = True
+
     def load_filter(self):
         filter_file = self.arguments.filter
         if Path(filter_file).exists():
@@ -94,6 +160,18 @@ class DirectoryProcessor(object):
                             default="output",
                             help="Output directory. This is where the converted files will \
                                 be stored. Defaults to 'output'")
+
+        self.parser.add_argument('--serializer',
+                                type=str.lower,
+                                dest="serializer",
+                                choices=("yaml", "json", "pickle"),
+                                help="serializer for alignments file")
+
+        self.parser.add_argument('--alignments',
+                                type=str,
+                                dest="alignments_path",
+                                help="optional path to alignments file.")
+
         self.parser.add_argument('-v', '--verbose',
                             action="store_true",
                             dest="verbose",
@@ -118,7 +196,7 @@ class DirectoryProcessor(object):
     def finalize(self):
         print('-------------------------')
         print('Images found:        {}'.format(self.images_found))
-        print('Faces detected:      {}'.format(self.faces_detected))
+        print('Faces detected:      {}'.format(self.num_faces_detected))
         print('-------------------------')
 
         if self.verify_output:

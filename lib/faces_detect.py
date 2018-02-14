@@ -22,13 +22,17 @@ def _css_to_rect(css):
 # end of Copy/Paste
 
 class DetectedFace(object):
-    def __init__(self, image, x, w, y, h, landmarks):
+    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks=None, landmarksXY=None):
         self.image = image
         self.x = x
         self.w = w
         self.y = y
         self.h = h
         self.landmarks = landmarks
-    
+        self.landmarksXY = landmarksXY
+
     def landmarksAsXY(self):
-        return [(p.x, p.y) for p in self.landmarks.parts()]
+        if self.landmarksXY:
+            return self.landmarksXY
+        self.landmarksXY = [(p.x, p.y) for p in self.landmarks.parts()]
+        return self.landmarksXY

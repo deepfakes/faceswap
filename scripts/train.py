@@ -72,7 +72,7 @@ class TrainingProcessor(object):
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem"),
+                            choices=("Original", "LowMem", "GAN"),
                             default="Original",
                             help="Select which trainer to use, LowMem for cards < 2gb.")
         parser.add_argument('-bs', '--batch-size',
@@ -84,7 +84,10 @@ class TrainingProcessor(object):
                             dest="allow_growth",
                             default=False,
                             help="Sets allow_growth option of Tensorflow to spare memory on some configs")
-                            
+        parser.add_argument('-ep', '--epochs',
+                            type=int,
+                            default=1000000,
+                            help="Length of training in epochs.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -142,7 +145,7 @@ class TrainingProcessor(object):
         try:
             print('Starting. Press "Enter" to stop training and save model')
 
-            for epoch in range(0, 1000000):
+            for epoch in range(0, self.arguments.epochs):
 
                 save_iteration = epoch % self.arguments.save_interval == 0
 

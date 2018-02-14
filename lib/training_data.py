@@ -35,7 +35,11 @@ class TrainingDataGenerator():
         return img / 255.0
     
     def read_image(self, fn):
-        image = self.color_adjust(cv2.imread(fn))
+        try:
+            image = self.color_adjust(cv2.imread(fn))
+        except TypeError:
+            raise Exception("Error while reading image", fn)
+        
         image = cv2.resize(image, (256,256))
         image = self.random_transform( image, **self.random_transform_args )
         warped_img, target_img = self.random_warp( image, self.coverage )

@@ -79,7 +79,7 @@ class Convert():
 
         if self.mask_type == 'rect':
             image_mask = face_mask
-        elif self.mask_type == 'faceHull':
+        elif self.mask_type == 'facehull':
             image_mask = hull_mask
         else:
             image_mask = ((face_mask*hull_mask))
