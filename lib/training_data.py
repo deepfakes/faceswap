@@ -10,37 +10,64 @@ class TrainingDataGenerator():
         self.random_transform_args = random_transform_args
         self.coverage = coverage
 
-    def minibatchAB(self, images, batchsize):
-        batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
-        for ep1, warped_img, target_img in batch.iterator():
-            yield ep1, warped_img, target_img
+    def load_images(self, image_paths):
+        iter_all_images = (cv2.imread(fn) for fn in image_paths)
+        for i, image in enumerate(iter_all_images):
+            if i == 0:
+                all_images = numpy.empty((len(image_paths),) + image.shape, dtype=image.dtype)
+            all_images[i] = image
+
+        try:
+            first = all_images[i]
+        except:
+            print('Cannot find images. Make sure the data directory paths are properly entered.')
+
+        return all_images
+
+    def minibatchAB(self, images_A, images_B, batchsize):
+        images_A = self.load_images(images_A) / 255.0
+        images_B = self.load_images(images_B) / 255.0
+        images_A += images_B.mean(axis=(0, 1, 2)) - images_A.mean(axis=(0, 1, 2)) # color matching
+        
+        batch = BackgroundGenerator(self.minibatch(images_A, images_B, batchsize), 1)
+        for ep1, warped_img_A, target_img_A, warped_img_B, target_img_B in batch.iterator():
+            yield ep1, warped_img_A, target_img_A, warped_img_B, target_img_B
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
-    def minibatch(self, data, batchsize):
-        length = len(data)
-        assert length >= batchsize, "Number of images is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length, batchsize)
-        epoch = i = 0
-        shuffle(data)
-        while True:
-            size = batchsize
-            if i+size > length:
-                shuffle(data)
-                i = 0
-                epoch+=1
-            rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])
-            i+=size
-            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
-
-    def color_adjust(self, img):
-        return img / 255.0
-    
-    def read_image(self, fn):
-        try:
-            image = self.color_adjust(cv2.imread(fn))
-        except TypeError:
-            raise Exception("Error while reading image", fn)
+    def minibatch(self, images_A, images_B, batchsize):
+        length_A = len(images_A)
+        length_B = len(images_B)
+        assert length_A >= batchsize, "Number of images a is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length_A, batchsize)
+        assert length_B >= batchsize, "Number of images b is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length_B, batchsize)
         
-        image = cv2.resize(image, (256,256))
+        epoch = index_A = index_B = 0
+        shuffle(images_A)
+        
+        while True:
+            overflow=False
+            
+            if index_A+batchsize > length_A:
+                shuffle(images_A)
+                index_A = 0
+                overflow=True
+            
+            if index_B+batchsize > length_B:
+                shuffle(images_B)
+                index_B = 0
+                overflow=True
+                
+            if overflow:
+                epoch+=1
+                
+            rtn_A = numpy.float32([self.warp_image(img) for img in images_A[index_A:index_A+batchsize]])
+            index_A+=batchsize
+            
+            rtn_B = numpy.float32([self.warp_image(img) for img in images_B[index_B:index_B+batchsize]])
+            index_B+=batchsize            
+            
+            yield epoch, rtn_A[:,0,:,:,:], rtn_A[:,1,:,:,:], rtn_B[:,0,:,:,:], rtn_B[:,1,:,:,:]
+    
+    def warp_image(self, image):
         image = self.random_transform( image, **self.random_transform_args )
         warped_img, target_img = self.random_warp( image, self.coverage )
         

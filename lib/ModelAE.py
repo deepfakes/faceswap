@@ -51,12 +51,10 @@ class TrainerAE():
         self.model = model
 
         generator = TrainingDataGenerator(self.random_transform_args, 160)
-        self.images_A = generator.minibatchAB(fn_A, self.batch_size)
-        self.images_B = generator.minibatchAB(fn_B, self.batch_size)
+        self.images = generator.minibatchAB(fn_A, fn_B, self.batch_size)
 
     def train_one_step(self, iter, viewer):
-        epoch, warped_A, target_A = next(self.images_A)
-        epoch, warped_B, target_B = next(self.images_B)
+        epoch, warped_A, target_A, warped_B, target_B = next(self.images)
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
