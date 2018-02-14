@@ -70,7 +70,7 @@ class TrainerAE():
         elapsed_train_time = time.clock() - train_start_time
         if iter > 0:
             self.min_iter_time = min(self.min_iter_time, elapsed_train_time)
-            self.max_iter_time = max(self.min_iter_time, elapsed_train_time)
+            self.max_iter_time = max(self.max_iter_time, elapsed_train_time)
             self.avg_iter_time = (self.avg_iter_time * (iter-1) + elapsed_train_time) / iter
         else:
             self.min_iter_time = self.max_iter_time = self.avg_iter_time = elapsed_train_time
