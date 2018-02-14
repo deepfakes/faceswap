@@ -68,7 +68,7 @@ class ExtractTrainingData(DirectoryProcessor):
         count = 0
 
         image = cv2.imread(filename)
-        faces = self.get_faces(image)
+        faces = self.get_faces(image, filename)
         rvals = []
         for idx, face in faces:
             count = idx

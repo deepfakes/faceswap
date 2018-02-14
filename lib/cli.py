@@ -116,10 +116,10 @@ class DirectoryProcessor(object):
             self.num_faces_detected += 1
             faces_count += 1
         if faces_count > 1 and self.arguments.verbose:
-            print('Note: Found more than one face in an image!')
+            print('Note: Found more than one face in an image! File: %s' % filename)
             self.verify_output = True
 
-    def get_faces(self, image):
+    def get_faces(self, image, filename):
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector)
 
@@ -133,7 +133,7 @@ class DirectoryProcessor(object):
             faces_count += 1
 
         if faces_count > 1 and self.arguments.verbose:
-            print('Note: Found more than one face in an image!')
+            print('Note: Found more than one face in an image! File: %s' % filename)
             self.verify_output = True
 
     def load_filter(self):

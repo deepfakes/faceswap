@@ -5,10 +5,15 @@ import cv2
 from lib.aligner import get_align_mat
 
 class Extract(object):
-    def extract(self, image, face, size):
+    def extract(self, image, face, size, debug=False):
         if face.landmarks == None:
             print("Warning! landmarks not found. Switching to crop!")
             return cv2.resize(face.image, (size, size))
+        
+        # Draws landmarks for debug
+        if debug:
+            for (x, y) in face.landmarksAsXY():
+                cv2.circle(image, (x, y), 1, (0, 0, 255), -1)
 
         alignment = get_align_mat( face )
         return self.transform( image, alignment, size, 48 )
