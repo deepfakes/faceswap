@@ -42,6 +42,7 @@ class TrainingDataGenerator():
         
         epoch = index_A = index_B = 0
         shuffle(images_A)
+        shuffle(images_B)
         
         while True:
             overflow=False
