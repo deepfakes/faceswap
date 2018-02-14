@@ -73,7 +73,8 @@ class TrainerAE():
             self.max_iter_time = max(self.max_iter_time, elapsed_train_time)
             self.avg_iter_time = (self.avg_iter_time * (iter-1) + elapsed_train_time) / iter
         else:
-            self.min_iter_time = self.max_iter_time = self.avg_iter_time = elapsed_train_time
+            self.max_iter_time = self.avg_iter_time = 0
+            self.min_iter_time = 999
         
         print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}, speed: {4}".format(time.strftime("%H:%M:%S"), iter, loss_A, loss_B, "last[{0:.2f}sec] avg[{1:.2f}sec] min[{2:.2f}sec] max[{3:.2f}sec]".format(elapsed_train_time,self.avg_iter_time, self.min_iter_time, self.max_iter_time) if iter > 0 else "calculating.." ))
         
