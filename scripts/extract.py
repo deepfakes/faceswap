@@ -37,6 +37,12 @@ class ExtractTrainingData(DirectoryProcessor):
                             type=int,
                             default=1,
                             help="Number of processes to use.")
+        
+        parser.add_argument('-dl', '--debug-landmarks',
+                            action="store_true",
+                            dest="debug_landmarks",
+                            default=False,
+                            help="Draw landmarks for debug.")
         return parser
 
     def process(self):
@@ -73,7 +79,7 @@ class ExtractTrainingData(DirectoryProcessor):
         for idx, face in faces:
             count = idx
 
-            resized_image = self.extractor.extract(image, face, 256)
+            resized_image = self.extractor.extract(image, face, self.arguments.debug_landmarks, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
             cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
             f = {
