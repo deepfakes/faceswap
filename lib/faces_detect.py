@@ -1,28 +1,13 @@
 import dlib
 import face_recognition
 import face_recognition_models
-import face_alignment
 
 def detect_faces(frame, model="hog"):
     face_locations = face_recognition.face_locations(frame, model=model)
-    #landmarks = _raw_face_landmarks(frame, face_locations)
+    landmarks = _raw_face_landmarks(frame, face_locations)
 
-    if model == "cnn":
-        fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, enable_cuda=True, 
-                flip_input=True)
-    else:
-        fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, enable_cuda=True, 
-                flip_input=True)
-
-    raw_landmarks = fa.get_landmarks(frame, all_faces=True)
-    landmarksXY = []
-
-    if raw_landmarks is not None:
-        for raw_landmark in raw_landmarks:
-            landmarksXY.append([(int(p[0]), int(p[1])) for p in raw_landmark])
-        for ((y, right, bottom, x), landmarks) in zip(face_locations, landmarksXY):
-            yield DetectedFace(frame[y: bottom, x: right], x, right - x, y, 
-                    bottom - y, landmarks=landmarks, landmarksXY=landmarks)
+    for ((y, right, bottom, x), landmarks) in zip(face_locations, landmarks):
+        yield DetectedFace(frame[y: bottom, x: right], x, right - x, y, bottom - y, landmarks)
 
 # Copy/Paste (mostly) from private method in face_recognition
 predictor_68_point_model = face_recognition_models.pose_predictor_model_location()
