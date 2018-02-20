@@ -9,10 +9,10 @@ def detect_faces(frame, model="hog"):
 
     if model == "cnn":
         fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, enable_cuda=True, 
-                enable_cudnn=True, use_cnn_face_detector=True)
+                flip_input=True)
     else:
         fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, enable_cuda=True, 
-                enable_cudnn=True, use_cnn_face_detector=False)
+                flip_input=True)
 
     raw_landmarks = fa.get_landmarks(frame, all_faces=True)
     landmarksXY = []

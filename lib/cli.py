@@ -50,27 +50,17 @@ class DirectoryProcessor(object):
         print("Using {} serializer".format(self.serializer.ext))
 
         print('Starting, this may take a while...')
-        
-        try:
-            if self.arguments.skip_existing:
-                self.already_processed = get_image_paths(self.arguments.output_dir)
-        except AttributeError:
-            pass
-    
+
+        self.already_processed = get_image_paths(self.arguments.output_dir)
         self.output_dir = get_folder(self.arguments.output_dir)
         try:
-            try:
-                if self.arguments.skip_existing:
-                    self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
-                    print('Excluding %s files' % len(self.already_processed))
-                else:
-                    self.input_dir = get_image_paths(self.arguments.input_dir)
-            except AttributeError:
-                self.input_dir = get_image_paths(self.arguments.input_dir)
+            self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
         except:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
+        print('Should exclude %s' % len(self.already_processed))
+        print('Length of input dir: %s' % len(self.input_dir))
         self.filter = self.load_filter()
         self.process()
         self.finalize()
