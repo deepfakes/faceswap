@@ -51,13 +51,16 @@ class DirectoryProcessor(object):
 
         print('Starting, this may take a while...')
 
+        self.already_processed = get_image_paths(self.arguments.output_dir)
         self.output_dir = get_folder(self.arguments.output_dir)
         try:
-            self.input_dir = get_image_paths(self.arguments.input_dir)
+            self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
         except:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
+        print('Should exclude %s' % len(self.already_processed))
+        print('Length of input dir: %s' % len(self.input_dir))
         self.filter = self.load_filter()
         self.process()
         self.finalize()
@@ -122,7 +125,7 @@ class DirectoryProcessor(object):
     def get_faces(self, image, filename):
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector)
-
+        
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
