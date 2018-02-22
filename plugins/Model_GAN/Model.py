@@ -9,18 +9,36 @@ from keras.applications import *
 from keras.optimizers import Adam
 
 from lib.PixelShuffler import PixelShuffler
+from .instance_normalization import InstanceNormalization
 
 netGAH5 = 'netGA_GAN.h5'
 netGBH5 = 'netGB_GAN.h5'
 netDAH5 = 'netDA_GAN.h5'
 netDBH5 = 'netDB_GAN.h5'
 
+def __conv_init(a):
+    print("conv_init", a)
+    k = RandomNormal(0, 0.02)(a) # for convolution kernel
+    k.conv_weight = True    
+    return k
+
+#def batchnorm():
+#    return BatchNormalization(momentum=0.9, axis=channel_axis, epsilon=1.01e-5, gamma_initializer = gamma_init)
+
+def inst_norm():
+    return InstanceNormalization()
+
+conv_init = RandomNormal(0, 0.02)
+gamma_init = RandomNormal(1., 0.02) # for batch normalization
+
 class GANModel():
     img_size = 64 
     channels = 3
     img_shape = (img_size, img_size, channels)
     encoded_dim = 1024
-    
+    nc_in = 3 # number of input channels of generators
+    nc_D_inp = 6 # number of input channels of discriminators
+
     def __init__(self, model_dir):
         self.model_dir = model_dir
 
@@ -29,76 +47,45 @@ class GANModel():
         # Build and compile the discriminator
         self.netDA, self.netDB = self.build_discriminator()
 
-        # For the adversarial_autoencoder model we will only train the generator
-        self.netDA.trainable = False
-        self.netDB.trainable = False
-        
-        self.netDA.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
-        self.netDB.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
-
         # Build and compile the generator
         self.netGA, self.netGB = self.build_generator()
-        self.netGA.compile(loss=['mae', 'mse'], optimizer=optimizer)
-        self.netGB.compile(loss=['mae', 'mse'], optimizer=optimizer)
-
-        img = Input(shape=self.img_shape)
-        alphaA, reconstructed_imgA = self.netGA(img)
-        alphaB, reconstructed_imgB = self.netGB(img)
-
-        def one_minus(x): return 1 - x
-        # masked_img = alpha * reconstructed_img + (1 - alpha) * img
-        masked_imgA = add([multiply([alphaA, reconstructed_imgA]), multiply([Lambda(one_minus)(alphaA), img])])
-        masked_imgB = add([multiply([alphaB, reconstructed_imgB]), multiply([Lambda(one_minus)(alphaB), img])])
-        out_discriminatorA = self.netDA(concatenate([masked_imgA, img], axis=-1))
-        out_discriminatorB = self.netDB(concatenate([masked_imgB, img], axis=-1))
-
-        # The adversarial_autoencoder model  (stacked generator and discriminator) takes
-        # img as input => generates encoded represenation and reconstructed image => determines validity 
-        self.adversarial_autoencoderA = Model(img, [reconstructed_imgA, out_discriminatorA])
-        self.adversarial_autoencoderB = Model(img, [reconstructed_imgB, out_discriminatorB])
-        self.adversarial_autoencoderA.compile(loss=['mae', 'mse'],
-                                              loss_weights=[1, 0.5],
-                                              optimizer=optimizer)
-        self.adversarial_autoencoderB.compile(loss=['mae', 'mse'],
-                                              loss_weights=[1, 0.5],
-                                              optimizer=optimizer)
 
     def converter(self, swap):
         predictor = self.netGB if not swap else self.netGA
         return lambda img: predictor.predict(img)
 
     def build_generator(self):
-        def conv_block(input_tensor, f):
+
+        def conv_block(input_tensor, f, use_instance_norm=True):
             x = input_tensor
-            x = Conv2D(f, kernel_size=3, strides=2, kernel_initializer=RandomNormal(0, 0.02), 
-                       use_bias=False, padding="same")(x)
-            x = LeakyReLU(alpha=0.2)(x)
+            x = SeparableConv2D(f, kernel_size=3, strides=2, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
+            if use_instance_norm:
+                x = inst_norm()(x)
+            x = Activation("relu")(x)
             return x
 
-        def res_block(input_tensor, f):
+        def res_block(input_tensor, f, dilation=1):
             x = input_tensor
-            x = Conv2D(f, kernel_size=3, kernel_initializer=RandomNormal(0, 0.02), 
-                       use_bias=False, padding="same")(x)
+            x = Conv2D(f, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same", dilation_rate=dilation)(x)
             x = LeakyReLU(alpha=0.2)(x)
-            x = Conv2D(f, kernel_size=3, kernel_initializer=RandomNormal(0, 0.02), 
-                       use_bias=False, padding="same")(x)
+            x = Conv2D(f, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same", dilation_rate=dilation)(x)
             x = add([x, input_tensor])
-            x = LeakyReLU(alpha=0.2)(x)
+            #x = LeakyReLU(alpha=0.2)(x)
             return x
 
-        def upscale_ps(filters, use_norm=True):
-            def block(x):
-                x = Conv2D(filters*4, kernel_size=3, use_bias=False, 
-                           kernel_initializer=RandomNormal(0, 0.02), padding='same' )(x)
+        def upscale_ps(filters, use_instance_norm=True):
+            def block(x, use_instance_norm=use_instance_norm):
+                x = Conv2D(filters*4, kernel_size=3, use_bias=False, kernel_initializer=RandomNormal(0, 0.02), padding='same')(x)
+                if use_instance_norm:
+                    x = inst_norm()(x)
                 x = LeakyReLU(0.1)(x)
                 x = PixelShuffler()(x)
                 return x
             return block
 
-        def Encoder(img_shape):
-            inp = Input(shape=img_shape)
-            x = Conv2D(64, kernel_size=5, kernel_initializer=RandomNormal(0, 0.02), 
-                       use_bias=False, padding="same")(inp)
+        def Encoder(nc_in=3, input_size=64):
+            inp = Input(shape=(input_size, input_size, nc_in))
+            x = Conv2D(64, kernel_size=5, kernel_initializer=conv_init, use_bias=False, padding="same")(inp)
             x = conv_block(x,128)
             x = conv_block(x,256)
             x = conv_block(x,512) 
@@ -109,23 +96,23 @@ class GANModel():
             out = upscale_ps(512)(x)
             return Model(inputs=inp, outputs=out)
 
-        def Decoder_ps(img_shape):
-            nc_in = 512
-            input_size = img_shape[0]//8
-            inp = Input(shape=(input_size, input_size, nc_in))
-            x = inp
+        def Decoder_ps(nc_in=512, input_size=8):
+            input_ = Input(shape=(input_size, input_size, nc_in))
+            x = input_
             x = upscale_ps(256)(x)
             x = upscale_ps(128)(x)
             x = upscale_ps(64)(x)
             x = res_block(x, 64)
             x = res_block(x, 64)
+            #x = Conv2D(4, kernel_size=5, padding='same')(x)   
             alpha = Conv2D(1, kernel_size=5, padding='same', activation="sigmoid")(x)
             rgb = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(x)
-            return Model(inp, [alpha, rgb])
+            out = concatenate([alpha, rgb])
+            return Model(input_, out )
         
-        encoder = Encoder(self.img_shape)
-        decoder_A = Decoder_ps(self.img_shape)
-        decoder_B = Decoder_ps(self.img_shape)    
+        encoder = Encoder()
+        decoder_A = Decoder_ps()
+        decoder_B = Decoder_ps()    
         x = Input(shape=self.img_shape)
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))           
@@ -136,26 +123,28 @@ class GANModel():
         except:
             print ("Generator weights files not found.")
             pass
-        return netGA, netGB, 
+        return netGA, netGB
 
-    def build_discriminator(self):  
+    def build_discriminator(self):
         def conv_block_d(input_tensor, f, use_instance_norm=True):
             x = input_tensor
-            x = Conv2D(f, kernel_size=4, strides=2, kernel_initializer=RandomNormal(0, 0.02), 
-                       use_bias=False, padding="same")(x)
+            x = Conv2D(f, kernel_size=4, strides=2, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
+            if use_instance_norm:
+                x = inst_norm()(x)
             x = LeakyReLU(alpha=0.2)(x)
-            return x   
-        def Discriminator(img_shape):
-            inp = Input(shape=(img_shape[0], img_shape[1], img_shape[2]*2))
+            return x
+
+        def Discriminator(nc_in, input_size=64):
+            inp = Input(shape=(input_size, input_size, nc_in))
+            #x = GaussianNoise(0.05)(inp)
             x = conv_block_d(inp, 64, False)
-            x = conv_block_d(x, 128, False)
-            x = conv_block_d(x, 256, False)
-            out = Conv2D(1, kernel_size=4, kernel_initializer=RandomNormal(0, 0.02), 
-                         use_bias=False, padding="same", activation="sigmoid")(x)   
-            return Model(inputs=[inp], outputs=out) 
+            x = conv_block_d(x, 128, True)
+            x = conv_block_d(x, 256, True)
+            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)   
+            return Model(inputs=[inp], outputs=out)
         
-        netDA = Discriminator(self.img_shape)
-        netDB = Discriminator(self.img_shape)        
+        netDA = Discriminator(self.nc_D_inp)
+        netDB = Discriminator(self.nc_D_inp)        
         try:
             netDA.load_weights(str(self.model_dir / netDAH5))
             netDB.load_weights(str(self.model_dir / netDBH5))
