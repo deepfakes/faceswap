@@ -34,7 +34,7 @@ class Trainer():
         self.use_mixup = True
         self.mixup_alpha = 0.2
         self.use_perceptual_loss = False
-        self.use_instancenorm = True
+        self.use_instancenorm = False
 
         self.lrD = 1e-4 # Discriminator learning rate
         self.lrG = 1e-4 # Generator learning rate
