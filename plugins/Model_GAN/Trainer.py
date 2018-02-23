@@ -133,13 +133,17 @@ class Trainer():
         self.errGA_sum += errGA[0]
         self.errGB_sum += errGB[0]
         
-        avg_counter = iter%100 + 1
+        avg_counter = 0
+        if iter % 100 == 0 and iter > 0:
+            avg_counter = 100
+        else:
+            avg_counter = iter % 100
 
         print('[%s] [%d/%s][%d] Loss_DA: %f Loss_DB: %f Loss_GA: %f Loss_GB: %f'
               % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/avg_counter, self.errDB_sum/avg_counter, self.errGA_sum/avg_counter, self.errGB_sum/avg_counter),
               end='\r')
         
-        if (iter+1) % 100 == 0:
+        if iter % 100 == 0:
             # Only average the last 100 iterations
             self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
 
