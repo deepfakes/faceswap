@@ -128,13 +128,17 @@ class Trainer():
         errGB = self.netGB_train([warped_B, target_B])
         
         # For calculating average losses
+        if iter % 100 == 0:
+            # Only average the last 100 iterations
+            self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
+        
         self.errDA_sum += errDA[0]
         self.errDB_sum += errDB[0]
         self.errGA_sum += errGA[0]
         self.errGB_sum += errGB[0]
 
         print('[%s] [%d/%s][%d] Loss_DA: %f Loss_DB: %f Loss_GA: %f Loss_GB: %f'
-              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/iter, self.errDB_sum/iter, self.errGA_sum/iter, self.errGB_sum/iter),
+              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/(iter%100+1), self.errDB_sum/(iter%100+1), self.errGA_sum/(iter%100+1), self.errGB_sum/(iter%100+1)),
               end='\r')
 
         if viewer is not None:
