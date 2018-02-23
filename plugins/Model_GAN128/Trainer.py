@@ -32,7 +32,7 @@ class Trainer():
         self.use_lsgan = True
         self.use_mixup = True
         self.mixup_alpha = 0.2
-        self.use_perceptual_loss = True
+        self.use_perceptual_loss = False
         self.use_instancenorm = False
 
         self.lrD = 1e-4 # Discriminator learning rate
