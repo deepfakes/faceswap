@@ -96,6 +96,16 @@ class Trainer():
         self.netDB_train = K.function([distorted_B, real_B],[loss_DB], training_updates)
         training_updates = Adam(lr=self.lrG, beta_1=0.5).get_updates(weightsGB,[], loss_GB)
         self.netGB_train = K.function([distorted_B, real_B], [loss_GB], training_updates)
+        
+    def first_order(self, x, axis=1):
+        img_nrows = x.shape[1]
+        img_ncols = x.shape[2]
+        if axis == 1:
+            return K.abs(x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, 1:, :img_ncols - 1, :])
+        elif axis == 2:
+            return K.abs(x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, :img_nrows - 1, 1:, :])
+        else:
+            return None
 
     def train_one_step(self, iter, viewer):
         # ---------------------
