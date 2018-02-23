@@ -41,6 +41,9 @@ class Trainer():
         generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 2)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
+        
+        self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
+        
         self.setup()
 
     def setup(self):
@@ -129,20 +132,11 @@ class Trainer():
         self.errDB_sum += errDB[0]
         self.errGA_sum += errGA[0]
         self.errGB_sum += errGB[0]
-        
-        avg_counter = 0
-        if iter % 100 == 0 and iter > 0:
-            avg_counter = 100
-        else:
-            avg_counter = iter % 100
+        self.avg_counter += 1
 
         print('[%s] [%d/%s][%d] Loss_DA: %f Loss_DB: %f Loss_GA: %f Loss_GB: %f'
-              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/avg_counter, self.errDB_sum/avg_counter, self.errGA_sum/avg_counter, self.errGB_sum/avg_counter),
+              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/self.avg_counter, self.errDB_sum/self.avg_counter, self.errGA_sum/self.avg_counter, self.errGB_sum/self.avg_counter),
               end='\r')
-        
-        if iter % 100 == 0:
-            # Only average the last 100 iterations
-            self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
         
         if viewer is not None:
             self.show_sample(viewer)
@@ -216,6 +210,9 @@ class Trainer():
         display_fn(self.showG(tA, tB, self.path_A, self.path_B), "raw")
         display_fn(self.showG(wA, wB, self.path_bgr_A, self.path_bgr_B), "masked")
         display_fn(self.showG_mask(tA, tB, self.path_mask_A, self.path_mask_B), "mask")
+        # Reset the averages
+        self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
+        self.avg_counter = 0
     
     def showG(self, test_A, test_B, path_A, path_B):
         figure_A = np.stack([
