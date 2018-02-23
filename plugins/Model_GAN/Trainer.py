@@ -6,7 +6,6 @@ from keras.layers import *
 from tensorflow.contrib.distributions import Beta
 import tensorflow as tf
 from keras.optimizers import Adam
-from keras.models import Model
 
 from lib.training_data import TrainingDataGenerator, stack_images
 
@@ -57,6 +56,7 @@ class Trainer():
 
         # ========== Define Perceptual Loss Model==========
         if self.use_perceptual_loss:
+            from keras.models import Model
             from keras_vggface.vggface import VGGFace
             vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
             vggface.trainable = False

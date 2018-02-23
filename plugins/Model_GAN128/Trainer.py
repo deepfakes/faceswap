@@ -29,10 +29,10 @@ class Trainer():
         self.batch_size = batch_size
         self.model = model
         
-        self.use_lsgan = False
+        self.use_lsgan = True
         self.use_mixup = True
         self.mixup_alpha = 0.2
-        self.use_perceptual_loss = False
+        self.use_perceptual_loss = True
         self.use_instancenorm = False
 
         self.lrD = 1e-4 # Discriminator learning rate
@@ -56,6 +56,7 @@ class Trainer():
 
         # ========== Define Perceptual Loss Model==========
         if self.use_perceptual_loss:
+            from keras.models import Model
             from keras_vggface.vggface import VGGFace
             vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
             vggface.trainable = False
@@ -73,6 +74,12 @@ class Trainer():
 
         loss_GA += 3e-3 * K.mean(K.abs(mask_A))
         loss_GB += 3e-3 * K.mean(K.abs(mask_B))
+
+        w_fo = 0.01
+        loss_GA += w_fo * K.mean(first_order(mask_A, axis=1))
+        loss_GA += w_fo * K.mean(first_order(mask_A, axis=2))
+        loss_GB += w_fo * K.mean(first_order(mask_B, axis=1))
+        loss_GB += w_fo * K.mean(first_order(mask_B, axis=2))
 
         weightsDA = self.model.netDA.trainable_weights
         weightsGA = self.model.netGA.trainable_weights
