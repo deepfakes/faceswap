@@ -6,6 +6,7 @@ from keras.layers import *
 from tensorflow.contrib.distributions import Beta
 import tensorflow as tf
 from keras.optimizers import Adam
+from keras.models import Model
 
 from lib.training_data import TrainingDataGenerator, stack_images
 
@@ -28,12 +29,12 @@ class Trainer():
         assert batch_size % 2 == 0, "batch_size must be an even number"
         self.batch_size = batch_size
         self.model = model
-        
-        self.use_lsgan = False
+
+        self.use_lsgan = True
         self.use_mixup = True
         self.mixup_alpha = 0.2
         self.use_perceptual_loss = False
-        self.use_instancenorm = False
+        self.use_instancenorm = True
 
         self.lrD = 1e-4 # Discriminator learning rate
         self.lrG = 1e-4 # Generator learning rate
@@ -48,7 +49,7 @@ class Trainer():
         distorted_B, fake_B, mask_B, self.path_B, self.path_mask_B, self.path_abgr_B, self.path_bgr_B = self.cycle_variables(self.model.netGB)
         real_A = Input(shape=self.model.img_shape)
         real_B = Input(shape=self.model.img_shape)
-        
+
         if self.use_lsgan:
             self.loss_fn = lambda output, target : K.mean(K.abs(K.square(output-target)))
         else:
@@ -95,7 +96,7 @@ class Trainer():
         self.netDB_train = K.function([distorted_B, real_B],[loss_DB], training_updates)
         training_updates = Adam(lr=self.lrG, beta_1=0.5).get_updates(weightsGB,[], loss_GB)
         self.netGB_train = K.function([distorted_B, real_B], [loss_GB], training_updates)
-    
+
     def first_order(self, x, axis=1):
         img_nrows = x.shape[1]
         img_ncols = x.shape[2]
@@ -105,7 +106,7 @@ class Trainer():
             return K.abs(x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, :img_nrows - 1, 1:, :])
         else:
             return None
-    
+
     def train_one_step(self, iter, viewer):
         # ---------------------
         #  Train Discriminators
@@ -123,11 +124,11 @@ class Trainer():
         # Train generators for one batch
         errGA = self.netGA_train([warped_A, target_A])
         errGB = self.netGB_train([warped_B, target_B])
-        
+
         print('[%s] [%d/%s][%d] Loss_DA: %f Loss_DB: %f Loss_GA: %f Loss_GB: %f'
               % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, errDA[0], errDB[0], errGA[0], errGB[0]),
               end='\r')
-        
+
         if viewer is not None:
             self.show_sample(viewer)
 
@@ -136,8 +137,8 @@ class Trainer():
         fake_output = netG.outputs[0]
         alpha = Lambda(lambda x: x[:,:,:, :1])(fake_output)
         rgb = Lambda(lambda x: x[:,:,:, 1:])(fake_output)
-        
-        masked_fake_output = alpha * rgb + (1-alpha) * distorted_input 
+
+        masked_fake_output = alpha * rgb + (1-alpha) * distorted_input
 
         fn_generate = K.function([distorted_input], [masked_fake_output])
         fn_mask = K.function([distorted_input], [concatenate([alpha, alpha, alpha])])
@@ -145,11 +146,11 @@ class Trainer():
         fn_bgr = K.function([distorted_input], [rgb])
         return distorted_input, fake_output, alpha, fn_generate, fn_mask, fn_abgr, fn_bgr
 
-    def define_loss(self, netD, real, fake_argb, distorted, vggface_feat=None):   
+    def define_loss(self, netD, real, fake_argb, distorted, vggface_feat=None):
         alpha = Lambda(lambda x: x[:,:,:, :1])(fake_argb)
         fake_rgb = Lambda(lambda x: x[:,:,:, 1:])(fake_argb)
         fake = alpha * fake_rgb + (1-alpha) * distorted
-        
+
         if self.use_mixup:
             dist = Beta(self.mixup_alpha, self.mixup_alpha)
             lam = dist.sample()
@@ -157,25 +158,25 @@ class Trainer():
             mixup = lam * concatenate([real, distorted]) + (1 - lam) * concatenate([fake, distorted])
             # ==========
             output_mixup = netD(mixup)
-            loss_D = self.loss_fn(output_mixup, lam * K.ones_like(output_mixup)) 
+            loss_D = self.loss_fn(output_mixup, lam * K.ones_like(output_mixup))
             output_fake = netD(concatenate([fake, distorted])) # dummy
             loss_G = .5 * self.loss_fn(output_mixup, (1 - lam) * K.ones_like(output_mixup))
         else:
             output_real = netD(concatenate([real, distorted])) # positive sample
-            output_fake = netD(concatenate([fake, distorted])) # negative sample   
-            loss_D_real = self.loss_fn(output_real, K.ones_like(output_real))    
-            loss_D_fake = self.loss_fn(output_fake, K.zeros_like(output_fake))   
+            output_fake = netD(concatenate([fake, distorted])) # negative sample
+            loss_D_real = self.loss_fn(output_real, K.ones_like(output_real))
+            loss_D_fake = self.loss_fn(output_fake, K.zeros_like(output_fake))
             loss_D = loss_D_real + loss_D_fake
-            loss_G = .5 * self.loss_fn(output_fake, K.ones_like(output_fake))  
-        # ==========  
+            loss_G = .5 * self.loss_fn(output_fake, K.ones_like(output_fake))
+        # ==========
         loss_G += K.mean(K.abs(fake_rgb - real))
         # ==========
-        
-        # Edge loss (similar with total variation loss) 
+
+        # Edge loss (similar with total variation loss)
         loss_G += 1 * K.mean(K.abs(self.first_order(fake_rgb, axis=1) - self.first_order(real, axis=1)))
         loss_G += 1 * K.mean(K.abs(self.first_order(fake_rgb, axis=2) - self.first_order(real, axis=2)))
-        
-        
+
+
         # Perceptual Loss
         if not vggface_feat is None:
             def preprocess_vggface(x):
@@ -189,24 +190,24 @@ class Trainer():
             real_sz224 = tf.image.resize_images(real, [224, 224])
             real_sz224 = Lambda(preprocess_vggface)(real_sz224)
             # ==========
-            fake_sz224 = tf.image.resize_images(fake_rgb, [224, 224]) 
+            fake_sz224 = tf.image.resize_images(fake_rgb, [224, 224])
             fake_sz224 = Lambda(preprocess_vggface)(fake_sz224)
-            # ==========   
+            # ==========
             real_feat55, real_feat28, real_feat7 = vggface_feat(real_sz224)
-            fake_feat55, fake_feat28, fake_feat7  = vggface_feat(fake_sz224)    
+            fake_feat55, fake_feat28, fake_feat7  = vggface_feat(fake_sz224)
             loss_G += pl_params[0] * K.mean(K.abs(fake_feat7 - real_feat7))
             loss_G += pl_params[1] * K.mean(K.abs(fake_feat28 - real_feat28))
             loss_G += pl_params[2] * K.mean(K.abs(fake_feat55 - real_feat55))
-        
+
         return loss_D, loss_G
-    
+
     def show_sample(self, display_fn):
         _, wA, tA = next(self.train_batchA)
         _, wB, tB = next(self.train_batchB)
         display_fn(self.showG(tA, tB, self.path_A, self.path_B), "raw")
         display_fn(self.showG(wA, wB, self.path_bgr_A, self.path_bgr_B), "masked")
         display_fn(self.showG_mask(tA, tB, self.path_mask_A, self.path_mask_B), "mask")
-    
+
     def showG(self, test_A, test_B, path_A, path_B):
         figure_A = np.stack([
             test_A,
