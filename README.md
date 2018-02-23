@@ -30,6 +30,8 @@ Note: there is no conversion for video yet. You can use [ffmpeg](https://www.ffm
 **Whole project with training images and trained model (~300MB):**
 https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
+https://pan.baidu.com/s/1eToofQE (for mainland China)
+
 ## How To setup and run the project
 
 ### Setup
