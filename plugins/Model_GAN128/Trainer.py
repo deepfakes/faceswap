@@ -76,10 +76,10 @@ class Trainer():
         loss_GB += 3e-3 * K.mean(K.abs(mask_B))
 
         w_fo = 0.01
-        loss_GA += w_fo * K.mean(first_order(mask_A, axis=1))
-        loss_GA += w_fo * K.mean(first_order(mask_A, axis=2))
-        loss_GB += w_fo * K.mean(first_order(mask_B, axis=1))
-        loss_GB += w_fo * K.mean(first_order(mask_B, axis=2))
+        loss_GA += w_fo * K.mean(self.first_order(mask_A, axis=1))
+        loss_GA += w_fo * K.mean(self.first_order(mask_A, axis=2))
+        loss_GB += w_fo * K.mean(self.first_order(mask_B, axis=1))
+        loss_GB += w_fo * K.mean(self.first_order(mask_B, axis=2))
 
         weightsDA = self.model.netDA.trainable_weights
         weightsGA = self.model.netGA.trainable_weights
