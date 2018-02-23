@@ -56,28 +56,24 @@ class GANModel():
 
     def build_generator(self):
 
-        def conv_block(input_tensor, f, use_instance_norm=True):
+        def conv_block(input_tensor, f):
             x = input_tensor
-            x = SeparableConv2D(f, kernel_size=3, strides=2, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
-            if use_instance_norm:
-                x = inst_norm()(x)
+            x = Conv2D(f, kernel_size=3, strides=2, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
             x = Activation("relu")(x)
             return x
 
-        def res_block(input_tensor, f, dilation=1):
+        def res_block(input_tensor, f):
             x = input_tensor
-            x = Conv2D(f, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same", dilation_rate=dilation)(x)
+            x = Conv2D(f, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
             x = LeakyReLU(alpha=0.2)(x)
-            x = Conv2D(f, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same", dilation_rate=dilation)(x)
+            x = Conv2D(f, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
             x = add([x, input_tensor])
-            #x = LeakyReLU(alpha=0.2)(x)
+            x = LeakyReLU(alpha=0.2)(x)
             return x
 
         def upscale_ps(filters, use_instance_norm=True):
-            def block(x, use_instance_norm=use_instance_norm):
+            def block(x):
                 x = Conv2D(filters*4, kernel_size=3, use_bias=False, kernel_initializer=RandomNormal(0, 0.02), padding='same')(x)
-                if use_instance_norm:
-                    x = inst_norm()(x)
                 x = LeakyReLU(0.1)(x)
                 x = PixelShuffler()(x)
                 return x
@@ -129,8 +125,6 @@ class GANModel():
         def conv_block_d(input_tensor, f, use_instance_norm=True):
             x = input_tensor
             x = Conv2D(f, kernel_size=4, strides=2, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
-            if use_instance_norm:
-                x = inst_norm()(x)
             x = LeakyReLU(alpha=0.2)(x)
             return x
 
@@ -138,8 +132,8 @@ class GANModel():
             inp = Input(shape=(input_size, input_size, nc_in))
             #x = GaussianNoise(0.05)(inp)
             x = conv_block_d(inp, 64, False)
-            x = conv_block_d(x, 128, True)
-            x = conv_block_d(x, 256, True)
+            x = conv_block_d(x, 128, False)
+            x = conv_block_d(x, 256, False)
             out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)   
             return Model(inputs=[inp], outputs=out)
         
