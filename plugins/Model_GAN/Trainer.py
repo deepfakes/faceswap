@@ -41,6 +41,9 @@ class Trainer():
         generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 1)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
+        
+        self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
+        
         self.setup()
 
     def setup(self):
@@ -117,16 +120,21 @@ class Trainer():
         epoch, warped_B, target_B = next(self.train_batchB)
 
         # Train dicriminators for one batch
-        if iter % 1 == 0:
-            errDA  = self.netDA_train([warped_A, target_A])
-            errDB  = self.netDB_train([warped_B, target_B])
+        errDA  = self.netDA_train([warped_A, target_A])
+        errDB  = self.netDB_train([warped_B, target_B])
 
         # Train generators for one batch
         errGA = self.netGA_train([warped_A, target_A])
         errGB = self.netGB_train([warped_B, target_B])
+        
+        # For calculating average losses
+        self.errDA_sum += errDA[0]
+        self.errDB_sum += errDB[0]
+        self.errGA_sum += errGA[0]
+        self.errGB_sum += errGB[0]
 
         print('[%s] [%d/%s][%d] Loss_DA: %f Loss_DB: %f Loss_GA: %f Loss_GB: %f'
-              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, errDA[0], errDB[0], errGA[0], errGB[0]),
+              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/iter, self.errDB_sum/iter, self.errGA_sum/iter, self.errGB_sum/iter),
               end='\r')
 
         if viewer is not None:
