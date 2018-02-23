@@ -107,7 +107,8 @@ class GANModel():
             #x = Conv2D(4, kernel_size=5, padding='same')(x)   
             alpha = Conv2D(1, kernel_size=5, padding='same', activation="sigmoid")(x)
             rgb = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(x)
-            return Model(input_, [alpha, rgb])
+            out = concatenate([alpha, rgb])
+            return Model(input_, out )
         
         encoder = Encoder()
         decoder_A = Decoder_ps()
