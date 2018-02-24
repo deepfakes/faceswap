@@ -25,6 +25,8 @@ class Trainer():
         }
 
     def __init__(self, model, fn_A, fn_B, batch_size):
+        K.set_learning_phase(1)
+        
         assert batch_size % 2 == 0, "batch_size must be an even number"
         self.batch_size = batch_size
         self.model = model
