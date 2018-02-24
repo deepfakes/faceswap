@@ -31,7 +31,7 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem", "GAN"), # case sensitive because this is used to load a plug-in.
+                            choices=("Original", "LowMem", "GAN", "GAN128"), # case sensitive because this is used to load a plug-in.
                             default="Original",
                             help="Select the trainer that was used to create the model.")
 
