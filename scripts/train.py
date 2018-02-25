@@ -79,6 +79,11 @@ class TrainingProcessor(object):
                             type=int,
                             default=64,
                             help="Batch size, as a power of 2 (64, 128, 256, etc)")
+        parser.add_argument('-ag', '--allow-growth',
+                            action="store_true",
+                            dest="allow_growth",
+                            default=False,
+                            help="Sets allow_growth option of Tensorflow to spare memory on some configs")
         parser.add_argument('-ep', '--epochs',
                             type=int,
                             default=1000000,
@@ -122,19 +127,22 @@ class TrainingProcessor(object):
         thr.join() # waits until thread finishes
 
     def processThread(self):
+        if self.arguments.allow_growth:
+            self.set_tf_allow_growth()
+
+        print('Loading data, this may take a while...')
+        # this is so that you can enter case insensitive values for trainer
+        trainer = self.arguments.trainer
+        trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
+        model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
+        model.load(swapped=False)
+
+        images_A = get_image_paths(self.arguments.input_A)
+        images_B = get_image_paths(self.arguments.input_B)
+        trainer = PluginLoader.get_trainer(trainer)
+        trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
+
         try:
-            print('Loading data, this may take a while...')
-            # this is so that you can enter case insensitive values for trainer
-            trainer = self.arguments.trainer
-            trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
-            model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
-            model.load(swapped=False)
-
-            images_A = get_image_paths(self.arguments.input_A)
-            images_B = get_image_paths(self.arguments.input_B)
-            trainer = PluginLoader.get_trainer(trainer)
-            trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
-
             print('Starting. Press "Enter" to stop training and save model')
 
             for epoch in range(0, self.arguments.epochs):
@@ -160,7 +168,18 @@ class TrainingProcessor(object):
             except KeyboardInterrupt:
                 print('Saving model weights has been cancelled!')
             exit(0)
-    
+        except Exception as e:
+            print(e)
+            exit(1)
+
+    def set_tf_allow_growth(self):
+        import tensorflow as tf
+        from keras.backend.tensorflow_backend import set_session
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        config.gpu_options.visible_device_list="0"
+        set_session(tf.Session(config=config))
+
     preview_buffer = {}
 
     def show(self, image, name=''):
