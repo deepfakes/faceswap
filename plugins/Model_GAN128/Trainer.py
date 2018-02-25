@@ -211,7 +211,7 @@ class Trainer():
         _, wA, tA = next(self.train_batchA)
         _, wB, tB = next(self.train_batchB)
         display_fn(self.showG(tA, tB, self.path_A, self.path_B), "raw")
-        display_fn(self.showG(wA, wB, self.path_bgr_A, self.path_bgr_B), "masked")
+        display_fn(self.showG(tA, tB, self.path_bgr_A, self.path_bgr_B), "masked")
         display_fn(self.showG_mask(tA, tB, self.path_mask_A, self.path_mask_B), "mask")
         # Reset the averages
         self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
