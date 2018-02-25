@@ -6,6 +6,7 @@ from keras.layers import *
 from tensorflow.contrib.distributions import Beta
 import tensorflow as tf
 from keras.optimizers import Adam
+from keras import backend as K
 
 from lib.training_data import TrainingDataGenerator, stack_images
 
@@ -26,7 +27,7 @@ class Trainer():
 
     def __init__(self, model, fn_A, fn_B, batch_size):
         K.set_learning_phase(1)
-        
+
         assert batch_size % 2 == 0, "batch_size must be an even number"
         self.batch_size = batch_size
         self.model = model
@@ -43,9 +44,9 @@ class Trainer():
         generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 1)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
-        
+
         self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
-        
+
         self.setup()
 
     def setup(self):
@@ -128,7 +129,7 @@ class Trainer():
         # Train generators for one batch
         errGA = self.netGA_train([warped_A, target_A])
         errGB = self.netGB_train([warped_B, target_B])
-        
+
         # For calculating average losses
         self.errDA_sum += errDA[0]
         self.errDB_sum += errDB[0]
