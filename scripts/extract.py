@@ -52,7 +52,8 @@ class ExtractTrainingData(DirectoryProcessor):
             else:
                 try:
                     for filename in tqdm(self.read_directory()):
-                         self.faces_detected[os.path.basename(filename)] = self.handleImage(filename)[1]
+                        image = cv2.imread(filename)
+                        self.faces_detected[os.path.basename(filename)] = self.handleImage(self, image)
                 except Exception as e:
                     print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
         finally:
@@ -60,14 +61,14 @@ class ExtractTrainingData(DirectoryProcessor):
 
     def processFiles(self, filename):
         try:
-            return self.handleImage(filename)
+            image = cv2.imread(filename)
+            return filename, self.handleImage(image)
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
 
-    def handleImage(self, filename):
+    def handleImage(self, image):
         count = 0
 
-        image = cv2.imread(filename)
         faces = self.get_faces(image)
         rvals = []
         for idx, face in faces:
@@ -84,4 +85,4 @@ class ExtractTrainingData(DirectoryProcessor):
                 "landmarksXY": face.landmarksAsXY()
             }
             rvals.append(f)
-        return filename, rvals
+        return rvals
