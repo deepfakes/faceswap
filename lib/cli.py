@@ -58,6 +58,7 @@ class DirectoryProcessor(object):
             pass
     
         self.output_dir = get_folder(self.arguments.output_dir)
+
         try:
             try:
                 if self.arguments.skip_existing:

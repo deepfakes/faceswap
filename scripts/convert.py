@@ -6,7 +6,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from lib.cli import DirectoryProcessor, FullPaths
-from lib.utils import BackgroundGenerator, get_folder
+from lib.utils import BackgroundGenerator, get_folder, get_image_paths
 
 from plugins.PluginLoader import PluginLoader
 
@@ -27,7 +27,16 @@ class ConvertImage(DirectoryProcessor):
                             dest="model_dir",
                             default="models",
                             help="Model directory. A directory containing the trained model \
-                    you wish to process. Defaults to 'models'")
+                            you wish to process. Defaults to 'models'")
+
+        parser.add_argument('-a', '--input-aligned-dir',
+                            action=FullPaths,
+                            dest="input_aligned_dir",
+                            default=None,
+                            help="Input \"aligned directory\". A directory that should contain the \
+                            aligned faces extracted from the input files. If you delete faces from \
+                            this folder, they'll be skipped during conversion. If no aligned dir is \
+                            specified, all faces will be converted.")
 
         parser.add_argument('-t', '--trainer',
                             type=str,
@@ -119,6 +128,8 @@ class ConvertImage(DirectoryProcessor):
         # Note: GAN prediction outputs a mask + an image, while other predicts only an image
         model_name = self.arguments.trainer
         conv_name = self.arguments.converter
+        input_aligned_dir = None
+        self.input_aligned_dir_path = None
 
         if conv_name.startswith("GAN"):
             assert model_name.startswith("GAN") is True, "GAN converter can only be used with GAN model!"
@@ -129,6 +140,16 @@ class ConvertImage(DirectoryProcessor):
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
+
+        try:
+            self.input_aligned_dir_path = self.arguments.input_aligned_dir
+            input_aligned_dir = self.arguments.input_aligned_dir
+            if input_aligned_dir is None:
+                raise Exception()
+            self.input_aligned_dir = map(lambda path: Path(path), get_image_paths(input_aligned_dir)) # Removes escaped backslashes from paths
+            print(self.input_aligned_dir)
+        except:
+            print('Aligned directory not found. All faces listed in the alignments file will be converted.')
 
         converter = PluginLoader.get_converter(conv_name)(model.converter(False),
             blur_size=self.arguments.blur_size,
@@ -166,6 +187,11 @@ class ConvertImage(DirectoryProcessor):
         except:
             return False
 
+    def check_skipface(self, filename, face_idx):
+        aligned_face_name = '{}_{}{}'.format(Path(filename).stem, face_idx, Path(filename).suffix)
+        aligned_face_file = Path(self.input_aligned_dir_path) / Path(aligned_face_name)
+        return aligned_face_file not in self.input_aligned_dir
+
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
@@ -174,8 +200,11 @@ class ConvertImage(DirectoryProcessor):
             if self.arguments.discard_frames and skip:
                 return
 
-            if not skip: # process as normal
+            if not skip: # process frame as normal
                 for idx, face in faces:
+                    if self.input_aligned_dir is not None and self.check_skipface(filename, idx):
+                        print ('face {} for frame {} was deleted, skipping'.format(idx, os.path.basename(filename)))
+                        continue
                     image = converter.patch_image(image, face)
 
             output_file = get_folder(self.output_dir) / Path(filename).name
