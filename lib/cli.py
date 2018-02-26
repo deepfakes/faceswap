@@ -63,6 +63,7 @@ class DirectoryProcessor(object):
         print('Starting, this may take a while...')
 
         self.output_dir = get_folder(self.arguments.output_dir)
+
         try:
             self.input_dir = get_image_paths(self.arguments.input_dir)
         except:
