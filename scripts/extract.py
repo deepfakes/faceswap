@@ -53,7 +53,7 @@ class ExtractTrainingData(DirectoryProcessor):
                 try:
                     for filename in tqdm(self.read_directory()):
                         image = cv2.imread(filename)
-                        self.faces_detected[os.path.basename(filename)] = self.handleImage(self, image)
+                        self.faces_detected[os.path.basename(filename)] = self.handleImage(image)
                 except Exception as e:
                     print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
         finally:
