@@ -144,11 +144,10 @@ class ConvertImage(DirectoryProcessor):
         if self.arguments.input_aligned_dir is not None:
             input_aligned_dir = self.arguments.input_aligned_dir
         try:
-            # Mapping (path -> Path(path)) removes escaped backslashes from paths
-            self.input_aligned_dir = map(lambda path: Path(path), get_image_paths(input_aligned_dir))
-            if len(list(self.input_aligned_dir)) == 0:
+            self.input_aligned_dir = [Path(path) for path in get_image_paths(input_aligned_dir)]
+            if len(self.input_aligned_dir) == 0:
                 print('Aligned directory is empty, no faces will be converted!')
-            elif len(list(self.input_aligned_dir)) <= len(self.input_dir)/3:
+            elif len(self.input_aligned_dir) <= len(self.input_dir)/3:
                 print('Aligned directory contains an amount of images much less than the input, are you sure this is the right directory?')
         except:
             print('Aligned directory not found. All faces listed in the alignments file will be converted.')
