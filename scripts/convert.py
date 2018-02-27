@@ -127,8 +127,7 @@ class ConvertImage(DirectoryProcessor):
         # Note: GAN prediction outputs a mask + an image, while other predicts only an image
         model_name = self.arguments.trainer
         conv_name = self.arguments.converter
-        input_aligned_dir = None
-        self.input_aligned_dir_path = None
+        self.input_aligned_dir = None
 
         if conv_name.startswith("GAN"):
             assert model_name.startswith("GAN") is True, "GAN converter can only be used with GAN model!"
@@ -140,13 +139,16 @@ class ConvertImage(DirectoryProcessor):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
 
-        try:
-            self.input_aligned_dir_path = self.arguments.input_aligned_dir
+        input_aligned_dir = Path(self.arguments.input_dir)/Path('aligned')
+        if self.arguments.input_aligned_dir is not None:
             input_aligned_dir = self.arguments.input_aligned_dir
-            if input_aligned_dir is None:
-                raise Exception()
-            self.input_aligned_dir = map(lambda path: Path(path), get_image_paths(input_aligned_dir)) # Removes escaped backslashes from paths
-            print(self.input_aligned_dir)
+        try:
+            # Mapping (path -> Path(path)) removes escaped backslashes from paths
+            self.input_aligned_dir = map(lambda path: Path(path), get_image_paths(input_aligned_dir))
+            if len(list(self.input_aligned_dir)) == 0:
+                print('Aligned directory is empty, no faces will be converted!')
+            elif len(list(self.input_aligned_dir)) <= len(self.input_dir)/3:
+                print('Aligned directory contains an amount of images much less than the input, are you sure this is the right directory?')
         except:
             print('Aligned directory not found. All faces listed in the alignments file will be converted.')
 
@@ -188,7 +190,7 @@ class ConvertImage(DirectoryProcessor):
 
     def check_skipface(self, filename, face_idx):
         aligned_face_name = '{}_{}{}'.format(Path(filename).stem, face_idx, Path(filename).suffix)
-        aligned_face_file = Path(self.input_aligned_dir_path) / Path(aligned_face_name)
+        aligned_face_file = Path(self.arguments.input_aligned_dir) / Path(aligned_face_name)
         return aligned_face_file not in self.input_aligned_dir
 
     def convert(self, converter, item):
