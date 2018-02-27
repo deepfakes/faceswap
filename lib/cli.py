@@ -35,7 +35,6 @@ class DirectoryProcessor(object):
         self.create_parser(subparser, command, description)
         self.parse_arguments(description, subparser, command)
 
-
     def process_arguments(self, arguments):
         self.arguments = arguments
         print("Input Directory: {}".format(self.arguments.input_dir))
