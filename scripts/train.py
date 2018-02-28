@@ -115,15 +115,17 @@ class TrainingProcessor(object):
 
                         key = cv2.waitKey(1000)
                         if key == ord('\n') or key == ord('\r'):
+                            print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
                             break
                         if key == ord('s'):
                             self.save_now = True
                     except KeyboardInterrupt:
+                        print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
                         break
+                thread_event.clear()
         except KeyboardInterrupt:
             print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
             thread_event.clear()
-            print("event cleared")
             thr.join() # waits until thread finishes
 
             
