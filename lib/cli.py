@@ -63,6 +63,8 @@ class DirectoryProcessor(object):
                 if self.arguments.skip_existing:
                     self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
                     print('Excluding %s files' % len(self.already_processed))
+                else:
+                    self.input_dir = get_image_paths(self.arguments.input_dir)
             except AttributeError:
                 self.input_dir = get_image_paths(self.arguments.input_dir)
         except:
