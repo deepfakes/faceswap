@@ -82,7 +82,7 @@ ffmpeg -i /path/to/my/video.mp4 /path/to/output/video-frame-%d.png
 If you split a video, using [ffmpeg](https://www.ffmpeg.org) for example, and used them as a target for swapping faces onto you can combine these frames again. The command below stitches the png frames back into a single video again.
 
 ```bash
-ffmpeg -i video-frame-%04d.png -c:v libx264 -vf "fps=25,format=yuv420p" out.mp4
+ffmpeg -i video-frame-%0d.png -c:v libx264 -vf "fps=25,format=yuv420p" out.mp4
 ```
 
 ## Notes

@@ -1,0 +1,1 @@
+from .FaceLandmarksExtractor import extract
