@@ -6,8 +6,9 @@ import numpy
 from lib.aligner import get_align_mat
 
 class Convert():
-    def __init__(self, encoder, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, **kwargs):
+    def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, **kwargs):
         self.encoder = encoder
+        self.trainer = trainer
 
         self.erosion_kernel = None
         if erosion_kernel_size is not None:
@@ -17,8 +18,8 @@ class Convert():
         self.seamless_clone = seamless_clone
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
 
-    def patch_image( self, image, face_detected ):
-        size = 64
+    def patch_image( self, image, face_detected, size ):
+
         image_size = image.shape[1], image.shape[0]
 
         mat = numpy.array(get_align_mat(face_detected)).reshape(2,3) * size
@@ -38,9 +39,9 @@ class Convert():
         outImage = None
         if self.seamless_clone:
             unitMask = numpy.clip( image_mask * 365, 0, 255 ).astype(numpy.uint8)
-      
+
             maxregion = numpy.argwhere(unitMask==255)
-      
+
             if maxregion.size > 0:
               miny,minx = maxregion.min(axis=0)[:2]
               maxy,maxx = maxregion.max(axis=0)[:2]
@@ -49,9 +50,9 @@ class Convert():
               masky = int(minx+(lenx//2))
               maskx = int(miny+(leny//2))
               outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),base_image.astype(numpy.uint8),unitMask,(masky,maskx) , cv2.NORMAL_CLONE )
-              
+
               return outimage
-              
+
         foreground = cv2.multiply(image_mask, new_image.astype(float))
         background = cv2.multiply(1.0 - image_mask, base_image.astype(float))
         outimage = cv2.add(foreground, background)
@@ -61,9 +62,22 @@ class Convert():
     def get_new_face(self, image, mat, size):
         face = cv2.warpAffine( image, mat, (size,size) )
         face = numpy.expand_dims( face, 0 )
-        new_face = self.encoder( face / 255.0 )[0]
+        new_face = None
 
-        return numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
+        if "GAN" not in self.trainer:
+            new_face = self.encoder( face / 255.0 )[0]
+            numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
+        else:
+            face = face / 255.0 * 2 - 1
+            fake_output = self.encoder(face)
+            if "128" in self.trainer: # TODO: Another hack to switch between 64 and 128
+                fake_output = fake_output[0]
+            mask = fake_output[:,:,:, :1]
+            new_face = fake_output[:,:,:, 1:]
+            new_face = mask * new_face + (1 - mask) * face
+            new_face = numpy.clip((new_face[0] + 1) * 255 / 2, 0, 255).astype( image.dtype )
+
+        return new_face
 
     def get_image_mask(self, image, new_face, face_detected, mat, image_size):
 

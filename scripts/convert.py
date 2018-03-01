@@ -129,10 +129,8 @@ class ConvertImage(DirectoryProcessor):
         conv_name = self.arguments.converter
         self.input_aligned_dir = None
 
-        if conv_name.startswith("GAN"):
-            assert model_name.startswith("GAN") is True, "GAN converter can only be used with GAN model!"
-        else:
-            assert model_name.startswith("GAN") is False, "GAN model can only be used with GAN converter!"
+        if model_name.startswith("GAN"):
+            assert conv_name is not "Adjust", "GAN models can't be used with the Adjust converter!"
 
         model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir))
         if not model.load(self.arguments.swap_model):
@@ -152,6 +150,7 @@ class ConvertImage(DirectoryProcessor):
             print('Aligned directory not found. All faces listed in the alignments file will be converted.')
 
         converter = PluginLoader.get_converter(conv_name)(model.converter(False),
+            trainer=self.arguments.trainer,
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
             mask_type=self.arguments.mask_type,
@@ -205,7 +204,8 @@ class ConvertImage(DirectoryProcessor):
                     if self.input_aligned_dir is not None and self.check_skipface(filename, idx):
                         print ('face {} for frame {} was deleted, skipping'.format(idx, os.path.basename(filename)))
                         continue
-                    image = converter.patch_image(image, face)
+                    image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
+                    # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
 
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)

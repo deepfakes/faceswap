@@ -2,13 +2,13 @@
 
 import cv2
 
-from .aligner import get_align_mat
+from lib.aligner import get_align_mat
 
 class Extract:
     def extract(self, image, face, size):
         alignment = get_align_mat( face )
         return self.transform( image, alignment, size, 48 )
-    
+
     def transform( self, image, mat, size, padding=0 ):
         mat = mat * (size - 2 * padding)
         mat[:,2] += padding
