@@ -12,16 +12,15 @@ def get_folder(path):
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
-def get_image_paths(directory, exclude=[]):
+def get_image_paths(directory, exclude=[], debug=False):
     exclude_names = [basename(Path(x).stem[:-1] + Path(x).suffix) for x in exclude]
     dir_contents = []
     dir_scanned = list(scandir(directory))
-    print(exclude_names)
-    print("Original input dir size: %s" % len(dir_scanned))
     for x in dir_scanned:
         if any(map(lambda ext: x.name.lower().endswith(ext), image_extensions)):
             if x.name in exclude_names:
-                print("Already processed %s" % x.name)
+                if debug:
+                    print("Already processed %s" % x.name)
                 continue
             else:
                 dir_contents.append(x.path)

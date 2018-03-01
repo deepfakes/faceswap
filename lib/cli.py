@@ -50,17 +50,21 @@ class DirectoryProcessor(object):
         print("Using {} serializer".format(self.serializer.ext))
 
         print('Starting, this may take a while...')
-
-        self.already_processed = get_image_paths(self.arguments.output_dir)
+        
+        if self.arguments.skip_existing:
+            self.already_processed = get_image_paths(self.arguments.output_dir)
+    
         self.output_dir = get_folder(self.arguments.output_dir)
         try:
-            self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
+            if self.arguments.skip_existing:
+                self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
+                print('Excluding %s files' % len(self.already_processed))
+            else:
+                self.input_dir = get_image_paths(self.arguments.input_dir)
         except:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
-        print('Should exclude %s' % len(self.already_processed))
-        print('Length of input dir: %s' % len(self.input_dir))
         self.filter = self.load_filter()
         self.process()
         self.finalize()
@@ -86,15 +90,11 @@ class DirectoryProcessor(object):
         if self.arguments.alignments_path is not None:
             fn = self.arguments.alignments_path
         print("Alignments filepath: %s" % fn)
-        
-        if self.arguments.skip_existing:
-            if os.path.exists(fn):
-                with open(fn, self.serializer.roptions) as inf:
-                    data = self.serializer.unmarshal(inf.read())
-                    for k, v in data.items():
-                        self.faces_detected[k] = v
-            else:
-                print('Existing alignments file "%s" not found.' % fn)
+        if os.path.exists(fn):
+            with open(fn, self.serializer.roptions) as inf:
+                data = self.serializer.unmarshal(inf.read())
+                for k, v in data.items():
+                    self.faces_detected[k] = v
         try:
             print("Writing alignments to: {}".format(fn))
             with open(fn, self.serializer.woptions) as fh:
