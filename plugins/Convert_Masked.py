@@ -3,7 +3,7 @@
 import cv2
 import numpy
 
-from lib.aligner import get_align_mat
+from .Extract_Align.aligner import get_align_mat
 
 class Convert():
     def __init__(self, encoder, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, **kwargs):
