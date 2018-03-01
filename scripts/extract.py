@@ -17,7 +17,7 @@ class ExtractTrainingData(DirectoryProcessor):
             description=description,
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground"
-        )
+            )
 
     def add_optional_arguments(self, parser):
         parser.add_argument('-D', '--detector',
@@ -37,6 +37,12 @@ class ExtractTrainingData(DirectoryProcessor):
                             type=int,
                             default=1,
                             help="Number of processes to use.")
+        
+        parser.add_argument('-s', '--skip-existing',
+                            action='store_true',
+                            dest='skip_existing',
+                            default=False,
+                            help="Skips frames already extracted.")
         return parser
 
     def process(self):
