@@ -51,17 +51,21 @@ class DirectoryProcessor(object):
 
         print('Starting, this may take a while...')
         
-        if self.arguments.skip_existing:
-            self.already_processed = get_image_paths(self.arguments.output_dir)
-    
-        self.output_dir = get_folder(self.arguments.output_dir)
         try:
             if self.arguments.skip_existing:
-                self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
-                print('Excluding %s files' % len(self.already_processed))
-            else:
+                self.already_processed = get_image_paths(self.arguments.output_dir)
+        except AttributeError:
+            pass
+
+        self.output_dir = get_folder(self.arguments.output_dir)
+        try:
+            try:
+                if self.arguments.skip_existing:
+                    self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
+                    print('Excluding %s files' % len(self.already_processed))
+            except AttributeError:
                 self.input_dir = get_image_paths(self.arguments.input_dir)
-        except:
+        except ValueError:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
