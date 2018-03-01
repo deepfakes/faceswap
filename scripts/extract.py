@@ -58,7 +58,8 @@ class ExtractTrainingData(DirectoryProcessor):
             else:
                 try:
                     for filename in tqdm(self.read_directory()):
-                         self.faces_detected[os.path.basename(filename)] = self.handleImage(filename)[1]
+                        image = cv2.imread(filename)
+                        self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
                 except Exception as e:
                     print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
         finally:
@@ -66,20 +67,25 @@ class ExtractTrainingData(DirectoryProcessor):
 
     def processFiles(self, filename):
         try:
-            return self.handleImage(filename)
+            image = cv2.imread(filename)
+            return filename, self.handleImage(image, filename)
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
 
-    def handleImage(self, filename):
+    def handleImage(self, image, filename):
         count = 0
 
-        image = cv2.imread(filename)
         faces = self.get_faces(image)
         rvals = []
         for idx, face in faces:
             count = idx
-
-            resized_image = self.extractor.extract(image, face, self.arguments.debug_landmarks, 256)
+             
+            # Draws landmarks for debug
+            if self.arguments.debug_landmarks:
+                for (x, y) in face.landmarksAsXY():
+                    cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
+                    
+            resized_image = self.extractor.extract(image, face, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
             cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
             f = {
@@ -90,4 +96,4 @@ class ExtractTrainingData(DirectoryProcessor):
                 "landmarksXY": face.landmarksAsXY()
             }
             rvals.append(f)
-        return filename, rvals
+        return rvals
