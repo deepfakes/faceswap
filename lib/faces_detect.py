@@ -13,7 +13,6 @@ class DetectedFace(object):
         self.w = w
         self.y = y
         self.h = h
-        self.landmarks = None
         self.landmarksXY = landmarksXY
 
     def landmarksAsXY(self):
