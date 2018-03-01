@@ -5,7 +5,7 @@ from keras.layers import Input, Dense, Flatten, Reshape
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.optimizers import Adam
-
+from keras.utils import multi_gpu_model
 from lib.ModelAE import ModelAE, TrainerAE
 from lib.PixelShuffler import PixelShuffler
 
@@ -19,10 +19,14 @@ class Model(ModelAE):
 
         self.autoencoder_A = KerasModel(x, self.decoder_A(self.encoder(x)))
         self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))
+        self.autoencoder_A = multi_gpu_model( self.autoencoder_A ,2)
+        self.autoencoder_B = multi_gpu_model( self.autoencoder_B ,2)
 
         self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
         self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
+        
 
+       
     def converter(self, swap):
         autoencoder = self.autoencoder_B if not swap else self.autoencoder_A 
         return lambda img: autoencoder.predict(img)
@@ -63,6 +67,7 @@ class Model(ModelAE):
         x = self.upscale(64)(x)
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         return KerasModel(input_, x)
+
 
 class Trainer(TrainerAE):
     """Empty inheritance"""
