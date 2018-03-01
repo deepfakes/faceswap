@@ -43,13 +43,6 @@ class ExtractTrainingData(DirectoryProcessor):
                             dest='skip_existing',
                             default=False,
                             help="Skips frames already extracted.")
-        
-        parser.add_argument('-dl', '--debug-landmarks',
-                            action="store_true",
-                            dest="debug_landmarks",
-                            default=False,
-                            help="Draw landmarks for debug.")
-        
         return parser
 
     def process(self):
