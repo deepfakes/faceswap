@@ -17,7 +17,7 @@ def get_image_paths(directory, exclude=[], debug=False):
     dir_contents = []
     dir_scanned = list(scandir(directory))
     for x in dir_scanned:
-        if any(map(lambda ext: x.name.lower().endswith(ext), image_extensions)):
+        if any([x.name.lower().endswith(ext) for ext in image_extensions]):
             if x.name in exclude_names:
                 if debug:
                     print("Already processed %s" % x.name)

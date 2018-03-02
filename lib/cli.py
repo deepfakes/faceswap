@@ -96,11 +96,15 @@ class DirectoryProcessor(object):
         if self.arguments.alignments_path is not None:
             fn = self.arguments.alignments_path
         print("Alignments filepath: %s" % fn)
-        if os.path.exists(fn):
-            with open(fn, self.serializer.roptions) as inf:
-                data = self.serializer.unmarshal(inf.read())
-                for k, v in data.items():
-                    self.faces_detected[k] = v
+        
+        if self.arguments.skip_existing:
+            if os.path.exists(fn):
+                with open(fn, self.serializer.roptions) as inf:
+                    data = self.serializer.unmarshal(inf.read())
+                    for k, v in data.items():
+                        self.faces_detected[k] = v
+            else:
+                print('Existing alignments file "%s" not found.' % fn)
         try:
             print("Writing alignments to: {}".format(fn))
             with open(fn, self.serializer.woptions) as fh:
