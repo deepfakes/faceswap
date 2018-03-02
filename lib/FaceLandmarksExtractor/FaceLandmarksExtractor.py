@@ -3,6 +3,8 @@ import numpy as np
 import os
 import cv2
 import dlib
+
+
 import keras
 from keras import backend as K
 
@@ -108,22 +110,37 @@ def get_pts_from_predict(a, center, scale):
    
     c += 0.5
     return [ transform (c[i], center, scale, a.shape[2]) for i in range(a.shape[0]) ]
-        
-def extract(input_image, use_cnn_face_detector=True, all_faces=True):
+
+def extract(input_image, use_cnn_face_detector=True, all_faces=True, max_res_side=1112 ):
+#max_res_side=1112 for 3GB VRAM Windows 10 users.
+
     global dlib_cnn_face_detector
     global dlib_face_detector
     global keras_model
     
-    #this execution order (dlib -> keras model) prevents dlib cnn cuda OOM error on Windows
-    if dlib_cnn_face_detector is None:            
+    (h, w, ch) = input_image.shape
+
+    input_scale = 1.0
+    if w > h and w > max_res_side:
+        input_scale = max_res_side / w
+    if h > w and h > max_res_side:
+        input_scale = max_res_side / h
+        
+    if input_scale != 1.0:
+        input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
+
+    #DLIB and TF competiting for VRAM, so dlib must do first allocation to prevent OOM error 
+    if use_cnn_face_detector and dlib_cnn_face_detector is None:
         dlib_cnn_face_detector_path = os.path.join(os.path.dirname(__file__), "mmod_human_face_detector.dat")
         if not os.path.exists(dlib_cnn_face_detector_path):
             print ("Error: Unable to find %s, reinstall the lib !" % (dlib_cnn_face_detector_path) )
         else:
-            dlib_cnn_face_detector = dlib.cnn_face_detection_model_v1(dlib_cnn_face_detector_path)
+            dlib_cnn_face_detector = dlib.cnn_face_detection_model_v1(dlib_cnn_face_detector_path)            
+            dlib_cnn_face_detector ( np.zeros ( (max_res_side, max_res_side, 3), dtype=np.float32), 1 )
     
     if dlib_face_detector is None:
-        dlib_face_detector = dlib.get_frontal_face_detector()     
+        dlib_face_detector = dlib.get_frontal_face_detector()
+        dlib_face_detector ( np.zeros ( (max_res_side, max_res_side, 3), dtype=np.float32), 1 )
                 
     if use_cnn_face_detector:
         detected_faces = dlib_cnn_face_detector(input_image, 1)
@@ -134,7 +151,6 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True):
                 print ('Info: CNN found no faces, but HOG found !')
     else:        
         detected_faces = dlib_face_detector(input_image, 1)
-
     
     if keras_model is None:        
         model_path = os.path.join( os.path.dirname(__file__) , "2DFAN-4.h5" )
@@ -163,8 +179,8 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True):
             image = np.expand_dims(image, 0)
             
             pts_img = get_pts_from_predict ( keras_model.predict (image)[-1][0], center, scale)
-            pts_img = [ ( int(pt[0]), int(pt[1]) ) for pt in pts_img ]             
-            landmarks.append ( ((left, top, right, bottom),pts_img) )
+            pts_img = [ ( int(pt[0]/input_scale), int(pt[1]/input_scale) ) for pt in pts_img ]             
+            landmarks.append ( ((  int(left/input_scale), int(top/input_scale), int(right/input_scale), int(bottom/input_scale) ),pts_img) )
     else:
         print("Warning: No faces were detected.")
         
