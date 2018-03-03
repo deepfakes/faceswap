@@ -160,14 +160,15 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True, scale_to=20
 
     landmarks = []
     if len(detected_faces) > 0:        
-        for i, d in enumerate(detected_faces):
+        for i, d_rect in enumerate(detected_faces):
             if i > 0 and not all_faces:
                 break
-            
-            d_rect = d.rect if use_cnn_face_detector else d
         
+            if type(d_rect) == dlib.mmod_rectangle:
+                d_rect = d_rect.rect
+            
             left, top, right, bottom = d_rect.left(), d_rect.top(), d_rect.right(), d_rect.bottom()
-            del d
+            del d_rect
     
             center = np.array( [ (left + right) / 2.0, (top + bottom) / 2.0] )
             center[1] -= (bottom - top) * 0.12
