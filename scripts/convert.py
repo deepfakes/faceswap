@@ -97,7 +97,7 @@ class ConvertImage(DirectoryProcessor):
                             dest="erosion_kernel_size",
                             type=int,
                             default=None,
-                            help="Erosion kernel size. (Masked converter only)")
+                            help="Erosion kernel size. (Masked converter only). If negative, it is interpreted as dilation kernel size")
 
         parser.add_argument('-sm', '--smooth-mask',
                             action="store_true",
