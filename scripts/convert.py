@@ -97,7 +97,7 @@ class ConvertImage(DirectoryProcessor):
                             dest="erosion_kernel_size",
                             type=int,
                             default=None,
-                            help="Erosion kernel size. (Masked converter only). Positive values apply erosion which reduces the edge \ 
+                            help="Erosion kernel size. (Masked converter only). Positive values apply erosion which reduces the edge \
                             of the swapped face. Negative values apply dilation which allows the swapped face to cover more space.")
 
         parser.add_argument('-sm', '--smooth-mask',
