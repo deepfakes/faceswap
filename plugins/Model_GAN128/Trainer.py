@@ -37,14 +37,14 @@ class Trainer():
         self.mixup_alpha = 0.2
         self.use_perceptual_loss = perceptual_loss
 
-        self.lrD = 1e-4 # Discriminator learning rate
-        self.lrG = 1e-4 # Generator learning rate
+        self.lrD = 2e-4 # Discriminator learning rate
+        self.lrG = 2e-4 # Generator learning rate
 
         generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 2)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
 
-        self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
+        self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = self.errDA2_sum = self.errDB2_sum = self.errDA_code_sum = self.errDB_code_sum = 0
 
         self.setup()
 
@@ -58,11 +58,13 @@ class Trainer():
             self.loss_fn = lambda output, target : K.mean(K.abs(K.square(output-target)))
         else:
             self.loss_fn = lambda output, target : -K.mean(K.log(output+1e-12)*target+K.log(1-output+1e-12)*(1-target))
+        loss_fn_bce = lambda output, target : -K.mean(K.log(output+1e-12)*target+K.log(1-output+1e-12)*(1-target))
 
         # ========== Define Perceptual Loss Model==========
         if self.use_perceptual_loss:
             from keras.models import Model
             from keras_vggface.vggface import VGGFace
+            print("Using perceptual loss.")
             vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
             vggface.trainable = False
             out_size55 = vggface.layers[36].output
@@ -70,12 +72,15 @@ class Trainer():
             out_size7 = vggface.layers[-2].output
             vggface_feat = Model(vggface.input, [out_size55, out_size28, out_size7])
             vggface_feat.trainable = False
+            netDA_feat = netDB_feat = 0
         else:
+            print("Not using perceptual loss.")
             vggface_feat = None
+            netDA_feat = netDB_feat = vggface_feat = None
 
         #TODO check "Tips for mask refinement (optional after >15k iters)" => https://render.githubusercontent.com/view/ipynb?commit=87d6e7a28ce754acd38d885367b6ceb0be92ec54&enc_url=68747470733a2f2f7261772e67697468756275736572636f6e74656e742e636f6d2f7368616f616e6c752f66616365737761702d47414e2f383764366537613238636537353461636433386438383533363762366365623062653932656335342f46616365537761705f47414e5f76325f737a3132385f747261696e2e6970796e62&nwo=shaoanlu%2Ffaceswap-GAN&path=FaceSwap_GAN_v2_sz128_train.ipynb&repository_id=115182783&repository_type=Repository#Tips-for-mask-refinement-(optional-after-%3E15k-iters)
-        loss_DA, loss_GA = self.define_loss(self.model.netDA, real_A, fake_A, fake_sz64_A, distorted_A, vggface_feat)
-        loss_DB, loss_GB = self.define_loss(self.model.netDB, real_B, fake_B, fake_sz64_B, distorted_B, vggface_feat)
+        loss_DA, loss_DA2, loss_GA, loss_DA_feat, loss_DA_code = self.define_loss(self.model.netDA, self.model.netDA2, self.model.netDA_feat, self.model.netD_code, self.model.netGA, real_A, fake_A, fake_sz64_A, distorted_A, domain="A", vggface_feat)
+        loss_DB, loss_DB2, loss_GB, loss_DB_feat, loss_DB_code = self.define_loss(self.model.netDB, self.model.netDB2, self.model.netDB_feat, self.model.netD_code, self.model.netGB, real_B, fake_B, fake_sz64_B, distorted_B, domain="B", vggface_feat)
 
         loss_GA += 3e-3 * K.mean(K.abs(mask_A))
         loss_GB += 3e-3 * K.mean(K.abs(mask_B))
@@ -87,20 +92,43 @@ class Trainer():
         loss_GB += w_fo * K.mean(self.first_order(mask_B, axis=2))
 
         weightsDA = self.model.netDA.trainable_weights
+        weightsDA2 = self.model.netDA2.trainable_weights
         weightsGA = self.model.netGA.trainable_weights
         weightsDB = self.model.netDB.trainable_weights
+        weightsDB2 = self.model.netDB2.trainable_weights
         weightsGB = self.model.netGB.trainable_weights
+        weightsD_code = self.model.netD_code.trainable_weights
 
         # Adam(..).get_updates(...)
+        """
+        # Using the following update function spped up training time (per iter.) by ~15%.
+        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsDA+weightsDA2+weightsD_code,[],loss_DA+loss_DA2+loss_DA_code)
+        netDA_train = K.function([distorted_A, real_A],[loss_DA+loss_DA2+loss_DA_code], training_updates)
+        """
         training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsDA,[],loss_DA)
         self.netDA_train = K.function([distorted_A, real_A],[loss_DA], training_updates)
+        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsDA2,[],loss_DA2)
+        self.netDA2_train = K.function([distorted_A, real_A],[loss_DA2], training_updates)
         training_updates = Adam(lr=self.lrG, beta_1=0.5).get_updates(weightsGA,[], loss_GA)
         self.netGA_train = K.function([distorted_A, real_A], [loss_GA], training_updates)
 
         training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsDB,[],loss_DB)
         self.netDB_train = K.function([distorted_B, real_B],[loss_DB], training_updates)
+        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsDB2,[],loss_DB2)
+        self.netDB2_train = K.function([distorted_B, real_B],[loss_DB2], training_updates)
         training_updates = Adam(lr=self.lrG, beta_1=0.5).get_updates(weightsGB,[], loss_GB)
         self.netGB_train = K.function([distorted_B, real_B], [loss_GB], training_updates)
+
+        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsD_code,[], loss_DA_code)
+        self.netDA_code_train = K.function([distorted_A, real_A],[loss_DA_code], training_updates)
+        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsD_code,[], loss_DB_code)
+        self.netDB_code_train = K.function([distorted_B, real_B],[loss_DB_code], training_updates)
+
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cosine.html
+    def cos_distance(x1, x2):
+        x1 = K.l2_normalize(x1, axis=-1)
+        x2 = K.l2_normalize(x2, axis=-1)
+        return K.mean(1 - K.sum((x1 * x2), axis=-1))
 
     def first_order(self, x, axis=1):
         img_nrows = x.shape[1]
@@ -124,6 +152,10 @@ class Trainer():
         # Train dicriminators for one batch
         errDA  = self.netDA_train([warped_A, target_A])
         errDB  = self.netDB_train([warped_B, target_B])
+        errDA2 = self.netDA2_train([warped_A, target_A])
+        errDB2 = self.netDB2_train([warped_B, target_B])
+        errDA_code = self.netDA_code_train([warped_A, target_A])
+        errDB_code = self.netDB_code_train([warped_B, target_B])
 
         # Train generators for one batch
         errGA = self.netGA_train([warped_A, target_A])
@@ -132,12 +164,28 @@ class Trainer():
         # For calculating average losses
         self.errDA_sum += errDA[0]
         self.errDB_sum += errDB[0]
+        self.errDA2_sum += errDA2[0]
+        self.errDB2_sum += errDB2[0]
+        self.errDA_code_sum += errDA_code[0]
+        self.errDB_code_sum += errDB_code[0]
         self.errGA_sum += errGA[0]
         self.errGB_sum += errGB[0]
         self.avg_counter += 1
 
-        print('[%s] [%d/%s][%d] Loss_DA: %f Loss_DB: %f Loss_GA: %f Loss_GB: %f'
-              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, self.errDA_sum/self.avg_counter, self.errDB_sum/self.avg_counter, self.errGA_sum/self.avg_counter, self.errGB_sum/self.avg_counter),
+        errDA_avg = self.errDA_sum/self.avg_counter
+        errDB_avg = self.errDB_sum/self.avg_counter
+        errDA2_avg = self.errDA2_sum/self.avg_counter
+        errDB2_avg = self.errDB2_sum/self.avg_counter
+        errDA_code_avg = self.errDA_code_sum/self.avg_counter
+        errDB_code_avg = self.errDB_code_sum/self.avg_counter
+        errGA_avg = self.errGA_sum/self.avg_counter
+        errGB_avg = self.errGB_sum/self.avg_counter
+
+        if epoch % 10 == 0:
+            print('[%s] [%d/%s][%d] Loss_DA, Loss_DB, Loss_DA2, Loss_DB2, Loss_DA_code, Loss_DB_code, Loss_GA, Loss_GB')
+
+        print('[%s] [%d/%s][%d] %f, %f, %f, %f, %f, %f, %f, %f'
+              % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, errDA_avg, errDB_avg, errDA2_avg, errDB2_avg, errDA_code_avg, errDB_code_avg, errGA_avg, errGB_avg),
               end='\r')
 
         if viewer is not None:
@@ -146,7 +194,7 @@ class Trainer():
     def cycle_variables(self, netG):
         distorted_input = netG.inputs[0]
         fake_output = netG.outputs[0]
-        fake_output64 = netG.outputs[1]
+        fake_output64 = netG.outputs[2]
         alpha = Lambda(lambda x: x[:,:,:, :1])(fake_output)
         rgb = Lambda(lambda x: x[:,:,:, 1:])(fake_output)
 
@@ -158,33 +206,51 @@ class Trainer():
         fn_bgr = K.function([distorted_input], [rgb])
         return distorted_input, fake_output, fake_output64, alpha, fn_generate, fn_mask, fn_abgr, fn_bgr
 
-    def define_loss(self, netD, real, fake_argb, fake_sz64, distorted, vggface_feat=None):
+    def define_loss(self, netD, netD2, netD_feat, netD_code, netG, real, fake_argb, fake_sz64, distorted, domain, vggface_feat=None):
         alpha = Lambda(lambda x: x[:,:,:, :1])(fake_argb)
         fake_rgb = Lambda(lambda x: x[:,:,:, 1:])(fake_argb)
         fake = alpha * fake_rgb + (1-alpha) * distorted
 
-        if self.use_mixup:
-            dist = Beta(self.mixup_alpha, self.mixup_alpha)
-            lam = dist.sample()
-            # ==========
-            mixup = lam * concatenate([real, distorted]) + (1 - lam) * concatenate([fake, distorted])
-            # ==========
-            output_mixup = netD(mixup)
-            loss_D = self.loss_fn(output_mixup, lam * K.ones_like(output_mixup))
-            #output_fake = netD(concatenate([fake, distorted])) # dummy
-            loss_G = 1 * self.loss_fn(output_mixup, (1 - lam) * K.ones_like(output_mixup))
-        else:
-            output_real = netD(concatenate([real, distorted])) # positive sample
-            output_fake = netD(concatenate([fake, distorted])) # negative sample
-            loss_D_real = self.loss_fn(output_real, K.ones_like(output_real))
-            loss_D_fake = self.loss_fn(output_fake, K.zeros_like(output_fake))
-            loss_D = loss_D_real + loss_D_fake
-            loss_G = 1 * self.loss_fn(output_fake, K.ones_like(output_fake))
+        # Use mixup - Loss of masked output
+        dist = Beta(self.mixup_alpha, self.mixup_alpha)
+        lam = dist.sample()
         # ==========
-        loss_G += K.mean(K.abs(fake_rgb - real))
-        loss_G += K.mean(K.abs(fake_sz64 - tf.image.resize_images(real, [64, 64])))
+        mixup = lam * concatenate([real, distorted]) + (1 - lam) * concatenate([fake, distorted])
+        # ==========
+        output_mixup = netD(mixup)
+        loss_D = self.loss_fn(output_mixup, lam * K.ones_like(output_mixup))
+        loss_G = .5 * self.loss_fn(output_mixup, (1 - lam) * K.ones_like(output_mixup))
+
+        # Loss of raw output
+        #real_shuffled = Lambda(lambda x: tf.random_shuffle(x))(real)
+        lam2 = dist.sample()
+        mixup2 = lam2 * real + (1 - lam2) * fake_rgb
+        output2_mixup = netD2(mixup2)
+        loss_D2 = loss_fn(output2_mixup, lam2 * K.ones_like(output2_mixup))
+        loss_G += .5 * loss_fn(output2_mixup, (1 - lam) * K.ones_like(output2_mixup))
+
+        # Domain adversarial loss
+        real_code = netG([real])[1]
+        rec_code = netG([fake_rgb])[1]
+        output_real_code = netD_code([real_code])
+        # Target of domain A = 1, domain B = 0
+        if domain == "A":
+            loss_D_code = loss_fn_bce(output_real_code, K.ones_like(output_real_code))
+            loss_G += .03 * loss_fn(output_real_code, K.zeros_like(output_real_code))
+        elif domain == "B":
+            loss_D_code = loss_fn_bce(output_real_code, K.zeros_like(output_real_code))
+            loss_G += .03 * loss_fn(output_real_code, K.ones_like(output_real_code))
+
+        # semantic consistency loss
+        loss_G += 1. * cos_distance(rec_code, real_code)
+
+        # ==========
+        # L1 loss
+        loss_G += 3 * K.mean(K.abs(fake_rgb - real))
+        loss_G += 3 * K.mean(K.abs(fake_sz64 - tf.image.resize_images(real, [64, 64])))
         # ==========
 
+        loss_D_feat = 0
         # Perceptual Loss
         if not vggface_feat is None:
             def preprocess_vggface(x):
@@ -200,11 +266,11 @@ class Trainer():
             # ==========
             real_feat55, real_feat28, real_feat7 = vggface_feat(real_sz224)
             fake_feat55, fake_feat28, fake_feat7  = vggface_feat(fake_sz224)
-            loss_G += pl_params[0] * K.mean(K.abs(fake_feat7 - real_feat7))
+            loss_G += pl_params[0] * K.mean(K.square(fake_feat7 - real_feat7))
             loss_G += pl_params[1] * K.mean(K.abs(fake_feat28 - real_feat28))
             loss_G += pl_params[2] * K.mean(K.abs(fake_feat55 - real_feat55))
 
-        return loss_D, loss_G
+        return return loss_D, loss_D2, loss_G, loss_D_feat, loss_D_code
 
     def show_sample(self, display_fn):
         _, wA, tA = next(self.train_batchA)
