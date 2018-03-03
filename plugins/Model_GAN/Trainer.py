@@ -25,7 +25,7 @@ class Trainer():
         'random_flip': 0.5,
         }
 
-    def __init__(self, model, fn_A, fn_B, batch_size):
+    def __init__(self, model, fn_A, fn_B, batch_size, perceptual_loss):
         K.set_learning_phase(1)
 
         assert batch_size % 2 == 0, "batch_size must be an even number"
@@ -35,7 +35,7 @@ class Trainer():
         self.use_lsgan = True
         self.use_mixup = True
         self.mixup_alpha = 0.2
-        self.use_perceptual_loss = False
+        self.use_perceptual_loss = perceptual_loss
         self.use_instancenorm = False
 
         self.lrD = 1e-4 # Discriminator learning rate

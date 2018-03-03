@@ -93,7 +93,7 @@ class ConvertImage(DirectoryProcessor):
                             action="store_true",
                             dest="seamless_clone",
                             default=False,
-                            help="Seamless mode. (Masked converter only)")
+                            help="Use cv2's seamless clone. (Masked converter only)")
 
         parser.add_argument('-M', '--mask-type',
                             type=str.lower, #lowercase this, because its just a string later on.
@@ -107,6 +107,12 @@ class ConvertImage(DirectoryProcessor):
                             type=int,
                             default=None,
                             help="Erosion kernel size. (Masked converter only)")
+
+        parser.add_argument('-mh', '--match-histgoram',
+                            action="store_true",
+                            dest="match_histogram",
+                            default=False,
+                            help="Use histogram matching. (Masked converter only)")
 
         parser.add_argument('-sm', '--smooth-mask',
                             action="store_true",
@@ -155,6 +161,7 @@ class ConvertImage(DirectoryProcessor):
             seamless_clone=self.arguments.seamless_clone,
             mask_type=self.arguments.mask_type,
             erosion_kernel_size=self.arguments.erosion_kernel_size,
+            match_histogram=self.arguments.match_histogram,
             smooth_mask=self.arguments.smooth_mask,
             avg_color_adjust=self.arguments.avg_color_adjust
         )
