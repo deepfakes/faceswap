@@ -9,11 +9,13 @@ class Convert():
     def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, **kwargs):
         self.encoder = encoder
         self.trainer = trainer
-
         self.erosion_kernel = None
+        self.erosion_kernel_size = erosion_kernel_size
         if erosion_kernel_size is not None:
-            self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(erosion_kernel_size,erosion_kernel_size))
-
+            if erosion_kernel_size > 0:
+                self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(erosion_kernel_size,erosion_kernel_size))
+            elif erosion_kernel_size < 0:
+                self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(abs(erosion_kernel_size),abs(erosion_kernel_size)))
         self.blur_size = blur_size
         self.seamless_clone = seamless_clone
         self.match_histogram = match_histogram
@@ -143,7 +145,11 @@ class Convert():
 
 
         if self.erosion_kernel is not None:
-            image_mask = cv2.erode(image_mask,self.erosion_kernel,iterations = 1)
+            if self.erosion_kernel_size > 0:
+                image_mask = cv2.erode(image_mask,self.erosion_kernel,iterations = 1)
+            elif self.erosion_kernel_size < 0:
+                dilation_kernel = abs(self.erosion_kernel)
+                image_mask = cv2.dilate(image_mask,dilation_kernel,iterations = 1)
 
         if self.blur_size!=0:
             image_mask = cv2.blur(image_mask,(self.blur_size,self.blur_size))
