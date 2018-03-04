@@ -181,7 +181,7 @@ class Trainer():
         errGA_avg = self.errGA_sum/self.avg_counter
         errGB_avg = self.errGB_sum/self.avg_counter
 
-        if (int(iter/save_interval) % 15 == 0 and int(iter/save_interval) > 0) or iter == 0:
+        if (int(iter/save_interval) % 15 == 0 and iter % save_interval == 0 and int(iter/save_interval) > 0) or iter == 0:
             print('Losses:                     {}DA,       DB,       DA2,      DB2,      DA_code,  DB_code,  GA,       GB'.format(' '*len(str(iter))))
 
         print('[%s] [%d/%s][%d] %f, %f, %f, %f, %f, %f, %f, %f'
