@@ -154,7 +154,7 @@ class TrainingProcessor(object):
 
                 save_iteration = epoch % self.arguments.save_interval == 0
 
-                trainer.train_one_step(epoch, self.show if (save_iteration or self.save_now) else None)
+                trainer.train_one_step(epoch, self.show if (save_iteration or self.save_now) else None, self.arguments.save_interval)
 
                 if save_iteration:
                     model.save_weights()

@@ -42,7 +42,7 @@ class GANModel():
         optimizer = Adam(1e-4, 0.5)
 
         # Build and compile the discriminator
-        self.netDA, self.netDB = self.build_discriminator()
+        self.netDA, self.netDB, self.netDA2, self.netDB2, self.netD_code = self.build_discriminator()
 
         # Build and compile the generator
         self.netGA, self.netGB = self.build_generator()
@@ -287,7 +287,7 @@ class GANModel():
         except:
             print ("Discriminator weights files not found.")
             pass
-        return netDA, netDB
+        return netDA, netDB, netDA2, netDB2, netD_code
 
     def load(self, swapped):
         if swapped:

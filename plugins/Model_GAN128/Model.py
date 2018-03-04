@@ -43,7 +43,7 @@ class GANModel():
         optimizer = Adam(1e-4, 0.5)
 
         # Build and compile the discriminator
-        self.netDA, self.netDB = self.build_discriminator()
+        self.netDA, self.netDB, self.netDA2, self.netDB2, self.netD_code = self.build_discriminator()
 
         # Build and compile the generator
         self.netGA, self.netGB = self.build_generator()
@@ -113,7 +113,6 @@ class GANModel():
             x = upscale_ps(128)(x)
             x = upscale_ps(64)(x)
             x = res_block(x, 64)
-            x, _ = mixed_scaled_dense_network(x, 16, 64, 4)
 
             out64 = Conv2D(64, kernel_size=3, padding='same')(x)
             out64 = LeakyReLU(alpha=0.1)(out64)
@@ -122,12 +121,14 @@ class GANModel():
             x = upscale_ps(32)(x)
             x = res_block(x, 32)
             x = res_block(x, 32)
+            x, _ = mixed_scaled_dense_network(x, 16, 64, 4)
+
             alpha = Lambda(lambda x: x[:,:,:,0:1])(x)
             alpha = Activation("sigmoid")(alpha)
             bgr = Lambda(lambda x: x[:,:,:,1:])(x)
             bgr = Activation("tanh")(bgr)
             out = concatenate([alpha, bgr])
-            return Model([inp, code], [out, out64, code])
+            return Model([inp, code], [out, code, out64])
 
         def mixed_scaled_dense_network(input_tensor, num_layers=32, nc_in=3, nc_out=1):
             """
@@ -284,8 +285,8 @@ class GANModel():
             out = Dense(1, activation='sigmoid')(x)
             return Model(inputs=[inp], outputs=out)
 
-        netDA = Discriminator2(self.nc_D_inp)
-        netDB = Discriminator2(self.nc_D_inp)
+        netDA = Discriminator(self.nc_D_inp)
+        netDB = Discriminator(self.nc_D_inp)
         netDA2 = Discriminator2(self.nc_D_inp//2)
         netDB2 = Discriminator2(self.nc_D_inp//2)
         netD_code = Discriminator_code()
@@ -299,7 +300,7 @@ class GANModel():
         except:
             print ("Discriminator weights files not found.")
             pass
-        return netDA, netDB
+        return netDA, netDB, netDA2, netDB2, netD_code
 
     def load(self, swapped):
         if swapped:

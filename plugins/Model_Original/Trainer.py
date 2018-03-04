@@ -19,7 +19,7 @@ class Trainer():
         self.images_A = generator.minibatchAB(fn_A, self.batch_size)
         self.images_B = generator.minibatchAB(fn_B, self.batch_size)
 
-    def train_one_step(self, iter, viewer):
+    def train_one_step(self, iter, viewer, save_interval):
         epoch, warped_A, target_A = next(self.images_A)
         epoch, warped_B, target_B = next(self.images_B)
 

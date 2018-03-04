@@ -58,7 +58,7 @@ class Trainer():
             self.loss_fn = lambda output, target : K.mean(K.abs(K.square(output-target)))
         else:
             self.loss_fn = lambda output, target : -K.mean(K.log(output+1e-12)*target+K.log(1-output+1e-12)*(1-target))
-        loss_fn_bce = lambda output, target : -K.mean(K.log(output+1e-12)*target+K.log(1-output+1e-12)*(1-target))
+        self.loss_fn_bce = lambda output, target : -K.mean(K.log(output+1e-12)*target+K.log(1-output+1e-12)*(1-target))
 
         # ========== Define Perceptual Loss Model==========
         if self.use_perceptual_loss:
@@ -79,8 +79,8 @@ class Trainer():
             netDA_feat = netDB_feat = vggface_feat = None
 
         #TODO check "Tips for mask refinement (optional after >15k iters)" => https://render.githubusercontent.com/view/ipynb?commit=87d6e7a28ce754acd38d885367b6ceb0be92ec54&enc_url=68747470733a2f2f7261772e67697468756275736572636f6e74656e742e636f6d2f7368616f616e6c752f66616365737761702d47414e2f383764366537613238636537353461636433386438383533363762366365623062653932656335342f46616365537761705f47414e5f76325f737a3132385f747261696e2e6970796e62&nwo=shaoanlu%2Ffaceswap-GAN&path=FaceSwap_GAN_v2_sz128_train.ipynb&repository_id=115182783&repository_type=Repository#Tips-for-mask-refinement-(optional-after-%3E15k-iters)
-        loss_DA, loss_DA2, loss_GA, loss_DA_feat, loss_DA_code = self.define_loss(self.model.netDA, self.model.netDA2, self.model.netDA_feat, self.model.netD_code, self.model.netGA, real_A, fake_A, fake_sz64_A, distorted_A, domain="A", vggface_feat)
-        loss_DB, loss_DB2, loss_GB, loss_DB_feat, loss_DB_code = self.define_loss(self.model.netDB, self.model.netDB2, self.model.netDB_feat, self.model.netD_code, self.model.netGB, real_B, fake_B, fake_sz64_B, distorted_B, domain="B", vggface_feat)
+        loss_DA, loss_DA2, loss_GA, loss_DA_feat, loss_DA_code = self.define_loss(self.model.netDA, self.model.netDA2, netDA_feat, self.model.netD_code, self.model.netGA, real_A, fake_A, fake_sz64_A, distorted_A, "A", vggface_feat)
+        loss_DB, loss_DB2, loss_GB, loss_DB_feat, loss_DB_code = self.define_loss(self.model.netDB, self.model.netDB2, netDB_feat, self.model.netD_code, self.model.netGB, real_B, fake_B, fake_sz64_B, distorted_B, "B", vggface_feat)
 
         loss_GA += 3e-3 * K.mean(K.abs(mask_A))
         loss_GB += 3e-3 * K.mean(K.abs(mask_B))
@@ -107,25 +107,25 @@ class Trainer():
         """
         training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsDA,[],loss_DA)
         self.netDA_train = K.function([distorted_A, real_A],[loss_DA], training_updates)
-        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsDA2,[],loss_DA2)
+        training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsDA2,[],loss_DA2)
         self.netDA2_train = K.function([distorted_A, real_A],[loss_DA2], training_updates)
         training_updates = Adam(lr=self.lrG, beta_1=0.5).get_updates(weightsGA,[], loss_GA)
         self.netGA_train = K.function([distorted_A, real_A], [loss_GA], training_updates)
 
         training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsDB,[],loss_DB)
         self.netDB_train = K.function([distorted_B, real_B],[loss_DB], training_updates)
-        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsDB2,[],loss_DB2)
+        training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsDB2,[],loss_DB2)
         self.netDB2_train = K.function([distorted_B, real_B],[loss_DB2], training_updates)
         training_updates = Adam(lr=self.lrG, beta_1=0.5).get_updates(weightsGB,[], loss_GB)
         self.netGB_train = K.function([distorted_B, real_B], [loss_GB], training_updates)
 
-        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsD_code,[], loss_DA_code)
+        training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsD_code,[], loss_DA_code)
         self.netDA_code_train = K.function([distorted_A, real_A],[loss_DA_code], training_updates)
-        training_updates = Adam(lr=lrD, beta_1=0.5).get_updates(weightsD_code,[], loss_DB_code)
+        training_updates = Adam(lr=self.lrD, beta_1=0.5).get_updates(weightsD_code,[], loss_DB_code)
         self.netDB_code_train = K.function([distorted_B, real_B],[loss_DB_code], training_updates)
 
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cosine.html
-    def cos_distance(x1, x2):
+    def cos_distance(self, x1, x2):
         x1 = K.l2_normalize(x1, axis=-1)
         x2 = K.l2_normalize(x2, axis=-1)
         return K.mean(1 - K.sum((x1 * x2), axis=-1))
@@ -140,7 +140,7 @@ class Trainer():
         else:
             return None
 
-    def train_one_step(self, iter, viewer):
+    def train_one_step(self, iter, viewer, save_interval):
         # ---------------------
         #  Train Discriminators
         # ---------------------
@@ -181,8 +181,8 @@ class Trainer():
         errGA_avg = self.errGA_sum/self.avg_counter
         errGB_avg = self.errGB_sum/self.avg_counter
 
-        if epoch % 10 == 0:
-            print('[%s] [%d/%s][%d] Loss_DA, Loss_DB, Loss_DA2, Loss_DB2, Loss_DA_code, Loss_DB_code, Loss_GA, Loss_GB')
+        if (int(iter/save_interval) % (save_interval*15) == 0 and iter/save_interval > 0) or iter == 0:
+            print('Losses:                     {}DA,       DB,       DA2,      DB2,      DA_code,  DB_code,  GA,       GB'.format(' '*len(str(iter))))
 
         print('[%s] [%d/%s][%d] %f, %f, %f, %f, %f, %f, %f, %f'
               % (time.strftime("%H:%M:%S"), epoch, "num_epochs", iter, errDA_avg, errDB_avg, errDA2_avg, errDB2_avg, errDA_code_avg, errDB_code_avg, errGA_avg, errGB_avg),
@@ -226,8 +226,8 @@ class Trainer():
         lam2 = dist.sample()
         mixup2 = lam2 * real + (1 - lam2) * fake_rgb
         output2_mixup = netD2(mixup2)
-        loss_D2 = loss_fn(output2_mixup, lam2 * K.ones_like(output2_mixup))
-        loss_G += .5 * loss_fn(output2_mixup, (1 - lam) * K.ones_like(output2_mixup))
+        loss_D2 = self.loss_fn(output2_mixup, lam2 * K.ones_like(output2_mixup))
+        loss_G += .5 * self.loss_fn(output2_mixup, (1 - lam) * K.ones_like(output2_mixup))
 
         # Domain adversarial loss
         real_code = netG([real])[1]
@@ -235,14 +235,14 @@ class Trainer():
         output_real_code = netD_code([real_code])
         # Target of domain A = 1, domain B = 0
         if domain == "A":
-            loss_D_code = loss_fn_bce(output_real_code, K.ones_like(output_real_code))
-            loss_G += .03 * loss_fn(output_real_code, K.zeros_like(output_real_code))
+            loss_D_code = self.loss_fn_bce(output_real_code, K.ones_like(output_real_code))
+            loss_G += .03 * self.loss_fn(output_real_code, K.zeros_like(output_real_code))
         elif domain == "B":
-            loss_D_code = loss_fn_bce(output_real_code, K.zeros_like(output_real_code))
-            loss_G += .03 * loss_fn(output_real_code, K.ones_like(output_real_code))
+            loss_D_code = self.loss_fn_bce(output_real_code, K.zeros_like(output_real_code))
+            loss_G += .03 * self.loss_fn(output_real_code, K.ones_like(output_real_code))
 
         # semantic consistency loss
-        loss_G += 1. * cos_distance(rec_code, real_code)
+        loss_G += 1. * self.cos_distance(rec_code, real_code)
 
         # ==========
         # L1 loss
@@ -270,7 +270,7 @@ class Trainer():
             loss_G += pl_params[1] * K.mean(K.abs(fake_feat28 - real_feat28))
             loss_G += pl_params[2] * K.mean(K.abs(fake_feat55 - real_feat55))
 
-        return return loss_D, loss_D2, loss_G, loss_D_feat, loss_D_code
+        return loss_D, loss_D2, loss_G, loss_D_feat, loss_D_code
 
     def show_sample(self, display_fn):
         _, wA, tA = next(self.train_batchA)
@@ -279,7 +279,7 @@ class Trainer():
         display_fn(self.showG(tA, tB, self.path_bgr_A, self.path_bgr_B), "masked")
         display_fn(self.showG_mask(tA, tB, self.path_mask_A, self.path_mask_B), "mask")
         # Reset the averages
-        self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
+        self.errDA_sum = self.errDB_sum = self.errDA2_sum = self.errDB2_sum = self.errDA_code_sum = self.errDB_code_sum = self.errGA_sum = self.errGB_sum = 0
         self.avg_counter = 0
 
     def showG(self, test_A, test_B, path_A, path_B):
