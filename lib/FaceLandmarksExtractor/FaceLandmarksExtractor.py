@@ -6,25 +6,21 @@ import dlib
 import keras
 from keras import backend as K
 
-dlib_cnn_face_detector = None
-dlib_face_detector = None
+dlib_detectors = []
 keras_model = None
+is_initialized = False
 
 @atexit.register
 def onExit():
-    global dlib_cnn_face_detector
-    global dlib_face_detector
+    global dlib_detectors
     global keras_model
     
     if keras_model is not None:
         del keras_model
         K.clear_session()
         
-    if dlib_cnn_face_detector is not None:
-        del dlib_cnn_face_detector
-    
-    if dlib_face_detector is not None:
-        del dlib_face_detector
+    for detector in dlib_detectors:
+        del detector
         
 class TorchBatchNorm2D(keras.engine.topology.Layer):
     def __init__(self, axis=-1, momentum=0.99, epsilon=1e-3, **kwargs):
@@ -108,52 +104,71 @@ def get_pts_from_predict(a, center, scale):
    
     c += 0.5
     return [ transform (c[i], center, scale, a.shape[2]) for i in range(a.shape[0]) ]
-        
-def extract(input_image, use_cnn_face_detector=True, all_faces=True):
-    global dlib_cnn_face_detector
-    global dlib_face_detector
+
+def initialize(scale_to=2048):
+    global dlib_detectors
     global keras_model
-    
-    #this execution order (dlib -> keras model) prevents dlib cnn cuda OOM error on Windows
-    if dlib_cnn_face_detector is None:            
+    global is_initialized
+    if not is_initialized:       
+        
         dlib_cnn_face_detector_path = os.path.join(os.path.dirname(__file__), "mmod_human_face_detector.dat")
         if not os.path.exists(dlib_cnn_face_detector_path):
-            print ("Error: Unable to find %s, reinstall the lib !" % (dlib_cnn_face_detector_path) )
+            raise Exception ("Error: Unable to find %s, reinstall the lib !" % (dlib_cnn_face_detector_path) )
         else:
-            dlib_cnn_face_detector = dlib.cnn_face_detection_model_v1(dlib_cnn_face_detector_path)
+            dlib_cnn_face_detector = dlib.cnn_face_detection_model_v1(dlib_cnn_face_detector_path)            
+            #DLIB and TF competiting for VRAM, so dlib must do first allocation to prevent OOM error 
+            dlib_cnn_face_detector ( np.zeros ( (scale_to, scale_to, 3), dtype=np.uint8), 0 ) 
+            dlib_detectors.append(dlib_cnn_face_detector)
     
-    if dlib_face_detector is None:
-        dlib_face_detector = dlib.get_frontal_face_detector()     
-                
-    if use_cnn_face_detector:
-        detected_faces = dlib_cnn_face_detector(input_image, 1)
-        if len(detected_faces) == 0:
-            use_cnn_face_detector = False
-            detected_faces = dlib_face_detector(input_image, 1)
-            if len(detected_faces) != 0:
-                print ('Info: CNN found no faces, but HOG found !')
-    else:        
-        detected_faces = dlib_face_detector(input_image, 1)
-
-    
-    if keras_model is None:        
-        model_path = os.path.join( os.path.dirname(__file__) , "2DFAN-4.h5" )
-        if not os.path.exists(model_path):
-            print ("Error: Unable to find %s, reinstall the lib !" % (model_path) )
+        dlib_face_detector = dlib.get_frontal_face_detector()
+        dlib_face_detector ( np.zeros ( (scale_to, scale_to, 3), dtype=np.uint8), 0 )
+        dlib_detectors.append(dlib_face_detector)        
+        
+        keras_model_path = os.path.join( os.path.dirname(__file__) , "2DFAN-4.h5" )
+        if not os.path.exists(keras_model_path):
+            print ("Error: Unable to find %s, reinstall the lib !" % (keras_model_path) )
         else:
             print ("Info: initializing keras model...")
-            keras_model = keras.models.load_model (model_path, custom_objects={'TorchBatchNorm2D': TorchBatchNorm2D} ) 
+            keras_model = keras.models.load_model (keras_model_path, custom_objects={'TorchBatchNorm2D': TorchBatchNorm2D} ) 
+            
+        is_initialized = True
+
+#scale_to=2048 with dlib upsamples=0 for 3GB VRAM Windows 10 users        
+def extract(input_image, use_cnn_face_detector=True, all_faces=True, scale_to=2048 ):
+    initialize(scale_to)
+    global dlib_detectors
+    global keras_model
     
+    (h, w, ch) = input_image.shape
+
+    input_scale = scale_to / (w if w > h else h)
+    input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
+    input_image_bgr = input_image[:,:,::-1].copy() #cv2 and numpy inputs differs in rgb-bgr order, this affects chance of dlib face detection
+    input_images = [input_image, input_image_bgr]
+ 
+    detected_faces = []
+    if use_cnn_face_detector:
+        for detector, input_image in ((detector, input_image) for detector in dlib_detectors for input_image in input_images):
+            detected_faces = detector(input_image, 0)
+            if len(detected_faces) != 0:
+                break
+    else:        
+        for input_image in input_images:
+            detected_faces = dlib_detectors[1](input_image, 0)
+            if len(detected_faces) != 0:
+                break
+
     landmarks = []
     if len(detected_faces) > 0:        
-        for i, d in enumerate(detected_faces):
+        for i, d_rect in enumerate(detected_faces):
             if i > 0 and not all_faces:
                 break
-            
-            d_rect = d.rect if use_cnn_face_detector else d
         
+            if type(d_rect) == dlib.mmod_rectangle:
+                d_rect = d_rect.rect
+            
             left, top, right, bottom = d_rect.left(), d_rect.top(), d_rect.right(), d_rect.bottom()
-            del d
+            del d_rect
     
             center = np.array( [ (left + right) / 2.0, (top + bottom) / 2.0] )
             center[1] -= (bottom - top) * 0.12
@@ -163,8 +178,8 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True):
             image = np.expand_dims(image, 0)
             
             pts_img = get_pts_from_predict ( keras_model.predict (image)[-1][0], center, scale)
-            pts_img = [ ( int(pt[0]), int(pt[1]) ) for pt in pts_img ]             
-            landmarks.append ( ((left, top, right, bottom),pts_img) )
+            pts_img = [ ( int(pt[0]/input_scale), int(pt[1]/input_scale) ) for pt in pts_img ]             
+            landmarks.append ( ((  int(left/input_scale), int(top/input_scale), int(right/input_scale), int(bottom/input_scale) ),pts_img) )
     else:
         print("Warning: No faces were detected.")
         
