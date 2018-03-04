@@ -1,6 +1,6 @@
 import argparse
 import sys
-from os.path import basename
+from os.path import basename, exists
 
 from pathlib import Path
 from scandir import scandir
@@ -15,6 +15,10 @@ def get_folder(path):
 def get_image_paths(directory, exclude=[], debug=False):
     exclude_names = [basename(Path(x).stem[:-1] + Path(x).suffix) for x in exclude]
     dir_contents = []
+
+    if not exists(directory):
+        directory = get_folder(directory).path
+
     dir_scanned = list(scandir(directory))
     for x in dir_scanned:
         if any([x.name.lower().endswith(ext) for ext in image_extensions]):
