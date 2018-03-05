@@ -99,34 +99,37 @@ class TrainingProcessor(object):
         import threading
         self.stop = False
         self.save_now = False
+        thread_event = threading.Event()
+        thread_event.set()
+        try:
+            thr = threading.Thread(target=self.processThread, args=(thread_event,), kwargs={})
+            thr.start()
 
-        thr = threading.Thread(target=self.processThread, args=(), kwargs={})
-        thr.start()
+            if self.arguments.preview:
+                print('Using live preview')
+                while True:
+                    try:
+                        with self.lock:
+                            for name, image in self.preview_buffer.items():
+                                cv2.imshow(name, image)
 
-        if self.arguments.preview:
-            print('Using live preview')
-            while True:
-                try:
-                    with self.lock:
-                        for name, image in self.preview_buffer.items():
-                            cv2.imshow(name, image)
-
-                    key = cv2.waitKey(1000)
-                    if key == ord('\n') or key == ord('\r'):
+                        key = cv2.waitKey(1000)
+                        if key == ord('\n') or key == ord('\r'):
+                            print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
+                            break
+                        if key == ord('s'):
+                            self.save_now = True
+                    except KeyboardInterrupt:
+                        print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
                         break
-                    if key == ord('s'):
-                        self.save_now = True
-                except KeyboardInterrupt:
-                    break
-        else:
-            input() # TODO how to catch a specific key instead of Enter?
-            # there isnt a good multiplatform solution: https://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
+                thread_event.clear()
+        except KeyboardInterrupt:
+            print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
+            thread_event.clear()
+            thr.join() # waits until thread finishes
 
-        print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
-        self.stop = True
-        thr.join() # waits until thread finishes
-
-    def processThread(self):
+            
+    def processThread(self, thread_event):
         if self.arguments.allow_growth:
             self.set_tf_allow_growth()
         
@@ -142,36 +145,29 @@ class TrainingProcessor(object):
         trainer = PluginLoader.get_trainer(trainer)
         trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
 
-        try:
-            print('Starting. Press "Enter" to stop training and save model')
+        print('Starting. Press "Ctrl + C" to stop training and save model')
+        epoch = 0
+        while epoch < self.arguments.epochs and thread_event.is_set():
 
-            for epoch in range(0, self.arguments.epochs):
+            save_iteration = epoch % self.arguments.save_interval == 0
 
-                save_iteration = epoch % self.arguments.save_interval == 0
+            trainer.train_one_step(epoch, self.show if (save_iteration or self.save_now) else None)
 
-                trainer.train_one_step(epoch, self.show if (save_iteration or self.save_now) else None)
-
-                if save_iteration:
-                    model.save_weights()
-
-                if self.stop:
-                    model.save_weights()
-                    exit()
-
-                if self.save_now:
-                    model.save_weights()
-                    self.save_now = False
-
-        except KeyboardInterrupt:
-            try:
+            if save_iteration:
                 model.save_weights()
-            except KeyboardInterrupt:
-                print('Saving model weights has been cancelled!')
-            exit(0)
-        except Exception as e:
-            print(e)
-            exit(1)
-    
+
+            if self.stop:
+                model.save_weights()
+                exit()
+
+            if self.save_now:
+                model.save_weights()
+                self.save_now = False
+            epoch += 1
+        print("saving weights") 
+        model.save_weights()
+        exit(0)
+            
     def set_tf_allow_growth(self):
         import tensorflow as tf
         from keras.backend.tensorflow_backend import set_session
