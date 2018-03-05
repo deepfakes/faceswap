@@ -6,7 +6,7 @@ from lib.aligner import get_align_mat
 
 class Extract(object):
     def extract(self, image, face, size):
-        alignment = get_align_mat( face )
+        alignment = get_align_mat( face, size )
         return self.transform( image, alignment, size, 48 )
     
     def transform( self, image, mat, size, padding=0 ):
