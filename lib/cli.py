@@ -50,10 +50,23 @@ class DirectoryProcessor(object):
         print("Using {} serializer".format(self.serializer.ext))
 
         print('Starting, this may take a while...')
-
+        
+        try:
+            if self.arguments.skip_existing:
+                self.already_processed = get_image_paths(self.arguments.output_dir)
+        except AttributeError:
+            pass
+    
         self.output_dir = get_folder(self.arguments.output_dir)
         try:
-            self.input_dir = get_image_paths(self.arguments.input_dir)
+            try:
+                if self.arguments.skip_existing:
+                    self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
+                    print('Excluding %s files' % len(self.already_processed))
+                else:
+                    self.input_dir = get_image_paths(self.arguments.input_dir)
+            except AttributeError:
+                self.input_dir = get_image_paths(self.arguments.input_dir)
         except:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
@@ -82,6 +95,16 @@ class DirectoryProcessor(object):
         fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
         if self.arguments.alignments_path is not None:
             fn = self.arguments.alignments_path
+        print("Alignments filepath: %s" % fn)
+        
+        if self.arguments.skip_existing:
+            if os.path.exists(fn):
+                with open(fn, self.serializer.roptions) as inf:
+                    data = self.serializer.unmarshal(inf.read())
+                    for k, v in data.items():
+                        self.faces_detected[k] = v
+            else:
+                print('Existing alignments file "%s" not found.' % fn)
         try:
             print("Writing alignments to: {}".format(fn))
             with open(fn, self.serializer.woptions) as fh:
@@ -116,13 +139,13 @@ class DirectoryProcessor(object):
             self.num_faces_detected += 1
             faces_count += 1
         if faces_count > 1 and self.arguments.verbose:
-            print('Note: Found more than one face in an image!')
+            print('Note: Found more than one face in an image! File: %s' % filename)
             self.verify_output = True
 
     def get_faces(self, image):
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector)
-
+        
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
@@ -133,7 +156,6 @@ class DirectoryProcessor(object):
             faces_count += 1
 
         if faces_count > 1 and self.arguments.verbose:
-            print('Note: Found more than one face in an image!')
             self.verify_output = True
 
     def load_filter(self):
