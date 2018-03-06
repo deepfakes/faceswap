@@ -196,7 +196,10 @@ class ConvertImage(DirectoryProcessor):
     def check_skipface(self, filename, face_idx):
         aligned_face_name = '{}_{}{}'.format(Path(filename).stem, face_idx, Path(filename).suffix)
         aligned_face_file = Path(self.arguments.input_aligned_dir) / Path(aligned_face_name)
-        return aligned_face_file not in self.input_aligned_dir
+        # TODO: Remove this temporary fix for backwards compatibility of filenames
+        bk_compat_aligned_face_name = '{}{}{}'.format(Path(filename).stem, face_idx, Path(filename).suffix)
+        bk_compat_aligned_face_file = Path(self.arguments.input_aligned_dir) / Path(bk_compat_aligned_face_name)
+        return aligned_face_file not in self.input_aligned_dir and bk_compat_aligned_face_file not in self.input_aligned_dir
 
     def convert(self, converter, item):
         try:
