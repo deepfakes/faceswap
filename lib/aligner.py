@@ -25,8 +25,13 @@ mean_face_y = numpy.array([
 
 landmarks_2D = numpy.stack( [ mean_face_x, mean_face_y ], axis=1 )
 
-def get_align_mat(face, size):
-    mat_umeyama = umeyama(numpy.array(face.landmarksAsXY()[17:]), landmarks_2D, True)[0:2] * size
+def get_align_mat(face, size, should_align_eyes):
+    mat_umeyama = umeyama(numpy.array(face.landmarksAsXY()[17:]), landmarks_2D, True)[0:2]
+
+    if should_align_eyes is False:
+        return mat_umeyama
+
+    mat_umeyama = mat_umeyama * size
 
     # Convert to matrix
     landmarks = numpy.matrix(face.landmarksAsXY())
