@@ -51,8 +51,6 @@ def align_eyes(landmarks, size):
     leftEyePts = landmarks[lStart:lEnd]
     rightEyePts = landmarks[rStart:rEnd]
 
-    # TODO: Check if CoMs are actually right w.r.t. y,x swap
-
     # compute the center of mass for each eye
     leftEyeCenter = leftEyePts.mean(axis=0).astype("int")
     rightEyeCenter = rightEyePts.mean(axis=0).astype("int")
