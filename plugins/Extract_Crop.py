@@ -3,5 +3,5 @@
 import cv2
 
 class Extract(object):
-    def extract(self, image, face, size):
+    def extract(self, image, face, size, *args):
         return cv2.resize(face.image, (size, size))
