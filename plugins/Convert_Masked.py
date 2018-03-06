@@ -23,7 +23,7 @@ class Convert():
         size = 64
         image_size = image.shape[1], image.shape[0]
 
-        mat = numpy.array(get_align_mat(face_detected)).reshape(2,3) * size
+        mat = numpy.array(get_align_mat(face_detected, size, should_align_eyes=False)).reshape(2,3) * size
 
         new_face = self.get_new_face(image,mat,size)
 
