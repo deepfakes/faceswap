@@ -59,21 +59,21 @@ class TrainerAE():
         self.loss_B = 0.0
 
     def train_one_step(self, iter, viewer):       
-        epoch, warped_A, target_A = None, None, None
-        epoch, warped_B, target_B = None, None, None
-        
+
         if not self.balance_loss or self.loss_A == 0.0 or self.loss_B == 0.0 or iter % 10 == 0 or viewer is not None:
-            epoch, warped_A, target_A = next(self.images_A)
-            epoch, warped_B, target_B = next(self.images_B)
-            self.loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-            self.loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
+            is_train_A = True
+            is_train_B = True
         else:
-            if self.loss_A >= self.loss_B:
-                epoch, warped_A, target_A = next(self.images_A)
-                self.loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-            else:
-                epoch, warped_B, target_B = next(self.images_B)
-                self.loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)       
+            is_train_A = self.loss_A >= self.loss_B
+            is_train_B = not is_train_A
+            
+        if is_train_A:
+            epoch, warped_A, target_A = next(self.images_A)
+            self.loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
+            
+        if is_train_B:
+            epoch, warped_B, target_B = next(self.images_B)
+            self.loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)       
 
         print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(time.strftime("%H:%M:%S"), iter, self.loss_A, self.loss_B),
             end='\r')
