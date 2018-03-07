@@ -88,6 +88,11 @@ class TrainingProcessor(object):
                             type=int,
                             default=1000000,
                             help="Length of training in epochs.")
+        parser.add_argument('-bls', '--balance-loss',
+                            action="store_true",
+                            dest="balance_loss",
+                            default=False,
+                            help="Balance loss during training.")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -140,7 +145,7 @@ class TrainingProcessor(object):
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
         trainer = PluginLoader.get_trainer(trainer)
-        trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
+        trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size, balance_loss=self.arguments.balance_loss)
 
         try:
             print('Starting. Press "Enter" to stop training and save model')
