@@ -10,7 +10,7 @@ class TrainingDataGenerator():
         self.random_transform_args = random_transform_args
         self.coverage = coverage
         self.scale = scale
-        self.zoom = zoom
+        self.zoom = 4
 
     def minibatchAB(self, images, batchsize):
         batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
@@ -31,7 +31,7 @@ class TrainingDataGenerator():
                 epoch+=1
             rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])
             i+=size
-            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
+            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]
 
     def color_adjust(self, img):
         return img / 255.0

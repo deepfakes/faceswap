@@ -23,8 +23,10 @@ class Convert(Converter):
         self.match_histogram = match_histogram
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
 
-    def patch_one_face( self, image, face_detected, size ):
-        image_size = image.shape[1], image.shape[0]
+    def patch_one_face( self, image, face_detected, output_size ):
+        input_size = 64
+        mat = numpy.array(get_align_mat(face_detected)).reshape(2,3) * input_size
+        new_face = self.get_new_face(image,mat,input_size)
 
         mat = numpy.array(get_align_mat(face_detected, size, should_align_eyes=False)).reshape(2,3)
 
@@ -36,6 +38,10 @@ class Convert(Converter):
             mat[:,2] += padding
 
         new_face = self.get_new_face(image,mat,size)
+
+        size = output_size
+        image_size = image.shape[1], image.shape[0]
+        mat = numpy.array(get_align_mat(face_detected)).reshape(2,3) * size
 
         image_mask = self.get_image_mask( image, new_face, face_detected.landmarksAsXY(), mat, image_size )
 
