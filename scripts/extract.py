@@ -7,6 +7,7 @@ import os
 from lib.cli import DirectoryProcessor
 from lib.utils import get_folder
 from lib.multithreading import pool_process
+from lib.detect_blur import is_blurry
 from plugins.PluginLoader import PluginLoader
 
 class ExtractTrainingData(DirectoryProcessor):
@@ -56,6 +57,12 @@ class ExtractTrainingData(DirectoryProcessor):
                             default=False,
                             help="Perform extra alignment to ensure left/right eyes lie at the same height")
 
+        parser.add_argument('-bt', '--blur-threshold',
+                            type=int,
+                            dest="blur_thresh",
+                            default=None,
+                            help="Automatically discard images blurrier than the specified threshold. Discarded images are moved into a \"blurry\" sub-folder. Lower values allow more blur. Comment in the PR what threshold you use")
+
         return parser
 
     def process(self):
@@ -100,6 +107,14 @@ class ExtractTrainingData(DirectoryProcessor):
 
             resized_image = self.extractor.extract(image, face, 256, self.arguments.align_eyes)
             output_file = get_folder(self.output_dir) / Path(filename).stem
+
+            # Detect blurry images
+            if self.arguments.blur_thresh is not None:
+                blurry, focus_measure = is_blurry(resized_image, self.arguments.blur_thresh)
+                if blurry:
+                    print("{}'s focus measure of {} was below the blur threshold, moving to \"blurry\"".format(Path(filename).stem, focus_measure))
+                    output_file = get_folder(Path(self.output_dir) / Path("blurry")) / Path(filename).stem
+
             cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
             f = {
                 "x": face.x,
