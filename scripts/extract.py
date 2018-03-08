@@ -3,6 +3,7 @@ import cv2
 from pathlib import Path
 from tqdm import tqdm
 import os
+import numpy as np
 
 from lib.cli import DirectoryProcessor
 from lib.utils import get_folder
@@ -105,12 +106,21 @@ class ExtractTrainingData(DirectoryProcessor):
                 for (x, y) in face.landmarksAsXY():
                     cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
 
-            resized_image = self.extractor.extract(image, face, 256, self.arguments.align_eyes)
+            resized_image, t_mat = self.extractor.extract(image, face, 256, self.arguments.align_eyes)
             output_file = get_folder(self.output_dir) / Path(filename).stem
 
             # Detect blurry images
             if self.arguments.blur_thresh is not None:
-                blurry, focus_measure = is_blurry(resized_image, self.arguments.blur_thresh)
+                transformed_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
+                hull_mask = np.zeros((256 ,256, 3), dtype=float)
+                hull = cv2.convexHull(np.array(transformed_landmarks).reshape((-1, 2)).astype(int)).flatten().reshape((-1, 2))
+                cv2.fillConvexPoly(hull_mask, hull, (1,1,1))
+                isolated_face = cv2.multiply(hull_mask, resized_image.astype(float)).astype(np.uint8)
+                blurry, focus_measure = is_blurry(isolated_face, self.arguments.blur_thresh)
+                print("{} focus measure: {}".format(Path(filename).stem, focus_measure))
+                cv2.imshow("Isolated Face", isolated_face)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
                 if blurry:
                     print("{}'s focus measure of {} was below the blur threshold, moving to \"blurry\"".format(Path(filename).stem, focus_measure))
                     output_file = get_folder(Path(self.output_dir) / Path("blurry")) / Path(filename).stem

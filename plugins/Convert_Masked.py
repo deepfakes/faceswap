@@ -9,7 +9,7 @@ class Convert():
     def __init__(self, encoder, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, **kwargs):
         self.encoder = encoder
         self.erosion_kernel = None
-        self.erosion_kernel_size = erosion_kernel_size       
+        self.erosion_kernel_size = erosion_kernel_size
         if erosion_kernel_size is not None:
             if erosion_kernel_size > 0:
                 self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(erosion_kernel_size,erosion_kernel_size))
@@ -27,7 +27,7 @@ class Convert():
 
         new_face = self.get_new_face(image,mat,size)
 
-        image_mask = self.get_image_mask( image, new_face, face_detected, mat, image_size )
+        image_mask = self.get_image_mask( image, new_face, face_detected.landmarksAsXY(), mat, image_size )
 
         return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
 
@@ -40,9 +40,9 @@ class Convert():
         outImage = None
         if self.seamless_clone:
             unitMask = numpy.clip( image_mask * 365, 0, 255 ).astype(numpy.uint8)
-      
+
             maxregion = numpy.argwhere(unitMask==255)
-      
+
             if maxregion.size > 0:
               miny,minx = maxregion.min(axis=0)[:2]
               maxy,maxx = maxregion.max(axis=0)[:2]
@@ -51,9 +51,9 @@ class Convert():
               masky = int(minx+(lenx//2))
               maskx = int(miny+(leny//2))
               outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),base_image.astype(numpy.uint8),unitMask,(masky,maskx) , cv2.NORMAL_CLONE )
-              
+
               return outimage
-              
+
         foreground = cv2.multiply(image_mask, new_image.astype(float))
         background = cv2.multiply(1.0 - image_mask, base_image.astype(float))
         outimage = cv2.add(foreground, background)
@@ -67,7 +67,7 @@ class Convert():
 
         return numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
 
-    def get_image_mask(self, image, new_face, face_detected, mat, image_size):
+    def get_image_mask(self, image, new_face, landmarks, mat, image_size):
 
         face_mask = numpy.zeros(image.shape,dtype=float)
         if 'rect' in self.mask_type:
@@ -76,7 +76,7 @@ class Convert():
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
         if 'hull' in self.mask_type:
-            hull = cv2.convexHull( numpy.array( face_detected.landmarksAsXY() ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
+            hull = cv2.convexHull( numpy.array( landmarks ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
             cv2.fillConvexPoly( hull_mask,hull,(1,1,1) )
 
         if self.mask_type == 'rect':
