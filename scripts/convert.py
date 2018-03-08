@@ -125,7 +125,7 @@ class ConvertImage(DirectoryProcessor):
         else:
             assert model_name.startswith("GAN") is False, "GAN model can only be used with GAN converter!"
 
-        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir))
+        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir),1)
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
