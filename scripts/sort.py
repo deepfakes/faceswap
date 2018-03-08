@@ -57,6 +57,7 @@ class SortProcessor(DirectoryProcessor):
         
         print ("Sorting by blur...")         
         img_list = [ [x, self.estimate_blur(cv2.imread(x))] for x in tqdm(self.find_images(input_dir), desc="Loading") ]
+        print ("Sorting...")    
         img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True) 
         self.process_final_rename(input_dir, img_list)        
         print ("Done.")
