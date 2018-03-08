@@ -10,6 +10,8 @@ from keras.optimizers import Adam
 
 from lib.PixelShuffler import PixelShuffler
 
+from keras.utils import multi_gpu_model
+
 netGAH5 = 'netGA_GAN.h5'
 netGBH5 = 'netGB_GAN.h5'
 netDAH5 = 'netDA_GAN.h5'
@@ -21,8 +23,9 @@ class GANModel():
     img_shape = (img_size, img_size, channels)
     encoded_dim = 1024
     
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
+        self.gpus = gpus
 
         optimizer = Adam(1e-4, 0.5)
 
@@ -56,6 +59,11 @@ class GANModel():
         # img as input => generates encoded represenation and reconstructed image => determines validity 
         self.adversarial_autoencoderA = Model(img, [reconstructed_imgA, out_discriminatorA])
         self.adversarial_autoencoderB = Model(img, [reconstructed_imgB, out_discriminatorB])
+        
+        if self.gpus > 1:
+            self.autoencoder_A = multi_gpu_model( self.adversarial_autoencoderA , self.gpus)
+            self.autoencoder_B = multi_gpu_model( self.adversarial_autoencoderB , self.gpus)
+        
         self.adversarial_autoencoderA.compile(loss=['mae', 'mse'],
                                               loss_weights=[1, 0.5],
                                               optimizer=optimizer)
