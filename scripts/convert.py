@@ -6,7 +6,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from lib.cli import DirectoryProcessor, FullPaths
-from lib.utils import BackgroundGenerator, get_folder, rotate_image
+from lib.utils import BackgroundGenerator, get_folder
 
 from plugins.PluginLoader import PluginLoader
 
@@ -176,13 +176,7 @@ class ConvertImage(DirectoryProcessor):
 
             if not skip: # process as normal
                 for idx, face in faces:
-                    # Check for image rotations, before mapping face
-                    if face.r != 0: image = rotate_image(image, face.r)
-                    
                     image = converter.patch_image(image, face)
-                    
-                    # Rotate image back if it was rotated
-                    if face.r != 0: image = rotate_image(image, face.r * -1)
 
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
