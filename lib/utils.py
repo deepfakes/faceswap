@@ -13,7 +13,6 @@ def get_folder(path):
     return output_dir
 
 def get_image_paths(directory, exclude=[], debug=False):
-    exclude_names = [basename(Path(x).stem[:-1] + Path(x).suffix) for x in exclude]
     dir_contents = []
 
     if not exists(directory):
@@ -22,7 +21,7 @@ def get_image_paths(directory, exclude=[], debug=False):
     dir_scanned = list(scandir(directory))
     for x in dir_scanned:
         if any([x.name.lower().endswith(ext) for ext in image_extensions]):
-            if x.name in exclude_names:
+            if x.name in exclude:
                 if debug:
                     print("Already processed %s" % x.name)
                 continue
