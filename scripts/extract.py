@@ -6,6 +6,8 @@ import os
 
 from lib.cli import DirectoryProcessor
 from lib.utils import get_folder
+from lib import db
+
 from lib.multithreading import pool_process
 from plugins.PluginLoader import PluginLoader
 
@@ -69,6 +71,7 @@ class ExtractTrainingData(DirectoryProcessor):
                         self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
                 except Exception as e:
                     print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                    raise e
         finally:
             self.write_alignments()
 
@@ -78,14 +81,15 @@ class ExtractTrainingData(DirectoryProcessor):
             return filename, self.handleImage(image, filename)
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+            raise e
 
     def handleImage(self, image, filename):
         count = 0
-
+        conn = db.open_connection()
         faces = self.get_faces(image)
         rvals = []
         for idx, face in faces:
-            count = idx
+            count += 1
              
             # Draws landmarks for debug
             if self.arguments.debug_landmarks:
@@ -103,4 +107,8 @@ class ExtractTrainingData(DirectoryProcessor):
                 "landmarksXY": face.landmarksAsXY()
             }
             rvals.append(f)
+        if count > 0:
+            db.record_extraction(conn, filename, True)
+        if count == 0:
+            db.record_extraction(conn, filename, False)
         return rvals

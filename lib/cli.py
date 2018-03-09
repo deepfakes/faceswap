@@ -6,6 +6,7 @@ from pathlib import Path
 from lib.FaceFilter import FaceFilter
 from lib.faces_detect import detect_faces, DetectedFace
 from lib.utils import get_image_paths, get_folder
+from lib import db
 from lib import Serializer
 
 class FullPaths(argparse.Action):
@@ -34,10 +35,21 @@ class DirectoryProcessor(object):
     def __init__(self, subparser, command, description='default'):
         self.create_parser(subparser, command, description)
         self.parse_arguments(description, subparser, command)
+        if os.path.exists('faceswap.db'):
+            self.conn = db.open_connection()
+            is_valid = db.verify(self.conn)
+            if not is_valid:
+                db.create()
+        else:
+            db.create()
+            self.conn = db.open_connection()
 
 
     def process_arguments(self, arguments):
         self.arguments = arguments
+        if self.parser.prog == 'faceswap.py db':
+            self.process()
+            return
         print("Input Directory: {}".format(self.arguments.input_dir))
         print("Output Directory: {}".format(self.arguments.output_dir))
         self.serializer = None
@@ -52,22 +64,35 @@ class DirectoryProcessor(object):
         print('Starting, this may take a while...')
         
         try:
-            if self.arguments.skip_existing:
-                self.already_processed = get_image_paths(self.arguments.output_dir)
+            if self.arguments.skip_existing \
+                    and self.parser.prog == 'faceswap.py extract':
+                self.already_processed = db.get_already_extracted(self.conn)
+            
+            if self.arguments.skip_existing \
+                    and self.parser.prog == 'faceswap.py convert':
+                self.already_processed = db.get_already_converted(self.conn)
         except AttributeError:
             pass
-    
+
         self.output_dir = get_folder(self.arguments.output_dir)
         try:
             try:
                 if self.arguments.skip_existing:
                     self.input_dir = get_image_paths(self.arguments.input_dir, self.already_processed)
                     print('Excluding %s files' % len(self.already_processed))
+                
                 else:
                     self.input_dir = get_image_paths(self.arguments.input_dir)
             except AttributeError:
                 self.input_dir = get_image_paths(self.arguments.input_dir)
-        except:
+            try:
+                if self.arguments.only_frames_with_faces:
+                    frames_with_faces = db.get_frames_with_faces(self.conn)
+                    self.input_dir = [x for x in self.input_dir if os.path.basename(x) in frames_with_faces]
+                    print("Only %s frames have faces." % len(self.input_dir)) 
+            except AttributeError as e:
+                pass
+        except Exception as e:
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
@@ -145,7 +170,6 @@ class DirectoryProcessor(object):
     def get_faces(self, image):
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector)
-        
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
@@ -157,6 +181,7 @@ class DirectoryProcessor(object):
 
         if faces_count > 1 and self.arguments.verbose:
             self.verify_output = True
+
 
     def load_filter(self):
         filter_file = self.arguments.filter
@@ -220,10 +245,11 @@ class DirectoryProcessor(object):
         print('Images found:        {}'.format(self.images_found))
         print('Faces detected:      {}'.format(self.num_faces_detected))
         print('-------------------------')
-
+        
         if self.verify_output:
             print('Note:')
             print('Multiple faces were detected in one or more pictures.')
             print('Double check your results.')
             print('-------------------------')
         print('Done!')
+        self.conn.close()

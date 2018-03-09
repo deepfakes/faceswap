@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.utils import BackgroundGenerator, get_folder
+from lib import db
 
 from plugins.PluginLoader import PluginLoader
 
@@ -111,6 +112,18 @@ class ConvertImage(DirectoryProcessor):
                             dest="avg_color_adjust",
                             default=True,
                             help="Average color adjust. (Adjust converter only)")
+        
+        parser.add_argument('-se', '--skip-existing',
+                            action="store_true",
+                            dest="skip_existing",
+                            default=False,
+                            help="Skip already converted frames")
+        
+        parser.add_argument('-of', '--only-frames-with-faces',
+                            action="store_true",
+                            dest="only_frames_with_faces",
+                            default=False,
+                            help="Process only frames where faces were detected.")
         return parser
 
     def process(self):
@@ -180,8 +193,11 @@ class ConvertImage(DirectoryProcessor):
 
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
+            db.record_conversion(self.conn, filename, True)
         except Exception as e:
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
+            print("Recording failed conversion")
+            db.record_conversion(self.conn, filename, False)
 
     def prepare_images(self):
         self.read_alignments()

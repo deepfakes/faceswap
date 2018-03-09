@@ -182,5 +182,6 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True, scale_to=20
             landmarks.append ( ((  int(left/input_scale), int(top/input_scale), int(right/input_scale), int(bottom/input_scale) ),pts_img) )
     else:
         print("Warning: No faces were detected.")
+        return None
         
     return landmarks
