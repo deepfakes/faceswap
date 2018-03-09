@@ -61,8 +61,8 @@ class GANModel():
         self.adversarial_autoencoderB = Model(img, [reconstructed_imgB, out_discriminatorB])
         
         if self.gpus > 1:
-            self.autoencoder_A = multi_gpu_model( self.adversarial_autoencoderA , self.gpus)
-            self.autoencoder_B = multi_gpu_model( self.adversarial_autoencoderB , self.gpus)
+            self.adversarial_autoencoderA = multi_gpu_model( self.adversarial_autoencoderA , self.gpus)
+            self.adversarial_autoencoderB = multi_gpu_model( self.adversarial_autoencoderB , self.gpus)
         
         self.adversarial_autoencoderA.compile(loss=['mae', 'mse'],
                                               loss_weights=[1, 0.5],
