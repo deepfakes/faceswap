@@ -94,7 +94,8 @@ class ExtractTrainingData(DirectoryProcessor):
             faces = self.get_faces(rotated_image, rotation=angle)
             rotated_faces = [(idx, face) for idx, face in faces]
             if len(rotated_faces) != 0:
-                print('found face(s) by rotating image {} degrees'.format(angle))
+                if self.arguments.verbose:
+                    print('found face(s) by rotating image {} degrees'.format(angle))
                 break
             angle += 90
         return rotated_faces, rotated_image

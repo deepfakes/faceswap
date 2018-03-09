@@ -177,10 +177,12 @@ class ConvertImage(DirectoryProcessor):
             if not skip: # process as normal
                 for idx, face in faces:
                     # Check for image rotations and rotate before mapping face
-                    if face.r != 0: image = rotate_image(image, face.r)
-                    image = converter.patch_image(image, face)
-                    # Rotate image back if it was rotated
-                    if face.r != 0: image = rotate_image(image, face.r * -1)
+                    if face.r != 0:
+                        image = rotate_image(image, face.r)
+                        image = converter.patch_image(image, face)
+                        image = rotate_image(image, face.r * -1)
+                    else:
+                        image = converter.patch_image(image, face)
 
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
