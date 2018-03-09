@@ -29,15 +29,16 @@ class FaceFilter():
             if distance <= self.threshold:
                 print("Distance below threshold: %f < %f" % (distance, self.threshold))
             chosen = distance <= self.threshold
-            chosen = chosen and (mindistance < nmindistance)
-            chosen = chosen and (distance < ndistance)
-            # k-nn classifier
-            K=min(4, int((len(distances) + len(ndistances))/2))
-            N=sum(list(map(lambda x: x[0],
-                  list(sorted([(1,d) for d in distances] + [(0,d) for d in ndistances],
-                              key=lambda x: x[1]))[:K])))
-            ratio = N/K
-            chosen = chosen and (ratio > 0.5)
+            if len(ndistances) > 0:
+              chosen = chosen and (mindistance < nmindistance)
+              chosen = chosen and (distance < ndistance)
+              # k-nn classifier
+              K=min(4, int((len(distances) + len(ndistances))/2))
+              N=sum(list(map(lambda x: x[0],
+                    list(sorted([(1,d) for d in distances] + [(0,d) for d in ndistances],
+                                key=lambda x: x[1]))[:K])))
+              ratio = N/K
+              chosen = chosen and (ratio > 0.5)
             return chosen
         else:
             print("No face encodings found")
