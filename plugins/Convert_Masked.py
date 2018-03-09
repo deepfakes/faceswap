@@ -104,11 +104,12 @@ class Convert():
         face = numpy.expand_dims( face, 0 )
         face_clipped = numpy.clip(face[0], 0, 255).astype( image.dtype )
         new_face = None
+        mask = None
 
         if "GAN" not in self.trainer:
             normalized_face = face / 255.0
             new_face = self.encoder(normalized_face)[0]
-            numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
+            new_face = numpy.clip( new_face * 255, 0, 255 ).astype( image.dtype )
         else:
             normalized_face = face / 255.0 * 2 - 1
             fake_output = self.encoder(normalized_face)
