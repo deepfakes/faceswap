@@ -51,12 +51,13 @@ class ExtractTrainingData(DirectoryProcessor):
                             help="Draw landmarks for debug.")
 
         parser.add_argument('-r', '--rotate-images',
-                            action="store_true",
+                            type=str
                             dest="rotate_images",
-                            default=False,
+                            choices=("on", "off")
+                            default="off",
                             help="If a face isn't found, rotate the images through 90 degree "
                                  "iterations to try to find a face. Can find more faces at the "
-                                 "cost of extraction speed")
+                                 "cost of extraction speed."
         return parser
 
     def process(self):
@@ -105,7 +106,7 @@ class ExtractTrainingData(DirectoryProcessor):
         process_faces = [(idx, face) for idx, face in faces]
 
         # Run image rotator if requested and no faces found        
-        if len(process_faces) == 0 and self.arguments.rotate_images:
+        if self.arguments.rotate_images.lower() == 'on' and len(process_faces) == 0:
             process_faces, image = self.imageRotator(image)
 
         rvals = []
