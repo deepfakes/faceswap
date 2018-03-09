@@ -3,18 +3,42 @@
 import face_recognition
 # import face_recognition_models
 
+def avg(arr):
+  return sum(arr)*1.0/len(arr)
+
 class FaceFilter():
-    def __init__(self, reference_file_path, threshold = 0.6):
-        image = face_recognition.load_image_file(reference_file_path)
-        self.encoding = face_recognition.face_encodings(image)[0] # Note: we take only first face, so the reference file should only contain one face.
+    def __init__(self, reference_file_paths, nreference_file_paths, threshold = 0.6):
+        images = list(map(face_recognition.load_image_file, reference_file_paths))
+        nimages = list(map(face_recognition.load_image_file, nreference_file_paths))
+        self.encodings = list(map(lambda im: face_recognition.face_encodings(im)[0], images)) # Note: we take only first face, so the reference file should only contain one face.
+        self.nencodings = list(map(lambda im: face_recognition.face_encodings(im)[0], nimages)) # Note: we take only first face, so the reference file should only contain one face.
         self.threshold = threshold
     
     def check(self, detected_face):
         encodings = face_recognition.face_encodings(detected_face.image) # we could use detected landmarks, but I did not manage to do so. TODO The copy/paste below should help
         if encodings is not None and len(encodings) > 0:
-            score = face_recognition.face_distance([self.encoding], encodings[0])
-            print(score)
-            return score <= self.threshold
+            distances = face_recognition.face_distance(self.encodings, encodings[0])
+            ndistances = face_recognition.face_distance(self.nencodings, encodings[0])
+            ndistance = avg(ndistances)
+            distance = avg(distances)
+            nmindistance = min(ndistances)
+            mindistance = min(distances)
+            nmaxdistance = max(ndistances)
+            maxdistance = max(distances)
+            #distance = max(face_recognition.face_distance(self.encodings, encoding[0]))
+            if distance <= self.threshold:
+                print("Distance below threshold: %f < %f" % (distance, self.threshold))
+            chosen = distance <= self.threshold
+            chosen = chosen and (mindistance < nmindistance)
+            chosen = chosen and (distance < ndistance)
+            # k-nn classifier
+            K=min(4, int((len(distances) + len(ndistances))/2))
+            N=sum(list(map(lambda x: x[0],
+                  list(sorted([(1,d) for d in distances] + [(0,d) for d in ndistances],
+                              key=lambda x: x[1]))[:K])))
+            ratio = N/K
+            chosen = chosen and (ratio > 0.5)
+            return chosen
         else:
             print("No face encodings found")
             return False
