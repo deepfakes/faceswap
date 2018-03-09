@@ -110,9 +110,8 @@ def initialize(detector, scale_to=2048):
     global keras_model
     global is_initialized
     if not is_initialized:
-        try:
-            dlib_cnn_face_detector_path = os.path.join(os.path.dirname(__file__), "mmod_human_face_detector.dat")
-        except:
+        dlib_cnn_face_detector_path = os.path.join(os.path.dirname(__file__), "mmod_human_face_detector.dat")
+        if not os.path.exists(dlib_cnn_face_detector_path):
             raise Exception ("Error: Unable to find %s, reinstall the lib !" % (dlib_cnn_face_detector_path) )
         
         if detector == 'cnn' or detector == "all":
