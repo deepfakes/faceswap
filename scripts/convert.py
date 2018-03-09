@@ -180,7 +180,7 @@ class ConvertImage(DirectoryProcessor):
                     if face.r != 0:
                         image = rotate_image(image, face.r)
                         image = converter.patch_image(image, face)
-                        if face.r != 0: image = rotate_image(image, face.r * -1)
+                        image = rotate_image(image, face.r * -1)
                     else:
                         image = converter.patch_image(image, face)
 
