@@ -40,7 +40,7 @@ class Trainer():
         self.lrD = 2e-4 # Discriminator learning rate
         self.lrG = 2e-4 # Generator learning rate
 
-        generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 1)
+        generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 2)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
 
@@ -49,8 +49,8 @@ class Trainer():
         self.setup()
 
     def setup(self):
-        distorted_A, fake_A, mask_A, self.path_A, self.path_mask_A, self.path_abgr_A, self.path_bgr_A = self.cycle_variables(self.model.netGA)
-        distorted_B, fake_B, mask_B, self.path_B, self.path_mask_B, self.path_abgr_B, self.path_bgr_B = self.cycle_variables(self.model.netGB)
+        distorted_A, fake_A, fake_sz64_A, mask_A, self.path_A, self.path_mask_A, self.path_abgr_A, self.path_bgr_A = self.cycle_variables(self.model.netGA)
+        distorted_B, fake_B, fake_sz64_B, mask_B, self.path_B, self.path_mask_B, self.path_abgr_B, self.path_bgr_B = self.cycle_variables(self.model.netGB)
         real_A = Input(shape=self.model.img_shape)
         real_B = Input(shape=self.model.img_shape)
 
@@ -79,11 +79,11 @@ class Trainer():
             netDA_feat = netDB_feat = vggface_feat = None
 
         #TODO check "Tips for mask refinement (optional after >15k iters)" => https://render.githubusercontent.com/view/ipynb?commit=87d6e7a28ce754acd38d885367b6ceb0be92ec54&enc_url=68747470733a2f2f7261772e67697468756275736572636f6e74656e742e636f6d2f7368616f616e6c752f66616365737761702d47414e2f383764366537613238636537353461636433386438383533363762366365623062653932656335342f46616365537761705f47414e5f76325f737a3132385f747261696e2e6970796e62&nwo=shaoanlu%2Ffaceswap-GAN&path=FaceSwap_GAN_v2_sz128_train.ipynb&repository_id=115182783&repository_type=Repository#Tips-for-mask-refinement-(optional-after-%3E15k-iters)
-        loss_DA, loss_DA2, loss_GA, loss_DA_feat, loss_DA_code = self.define_loss(self.model.netDA, self.model.netDA2, netDA_feat, self.model.netD_code, self.model.netGA, real_A, fake_A, distorted_A, "A", vggface_feat)
-        loss_DB, loss_DB2, loss_GB, loss_DB_feat, loss_DB_code = self.define_loss(self.model.netDB, self.model.netDB2, netDB_feat, self.model.netD_code, self.model.netGB, real_B, fake_B, distorted_B, "B", vggface_feat)
+        loss_DA, loss_DA2, loss_GA, loss_DA_feat, loss_DA_code = self.define_loss(self.model.netDA, self.model.netDA2, netDA_feat, self.model.netD_code, self.model.netGA, real_A, fake_A, fake_sz64_A, distorted_A, "A", vggface_feat)
+        loss_DB, loss_DB2, loss_GB, loss_DB_feat, loss_DB_code = self.define_loss(self.model.netDB, self.model.netDB2, netDB_feat, self.model.netD_code, self.model.netGB, real_B, fake_B, fake_sz64_B, distorted_B, "B", vggface_feat)
 
-        loss_GA += 1e-3 * K.mean(K.abs(mask_A))
-        loss_GB += 1e-3 * K.mean(K.abs(mask_B))
+        loss_GA += 3e-3 * K.mean(K.abs(mask_A))
+        loss_GB += 3e-3 * K.mean(K.abs(mask_B))
 
         w_fo = 0.01
         loss_GA += w_fo * K.mean(self.first_order(mask_A, axis=1))
@@ -164,12 +164,12 @@ class Trainer():
         # For calculating average losses
         self.errDA_sum += errDA[0]
         self.errDB_sum += errDB[0]
-        self.errGA_sum += errGA[0]
-        self.errGB_sum += errGB[0]
         self.errDA2_sum += errDA2[0]
         self.errDB2_sum += errDB2[0]
         self.errDA_code_sum += errDA_code[0]
         self.errDB_code_sum += errDB_code[0]
+        self.errGA_sum += errGA[0]
+        self.errGB_sum += errGB[0]
         self.avg_counter += 1
 
         errDA_avg = self.errDA_sum/self.avg_counter
@@ -194,6 +194,7 @@ class Trainer():
     def cycle_variables(self, netG):
         distorted_input = netG.inputs[0]
         fake_output = netG.outputs[0]
+        fake_output64 = netG.outputs[2]
         alpha = Lambda(lambda x: x[:,:,:, :1])(fake_output)
         rgb = Lambda(lambda x: x[:,:,:, 1:])(fake_output)
 
@@ -203,9 +204,9 @@ class Trainer():
         fn_mask = K.function([distorted_input], [concatenate([alpha, alpha, alpha])])
         fn_abgr = K.function([distorted_input], [concatenate([alpha, rgb])])
         fn_bgr = K.function([distorted_input], [rgb])
-        return distorted_input, fake_output, alpha, fn_generate, fn_mask, fn_abgr, fn_bgr
+        return distorted_input, fake_output, fake_output64, alpha, fn_generate, fn_mask, fn_abgr, fn_bgr
 
-    def define_loss(self, netD, netD2, netD_feat, netD_code, netG, real, fake_argb, distorted, domain, vggface_feat=None):
+    def define_loss(self, netD, netD2, netD_feat, netD_code, netG, real, fake_argb, fake_sz64, distorted, domain, vggface_feat=None):
         alpha = Lambda(lambda x: x[:,:,:, :1])(fake_argb)
         fake_rgb = Lambda(lambda x: x[:,:,:, 1:])(fake_argb)
         fake = alpha * fake_rgb + (1-alpha) * distorted
@@ -219,6 +220,7 @@ class Trainer():
         output_mixup = netD(mixup)
         loss_D = self.loss_fn(output_mixup, lam * K.ones_like(output_mixup))
         loss_G = .5 * self.loss_fn(output_mixup, (1 - lam) * K.ones_like(output_mixup))
+
         # Loss of raw output
         #real_shuffled = Lambda(lambda x: tf.random_shuffle(x))(real)
         lam2 = dist.sample()
@@ -245,6 +247,7 @@ class Trainer():
         # ==========
         # L1 loss
         loss_G += 3 * K.mean(K.abs(fake_rgb - real))
+        loss_G += 3 * K.mean(K.abs(fake_sz64 - tf.image.resize_images(real, [64, 64])))
         # ==========
 
         loss_D_feat = 0

@@ -1,4 +1,5 @@
-# Based on the https://github.com/shaoanlu/faceswap-GAN repo (master/temp/faceswap_GAN_keras.ipynb)
+# Based on the https://github.com/shaoanlu/faceswap-GAN repo
+# source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
 from keras.models import Model
 from keras.layers import *
@@ -11,13 +12,13 @@ from keras.optimizers import Adam
 from lib.PixelShuffler import PixelShuffler
 from .instance_normalization import InstanceNormalization
 
-netGAH5 = 'netGA_GAN.h5'
-netGBH5 = 'netGB_GAN.h5'
-netDAH5 = 'netDA_GAN.h5'
-netDBH5 = 'netDB_GAN.h5'
-netDA2H5 = 'netDA_GAN.h5'
-netDB2H5 = 'netDB_GAN.h5'
-netD_codeH5 = 'netD_code_GAN.h5'
+netGAH5 = 'netGA_GAN128.h5'
+netGBH5 = 'netGB_GAN128.h5'
+netDAH5 = 'netDA_GAN128.h5'
+netDBH5 = 'netDB_GAN128.h5'
+netDA2H5 = 'netDA_GAN128.h5'
+netDB2H5 = 'netDB_GAN128.h5'
+netD_codeH5 = 'netD_code_GAN128.h5'
 
 def __conv_init(a):
     print("conv_init", a)
@@ -29,7 +30,7 @@ conv_init = RandomNormal(0, 0.02)
 gamma_init = RandomNormal(1., 0.02) # for batch normalization
 
 class GANModel():
-    img_size = 64
+    img_size = 128
     channels = 3
     img_shape = (img_size, img_size, channels)
     encoded_dim = 1024
@@ -55,7 +56,7 @@ class GANModel():
 
         def conv_block(input_tensor, f, k=3, strides=2, dilation_rate=1, use_instance_norm=True):
             x = input_tensor
-            x = Conv2D(f, kernel_size=k, strides=strides, dilation_rate=dilation_rate, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
+            x = SeparableConv2D(f, kernel_size=k, strides=strides, dilation_rate=dilation_rate, kernel_initializer=conv_init, use_bias=False, padding="same")(x)
             if use_instance_norm:
                 x = InstanceNormalization()(x)
             x = LeakyReLU(alpha=0.1)(x)
@@ -73,21 +74,22 @@ class GANModel():
 
         def upscale_ps(filters, dilation_rate=1, use_instance_norm=True):
             def block(x):
-                x = Conv2D(filters*4, kernel_size=3, use_bias=True, kernel_initializer=RandomNormal(0, 0.02), padding='same')(x)
+                x = Conv2D(filters*4, kernel_size=3, dilation_rate=dilation_rate, use_bias=True, kernel_initializer=RandomNormal(0, 0.02), padding='same')(x)
                 x = InstanceNormalization()(x)
                 x = LeakyReLU(0.1)(x)
                 x = PixelShuffler()(x)
                 return x
             return block
 
-        def Encoder(nc_in=3, input_size=64):
+        def Encoder(nc_in=3, input_size=128):
             def l2_norm(x):
                 epsilon = 1e-12
                 x_norm = K.sqrt(K.sum(K.square(x)))
                 return x / (x_norm + epsilon)
             inp = Input(shape=(input_size, input_size, nc_in))
-            x = Conv2D(64, kernel_size=5, kernel_initializer=conv_init, use_bias=False, padding="same")(inp)
+            x = Conv2D(32, kernel_size=5, kernel_initializer=conv_init, use_bias=False, padding="same")(inp)
             x = LeakyReLU(0.1)(x)
+            x = conv_block(x,64)
             x = conv_block(x,128)
             x = conv_block(x,256)
             x = conv_block(x,512)
@@ -111,13 +113,22 @@ class GANModel():
             x = upscale_ps(128)(x)
             x = upscale_ps(64)(x)
             x = res_block(x, 64)
+
+            out64 = Conv2D(64, kernel_size=3, padding='same')(x)
+            out64 = LeakyReLU(alpha=0.1)(out64)
+            out64 = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(out64)
+
+            x = upscale_ps(32)(x)
+            x = res_block(x, 32)
+            x = res_block(x, 32)
             x, _ = mixed_scaled_dense_network(x, 16, 64, 4)
+
             alpha = Lambda(lambda x: x[:,:,:,0:1])(x)
             alpha = Activation("sigmoid")(alpha)
             bgr = Lambda(lambda x: x[:,:,:,1:])(x)
             bgr = Activation("tanh")(bgr)
             out = concatenate([alpha, bgr])
-            return Model([inp, code], [out, code])
+            return Model([inp, code], [out, code, out64])
 
         def mixed_scaled_dense_network(input_tensor, num_layers=32, nc_in=3, nc_out=1):
             """
@@ -227,26 +238,28 @@ class GANModel():
             x = LeakyReLU(alpha=0.2)(x)
             return x
 
-        def Discriminator(nc_in, input_size=64):
-            inp = Input(shape=(input_size, input_size, nc_in))
-            #x = GaussianNoise(0.05)(inp)
-            x = conv_block_d(inp, 64, False)
-            x = conv_block_d(x, 128)
-            x = conv_block_d(x, 256)
-            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)
-            return Model(inputs=[inp], outputs=out)
-
-        def Discriminator2(nc_in, input_size=64):
+        def Discriminator(nc_in, input_size=128):
             inp = Input(shape=(input_size, input_size, nc_in))
             #x = GaussianNoise(0.05)(inp)
             x = conv_block_d(inp, 64, False)
             x = conv_block_d(x, 128)
             x = conv_block_d(x, 256)
             x = conv_block_d(x, 512)
+            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)
+            return Model(inputs=[inp], outputs=out)
+
+        def Discriminator2(nc_in, input_size=128):
+            inp = Input(shape=(input_size, input_size, nc_in))
+            #x = GaussianNoise(0.05)(inp)
+            x = conv_block_d(inp, 64, False)
+            x = conv_block_d(x, 128)
+            x = conv_block_d(x, 256)
+            x = conv_block_d(x, 512)
+            x = conv_block_d(x, 1024)
             out = Conv2D(1, kernel_size=3, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)
             return Model(inputs=[inp], outputs=out)
 
-        def Discriminator3(nc_in, input_size=64):
+        def Discriminator3(nc_in, input_size=128):
             inp = Input(shape=(input_size, input_size, nc_in))
             x = conv_block_d(inp, 32, False)
             x = mixnet_block(x, 12)

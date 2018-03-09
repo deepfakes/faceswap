@@ -8,11 +8,11 @@ class Convert(object):
         self.encoder = encoder
 
     def patch_image( self, original, face_detected ):
-        face = cv2.resize(face_detected.image, (64, 64))
+        face = cv2.resize(face_detected.image, (128, 128))
         face = numpy.expand_dims(face, 0) / 255.0 * 2 - 1
         fake_output = self.encoder(face)
-        mask = fake_output[:,:,:, :1]
-        new_face = fake_output[:,:,:, 1:]
+        mask = fake_output[0][:,:,:, :1]
+        new_face = fake_output[0][:,:,:, 1:]
         new_face = mask * new_face + (1 - mask) * face
         new_face = numpy.clip((new_face[0] + 1) * 255 / 2, 0, 255).astype('uint8')
 

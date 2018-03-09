@@ -6,9 +6,11 @@ from .utils import BackgroundGenerator
 from .umeyama import umeyama
 
 class TrainingDataGenerator():
-    def __init__(self, random_transform_args, coverage):
+    def __init__(self, random_transform_args, coverage, scale=5, zoom=1): #TODO thos default should stay in the warp function
         self.random_transform_args = random_transform_args
         self.coverage = coverage
+        self.scale = scale
+        self.zoom = zoom
 
     def minibatchAB(self, images, batchsize):
         batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
@@ -42,7 +44,7 @@ class TrainingDataGenerator():
         
         image = cv2.resize(image, (256,256))
         image = self.random_transform( image, **self.random_transform_args )
-        warped_img, target_img = self.random_warp( image, self.coverage )
+        warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
         
         return warped_img, target_img
 
@@ -61,25 +63,25 @@ class TrainingDataGenerator():
         return result
 
     # get pair of random warped images from aligned face image
-    def random_warp(self, image, coverage):
+    def random_warp(self, image, coverage, scale = 5, zoom = 1):
         assert image.shape == (256, 256, 3)
         range_ = numpy.linspace(128 - coverage//2, 128 + coverage//2, 5)
         mapx = numpy.broadcast_to(range_, (5, 5))
         mapy = mapx.T
 
-        mapx = mapx + numpy.random.normal(size=(5, 5), scale=5)
-        mapy = mapy + numpy.random.normal(size=(5, 5), scale=5)
+        mapx = mapx + numpy.random.normal(size=(5,5), scale=scale)
+        mapy = mapy + numpy.random.normal(size=(5,5), scale=scale)
 
-        interp_mapx = cv2.resize(mapx, (80, 80))[8:72, 8:72].astype('float32')
-        interp_mapy = cv2.resize(mapy, (80, 80))[8:72, 8:72].astype('float32')
+        interp_mapx = cv2.resize(mapx, (80*zoom,80*zoom))[8*zoom:72*zoom,8*zoom:72*zoom].astype('float32')
+        interp_mapy = cv2.resize(mapy, (80*zoom,80*zoom))[8*zoom:72*zoom,8*zoom:72*zoom].astype('float32')
 
         warped_image = cv2.remap(image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)
 
-        src_points = numpy.stack([mapx.ravel(), mapy.ravel()], axis=-1)
-        dst_points = numpy.mgrid[0:65:16, 0:65:16].T.reshape(-1, 2)
+        src_points = numpy.stack([mapx.ravel(), mapy.ravel() ], axis=-1)
+        dst_points = numpy.mgrid[0:65*zoom:16*zoom,0:65*zoom:16*zoom].T.reshape(-1,2)
         mat = umeyama(src_points, dst_points, True)[0:2]
 
-        target_image = cv2.warpAffine(image, mat, (64, 64))
+        target_image = cv2.warpAffine(image, mat, (64*zoom,64*zoom))
 
         return warped_image, target_image
 

@@ -6,11 +6,11 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.optimizers import Adam
 
-from .Model_Original import AutoEncoder, Trainer
+from .AutoEncoder import AutoEncoder
 from lib.PixelShuffler import PixelShuffler
 
 IMAGE_SHAPE = (64, 64, 3)
-ENCODER_DIM = 512
+ENCODER_DIM = 1024
 
 class Model(AutoEncoder):
     def initModel(self):
@@ -48,7 +48,7 @@ class Model(AutoEncoder):
         x = self.conv(128)(x)
         x = self.conv(256)(x)
         x = self.conv(512)(x)
-        #x = self.conv(1024)(x)
+        x = self.conv(1024)(x)
         x = Dense(ENCODER_DIM)(Flatten()(x))
         x = Dense(4 * 4 * 1024)(x)
         x = Reshape((4, 4, 1024))(x)
