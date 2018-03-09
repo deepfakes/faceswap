@@ -9,8 +9,9 @@ decoder_AH5 = 'decoder_A.h5'
 decoder_BH5 = 'decoder_B.h5'
 
 class ModelAE:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, gpus=1):
         self.model_dir = model_dir
+        self.gpus = gpus
 
         self.encoder = self.Encoder()
         self.decoder_A = self.Decoder()
@@ -46,7 +47,8 @@ class TrainerAE():
         'random_flip': 0.4,
     }
 
-    def __init__(self, model, fn_A, fn_B, batch_size=64):
+    def __init__(self, model, fn_A, fn_B, batch_size=64, gpus=1):
+        self.gpus=gpus
         self.batch_size = batch_size
         self.model = model
 
