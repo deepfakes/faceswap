@@ -36,7 +36,8 @@ FACIAL_LANDMARKS_IDXS = OrderedDict([
     ("right_eye", (36, 42)),
     ("left_eye", (42, 48)),
     ("nose", (27, 36)),
-    ("jaw", (0, 17))
+    ("jaw", (0, 17)),
+    ("chin", (8, 11))
 ])
 
 # Returns a rotation matrix that when applied to the 68 input facial landmarks
