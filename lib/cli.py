@@ -71,6 +71,7 @@ class DirectoryProcessor(object):
             print('Input directory not found. Please ensure it exists.')
             exit(1)
 
+        self.detector = self.arguments.detector
         self.filter = self.load_filter()
         self.process()
         self.finalize()
@@ -132,7 +133,8 @@ class DirectoryProcessor(object):
             face = DetectedFace(**rawface)
             face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             if self.filter is not None and not self.filter.check(face):
-                print('Skipping not recognized face!')
+                if self.arguments.verbose:
+                    print('Skipping not recognized face!')
                 continue
 
             yield faces_count, face
@@ -144,11 +146,12 @@ class DirectoryProcessor(object):
 
     def get_faces(self, image):
         faces_count = 0
-        faces = detect_faces(image, self.arguments.detector)
+        faces = detect_faces(image, self.detector, self.arguments.verbose)
         
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
-                print('Skipping not recognized face!')
+                if self.arguments.verbose:
+                    print('Skipping not recognized face!')
                 continue
             yield faces_count, face
 

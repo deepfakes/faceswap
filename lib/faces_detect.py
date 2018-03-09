@@ -1,8 +1,8 @@
 from lib import FaceLandmarksExtractor
 
-def detect_faces(frame, model="hog"):
-    fd = FaceLandmarksExtractor.extract (frame, True if model == "cnn" else False )
-    for face in fd:
+def detect_faces(frame, detector, verbose):
+    fd = FaceLandmarksExtractor.extract (frame, detector, verbose)
+    for face in fd:    
         x, y, right, bottom, landmarks = face[0][0], face[0][1], face[0][2], face[0][3], face[1]
         yield DetectedFace(frame[y: bottom, x: right], x, right - x, y, bottom - y, landmarksXY=landmarks)
 

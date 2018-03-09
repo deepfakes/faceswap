@@ -22,7 +22,7 @@ class ExtractTrainingData(DirectoryProcessor):
     def add_optional_arguments(self, parser):
         parser.add_argument('-D', '--detector',
                             type=str,
-                            choices=("hog", "cnn"), # case sensitive because this is used to load a plugin.
+                            choices=("hog", "cnn", "all"), # case sensitive because this is used to load a plugin.
                             default="hog",
                             help="Detector to use. 'cnn' detects much more angles but will be much more resource intensive and may fail on large files.")
 
@@ -68,7 +68,8 @@ class ExtractTrainingData(DirectoryProcessor):
                         image = cv2.imread(filename)
                         self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
                 except Exception as e:
-                    print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                    if self.arguments.verbose:
+                        print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
         finally:
             self.write_alignments()
 
@@ -77,21 +78,22 @@ class ExtractTrainingData(DirectoryProcessor):
             image = cv2.imread(filename)
             return filename, self.handleImage(image, filename)
         except Exception as e:
-            print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+            if self.arguments.verbose:
+                print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
 
     def handleImage(self, image, filename):
         count = 0
 
         faces = self.get_faces(image)
         rvals = []
+
         for idx, face in faces:
             count = idx
-             
             # Draws landmarks for debug
             if self.arguments.debug_landmarks:
                 for (x, y) in face.landmarksAsXY():
                     cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
-                    
+
             resized_image = self.extractor.extract(image, face, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
             cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
