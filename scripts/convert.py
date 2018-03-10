@@ -52,7 +52,7 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-c', '--converter',
                             type=str,
-                            choices=("Masked", "Adjust", "GAN", "GAN128"), # case sensitive because this is used to load a plugin.
+                            choices=("Masked", "Adjust"), # case sensitive because this is used to load a plugin.
                             default="Masked",
                             help="Converter to use.")
 
@@ -129,14 +129,10 @@ class ConvertImage(DirectoryProcessor):
 
     def process(self):
         # Original & LowMem models go with Adjust or Masked converter
-        # GAN converter & model must go together
         # Note: GAN prediction outputs a mask + an image, while other predicts only an image
         model_name = self.arguments.trainer
         conv_name = self.arguments.converter
         self.input_aligned_dir = None
-
-        if model_name.startswith("GAN"):
-            assert conv_name is not "Adjust", "GAN models can't be used with the Adjust converter!"
 
         model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir))
         if not model.load(self.arguments.swap_model):
