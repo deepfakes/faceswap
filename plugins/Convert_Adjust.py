@@ -8,18 +8,18 @@ import os
 class Convert(object):
     def __init__(self, encoder, smooth_mask=True, avg_color_adjust=True, **kwargs):
         self.encoder = encoder
-        
+
         self.use_smooth_mask = smooth_mask
         self.use_avg_color_adjust = avg_color_adjust
 
-    def patch_image( self, original, face_detected ):
+    def patch_image( self, original, face_detected, size ):
         #assert image.shape == (256, 256, 3)
         image = cv2.resize(face_detected.image, (256, 256))
         crop = slice(48, 208)
         face = image[crop, crop]
         old_face = face.copy()
 
-        face = cv2.resize(face, (64, 64))
+        face = cv2.resize(face, (size, size))
         face = numpy.expand_dims(face, 0)
         new_face = self.encoder(face / 255.0)[0]
         new_face = numpy.clip(new_face * 255, 0, 255).astype(image.dtype)

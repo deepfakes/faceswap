@@ -6,13 +6,13 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.optimizers import Adam
 
-from lib.ModelAE import ModelAE, TrainerAE
+from .AutoEncoder import AutoEncoder
 from lib.PixelShuffler import PixelShuffler
 
 IMAGE_SHAPE = (64, 64, 3)
 ENCODER_DIM = 1024
 
-class Model(ModelAE):
+class Model(AutoEncoder):
     def initModel(self):
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
         x = Input(shape=IMAGE_SHAPE)
@@ -63,6 +63,3 @@ class Model(ModelAE):
         x = self.upscale(64)(x)
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         return KerasModel(input_, x)
-
-class Trainer(TrainerAE):
-    """Empty inheritance"""
