@@ -50,6 +50,7 @@ class DirectoryProcessor(object):
         self.arguments = arguments
         print("Input Directory: {}".format(self.arguments.input_dir))
         print("Output Directory: {}".format(self.arguments.output_dir))
+        print("Filter: {}".format(self.arguments.filter))
         self.serializer = None
         if self.arguments.serializer is None and self.arguments.alignments_path is not None:
             ext = os.path.splitext(self.arguments.alignments_path)[-1]
@@ -170,10 +171,19 @@ class DirectoryProcessor(object):
             self.verify_output = True
 
     def load_filter(self):
-        filter_file = self.arguments.filter
-        if Path(filter_file).exists():
-            print('Loading reference image for filtering')
-            return FaceFilter(filter_file)
+        nfilter_files = self.arguments.nfilter
+        if not isinstance(self.arguments.nfilter, list):
+            nfilter_files = [self.arguments.nfilter]
+        nfilter_files = list(filter(lambda fn: Path(fn).exists(), nfilter_files))
+
+        filter_files = self.arguments.filter
+        if not isinstance(self.arguments.filter, list):
+            filter_files = [self.arguments.filter]
+        filter_files = list(filter(lambda fn: Path(fn).exists(), filter_files))
+        
+        if filter_files:
+            print('Loading reference images for filtering: %s' % filter_files)
+            return FaceFilter(filter_files, nfilter_files, self.arguments.ref_threshold)
 
     # for now, we limit this class responsability to the read of files. images and faces are processed outside this class
     def process(self):

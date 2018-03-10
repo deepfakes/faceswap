@@ -26,9 +26,25 @@ class ExtractTrainingData(DirectoryProcessor):
                             default="hog",
                             help="Detector to use. 'cnn' detects much more angles but will be much more resource intensive and may fail on large files.")
 
+        parser.add_argument('-l', '--ref_threshold',
+                            type=float,
+                            dest="ref_threshold",
+                            default=0.6,
+                            help="Threshold for positive face recognition"
+                            )
+
+        parser.add_argument('-n', '--nfilter',
+                            type=str,
+                            dest="nfilter",
+                            nargs='+',
+                            default="nfilter.jpg",
+                            help="Reference image for the persons you do not want to process. Should be a front portrait"
+                            )
+
         parser.add_argument('-f', '--filter',
                             type=str,
                             dest="filter",
+                            nargs='+',
                             default="filter.jpg",
                             help="Reference image for the person you want to process. Should be a front portrait"
                             )
@@ -63,12 +79,13 @@ class ExtractTrainingData(DirectoryProcessor):
                     self.num_faces_detected += 1
                     self.faces_detected[os.path.basename(filename)] = faces
             else:
-                try:
-                    for filename in tqdm(self.read_directory()):
+                for filename in tqdm(self.read_directory()):
+                    try:
                         image = cv2.imread(filename)
                         self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
-                except Exception as e:
-                    print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                    except Exception as e:
+                        print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                        pass
         finally:
             self.write_alignments()
 
@@ -78,6 +95,8 @@ class ExtractTrainingData(DirectoryProcessor):
             return filename, self.handleImage(image, filename)
         except Exception as e:
             print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+            pass
+        return filename, []
 
     def handleImage(self, image, filename):
         count = 0
