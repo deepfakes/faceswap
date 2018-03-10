@@ -1,4 +1,3 @@
-import argparse
 import cv2
 import sys
 from os.path import basename, exists
@@ -45,16 +44,6 @@ def rotate_image(image, angle):
     else:
         print('Unsupported image rotation angle: {}. Image unmodified'.format(angle))
     return image
-
-class FullHelpArgumentParser(argparse.ArgumentParser):
-    """
-    Identical to the built-in argument parser, but on error
-    it prints full help message instead of just usage information
-    """
-    def error(self, message):
-        self.print_help(sys.stderr)
-        args = {'prog': self.prog, 'message': message}
-        self.exit(2, '%(prog)s: error: %(message)s\n' % args)
 
 # From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
 import threading

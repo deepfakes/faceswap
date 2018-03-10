@@ -118,7 +118,7 @@ class ExtractTrainingData(DirectoryProcessor):
             
             resized_image = self.extractor.extract(image, face, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
-            cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
+            cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
             f = {
                 "r": face.r,
                 "x": face.x,

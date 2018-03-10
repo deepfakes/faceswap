@@ -72,9 +72,14 @@ class TrainingProcessor(object):
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem", "GAN"),
+                            choices=("Original", "LowMem", "GAN", "GAN128"),
                             default="Original",
                             help="Select which trainer to use, LowMem for cards < 2gb.")
+        parser.add_argument('-pl', '--use-perceptual-loss',
+                            action="store_true",
+                            dest="perceptual_loss",
+                            default=False,
+                            help="Use perceptual loss while training")
         parser.add_argument('-bs', '--batch-size',
                             type=int,
                             default=64,
@@ -129,7 +134,7 @@ class TrainingProcessor(object):
     def processThread(self):
         if self.arguments.allow_growth:
             self.set_tf_allow_growth()
-        
+
         print('Loading data, this may take a while...')
         # this is so that you can enter case insensitive values for trainer
         trainer = self.arguments.trainer
@@ -140,7 +145,7 @@ class TrainingProcessor(object):
         images_A = get_image_paths(self.arguments.input_A)
         images_B = get_image_paths(self.arguments.input_B)
         trainer = PluginLoader.get_trainer(trainer)
-        trainer = trainer(model, images_A, images_B, batch_size=self.arguments.batch_size)
+        trainer = trainer(model, images_A, images_B, self.arguments.batch_size, self.arguments.perceptual_loss)
 
         try:
             print('Starting. Press "Enter" to stop training and save model')
@@ -171,7 +176,7 @@ class TrainingProcessor(object):
         except Exception as e:
             print(e)
             exit(1)
-    
+
     def set_tf_allow_growth(self):
         import tensorflow as tf
         from keras.backend.tensorflow_backend import set_session
