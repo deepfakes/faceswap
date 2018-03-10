@@ -4,8 +4,8 @@ from pathlib import Path
 from tqdm import tqdm
 import os
 
-from lib.cli import DirectoryProcessor
-from lib.utils import get_folder, rotate_image
+from lib.cli import DirectoryProcessor, rotate_image
+from lib.utils import get_folder
 from lib.multithreading import pool_process
 from plugins.PluginLoader import PluginLoader
 
@@ -51,13 +51,13 @@ class ExtractTrainingData(DirectoryProcessor):
                             help="Draw landmarks for debug.")
 
         parser.add_argument('-r', '--rotate-images',
-                            type=str
+                            type=str,
                             dest="rotate_images",
-                            choices=("on", "off")
+                            choices=("on", "off"),
                             default="off",
                             help="If a face isn't found, rotate the images through 90 degree "
                                  "iterations to try to find a face. Can find more faces at the "
-                                 "cost of extraction speed."
+                                 "cost of extraction speed.")
         return parser
 
     def process(self):
@@ -118,7 +118,7 @@ class ExtractTrainingData(DirectoryProcessor):
             
             resized_image = self.extractor.extract(image, face, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
-            cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
+            cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
             f = {
                 "r": face.r,
                 "x": face.x,
