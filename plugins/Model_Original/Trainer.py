@@ -11,7 +11,7 @@ class Trainer():
         'random_flip': 0.4,
     }
 
-    def __init__(self, model, fn_A, fn_B, batch_size, *args):
+    def __init__(self, model, fn_A, fn_B, batch_size=64):
         self.batch_size = batch_size
         self.model = model
 
@@ -43,8 +43,14 @@ class Trainer():
             self.model.autoencoder_A.predict(test_B),
         ], axis=1)
 
+        if test_A.shape[0] % 2 == 1:
+            figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0],0) ])
+            figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0],0) ])
+        
         figure = numpy.concatenate([figure_A, figure_B], axis=0)
-        figure = figure.reshape((4, 7) + figure.shape[1:])
+        w = 4
+        h = int( figure.shape[0] / w)        
+        figure = figure.reshape((w, h) + figure.shape[1:])        
         figure = stack_images(figure)
-
+        
         return numpy.clip(figure * 255, 0, 255).astype('uint8')
