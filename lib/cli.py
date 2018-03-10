@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from lib.FaceFilter import FaceFilter
 from lib.faces_detect import detect_faces, DetectedFace
-from lib.utils import get_image_paths, get_folder
+from lib.utils import get_image_paths, get_folder, rotate_image
 from lib import Serializer
 
 class FullPaths(argparse.Action):
@@ -142,6 +142,8 @@ class DirectoryProcessor(object):
         faces = self.faces_detected[os.path.basename(filename)]
         for rawface in faces:
             face = DetectedFace(**rawface)
+            # Rotate the image if necessary
+            if face.r != 0: image = rotate_image(image, face.r)
             face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
@@ -154,9 +156,9 @@ class DirectoryProcessor(object):
             print('Note: Found more than one face in an image! File: %s' % filename)
             self.verify_output = True
 
-    def get_faces(self, image):
+    def get_faces(self, image, rotation=0):
         faces_count = 0
-        faces = detect_faces(image, self.arguments.detector)
+        faces = detect_faces(image, rotation, self.arguments.detector)
         
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
