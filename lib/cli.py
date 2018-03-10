@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from lib.FaceFilter import FaceFilter
 from lib.faces_detect import detect_faces, DetectedFace
-from lib.utils import get_image_paths, get_folder
+from lib.utils import get_image_paths, get_folder, rotate_image
 from lib import Serializer
 
 class FullPaths(argparse.Action):
@@ -50,6 +50,7 @@ class DirectoryProcessor(object):
         self.arguments = arguments
         print("Input Directory: {}".format(self.arguments.input_dir))
         print("Output Directory: {}".format(self.arguments.output_dir))
+        print("Filter: {}".format(self.arguments.filter))
         self.serializer = None
         if self.arguments.serializer is None and self.arguments.alignments_path is not None:
             ext = os.path.splitext(self.arguments.alignments_path)[-1]
@@ -141,6 +142,8 @@ class DirectoryProcessor(object):
         faces = self.faces_detected[os.path.basename(filename)]
         for rawface in faces:
             face = DetectedFace(**rawface)
+            # Rotate the image if necessary
+            if face.r != 0: image = rotate_image(image, face.r)
             face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             if self.filter is not None and not self.filter.check(face):
                 print('Skipping not recognized face!')
@@ -153,9 +156,9 @@ class DirectoryProcessor(object):
             print('Note: Found more than one face in an image! File: %s' % filename)
             self.verify_output = True
 
-    def get_faces(self, image):
+    def get_faces(self, image, rotation=0):
         faces_count = 0
-        faces = detect_faces(image, self.arguments.detector)
+        faces = detect_faces(image, rotation, self.arguments.detector)
         
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
@@ -170,10 +173,19 @@ class DirectoryProcessor(object):
             self.verify_output = True
 
     def load_filter(self):
-        filter_file = self.arguments.filter
-        if Path(filter_file).exists():
-            print('Loading reference image for filtering')
-            return FaceFilter(filter_file)
+        nfilter_files = self.arguments.nfilter
+        if not isinstance(self.arguments.nfilter, list):
+            nfilter_files = [self.arguments.nfilter]
+        nfilter_files = list(filter(lambda fn: Path(fn).exists(), nfilter_files))
+
+        filter_files = self.arguments.filter
+        if not isinstance(self.arguments.filter, list):
+            filter_files = [self.arguments.filter]
+        filter_files = list(filter(lambda fn: Path(fn).exists(), filter_files))
+        
+        if filter_files:
+            print('Loading reference images for filtering: %s' % filter_files)
+            return FaceFilter(filter_files, nfilter_files, self.arguments.ref_threshold)
 
     # for now, we limit this class responsability to the read of files. images and faces are processed outside this class
     def process(self):
