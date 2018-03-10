@@ -79,5 +79,7 @@ class Model(AutoEncoder):
         x = self.upscale(16)(x)
         x = self.res_block(x, 16)
         x = self.res_block(x, 16)
+        x = self.res_block(x, 16)
+        x = self.res_block(x, 16)
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         return KerasModel(input_, x)
