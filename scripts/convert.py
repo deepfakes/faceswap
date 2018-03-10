@@ -40,8 +40,8 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem", "GAN", "GAN128"), # case sensitive because this is used to load a plug-in.
-                            default="Original",
+                            choices=PluginLoader.get_available_models(), # case sensitive because this is used to load a plug-in.
+                            default=PluginLoader.get_default_model(),
                             help="Select the trainer that was used to create the model.")
 
         parser.add_argument('-s', '--swap-model',

@@ -72,8 +72,8 @@ class TrainingProcessor(object):
                             help="Writes the training result to a file even on preview mode.")
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem", "GAN", "GAN128"),
-                            default="Original",
+                            choices=PluginLoader.get_available_models(),
+                            default=PluginLoader.get_default_model(),
                             help="Select which trainer to use, LowMem for cards < 2gb.")
         parser.add_argument('-pl', '--use-perceptual-loss',
                             action="store_true",
