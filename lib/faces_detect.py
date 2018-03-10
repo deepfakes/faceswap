@@ -7,7 +7,7 @@ def detect_faces(frame, rotation=0, model="hog"):
         yield DetectedFace(frame[y: bottom, x: right], rotation, x, right - x, y, bottom - y, landmarksXY=landmarks)
 
 class DetectedFace(object):
-    def __init__(self, image=None, r=None, x=None, w=None, y=None, h=None, landmarksXY=None):
+    def __init__(self, image=None, r=0, x=None, w=None, y=None, h=None, landmarksXY=None):
         self.image = image
         self.r = r
         self.x = x
