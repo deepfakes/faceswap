@@ -46,11 +46,11 @@ class Trainer():
         if test_A.shape[0] % 2 == 1:
             figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0],0) ])
             figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0],0) ])
-        
+
         figure = numpy.concatenate([figure_A, figure_B], axis=0)
         w = 4
-        h = int( figure.shape[0] / w)        
-        figure = figure.reshape((w, h) + figure.shape[1:])        
+        h = int( figure.shape[0] / w)
+        figure = figure.reshape((w, h) + figure.shape[1:])
         figure = stack_images(figure)
-        
+
         return numpy.clip(figure * 255, 0, 255).astype('uint8')

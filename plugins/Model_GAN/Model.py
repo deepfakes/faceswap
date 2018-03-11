@@ -11,6 +11,8 @@ from keras.optimizers import Adam
 from lib.PixelShuffler import PixelShuffler
 from .instance_normalization import InstanceNormalization
 
+from keras.utils import multi_gpu_model
+
 netGAH5 = 'netGA_GAN.h5'
 netGBH5 = 'netGB_GAN.h5'
 netDAH5 = 'netDA_GAN.h5'
@@ -19,7 +21,7 @@ netDBH5 = 'netDB_GAN.h5'
 def __conv_init(a):
     print("conv_init", a)
     k = RandomNormal(0, 0.02)(a) # for convolution kernel
-    k.conv_weight = True    
+    k.conv_weight = True
     return k
 
 #def batchnorm():
@@ -32,15 +34,16 @@ conv_init = RandomNormal(0, 0.02)
 gamma_init = RandomNormal(1., 0.02) # for batch normalization
 
 class GANModel():
-    img_size = 64 
+    img_size = 64
     channels = 3
     img_shape = (img_size, img_size, channels)
     encoded_dim = 1024
     nc_in = 3 # number of input channels of generators
     nc_D_inp = 6 # number of input channels of discriminators
 
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
+        self.gpus = gpus
 
         optimizer = Adam(1e-4, 0.5)
 
@@ -84,7 +87,7 @@ class GANModel():
             x = Conv2D(64, kernel_size=5, kernel_initializer=conv_init, use_bias=False, padding="same")(inp)
             x = conv_block(x,128)
             x = conv_block(x,256)
-            x = conv_block(x,512) 
+            x = conv_block(x,512)
             x = conv_block(x,1024)
             x = Dense(1024)(Flatten()(x))
             x = Dense(4*4*1024)(x)
@@ -100,18 +103,23 @@ class GANModel():
             x = upscale_ps(64)(x)
             x = res_block(x, 64)
             x = res_block(x, 64)
-            #x = Conv2D(4, kernel_size=5, padding='same')(x)   
+            #x = Conv2D(4, kernel_size=5, padding='same')(x)
             alpha = Conv2D(1, kernel_size=5, padding='same', activation="sigmoid")(x)
             rgb = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(x)
             out = concatenate([alpha, rgb])
             return Model(input_, out )
-        
+
         encoder = Encoder()
         decoder_A = Decoder_ps()
-        decoder_B = Decoder_ps()    
+        decoder_B = Decoder_ps()
         x = Input(shape=self.img_shape)
         netGA = Model(x, decoder_A(encoder(x)))
-        netGB = Model(x, decoder_B(encoder(x)))           
+        netGB = Model(x, decoder_B(encoder(x)))
+
+        if self.gpus > 1:
+            netGA = multi_gpu_model( netGA , self.gpus)
+            netGB = multi_gpu_model( netGB , self.gpus)
+
         try:
             netGA.load_weights(str(self.model_dir / netGAH5))
             netGB.load_weights(str(self.model_dir / netGBH5))
@@ -134,11 +142,11 @@ class GANModel():
             x = conv_block_d(inp, 64, False)
             x = conv_block_d(x, 128, False)
             x = conv_block_d(x, 256, False)
-            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)   
+            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)
             return Model(inputs=[inp], outputs=out)
-        
+
         netDA = Discriminator(self.nc_D_inp)
-        netDB = Discriminator(self.nc_D_inp)        
+        netDB = Discriminator(self.nc_D_inp)
         try:
             netDA.load_weights(str(self.model_dir / netDAH5))
             netDB.load_weights(str(self.model_dir / netDBH5))
@@ -146,14 +154,14 @@ class GANModel():
         except:
             print ("Discriminator weights files not found.")
             pass
-        return netDA, netDB    
-    
+        return netDA, netDB
+
     def load(self, swapped):
         if swapped:
             print("swapping not supported on GAN")
             # TODO load is done in __init__ => look how to swap if possible
         return True
-    
+
     def save_weights(self):
         self.netGA.save_weights(str(self.model_dir / netGAH5))
         self.netGB.save_weights(str(self.model_dir / netGBH5))
