@@ -105,25 +105,26 @@ def get_pts_from_predict(a, center, scale):
     c += 0.5
     return [ transform (c[i], center, scale, a.shape[2]) for i in range(a.shape[0]) ]
 
-def initialize(scale_to=2048):
+def initialize(detector, scale_to=2048):
     global dlib_detectors
     global keras_model
     global is_initialized
-    if not is_initialized:       
-        
+    if not is_initialized:
         dlib_cnn_face_detector_path = os.path.join(os.path.dirname(__file__), "mmod_human_face_detector.dat")
         if not os.path.exists(dlib_cnn_face_detector_path):
             raise Exception ("Error: Unable to find %s, reinstall the lib !" % (dlib_cnn_face_detector_path) )
-        else:
+        
+        if detector == 'cnn' or detector == "all":
             dlib_cnn_face_detector = dlib.cnn_face_detection_model_v1(dlib_cnn_face_detector_path)            
             #DLIB and TF competiting for VRAM, so dlib must do first allocation to prevent OOM error 
             dlib_cnn_face_detector ( np.zeros ( (scale_to, scale_to, 3), dtype=np.uint8), 0 ) 
             dlib_detectors.append(dlib_cnn_face_detector)
-    
-        dlib_face_detector = dlib.get_frontal_face_detector()
-        dlib_face_detector ( np.zeros ( (scale_to, scale_to, 3), dtype=np.uint8), 0 )
-        dlib_detectors.append(dlib_face_detector)        
         
+        if detector == "hog" or detector == "all":
+            dlib_face_detector = dlib.get_frontal_face_detector()
+            dlib_face_detector ( np.zeros ( (scale_to, scale_to, 3), dtype=np.uint8), 0 )
+            dlib_detectors.append(dlib_face_detector)        
+    
         keras_model_path = os.path.join( os.path.dirname(__file__) , "2DFAN-4.h5" )
         if not os.path.exists(keras_model_path):
             print ("Error: Unable to find %s, reinstall the lib !" % (keras_model_path) )
@@ -134,8 +135,8 @@ def initialize(scale_to=2048):
         is_initialized = True
 
 #scale_to=2048 with dlib upsamples=0 for 3GB VRAM Windows 10 users        
-def extract(input_image, use_cnn_face_detector=True, all_faces=True, scale_to=2048 ):
-    initialize(scale_to)
+def extract(input_image, detector, verbose, all_faces=True, scale_to=2048):
+    initialize(detector, scale_to)
     global dlib_detectors
     global keras_model
     
@@ -147,16 +148,10 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True, scale_to=20
     input_images = [input_image, input_image_bgr]
  
     detected_faces = []
-    if use_cnn_face_detector:
-        for detector, input_image in ((detector, input_image) for detector in dlib_detectors for input_image in input_images):
-            detected_faces = detector(input_image, 0)
-            if len(detected_faces) != 0:
-                break
-    else:        
-        for input_image in input_images:
-            detected_faces = dlib_detectors[1](input_image, 0)
-            if len(detected_faces) != 0:
-                break
+    for current_detector, input_image in ((current_detector, input_image) for current_detector in dlib_detectors for input_image in input_images):
+        detected_faces = current_detector(input_image, 0)
+        if len(detected_faces) != 0:
+            break
 
     landmarks = []
     if len(detected_faces) > 0:        
@@ -180,7 +175,7 @@ def extract(input_image, use_cnn_face_detector=True, all_faces=True, scale_to=20
             pts_img = get_pts_from_predict ( keras_model.predict (image)[-1][0], center, scale)
             pts_img = [ ( int(pt[0]/input_scale), int(pt[1]/input_scale) ) for pt in pts_img ]             
             landmarks.append ( ((  int(left/input_scale), int(top/input_scale), int(right/input_scale), int(bottom/input_scale) ),pts_img) )
-    else:
+    elif verbose:
         print("Warning: No faces were detected.")
         
     return landmarks
