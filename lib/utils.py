@@ -1,4 +1,4 @@
-import argparse
+import cv2
 import sys
 from os.path import basename, exists
 
@@ -31,15 +31,19 @@ def get_image_paths(directory, exclude=[], debug=False):
 
     return dir_contents
 
-class FullHelpArgumentParser(argparse.ArgumentParser):
-    """
-    Identical to the built-in argument parser, but on error
-    it prints full help message instead of just usage information
-    """
-    def error(self, message):
-        self.print_help(sys.stderr)
-        args = {'prog': self.prog, 'message': message}
-        self.exit(2, '%(prog)s: error: %(message)s\n' % args)
+def rotate_image(image, angle):
+    ''' Rotates an image by 90, 180 or 270 degrees. Positive for clockwise, negative for 
+        counterclockwise '''
+    if angle < 0: angle = sum((360, angle))
+    if angle == 90:
+        image = cv2.flip(cv2.transpose(image),flipCode=1)
+    elif angle == 180:
+        image = cv2.flip(image,flipCode=-1)
+    elif angle == 270:
+        image = cv2.flip(cv2.transpose(image),flipCode=0)
+    else:
+        print('Unsupported image rotation angle: {}. Image unmodified'.format(angle))
+    return image
 
 # From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
 import threading

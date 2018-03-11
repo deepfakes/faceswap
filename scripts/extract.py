@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 import os
 
-from lib.cli import DirectoryProcessor
+from lib.cli import DirectoryProcessor, rotate_image
 from lib.utils import get_folder
 from lib.multithreading import pool_process
 from plugins.PluginLoader import PluginLoader
@@ -26,9 +26,25 @@ class ExtractTrainingData(DirectoryProcessor):
                             default="hog",
                             help="Detector to use. 'cnn' detects much more angles but will be much more resource intensive and may fail on large files.")
 
+        parser.add_argument('-l', '--ref_threshold',
+                            type=float,
+                            dest="ref_threshold",
+                            default=0.6,
+                            help="Threshold for positive face recognition"
+                            )
+
+        parser.add_argument('-n', '--nfilter',
+                            type=str,
+                            dest="nfilter",
+                            nargs='+',
+                            default="nfilter.jpg",
+                            help="Reference image for the persons you do not want to process. Should be a front portrait"
+                            )
+
         parser.add_argument('-f', '--filter',
                             type=str,
                             dest="filter",
+                            nargs='+',
                             default="filter.jpg",
                             help="Reference image for the person you want to process. Should be a front portrait"
                             )
@@ -49,7 +65,15 @@ class ExtractTrainingData(DirectoryProcessor):
                             dest="debug_landmarks",
                             default=False,
                             help="Draw landmarks for debug.")
-        
+
+        parser.add_argument('-r', '--rotate-images',
+                            type=str,
+                            dest="rotate_images",
+                            choices=("on", "off"),
+                            default="off",
+                            help="If a face isn't found, rotate the images through 90 degree "
+                                 "iterations to try to find a face. Can find more faces at the "
+                                 "cost of extraction speed.")
         return parser
 
     def process(self):
@@ -63,13 +87,14 @@ class ExtractTrainingData(DirectoryProcessor):
                     self.num_faces_detected += 1
                     self.faces_detected[os.path.basename(filename)] = faces
             else:
-                try:
-                    for filename in tqdm(self.read_directory()):
+                for filename in tqdm(self.read_directory()):
+                    try:
                         image = cv2.imread(filename)
                         self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
-                except Exception as e:
-                    if self.arguments.verbose:
-                        print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                    except Exception as e:
+	                    if self.arguments.verbose:
+	                        print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                        pass
         finally:
             self.write_alignments()
 
@@ -80,22 +105,43 @@ class ExtractTrainingData(DirectoryProcessor):
         except Exception as e:
             if self.arguments.verbose:
                 print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+            pass
+        return filename, []
 
+    def imageRotator(self, image):
+        ''' rotates the image through 90 degree iterations to find a face '''
+        angle = 90
+        while angle <= 270:
+            rotated_image = rotate_image(image, angle)
+            faces = self.get_faces(rotated_image, rotation=angle)
+            rotated_faces = [(idx, face) for idx, face in faces]
+            if len(rotated_faces) != 0:
+                if self.arguments.verbose:
+                    print('found face(s) by rotating image {} degrees'.format(angle))
+                break
+            angle += 90
+        return rotated_faces, rotated_image
+        
     def handleImage(self, image, filename):
-        count = 0
-
         faces = self.get_faces(image)
+        process_faces = [(idx, face) for idx, face in faces]
+
+        # Run image rotator if requested and no faces found        
+        if self.arguments.rotate_images.lower() == 'on' and len(process_faces) == 0:
+            process_faces, image = self.imageRotator(image)
+
         rvals = []
-        for idx, face in faces:
-            count = idx
+        for idx, face in process_faces:
             # Draws landmarks for debug
             if self.arguments.debug_landmarks:
                 for (x, y) in face.landmarksAsXY():
                     cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
+            
             resized_image = self.extractor.extract(image, face, 256)
             output_file = get_folder(self.output_dir) / Path(filename).stem
-            cv2.imwrite(str(output_file) + str(idx) + Path(filename).suffix, resized_image)
+            cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
             f = {
+                "r": face.r,
                 "x": face.x,
                 "w": face.w,
                 "y": face.y,
