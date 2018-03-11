@@ -6,7 +6,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from lib.cli import DirectoryProcessor, FullPaths
-from lib.utils import BackgroundGenerator, get_folder, get_image_paths
+from lib.utils import BackgroundGenerator, get_folder, get_image_paths, rotate_image
 
 from plugins.PluginLoader import PluginLoader
 
@@ -40,8 +40,8 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-t', '--trainer',
                             type=str,
-                            choices=("Original", "LowMem", "GAN", "GAN128", "IAE"), # case sensitive because this is used to load a plug-in.
-                            default="Original",
+                            choices=PluginLoader.get_available_models(), # case sensitive because this is used to load a plug-in.
+                            default=PluginLoader.get_default_model(),
                             help="Select the trainer that was used to create the model.")
 
         parser.add_argument('-s', '--swap-model',
@@ -76,11 +76,27 @@ class ConvertImage(DirectoryProcessor):
                             help="When used with --frame-ranges discards frames that are not processed instead of writing them out unchanged."
                             )
 
+        parser.add_argument('-l', '--ref_threshold',
+                            type=float,
+                            dest="ref_threshold",
+                            default=0.6,
+                            help="Threshold for positive face recognition"
+                            )
+
+        parser.add_argument('-n', '--nfilter',
+                            type=str,
+                            dest="nfilter",
+                            nargs='+',
+                            default="nfilter.jpg",
+                            help="Reference image for the persons you do not want to process. Should be a front portrait"
+                            )
+
         parser.add_argument('-f', '--filter',
                             type=str,
                             dest="filter",
+                            nargs="+",
                             default="filter.jpg",
-                            help="Reference image for the person you want to process. Should be a front portrait"
+                            help="Reference images for the person you want to process. Should be a front portrait"
                             )
 
         parser.add_argument('-b', '--blur-size',
@@ -210,8 +226,15 @@ class ConvertImage(DirectoryProcessor):
                     if self.input_aligned_dir is not None and self.check_skipface(filename, idx):
                         print ('face {} for frame {} was deleted, skipping'.format(idx, os.path.basename(filename)))
                         continue
-                    image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
-                    # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
+                    # Check for image rotations and rotate before mapping face
+                    if face.r != 0:
+                        image = rotate_image(image, face.r)
+                        image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
+                        # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
+                        image = rotate_image(image, face.r * -1)
+                    else:
+                        image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
+                        # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
 
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
