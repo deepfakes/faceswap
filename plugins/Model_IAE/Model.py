@@ -12,8 +12,7 @@ from lib.PixelShuffler import PixelShuffler
 from keras.utils import multi_gpu_model
 
 IMAGE_SHAPE = (64, 64, 3)
-ENCODER_DIM = 512
-
+ENCODER_DIM = 1024
 
 class Model(AutoEncoder):
     def initModel(self):

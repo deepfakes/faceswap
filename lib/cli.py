@@ -146,7 +146,8 @@ class DirectoryProcessor(object):
             if face.r != 0: image = rotate_image(image, face.r)
             face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             if self.filter is not None and not self.filter.check(face):
-                print('Skipping not recognized face!')
+                if self.arguments.verbose:
+                    print('Skipping not recognized face!')
                 continue
 
             yield faces_count, face
@@ -158,11 +159,12 @@ class DirectoryProcessor(object):
 
     def get_faces(self, image, rotation=0):
         faces_count = 0
-        faces = detect_faces(image, rotation, self.arguments.detector)
+        faces = detect_faces(image, self.arguments.detector, self.arguments.verbose, rotation)
         
         for face in faces:
             if self.filter is not None and not self.filter.check(face):
-                print('Skipping not recognized face!')
+                if self.arguments.verbose:
+                    print('Skipping not recognized face!')
                 continue
             yield faces_count, face
 
