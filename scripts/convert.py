@@ -145,7 +145,7 @@ class ConvertImage(DirectoryProcessor):
         parser.add_argument('-g', '--gpus',
                             type=int,
                             default=1,
-                            help="Number of GPUs to use for convert")
+                            help="Number of GPUs to use for conversion")
 
         return parser
 
