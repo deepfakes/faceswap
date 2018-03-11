@@ -92,8 +92,8 @@ class ExtractTrainingData(DirectoryProcessor):
                         image = cv2.imread(filename)
                         self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
                     except Exception as e:
-	                    if self.arguments.verbose:
-	                        print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                        if self.arguments.verbose:
+                            print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
                         pass
         finally:
             self.write_alignments()
