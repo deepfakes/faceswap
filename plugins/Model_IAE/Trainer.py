@@ -12,7 +12,7 @@ class Trainer():
         'random_flip': 0.4,
     }
 
-    def __init__(self, model, fn_A, fn_B, batch_size=64):
+    def __init__(self, model, fn_A, fn_B, batch_size, *args):
         self.batch_size = batch_size
         self.model = model
 
