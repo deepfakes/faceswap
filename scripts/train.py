@@ -93,6 +93,10 @@ class TrainingProcessor(object):
                             type=int,
                             default=1000000,
                             help="Length of training in epochs.")
+        parser.add_argument('-g', '--gpus',
+                            type=int,
+                            default=1,
+                            help="Number of GPUs to use for training")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
@@ -140,7 +144,7 @@ class TrainingProcessor(object):
             # this is so that you can enter case insensitive values for trainer
             trainer = self.arguments.trainer
             trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
-            model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir))
+            model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir), self.arguments.gpus)
             model.load(swapped=False)
 
             images_A = get_image_paths(self.arguments.input_A)

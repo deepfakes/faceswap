@@ -9,8 +9,9 @@ inter_bothH5 = 'IAE_inter_both.h5'
 
 
 class AutoEncoder:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
+        self.gpus = gpus
 
         self.encoder = self.Encoder()
         self.decoder = self.Decoder()
@@ -43,4 +44,3 @@ class AutoEncoder:
         self.inter_A.save_weights(str(self.model_dir / inter_AH5))
         self.inter_B.save_weights(str(self.model_dir / inter_BH5))
         print('saved model weights')
-

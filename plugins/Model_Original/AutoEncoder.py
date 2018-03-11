@@ -5,8 +5,9 @@ decoder_AH5 = 'decoder_A.h5'
 decoder_BH5 = 'decoder_B.h5'
 
 class AutoEncoder:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
+        self.gpus = gpus
 
         self.encoder = self.Encoder()
         self.decoder_A = self.Decoder()

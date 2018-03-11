@@ -141,6 +141,12 @@ class ConvertImage(DirectoryProcessor):
                             dest="avg_color_adjust",
                             default=True,
                             help="Average color adjust. (Adjust converter only)")
+
+        parser.add_argument('-g', '--gpus',
+                            type=int,
+                            default=1,
+                            help="Number of GPUs to use for conversion")
+
         return parser
 
     def process(self):
@@ -150,7 +156,7 @@ class ConvertImage(DirectoryProcessor):
         conv_name = self.arguments.converter
         self.input_aligned_dir = None
 
-        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir))
+        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir), self.arguments.gpus)
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)

@@ -9,6 +9,8 @@ from keras.optimizers import Adam
 from .Model_Original import AutoEncoder, Trainer
 from lib.PixelShuffler import PixelShuffler
 
+from keras.utils import multi_gpu_model
+
 IMAGE_SHAPE = (64, 64, 3)
 ENCODER_DIM = 512
 
@@ -20,11 +22,15 @@ class Model(AutoEncoder):
         self.autoencoder_A = KerasModel(x, self.decoder_A(self.encoder(x)))
         self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))
 
+        if self.gpus > 1:
+            self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
+            self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)
+
         self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
         self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
 
     def converter(self, swap):
-        autoencoder = self.autoencoder_B if not swap else self.autoencoder_A 
+        autoencoder = self.autoencoder_B if not swap else self.autoencoder_A
         return lambda img: autoencoder.predict(img)
 
     def conv(self, filters):
