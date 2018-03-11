@@ -1,11 +1,11 @@
 # Improved-AutoEncoder base classes
 
 
-encoderH5 = 'encoder.h5'
-decoderH5 = 'decoder.h5'
-inter_AH5 = 'inter_A.h5'
-inter_BH5 = 'inter_B.h5'
-inter_bothH5 = 'inter_both.h5'
+encoderH5 = 'IAE_encoder.h5'
+decoderH5 = 'IAE_decoder.h5'
+inter_AH5 = 'IAE_inter_A.h5'
+inter_BH5 = 'IAE_inter_B.h5'
+inter_bothH5 = 'IAE_inter_both.h5'
 
 
 class AutoEncoder:
