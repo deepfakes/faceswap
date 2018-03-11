@@ -5,6 +5,8 @@ import operator
 import numpy as np
 import cv2
 from tqdm import tqdm
+import face_recognition
+
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
 if sys.version_info[0] == 3 and sys.version_info[1] < 2:
@@ -28,16 +30,18 @@ class SortProcessor(object):
                              
         parser.add_argument('-by', '--by',
                             type=str,
-                            choices=("blur", "similarity"), # case sensitive because this is used to load a plugin.
+                            choices=("blur", "hist", "face"),
                             dest='method',
-                            default="similarity",
+                            default="hist",
                             help="Sort by method.")
 
     def process(self):        
         if self.arguments.method.lower() == 'blur':
             self.process_blur()
-        elif self.arguments.method.lower() == 'similarity':
-            self.process_similarity()
+        elif self.arguments.method.lower() == 'hist':
+            self.process_hist()
+        elif self.arguments.method.lower() == 'face':
+            self.process_face()
             
     def process_blur(self):
         input_dir = self.arguments.input_dir
@@ -49,10 +53,10 @@ class SortProcessor(object):
         self.process_final_rename(input_dir, img_list)        
         print ("Done.")
   
-    def process_similarity(self):
+    def process_hist(self):
         input_dir = self.arguments.input_dir
         
-        print ("Sorting by similarity...")
+        print ("Sorting by histogram similarity...")
         
         img_list = [ [x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256]) ] for x in tqdm( self.find_images(input_dir), desc="Loading") ]
 
@@ -62,6 +66,35 @@ class SortProcessor(object):
             j_min_score = i+1
             for j in range(i+1,len(img_list)):
                 score = cv2.compareHist(img_list[i][1], img_list[j][1], cv2.HISTCMP_BHATTACHARYYA)
+                if score < min_score:
+                    min_score = score
+                    j_min_score = j            
+            img_list[i+1], img_list[j_min_score] = img_list[j_min_score], img_list[i+1]
+            
+        self.process_final_rename (input_dir, img_list)
+                
+        print ("Done.")
+        
+    def process_face(self):
+        input_dir = self.arguments.input_dir
+        
+        print ("Sorting by face similarity...")
+        
+        img_list = [ [x, face_recognition.face_encodings(cv2.imread(x)) ] for x in tqdm( self.find_images(input_dir), desc="Loading") ]
+
+        img_list_len = len(img_list)
+        for i in tqdm ( range(0, img_list_len-1), desc="Sorting"):
+            min_score = 9999.9
+            j_min_score = i+1
+            for j in range(i+1,len(img_list)):
+            
+                f1encs = img_list[i][1]
+                f2encs = img_list[j][1]
+                if f1encs is not None and f2encs is not None and len(f1encs) > 0 and len(f2encs) > 0:
+                    score = face_recognition.face_distance(f1encs[0], f2encs)[0]
+                else: 
+                    score = 9999.9
+                
                 if score < min_score:
                     min_score = score
                     j_min_score = j            
