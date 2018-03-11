@@ -141,6 +141,12 @@ class ConvertImage(DirectoryProcessor):
                             dest="avg_color_adjust",
                             default=True,
                             help="Average color adjust. (Adjust converter only)")
+
+        parser.add_argument('-g', '--gpus',
+                            type=int,
+                            default=1,
+                            help="Number of GPUs to use for conversion")
+
         return parser
 
     def process(self):
