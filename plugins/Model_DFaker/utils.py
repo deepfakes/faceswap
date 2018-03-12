@@ -1,3 +1,9 @@
+import cv2
+import numpy
+import os
+import json
+
+from tqdm import tqdm
 
 #guideShades = numpy.linspace(20,250,68)
 

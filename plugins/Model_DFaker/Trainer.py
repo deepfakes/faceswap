@@ -1,8 +1,11 @@
 
 import time
 import numpy
+import random
+
 from lib.training_data import TrainingDataGenerator, stack_images
-from image_augmentation import random_transform, random_warp_src_dest
+from .image_augmentation import random_transform, random_warp_src_dest
+from .utils import load_images_aligned
 
 class DFTrainingDataGenerator(TrainingDataGenerator):
     def __init__(self, random_transform_args, coverage, scale, zoom):
@@ -10,8 +13,7 @@ class DFTrainingDataGenerator(TrainingDataGenerator):
 
     def minibatchAB(self, images, srcPoints, dstPoints, batch_size ):
         batch = BackgroundGenerator(self.minibatch(images, srcPoints, dstPoints, batch_size), 1)
-        for ep1, warped_img, target_img, mask_img in batch.iterator():
-            yield ep1, warped_img, target_img, mask_img
+        return batch.iterator()
 
     def minibatch(self, data, srcPoints, dstPoints, batchsize):
         epoch = 0
@@ -42,7 +44,6 @@ class DFTrainingDataGenerator(TrainingDataGenerator):
 
             yield epoch, warped_img, target_img, mask_image
 
-
 class Trainer():
     random_transform_args = {
         'rotation_range': 10,
@@ -56,14 +57,27 @@ class Trainer():
         self.model = model
 
         generator = TrainingDataGenerator(self.random_transform_args, 160)
-        self.images_A = generator.minibatchAB(fn_A, landmarks_A, landmarks_B, self.batch_size)
-        self.images_B = generator.minibatchAB(fn_B, landmarks_B, landmarks_A, self.batch_size)
+        
+        minImages = 2000#min(len(fn_A),len(fn_B))*20
+
+        random.shuffle(fn_A)
+        random.shuffle(fn_B)
+
+        #NOTE this loads all images so it may be memory intensive! (cumber of images is maxed to 'minImages')
+        images_A, landmarks_A = load_images_aligned(fn_A[:minImages])
+        images_B, landmarks_B = load_images_aligned(fn_B[:minImages])
+
+        images_A = images_A/255.0
+        images_B = images_B/255.0
+
+        images_A[:,:,:3] += images_B[:,:,:3].mean( axis=(0,1,2) ) - images_A[:,:,:3].mean( axis=(0,1,2) )
+
+        self.images_A = generator.minibatchAB(images_A, landmarks_A, landmarks_B, self.batch_size)
+        self.images_B = generator.minibatchAB(images_B, landmarks_B, landmarks_A, self.batch_size)
 
     def train_one_step(self, iter, viewer):
         epoch, warped_A, target_A, mask_A = next(self.images_A)
         epoch, warped_B, target_B, mask_B = next(self.images_B)
-
-        #missing normalisation:   images_A[:,:,:3] += images_B[:,:,:3].mean( axis=(0,1,2) ) - images_A[:,:,:3].mean( axis=(0,1,2) )
       
         #omask = numpy.ones((target_A.shape[0],64,64,1),float)
 

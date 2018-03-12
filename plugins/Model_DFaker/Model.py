@@ -1,10 +1,11 @@
-from keras.models import Model
+from keras.models import Model as KerasModel
 from keras.layers import Input, Dense, Flatten, Reshape, Dropout, Add,Concatenate, Lambda
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.initializers import RandomNormal
 from keras.optimizers import Adam
 
+from .AutoEncoder import AutoEncoder
 from lib.PixelShuffler import PixelShuffler
 
 import tensorflow as tf
@@ -68,7 +69,7 @@ def __conv_init(a):
     k.conv_weight = True    
     return k
 
-def Model(AutoEncoder):
+class Model(AutoEncoder):
     def initModel(self):
         optimizer = Adam( lr=5e-5, beta_1=0.5, beta_2=0.999 )
 
@@ -86,8 +87,8 @@ def Model(AutoEncoder):
         #autoencoder_A = multi_gpu_model( autoencoder_A ,2)
         #autoencoder_B = multi_gpu_model( autoencoder_B ,2)
 
-        o1,om1  = decoder_A( encoder(x1))
-        o2,om2  = decoder_B( encoder(x2))
+        o1,om1  = self.decoder_A( self.encoder(x1))
+        o2,om2  = self.decoder_B( self.encoder(x2))
 
         DSSIM = DSSIMObjective()
         self.autoencoder_A.compile( optimizer=optimizer, loss=[ penalized_loss(m1, DSSIM),'mse'] )
@@ -140,7 +141,7 @@ def Model(AutoEncoder):
         x = Dense(4*4*1024)(x)
         x = Reshape((4,4,1024))(x)
         x = self.upscale(512)(x)
-        return Model( input_, [x] )
+        return KerasModel( input_, [x] )
 
     def Decoder(self, name):
         input_ = Input( shape=(8,8,512) )
@@ -163,4 +164,4 @@ def Model(AutoEncoder):
         y = self.upscale(64)(y)
         y = Conv2D( 1, kernel_size=5, padding='same', activation='sigmoid' )(y)
 
-        return Model( [input_], outputs=[x,y] )
+        return KerasModel( [input_], outputs=[x,y] )

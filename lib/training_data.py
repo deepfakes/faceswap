@@ -14,8 +14,7 @@ class TrainingDataGenerator():
 
     def minibatchAB(self, images, batchsize):
         batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
-        for ep1, warped_img, target_img in batch.iterator():
-            yield ep1, warped_img, target_img
+        return batch.iterator()
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
     def minibatch(self, data, batchsize):
