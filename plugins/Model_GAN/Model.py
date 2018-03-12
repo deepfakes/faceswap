@@ -116,9 +116,8 @@ class GANModel():
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))
 
-        if self.gpus > 1:
-            netGA = multi_gpu_model( netGA , self.gpus)
-            netGB = multi_gpu_model( netGB , self.gpus)
+        self.netGA_sm = netGA
+        self.netGB_sm = netGB
 
         try:
             netGA.load_weights(str(self.model_dir / netGAH5))
@@ -127,6 +126,11 @@ class GANModel():
         except:
             print ("Generator weights files not found.")
             pass
+
+        if self.gpus > 1:
+            netGA = multi_gpu_model( self.netGA_sm , self.gpus)
+            netGB = multi_gpu_model( self.netGB_sm , self.gpus)
+
         return netGA, netGB
 
     def build_discriminator(self):
@@ -163,8 +167,12 @@ class GANModel():
         return True
 
     def save_weights(self):
-        self.netGA.save_weights(str(self.model_dir / netGAH5))
-        self.netGB.save_weights(str(self.model_dir / netGBH5))
+        if self.gpus > 1:
+            self.netGA_sm.save_weights(str(self.model_dir / netGAH5))
+            self.netGB_sm.save_weights(str(self.model_dir / netGBH5))
+        else:
+            self.netGA.save_weights(str(self.model_dir / netGAH5))
+            self.netGB.save_weights(str(self.model_dir / netGBH5))
         self.netDA.save_weights(str(self.model_dir / netDAH5))
         self.netDB.save_weights(str(self.model_dir / netDBH5))
         print ("Models saved.")
