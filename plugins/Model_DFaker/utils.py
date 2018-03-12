@@ -3,8 +3,10 @@ import numpy
 import os
 import json
 
-from tqdm import tqdm
+from lib.faces_detect import DetectedFace
 
+from tqdm import tqdm
+from lib.aligner import get_align_mat
 #guideShades = numpy.linspace(20,250,68)
 
 def load_images_aligned(image_paths):
@@ -17,14 +19,17 @@ def load_images_aligned(image_paths):
 
 
   pbar = tqdm(alignments)
-  for original,cropped,mat,points in pbar:
-    pbar.set_description('loading '+basePath)
-    cropped = os.path.split(cropped)[1]
-    cropped = os.path.join(basePath,cropped)
-    if cropped in image_paths and os.path.exists(cropped):
-        image, facepoints = get_image( cropped, mat, points )
-        all_images.append( image  )
-        landmarks.append( facepoints )
+  for original in pbar:
+    faces = alignments[original]
+    for rawface in faces:
+        detected_face = DetectedFace(**rawface)
+        cropped = detected_face.cropped
+        points = detected_face.landmarksXY
+        mat = get_align_mat( detected_face, 0, False )
+        if os.path.exists(cropped):
+            image, facepoints = load_image( cropped, mat, points )
+            all_images.append( image  )
+            landmarks.append( facepoints )
 
   return numpy.array(all_images),numpy.array(landmarks)
 

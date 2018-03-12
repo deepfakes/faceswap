@@ -1,28 +1,29 @@
-
+import cv2
 import time
 import numpy
 import random
 
+from lib.utils import BackgroundGenerator
 from lib.training_data import TrainingDataGenerator, stack_images
 from .image_augmentation import random_transform, random_warp_src_dest
 from .utils import load_images_aligned
 
 class DFTrainingDataGenerator(TrainingDataGenerator):
-    def __init__(self, random_transform_args, coverage, scale, zoom):
-        super().__init__(random_transform_args, coverage, scale, zoom)
+    def __init__(self, random_transform_args, coverage):
+        super().__init__(random_transform_args, coverage)
 
     def minibatchAB(self, images, srcPoints, dstPoints, batch_size ):
         batch = BackgroundGenerator(self.minibatch(images, srcPoints, dstPoints, batch_size), 1)
         return batch.iterator()
 
-    def minibatch(self, data, srcPoints, dstPoints, batchsize):
+    def minibatch(self, images, srcPoints, dstPoints, batch_size):
         epoch = 0
         while True:
             epoch+=1
             indices = numpy.random.choice(range(0,images.shape[0]),size=batch_size,replace=False)
             for i,index in enumerate(indices):
                 image = images[index]
-                image = random_transform( image, **random_transform_args )
+                image = random_transform( image, **self.random_transform_args )
 
                 closest = ( numpy.mean(numpy.square(srcPoints[index]-dstPoints),axis=(1,2)) ).argsort()[:10]
                 closest = numpy.random.choice(closest)
@@ -42,7 +43,7 @@ class DFTrainingDataGenerator(TrainingDataGenerator):
                 target_images[i] = target_img
                 mask_images[i]   = mask_image
 
-            yield epoch, warped_img, target_img, mask_image
+            yield epoch, warped_images, target_images, mask_images
 
 class Trainer():
     random_transform_args = {
@@ -56,7 +57,7 @@ class Trainer():
         self.batch_size = batch_size
         self.model = model
 
-        generator = TrainingDataGenerator(self.random_transform_args, 160)
+        generator = DFTrainingDataGenerator(self.random_transform_args, 160)
         
         minImages = 2000#min(len(fn_A),len(fn_B))*20
 
@@ -81,13 +82,21 @@ class Trainer():
       
         #omask = numpy.ones((target_A.shape[0],64,64,1),float)
 
-        loss_A = autoencoder_A.train_on_batch([warped_A,mask_A], [target_A,mask_A])
-        loss_B = autoencoder_B.train_on_batch([warped_B,mask_B], [target_B,mask_B])
-        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(time.strftime("%H:%M:%S"), iter, loss_A, loss_B),
+        loss_A = self.model.autoencoder_A.train_on_batch([warped_A,mask_A], [target_A,mask_A])
+        loss_B = self.model.autoencoder_B.train_on_batch([warped_B,mask_B], [target_B,mask_B])
+
+        print("Loss A [{}] Loss B [{}]".format(loss_A,loss_B),
             end='\r')
 
         if viewer is not None:
             viewer(self.show_sample(target_A[0:8,:,:,:3], target_B[0:8,:,:,:3]), "training")
+            viewer(self.show_warped(warped_A[:6],warped_B[:6]), "warped")
+
+    def show_warped(self, warped_A, warped_B):
+        figWarped = numpy.stack([warped_A, warped_B],axis=0 )
+        figWarped = numpy.clip( figWarped * 255, 0, 255 ).astype('uint8')
+        figWarped = stack_images( figWarped )
+        return figWarped
 
     def show_sample(self, test_A, test_B):
         test_A_i = []
@@ -100,19 +109,14 @@ class Trainer():
         for i in test_B:
             test_B_i.append(cv2.resize(i,(64,64),cv2.INTER_AREA))
         test_B_i = numpy.array(test_B_i).reshape((-1,64,64,3))
-
-        figWarped = numpy.stack([warped_A[:6],warped_B[:6]],axis=0 )
-        figWarped = numpy.clip( figWarped * 255, 0, 255 ).astype('uint8')
-        figWarped = stack_images( figWarped )
-        cv2.imshow( "w", figWarped )
         
         zmask = numpy.zeros((test_A.shape[0],128,128,1),float)
 
-        pred_a_a,pred_a_a_m = autoencoder_A.predict([test_A_i,zmask])
-        pred_b_a,pred_b_a_m = autoencoder_B.predict([test_A_i,zmask])
+        pred_a_a,pred_a_a_m = self.model.autoencoder_A.predict([test_A_i,zmask])
+        pred_b_a,pred_b_a_m = self.model.autoencoder_B.predict([test_A_i,zmask])
 
-        pred_a_b,pred_a_b_m = autoencoder_A.predict([test_B_i,zmask])
-        pred_b_b,pred_b_b_m = autoencoder_B.predict([test_B_i,zmask])
+        pred_a_b,pred_a_b_m = self.model.autoencoder_A.predict([test_B_i,zmask])
+        pred_b_b,pred_b_b_m = self.model.autoencoder_B.predict([test_B_i,zmask])
 
         pred_a_a = pred_a_a[0:18,:,:,:3]
         pred_a_b = pred_a_b[0:18,:,:,:3]

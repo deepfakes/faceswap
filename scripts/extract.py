@@ -160,8 +160,10 @@ class ExtractTrainingData(DirectoryProcessor):
                     print("{}'s focus measure of {} was below the blur threshold, moving to \"blurry\"".format(Path(filename).stem, focus_measure))
                     output_file = get_folder(Path(self.output_dir) / Path("blurry")) / Path(filename).stem
 
-            cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
+            output_file = '{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix)
+            cv2.imwrite(output_file, resized_image)
             f = {
+                "cropped": output_file,
                 "r": face.r,
                 "x": face.x,
                 "w": face.w,

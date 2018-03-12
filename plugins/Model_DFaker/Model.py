@@ -73,8 +73,9 @@ class Model(AutoEncoder):
     def initModel(self):
         optimizer = Adam( lr=5e-5, beta_1=0.5, beta_2=0.999 )
 
-        print(self.encoder.summary()) 
-        print(self.decoder_A.summary())
+        # print(self.encoder.summary()) 
+        # print(self.decoder_A.summary())
+        # print(self.decoder_B.summary())
 
         x1 = Input( shape=IMAGE_SHAPE )
         x2 = Input( shape=IMAGE_SHAPE )
@@ -84,11 +85,15 @@ class Model(AutoEncoder):
         self.autoencoder_A = KerasModel( [x1,m1], self.decoder_A( self.encoder(x1) ) )
         self.autoencoder_B = KerasModel( [x2,m2], self.decoder_B( self.encoder(x2) ) )
 
-        #autoencoder_A = multi_gpu_model( autoencoder_A ,2)
-        #autoencoder_B = multi_gpu_model( autoencoder_B ,2)
+        # print(self.autoencoder_A.summary())
+        # print(self.autoencoder_B.summary())
 
-        o1,om1  = self.decoder_A( self.encoder(x1))
-        o2,om2  = self.decoder_B( self.encoder(x2))
+        if self.gpus > 1:
+            self.autoencoder_A = multi_gpu_model( self.autoencoder_A ,self.gpus)
+            self.autoencoder_B = multi_gpu_model( self.autoencoder_B ,self.gpus)
+
+        # o1,om1  = self.decoder_A( self.encoder(x1))
+        # o2,om2  = self.decoder_B( self.encoder(x2))
 
         DSSIM = DSSIMObjective()
         self.autoencoder_A.compile( optimizer=optimizer, loss=[ penalized_loss(m1, DSSIM),'mse'] )
