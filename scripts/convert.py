@@ -135,7 +135,7 @@ class ConvertImage(DirectoryProcessor):
                             dest="sharpen_image",
                             choices=["bsharpen", "gsharpen"],
                             default="none",
-                            help="Use Sharpen Image - bSharpen = Box Blur, gSharpen = Gaussian Blur (Masked converter only)")
+                            help="Use Sharpen Image - bsharpen = Box Blur, gsharpen = Gaussian Blur (Masked converter only)")
 
         parser.add_argument('-sm', '--smooth-mask',
                             action="store_true",
