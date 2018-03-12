@@ -102,25 +102,14 @@ class ExtractTrainingData(DirectoryProcessor):
                     self.faces_detected[os.path.basename(filename)] = faces
             else:
                 for filename in tqdm(self.read_directory()):
-                    try:
-                        image = cv2.imread(filename)
-                        self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
-                    except Exception as e:
-                        if self.arguments.verbose:
-                            print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
-                        pass
+                    filename, faces = self.processFiles(filename)
+                    self.faces_detected[os.path.basename(filename)] = faces
         finally:
             self.write_alignments()
 
     def processFiles(self, filename):
-        try:
-            image = cv2.imread(filename)
-            return filename, self.handleImage(image, filename)
-        except Exception as e:
-            if self.arguments.verbose:
-                print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
-            pass
-        return filename, []
+        image = cv2.imread(filename)
+        return filename, self.handleImage(image, filename)
 
     def getRotatedImageFaces(self, image, angle):
         rotated_image = rotate_image(image, angle)
