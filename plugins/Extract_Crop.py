@@ -4,4 +4,4 @@ import cv2
 
 class Extract(object):
     def extract(self, image, face, size):
-        return cv2.resize(face.image, (size, size))
+        return cv2.resize(face.image, (size, size),interpolation=cv2.INTER_AREA)
