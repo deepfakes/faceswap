@@ -6,7 +6,7 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.optimizers import Adam
 from keras.initializers import RandomNormal
-from keras_contrib.losses import DSSIMObjective
+from keras import backend as K
 
 from .AutoEncoder import AutoEncoder
 from lib.PixelShuffler import PixelShuffler
@@ -15,6 +15,9 @@ IMAGE_SHAPE = (64, 64, 3)
 ENCODER_DIM = 1024
 
 conv_init = RandomNormal(0, 0.02)
+
+def ground_truth_diff(y_true, y_pred):
+    return K.abs(y_pred - y_true)
 
 class Model(AutoEncoder):
     def initModel(self):
@@ -26,7 +29,7 @@ class Model(AutoEncoder):
         self.autoencoder_B = KerasModel(x, self.decoder_B(encoder(x)))
 
         #self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss=DSSIMObjective(kernel_size=3))
+        self.autoencoder_B.compile(optimizer=optimizer, loss=ground_truth_diff)
 
     def converter(self, swap):
         autoencoder = self.autoencoder_B
