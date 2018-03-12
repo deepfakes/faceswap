@@ -116,6 +116,9 @@ class GANModel():
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))
 
+        self.netGA_sm = netGA
+        self.netGB_sm = netGB
+
         try:
             netGA.load_weights(str(self.model_dir / netGAH5))
             netGB.load_weights(str(self.model_dir / netGBH5))
@@ -125,10 +128,8 @@ class GANModel():
             pass
 
         if self.gpus > 1:
-            self.netGA_sm = netGA
-            self.netGB_sm = netGB
-            netGA = multi_gpu_model( netGA , self.gpus)
-            netGB = multi_gpu_model( netGB , self.gpus)
+            netGA = multi_gpu_model( self.netGA_sm , self.gpus)
+            netGB = multi_gpu_model( self.netGB_sm , self.gpus)
 
         return netGA, netGB
 
