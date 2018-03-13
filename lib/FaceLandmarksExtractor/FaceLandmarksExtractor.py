@@ -87,7 +87,7 @@ def crop(image, center, scale, resolution=256):
     oldX = np.array([max(1, ul[0] + 1), min(br[0], wd)], dtype=np.int32)
     oldY = np.array([max(1, ul[1] + 1), min(br[1], ht)], dtype=np.int32)
     newImg[newY[0] - 1:newY[1], newX[0] - 1:newX[1] ] = image[oldY[0] - 1:oldY[1], oldX[0] - 1:oldX[1], :]
-    newImg = cv2.resize(newImg, dsize=(resolution, resolution), interpolation=cv2.INTER_AREA)
+    newImg = cv2.resize(newImg, dsize=(resolution, resolution), interpolation=cv2.INTER_LINEAR)
     return newImg
            
 def get_pts_from_predict(a, center, scale):
@@ -143,7 +143,7 @@ def extract(input_image, detector, verbose, all_faces=True, scale_to=2048):
     (h, w, ch) = input_image.shape
 
     input_scale = scale_to / (w if w > h else h)
-    input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LANCZOS4)
+    input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
     input_image = input_image[:,:,::-1] #cv2 loads into BGR format, dlib model is trained on RGB format, switch to RGB
  
     detected_faces = []

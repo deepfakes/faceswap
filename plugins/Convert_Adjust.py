@@ -14,16 +14,16 @@ class Convert(object):
 
     def patch_image( self, original, face_detected, size ):
         #assert image.shape == (256, 256, 3)
-        image = cv2.resize(face_detected.image, (256, 256), interpolation=cv2.INTER_LANCZOS4)
+        image = cv2.resize(face_detected.image, (256, 256))
         crop = slice(48, 208)
         face = image[crop, crop]
         old_face = face.copy()
 
-        face = cv2.resize(face, (size, size), interpolation=cv2.INTER_AREA)
+        face = cv2.resize(face, (size, size))
         face = numpy.expand_dims(face, 0)
         new_face = self.encoder(face / 255.0)[0]
         new_face = numpy.clip(new_face * 255, 0, 255).astype(image.dtype)
-        new_face = cv2.resize(new_face, (160, 160), interpolation=cv2.INTER_LANCZOS4)
+        new_face = cv2.resize(new_face, (160, 160))
 
         if self.use_avg_color_adjust:
             self.adjust_avg_color(old_face,new_face)
@@ -31,7 +31,7 @@ class Convert(object):
             self.smooth_mask(old_face,new_face)
 
         new_face = self.superpose(image, new_face, crop)
-        original[slice(face_detected.y, face_detected.y + face_detected.h), slice(face_detected.x, face_detected.x + face_detected.w)] = cv2.resize(new_face, (face_detected.w, face_detected.h), interpolation=cv2.INTER_LANCZOS4)
+        original[slice(face_detected.y, face_detected.y + face_detected.h), slice(face_detected.x, face_detected.x + face_detected.w)] = cv2.resize(new_face, (face_detected.w, face_detected.h))
         return original
 
     def adjust_avg_color(self,img_old,img_new):
