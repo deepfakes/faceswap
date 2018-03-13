@@ -129,6 +129,13 @@ class ConvertImage(DirectoryProcessor):
                             dest="match_histogram",
                             default=False,
                             help="Use histogram matching. (Masked converter only)")
+        
+        parser.add_argument('-sh',
+                            type=str.lower,
+                            dest="sharpen_image",
+                            choices=["bsharpen", "gsharpen"],
+                            default="none",
+                            help="Use Sharpen Image - bsharpen = Box Blur, gsharpen = Gaussian Blur (Masked converter only)")
 
         parser.add_argument('-sm', '--smooth-mask',
                             action="store_true",
@@ -177,6 +184,7 @@ class ConvertImage(DirectoryProcessor):
             trainer=self.arguments.trainer,
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
+            sharpen_image=self.arguments.sharpen_image,
             mask_type=self.arguments.mask_type,
             erosion_kernel_size=self.arguments.erosion_kernel_size,
             match_histogram=self.arguments.match_histogram,
