@@ -144,7 +144,7 @@ def extract(input_image, detector, verbose, all_faces=True, scale_to=2048):
 
     input_scale = scale_to / (w if w > h else h)
     input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
-    input_image_RGB = input_image[:,:,::-1].copy #cv2 loads into BGR format, dlib model is trained on RGB format, switch to RGB
+    input_image_RGB = input_image[:,:,::-1].copy() #cv2 loads into BGR format, dlib model is trained on RGB format, switch to RGB
  
     detected_faces = []
     for current_detector in dlib_detectors:
