@@ -168,7 +168,7 @@ def extract(input_image, detector, verbose, all_faces=True, scale_to=2048):
             center[1] -= (bottom - top) * 0.12
             scale = (right - left + bottom - top) / 195.0
         
-            image = crop(input_image, center, scale).transpose ( (2,0,1) ).astype(np.float32) / 255.0
+            image = crop(input_image_RGB, center, scale).transpose ( (2,0,1) ).astype(np.float32) / 255.0
             image = np.expand_dims(image, 0)
             
             pts_img = get_pts_from_predict ( keras_model.predict (image)[-1][0], center, scale)
