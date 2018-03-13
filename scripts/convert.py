@@ -129,6 +129,13 @@ class ConvertImage(DirectoryProcessor):
                             dest="match_histogram",
                             default=False,
                             help="Use histogram matching. (Masked converter only)")
+        
+        parser.add_argument('-sh',
+                            type=str.lower,
+                            dest="sharpen_image",
+                            choices=["bsharpen", "gsharpen"],
+                            default="none",
+                            help="Use Sharpen Image - bsharpen = Box Blur, gsharpen = Gaussian Blur (Masked converter only)")
 
         parser.add_argument('-sm', '--smooth-mask',
                             action="store_true",
@@ -141,6 +148,12 @@ class ConvertImage(DirectoryProcessor):
                             dest="avg_color_adjust",
                             default=True,
                             help="Average color adjust. (Adjust converter only)")
+
+        parser.add_argument('-g', '--gpus',
+                            type=int,
+                            default=1,
+                            help="Number of GPUs to use for conversion")
+
         return parser
 
     def process(self):
@@ -150,7 +163,7 @@ class ConvertImage(DirectoryProcessor):
         conv_name = self.arguments.converter
         self.input_aligned_dir = None
 
-        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir))
+        model = PluginLoader.get_model(model_name)(get_folder(self.arguments.model_dir), self.arguments.gpus)
         if not model.load(self.arguments.swap_model):
             print('Model Not Found! A valid model must be provided to continue!')
             exit(1)
@@ -171,6 +184,7 @@ class ConvertImage(DirectoryProcessor):
             trainer=self.arguments.trainer,
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
+            sharpen_image=self.arguments.sharpen_image,
             mask_type=self.arguments.mask_type,
             erosion_kernel_size=self.arguments.erosion_kernel_size,
             match_histogram=self.arguments.match_histogram,

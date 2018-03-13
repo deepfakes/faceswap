@@ -6,7 +6,7 @@ import numpy
 from lib.aligner import get_align_mat
 
 class Convert():
-    def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, **kwargs):
+    def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, sharpen_image=None, **kwargs):
         self.encoder = encoder
         self.trainer = trainer
         self.erosion_kernel = None
@@ -18,6 +18,7 @@ class Convert():
                 self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(abs(erosion_kernel_size),abs(erosion_kernel_size)))
         self.blur_size = blur_size
         self.seamless_clone = seamless_clone
+        self.sharpen_image = sharpen_image
         self.match_histogram = match_histogram
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
 
@@ -38,8 +39,21 @@ class Convert():
         new_image = numpy.copy( image )
 
         cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
+        
+        if "bsharpen" in self.sharpen_image:
+            # Sharpening using filter2D
+            kernel = numpy.ones((3, 3)) * (-1)
+            kernel[1, 1] = 9
+            new_image = cv2.filter2D(new_image, -1, kernel)
+        elif "gsharpen" in self.sharpen_image:
+            # Sharpening using Weighted Method
+            gaussain_blur = cv2.GaussianBlur(new_image, (0, 0), 3.0)
+            new_image = cv2.addWeighted(
+                new_image, 1.5, gaussain_blur, -0.5, 0, new_image)
+        elif "none" in self.sharpen_image:
+            pass
 
-        outImage = None
+        outimage = None
         if self.seamless_clone:
             unitMask = numpy.clip( image_mask * 365, 0, 255 ).astype(numpy.uint8)
 

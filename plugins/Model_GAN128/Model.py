@@ -1,4 +1,4 @@
-# Based on the https://github.com/shaoanlu/faceswap-GAN repo 
+# Based on the https://github.com/shaoanlu/faceswap-GAN repo
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
 from keras.models import Model
@@ -20,7 +20,7 @@ netDBH5 = 'netDB_GAN128.h5'
 def __conv_init(a):
     print("conv_init", a)
     k = RandomNormal(0, 0.02)(a) # for convolution kernel
-    k.conv_weight = True    
+    k.conv_weight = True
     return k
 
 #def batchnorm():
@@ -40,8 +40,9 @@ class GANModel():
     nc_in = 3 # number of input channels of generators
     nc_D_inp = 6 # number of input channels of discriminators
 
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
+        self.gpus = gpus
 
         optimizer = Adam(1e-4, 0.5)
 
@@ -90,7 +91,7 @@ class GANModel():
             x = conv_block(x,64, use_instance_norm=False)
             x = conv_block(x,128)
             x = conv_block(x,256)
-            x = conv_block(x,512) 
+            x = conv_block(x,512)
             x = conv_block(x,1024)
             x = Dense(1024)(Flatten()(x))
             x = Dense(4*4*1024)(x)
@@ -102,14 +103,14 @@ class GANModel():
             input_ = Input(shape=(input_size, input_size, nc_in))
             x = input_
             x = upscale_ps(256)(x)
-            x = upscale_ps(128)(x)    
+            x = upscale_ps(128)(x)
             x = upscale_ps(64)(x)
-            x = res_block(x, 64, dilation=2)      
-            
+            x = res_block(x, 64, dilation=2)
+
             out64 = Conv2D(64, kernel_size=3, padding='same')(x)
             out64 = LeakyReLU(alpha=0.1)(out64)
             out64 = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(out64)
-            
+
             x = upscale_ps(32)(x)
             x = res_block(x, 32)
             x = res_block(x, 32)
@@ -117,13 +118,17 @@ class GANModel():
             rgb = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(x)
             out = concatenate([alpha, rgb])
             return Model(input_, [out, out64] )
-        
+
         encoder = Encoder()
         decoder_A = Decoder_ps()
         decoder_B = Decoder_ps()
         x = Input(shape=self.img_shape)
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))
+
+        self.netGA_sm = netGA
+        self.netGB_sm = netGB
+        
         try:
             netGA.load_weights(str(self.model_dir / netGAH5))
             netGB.load_weights(str(self.model_dir / netGBH5))
@@ -131,6 +136,11 @@ class GANModel():
         except:
             print ("Generator weights files not found.")
             pass
+
+        if self.gpus > 1:
+            netGA = multi_gpu_model( self.netGA_sm , self.gpus)
+            netGB = multi_gpu_model( self.netGB_sm , self.gpus)
+
         return netGA, netGB
 
     def build_discriminator(self):
@@ -149,11 +159,12 @@ class GANModel():
             x = conv_block_d(x, 128, True)
             x = conv_block_d(x, 256, True)
             x = conv_block_d(x, 512, True)
-            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)   
+            out = Conv2D(1, kernel_size=4, kernel_initializer=conv_init, use_bias=False, padding="same", activation="sigmoid")(x)
             return Model(inputs=[inp], outputs=out)
-        
+
         netDA = Discriminator(self.nc_D_inp)
         netDB = Discriminator(self.nc_D_inp)
+
         try:
             netDA.load_weights(str(self.model_dir / netDAH5))
             netDB.load_weights(str(self.model_dir / netDBH5))
@@ -161,14 +172,14 @@ class GANModel():
         except:
             print ("Discriminator weights files not found.")
             pass
-        return netDA, netDB    
-    
+        return netDA, netDB
+
     def load(self, swapped):
         if swapped:
             print("swapping not supported on GAN")
             # TODO load is done in __init__ => look how to swap if possible
         return True
-    
+
     def save_weights(self):
         self.netGA.save_weights(str(self.model_dir / netGAH5))
         self.netGB.save_weights(str(self.model_dir / netGBH5))
