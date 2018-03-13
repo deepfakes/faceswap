@@ -19,9 +19,9 @@ class GANTrainingDataGenerator(TrainingDataGenerator):
 
 class Trainer():
     random_transform_args = {
-        'rotation_range': 10,
-        'zoom_range': 0,
-        'shift_range': 0,
+        'rotation_range': 20,
+        'zoom_range': 0.1,
+        'shift_range': 0.05,
         'random_flip': 0.5,
         }
 
