@@ -71,7 +71,7 @@ def transform(point, center, scale, resolution):
     m = np.linalg.inv(m)
     return np.matmul (m, pt)[0:2]
     
-def crop(image, center, scale, resolution=256):
+def crop(image, center, scale, resolution=256.0):
     ul = transform([1, 1], center, scale, resolution).astype( np.int )
     br = transform([resolution, resolution], center, scale, resolution).astype( np.int )
     if image.ndim > 2:
@@ -87,7 +87,7 @@ def crop(image, center, scale, resolution=256):
     oldX = np.array([max(1, ul[0] + 1), min(br[0], wd)], dtype=np.int32)
     oldY = np.array([max(1, ul[1] + 1), min(br[1], ht)], dtype=np.int32)
     newImg[newY[0] - 1:newY[1], newX[0] - 1:newX[1] ] = image[oldY[0] - 1:oldY[1], oldX[0] - 1:oldX[1], :]
-    newImg = cv2.resize(newImg, dsize=(resolution, resolution), interpolation=cv2.INTER_LINEAR)
+    newImg = cv2.resize(newImg, dsize=(int(resolution), int(resolution)), interpolation=cv2.INTER_LINEAR)
     return newImg
            
 def get_pts_from_predict(a, center, scale):
@@ -144,11 +144,11 @@ def extract(input_image, detector, verbose, all_faces=True, scale_to=2048):
 
     input_scale = scale_to / (w if w > h else h)
     input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
-    input_image = input_image[:,:,::-1] #cv2 loads into BGR format, dlib model is trained on RGB format, switch to RGB
+    input_image_RGB = input_image[:,:,::-1].copy #cv2 loads into BGR format, dlib model is trained on RGB format, switch to RGB
  
     detected_faces = []
     for current_detector in dlib_detectors:
-        detected_faces = current_detector(input_image, 0)
+        detected_faces = current_detector(input_image_RGB, 0)
         if len(detected_faces) != 0:
             break
 
