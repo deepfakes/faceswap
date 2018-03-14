@@ -26,7 +26,14 @@ class Convert():
 
         image_size = image.shape[1], image.shape[0]
 
-        mat = numpy.array(get_align_mat(face_detected)).reshape(2,3) * size
+        mat = numpy.array(get_align_mat(face_detected)).reshape(2,3)
+
+        if "GAN" not in self.trainer:
+            mat = mat * size
+        else:
+            padding = int(48/256*size)
+            mat = mat * (size - 2 * padding)
+            mat[:,2] += padding
 
         new_face = self.get_new_face(image,mat,size)
 
