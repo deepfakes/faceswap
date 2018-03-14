@@ -87,7 +87,7 @@ class ExtractTrainingData(DirectoryProcessor):
                             type=int,
                             dest="blur_thresh",
                             default=None,
-                            help="Automatically discard images blurrier than the specified threshold. Discarded images are moved into a \"blurry\" sub-folder. Lower values allow more blur. Comment in the PR what threshold you use")
+                            help="Automatically discard images blurrier than the specified threshold. Discarded images are moved into a \"blurry\" sub-folder. Lower values allow more blur")
 
         return parser
 
