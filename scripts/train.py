@@ -178,7 +178,7 @@ class TrainingProcessor(object):
                 print('Saving model weights has been cancelled!')
             exit(0)
         except Exception as e:
-            print(e)
+            raise e
             exit(1)
 
     def set_tf_allow_growth(self):
@@ -200,4 +200,4 @@ class TrainingProcessor(object):
                 cv2.imwrite('_sample_{}.jpg'.format(name), image)
         except Exception as e:
             print("could not preview sample")
-            print(e)
+            raise e
