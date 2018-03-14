@@ -12,6 +12,8 @@ from keras.optimizers import Adam
 from lib.PixelShuffler import PixelShuffler
 from .instance_normalization import InstanceNormalization
 
+from keras.utils import multi_gpu_model
+
 netGAH5 = 'netGA_GAN128.h5'
 netGBH5 = 'netGB_GAN128.h5'
 netDAH5 = 'netDA_GAN128.h5'
@@ -43,6 +45,7 @@ class GANModel():
     def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
         self.gpus = gpus
+        assert self.gpus == 1, "Error: GAN128 cannot use multiple gpus right now. See https://github.com/deepfakes/faceswap/issues/287"
 
         optimizer = Adam(1e-4, 0.5)
 
@@ -128,7 +131,7 @@ class GANModel():
 
         self.netGA_sm = netGA
         self.netGB_sm = netGB
-        
+
         try:
             netGA.load_weights(str(self.model_dir / netGAH5))
             netGB.load_weights(str(self.model_dir / netGBH5))
@@ -181,8 +184,12 @@ class GANModel():
         return True
 
     def save_weights(self):
-        self.netGA.save_weights(str(self.model_dir / netGAH5))
-        self.netGB.save_weights(str(self.model_dir / netGBH5))
+        if self.gpus > 1:
+            self.netGA_sm.save_weights(str(self.model_dir / netGAH5))
+            self.netGB_sm.save_weights(str(self.model_dir / netGBH5))
+        else:
+            self.netGA.save_weights(str(self.model_dir / netGAH5))
+            self.netGB.save_weights(str(self.model_dir / netGBH5))
         self.netDA.save_weights(str(self.model_dir / netDAH5))
         self.netDB.save_weights(str(self.model_dir / netDBH5))
         print ("Models saved.")
