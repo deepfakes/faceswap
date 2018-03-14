@@ -29,7 +29,14 @@ class Model(AutoEncoder):
         self.autoencoder_B = KerasModel(x, self.decoder_B(encoder(x)))
 
         #self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss=ground_truth_diff)
+        self.autoencoder_B.compile(optimizer=optimizer, loss='binary_crossentropy')
+
+        encoder.summary()
+        self.autoencoder_B.summary()
+
+        from keras.utils import plot_model
+        plot_model(self.encoder, to_file='_model_encoder.png', show_shapes=True, show_layer_names=True)
+        plot_model(self.decoder_B, to_file='_model_decoder_B.png', show_shapes=True, show_layer_names=True)
 
     def converter(self, swap):
         autoencoder = self.autoencoder_B
