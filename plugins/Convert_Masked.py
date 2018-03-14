@@ -26,7 +26,7 @@ class Convert():
 
         image_size = image.shape[1], image.shape[0]
 
-        mat = numpy.array(get_align_mat(face_detected)).reshape(2,3)
+        mat = numpy.array(get_align_mat(face_detected, size, should_align_eyes=False)).reshape(2,3)
 
         if "GAN" not in self.trainer:
             mat = mat * size
@@ -37,7 +37,7 @@ class Convert():
 
         new_face = self.get_new_face(image,mat,size)
 
-        image_mask = self.get_image_mask( image, new_face, face_detected, mat, image_size )
+        image_mask = self.get_image_mask( image, new_face, face_detected.landmarksAsXY(), mat, image_size )
 
         return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
 
@@ -146,7 +146,7 @@ class Convert():
 
         return new_face
 
-    def get_image_mask(self, image, new_face, face_detected, mat, image_size):
+    def get_image_mask(self, image, new_face, landmarks, mat, image_size):
 
         face_mask = numpy.zeros(image.shape,dtype=float)
         if 'rect' in self.mask_type:
@@ -155,7 +155,7 @@ class Convert():
 
         hull_mask = numpy.zeros(image.shape,dtype=float)
         if 'hull' in self.mask_type:
-            hull = cv2.convexHull( numpy.array( face_detected.landmarksAsXY() ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
+            hull = cv2.convexHull( numpy.array( landmarks ).reshape((-1,2)).astype(int) ).flatten().reshape( (-1,2) )
             cv2.fillConvexPoly( hull_mask,hull,(1,1,1) )
 
         if self.mask_type == 'rect':

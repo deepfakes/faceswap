@@ -3,10 +3,12 @@ import cv2
 from pathlib import Path
 from tqdm import tqdm
 import os
+import numpy as np
 
 from lib.cli import DirectoryProcessor, rotate_image
 from lib.utils import get_folder
 from lib.multithreading import pool_process
+from lib.detect_blur import is_blurry
 from plugins.PluginLoader import PluginLoader
 
 class ExtractTrainingData(DirectoryProcessor):
@@ -53,13 +55,13 @@ class ExtractTrainingData(DirectoryProcessor):
                             type=int,
                             default=1,
                             help="Number of processes to use.")
-        
+
         parser.add_argument('-s', '--skip-existing',
                             action='store_true',
                             dest='skip_existing',
                             default=False,
                             help="Skips frames already extracted.")
-        
+
         parser.add_argument('-dl', '--debug-landmarks',
                             action="store_true",
                             dest="debug_landmarks",
@@ -74,6 +76,19 @@ class ExtractTrainingData(DirectoryProcessor):
                             help="If a face isn't found, rotate the images through 90 degree "
                                  "iterations to try to find a face. Can find more faces at the "
                                  "cost of extraction speed.")
+
+        parser.add_argument('-ae', '--align-eyes',
+                            action="store_true",
+                            dest="align_eyes",
+                            default=False,
+                            help="Perform extra alignment to ensure left/right eyes lie at the same height")
+
+        parser.add_argument('-bt', '--blur-threshold',
+                            type=int,
+                            dest="blur_thresh",
+                            default=None,
+                            help="Automatically discard images blurrier than the specified threshold. Discarded images are moved into a \"blurry\" sub-folder. Lower values allow more blur")
+
         return parser
 
     def process(self):
@@ -121,12 +136,12 @@ class ExtractTrainingData(DirectoryProcessor):
                 break
             angle += 90
         return rotated_faces, rotated_image
-        
+
     def handleImage(self, image, filename):
         faces = self.get_faces(image)
         process_faces = [(idx, face) for idx, face in faces]
 
-        # Run image rotator if requested and no faces found        
+        # Run image rotator if requested and no faces found
         if self.arguments.rotate_images.lower() == 'on' and len(process_faces) == 0:
             process_faces, image = self.imageRotator(image)
 
@@ -136,9 +151,25 @@ class ExtractTrainingData(DirectoryProcessor):
             if self.arguments.debug_landmarks:
                 for (x, y) in face.landmarksAsXY():
                     cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
-            
-            resized_image = self.extractor.extract(image, face, 256)
+
+            resized_image, t_mat = self.extractor.extract(image, face, 256, self.arguments.align_eyes)
             output_file = get_folder(self.output_dir) / Path(filename).stem
+
+            # Detect blurry images
+            if self.arguments.blur_thresh is not None:
+                aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
+                feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
+                feature_mask = cv2.blur(feature_mask, (10, 10))
+                isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)
+                blurry, focus_measure = is_blurry(isolated_face, self.arguments.blur_thresh)
+                # print("{} focus measure: {}".format(Path(filename).stem, focus_measure))
+                # cv2.imshow("Isolated Face", isolated_face)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+                if blurry:
+                    print("{}'s focus measure of {} was below the blur threshold, moving to \"blurry\"".format(Path(filename).stem, focus_measure))
+                    output_file = get_folder(Path(self.output_dir) / Path("blurry")) / Path(filename).stem
+
             cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
             f = {
                 "r": face.r,
