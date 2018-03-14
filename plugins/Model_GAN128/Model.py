@@ -44,7 +44,8 @@ class GANModel():
 
     def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
-        self.gpus = 1 #See https://github.com/deepfakes/faceswap/issues/287
+        self.gpus = gpus
+        assert self.gpus == 1, "Error: GAN128 cannot use multiple gpus right now. See https://github.com/deepfakes/faceswap/issues/287"
 
         optimizer = Adam(1e-4, 0.5)
 
