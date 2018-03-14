@@ -52,7 +52,7 @@ class ConvertImage(DirectoryProcessor):
 
         parser.add_argument('-c', '--converter',
                             type=str,
-                            choices=("Masked", "Adjust"), # case sensitive because this is used to load a plugin.
+                            choices=("Masked", "Adjust", "DFaker"), # case sensitive because this is used to load a plugin.
                             default="Masked",
                             help="Converter to use.")
 
@@ -109,7 +109,7 @@ class ConvertImage(DirectoryProcessor):
                             action="store_true",
                             dest="seamless_clone",
                             default=False,
-                            help="Use cv2's seamless clone. (Masked converter only)")
+                            help="Use cv2's seamless clone. (Masked or DFaker converter only)")
 
         parser.add_argument('-M', '--mask-type',
                             type=str.lower, #lowercase this, because its just a string later on.
@@ -130,7 +130,7 @@ class ConvertImage(DirectoryProcessor):
                             default=False,
                             help="Use histogram matching. (Masked converter only)")
         
-        parser.add_argument('-sh',
+        parser.add_argument('-sh', '--sharpen',
                             type=str.lower,
                             dest="sharpen_image",
                             choices=["bsharpen", "gsharpen"],
@@ -140,14 +140,20 @@ class ConvertImage(DirectoryProcessor):
         parser.add_argument('-sm', '--smooth-mask',
                             action="store_true",
                             dest="smooth_mask",
-                            default=True,
+                            default=False,
                             help="Smooth mask (Adjust converter only)")
 
         parser.add_argument('-aca', '--avg-color-adjust',
                             action="store_true",
                             dest="avg_color_adjust",
-                            default=True,
+                            default=False,
                             help="Average color adjust. (Adjust converter only)")
+        
+        parser.add_argument("--double-pass",
+                            action="store_true",
+                            dest="double_pass",
+                            default=False,
+                            help="Double Pass (DFaker converter only)")
 
         parser.add_argument('-g', '--gpus',
                             type=int,
@@ -180,7 +186,7 @@ class ConvertImage(DirectoryProcessor):
         except:
             print('Aligned directory not found. All faces listed in the alignments file will be converted.')
 
-        converter = PluginLoader.get_converter(conv_name)(model.converter(False),
+        converter = PluginLoader.get_converter(conv_name)(model.converter,
             trainer=self.arguments.trainer,
             blur_size=self.arguments.blur_size,
             seamless_clone=self.arguments.seamless_clone,
@@ -189,7 +195,8 @@ class ConvertImage(DirectoryProcessor):
             erosion_kernel_size=self.arguments.erosion_kernel_size,
             match_histogram=self.arguments.match_histogram,
             smooth_mask=self.arguments.smooth_mask,
-            avg_color_adjust=self.arguments.avg_color_adjust
+            avg_color_adjust=self.arguments.avg_color_adjust,
+            double_pass=self.arguments.double_pass,
         )
 
         batch = BackgroundGenerator(self.prepare_images(), 1)

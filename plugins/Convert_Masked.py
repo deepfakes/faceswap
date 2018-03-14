@@ -7,15 +7,12 @@ from lib.aligner import get_align_mat
 
 class Convert():
     def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, sharpen_image=None, **kwargs):
-        self.encoder = encoder
+        self.encoder = encoder(False)
         self.trainer = trainer
         self.erosion_kernel = None
         self.erosion_kernel_size = erosion_kernel_size
         if erosion_kernel_size is not None:
-            if erosion_kernel_size > 0:
-                self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(erosion_kernel_size,erosion_kernel_size))
-            elif erosion_kernel_size < 0:
-                self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(abs(erosion_kernel_size),abs(erosion_kernel_size)))
+            self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(abs(erosion_kernel_size),abs(erosion_kernel_size)))
         self.blur_size = blur_size
         self.seamless_clone = seamless_clone
         self.sharpen_image = sharpen_image

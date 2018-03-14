@@ -7,7 +7,7 @@ import os
 
 class Convert(object):
     def __init__(self, encoder, smooth_mask=True, avg_color_adjust=True, **kwargs):
-        self.encoder = encoder
+        self.encoder = encoder(False)
 
         self.use_smooth_mask = smooth_mask
         self.use_avg_color_adjust = avg_color_adjust
