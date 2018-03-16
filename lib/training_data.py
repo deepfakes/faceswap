@@ -19,6 +19,7 @@ class TrainingDataGenerator():
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
     def minibatch(self, data, batchsize):
+        data = numpy.repeat(data, batchsize)
         length = len(data)
         assert length >= batchsize, "Number of images is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length, batchsize)
         epoch = i = 0
@@ -43,10 +44,10 @@ class TrainingDataGenerator():
             raise Exception("Error while reading image", fn)
         
         image = cv2.resize(image, (256,256))
-        image = self.random_transform( image, **self.random_transform_args )
-        warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
+        #image = self.random_transform( image, **self.random_transform_args )
+        #warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
         
-        return warped_img, target_img
+        return image, image
 
     def random_transform(self, image, rotation_range, zoom_range, shift_range, random_flip):
         h, w = image.shape[0:2]
