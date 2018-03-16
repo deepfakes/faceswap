@@ -14,7 +14,7 @@ from keras_contrib.losses import DSSIMObjective
 from keras import losses
 
 from keras.utils import multi_gpu_model
-
+import numpy
 
 class penalized_loss(object):
 
@@ -100,16 +100,17 @@ class Model(AutoEncoder):
         self.autoencoder_B.compile( optimizer=optimizer, loss=[ penalized_loss(m2, DSSIM),'mse'] )
 
     def converter(self, swap):
+        zmask = numpy.zeros((1,128, 128,1),float)
         autoencoder = self.autoencoder_B if not swap else self.autoencoder_A 
-        return lambda img: autoencoder.predict(img)
+        return lambda img: autoencoder.predict([img, zmask])
 
-    def upscale_ps(self, filters, use_norm=True):
-        def block(x):
-            x = Conv2D(filters*4, kernel_size=3, use_bias=False, kernel_initializer=RandomNormal(0, 0.02), padding='same' )(x)
-            x = LeakyReLU(0.1)(x)
-            x = PixelShuffler()(x)
-            return x
-        return block
+    # def upscale_ps(self, filters, use_norm=True):
+    #     def block(x):
+    #         x = Conv2D(filters*4, kernel_size=3, use_bias=False, kernel_initializer=RandomNormal(0, 0.02), padding='same' )(x)
+    #         x = LeakyReLU(0.1)(x)
+    #         x = PixelShuffler()(x)
+    #         return x
+    #     return block
 
     def res_block(self, input_tensor, f):
         x = input_tensor

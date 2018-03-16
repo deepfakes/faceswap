@@ -18,7 +18,6 @@ n=0
 
 imageSize = 256
 croppedSize = 240 
-zmask = numpy.zeros((1,128, 128,1),float)
 
 import cv2
 import numpy
@@ -63,17 +62,16 @@ class Convert():
         face = cv2.resize(face,(64,64),cv2.INTER_AREA)
         face = numpy.expand_dims( face, 0 )
 
-        new_face_rgb,new_face_m = self.encoder_A( [face / 255.0,zmask] )
+        new_face_rgb,new_face_m = self.encoder_A( face / 255.0 )
 
         if self.double_pass:
             #feed the original prediction back into the network for a second round.
             new_face_rgb = new_face_rgb.reshape((128, 128, 3))
             new_face_rgb = cv2.resize( new_face_rgb , (64,64))
             new_face_rgb = numpy.expand_dims( new_face_rgb, 0 )
-            new_face_rgb,_ = self.encoder_B( [new_face_rgb,zmask] )
-        
+            new_face_rgb,_ = self.encoder_A( new_face_rgb )
 
-        _,other_face_m = self.encoder_A( [face / 255.0,zmask] ) # NOTE: we get the image from other autoencoder!
+        _,other_face_m = self.encoder_B( face / 255.0 ) # NOTE: we get the image from other autoencoder!
 
         new_face_m = numpy.maximum(new_face_m, other_face_m )
 
