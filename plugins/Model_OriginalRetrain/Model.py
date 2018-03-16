@@ -4,6 +4,7 @@ from keras.models import Model as KerasModel
 from keras.layers import Input, Dense, Flatten, Reshape, add
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
+from keras.layers import MaxPool2D
 from keras.optimizers import Adam
 from keras.initializers import RandomNormal
 from keras import backend as K
@@ -29,7 +30,7 @@ class Model(AutoEncoder):
         self.autoencoder_B = KerasModel(x, self.decoder_B(encoder(x)))
 
         #self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss='binary_crossentropy')
+        self.autoencoder_B.compile(optimizer=optimizer, loss='mse')
 
         encoder.summary()
         self.autoencoder_B.summary()
@@ -87,9 +88,9 @@ class Model(AutoEncoder):
         x = self.upscale(64)(x)
         x = self.upscale(32)(x)
         x = self.upscale(16)(x)
-        x = self.res_block(x, 16)
-        x = self.res_block(x, 16)
-        x = self.res_block(x, 16)
-        x = self.res_block(x, 16)
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        x = self.res_block(x, 3)
+        x = self.res_block(x, 3)
+        x = self.res_block(x, 3)
+        x = self.res_block(x, 3)
         return KerasModel(input_, x)
