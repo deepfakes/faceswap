@@ -15,12 +15,14 @@ from tqdm import tqdm
 class AlignmentData(object):
     ''' Class to hold the alignment data '''
 
-    def __init__(self, alignments_file):
+    def __init__(self, alignments_file, destination_format):
         self.extensions = ['json', 'p', 'yaml', 'yml']
         self.alignments_file = alignments_file
-        self.serializer_opts = None
+        self.serializer_opts = {}
         self.alignments = None
-
+        self.read_opts = None
+        self.write_opts = None
+        
         self.check_alignments_file_exists()
 
         self.alignments_format = os.path.splitext(self.alignments_file)[1][1:]
@@ -29,6 +31,8 @@ class AlignmentData(object):
 
         self.load_alignments()
 
+        self.serializer = self.set_destination_serializer(destination_format)
+
     def check_alignments_file_exists(self):
         ''' Check the alignments file exists'''
         if not os.path.isfile(self.alignments_file):
@@ -36,14 +40,16 @@ class AlignmentData(object):
             sys.exit()
         
     def set_serializer(self):
+        ''' Set the serializer '''
         if self.alignments_format == 'json':
-            self.serializer_opts = {'indent': 2}
+            self.read_opts = 'r'
             return json
         elif self.alignments_format == 'p':
+            self.read_opts = 'rb'
             return pickle
         elif self.alignments_format in ['yml', 'yaml']:
+            self.read_opts = 'r'
             try:
-                self.serializer_opts = {'default_flow_style': False}
                 global yaml
                 import yaml
                 return yaml
@@ -54,10 +60,31 @@ class AlignmentData(object):
             print('{} is not a supported serializer. Exiting'.format(self.alignments_format))
             sys.exit()
 
+    def set_destination_serializer(self, destination_format):
+        ''' set the destination serializer '''
+        if destination_format == 'json':
+            self.serializer_opts = {'indent': 2}
+            self.write_opts = 'w'
+            alignments_format = 'json'
+        elif destination_format == 'pickle':
+            self.write_opts = 'wb'
+            alignments_format = 'p'
+        elif destination_format == 'yaml':
+            self.write_opts = 'w'
+            self.serializer_opts = {'default_flow_style': False}
+            alignments_format = 'yml'
+        else:
+            print('{} is not a supported serializer. Exiting'.format(destination_format))
+            sys.exit()
+        if alignments_format == self.alignments_format:
+            return self.serializer
+        self.alignments_format = alignments_format
+        return self.set_serializer()
+
     def load_alignments(self):
         ''' Read the alignments data from the correct format '''
         print('Loading {} alignments from {}\n'.format(self.alignments_format, self.alignments_file))
-        with open(self.alignments_file, 'r') as alignments:
+        with open(self.alignments_file, self.read_opts) as alignments:
             if self.alignments_format not in ('yaml', 'yml'):
                 self.alignments = self.serializer.loads(alignments.read())
             else:
@@ -73,8 +100,9 @@ class AlignmentData(object):
     def save_alignments(self):
         ''' Backup copy of old alignments and save new alignments '''
         self.backup_alignments()
-        print('Saving alignments to {}\n'.format(self.alignments_file))
-        with open(self.alignments_file, 'w') as alignments:
+        alignments_file = '{}.{}'.format(os.path.splitext(self.alignments_file)[0], self.alignments_format)
+        print('Saving alignments to {}\n'.format(alignments_file))
+        with open(alignments_file, self.write_opts) as alignments:
             if self.alignments_format not in ('yaml', 'yml'):
                 alignments.write(self.serializer.dumps(self.alignments, **self.serializer_opts))
             else:
@@ -132,7 +160,7 @@ class RemoveAlignments(object):
     ''' Remove items from alignments file '''
     def __init__(self, arguments):
         self.faces = Faces(arguments.faces_dir)
-        self.alignment_data = AlignmentData(arguments.alignments_file)
+        self.alignment_data = AlignmentData(arguments.alignments_file, arguments.destination_format)
         self.count_items = len(self.alignment_data.alignments)
         self.count_faces = len(self.faces.file_list_sorted)
         self.removed = set()
@@ -200,12 +228,22 @@ def parser_arguments(parser):
                         dest='faces_dir',
                         help='Input directory of source A extracted faces.',
                         required=True)
+    parser.add_argument('-d', '--destination_format',
+                        type=str,
+                        choices=('json', 'pickle', 'yaml'),
+                        dest='destination_format',
+                        help='The file format to save the serialized data in.',
+                        default='json')
+    
 
 def select_job(arguments):
     ''' Select the job '''
     if arguments.job.lower() == 'remove':
         job = RemoveAlignments(arguments)
         job.remove_alignment()
+    if arguments.job.lower() == 'reformat':
+        job = AlignmentData(arguments.alignments_file, arguments.destination_format)
+        job.save_alignments()
 
 if __name__ == '__main__':
     print ('Faceswap Alignments File Helper Tool.\n')
