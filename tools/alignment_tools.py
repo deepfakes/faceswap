@@ -2,6 +2,7 @@
 
 #TODO change format
 #TODO merge alignments
+#TODO move/identify frames that are not in alignments file
 
 import argparse
 import datetime
@@ -14,59 +15,54 @@ from tqdm import tqdm
 class AlignmentData(object):
     ''' Class to hold the alignment data '''
 
-    def __init__(self, alignments_dir):
+    def __init__(self, alignments_file):
         self.extensions = ['json', 'p', 'yaml', 'yml']
-        self.alignments_file = None
-        self.alignments_format = None
+        self.alignments_file = alignments_file
+        self.serializer_opts = None
         self.alignments = None
 
-        self.load_alignments(alignments_dir)
+        self.check_alignments_file_exists()
 
-    def alignments_file_exists(self, alignments_base, extension):
-        ''' return 1 if a file is found '''
-        alignments_file = '{}.{}'.format(alignments_base, extension)
-        if os.path.isfile(alignments_file):
-            self.alignments_file = alignments_file
-            self.alignments_format = extension
-            return 1
-        return 0
+        self.alignments_format = os.path.splitext(self.alignments_file)[1][1:]
 
-    def check_alignments_file(self, alignments_base):
-        ''' Checks that there is just one alignment file '''
-        file_count = 0
-        for extension in self.extensions:
-            file_count += self.alignments_file_exists(alignments_base, extension)
-        if file_count != 1:
-            raise ValueError ('1 alignments file should exist, but {} were found'.format(file_count))
+        self.serializer = self.set_serializer()
 
-    def read_alignments(self):
+        self.load_alignments()
+
+    def check_alignments_file_exists(self):
+        ''' Check the alignments file exists'''
+        if not os.path.isfile(self.alignments_file):
+            print('alignments file not found at: {}'.format(self.alignments_file))
+            sys.exit()
+        
+    def set_serializer(self):
+        if self.alignments_format == 'json':
+            self.serializer_opts = {'indent': 2}
+            return json
+        elif self.alignments_format == 'p':
+            return pickle
+        elif self.alignments_format in ['yml', 'yaml']:
+            try:
+                self.serializer_opts = {'default_flow_style': False}
+                global yaml
+                import yaml
+                return yaml
+            except ImportError:
+                print('You must have PyYAML installed to use YAMLSerializer')
+                sys.exit()
+        else:
+            print('{} is not a supported serializer. Exiting'.format(self.alignments_format))
+            sys.exit()
+
+    def load_alignments(self):
         ''' Read the alignments data from the correct format '''
         print('Loading {} alignments from {}\n'.format(self.alignments_format, self.alignments_file))
-        alignments = open(self.alignments_file, 'r')
-        if self.alignments_format == 'json':
-            return json.loads(alignments.read())
-        elif self.alignments_format == 'p':
-            return pickle.loads(alignments.read())
-        elif self.alignments_format in ('yaml', 'yml'):
-            try:
-                import yaml
-            except ImportError:
-                raise ValueError('You must have PyYAML installed to use YAMLSerializer')
-            return yaml.load(alignments.read())
-        alignments.close()
-    
-    def load_alignments(self, alignments_dir):
-        ''' load the data from the alignments file '''
-        alignments_base = os.path.join(alignments_dir, 'alignments')
-        try:
-            self.check_alignments_file(alignments_base)
-            self.alignments = self.read_alignments()
-        except ValueError as v:
-            print(v)
-            sys.exit()
-        except:
-            raise
-
+        with open(self.alignments_file, 'r') as alignments:
+            if self.alignments_format not in ('yaml', 'yml'):
+                self.alignments = self.serializer.loads(alignments.read())
+            else:
+                self.alignments = self.serializer.load(alignments.read())
+                
     def backup_alignments(self):
         ''' Backup copy of old alignments '''
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -74,26 +70,15 @@ class AlignmentData(object):
         print('Backing up old {} to {}'.format(self.alignments_file, backupfile))
         os.rename(self.alignments_file, backupfile)
 
-    def write_alignments(self):
-        ''' compile the new alignments '''
-        print('Saving alignments to {}\n'.format(self.alignments_file))
-        if self.alignments_format == 'json':
-            return json.dumps(self.alignments, indent=2)
-        elif self.alignments_format == 'p':
-            return pickle.dumps(self.alignments)
-        elif self.alignments_format in ('yaml', 'yml'):
-            try:
-                import yaml
-            except ImportError:
-                raise ValueError('You must have PyYAML installed to use YAMLSerializer')
-            return yaml.dump(self.alignments, default_flow_style=False)       
-
     def save_alignments(self):
         ''' Backup copy of old alignments and save new alignments '''
         self.backup_alignments()
-        alignments = open(self.alignments_file, 'w')
-        alignments.write(self.write_alignments())
-        alignments.close()
+        print('Saving alignments to {}\n'.format(self.alignments_file))
+        with open(self.alignments_file, 'w') as alignments:
+            if self.alignments_format not in ('yaml', 'yml'):
+                alignments.write(self.serializer.dumps(self.alignments, **self.serializer_opts))
+            else:
+                alignments.write(self.serializer.dump(self.alignments, **self.serializer_opts))
 
     def get_alignments_one_image(self):
         ''' Return the face alignments for one image '''
@@ -147,7 +132,7 @@ class RemoveAlignments(object):
     ''' Remove items from alignments file '''
     def __init__(self, arguments):
         self.faces = Faces(arguments.faces_dir)
-        self.alignment_data = AlignmentData(arguments.alignments_dir)
+        self.alignment_data = AlignmentData(arguments.alignments_file)
         self.count_items = len(self.alignment_data.alignments)
         self.count_faces = len(self.faces.file_list_sorted)
         self.removed = set()
@@ -162,7 +147,6 @@ class RemoveAlignments(object):
                 continue
             for idx in self.alignment_data.get_one_alignment_index_reverse(alignments, number_alignments):
                 if idx not in self.faces.faces.get(image_name,[-1]):
-                    print(image_name)
                     del alignments[idx]
                     self.removed.add(image_name)
                     del_count += 1
@@ -206,11 +190,10 @@ def parser_arguments(parser):
                         dest='job',
                         help='The job to be performed.',
                         required=True)
-    parser.add_argument('-a', '--alignments_folder',
+    parser.add_argument('-a', '--alignments_file',
                         type=str,
-                        dest='alignments_dir',
-                        help='Input directory of source A frames. Alignments file must exist in '
-                              'this folder',
+                        dest='alignments_file',
+                        help='Full path to the alignments file to be processed',
                         required=True)
     parser.add_argument('-f', '--faces_folder',
                         type=str,
