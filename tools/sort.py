@@ -45,12 +45,12 @@ class SortProcessor(object):
                             type=str,
                             choices=("folders", "rename"),
                             dest='grouping',
-                            default="folders",
+                            default="rename",
                             help="'folders' sorts input the files them into\
                                   folders.\
                                   'renaming' renames the input files to group\
                                   them.\
-                                  Default: folders")
+                                  Default: rename")
 
         parser.add_argument('-t', '--ref_threshold',
                             type=float,
@@ -117,14 +117,15 @@ class SortProcessor(object):
 
         parser.add_argument('-by', '--by',
                             type=str,
-                            choices=("blur", "face", "face-cnn", "face-dissim",
-                                     "hist", "hist-dissim"),
+                            choices=("blur", "face", "face-cnn",
+                                     "face-cnn-dissim", "face-dissim", "hist",
+                                     "hist-dissim"),
                             dest='method',
                             default="hist",
                             help="Sort by method.\
-                                  When grouping by folders face-dissim \
-                                  defaults to face, and hist-dissim defaults\
-                                  to hist.\
+                                  When grouping by folders face-cnn-dissim and\
+                                  face-dissim default to face, \
+                                  and hist-dissim defaults to hist.\
                                   Default: hist")
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
@@ -156,6 +157,8 @@ class SortProcessor(object):
         if self.arguments.grouping.lower() == 'folders':
             if self.arguments.method.lower() == 'face-dissim':
                 self.arguments.method = 'face'
+            elif self.arguments.method.lower() == 'face-cnn-dissim':
+                self.arguments.method = 'face'
             elif self.arguments.method.lower() == 'hist-dissim':
                 self.arguments.method = 'hist'
 
@@ -181,14 +184,16 @@ class SortProcessor(object):
                 self.process_blur()
             elif self.arguments.method.lower() == 'face':
                 self.process_face()
+            elif self.arguments.method.lower() == 'face-dissim':
+                self.process_face_dissim()
             elif self.arguments.method.lower() == 'face-cnn':
                 self.process_face_cnn()
-            elif self.arguments.method.lower() == 'face-dissim':
-                self.process_face()
+            elif self.arguments.method.lower() == 'face-cnn-dissim':
+                self.process_face_cnn_dissim()
             elif self.arguments.method.lower() == 'hist':
                 self.process_hist()
             elif self.arguments.method.lower() == 'hist-dissim':
-                self.process_hist()
+                self.process_hist_dissim()
 
     # Methods for grouping by renaming
     def process_blur(self):
@@ -232,13 +237,41 @@ class SortProcessor(object):
                 
         print ("Done.")
 
+    def process_face_dissim(self):
+        input_dir = self.arguments.input_dir
+        output_dir = self.arguments.output_dir
+
+        print ("Sorting by face dissimilarity...")
+
+        img_list = [ [x, face_recognition.face_encodings(cv2.imread(x)), 0 ] for x in tqdm( self.find_images(input_dir), desc="Loading") ]
+
+        img_list_len = len(img_list)
+        for i in tqdm ( range(0, img_list_len), desc="Sorting"):
+            score_total = 0
+            for j in range( 0, img_list_len):
+                if i == j:
+                    continue
+                try:
+                    score_total += face_recognition.face_distance([img_list[i][1]], [img_list[j][1]])
+                except:
+                    pass
+
+            img_list[i][2] = score_total
+
+
+        print ("Sorting...")
+        img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
+        self.process_final_rename (output_dir, img_list)
+
+        print ("Done.")
+
     def process_face_cnn(self):
         from lib import FaceLandmarksExtractor
 
         input_dir = self.arguments.input_dir
         output_dir = self.arguments.output_dir
 
-        print ("Sorting by face similarity...")
+        print ("Sorting by face-cnn similarity...")
 
         img_list = []
         for x in tqdm( self.find_images(input_dir), desc="Loading"):
@@ -264,27 +297,30 @@ class SortProcessor(object):
 
         print ("Done.")
 
-    def process_face_dissim(self):
+    def process_face_cnn_dissim(self):
+        from lib import FaceLandmarksExtractor
+
         input_dir = self.arguments.input_dir
         output_dir = self.arguments.output_dir
 
-        print ("Sorting by face dissimilarity...")
+        print ("Sorting by face-cnn dissimilarity...")
 
-        img_list = [ [x, face_recognition.face_encodings(cv2.imread(x)) ] for x in tqdm( self.find_images(input_dir), desc="Loading") ]
+        img_list = []
+        for x in tqdm( self.find_images(input_dir), desc="Loading"):
+            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True)
+            img_list.append( [x, np.array(d[0][1]) if len(d) > 0 else np.zeros ( (68,2) ), 0 ] )
 
         img_list_len = len(img_list)
-        for i in tqdm ( range(0, img_list_len), desc="Sorting"):
+        for i in tqdm ( range(0, img_list_len-1), desc="Sorting"):
             score_total = 0
-            for j in range( 0, img_list_len):
+            for j in range(i+1,len(img_list)):
                 if i == j:
                     continue
-                try:
-                    score_total += face_recognition.face_distance([img_list[i][1]], [img_list[j][1]])
-                except:
-                    pass
+                fl1 = img_list[i][1]
+                fl2 = img_list[j][1]
+                score_total += np.sum ( np.absolute ( (fl2 - fl1).flatten() ) )
 
             img_list[i][2] = score_total
-
 
         print ("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
@@ -407,7 +443,7 @@ class SortProcessor(object):
         input_dir = self.arguments.input_dir
         output_dir = self.arguments.output_dir
 
-        print ("Sorting by face similarity...")
+        print ("Grouping by face similarity...")
 
         # Groups are of the form: group_num -> reference face
         reference_groups = dict()
@@ -466,7 +502,7 @@ class SortProcessor(object):
         input_dir = self.arguments.input_dir
         output_dir = self.arguments.output_dir
 
-        print ("Grouping by face similarity...")
+        print ("Grouping by face-cnn similarity...")
 
         # Groups are of the form: group_num -> reference face
         reference_groups = dict()
@@ -516,6 +552,8 @@ class SortProcessor(object):
     def process_hist_folders(self):
         input_dir = self.arguments.input_dir
         output_dir = self.arguments.output_dir
+
+        print ("Grouping by histogram...")
 
         # Groups are of the form: group_num -> reference histogram
         reference_groups = dict()
