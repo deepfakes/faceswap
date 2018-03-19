@@ -68,6 +68,9 @@ class DirectoryProcessor(object):
         except AttributeError:
             pass
     
+        self.start()
+
+    def start(self):
         self.output_dir = get_folder(self.arguments.output_dir)
 
         try:

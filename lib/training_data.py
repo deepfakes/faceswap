@@ -10,7 +10,7 @@ class TrainingDataGenerator():
         self.random_transform_args = random_transform_args
         self.coverage = coverage
         self.scale = scale
-        self.zoom = zoom
+        self.zoom = 4
 
     def minibatchAB(self, images, batchsize):
         batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
@@ -19,6 +19,7 @@ class TrainingDataGenerator():
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
     def minibatch(self, data, batchsize):
+        data = numpy.repeat(data, batchsize)
         length = len(data)
         assert length >= batchsize, "Number of images is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length, batchsize)
         epoch = i = 0
@@ -31,7 +32,7 @@ class TrainingDataGenerator():
                 epoch+=1
             rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])
             i+=size
-            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
+            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]
 
     def color_adjust(self, img):
         return img / 255.0
@@ -43,10 +44,10 @@ class TrainingDataGenerator():
             raise Exception("Error while reading image", fn)
         
         image = cv2.resize(image, (256,256))
-        image = self.random_transform( image, **self.random_transform_args )
-        warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
+        #image = self.random_transform( image, **self.random_transform_args )
+        #warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
         
-        return warped_img, target_img
+        return image, image
 
     def random_transform(self, image, rotation_range, zoom_range, shift_range, random_flip):
         h, w = image.shape[0:2]

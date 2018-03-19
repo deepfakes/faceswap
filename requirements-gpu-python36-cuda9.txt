@@ -8,3 +8,4 @@ scikit-image
 dlib
 face_recognition
 tqdm
+moviepy

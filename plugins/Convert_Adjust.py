@@ -5,14 +5,16 @@ import cv2
 import numpy
 import os
 
-class Convert(object):
+from lib.Converter import Converter
+
+class Convert(Converter):
     def __init__(self, encoder, smooth_mask=True, avg_color_adjust=True, **kwargs):
         self.encoder = encoder
 
         self.use_smooth_mask = smooth_mask
         self.use_avg_color_adjust = avg_color_adjust
 
-    def patch_image( self, original, face_detected, size ):
+    def patch_one_face( self, original, face_detected, size ):
         #assert image.shape == (256, 256, 3)
         image = cv2.resize(face_detected.image, (256, 256))
         crop = slice(48, 208)

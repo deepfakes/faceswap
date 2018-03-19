@@ -26,4 +26,7 @@ RUN apt-get update -qq \
 COPY ./requirements-python35.txt .
 RUN pip3 --no-cache-dir install -r ./requirements-python35.txt
 
+COPY ./install_ffmpeg.py
+RUN python3 ./install_ffmpeg.py
+
 WORKDIR /srv/
