@@ -20,8 +20,8 @@ class AlignmentData(object):
         self.alignments_file = alignments_file
         self.serializer_opts = {}
         self.alignments = None
-        self.read_opts = None
-        self.write_opts = None
+        self.read_opts = 'r'
+        self.write_opts = 'w'
         
         self.check_alignments_file_exists()
 
@@ -42,13 +42,11 @@ class AlignmentData(object):
     def set_serializer(self):
         ''' Set the serializer '''
         if self.alignments_format == 'json':
-            self.read_opts = 'r'
             return json
         elif self.alignments_format == 'p':
             self.read_opts = 'rb'
             return pickle
         elif self.alignments_format in ['yml', 'yaml']:
-            self.read_opts = 'r'
             try:
                 global yaml
                 import yaml
@@ -64,13 +62,11 @@ class AlignmentData(object):
         ''' set the destination serializer '''
         if destination_format == 'json':
             self.serializer_opts = {'indent': 2}
-            self.write_opts = 'w'
             alignments_format = 'json'
         elif destination_format == 'pickle':
             self.write_opts = 'wb'
             alignments_format = 'p'
         elif destination_format == 'yaml':
-            self.write_opts = 'w'
             self.serializer_opts = {'default_flow_style': False}
             alignments_format = 'yml'
         else:
