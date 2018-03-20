@@ -17,10 +17,16 @@ def bad_args(args):
 
 
 if __name__ == "__main__":
+    _tools_warning = "Please backup your data and/or test the tool you want "
+    _tools_warning += "to use with a smaller data set to make sure you "
+    _tools_warning += "understand how it works."
+    print(_tools_warning)
+
     parser = FullHelpArgumentParser()
     subparser = parser.add_subparsers()
     sort = SortProcessor(
-        subparser, "sort", "Sort images using various methods.")
+        subparser, "sort", "This command lets you sort images using various "
+                           "methods.")
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
