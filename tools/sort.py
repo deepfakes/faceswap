@@ -54,7 +54,7 @@ class SortProcessor(object):
                             default="rename",
                             help="'folders': files are sorted using the "
                                  "-s/--sort-by method, then they are "
-                                 "organized nto folders using the "
+                                 "organized into folders using the "
                                  "-g/--group-by grouping method. "
                                  "'rename': files are sorted using the "
                                  "-s/--sort-by then they are renamed."
@@ -64,64 +64,64 @@ class SortProcessor(object):
                             type=float,
                             dest='min_threshold',
                             default=-1.0,
-                            help="Float value.\
-                                  Minimum threshold to use for comparison with\
-                                  'face' and 'hist' methods. The lower the \
-                                  value the more discriminating the sorting \
-                                  is. \
-                                  For face 0.6 should be enough, with 0.5\
-                                  being very discriminating. \
-                                  For face-cnn 7.2 should be enough, with 4\
-                                  being very discriminating.\
-                                  For hist 0.3 should be enough, with 0.2\
-                                  being very discriminating.\
-                                  Be careful setting a value that's too \
-                                  low in a directory with many images, as this\
-                                  could result in a lot of directories being \
-                                  created.\
-                                  Defaults: face 0.6, face-cnn 17, hist 0.3")
+                            help="Float value. "
+                                 "Minimum threshold to use for grouping "
+                                 "comparison with 'face' and 'hist' methods. "
+                                 "The lower the value the more discriminating "
+                                 "the grouping is. "
+                                 "For face 0.6 should be enough, with 0.5 "
+                                 "being very discriminating. "
+                                 "For face-cnn 7.2 should be enough, with 4 "
+                                 "being very discriminating. "
+                                 "For hist 0.3 should be enough, with 0.2 "
+                                 "being very discriminating. "
+                                 "Be careful setting a value that's too "
+                                 "low in a directory with many images, as "
+                                 "this could result in a lot of directories "
+                                 " being created. "
+                                 "Defaults: face 0.6, face-cnn 7.2, hist 0.3")
 
         parser.add_argument('-b', '--bins',
                             type=int,
                             dest='num_bins',
                             default=5,
-                            help="Integer value.\
-                                  Number of folders that will be used to group\
-                                  by blur. Folder 0 will be the least blurry,\
-                                  while the last folder will be the blurriest.\
-                                  If the number of images doesn't divide\
-                                  evenly into the number of bins, the\
-                                  remaining images get put in the last bin as\
-                                  they will be the blurriest by definition.\
-                                  Default value: 5")
+                            help="Integer value. "
+                                 "Number of folders that will be used to " 
+                                 "group by blur. Folder 0 will be the least "
+                                 "blurry, while the last folder will be the "
+                                 "blurriest. If the number of images doesn't "
+                                 "divide evenly into the number of bins, the "
+                                 "remaining images get put in the last bin as "
+                                 "they will be the blurriest by definition. "
+                                 "Default value: 5")
 
         parser.add_argument('-k', '--keep',
                             action='store_true',
                             dest='keep_original',
                             default=False,
-                            help="Keeps the original files in the input\
-                                  directory. Be careful when using this with\
-                                  rename grouping and no specified output\
-                                  directory as this would keep the original\
-                                  and renamed files in the same directory.")
+                            help="Keeps the original files in the input "
+                                 "directory. Be careful when using this with "
+                                 "rename grouping and no specified output "
+                                 "directory as this would keep the original "
+                                 "and renamed files in the same directory.")
 
         parser.add_argument('-l', '--log-changes',
                             action='store_true',
                             dest='log_changes',
                             default=False,
-                            help="Logs file renaming changes if grouping by\
-                                  renaming, or it logs the file\
-                                  copying/movement if grouping by folders.\
-                                  If no log file is specified with \
-                                  '--log-file', then a 'sort_log.json' file \
-                                  will be created in the input directory.")
+                            help="Logs file renaming changes if grouping by "
+                                 "renaming, or it logs the file "
+                                 "copying/movement if grouping by folders. "
+                                 "If no log file is specified with "
+                                 "'--log-file', then a 'sort_log.json' file "
+                                 "will be created in the input directory.")
 
-        parser.add_argument('-lg', '--log-file',
+        parser.add_argument('-lf', '--log-file',
                             dest='log_file',
                             default='__default',
-                            help="Specify a log file to use for saving the\
-                                  renaming or grouping information.\
-                                  Default: sort_log.json")
+                            help="Specify a log file to use for saving the "
+                                 "renaming or grouping information. "
+                                 "Default: sort_log.json")
 
         parser.add_argument('-s', '--sort-by',
                             type=str,
@@ -197,18 +197,19 @@ class SortProcessor(object):
         the core process of sorting, optionally grouping, renaming/moving into
         folders. After the functions are assigned they are executed.
         """
-        sort_method = self.arguments.sort_method.lower()
-        group_method = self.arguments.group_method.lower()
+        __sort_method = self.arguments.sort_method.lower()
+        __group_method = self.arguments.group_method.lower()
         final_process = self.arguments.final_process.lower()
 
         # Assign the methods that will be used for processing the files
-        sort_method = self.set_process_method("sort", sort_method)
-        group_method = self.set_process_method("group", group_method)
+        sort_method = self.set_process_method("sort", __sort_method)
+        group_method = self.set_process_method("group", __group_method)
         final_method = self.set_process_method("final_process", final_process)
 
         img_list = getattr(self, sort_method)()
         if "group" in final_process:
-            if sort_method.replace('_dissim', '') != group_method.replace('group', 'sort'):
+            # Check if non-dissim sort method and group method are not the same
+            if __sort_method.replace('-dissim', '') != __group_method:
                 img_list = self.reload_images(group_method, img_list)
                 img_list = getattr(self, group_method)(img_list)
             else:
@@ -632,9 +633,9 @@ class SortProcessor(object):
     @staticmethod
     def splice_lists(sorted_list, new_vals_list):
         """
-        This method replaces the value at index 1 in the sorted_list with the
-        value that is calculated for the same img_path, but found in
-        new_vals_list.
+        This method replaces the value at index 1 in each sub-list in the
+        sorted_list with the value that is calculated for the same img_path,
+        but found in new_vals_list.
 
         Format of lists: [[img_path, value], [img_path2, value2], ...]
 
