@@ -42,7 +42,7 @@ def main( input_dir, output_path ):
         lowest_yaw = min (lowest_yaw, sample_yaw)
         highest_yaw = max (highest_yaw, sample_yaw)     
         
-    gradations = 180
+    gradations = 256
     diff_rot_per_grad = abs(highest_yaw-lowest_yaw) / gradations
 
     yaws_sample_list = []
