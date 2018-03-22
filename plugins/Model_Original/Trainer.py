@@ -11,14 +11,18 @@ class Trainer():
         'random_flip': 0.4,
     }
 
-    def __init__(self, model, fn_A, fn_B, batch_size, *args):
+    def __init__(self, fn_A, fn_B, batch_size, *args):
         self.batch_size = batch_size
-        self.model = model
 
         generator = TrainingDataGenerator(self.random_transform_args, 160)
         self.images_A = generator.minibatchAB(fn_A, self.batch_size)
         self.images_B = generator.minibatchAB(fn_B, self.batch_size)
-
+        next(self.images_A) #tmp OOM fix, execute image batch before model loaded
+        next(self.images_B)
+        
+    def set_model(self, model):
+        self.model = model
+        
     def train_one_step(self, iter, viewer):
         epoch, warped_A, target_A = next(self.images_A)
         epoch, warped_B, target_B = next(self.images_B)
