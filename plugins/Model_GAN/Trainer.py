@@ -48,10 +48,9 @@ class Trainer():
         
         self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
 
-        self.setup()
-        
     def set_model(self, model):
         self.model = model
+        self.setup()
 
     def setup(self):
         distorted_A, fake_A, mask_A, self.path_A, self.path_mask_A, self.path_abgr_A, self.path_bgr_A = self.cycle_variables(self.model.netGA)
