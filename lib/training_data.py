@@ -1,9 +1,16 @@
 import cv2
 import numpy
 from random import shuffle
+from random import randint
 
 from .utils import BackgroundGenerator
 from .umeyama import umeyama
+
+import os
+import sys
+import subprocess
+
+from .Serializer import JSONSerializer
 
 class TrainingDataGenerator():
     def __init__(self, random_transform_args, coverage, scale=5, zoom=1): #TODO thos default should stay in the warp function
@@ -13,25 +20,63 @@ class TrainingDataGenerator():
         self.zoom = zoom
 
     def minibatchAB(self, images, batchsize):
-        batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
+    
+        def execute_yaw_sorter ( input_dir, output_path ):
+            yaw_sorter_process = subprocess.Popen(
+                        sys.executable + " " +                
+                        os.path.join ( os.path.dirname(__file__), 'yaw_sorter.py' ) + ' "' + input_dir + '" "' + output_path + '"'
+                        , env=os.environ)                        
+            yaw_sorter_process.wait()
+        
+        images_dir = os.path.dirname (images[0])
+        images_parent_dir = os.path.join ( images_dir, os.pardir )
+        images_parent_dir_alignments_yaw_json = os.path.join ( images_parent_dir, "alignments_yaw.json" )
+        
+        broken_alignments_yaw = False
+        while True:
+            yaws_sample_list = []
+            if not os.path.exists(images_parent_dir_alignments_yaw_json) or broken_alignments_yaw:
+                print ('Sorting trainset to alignments_yaw.json...')
+                execute_yaw_sorter (images_dir, images_parent_dir_alignments_yaw_json )
+                
+            with open(images_parent_dir_alignments_yaw_json, "r") as f:
+                yaws_sample_list = JSONSerializer.unmarshal(f.read())   
+            
+            broken_alignments_yaw = False
+            for image in images:
+                if any (image in sample_list for sample_list in yaws_sample_list) == False:
+                    import code
+                    code.interact(local=dict(globals(), **locals()))
+                    broken_alignments_yaw = True
+                    break
+            
+            if not broken_alignments_yaw:
+                break
+                
+        print ('Using alignments_yaw.json.')
+        
+        batch = BackgroundGenerator(self.minibatch(yaws_sample_list, batchsize), 1)
         for ep1, warped_img, target_img in batch.iterator():
             yield ep1, warped_img, target_img
-
+            
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
     def minibatch(self, data, batchsize):
-        length = len(data)
-        assert length >= batchsize, "Number of images is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length, batchsize)
-        epoch = i = 0
-        shuffle(data)
+        data_len = len(data)
+        epoch = 0
+        data_counter = 0
         while True:
-            size = batchsize
-            if i+size > length:
-                shuffle(data)
-                i = 0
-                epoch+=1
-            rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])
-            i+=size
-            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
+            batch_data_list = []  
+            for i in range(0, batchsize):
+                idx = (i + data_counter) % data_len
+                idx_data_len = len(data[idx])
+                if idx_data_len > 0:
+                    batch_data_list.append ( data[idx][randint (0, idx_data_len-1)] )
+            data_counter += batchsize    
+
+            rtn = numpy.float32([self.read_image(img) for img in batch_data_list ])   
+            epoch += 1   
+            
+            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]
 
     def color_adjust(self, img):
         return img / 255.0
