@@ -43,8 +43,8 @@ class Trainer():
         generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 1)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
-        next(self.images_A) #tmp OOM fix, execute image batch before model loaded
-        next(self.images_B)
+        next(self.train_batchA) #tmp OOM fix, execute image batch before model loaded
+        next(self.train_batchB)
         
         self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
 
