@@ -36,6 +36,7 @@ class Trainer():
         self.use_mixup = True
         self.mixup_alpha = 0.2
         self.use_perceptual_loss = perceptual_loss
+        self.use_mask_refinement = False #OPTIONAL After 15k iteration**
 
         self.lrD = 1e-4 # Discriminator learning rate
         self.lrG = 1e-4 # Generator learning rate
@@ -73,12 +74,15 @@ class Trainer():
         else:
             vggface_feat = None
 
-        #TODO check "Tips for mask refinement (optional after >15k iters)" => https://render.githubusercontent.com/view/ipynb?commit=87d6e7a28ce754acd38d885367b6ceb0be92ec54&enc_url=68747470733a2f2f7261772e67697468756275736572636f6e74656e742e636f6d2f7368616f616e6c752f66616365737761702d47414e2f383764366537613238636537353461636433386438383533363762366365623062653932656335342f46616365537761705f47414e5f76325f737a3132385f747261696e2e6970796e62&nwo=shaoanlu%2Ffaceswap-GAN&path=FaceSwap_GAN_v2_sz128_train.ipynb&repository_id=115182783&repository_type=Repository#Tips-for-mask-refinement-(optional-after-%3E15k-iters)
         loss_DA, loss_GA = self.define_loss(self.model.netDA, real_A, fake_A, fake_sz64_A, distorted_A, vggface_feat)
         loss_DB, loss_GB = self.define_loss(self.model.netDB, real_B, fake_B, fake_sz64_B, distorted_B, vggface_feat)
 
-        loss_GA += 3e-3 * K.mean(K.abs(mask_A))
-        loss_GB += 3e-3 * K.mean(K.abs(mask_B))
+        if self.use_mask_refinement:
+            loss_GA += 1e-3 * K.mean(K.square(mask_A))
+            loss_GB += 1e-3 * K.mean(K.square(mask_B))
+        else:
+            loss_GA += 3e-3 * K.mean(K.abs(mask_A))
+            loss_GB += 3e-3 * K.mean(K.abs(mask_B))
 
         w_fo = 0.01
         loss_GA += w_fo * K.mean(self.first_order(mask_A, axis=1))
@@ -181,7 +185,10 @@ class Trainer():
             loss_D = loss_D_real + loss_D_fake
             loss_G = 1 * self.loss_fn(output_fake, K.ones_like(output_fake))
         # ==========
-        loss_G += K.mean(K.abs(fake_rgb - real))
+        if self.use_mask_refinement:
+            loss_G += K.mean(K.abs(fake - real))
+        else:
+            loss_G += K.mean(K.abs(fake_rgb - real))
         loss_G += K.mean(K.abs(fake_sz64 - tf.image.resize_images(real, [64, 64])))
         # ==========
 
@@ -195,7 +202,10 @@ class Trainer():
             real_sz224 = tf.image.resize_images(real, [224, 224])
             real_sz224 = Lambda(preprocess_vggface)(real_sz224)
             # ==========
-            fake_sz224 = tf.image.resize_images(fake_rgb, [224, 224])
+            if self.use_mask_refinement:
+                fake_sz224 = tf.image.resize_images(fake, [224, 224])
+            else:
+                fake_sz224 = tf.image.resize_images(fake_rgb, [224, 224])
             fake_sz224 = Lambda(preprocess_vggface)(fake_sz224)
             # ==========
             real_feat55, real_feat28, real_feat7 = vggface_feat(real_sz224)
