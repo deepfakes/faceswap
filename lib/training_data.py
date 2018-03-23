@@ -21,10 +21,8 @@ class TrainingDataGenerator():
 
     def minibatchAB(self, images, batchsize):
         def execute_yaw_sorter ( input_dir, output_path ):
-            yaw_sorter_process = subprocess.Popen(
-                        sys.executable + " " +                
-                        os.path.join ( os.path.dirname(__file__), 'yaw_sorter.py' ) + ' "' + input_dir + '" "' + output_path + '"'
-                        , env=os.environ)                        
+            args = [sys.executable, os.path.join(os.path.dirname(__file__), 'yaw_sorter.py'), input_dir, output_path]
+            yaw_sorter_process = subprocess.Popen(args, env=os.environ)
             yaw_sorter_process.wait()
         
         images_dir = os.path.dirname (images[0])
