@@ -20,7 +20,6 @@ class TrainingDataGenerator():
         self.zoom = zoom
 
     def minibatchAB(self, images, batchsize):
-    
         def execute_yaw_sorter ( input_dir, output_path ):
             yaw_sorter_process = subprocess.Popen(
                         sys.executable + " " +                
@@ -45,8 +44,6 @@ class TrainingDataGenerator():
             broken_alignments_yaw = False
             for image in images:
                 if any (image in sample_list for sample_list in yaws_sample_list) == False:
-                    import code
-                    code.interact(local=dict(globals(), **locals()))
                     broken_alignments_yaw = True
                     break
             
