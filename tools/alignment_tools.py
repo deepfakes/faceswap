@@ -1,8 +1,8 @@
 ''' Tools for manipulating the alignments seralized file '''
 
-#TODO change format
 #TODO merge alignments
 #TODO move/identify frames that are not in alignments file
+#TODO Identify frames with multiple/no faces in them
 
 import argparse
 import datetime
@@ -12,97 +12,263 @@ import json
 import pickle
 from tqdm import tqdm
 
+class AlignmentTool(object):
+    ''' Main class to process jobs '''
+
+    def __init__(self, subparser, command, description='default'):
+        self.set_parser(description, subparser, command)
+
+    def set_parser(self, description, subparser, command):
+        ''' Set parent parser and correct subparser '''
+        parser = subparser.add_parser(
+                command,
+                help="This command lets you change an alignments file in\
+                      various ways.",
+                description=description,
+                epilog="Questions and feedback: \
+                        https://github.com/deepfakes/faceswap-playground")
+        subparser = parser.add_subparsers()
+        remove = RemoveAlignments(subparser,
+                         'remove', 'Remove deleted faces from an alignments file')
+        reformat = ReformatAlignments(subparser,
+                         'reformat', 'Save a copy of alignments file in a different format')
+
+class RemoveAlignments(object):
+    ''' Remove items from alignments file '''
+    def __init__(self, subparser, command, description='default'):
+        self.faces = None
+        self.alignment_data = None
+        self.count_faces = None
+        self.count_items = None
+        self.removed = set()
+
+        self.parse_arguments(description, subparser, command)
+        
+    def parse_arguments(self, description, subparser, command):
+        parser = subparser.add_parser(
+                command,
+                help='This command removes items from an alignments file that do not \
+                      appear in the  aligned faces folder.',
+                description=description)
+        parser.add_argument('-a', '--alignments_file',
+                            type=str,
+                            dest='alignments_file',
+                            help='Full path to the alignments file to be processed.',
+                            required=True)
+        parser.add_argument('-f', '--faces_folder',
+                            type=str,
+                            dest='faces_dir',
+                            help='Input directory of source A extracted faces.',
+                            required=True)
+        parser.add_argument('-d', '--destination_format',
+                            type=str,
+                            choices=('json', 'pickle', 'yaml'),
+                            dest='destination_format',
+                            help='The file format to save the serialized data in. \
+                                  Defaults to same as source.',
+                            default=None)  
+        parser.set_defaults(func=self.process)
+
+    def process(self, arguments):
+        ''' process the arguments and run removal '''
+        self.faces = Faces(arguments.faces_dir)
+        self.alignment_data = AlignmentData(arguments.alignments_file, arguments.destination_format)
+        self.count_items = len(self.alignment_data.alignments)
+        self.count_faces = len(self.faces.file_list_sorted)
+        self.remove_alignment()
+
+    def remove_alignment(self):
+        ''' Remove the alignment from the alignments file '''
+        del_count = 0
+        for image_name, alignments, number_alignments in tqdm(self.alignment_data.get_alignments_one_image(),
+                                                              desc='Processing alignments file',
+                                                              total=self.count_items):
+            number_faces = len(self.faces.faces.get(image_name,[]))
+            if number_alignments == 0 or number_alignments == number_faces:
+                continue
+            for idx in self.alignment_data.get_one_alignment_index_reverse(alignments, number_alignments):
+                face_indexes = self.faces.faces.get(image_name,[-1]) 
+                if idx not in face_indexes:
+                    del alignments[idx]
+                    self.removed.add(image_name)
+                    del_count += 1
+        if del_count == 0:
+            print('No changes made to alignments file. Exiting')
+            return
+        print('{} alignments(s) were removed from alignments file\n'.format(del_count))
+        self.alignment_data.save_alignments()
+        self.rename_faces()
+
+    def rename_faces(self):
+        ''' Rename the aligned faces to match their new index in alignments file '''
+        current_image = ''
+        current_index = 0
+        rename_count = 0
+        for item in tqdm(self.faces.file_list_sorted, desc='Renaming aligned faces', total=self.count_faces):
+            filename, extension, original_file, index = item
+            if original_file in self.removed:
+                if current_image != original_file:
+                    current_index = 0
+                current_image = original_file
+                if current_index != index:
+                    old_file = filename + extension
+                    new_file = current_image + '_' + current_index + extension
+                    src = os.path.join(self.faces.faces_dir, old_file)
+                    dst = os.path.join(self.faces.faces_dir, new_file)
+                    os.rename(src, dst)
+                    rename_count += 1
+                current_index += 1
+        if rename_count == 0:
+            print('No files were renamed. Exiting')
+            return
+        print('{} face(s) were renamed to match with alignments file'.format(rename_count))
+
+class ReformatAlignments(object):
+    ''' Reformat items from alignments file '''
+    def __init__(self, subparser, command, description='default'):
+        self.alignment_data = None
+
+        self.parse_arguments(description, subparser, command)
+        
+    def parse_arguments(self, description, subparser, command):
+        parser = subparser.add_parser(
+                command,
+                help="This command saves the alignments file in the specified format",
+                description=description)
+        parser.add_argument('-a', '--alignments_file',
+                            type=str,
+                            dest='alignments_file',
+                            help='Full path to the alignments file to be processed',
+                            required=True)
+        parser.add_argument('-d', '--destination_format',
+                            type=str,
+                            choices=('json', 'pickle', 'yaml'),
+                            dest='destination_format',
+                            help='The file format to save the serialized data in.',
+                            required=True)  
+        parser.set_defaults(func=self.process)
+
+    def process(self, arguments):
+        ''' process the arguments and run reformat '''
+        self.alignment_data = AlignmentData(arguments.alignments_file, arguments.destination_format)
+        self.alignment_data.save_alignments()
+
 class AlignmentData(object):
     ''' Class to hold the alignment data '''
 
     def __init__(self, alignments_file, destination_format):
         self.extensions = ['json', 'p', 'yaml', 'yml']
         self.alignments_file = alignments_file
-        self.serializer_opts = {}
-        self.alignments = None
-        self.read_opts = 'r'
-        self.write_opts = 'w'
-        
         self.check_alignments_file_exists()
-
-        self.alignments_format = os.path.splitext(self.alignments_file)[1][1:]
-
+        self.alignments_format = self.get_alignments_format()
+        self.destination_format = self.get_destination_format(destination_format)
         self.serializer = self.set_serializer()
 
         self.load_alignments()
+        self.set_destination_serializer()
 
-        self.serializer = self.set_destination_serializer(destination_format)
+    @staticmethod
+    def handle_yaml():
+        ''' If YAML is requested but PyYAML is not installed exit gracefully with message, 
+            otherwise pass module through '''
+        try:
+            import yaml
+            return yaml
+        except ImportError:
+            print('You must have PyYAML installed to use YAMLSerializer')
+            sys.exit()
 
     def check_alignments_file_exists(self):
         ''' Check the alignments file exists'''
         if not os.path.isfile(self.alignments_file):
             print('alignments file not found at: {}'.format(self.alignments_file))
             sys.exit()
-        
+
+    def get_alignments_format(self):
+        ''' Return the extension of the input file to get the format '''
+        return os.path.splitext(self.alignments_file)[1][1:]
+
+    def get_destination_format(self, destination_format):
+        ''' Standardise the destination format to the correct extension '''
+        if destination_format is None :
+            return self.alignments_format
+        elif destination_format == 'json':
+            return 'json'
+        elif destination_format == 'pickle':
+            return 'p'
+        elif destination_format == 'yaml':
+            return 'yml'
+        else:
+            print('{} is not a supported serializer. Exiting'.format(destination_format))
+            sys.exit()        
+
     def set_serializer(self):
         ''' Set the serializer '''
+        read_opts = 'r'
+        write_opts = 'w'
+        serializer_opts = {}
         if self.alignments_format == 'json':
-            return json
+            serializer_opts = {'indent': 2}
+            serializer = json
         elif self.alignments_format == 'p':
-            self.read_opts = 'rb'
-            return pickle
+            read_opts = 'rb'
+            write_opts = 'wb'
+            serializer = pickle
         elif self.alignments_format in ['yml', 'yaml']:
-            try:
-                global yaml
-                import yaml
-                return yaml
-            except ImportError:
-                print('You must have PyYAML installed to use YAMLSerializer')
-                sys.exit()
+            serializer_opts = {'default_flow_style': False}
+            serializer = self.handle_yaml()
         else:
             print('{} is not a supported serializer. Exiting'.format(self.alignments_format))
             sys.exit()
+        return {'serializer': serializer,
+                'serializer_opts': serializer_opts,
+                'read_opts': read_opts,
+                'write_opts': write_opts}
 
-    def set_destination_serializer(self, destination_format):
-        ''' set the destination serializer '''
-        if destination_format == 'json':
-            self.serializer_opts = {'indent': 2}
-            alignments_format = 'json'
-        elif destination_format == 'pickle':
-            self.write_opts = 'wb'
-            alignments_format = 'p'
-        elif destination_format == 'yaml':
-            self.serializer_opts = {'default_flow_style': False}
-            alignments_format = 'yml'
-        else:
-            print('{} is not a supported serializer. Exiting'.format(destination_format))
-            sys.exit()
-        if alignments_format == self.alignments_format:
-            return self.serializer
-        self.alignments_format = alignments_format
-        return self.set_serializer()
+    def set_destination_serializer(self):
+        ''' set the destination serializer if it differs from the import serializer '''
+        if self.destination_format != self.alignments_format:
+            self.alignments_format = self.destination_format
+            self.serializer = self.set_serializer()
 
     def load_alignments(self):
         ''' Read the alignments data from the correct format '''
+        serializer = self.serializer['serializer']
+        read_opts = self.serializer['read_opts']
+
         print('Loading {} alignments from {}\n'.format(self.alignments_format, self.alignments_file))
-        with open(self.alignments_file, self.read_opts) as alignments:
+        with open(self.alignments_file, read_opts) as alignments:
             if self.alignments_format not in ('yaml', 'yml'):
-                self.alignments = self.serializer.loads(alignments.read())
+                self.alignments = serializer.loads(alignments.read())
             else:
-                self.alignments = self.serializer.load(alignments.read())
+                self.alignments = serializer.load(alignments.read())
                 
     def backup_alignments(self):
         ''' Backup copy of old alignments '''
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        backupfile = '{}_{}{}'.format(os.path.splitext(self.alignments_file)[0], now, os.path.splitext(self.alignments_file)[1])
-        print('Backing up old {} to {}'.format(self.alignments_file, backupfile))
-        os.rename(self.alignments_file, backupfile)
+        src = self.alignments_file
+        dst = src.split('.')
+        dst[0] += '_' + now + '.'
+        dst = dst[0] + dst[1]
+        print('Backing up original alignments to {}'.format(dst))
+        os.rename(src, dst)
 
     def save_alignments(self):
         ''' Backup copy of old alignments and save new alignments '''
+        serializer = self.serializer['serializer']
+        write_opts = self.serializer['write_opts']
+        serializer_opts = self.serializer['serializer_opts']
+        dst = self.alignments_file.split('.')
+        dst  = dst[0] + '.' + self.alignments_format
+
         self.backup_alignments()
-        alignments_file = '{}.{}'.format(os.path.splitext(self.alignments_file)[0], self.alignments_format)
-        print('Saving alignments to {}\n'.format(alignments_file))
-        with open(alignments_file, self.write_opts) as alignments:
+
+        print('Saving alignments to {}\n'.format(dst))
+        with open(dst, write_opts) as alignments:
             if self.alignments_format not in ('yaml', 'yml'):
-                alignments.write(self.serializer.dumps(self.alignments, **self.serializer_opts))
+                alignments.write(serializer.dumps(self.alignments, **serializer_opts))
             else:
-                alignments.write(self.serializer.dump(self.alignments, **self.serializer_opts))
+                alignments.write(serializer.dump(self.alignments, **serializer_opts))
 
     def get_alignments_one_image(self):
         ''' Return the face alignments for one image '''
@@ -152,101 +318,29 @@ class Faces(object):
             else:
                 self.faces[original_file].append(index)
 
-class RemoveAlignments(object):
-    ''' Remove items from alignments file '''
-    def __init__(self, arguments):
-        self.faces = Faces(arguments.faces_dir)
-        self.alignment_data = AlignmentData(arguments.alignments_file, arguments.destination_format)
-        self.count_items = len(self.alignment_data.alignments)
-        self.count_faces = len(self.faces.file_list_sorted)
-        self.removed = set()
-
-    def remove_alignment(self):
-        ''' Remove the alignment from the alignments file '''
-        del_count = 0
-        for image_name, alignments, number_alignments in tqdm(self.alignment_data.get_alignments_one_image(),
-                                                              desc='Processing alignments file',
-                                                              total=self.count_items):
-            if number_alignments == 0 or number_alignments == len(self.faces.faces.get(image_name,[])):
-                continue
-            for idx in self.alignment_data.get_one_alignment_index_reverse(alignments, number_alignments):
-                if idx not in self.faces.faces.get(image_name,[-1]):
-                    del alignments[idx]
-                    self.removed.add(image_name)
-                    del_count += 1
-        if del_count == 0:
-            print('No changes made to alignments file. Exiting')
-            return
-        print('{} alignments(s) were removed from alignments file\n'.format(del_count))
-        self.alignment_data.save_alignments()
-        self.rename_faces()
-
-    def rename_faces(self):
-        ''' Rename the aligned faces to match their new index in alignments file '''
-        current_image = ''
-        current_index = 0
-        rename_count = 0
-        for item in tqdm(self.faces.file_list_sorted, desc='Renaming aligned faces', total=self.count_faces):
-            filename, extension, original_file, index = item
-            if original_file in self.removed:
-                if current_image != original_file:
-                    current_index = 0
-                current_image = original_file
-                if current_index != index:
-                    old_file = os.path.join(self.faces.faces_dir,'{}{}'.format(filename, extension))
-                    new_file = os.path.join(self.faces.faces_dir,'{}_{}{}'.format(original_file, current_index, extension))
-                    os.rename(old_file, new_file)
-                    rename_count += 1
-                current_index += 1
-        if rename_count == 0:
-            print('No files were renamed. Exiting')
-            return
-        print('{} face(s) were renamed to match with alignments file'.format(rename_count))
-
 def bad_args(args):
     parser.print_help()
     exit(0)
 
-def parser_arguments(parser):
-    parser.add_argument('-j', '--job',
-                        type=str,
-                        choices=('remove', 'merge', 'reformat'),
-                        dest='job',
-                        help='The job to be performed.',
-                        required=True)
-    parser.add_argument('-a', '--alignments_file',
-                        type=str,
-                        dest='alignments_file',
-                        help='Full path to the alignments file to be processed',
-                        required=True)
-    parser.add_argument('-f', '--faces_folder',
-                        type=str,
-                        dest='faces_dir',
-                        help='Input directory of source A extracted faces.',
-                        required=True)
-    parser.add_argument('-d', '--destination_format',
-                        type=str,
-                        choices=('json', 'pickle', 'yaml'),
-                        dest='destination_format',
-                        help='The file format to save the serialized data in.',
-                        default='json')
-    
-
-def select_job(arguments):
-    ''' Select the job '''
-    if arguments.job.lower() == 'remove':
-        job = RemoveAlignments(arguments)
-        job.remove_alignment()
-    if arguments.job.lower() == 'reformat':
-        job = AlignmentData(arguments.alignments_file, arguments.destination_format)
-        job.save_alignments()
-
 if __name__ == '__main__':
     print ('Faceswap Alignments File Helper Tool.\n')
-    
+   
+    parser = argparse.ArgumentParser()
+    subparser = parser.add_subparsers()
+    tool = AlignmentTool(subparser,
+                         'alignments', 'Perform various edits to an alignments file.')
+    parser.set_defaults(func=bad_args)
+    arguments = parser.parse_args()
+    arguments.func(arguments)
+
+
+
+
+'''
     parser = argparse.ArgumentParser()
     parser.set_defaults(func=bad_args)
     parser_arguments(parser)
     arguments = parser.parse_args()
     select_job(arguments)
+'''
 
