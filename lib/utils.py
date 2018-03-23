@@ -1,6 +1,7 @@
 import cv2
 import sys
 from os.path import basename, exists
+import numpy as np
 
 from pathlib import Path
 from scandir import scandir
@@ -31,19 +32,10 @@ def get_image_paths(directory, exclude=[], debug=False):
 
     return dir_contents
 
+# From: https://stackoverflow.com/questions/9041681/opencv-python-rotate-image-by-x-degrees-around-specific-point
 def rotate_image(image, angle):
-    ''' Rotates an image by 90, 180 or 270 degrees. Positive for clockwise, negative for 
-        counterclockwise '''
-    if angle < 0: angle = sum((360, angle))
-    if angle == 90:
-        image = cv2.flip(cv2.transpose(image),flipCode=1)
-    elif angle == 180:
-        image = cv2.flip(image,flipCode=-1)
-    elif angle == 270:
-        image = cv2.flip(cv2.transpose(image),flipCode=0)
-    else:
-        print('Unsupported image rotation angle: {}. Image unmodified'.format(angle))
-    return image
+    center = tuple(np.array([image.shape[0], image.shape[1]]) / 2)
+    return cv2.warpAffine(image, cv2.getRotationMatrix2D(center, angle, 1.0), (image.shape[1], image.shape[0]))
 
 # From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
 import threading

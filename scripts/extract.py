@@ -77,6 +77,12 @@ class ExtractTrainingData(DirectoryProcessor):
                                  "iterations to try to find a face. Can find more faces at the "
                                  "cost of extraction speed.")
 
+        parser.add_argument('-ra', '--rotation-angle',
+                            type=int,
+                            dest="rotation_angle",
+                            default=90,
+                            help="How much to rotate the images with each step if --rotate-images is on")
+
         parser.add_argument('-ae', '--align-eyes',
                             action="store_true",
                             dest="align_eyes",
@@ -124,9 +130,9 @@ class ExtractTrainingData(DirectoryProcessor):
         return filename, []
 
     def imageRotator(self, image):
-        ''' rotates the image through 90 degree iterations to find a face '''
-        angle = 90
-        while angle <= 270:
+        ''' rotates the image through arguments.rotation_angle degree iterations to find a face '''
+        angle = self.arguments.rotation_angle
+        while angle < 360:
             rotated_image = rotate_image(image, angle)
             faces = self.get_faces(rotated_image, rotation=angle)
             rotated_faces = [(idx, face) for idx, face in faces]
@@ -134,7 +140,7 @@ class ExtractTrainingData(DirectoryProcessor):
                 if self.arguments.verbose:
                     print('found face(s) by rotating image {} degrees'.format(angle))
                 break
-            angle += 90
+            angle += self.arguments.rotation_angle
         return rotated_faces, rotated_image
 
     def handleImage(self, image, filename):
