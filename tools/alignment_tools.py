@@ -327,20 +327,8 @@ if __name__ == '__main__':
    
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers()
-    tool = AlignmentTool(subparser,
+    alignment = AlignmentTool(subparser,
                          'alignments', 'Perform various edits to an alignments file.')
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
-
-
-
-
-'''
-    parser = argparse.ArgumentParser()
-    parser.set_defaults(func=bad_args)
-    parser_arguments(parser)
-    arguments = parser.parse_args()
-    select_job(arguments)
-'''
-
