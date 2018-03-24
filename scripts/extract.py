@@ -143,7 +143,7 @@ class ExtractTrainingData(DirectoryProcessor):
         process_faces = [(idx, face) for idx, face in faces]
 
         # Run image rotator if requested and no faces found
-        if self.arguments.rotate_images is not None and len(process_faces) == 0:
+        if self.rotation_angles is not None and len(process_faces) == 0:
             process_faces, image = self.imageRotator(image)
 
         rvals = []
