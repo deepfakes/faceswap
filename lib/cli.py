@@ -62,11 +62,13 @@ class DirectoryProcessor(object):
         print("Using {} serializer".format(self.serializer.ext))
 
         try:
-            if self.arguments.rotate_images == "on":
-                if self.arguments.rotation_angle_list is not None:
-                    self.rotation_angles = self.arguments.rotation_angle_list
-                else:
-                    self.rotation_angles = range(self.arguments.rotation_angle, 360, self.arguments.rotation_angle)
+            if self.arguments.rotate_images is not None:
+                rotation_angles = [int(angle) for angle in self.arguments.rotate_images.split(",")]
+                if len(rotation_angles) == 1:
+                    rotation_step_size = rotation_angles[0]
+                    self.rotation_angles = range(rotation_step_size, 360, rotation_step_size)
+                elif len(rotation_angles) > 1:
+                    self.rotation_angles = rotation_angles
         except AttributeError:
             pass
 

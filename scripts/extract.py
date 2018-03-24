@@ -69,26 +69,12 @@ class ExtractTrainingData(DirectoryProcessor):
                             help="Draw landmarks for debug.")
 
         parser.add_argument('-r', '--rotate-images',
-                            type=str.lower,
+                            type=str,
                             dest="rotate_images",
-                            choices=("on", "off"),
-                            default="off",
-                            help="If a face isn't found, rotate the images through 90 degree "
-                                 "iterations to try to find a face. Can find more faces at the "
-                                 "cost of extraction speed.")
-
-        parser.add_argument('-ra', '--rotation-angle',
-                            type=int,
-                            dest="rotation_angle",
-                            default=90,
-                            help="Angle to rotate the images with each step (if --rotate-images is on)")
-
-        parser.add_argument('-ral', '--rotation-angle-list',
-                            type=int,
-                            dest="rotation_angle_list",
-                            nargs='*',
                             default=None,
-                            help="List of angles to use (if --rotate-images is on)")
+                            help="If a face isn't found, rotate the images to try to find a face. Can find more faces at the "
+                                 "cost of extraction speed.  Pass in a single number to use increments of that size up to 360, "
+                                 "or pass in a list of numbers to enumerate exactly what angles to check.")
 
         parser.add_argument('-ae', '--align-eyes',
                             action="store_true",
@@ -157,7 +143,7 @@ class ExtractTrainingData(DirectoryProcessor):
         process_faces = [(idx, face) for idx, face in faces]
 
         # Run image rotator if requested and no faces found
-        if self.arguments.rotate_images == 'on' and len(process_faces) == 0:
+        if self.arguments.rotate_images is not None and len(process_faces) == 0:
             process_faces, image = self.imageRotator(image)
 
         rvals = []
