@@ -142,16 +142,19 @@ class TrainingProcessor(object):
 
             print('Loading data, this may take a while...')
             # this is so that you can enter case insensitive values for trainer
-            trainer = self.arguments.trainer
-            trainer = "LowMem" if trainer.lower() == "lowmem" else trainer
-            model = PluginLoader.get_model(trainer)(get_folder(self.arguments.model_dir), self.arguments.gpus)
-            model.load(swapped=False)
-
+            trainer_name = self.arguments.trainer
+            trainer_name = "LowMem" if trainer_name.lower() == "lowmem" else trainer_name
+            
             images_A = get_image_paths(self.arguments.input_A)
             images_B = get_image_paths(self.arguments.input_B)
-            trainer = PluginLoader.get_trainer(trainer)
-            trainer = trainer(model, images_A, images_B, self.arguments.batch_size, self.arguments.perceptual_loss)
+            trainer = PluginLoader.get_trainer(trainer_name)
+            trainer = trainer(images_A, images_B, self.arguments.batch_size, self.arguments.perceptual_loss)
 
+            model = PluginLoader.get_model(trainer_name)(get_folder(self.arguments.model_dir), self.arguments.gpus)
+            model.load(swapped=False)
+
+            trainer.set_model(model)
+            
             print('Starting. Press "Enter" to stop training and save model')
 
             for epoch in range(0, self.arguments.epochs):

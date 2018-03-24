@@ -25,12 +25,11 @@ class Trainer():
         'random_flip': 0.5,
         }
 
-    def __init__(self, model, fn_A, fn_B, batch_size, perceptual_loss):
+    def __init__(self, fn_A, fn_B, batch_size, perceptual_loss):
         K.set_learning_phase(1)
 
         assert batch_size % 2 == 0, "batch_size must be an even number"
         self.batch_size = batch_size
-        self.model = model
 
         self.use_lsgan = True
         self.use_mixup = True
@@ -44,11 +43,14 @@ class Trainer():
         generator = GANTrainingDataGenerator(self.random_transform_args, 220, 6, 2)
         self.train_batchA = generator.minibatchAB(fn_A, batch_size)
         self.train_batchB = generator.minibatchAB(fn_B, batch_size)
-
+        next(self.train_batchA) #tmp OOM fix, execute image batch before model loaded
+        next(self.train_batchB)
         self.avg_counter = self.errDA_sum = self.errDB_sum = self.errGA_sum = self.errGB_sum = 0
 
+    def set_model(self, model):
+        self.model = model
         self.setup()
-
+        
     def setup(self):
         distorted_A, fake_A, fake_sz64_A, mask_A, self.path_A, self.path_mask_A, self.path_abgr_A, self.path_bgr_A = self.cycle_variables(self.model.netGA)
         distorted_B, fake_B, fake_sz64_B, mask_B, self.path_B, self.path_mask_B, self.path_abgr_B, self.path_bgr_B = self.cycle_variables(self.model.netGB)
