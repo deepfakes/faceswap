@@ -9,7 +9,7 @@ from .umeyama import umeyama
 import os
 import sys
 import subprocess
-
+import itertools
 from .Serializer import JSONSerializer
 
 class TrainingDataGenerator():
@@ -42,6 +42,11 @@ class TrainingDataGenerator():
             broken_alignments_yaw = False
             for image in images:
                 if any (image in sample_list for sample_list in yaws_sample_list) == False:
+                    broken_alignments_yaw = True
+                    break
+            
+            for sample in itertools.chain.from_iterable(yaws_sample_list):
+                if not sample in images:
                     broken_alignments_yaw = True
                     break
             
