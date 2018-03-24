@@ -41,6 +41,7 @@ class DirectoryProcessor(object):
     num_faces_detected = 0
     faces_detected = dict()
     verify_output = False
+    rotation_angles = None
 
     def __init__(self, subparser, command, description='default'):
         self.create_parser(subparser, command, description)
@@ -60,8 +61,19 @@ class DirectoryProcessor(object):
             self.serializer = Serializer.get_serializer(self.arguments.serializer or "json")
         print("Using {} serializer".format(self.serializer.ext))
 
+        try:
+            if self.arguments.rotate_images == "on":
+                print("Rotation angle list")
+                print(self.arguments.rotation_angle_list)
+                if self.arguments.rotation_angle_list is not None:
+                    self.rotation_angles = self.arguments.rotation_angle_list
+                else:
+                    self.rotation_angles = range(self.arguments.rotation_angle, 360, self.arguments.rotation_angle)
+        except AttributeError:
+            pass
+
         print('Starting, this may take a while...')
-        
+
         try:
             if self.arguments.skip_existing:
                 self.already_processed = get_image_paths(self.arguments.output_dir)

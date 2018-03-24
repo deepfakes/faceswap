@@ -69,7 +69,7 @@ class ExtractTrainingData(DirectoryProcessor):
                             help="Draw landmarks for debug.")
 
         parser.add_argument('-r', '--rotate-images',
-                            type=str,
+                            type=str.lower,
                             dest="rotate_images",
                             choices=("on", "off"),
                             default="off",
@@ -81,7 +81,14 @@ class ExtractTrainingData(DirectoryProcessor):
                             type=int,
                             dest="rotation_angle",
                             default=90,
-                            help="How much to rotate the images with each step if --rotate-images is on")
+                            help="Angle to rotate the images with each step (if --rotate-images is on)")
+
+        parser.add_argument('-ral', '--rotation-angle-list',
+                            type=int,
+                            dest="rotation_angle_list",
+                            nargs='*',
+                            default=None,
+                            help="List of angles to use (if --rotate-images is on)")
 
         parser.add_argument('-ae', '--align-eyes',
                             action="store_true",
@@ -129,18 +136,20 @@ class ExtractTrainingData(DirectoryProcessor):
             pass
         return filename, []
 
+    def getRotatedImageFaces(self, image, angle):
+        rotated_image = rotate_image(image, angle)
+        faces = self.get_faces(rotated_image, rotation=angle)
+        rotated_faces = [(idx, face) for idx, face in faces]
+        return rotated_faces, rotated_image
+
     def imageRotator(self, image):
-        ''' rotates the image through arguments.rotation_angle degree iterations to find a face '''
-        angle = self.arguments.rotation_angle
-        while angle < 360:
-            rotated_image = rotate_image(image, angle)
-            faces = self.get_faces(rotated_image, rotation=angle)
-            rotated_faces = [(idx, face) for idx, face in faces]
-            if len(rotated_faces) != 0:
+        ''' rotates the image through rotation_angles to try to find a face '''
+        for angle in self.rotation_angles:
+            rotated_faces, rotated_image = self.getRotatedImageFaces(image, angle)
+            if len(rotated_faces) > 0:
                 if self.arguments.verbose:
                     print('found face(s) by rotating image {} degrees'.format(angle))
                 break
-            angle += self.arguments.rotation_angle
         return rotated_faces, rotated_image
 
     def handleImage(self, image, filename):
@@ -148,7 +157,7 @@ class ExtractTrainingData(DirectoryProcessor):
         process_faces = [(idx, face) for idx, face in faces]
 
         # Run image rotator if requested and no faces found
-        if self.arguments.rotate_images.lower() == 'on' and len(process_faces) == 0:
+        if self.arguments.rotate_images == 'on' and len(process_faces) == 0:
             process_faces, image = self.imageRotator(image)
 
         rvals = []
