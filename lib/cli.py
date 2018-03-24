@@ -63,8 +63,6 @@ class DirectoryProcessor(object):
 
         try:
             if self.arguments.rotate_images == "on":
-                print("Rotation angle list")
-                print(self.arguments.rotation_angle_list)
                 if self.arguments.rotation_angle_list is not None:
                     self.rotation_angles = self.arguments.rotation_angle_list
                 else:
