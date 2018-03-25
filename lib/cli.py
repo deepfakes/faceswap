@@ -4,10 +4,29 @@ import sys
 import time
 
 from pathlib import Path
-from lib.FaceFilter import FaceFilter
-from lib.faces_detect import detect_faces, DetectedFace
 from lib.utils import get_image_paths, get_folder, rotate_image
 from lib import Serializer
+
+''' The following are modules that require GPU usage so they should only be called 
+    if they are needed '''
+detect_faces = None
+DetectedFace = None
+def import_faces_detect():
+    ''' Import the faces_detect module only when it is required '''
+    if 'lib.faces_detect' not in sys.modules:
+        global detect_faces
+        global DetectedFace
+        import lib.faces_detect 
+        detect_faces = lib.faces_detect.detect_faces
+        DetectedFace = lib.faces_detect.DetectedFace
+
+FaceFilter = None
+def import_FaceFilter():
+    ''' Import the FaceFilter module only when it is required '''
+    if 'lib.FaceFilter' not in sys.modules:
+        global FaceFilter
+        import lib.FaceFilter
+        FaceFilter = lib.FaceFilter.FaceFilter
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
@@ -138,6 +157,8 @@ class DirectoryProcessor(object):
         return os.path.exists(fn)
 
     def get_faces_alignments(self, filename, image):
+        if DetectedFace is None:
+            import_faces_detect()
         faces_count = 0
         faces = self.faces_detected[os.path.basename(filename)]
         for rawface in faces:
@@ -158,6 +179,8 @@ class DirectoryProcessor(object):
             self.verify_output = True
 
     def get_faces(self, image, rotation=0):
+        if detect_faces is None:
+            import_faces_detect()
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector, self.arguments.verbose, rotation)
         
@@ -186,6 +209,8 @@ class DirectoryProcessor(object):
         filter_files = list(filter(lambda fn: Path(fn).exists(), filter_files))
         
         if filter_files:
+            if FaceFilter is None:
+                import_FaceFilter()
             print('Loading reference images for filtering: %s' % filter_files)
             return FaceFilter(filter_files, nfilter_files, self.arguments.ref_threshold)
 

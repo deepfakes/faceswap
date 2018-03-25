@@ -1,18 +1,34 @@
 import cv2
 import numpy
+import sys
 import time
 
-from threading import Lock
+import threading 
 from lib.utils import get_image_paths, get_folder
 from lib.cli import FullPaths
 from plugins.PluginLoader import PluginLoader
+
+''' The following are modules that require GPU usage so they should only be called 
+    if they are needed '''
+tf = None
+set_session = None
+def import_tensorflow_keras():
+    ''' Import the faces_detect module only when it is required '''
+    if 'tensorflow' not in sys.modules:
+        global tf
+        import tensorflow
+        tf = tensorflow
+    if 'keras.backend.tensorflow_backend' not in sys.modules:
+        global set_session
+        import keras.backend.tensorflow_backend
+        set_session = keras.backend.tensorflow_backend.set_session
 
 class TrainingProcessor(object):
     arguments = None
 
     def __init__(self, subparser, command, description='default'):
         self.parse_arguments(description, subparser, command)
-        self.lock = Lock()
+        self.lock = threading.Lock()
 
     def process_arguments(self, arguments):
         self.arguments = arguments
@@ -105,7 +121,6 @@ class TrainingProcessor(object):
         return parser
 
     def process(self):
-        import threading
         self.stop = False
         self.save_now = False
 
@@ -182,8 +197,8 @@ class TrainingProcessor(object):
             exit(1)
 
     def set_tf_allow_growth(self):
-        import tensorflow as tf
-        from keras.backend.tensorflow_backend import set_session
+        if tf is None:
+            import_tensorflow_keras()
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.gpu_options.visible_device_list="0"
