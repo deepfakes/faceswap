@@ -35,7 +35,7 @@ def get_image_paths(directory, exclude=[], debug=False):
 def rotate_image(image, angle, rotated_width=None, rotated_height=None):
     height, width = image.shape[:2]
     image_center = (width/2, height/2)
-    rotation_matrix = cv2.getRotationMatrix2D(image_center, angle, 1.)
+    rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
     if rotated_width is None or rotated_height is None:
         abs_cos = abs(rotation_matrix[0, 0])
         abs_sin = abs(rotation_matrix[0, 1])
