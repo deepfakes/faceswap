@@ -13,7 +13,7 @@ from plugins.PluginLoader import PluginLoader
 tf = None
 set_session = None
 def import_tensorflow_keras():
-    ''' Import the faces_detect module only when it is required '''
+    ''' Import the TensorFlow and keras set_session modules only when they are required '''
     if 'tensorflow' not in sys.modules:
         global tf
         import tensorflow
