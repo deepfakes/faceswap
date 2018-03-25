@@ -8,20 +8,16 @@ from lib.utils import get_image_paths, get_folder
 from lib.cli import FullPaths
 from plugins.PluginLoader import PluginLoader
 
-''' The following are modules that require GPU usage so they should only be called 
-    if they are needed '''
 tf = None
 set_session = None
 def import_tensorflow_keras():
     ''' Import the TensorFlow and keras set_session modules only when they are required '''
-    if 'tensorflow' not in sys.modules:
-        global tf
-        import tensorflow
-        tf = tensorflow
-    if 'keras.backend.tensorflow_backend' not in sys.modules:
-        global set_session
-        import keras.backend.tensorflow_backend
-        set_session = keras.backend.tensorflow_backend.set_session
+    global tf
+    global set_session
+    import tensorflow
+    import keras.backend.tensorflow_backend
+    tf = tensorflow
+    set_session = keras.backend.tensorflow_backend.set_session
 
 class TrainingProcessor(object):
     arguments = None

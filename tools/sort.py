@@ -6,17 +6,29 @@ import operator
 import numpy as np
 import cv2
 from tqdm import tqdm
-import face_recognition
 from shutil import copyfile
 import json
 import re
 
+# DLIB is a GPU Memory hog, so the following modules should only be imported when required
+face_recognition = None
+FaceLandmarksExtractor = None
+
+def import_face_recognition():
+    ''' Import the face_recognition module only when it is required '''
+    global face_recognition
+    import face_recognition
+
+def import_FaceLandmarksExtractor():
+    ''' Import the FaceLandmarksExtractor module only when it is required '''
+    global FaceLandmarksExtractor
+    import lib.FaceLandmarksExtractor
+    FaceLandmarksExtractor = lib.FaceLandmarksExtractor
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
 if sys.version_info[0] == 3 and sys.version_info[1] < 2:
     raise Exception("This program requires at least python3.2")
-
 
 class SortProcessor(object):
     def __init__(self, subparser, command, description='default'):
@@ -232,6 +244,9 @@ class SortProcessor(object):
         return img_list
 
     def sort_face(self):
+        if face_recognition is None:
+            import_face_recognition()
+       
         input_dir = self.arguments.input_dir
 
         print ("Sorting by face similarity...")
@@ -259,6 +274,9 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_dissim(self):
+        if face_recognition is None:
+            import_face_recognition()
+        
         input_dir = self.arguments.input_dir
 
         print ("Sorting by face dissimilarity...")
@@ -284,7 +302,8 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_cnn(self):
-        from lib import FaceLandmarksExtractor
+        if FaceLandmarksExtractor is None:
+            import_FaceLandmarksExtractor()
 
         input_dir = self.arguments.input_dir
 
@@ -634,6 +653,9 @@ class SortProcessor(object):
         :return: img_list but with the comparative values that the chosen
         grouping method expects.
         """
+        if face_recognition is None:
+            import_face_recognition()
+
         input_dir = self.arguments.input_dir
         print("Preparing to group...")
         if group_method == 'group_blur':
@@ -764,6 +786,8 @@ class SortProcessor(object):
 
     @staticmethod
     def get_avg_score_faces(f1encs, references):
+        if face_recognition is None:
+            import_face_recognition()
         scores = []
         for f2encs in references:
             score = face_recognition.face_distance(f1encs, f2encs)[0]

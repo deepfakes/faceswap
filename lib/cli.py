@@ -7,26 +7,24 @@ from pathlib import Path
 from lib.utils import get_image_paths, get_folder, rotate_image
 from lib import Serializer
 
-''' The following are modules that require GPU usage so they should only be called 
-    if they are needed '''
+# DLIB is a GPU Memory hog, so the following modules should only be imported when required
 detect_faces = None
 DetectedFace = None
+FaceFilter = None
+
 def import_faces_detect():
     ''' Import the faces_detect module only when it is required '''
-    if 'lib.faces_detect' not in sys.modules:
-        global detect_faces
-        global DetectedFace
-        import lib.faces_detect 
-        detect_faces = lib.faces_detect.detect_faces
-        DetectedFace = lib.faces_detect.DetectedFace
+    global detect_faces
+    global DetectedFace
+    import lib.faces_detect 
+    detect_faces = lib.faces_detect.detect_faces
+    DetectedFace = lib.faces_detect.DetectedFace
 
-FaceFilter = None
 def import_FaceFilter():
     ''' Import the FaceFilter module only when it is required '''
-    if 'lib.FaceFilter' not in sys.modules:
-        global FaceFilter
-        import lib.FaceFilter
-        FaceFilter = lib.FaceFilter.FaceFilter
+    global FaceFilter
+    import lib.FaceFilter
+    FaceFilter = lib.FaceFilter.FaceFilter
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
