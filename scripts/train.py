@@ -197,7 +197,7 @@ class TrainingProcessor(object):
             exit(1)
 
     def set_tf_allow_growth(self):
-        if tf is None:
+        if tf is None or set_session is None:
             import_tensorflow_keras()
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
