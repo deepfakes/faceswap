@@ -3,6 +3,7 @@ import sys
 from lib.cli import FullHelpArgumentParser
 # Importing the various tools
 from tools.sort import SortProcessor
+from tools.alignment_tools import AlignmentTool
 
 # Python version check
 if sys.version_info[0] < 3:
@@ -27,6 +28,8 @@ if __name__ == "__main__":
     sort = SortProcessor(
         subparser, "sort", "This command lets you sort images using various "
                            "methods.")
+    alignments = AlignmentTool(subparser,
+                         'alignments', 'Perform various edits to an alignments file.')
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
