@@ -1,6 +1,9 @@
 import numpy
 
 from lib.umeyama import umeyama
+from lib.align_eyes import align_eyes
+from numpy.linalg import inv
+import cv2
 
 mean_face_x = numpy.array([
 0.000213256, 0.0752622, 0.18113, 0.29077, 0.393397, 0.586856, 0.689483, 0.799124,
@@ -22,5 +25,38 @@ mean_face_y = numpy.array([
 
 landmarks_2D = numpy.stack( [ mean_face_x, mean_face_y ], axis=1 )
 
-def get_align_mat(face):
-    return umeyama( numpy.array(face.landmarksAsXY()[17:]), landmarks_2D, True )[0:2]
+def get_align_mat(face, size, should_align_eyes):
+    mat_umeyama = umeyama(numpy.array(face.landmarksAsXY()[17:]), landmarks_2D, True)[0:2]
+
+    if should_align_eyes is False:
+        return mat_umeyama
+
+    mat_umeyama = mat_umeyama * size
+
+    # Convert to matrix
+    landmarks = numpy.matrix(face.landmarksAsXY())
+
+    # cv2 expects points to be in the form np.array([ [[x1, y1]], [[x2, y2]], ... ]), we'll expand the dim
+    landmarks = numpy.expand_dims(landmarks, axis=1)
+
+    # Align the landmarks using umeyama
+    umeyama_landmarks = cv2.transform(landmarks, mat_umeyama, landmarks.shape)
+
+    # Determine a rotation matrix to align eyes horizontally
+    mat_align_eyes = align_eyes(umeyama_landmarks, size)
+
+    # Extend the 2x3 transform matrices to 3x3 so we can multiply them
+    # and combine them as one
+    mat_umeyama = numpy.matrix(mat_umeyama)
+    mat_umeyama.resize((3, 3))
+    mat_align_eyes = numpy.matrix(mat_align_eyes)
+    mat_align_eyes.resize((3, 3))
+    mat_umeyama[2] = mat_align_eyes[2] = [0, 0, 1]
+
+    # Combine the umeyama transform with the extra rotation matrix
+    transform_mat = mat_align_eyes * mat_umeyama
+
+    # Remove the extra row added, shape needs to be 2x3
+    transform_mat = numpy.delete(transform_mat, 2, 0)
+    transform_mat = transform_mat / size
+    return transform_mat
