@@ -135,12 +135,12 @@ def initialize(detector, scale_to=2048):
         is_initialized = True
 
 #scale_to=2048 with dlib upsamples=0 for 3GB VRAM Windows 10 users        
-def extract(input_image, detector, verbose, all_faces=True, input_is_predetected_face=False, scale_to=2048):
+def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predetected_face=False, scale_to=2048):
     initialize(detector, scale_to)
     global dlib_detectors
     global keras_model
     
-    (h, w, ch) = input_image.shape
+    (h, w, ch) = input_image_bgr.shape
 
     detected_faces = []
     
@@ -149,13 +149,13 @@ def extract(input_image, detector, verbose, all_faces=True, input_is_predetected
         detected_faces = [ dlib.rectangle(0, 0, w, h) ]
     else:
         input_scale = scale_to / (w if w > h else h)
-        input_image = cv2.resize (input_image, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
-        input_image_bgr = input_image[:,:,::-1].copy() #cv2 and numpy inputs differs in rgb-bgr order, this affects chance of dlib face detection
+        input_image_bgr = cv2.resize (input_image_bgr, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
+        input_image = input_image_bgr[:,:,::-1].copy() #cv2 and numpy inputs differs in rgb-bgr order, this affects chance of dlib face detection
         input_images = [input_image, input_image_bgr]
-        for current_detector, input_image in ((current_detector, input_image) for current_detector in dlib_detectors for input_image in input_images):
-            detected_faces = current_detector(input_image, 0)
+        for current_detector, current_image in ((current_detector, current_image) for current_detector in dlib_detectors for current_image in input_images):
+            detected_faces = current_detector(current_image, 0)
             if len(detected_faces) != 0:
-                break           
+                break
 
     landmarks = []
     if len(detected_faces) > 0:        
