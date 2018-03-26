@@ -126,7 +126,7 @@ class SortProcessor(object):
         parser.add_argument('-s', '--sort-by',
                             type=str,
                             choices=("blur", "face", "face-cnn",
-                                     "face-cnn-dissim", "face-dissim", "hist",
+                                     "face-cnn-dissim", "face-dissim", "face-yaw", "hist",
                                      "hist-dissim"),
                             dest='sort_method',
                             default="hist",
@@ -292,7 +292,7 @@ class SortProcessor(object):
 
         img_list = []
         for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout):
-            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True)
+            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
             img_list.append( [x, np.array(d[0][1]) if len(d) > 0 else np.zeros ( (68,2) ) ] )
 
         img_list_len = len(img_list)
@@ -321,7 +321,7 @@ class SortProcessor(object):
 
         img_list = []
         for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout):
-            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True)
+            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
             img_list.append( [x, np.array(d[0][1]) if len(d) > 0 else np.zeros ( (68,2) ), 0 ] )
 
         img_list_len = len(img_list)
@@ -340,7 +340,30 @@ class SortProcessor(object):
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
 
         return img_list
+        
+    def sort_face_yaw(self):
+        def calc_landmarks_face_pitch(fl): #unused
+            t = ( (fl[6][1]-fl[8][1]) + (fl[10][1]-fl[8][1]) ) / 2.0   
+            b = fl[8][1]
+            return b-t
+        def calc_landmarks_face_yaw(fl):
+            l = ( (fl[27][0]-fl[0][0]) + (fl[28][0]-fl[1][0]) + (fl[29][0]-fl[2][0]) ) / 3.0   
+            r = ( (fl[16][0]-fl[27][0]) + (fl[15][0]-fl[28][0]) + (fl[14][0]-fl[29][0]) ) / 3.0
+            return r-l
+            
+        from lib import FaceLandmarksExtractor
+        input_dir = self.arguments.input_dir
+    
+        img_list = []
+        for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout):
+            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
+            img_list.append( [x, calc_landmarks_face_yaw(np.array(d[0][1])) ] )
 
+        print ("Sorting...")
+        img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
+        
+        return img_list
+        
     def sort_hist(self):
         input_dir = self.arguments.input_dir
 
@@ -621,7 +644,7 @@ class SortProcessor(object):
             from lib import FaceLandmarksExtractor
             temp_list = []
             for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout):
-                d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True)
+                d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
                 temp_list.append([x, np.array(d[0][1]) if len(d) > 0 else np.zeros((68, 2))])
         elif group_method == 'group_hist':
             temp_list = [[x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256])] for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout)]
