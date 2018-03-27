@@ -39,7 +39,6 @@ class DirectoryProcessor(object):
 
     images_found = 0
     num_faces_detected = 0
-    faces_detected = dict()
     verify_output = False
     rotation_angles = None
 
@@ -102,75 +101,10 @@ class DirectoryProcessor(object):
         self.process()
         self.finalize()
 
-    def read_alignments(self):
-
-        fn = os.path.join(str(self.arguments.input_dir),"alignments.{}".format(self.serializer.ext))
-        if self.arguments.alignments_path is not None:
-            fn = self.arguments.alignments_path
-
-        try:
-            print("Reading alignments from: {}".format(fn))
-            with open(fn, self.serializer.roptions) as f:
-                self.faces_detected = self.serializer.unmarshal(f.read())
-        except Exception as e:
-            print("{} not read!".format(fn))
-            print(str(e))
-            self.faces_detected = dict()
-
-    def write_alignments(self):
-
-        fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
-        if self.arguments.alignments_path is not None:
-            fn = self.arguments.alignments_path
-        print("Alignments filepath: %s" % fn)
-        
-        if self.arguments.skip_existing:
-            if os.path.exists(fn):
-                with open(fn, self.serializer.roptions) as inf:
-                    data = self.serializer.unmarshal(inf.read())
-                    for k, v in data.items():
-                        self.faces_detected[k] = v
-            else:
-                print('Existing alignments file "%s" not found.' % fn)
-        try:
-            print("Writing alignments to: {}".format(fn))
-            with open(fn, self.serializer.woptions) as fh:
-                fh.write(self.serializer.marshal(self.faces_detected))
-        except Exception as e:
-            print("{} not written!".format(fn))
-            print(str(e))
-            self.faces_detected = dict()
-
     def read_directory(self):
         self.images_found = len(self.input_dir)
         return self.input_dir
 
-    def have_face(self, filename):
-        return os.path.basename(filename) in self.faces_detected
-
-    def have_alignments(self):
-        fn = os.path.join(str(self.arguments.input_dir), "alignments.{}".format(self.serializer.ext))
-        return os.path.exists(fn)
-
-    def get_faces_alignments(self, filename, image):
-        faces_count = 0
-        faces = self.faces_detected[os.path.basename(filename)]
-        for rawface in faces:
-            face = DetectedFace(**rawface)
-            # Rotate the image if necessary
-            if face.r != 0: image = rotate_image(image, face.r)
-            face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
-            if self.filter is not None and not self.filter.check(face):
-                if self.arguments.verbose:
-                    print('Skipping not recognized face!')
-                continue
-
-            yield faces_count, face
-            self.num_faces_detected += 1
-            faces_count += 1
-        if faces_count > 1 and self.arguments.verbose:
-            print('Note: Found more than one face in an image! File: %s' % filename)
-            self.verify_output = True
 
     def get_faces(self, image, rotation=0):
         faces_count = 0

@@ -9,6 +9,7 @@ from lib.cli import DirectoryProcessor, rotate_image
 from lib.utils import get_folder
 from lib.multithreading import pool_process
 from lib.detect_blur import is_blurry
+from lib.AlignedPNG import AlignedPNG
 from plugins.PluginLoader import PluginLoader
 
 class ExtractTrainingData(DirectoryProcessor):
@@ -94,33 +95,26 @@ class ExtractTrainingData(DirectoryProcessor):
         extractor_name = "Align" # TODO Pass as argument
         self.extractor = PluginLoader.get_extractor(extractor_name)()
         processes = self.arguments.processes
+        
+        def processFile(filename):
+            try:
+                image = cv2.imread(filename)
+                self.handleImage(image, filename)
+            except Exception as e:
+                if self.arguments.verbose:
+                    print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
+                pass
+                
         try:
             if processes != 1:
                 files = list(self.read_directory())
-                for filename, faces in tqdm(pool_process(self.processFiles, files, processes=processes), total = len(files)):
+                for _ in tqdm(pool_process(processFile, files, processes=processes), total = len(files)):
                     self.num_faces_detected += 1
-                    self.faces_detected[os.path.basename(filename)] = faces
             else:
                 for filename in tqdm(self.read_directory()):
-                    try:
-                        image = cv2.imread(filename)
-                        self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
-                    except Exception as e:
-                        if self.arguments.verbose:
-                            print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
-                        pass
+                    processFile(filename)
         finally:
-            self.write_alignments()
-
-    def processFiles(self, filename):
-        try:
-            image = cv2.imread(filename)
-            return filename, self.handleImage(image, filename)
-        except Exception as e:
-            if self.arguments.verbose:
-                print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
             pass
-        return filename, []
 
     def getRotatedImageFaces(self, image, angle):
         rotated_image = rotate_image(image, angle)
@@ -146,20 +140,20 @@ class ExtractTrainingData(DirectoryProcessor):
         if self.rotation_angles is not None and len(process_faces) == 0:
             process_faces, image = self.imageRotator(image)
 
-        rvals = []
         for idx, face in process_faces:
+            output_file = get_folder(self.output_dir) / Path(filename).stem
+            
+            resized_image, t_mat = self.extractor.extract(image, face, 256, self.arguments.align_eyes)    
+            resized_image_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
+            
             # Draws landmarks for debug
             if self.arguments.debug_landmarks:
-                for (x, y) in face.landmarksAsXY():
-                    cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
-
-            resized_image, t_mat = self.extractor.extract(image, face, 256, self.arguments.align_eyes)
-            output_file = get_folder(self.output_dir) / Path(filename).stem
+                for (x, y) in resized_image_landmarks:
+                    cv2.circle(resized_image, (x, y), 2, (0, 0, 255), -1)
 
             # Detect blurry images
             if self.arguments.blur_thresh is not None:
-                aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
-                feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
+                feature_mask = self.extractor.get_feature_mask(resized_image_landmarks / 256, 256, 48)
                 feature_mask = cv2.blur(feature_mask, (10, 10))
                 isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)
                 blurry, focus_measure = is_blurry(isolated_face, self.arguments.blur_thresh)
@@ -171,14 +165,35 @@ class ExtractTrainingData(DirectoryProcessor):
                     print("{}'s focus measure of {} was below the blur threshold, moving to \"blurry\"".format(Path(filename).stem, focus_measure))
                     output_file = get_folder(Path(self.output_dir) / Path("blurry")) / Path(filename).stem
 
-            cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
-            f = {
-                "r": face.r,
-                "x": face.x,
-                "w": face.w,
-                "y": face.y,
-                "h": face.h,
-                "landmarksXY": face.landmarksAsXY()
+            png_filename = '{}_{}{}'.format(str(output_file), str(idx), '.png')
+            cv2.imwrite(png_filename, resized_image)
+
+            def calc_landmarks_face_pitch(fl):
+                t = ( (fl[6][1]-fl[8][1]) + (fl[10][1]-fl[8][1]) ) / 2.0   
+                b = fl[8][1]
+                return b-t
+            def calc_landmarks_face_yaw(fl):
+                l = ( (fl[27][0]-fl[0][0]) + (fl[28][0]-fl[1][0]) + (fl[29][0]-fl[2][0]) ) / 3.0   
+                r = ( (fl[16][0]-fl[27][0]) + (fl[15][0]-fl[28][0]) + (fl[14][0]-fl[29][0]) ) / 3.0
+                return r-l
+                
+            a_png = AlignedPNG.load (png_filename)
+            fl = resized_image_landmarks.tolist()
+            d = {
+              'landmarks': fl,
+              'yaw_value': calc_landmarks_face_yaw (fl),
+              'pitch_value': calc_landmarks_face_pitch (fl),
+              'source_filename': os.path.basename(filename),
+              'source_rect': {
+                                "r": face.r,
+                                "x": face.x,
+                                "w": face.w,
+                                "y": face.y,
+                                "h": face.h
+                             },
+              'source_landmarks': face.landmarksAsXY()
             }
-            rvals.append(f)
-        return rvals
+            a_png.setFaceswapDictData (d)
+            a_png.save(png_filename)
+
+        return []
