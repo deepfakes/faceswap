@@ -135,6 +135,7 @@ def initialize(detector, scale_to=2048):
         is_initialized = True
 
 #scale_to=2048 with dlib upsamples=0 for 3GB VRAM Windows 10 users        
+#you should not extract landmarks again from predetected face, because many face data lost, so result will be much different against extract from original big image
 def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predetected_face=False, scale_to=2048):
     initialize(detector, scale_to)
     global dlib_detectors
@@ -173,7 +174,7 @@ def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predete
             center[1] -= (bottom - top) * 0.12
             scale = (right - left + bottom - top) / 195.0
         
-            image = crop(input_image, center, scale).transpose ( (2,0,1) ).astype(np.float32) / 255.0
+            image = crop(input_image_bgr, center, scale).transpose ( (2,0,1) ).astype(np.float32) / 255.0
             image = np.expand_dims(image, 0)
             
             pts_img = get_pts_from_predict ( keras_model.predict (image)[-1][0], center, scale)
