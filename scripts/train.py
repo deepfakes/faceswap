@@ -14,10 +14,11 @@ def import_tensorflow_keras():
     ''' Import the TensorFlow and keras set_session modules only when they are required '''
     global tf
     global set_session
-    import tensorflow
-    import keras.backend.tensorflow_backend
-    tf = tensorflow
-    set_session = keras.backend.tensorflow_backend.set_session
+    if tf is None or set_session is None:
+        import tensorflow
+        import keras.backend.tensorflow_backend
+        tf = tensorflow
+        set_session = keras.backend.tensorflow_backend.set_session
 
 class TrainingProcessor(object):
     arguments = None
@@ -193,8 +194,7 @@ class TrainingProcessor(object):
             exit(1)
 
     def set_tf_allow_growth(self):
-        if tf is None or set_session is None:
-            import_tensorflow_keras()
+        import_tensorflow_keras()
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.gpu_options.visible_device_list="0"

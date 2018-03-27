@@ -17,13 +17,15 @@ FaceLandmarksExtractor = None
 def import_face_recognition():
     ''' Import the face_recognition module only when it is required '''
     global face_recognition
-    import face_recognition
+    if face_recognition is None:
+        import face_recognition
 
 def import_FaceLandmarksExtractor():
     ''' Import the FaceLandmarksExtractor module only when it is required '''
     global FaceLandmarksExtractor
-    import lib.FaceLandmarksExtractor
-    FaceLandmarksExtractor = lib.FaceLandmarksExtractor
+    if FaceLandmarksExtractor is None:
+        import lib.FaceLandmarksExtractor
+        FaceLandmarksExtractor = lib.FaceLandmarksExtractor
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
@@ -244,8 +246,7 @@ class SortProcessor(object):
         return img_list
 
     def sort_face(self):
-        if face_recognition is None:
-            import_face_recognition()
+        import_face_recognition()
        
         input_dir = self.arguments.input_dir
 
@@ -274,8 +275,7 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_dissim(self):
-        if face_recognition is None:
-            import_face_recognition()
+        import_face_recognition()
         
         input_dir = self.arguments.input_dir
 
@@ -302,8 +302,7 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_cnn(self):
-        if FaceLandmarksExtractor is None:
-            import_FaceLandmarksExtractor()
+        import_FaceLandmarksExtractor()
 
         input_dir = self.arguments.input_dir
 
@@ -332,7 +331,7 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_cnn_dissim(self):
-        from lib import FaceLandmarksExtractor
+        import_FaceLandmarksExtractor()
 
         input_dir = self.arguments.input_dir
 
@@ -370,7 +369,7 @@ class SortProcessor(object):
             r = ( (fl[16][0]-fl[27][0]) + (fl[15][0]-fl[28][0]) + (fl[14][0]-fl[29][0]) ) / 3.0
             return r-l
             
-        from lib import FaceLandmarksExtractor
+        import_FaceLandmarksExtractor()
         input_dir = self.arguments.input_dir
     
         img_list = []
@@ -653,8 +652,7 @@ class SortProcessor(object):
         :return: img_list but with the comparative values that the chosen
         grouping method expects.
         """
-        if face_recognition is None:
-            import_face_recognition()
+        import_face_recognition()
 
         input_dir = self.arguments.input_dir
         print("Preparing to group...")
@@ -663,7 +661,7 @@ class SortProcessor(object):
         elif group_method == 'group_face':
             temp_list = [[x, face_recognition.face_encodings(cv2.imread(x))] for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout)]
         elif group_method == 'group_face_cnn':
-            from lib import FaceLandmarksExtractor
+            import_FaceLandmarksExtractor()
             temp_list = []
             for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout):
                 d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
@@ -786,8 +784,7 @@ class SortProcessor(object):
 
     @staticmethod
     def get_avg_score_faces(f1encs, references):
-        if face_recognition is None:
-            import_face_recognition()
+        import_face_recognition()
         scores = []
         for f2encs in references:
             score = face_recognition.face_distance(f1encs, f2encs)[0]

@@ -16,15 +16,17 @@ def import_faces_detect():
     ''' Import the faces_detect module only when it is required '''
     global detect_faces
     global DetectedFace
-    import lib.faces_detect 
-    detect_faces = lib.faces_detect.detect_faces
-    DetectedFace = lib.faces_detect.DetectedFace
+    if detect_faces is None or DetectedFace is None:
+        import lib.faces_detect 
+        detect_faces = lib.faces_detect.detect_faces
+        DetectedFace = lib.faces_detect.DetectedFace
 
 def import_FaceFilter():
     ''' Import the FaceFilter module only when it is required '''
     global FaceFilter
-    import lib.FaceFilter
-    FaceFilter = lib.FaceFilter.FaceFilter
+    if FaceFilter is None:
+        import lib.FaceFilter
+        FaceFilter = lib.FaceFilter.FaceFilter
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
@@ -155,8 +157,7 @@ class DirectoryProcessor(object):
         return os.path.exists(fn)
 
     def get_faces_alignments(self, filename, image):
-        if DetectedFace is None:
-            import_faces_detect()
+        import_faces_detect()
         faces_count = 0
         faces = self.faces_detected[os.path.basename(filename)]
         for rawface in faces:
@@ -177,8 +178,7 @@ class DirectoryProcessor(object):
             self.verify_output = True
 
     def get_faces(self, image, rotation=0):
-        if detect_faces is None:
-            import_faces_detect()
+        import_faces_detect()
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector, self.arguments.verbose, rotation)
         
@@ -207,8 +207,7 @@ class DirectoryProcessor(object):
         filter_files = list(filter(lambda fn: Path(fn).exists(), filter_files))
         
         if filter_files:
-            if FaceFilter is None:
-                import_FaceFilter()
+            import_FaceFilter()
             print('Loading reference images for filtering: %s' % filter_files)
             return FaceFilter(filter_files, nfilter_files, self.arguments.ref_threshold)
 
