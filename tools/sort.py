@@ -6,11 +6,10 @@ import operator
 import numpy as np
 import cv2
 from tqdm import tqdm
-import face_recognition
 from shutil import copyfile
 import json
 import re
-
+from lib.AlignedPNG import AlignedPNG
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
@@ -69,9 +68,7 @@ class SortProcessor(object):
                                  "comparison with 'face' and 'hist' methods. "
                                  "The lower the value the more discriminating "
                                  "the grouping is. "
-                                 "For face 0.6 should be enough, with 0.5 "
-                                 "being very discriminating. "
-                                 "For face-cnn 7.2 should be enough, with 4 "
+                                 "For face 7.2 should be enough, with 4 "
                                  "being very discriminating. "
                                  "For hist 0.3 should be enough, with 0.2 "
                                  "being very discriminating. "
@@ -79,7 +76,7 @@ class SortProcessor(object):
                                  "low in a directory with many images, as "
                                  "this could result in a lot of directories "
                                  " being created. "
-                                 "Defaults: face 0.6, face-cnn 7.2, hist 0.3")
+                                 "Defaults: face 7.2, hist 0.3")
 
         parser.add_argument('-b', '--bins',
                             type=int,
@@ -125,9 +122,7 @@ class SortProcessor(object):
 
         parser.add_argument('-s', '--sort-by',
                             type=str,
-                            choices=("blur", "face", "face-cnn",
-                                     "face-cnn-dissim", "face-dissim", "face-yaw", "hist",
-                                     "hist-dissim"),
+                            choices=("blur", "face", "face-dissim", "face-yaw", "hist", "hist-dissim"),
                             dest='sort_method',
                             default="hist",
                             help="Sort by method. "
@@ -136,7 +131,7 @@ class SortProcessor(object):
 
         parser.add_argument('-g', '--group-by',
                             type=str,
-                            choices=("blur", "face", "face-cnn", "hist"),
+                            choices=("blur", "face", "hist"),
                             dest='group_method',
                             default="__default",
                             help="Group by method. "
@@ -175,8 +170,6 @@ class SortProcessor(object):
         if self.arguments.min_threshold == -1.0 and self.arguments.final_process == "group":
             method = self.arguments.group_method.lower()
             if method == 'face':
-                self.arguments.min_threshold = 0.6
-            elif method == 'face-cnn':
                 self.arguments.min_threshold = 7.2
             elif method == 'hist':
                 self.arguments.min_threshold = 0.3
@@ -235,65 +228,26 @@ class SortProcessor(object):
         input_dir = self.arguments.input_dir
 
         print ("Sorting by face similarity...")
-        
-        img_list = [ [x, face_recognition.face_encodings(cv2.imread(x)) ] for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout) ]
-
-        img_list_len = len(img_list)
-        for i in tqdm ( range(0, img_list_len-1), desc="Sorting", file=sys.stdout):
-            min_score = float("inf")
-            j_min_score = i+1
-            for j in range(i+1,len(img_list)):
-            
-                f1encs = img_list[i][1]
-                f2encs = img_list[j][1]
-                if f1encs is not None and f2encs is not None and len(f1encs) > 0 and len(f2encs) > 0:
-                    score = face_recognition.face_distance(f1encs[0], f2encs)[0]
-                else: 
-                    score = float("inf")
-                
-                if score < min_score:
-                    min_score = score
-                    j_min_score = j            
-            img_list[i+1], img_list[j_min_score] = img_list[j_min_score], img_list[i+1]
-            
-        return img_list
-
-    def sort_face_dissim(self):
-        input_dir = self.arguments.input_dir
-
-        print ("Sorting by face dissimilarity...")
-
-        img_list = [ [x, face_recognition.face_encodings(cv2.imread(x)), 0 ] for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout) ]
-
-        img_list_len = len(img_list)
-        for i in tqdm ( range(0, img_list_len), desc="Sorting", file=sys.stdout):
-            score_total = 0
-            for j in range( 0, img_list_len):
-                if i == j:
-                    continue
-                try:
-                    score_total += face_recognition.face_distance([img_list[i][1]], [img_list[j][1]])
-                except:
-                    pass
-
-            img_list[i][2] = score_total
-
-
-        print ("Sorting...")
-        img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
-        return img_list
-
-    def sort_face_cnn(self):
-        from lib import FaceLandmarksExtractor
-
-        input_dir = self.arguments.input_dir
-
-        print ("Sorting by face-cnn similarity...")
 
         img_list = []
         for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout):
-            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
-            img_list.append( [x, np.array(d[0][1]) if len(d) > 0 else np.zeros ( (68,2) ) ] )
+            if os.path.splitext(os.path.basename(x))[1] != '.png':
+                print ("%s is not a png file required for aligned-face" % (os.path.basename(x)) ) 
+                continue
+            
+            a_png = AlignedPNG.load (x)
+            if a_png is None:
+                print ("%s failed to load" % (os.path.basename(x)) ) 
+                continue
+                
+            d = a_png.getFaceswapDictData()
+            
+            if d is None or d['landmarks'] is None:          
+                print ("%s - no faceswap data found required for aligned-face" % (os.path.basename(x)) )
+                continue
+            
+            img_list.append( [x, np.array(d['landmarks']) ] )
+            
 
         img_list_len = len(img_list)
         for i in tqdm ( range(0, img_list_len-1), desc="Sorting", file=sys.stdout):
@@ -311,19 +265,31 @@ class SortProcessor(object):
             img_list[i+1], img_list[j_min_score] = img_list[j_min_score], img_list[i+1]
 
         return img_list
-
-    def sort_face_cnn_dissim(self):
-        from lib import FaceLandmarksExtractor
-
+    
+    def sort_face_dissim(self):
         input_dir = self.arguments.input_dir
 
-        print ("Sorting by face-cnn dissimilarity...")
+        print ("Sorting by face dissimilarity...")
 
         img_list = []
         for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout):
-            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
-            img_list.append( [x, np.array(d[0][1]) if len(d) > 0 else np.zeros ( (68,2) ), 0 ] )
-
+            if os.path.splitext(os.path.basename(x))[1] != '.png':
+                print ("%s is not a png file required for aligned-face-dissim" % (os.path.basename(x)) ) 
+                continue
+            
+            a_png = AlignedPNG.load (x)
+            if a_png is None:
+                print ("%s failed to load" % (os.path.basename(x)) ) 
+                continue
+                
+            d = a_png.getFaceswapDictData()
+            
+            if d is None or d['landmarks'] is None:          
+                print ("%s - no faceswap data found required for aligned-face" % (os.path.basename(x)) ) 
+                continue
+            
+            img_list.append( [x, np.array(d['landmarks']), 0 ] )
+            
         img_list_len = len(img_list)
         for i in tqdm( range(0, img_list_len-1), desc="Sorting", file=sys.stdout):
             score_total = 0
@@ -342,28 +308,32 @@ class SortProcessor(object):
         return img_list
         
     def sort_face_yaw(self):
-        def calc_landmarks_face_pitch(fl): #unused
-            t = ( (fl[6][1]-fl[8][1]) + (fl[10][1]-fl[8][1]) ) / 2.0   
-            b = fl[8][1]
-            return b-t
-        def calc_landmarks_face_yaw(fl):
-            l = ( (fl[27][0]-fl[0][0]) + (fl[28][0]-fl[1][0]) + (fl[29][0]-fl[2][0]) ) / 3.0   
-            r = ( (fl[16][0]-fl[27][0]) + (fl[15][0]-fl[28][0]) + (fl[14][0]-fl[29][0]) ) / 3.0
-            return r-l
-            
-        from lib import FaceLandmarksExtractor
         input_dir = self.arguments.input_dir
     
         img_list = []
         for x in tqdm( self.find_images(input_dir), desc="Loading", file=sys.stdout):
-            d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
-            img_list.append( [x, calc_landmarks_face_yaw(np.array(d[0][1])) ] )
+            if os.path.splitext(os.path.basename(x))[1] != '.png':
+                print ("%s is not a png file required for aligned-face-yaw" % (os.path.basename(x)) ) 
+                continue
+            
+            a_png = AlignedPNG.load (x)
+            if a_png is None:
+                print ("%s failed to load" % (os.path.basename(x)) ) 
+                continue
+                
+            d = a_png.getFaceswapDictData()
+            
+            if d is None or d['yaw_value'] is None:          
+                print ("%s - no faceswap data found required for aligned-face" % (os.path.basename(x)) ) 
+                continue
+            
+            img_list.append( [x, d['yaw_value'] ] )
 
         print ("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
         
         return img_list
-        
+    
     def sort_hist(self):
         input_dir = self.arguments.input_dir
 
@@ -432,57 +402,6 @@ class SortProcessor(object):
         return bins
 
     def group_face(self, img_list):
-        print ("Grouping by face similarity...")
-
-        # Groups are of the form: group_num -> reference face
-        reference_groups = dict()
-
-        # Bins array, where index is the group number and value is
-        # an array containing the file paths to the images in that group.
-        # The first group (0), is always the non-face group.
-        bins = [[]]
-
-        # Comparison threshold used to decide how similar
-        # faces have to be to be grouped together.
-        min_threshold = self.arguments.min_threshold
-
-        img_list_len = len(img_list)
-
-        for i in tqdm(range(1, img_list_len), desc="Grouping", file=sys.stdout):
-            f1encs = img_list[i][1]
-
-            # Check if current image is a face, if not then
-            # add it immediately to the non-face list.
-            if f1encs is None or len(f1encs) <= 0:
-                bins[0].append(img_list[i][0])
-
-            else:
-                current_best = [-1, float("inf")]
-
-                for key, references in reference_groups.items():
-                    # Non-faces are not added to reference_groups dict, thus
-                    # removing the need to check that f2encs is a face.
-                    # The try-catch block is to handle the first face that gets
-                    # processed, as the first value is None.
-                    try:
-                        score = self.get_avg_score_faces(f1encs, references)
-                    except TypeError:
-                        score = float("inf")
-                    except ZeroDivisionError:
-                        score = float("inf")
-                    if score < current_best[1]:
-                        current_best[0], current_best[1] = key, score
-
-                if current_best[1] < min_threshold:
-                    reference_groups[current_best[0]].append(f1encs[0])
-                    bins[current_best[0]].append(img_list[i][0])
-                else:
-                    reference_groups[len(reference_groups)] = img_list[i][1]
-                    bins.append([img_list[i][0]])
-
-        return bins
-
-    def group_face_cnn(self, img_list):
         print ("Grouping by face-cnn similarity...")
 
         # Groups are of the form: group_num -> reference faces
@@ -507,7 +426,7 @@ class SortProcessor(object):
 
             for key, references in reference_groups.items():
                 try:
-                    score = self.get_avg_score_faces_cnn(fl1, references)
+                    score = self.get_avg_score_faces(fl1, references)
                 except TypeError:
                     score = float("inf")
                 except ZeroDivisionError:
@@ -639,13 +558,26 @@ class SortProcessor(object):
         if group_method == 'group_blur':
             temp_list = [[x, self.estimate_blur(cv2.imread(x))] for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout)]
         elif group_method == 'group_face':
-            temp_list = [[x, face_recognition.face_encodings(cv2.imread(x))] for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout)]
-        elif group_method == 'group_face_cnn':
-            from lib import FaceLandmarksExtractor
+        
             temp_list = []
             for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout):
-                d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
-                temp_list.append([x, np.array(d[0][1]) if len(d) > 0 else np.zeros((68, 2))])
+                if os.path.splitext(os.path.basename(x))[1] != '.png':
+                    print ("%s is not a png file required for aligned-face" % (os.path.basename(x)) ) 
+                    continue
+                
+                a_png = AlignedPNG.load (x)
+                if a_png is None:
+                    print ("%s failed to load" % (os.path.basename(x)) ) 
+                    continue
+                    
+                d = a_png.getFaceswapDictData()
+                
+                if d is None or d['landmarks'] is None:          
+                    print ("%s - no faceswap data found required for aligned-face" % (os.path.basename(x)) )
+                    continue
+                
+                temp_list.append( [x, np.array(d['landmarks']) ] )
+
         elif group_method == 'group_hist':
             temp_list = [[x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256])] for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout)]
         else:
@@ -763,15 +695,7 @@ class SortProcessor(object):
         return sum(scores)/len(scores)
 
     @staticmethod
-    def get_avg_score_faces(f1encs, references):
-        scores = []
-        for f2encs in references:
-            score = face_recognition.face_distance(f1encs, f2encs)[0]
-            scores.append(score)
-        return sum(scores)/len(scores)
-
-    @staticmethod
-    def get_avg_score_faces_cnn(fl1, references):
+    def get_avg_score_faces(fl1, references):
         scores = []
         for fl2 in references:
             score = np.sum ( np.absolute ( (fl2 - fl1).flatten() ) )
@@ -790,10 +714,6 @@ def bad_args(args):
 
 
 if __name__ == "__main__":
-    __warning_string = "Important: face-cnn method will cause an error when "
-    __warning_string += "this tool is called directly instead of through the "
-    __warning_string += "tools.py command script."
-    print (__warning_string)
     print ("Images sort tool.\n")
     
     parser = argparse.ArgumentParser()

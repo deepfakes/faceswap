@@ -7,6 +7,8 @@ from tqdm import tqdm
 
 from lib.cli import DirectoryProcessor, FullPaths
 from lib.utils import BackgroundGenerator, get_folder, get_image_paths, rotate_image
+from lib.AlignedPNG import AlignedPNG
+from lib.faces_detect import DetectedFace
 
 from plugins.PluginLoader import PluginLoader
 
@@ -208,7 +210,7 @@ class ConvertImage(DirectoryProcessor):
 
         # last number regex. I know regex is hacky, but its reliablyhacky(tm).
         self.imageidxre = re.compile(r'(\d+)(?!.*\d)')
-
+        
         for item in batch.iterator():
             self.convert(converter, item)
 
@@ -219,14 +221,6 @@ class ConvertImage(DirectoryProcessor):
         except:
             return False
 
-    def check_skipface(self, filename, face_idx):
-        aligned_face_name = '{}_{}{}'.format(Path(filename).stem, face_idx, Path(filename).suffix)
-        aligned_face_file = Path(self.arguments.input_aligned_dir) / Path(aligned_face_name)
-        # TODO: Remove this temporary fix for backwards compatibility of filenames
-        bk_compat_aligned_face_name = '{}{}{}'.format(Path(filename).stem, face_idx, Path(filename).suffix)
-        bk_compat_aligned_face_file = Path(self.arguments.input_aligned_dir) / Path(bk_compat_aligned_face_name)
-        return aligned_face_file not in self.input_aligned_dir and bk_compat_aligned_face_file not in self.input_aligned_dir
-
     def convert(self, converter, item):
         try:
             (filename, image, faces) = item
@@ -236,16 +230,14 @@ class ConvertImage(DirectoryProcessor):
                 return
 
             if not skip: # process frame as normal
-                for idx, face in faces:
-                    if self.input_aligned_dir is not None and self.check_skipface(filename, idx):
-                        print ('face {} for frame {} was deleted, skipping'.format(idx, os.path.basename(filename)))
-                        continue
+                for face in faces:                    
                     # Check for image rotations and rotate before mapping face
                     if face.r != 0:
+                        height, width = image.shape[:2]
                         image = rotate_image(image, face.r)
                         image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
                         # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
-                        image = rotate_image(image, face.r * -1)
+                        image = rotate_image(image, face.r * -1, rotated_width=width, rotated_height=height)
                     else:
                         image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
                         # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
@@ -256,17 +248,30 @@ class ConvertImage(DirectoryProcessor):
             print('Failed to convert image: {}. Reason: {}'.format(filename, e))
 
     def prepare_images(self):
-        self.read_alignments()
-        is_have_alignments = self.have_alignments()
+        alignments = {} #Collecting alignments
+        for filename in tqdm(self.input_aligned_dir, desc="Collecting alignments"):
+            a_png = AlignedPNG.load( str(filename) )
+            if a_png is None: continue
+            d = a_png.getFaceswapDictData()
+            if d is None or d['source_filename'] is None or d['source_rect'] is None or d['source_landmarks'] is None: continue          
+            
+            source_filename_stem = Path(d['source_filename']).stem
+            if source_filename_stem not in alignments.keys():
+                alignments[ source_filename_stem ] = []
+                
+            sr = d['source_rect']                 
+            alignments[ source_filename_stem ].append ( 
+                DetectedFace ( r=sr['r'], x=sr['x'], w=sr['w'], y=sr['y'], h=sr['h'], landmarksXY=d['source_landmarks']) )
+
         for filename in tqdm(self.read_directory()):
             image = cv2.imread(filename)
 
-            if is_have_alignments:
-                if self.have_face(filename):
-                    faces = self.get_faces_alignments(filename, image)
-                else:
-                    print ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
-                    continue
+            if Path(filename).stem in alignments.keys():
+                faces = alignments[ Path(filename).stem ]
+                for face in faces:                    
+                    face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
             else:
-                faces = self.get_faces(image)
+                faces = []
+                print ('no faces found for %s, converting without faces' % (os.path.basename(filename)) )
+                
             yield filename, image, faces
