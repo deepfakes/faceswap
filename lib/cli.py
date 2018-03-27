@@ -75,7 +75,7 @@ class DirectoryProcessor(object):
             pass
 
         print('Starting, this may take a while...')
-        
+
         try:
             if self.arguments.skip_existing:
                 self.already_processed = get_image_paths(self.arguments.output_dir)
