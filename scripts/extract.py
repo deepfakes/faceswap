@@ -122,12 +122,6 @@ class ExtractTrainingData(DirectoryProcessor):
         rotated_faces = [(idx, face) for idx, face in faces]
         return rotated_faces, rotated_image
 
-    def getRotatedImageFaces(self, image, angle):
-        rotated_image = rotate_image(image, angle)
-        faces = self.get_faces(rotated_image, rotation=angle)
-        rotated_faces = [(idx, face) for idx, face in faces]
-        return rotated_faces, rotated_image
-
     def imageRotator(self, image):
         ''' rotates the image through rotation_angles to try to find a face '''
         for angle in self.rotation_angles:
