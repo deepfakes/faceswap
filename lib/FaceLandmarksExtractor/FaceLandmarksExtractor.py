@@ -135,6 +135,7 @@ def initialize(detector, scale_to=2048):
         is_initialized = True
 
 #scale_to=2048 with dlib upsamples=0 for 3GB VRAM Windows 10 users        
+#you should not extract landmarks again from predetected face, because many face data lost, so result will be much different against extract from original big image
 def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predetected_face=False, scale_to=2048):
     initialize(detector, scale_to)
     global dlib_detectors
