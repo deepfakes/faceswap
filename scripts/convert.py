@@ -242,10 +242,11 @@ class ConvertImage(DirectoryProcessor):
                         continue
                     # Check for image rotations and rotate before mapping face
                     if face.r != 0:
+                        height, width = image.shape[:2]
                         image = rotate_image(image, face.r)
                         image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
                         # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
-                        image = rotate_image(image, face.r * -1)
+                        image = rotate_image(image, face.r * -1, rotated_width=width, rotated_height=height)
                     else:
                         image = converter.patch_image(image, face, 64 if "128" not in self.arguments.trainer else 128)
                         # TODO: This switch between 64 and 128 is a hack for now. We should have a separate cli option for size
