@@ -147,6 +147,7 @@ def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predete
     if input_is_predetected_face:
         input_scale = 1.0
         detected_faces = [ dlib.rectangle(0, 0, w, h) ]
+        input_image = input_image_bgr[:,:,::-1].copy()
     else:
         input_scale = scale_to / (w if w > h else h)
         input_image_bgr = cv2.resize (input_image_bgr, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
