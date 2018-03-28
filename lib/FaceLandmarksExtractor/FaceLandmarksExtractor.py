@@ -148,6 +148,7 @@ def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predete
     if input_is_predetected_face:
         input_scale = 1.0
         detected_faces = [ dlib.rectangle(0, 0, w, h) ]
+        input_image = input_image_bgr[:,:,::-1].copy()
     else:
         input_scale = scale_to / (w if w > h else h)
         input_image_bgr = cv2.resize (input_image_bgr, ( int(w*input_scale), int(h*input_scale) ), interpolation=cv2.INTER_LINEAR)
@@ -174,7 +175,7 @@ def extract(input_image_bgr, detector, verbose, all_faces=True, input_is_predete
             center[1] -= (bottom - top) * 0.12
             scale = (right - left + bottom - top) / 195.0
         
-            image = crop(input_image_bgr, center, scale).transpose ( (2,0,1) ).astype(np.float32) / 255.0
+            image = crop(input_image, center, scale).transpose ( (2,0,1) ).astype(np.float32) / 255.0
             image = np.expand_dims(image, 0)
             
             pts_img = get_pts_from_predict ( keras_model.predict (image)[-1][0], center, scale)
