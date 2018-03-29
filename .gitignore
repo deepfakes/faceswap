@@ -1,9 +1,0 @@
-*
-!*.py
-!*.md
-!*.txt
-!Dockerfile*
-!requirements*
-!lib
-!scripts
-!plugins
