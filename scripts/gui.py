@@ -276,6 +276,9 @@ class TKGui(object):
         ''' Launch the script inside a subprocess to keep the GUI active '''
         title = command.capitalize()
         self.statustext.set('Running - {}'.format(title))
+        self.parser.set_defaults(func=self.bad_args)
+        arguments = self.parser.parse_args()
+        arguments.func(arguments)
         self.statustext.set('Idle')
         
 # Right Frame setup    
