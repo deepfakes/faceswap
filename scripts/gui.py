@@ -32,9 +32,9 @@ class TKGui(object):
 
     def extract_options(self, subparsers):
         ''' Extract the existing ArgParse Options '''
-        options = {section: subparsers[section].argument_list + subparsers[section].optional_arguments for section in subparsers.keys()}
-        for section in options.values():
-            for option in section:
+        options = {command: subparsers[command].argument_list + subparsers[command].optional_arguments for command in subparsers.keys()}
+        for command in options.values():
+            for option in command:
                 option['control_title'] = self.set_control_title(option.get('opts',''))
                 option['control_type'] = self.set_control_type(option)
         return options
@@ -83,16 +83,16 @@ class TKGui(object):
         notebook.pack(fill=tk.BOTH, expand=True)
 
         # extract, train and convert are explicitly stated to ensure they are always displayed in the same order
-        for section in ('extract', 'train', 'convert'):
-            title = section.title()
+        for command in ('extract', 'train', 'convert'):
+            title = command.title()
             page = ttk.Frame(notebook)
             
-            self.add_left_frame(page, section)
+            self.add_left_frame(page, command)
             self.add_frame_seperator(page)
             opt_frame = self.add_right_frame(page)
             
-            for option in self.opts[section]:
-                self.build_pages(option, opt_frame)
+            for option in self.opts[command]:
+                self.build_tabs(option, opt_frame)
             
             notebook.add(page, text=title)
 
@@ -121,12 +121,12 @@ class TKGui(object):
         config = self.serializer.unmarshal(config_file.read())
         if command is None:
             for command, options in config.items():
-                self.set_section_args(command, options)
+                self.set_command_args(command, options)
         else:
             options = config[command]
-            self.set_section_args(command, options)
+            self.set_command_args(command, options)
                 
-    def set_section_args(self, command, options):
+    def set_command_args(self, command, options):
         ''' Pass the saved config items back to the GUI '''
         for src_option, src_value in options.items():
             for dst_options in self.opts[command]:
@@ -222,7 +222,7 @@ class TKGui(object):
         self.bind_help(btnexecute, 'Run the {} script'.format(title))
 
     def add_util_buttons(self, frame, title):
-        ''' Add the section utitlity buttons '''
+        ''' Add the section utility buttons '''
         command = title.lower()
         title = title.capitalize()
 
@@ -306,7 +306,7 @@ class TKGui(object):
         canvas.configure(scrollregion=canvas.bbox('all'))
 
 # Build the Right Frame Options
-    def build_pages(self, option, page):
+    def build_tabs(self, option, page):
         ''' Build the correct control type for the option passed through '''
         ctl_type = option['control_type']
         ctl_title = option['control_title']
@@ -397,4 +397,3 @@ class TKGui(object):
         filename = filedialog.askopenfilename()
         if filename:
             filepath.set(filename)
-       

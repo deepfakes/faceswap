@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import copy
 import sys
 if  sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
@@ -29,7 +28,6 @@ if __name__ == "__main__":
     guiparsers = {'extract': extract, 'train': train, 'convert': convert}
     gui = TKGui(
         subparser, guiparsers, parser, "gui", "Launch the Faceswap Graphical User Interface.")
-    
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
