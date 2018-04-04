@@ -63,8 +63,49 @@ class DirectoryProcessor(object):
     rotation_angles = None
 
     def __init__(self, subparser, command, description='default'):
+        self.argument_list = self.get_argument_list()
+        self.optional_arguments = self.get_optional_arguments()
         self.create_parser(subparser, command, description)
         self.parse_arguments(description, subparser, command)
+
+    @staticmethod
+    def get_argument_list():
+        ''' Put the arguments in a list so that they are accessible from both argparse and gui '''
+        argument_list = []
+        argument_list.append({ "opts": ('-i', '--input-dir'),
+                               "action": FullPaths,
+                               "dest": "input_dir",
+                               "default": "input",
+                               "help": "Input directory. A directory containing the files \
+                                you wish to process. Defaults to 'input'"})
+        argument_list.append({ "opts": ('-o', '--output-dir'),
+                               "action": FullPaths,
+                               "dest": "output_dir",
+                               "default": "output",
+                               "help": "Output directory. This is where the converted files will \
+                                be stored. Defaults to 'output'"})
+        argument_list.append({ "opts": ('--serializer', ),
+                               "type": str.lower,
+                               "dest": "serializer",
+                               "choices": ("yaml", "json", "pickle"),
+                               "help": "serializer for alignments file"})
+        argument_list.append({ "opts": ('--alignments', ),
+                               "type": str,
+                               "dest": "alignments_path",
+                               "help": "optional path to alignments file."})
+        argument_list.append({ "opts": ('-v', '--verbose'),
+                               "action": "store_true",
+                               "dest": "verbose",
+                               "default": False,
+                               "help": "Show verbose output"})
+        return argument_list
+
+    @staticmethod
+    def get_optional_arguments():
+        ''' Put the arguments in a list so that they are accessible from both argparse and gui '''
+        # Override this for custom arguments
+        argument_list = []
+        return argument_list
 
     def process_arguments(self, arguments):
         self.arguments = arguments
@@ -232,35 +273,11 @@ class DirectoryProcessor(object):
         raise NotImplementedError()
 
     def parse_arguments(self, description, subparser, command):
-        self.parser.add_argument('-i', '--input-dir',
-                            action=FullPaths,
-                            dest="input_dir",
-                            default="input",
-                            help="Input directory. A directory containing the files \
-                            you wish to process. Defaults to 'input'")
-        self.parser.add_argument('-o', '--output-dir',
-                            action=FullPaths,
-                            dest="output_dir",
-                            default="output",
-                            help="Output directory. This is where the converted files will \
-                                be stored. Defaults to 'output'")
-
-        self.parser.add_argument('--serializer',
-                                type=str.lower,
-                                dest="serializer",
-                                choices=("yaml", "json", "pickle"),
-                                help="serializer for alignments file")
-
-        self.parser.add_argument('--alignments',
-                                type=str,
-                                dest="alignments_path",
-                                help="optional path to alignments file.")
-
-        self.parser.add_argument('-v', '--verbose',
-                            action="store_true",
-                            dest="verbose",
-                            default=False,
-                            help="Show verbose output")
+        for option in self.argument_list:
+            args = option['opts']
+            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
+            self.parser.add_argument(*args, **kwargs)
+        
         self.parser = self.add_optional_arguments(self.parser)
         self.parser.set_defaults(func=self.process_arguments)
 
@@ -274,7 +291,10 @@ class DirectoryProcessor(object):
         return parser
 
     def add_optional_arguments(self, parser):
-        # Override this for custom arguments
+        for option in self.optional_arguments:
+            args = option['opts']
+            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
+            parser.add_argument(*args, **kwargs)
         return parser
 
     def finalize(self):

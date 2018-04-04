@@ -23,6 +23,8 @@ class TrainingProcessor(object):
     arguments = None
 
     def __init__(self, subparser, command, description='default'):
+        self.argument_list = self.get_argument_list()
+        self.optional_arguments = self.get_optional_arguments()
         self.parse_arguments(description, subparser, command)
         self.lock = threading.Lock()
 
@@ -33,6 +35,85 @@ class TrainingProcessor(object):
         print("Training data directory: {}".format(self.arguments.model_dir))
 
         self.process()
+    
+    @staticmethod
+    def get_argument_list():
+        ''' Put the arguments in a list so that they are accessible from both argparse and gui '''
+        argument_list = []
+        argument_list.append({ "opts": ("-A", "--input-A"),
+                               "action": FullPaths,
+                               "dest": "input_A",
+                               "default": "input_A",
+                               "help": "Input directory. A directory containing training images for face A.\
+                               Defaults to 'input'"})
+        argument_list.append({ "opts": ("-B", "--input-B"),
+                               "action": FullPaths,
+                               "dest": "input_B",
+                               "default": "input_B",
+                               "help": "Input directory. A directory containing training images for face B.\
+                               Defaults to 'input'"})
+        argument_list.append({ "opts": ("-m", "--model-dir"),
+                               "action": FullPaths,
+                               "dest": "model_dir",
+                               "default": "models",
+                               "help": "Model directory. This is where the training data will \
+                               be stored. Defaults to 'model'"})
+        argument_list.append({ "opts": ("-p", "--preview"),
+                               "action": "store_true",
+                               "dest": "preview",
+                               "default": False,
+                               "help": "Show preview output. If not specified, write progress \
+                               to file."})
+        argument_list.append({ "opts": ("-v", "--verbose"),
+                               "action": "store_true",
+                               "dest": "verbose",
+                               "default": False,
+                               "help": "Show verbose output"})
+        argument_list.append({ "opts": ("-s", "--save-interval"),
+                               "type": int,
+                               "dest": "save_interval",
+                               "default": 100,
+                               "help": "Sets the number of iterations before saving the model."})
+        argument_list.append({ "opts": ("-w", "--write-image"),
+                               "action": "store_true",
+                               "dest": "write_image",
+                               "default": False,
+                               "help": "Writes the training result to a file even on preview mode."})
+        argument_list.append({ "opts": ("-t", "--trainer"),
+                               "type": str,
+                               "choices": PluginLoader.get_available_models(),
+                               "default": PluginLoader.get_default_model(),
+                               "help": "Select which trainer to use, LowMem for cards < 2gb."})
+        argument_list.append({ "opts": ("-pl", "--use-perceptual-loss"),
+                               "action": "store_true",
+                               "dest": "perceptual_loss",
+                               "default": False,
+                               "help": "Use perceptual loss while training"})
+        argument_list.append({ "opts": ("-bs", "--batch-size"),
+                               "type": int,
+                               "default": 64,
+                               "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
+        argument_list.append({ "opts": ("-ag", "--allow-growth"),
+                               "action": "store_true",
+                               "dest": "allow_growth",
+                               "default": False,
+                               "help": "Sets allow_growth option of Tensorflow to spare memory on some configs"})
+        argument_list.append({ "opts": ("-ep", "--epochs"),
+                               "type": int,
+                               "default": 1000000,
+                               "help": "Length of training in epochs."})
+        argument_list.append({ "opts": ("-g", "--gpus"),
+                               "type": int,
+                               "default": 1,
+                               "help": "Number of GPUs to use for training"})
+        return argument_list
+
+    @staticmethod
+    def get_optional_arguments():
+        ''' Put the arguments in a list so that they are accessible from both argparse and gui '''
+        # Override this for custom arguments
+        argument_list = []
+        return argument_list
 
     def parse_arguments(self, description, subparser, command):
         parser = subparser.add_parser(
@@ -40,80 +121,21 @@ class TrainingProcessor(object):
             help="This command trains the model for the two faces A and B.",
             description=description,
             epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground"
-        )
+            https://github.com/deepfakes/faceswap-playground")
 
-        parser.add_argument('-A', '--input-A',
-                            action=FullPaths,
-                            dest="input_A",
-                            default="input_A",
-                            help="Input directory. A directory containing training images for face A.\
-                             Defaults to 'input'")
-        parser.add_argument('-B', '--input-B',
-                            action=FullPaths,
-                            dest="input_B",
-                            default="input_B",
-                            help="Input directory. A directory containing training images for face B.\
-                             Defaults to 'input'")
-        parser.add_argument('-m', '--model-dir',
-                            action=FullPaths,
-                            dest="model_dir",
-                            default="models",
-                            help="Model directory. This is where the training data will \
-                                be stored. Defaults to 'model'")
-        parser.add_argument('-p', '--preview',
-                            action="store_true",
-                            dest="preview",
-                            default=False,
-                            help="Show preview output. If not specified, write progress \
-                            to file.")
-        parser.add_argument('-v', '--verbose',
-                            action="store_true",
-                            dest="verbose",
-                            default=False,
-                            help="Show verbose output")
-        parser.add_argument('-s', '--save-interval',
-                            type=int,
-                            dest="save_interval",
-                            default=100,
-                            help="Sets the number of iterations before saving the model.")
-        parser.add_argument('-w', '--write-image',
-                            action="store_true",
-                            dest="write_image",
-                            default=False,
-                            help="Writes the training result to a file even on preview mode.")
-        parser.add_argument('-t', '--trainer',
-                            type=str,
-                            choices=PluginLoader.get_available_models(),
-                            default=PluginLoader.get_default_model(),
-                            help="Select which trainer to use, LowMem for cards < 2gb.")
-        parser.add_argument('-pl', '--use-perceptual-loss',
-                            action="store_true",
-                            dest="perceptual_loss",
-                            default=False,
-                            help="Use perceptual loss while training")
-        parser.add_argument('-bs', '--batch-size',
-                            type=int,
-                            default=64,
-                            help="Batch size, as a power of 2 (64, 128, 256, etc)")
-        parser.add_argument('-ag', '--allow-growth',
-                            action="store_true",
-                            dest="allow_growth",
-                            default=False,
-                            help="Sets allow_growth option of Tensorflow to spare memory on some configs")
-        parser.add_argument('-ep', '--epochs',
-                            type=int,
-                            default=1000000,
-                            help="Length of training in epochs.")
-        parser.add_argument('-g', '--gpus',
-                            type=int,
-                            default=1,
-                            help="Number of GPUs to use for training")
+        for option in self.argument_list:
+            args = option['opts']
+            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
+            parser.add_argument(*args, **kwargs)
+
         parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
 
     def add_optional_arguments(self, parser):
-        # Override this for custom arguments
+        for option in self.optional_arguments:
+            args = option['opts']
+            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
+            parser.add_argument(*args, **kwargs)
         return parser
 
     def process(self):
