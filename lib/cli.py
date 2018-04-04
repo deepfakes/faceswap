@@ -4,10 +4,29 @@ import sys
 import time
 
 from pathlib import Path
-from lib.FaceFilter import FaceFilter
-from lib.faces_detect import detect_faces, DetectedFace
 from lib.utils import get_image_paths, get_folder, rotate_image
 from lib import Serializer
+
+# DLIB is a GPU Memory hog, so the following modules should only be imported when required
+detect_faces = None
+DetectedFace = None
+FaceFilter = None
+
+def import_faces_detect():
+    ''' Import the faces_detect module only when it is required '''
+    global detect_faces
+    global DetectedFace
+    if detect_faces is None or DetectedFace is None:
+        import lib.faces_detect 
+        detect_faces = lib.faces_detect.detect_faces
+        DetectedFace = lib.faces_detect.DetectedFace
+
+def import_FaceFilter():
+    ''' Import the FaceFilter module only when it is required '''
+    global FaceFilter
+    if FaceFilter is None:
+        import lib.FaceFilter
+        FaceFilter = lib.FaceFilter.FaceFilter
 
 class FullPaths(argparse.Action):
     """Expand user- and relative-paths"""
@@ -153,6 +172,7 @@ class DirectoryProcessor(object):
         return os.path.exists(fn)
 
     def get_faces_alignments(self, filename, image):
+        import_faces_detect()
         faces_count = 0
         faces = self.faces_detected[os.path.basename(filename)]
         for rawface in faces:
@@ -173,6 +193,7 @@ class DirectoryProcessor(object):
             self.verify_output = True
 
     def get_faces(self, image, rotation=0):
+        import_faces_detect()
         faces_count = 0
         faces = detect_faces(image, self.arguments.detector, self.arguments.verbose, rotation)
         
@@ -201,6 +222,7 @@ class DirectoryProcessor(object):
         filter_files = list(filter(lambda fn: Path(fn).exists(), filter_files))
         
         if filter_files:
+            import_FaceFilter()
             print('Loading reference images for filtering: %s' % filter_files)
             return FaceFilter(filter_files, nfilter_files, self.arguments.ref_threshold)
 
