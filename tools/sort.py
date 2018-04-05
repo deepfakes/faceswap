@@ -302,6 +302,7 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_cnn(self):
+        import_face_recognition()
         import_FaceLandmarksExtractor()
 
         input_dir = self.arguments.input_dir
@@ -331,6 +332,7 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_cnn_dissim(self):
+        import_face_recognition()
         import_FaceLandmarksExtractor()
 
         input_dir = self.arguments.input_dir
@@ -368,7 +370,8 @@ class SortProcessor(object):
             l = ( (fl[27][0]-fl[0][0]) + (fl[28][0]-fl[1][0]) + (fl[29][0]-fl[2][0]) ) / 3.0   
             r = ( (fl[16][0]-fl[27][0]) + (fl[15][0]-fl[28][0]) + (fl[14][0]-fl[29][0]) ) / 3.0
             return r-l
-            
+        
+        import_face_recognition()
         import_FaceLandmarksExtractor()
         input_dir = self.arguments.input_dir
     
