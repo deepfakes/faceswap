@@ -197,12 +197,12 @@ class TrainingProcessor(object):
                     model.save_weights()
 
                 if self.stop:
-                    model.save_weights()
-                    exit()
+                    break
 
                 if self.save_now:
                     model.save_weights()
                     self.save_now = False
+                    
             model.save_weights()
             print('Training complete\nModel has been saved')
             exit(0)
