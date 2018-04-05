@@ -8,12 +8,14 @@ from tkinter import filedialog
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
 
-class TKGui(object):
+class FaceswapGui(tk.Tk):
     ''' The Graphical User Interface '''
-    def __init__(self, subparser, subparsers, parser, command, description='default'):
-        self.root = tk.Tk()
+    def __init__(self, options, parser, *args, **kwargs):
+        
+        tk.Tk.__init__(self, *args, **kwargs)
+
+        self.opts = options
         self.parser = parser
-        self.opts = self.extract_options(subparsers)
         self.icofolder = tk.PhotoImage(file='icons/open_folder.png')
         self.icoload = tk.PhotoImage(file='icons/open_file.png')
         self.icosave = tk.PhotoImage(file='icons/save.png')
@@ -23,65 +25,13 @@ class TKGui(object):
         self.statustext = tk.StringVar()
         self.serializer = JSONSerializer
         self.filetypes=(('Faceswap files', '*.fsw'),  ('All files', '*.*'))
-       
-        self.parse_arguments(description, subparser, command)
+        self.task = FaceswapControl()
 
-    def bad_args(self, args):
-        self.parser.print_help()
-        exit(0)
-
-    def extract_options(self, subparsers):
-        ''' Extract the existing ArgParse Options '''
-        opts = {cmd: subparsers[cmd].argument_list + 
-                subparsers[cmd].optional_arguments for cmd in subparsers.keys()}
-        for command in opts.values():
-            for opt in command:
-                ctl, sysbrowser = self.set_control(opt)
-                opt['control_title'] = self.set_control_title(opt.get('opts',''))
-                opt['control'] = ctl
-                opt['filesystem_browser'] = sysbrowser
-        return opts
-
-    @staticmethod
-    def set_control_title(opts):
-        ''' Take the option switch and format it nicely '''
-        ctltitle = opts[0]
-        if len(opts) == 2:
-            ctltitle = opts[1]
-        ctltitle = ctltitle.replace('-',' ').replace('_',' ').strip()
-        return ctltitle
- 
-    @staticmethod
-    def set_control(option):
-        ''' Set the control and filesystem browser to use for each option '''
-        sysbrowser = None
-        ctl = tk.Entry
-        if option.get('dest', '') == 'alignments_path':
-            sysbrowser = 'load'
-        elif option.get('action', '') == FullPaths:
-            sysbrowser = 'folder'
-        elif option.get('choices', '') != '':
-            ctl = ttk.Combobox
-        elif option.get('action', '') == 'store_true':
-            ctl = tk.Checkbutton
-        return ctl, sysbrowser
-
-    def parse_arguments(self, description, subparser, command):
-        parser = subparser.add_parser(
-            command,
-            help="This Launches a GUI for Faceswap.",
-            description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground"
-        )
-        parser.set_defaults(func=self.process)
-
-    def process(self, arguments):
-        ''' Builds the GUI '''
-        self.arguments = arguments
-        self.root.title('faceswap.py')
+    def build_gui(self):
+        ''' Build the GUI '''
+        self.title('faceswap.py')
         self.menu()
-        notebook = ttk.Notebook(self.root)
+        notebook = ttk.Notebook(self)
         notebook.pack(fill=tk.BOTH, expand=True)
 
         # Commands explicitly stated to ensure consistent ordering
@@ -97,12 +47,10 @@ class TKGui(object):
             
             notebook.add(page, text=command.title())
 
-        self.root.mainloop()
-
 # All pages stuff
     def menu(self):
         ''' Menu bar for loading and saving configs '''
-        menubar = tk.Menu(self.root)
+        menubar = tk.Menu(self)
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label='Load full config...', command=self.load_config)
         filemenu.add_command(label='Save full config...', command=self.save_config)
@@ -110,9 +58,9 @@ class TKGui(object):
         filemenu.add_command(label='Reset all to default', command=self.reset_config)
         filemenu.add_command(label='Clear all', command=self.clear_config)
         filemenu.add_separator()
-        filemenu.add_command(label='Quit', command=self.root.quit)
+        filemenu.add_command(label='Quit', command=self.quit)
         menubar.add_cascade(label="File", menu=filemenu)
-        self.root.config(menu=menubar)
+        self.config(menu=menubar)
 
     def load_config(self, command=None):
         ''' Load a saved config file '''
@@ -227,9 +175,13 @@ class TKGui(object):
                                 text=title,
                                 height=2,
                                 width=12,
-                                command=lambda: self.execute_script(command))
+                                command=lambda: self.execute_task(command))
         btnexecute.pack(side=tk.TOP)
         self.bind_help(btnexecute, 'Run the {} script'.format(title))
+
+    def execute_task(self, command):
+        ''' Execute the task in Faceswap.py '''
+        self.task.execute_script(self.opts, command, self.parser, self.statustext)
 
     def add_util_buttons(self, frame, command):
         ''' Add the section utility buttons '''
@@ -265,31 +217,6 @@ class TKGui(object):
                                 bg="gray90")
         lblstatus.pack(side=tk.BOTTOM, anchor=tk.N)
 
-    def execute_script(self, command):
-        
-        optlist = ['faceswap.py', command]
-        for item in self.opts[command]:
-            optval = str(item.get('value','').get())
-            opt = item['opts'][0]
-            if optval == 'False' or optval == '':
-                continue
-            elif optval == 'True':
-                optlist.append(opt)
-            else:
-                optlist.extend((opt, optval))
-        sys.argv = optlist
-        process = Thread(target=self.launch_thread, args=(command,))
-        process.start()
-
-    def launch_thread(self, command):
-        ''' Launch the script inside a subprocess to keep the GUI active '''
-        title = command.capitalize()
-        self.statustext.set('Running - {}'.format(title))
-        self.parser.set_defaults(func=self.bad_args)
-        arguments = self.parser.parse_args()
-        arguments.func(arguments)
-        self.statustext.set('Idle')
-        
 # Right Frame setup    
     def add_right_frame(self, page):
         ''' Add the options panel to the right frame of each page '''
@@ -393,3 +320,102 @@ class TKGui(object):
         filename = filedialog.askopenfilename()
         if filename:
             filepath.set(filename)
+
+class TKGui(object):
+    ''' Main GUI Control '''
+    def __init__ (self, subparser, subparsers, parser, command, description='default'):
+        self.parser = parser
+        self.opts = self.extract_options(subparsers)
+        self.root = FaceswapGui(self.opts, self.parser)
+        self.parse_arguments(description, subparser, command)
+
+    def extract_options(self, subparsers):
+        ''' Extract the existing ArgParse Options '''
+        opts = {cmd: subparsers[cmd].argument_list + 
+                subparsers[cmd].optional_arguments for cmd in subparsers.keys()}
+        for command in opts.values():
+            for opt in command:
+                ctl, sysbrowser = self.set_control(opt)
+                opt['control_title'] = self.set_control_title(opt.get('opts',''))
+                opt['control'] = ctl
+                opt['filesystem_browser'] = sysbrowser
+        return opts
+
+    @staticmethod
+    def set_control_title(opts):
+        ''' Take the option switch and format it nicely '''
+        ctltitle = opts[1] if len(opts) == 2 else opts[0]
+        ctltitle = ctltitle.replace('-',' ').replace('_',' ').strip().title()
+        return ctltitle
+ 
+    @staticmethod
+    def set_control(option):
+        ''' Set the control and filesystem browser to use for each option '''
+        sysbrowser = None
+        ctl = tk.Entry
+        if option.get('dest', '') == 'alignments_path':
+            sysbrowser = 'load'
+        elif option.get('action', '') == FullPaths:
+            sysbrowser = 'folder'
+        elif option.get('choices', '') != '':
+            ctl = ttk.Combobox
+        elif option.get('action', '') == 'store_true':
+            ctl = tk.Checkbutton
+        return ctl, sysbrowser
+
+    def parse_arguments(self, description, subparser, command):
+        parser = subparser.add_parser(
+            command,
+            help="This Launches a GUI for Faceswap.",
+            description=description,
+            epilog="Questions and feedback: \
+            https://github.com/deepfakes/faceswap-playground"
+        )
+        parser.set_defaults(func=self.process)        
+
+    def process(self, arguments):
+        ''' Builds the GUI '''
+        self.arguments = arguments
+        self.root.build_gui()
+        self.root.mainloop()
+
+class FaceswapControl(object):
+    ''' Control the underlying Faceswap tasks '''
+
+    def __init__(self):
+        self.opts = None
+        self.command = None
+        self.parser = None
+        self.statustext = None
+
+    def bad_args(self, args):
+        self.parser.print_help()
+        exit(0)
+
+    def execute_script(self, options, command, parser, statustext):
+        self.opts = options
+        self.command = command
+        self.parser = parser
+        self.statustext = statustext
+        
+        optlist = ['faceswap.py', self.command]
+        for item in self.opts[self.command]:
+            optval = str(item.get('value','').get())
+            opt = item['opts'][0]
+            if optval == 'False' or optval == '':
+                continue
+            elif optval == 'True':
+                optlist.append(opt)
+            else:
+                optlist.extend((opt, optval))
+        sys.argv = optlist
+        process = Thread(target=self.launch_thread, args=(self.command,))
+        process.start()
+
+    def launch_thread(self, command):
+        ''' Launch the script inside a subprocess to keep the GUI active '''
+        self.statustext.set('Running - ' + command.title())
+        self.parser.set_defaults(func=self.bad_args)
+        arguments = self.parser.parse_args()
+        arguments.func(arguments)
+        self.statustext.set('Idle')        
