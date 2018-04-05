@@ -252,6 +252,7 @@ class DirectoryProcessor(object):
             self.verify_output = True
 
     def load_filter(self):
+        import_FaceFilter()
         nfilter_files = self.arguments.nfilter
         if not isinstance(self.arguments.nfilter, list):
             nfilter_files = [self.arguments.nfilter]
@@ -263,7 +264,6 @@ class DirectoryProcessor(object):
         filter_files = list(filter(lambda fn: Path(fn).exists(), filter_files))
         
         if filter_files:
-            import_FaceFilter()
             print('Loading reference images for filtering: %s' % filter_files)
             return FaceFilter(filter_files, nfilter_files, self.arguments.ref_threshold)
 
