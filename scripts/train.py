@@ -204,7 +204,6 @@ class TrainingProcessor(object):
                     self.save_now = False
                     
             model.save_weights()
-            print('Training complete\nModel has been saved')
             exit(0)
         except KeyboardInterrupt:
             try:
