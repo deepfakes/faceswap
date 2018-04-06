@@ -1,21 +1,49 @@
 import sys
-import tkinter as tk
 
 from os import path
 from threading import Thread
-from tkinter import ttk
-from tkinter import filedialog
 
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
 
+# Users without tkinter distrubtion packages or without an X-Console will error out
+# importing tkinter. Therefore run a check on these and only import if required 
+tk = None
+ttk = None
+filedialog = None
 
-class FaceswapGui(tk.Tk):
+def import_tkinter():
+    ''' Perform checks when importing tkinter module to ensure that GUI will load '''
+    global tk
+    global ttk
+    global filedialog
+    try:
+        import tkinter
+        from tkinter import ttk
+        from tkinter import filedialog
+        tk = tkinter
+    except ImportError:
+        import_helper_message()
+        return False
+    return True    
+
+def import_helper_message():
+    ''' Import helper text if attempting to use GUI without TkInter installed '''
+    cmd = sys.argv[1]
+    if cmd == 'gui':
+        msg =  ('It looks like TkInter isn''t installed for your OS, so the GUI has been disabled. '
+                'To enable the GUI please install the TkInter application.\nYou can try:\n'
+                '  Windows/macOS:      Install ActiveTcl Community Edition from www.activestate.com\n'
+                '  Ubuntu/Mint/Debian: sudo apt install python3-tk\n'
+                '  Arch:               sudo pacman -S tk\n'
+                '  CentOS/Redhat:      sudo yum install tkinter\n'
+                '  Fedora:             sudo dnf install python3-tkinter\n')
+        print(msg)
+
+class FaceswapGui(object):
     ''' The Graphical User Interface '''
-    def __init__(self, options, parser, *args, **kwargs):
-        
-        tk.Tk.__init__(self, *args, **kwargs)
-
+    def __init__(self, options, parser):
+        self.gui = tk.Tk()
         self.opts = options
         self.parser = parser
         
@@ -35,9 +63,9 @@ class FaceswapGui(tk.Tk):
 
     def build_gui(self):
         ''' Build the GUI '''
-        self.title('faceswap.py')
+        self.gui.title('faceswap.py')
         self.menu()
-        notebook = ttk.Notebook(self)
+        notebook = ttk.Notebook(self.gui)
         notebook.pack(fill=tk.BOTH, expand=True)
 
         # Commands explicitly stated to ensure consistent ordering
@@ -56,7 +84,7 @@ class FaceswapGui(tk.Tk):
 # All pages stuff
     def menu(self):
         ''' Menu bar for loading and saving configs '''
-        menubar = tk.Menu(self)
+        menubar = tk.Menu(self.gui)
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label='Load full config...', command=self.load_config)
         filemenu.add_command(label='Save full config...', command=self.save_config)
@@ -64,9 +92,9 @@ class FaceswapGui(tk.Tk):
         filemenu.add_command(label='Reset all to default', command=self.reset_config)
         filemenu.add_command(label='Clear all', command=self.clear_config)
         filemenu.add_separator()
-        filemenu.add_command(label='Quit', command=self.quit)
+        filemenu.add_command(label='Quit', command=self.gui.quit)
         menubar.add_cascade(label="File", menu=filemenu)
-        self.config(menu=menubar)
+        self.gui.config(menu=menubar)
 
     def load_config(self, command=None):
         ''' Load a saved config file '''
@@ -327,9 +355,55 @@ class FaceswapGui(tk.Tk):
         if filename:
             filepath.set(filename)
 
+class FaceswapControl(object):
+    ''' Control the underlying Faceswap tasks '''
+
+    def __init__(self):
+        self.opts = None
+        self.command = None
+        self.parser = None
+        self.statustext = None
+
+    def bad_args(self, args):
+        self.parser.print_help()
+        exit(0)
+
+    def execute_script(self, options, command, parser, statustext):
+        self.opts = options
+        self.command = command
+        self.parser = parser
+        self.statustext = statustext
+        
+        optlist = ['faceswap.py', self.command]
+        for item in self.opts[self.command]:
+            optval = str(item.get('value','').get())
+            opt = item['opts'][0]
+            if optval == 'False' or optval == '':
+                continue
+            elif optval == 'True':
+                optlist.append(opt)
+            else:
+                optlist.extend((opt, optval))
+        sys.argv = optlist
+        process = Thread(target=self.launch_thread, args=(self.command,))
+        process.start()
+
+    def launch_thread(self, command):
+        ''' Launch the script inside a subprocess to keep the GUI active '''
+        self.statustext.set('Running - ' + command.title())
+        self.parser.set_defaults(func=self.bad_args)
+        arguments = self.parser.parse_args()
+        arguments.func(arguments)
+        self.statustext.set('Idle')        
+
 class TKGui(object):
     ''' Main GUI Control '''
     def __init__ (self, subparser, subparsers, parser, command, description='default'):
+       
+    # Don't try to load the rest of the script if there are problems importing tkinter
+        if not import_tkinter():
+            return
+       
         self.parser = parser
         self.opts = self.extract_options(subparsers)
         self.root = FaceswapGui(self.opts, self.parser)
@@ -383,45 +457,5 @@ class TKGui(object):
         ''' Builds the GUI '''
         self.arguments = arguments
         self.root.build_gui()
-        self.root.mainloop()
+        self.root.gui.mainloop()
 
-class FaceswapControl(object):
-    ''' Control the underlying Faceswap tasks '''
-
-    def __init__(self):
-        self.opts = None
-        self.command = None
-        self.parser = None
-        self.statustext = None
-
-    def bad_args(self, args):
-        self.parser.print_help()
-        exit(0)
-
-    def execute_script(self, options, command, parser, statustext):
-        self.opts = options
-        self.command = command
-        self.parser = parser
-        self.statustext = statustext
-        
-        optlist = ['faceswap.py', self.command]
-        for item in self.opts[self.command]:
-            optval = str(item.get('value','').get())
-            opt = item['opts'][0]
-            if optval == 'False' or optval == '':
-                continue
-            elif optval == 'True':
-                optlist.append(opt)
-            else:
-                optlist.extend((opt, optval))
-        sys.argv = optlist
-        process = Thread(target=self.launch_thread, args=(self.command,))
-        process.start()
-
-    def launch_thread(self, command):
-        ''' Launch the script inside a subprocess to keep the GUI active '''
-        self.statustext.set('Running - ' + command.title())
-        self.parser.set_defaults(func=self.bad_args)
-        arguments = self.parser.parse_args()
-        arguments.func(arguments)
-        self.statustext.set('Idle')        
