@@ -1,6 +1,6 @@
 import sys
 
-from os import path
+from os import environ, path
 from threading import Thread
 
 from lib.cli import FullPaths
@@ -400,8 +400,9 @@ class TKGui(object):
     ''' Main GUI Control '''
     def __init__ (self, subparser, subparsers, parser, command, description='default'):
        
-    # Don't try to load the rest of the script if there are problems importing tkinter
-        if not import_tkinter():
+    # Don't try to load the rest of the script if there is no display or there are 
+    # problems importing tkinter
+        if not self.check_for_display(self) or not import_tkinter():
             return
        
         self.parser = parser
@@ -409,6 +410,15 @@ class TKGui(object):
         self.root = FaceswapGui(self.opts, self.parser)
         self.parse_arguments(description, subparser, command)
 
+    @staticmethod
+    def check_for_display(self):
+        ''' Check whether there is a display to output the GUI '''
+        cmd = sys.argv[1]
+        if cmd == 'gui' and not environ['DISPLAY']:
+            print ('Could not detect a display. The GUI has been disabled')
+            return False
+        return True
+    
     def extract_options(self, subparsers):
         ''' Extract the existing ArgParse Options '''
         opts = {cmd: subparsers[cmd].argument_list + 
