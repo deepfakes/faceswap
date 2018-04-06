@@ -12,7 +12,7 @@ tk = None
 ttk = None
 filedialog = None
 
-def import_tkinter():
+def import_tkinter(command):
     ''' Perform checks when importing tkinter module to ensure that GUI will load '''
     global tk
     global ttk
@@ -23,22 +23,25 @@ def import_tkinter():
         from tkinter import filedialog
         tk = tkinter
     except ImportError:
-        import_helper_message()
+        if command == 'gui':
+            print(  'It looks like TkInter isn''t installed for your OS, so the GUI has been '
+                    'disabled. To enable the GUI please install the TkInter application.\n'
+                    'You can try:\n'
+                    '  Windows/macOS:      Install ActiveTcl Community Edition from '
+                    'www.activestate.com\n'
+                    '  Ubuntu/Mint/Debian: sudo apt install python3-tk\n'
+                    '  Arch:               sudo pacman -S tk\n'
+                    '  CentOS/Redhat:      sudo yum install tkinter\n'
+                    '  Fedora:             sudo dnf install python3-tkinter\n')
         return False
     return True    
 
-def import_helper_message():
-    ''' Import helper text if attempting to use GUI without TkInter installed '''
-    cmd = sys.argv[1]
-    if cmd == 'gui':
-        msg =  ('It looks like TkInter isn''t installed for your OS, so the GUI has been disabled. '
-                'To enable the GUI please install the TkInter application.\nYou can try:\n'
-                '  Windows/macOS:      Install ActiveTcl Community Edition from www.activestate.com\n'
-                '  Ubuntu/Mint/Debian: sudo apt install python3-tk\n'
-                '  Arch:               sudo pacman -S tk\n'
-                '  CentOS/Redhat:      sudo yum install tkinter\n'
-                '  Fedora:             sudo dnf install python3-tkinter\n')
-        print(msg)
+def check_display(command):
+    # Check whether there is a display to output the GUI '''
+    if command == 'gui' and not environ['DISPLAY']:
+        print ('Could not detect a display. The GUI has been disabled')
+        return False
+    return True
 
 class FaceswapGui(object):
     ''' The Graphical User Interface '''
@@ -355,9 +358,9 @@ class FaceswapGui(object):
         if filename:
             filepath.set(filename)
 
+
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
-
     def __init__(self):
         self.opts = None
         self.command = None
@@ -399,10 +402,9 @@ class FaceswapControl(object):
 class TKGui(object):
     ''' Main GUI Control '''
     def __init__ (self, subparser, subparsers, parser, command, description='default'):
-       
-    # Don't try to load the rest of the script if there is no display or there are 
-    # problems importing tkinter
-        if not self.check_for_display(self) or not import_tkinter():
+    # Don't try to load the GUI if there is no display or there are problems importing tkinter
+        cmd = sys.argv[1]
+        if not check_display(cmd) or not import_tkinter(cmd):
             return
        
         self.parser = parser
@@ -410,15 +412,6 @@ class TKGui(object):
         self.root = FaceswapGui(self.opts, self.parser)
         self.parse_arguments(description, subparser, command)
 
-    @staticmethod
-    def check_for_display(self):
-        ''' Check whether there is a display to output the GUI '''
-        cmd = sys.argv[1]
-        if cmd == 'gui' and not environ['DISPLAY']:
-            print ('Could not detect a display. The GUI has been disabled')
-            return False
-        return True
-    
     def extract_options(self, subparsers):
         ''' Extract the existing ArgParse Options '''
         opts = {cmd: subparsers[cmd].argument_list + 
