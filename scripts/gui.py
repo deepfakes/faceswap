@@ -73,16 +73,8 @@ class FaceswapGui(object):
 
         # Commands explicitly stated to ensure consistent ordering
         for command in ('extract', 'train', 'convert'):
-            page = ttk.Frame(notebook)
-            
-            self.add_left_frame(page, command)
-            self.add_frame_seperator(page)
-            opt_frame = self.add_right_frame(page)
-            
-            for option in self.opts[command]:
-                self.build_tabs(option, opt_frame)
-            
-            notebook.add(page, text=command.title())
+            commandtab = CommandTab(self, notebook, command)
+            commandtab.build_tab()
 
 # All pages stuff
     def menu(self):
@@ -161,21 +153,32 @@ class FaceswapGui(object):
             else:
                 option['value'].set('')
 
-    @staticmethod
-    def add_frame_seperator(page):
-        ''' Add a seperator between left and right frames '''
-        sep = tk.Frame(page, width=2, bd=1, relief=tk.SUNKEN)
-        sep.pack(fill=tk.Y, padx=5, side=tk.LEFT)
+    def bind_help(self, control, helptext):
+        ''' Controls the help text displayed on mouse hover '''
+        for action in ('<Enter>', '<FocusIn>', '<Leave>', '<FocusOut>'):
+            helptext = helptext if action in ('<Enter>', '<FocusIn>') else ''
+            control.bind(action, lambda event, txt=helptext: self.helptext.set(txt))
 
-# Left Frame stuff
-    def add_left_frame(self, page, command):
-        ''' Add help display and execute button to the left frame of each page '''
-        frame = tk.Frame(page)
+    def execute_task(self, command):
+        ''' Execute the task in Faceswap.py '''
+        self.task.execute_script(self.opts, command, self.parser, self.statustext)
+
+class ActionFrame(object):
+    '''Action Frame - Displays information and action controls '''
+    def __init__(self, gui, page, command):
+        self.gui = gui
+        self.page = page
+        self.command = command
+        self.title = command.title()
+
+    def build_frame(self):
+        ''' Add help display and Action buttons to the left frame of each page '''
+        frame = tk.Frame(self.page)
         frame.pack(fill=tk.X, padx=(10,5), side=tk.LEFT, anchor=tk.N)
 
         self.add_info_section(frame)
-        self.add_action_buttons(frame, command)
-        self.add_util_buttons(frame, command)
+        self.add_action_buttons(frame)
+        self.add_util_buttons(frame)
         self.add_status_section(frame)
         
     def add_info_section(self, frame):
@@ -184,57 +187,45 @@ class FaceswapGui(object):
         hlpframe.pack(fill=tk.X, side=tk.TOP, pady=5)
         lbltitle = tk.Label(hlpframe, text='Info', width=15, anchor=tk.SW)
         lbltitle.pack(side=tk.TOP)
-        self.helptext.set('')
+        self.gui.helptext.set('')
         lblhelp = tk.Label( hlpframe,
                             height=20,
                             width=15,
-                            textvariable=self.helptext,
+                            textvariable=self.gui.helptext,
                             wraplength=120, 
                             justify=tk.LEFT, 
                             anchor=tk.NW,
                             bg="gray90")
         lblhelp.pack(side=tk.TOP, anchor=tk.N)
 
-    def bind_help(self, control, helptext):
-        ''' Controls the help text displayed on mouse hover '''
-        for action in ('<Enter>', '<FocusIn>', '<Leave>', '<FocusOut>'):
-            helptext = helptext if action in ('<Enter>', '<FocusIn>') else ''
-            control.bind(action, lambda event, txt=helptext: self.helptext.set(txt))
-
-    def add_action_buttons(self, frame, command):
+    def add_action_buttons(self, frame):
         ''' Add the action buttons for page '''
-        title = command.capitalize()
-
         actframe = tk.Frame(frame)
         actframe.pack(fill=tk.X, side=tk.TOP, pady=(15, 0))
 
         btnexecute = tk.Button( actframe,
-                                text=title,
+                                text=self.title,
                                 height=2,
                                 width=12,
-                                command=lambda: self.execute_task(command))
+                                command=lambda: self.gui.execute_task(self.command))
         btnexecute.pack(side=tk.TOP)
-        self.bind_help(btnexecute, 'Run the {} script'.format(title))
+        self.gui.bind_help(btnexecute, 'Run the {} script'.format(self.title))
 
-    def execute_task(self, command):
-        ''' Execute the task in Faceswap.py '''
-        self.task.execute_script(self.opts, command, self.parser, self.statustext)
-
-    def add_util_buttons(self, frame, command):
+    def add_util_buttons(self, frame):
         ''' Add the section utility buttons '''
         utlframe = tk.Frame(frame)
         utlframe.pack(side=tk.TOP, pady=(5,0))
 
         for utl in ('load', 'save', 'clear', 'reset'):
-            img = getattr(self, 'ico' + utl)
-            action = getattr(self, utl + '_config')
+            img = getattr(self.gui, 'ico' + utl)
+            action = getattr(self.gui, utl + '_config')
             btnutl = tk.Button( utlframe,
                                 height=16,
                                 width=16,
                                 image=img,
-                                command=lambda cmd=action: cmd(command))
+                                command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, pady=2, side=tk.LEFT)
-            self.bind_help(btnutl, utl.capitalize() + ' ' + command.capitalize() + ' config')
+            self.gui.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
 
     def add_status_section(self, frame):
         ''' Build the info text section page '''
@@ -243,21 +234,46 @@ class FaceswapGui(object):
         
         lbltitle = tk.Label(statusframe, text='Status', width=15, anchor=tk.SW)
         lbltitle.pack(side=tk.TOP)
-        self.statustext.set('Idle')
+        self.gui.statustext.set('Idle')
         lblstatus = tk.Label(   statusframe,
                                 height=1,
                                 width=15,
-                                textvariable=self.statustext,
+                                textvariable=self.gui.statustext,
                                 wraplength=120,
                                 justify=tk.LEFT,
                                 anchor=tk.NW,
                                 bg="gray90")
         lblstatus.pack(side=tk.BOTTOM, anchor=tk.N)
 
-# Right Frame setup    
-    def add_right_frame(self, page):
+class CommandTab(object):
+    ''' Tabs to hold the command options '''
+    def __init__(self, gui, notebook, command):
+        self.gui = gui
+        self.notebook = notebook
+        self.page = ttk.Frame(self.notebook)
+        self.command = command
+        self.title = command.title()
+
+    def build_tab(self):
+        ''' Build the tab '''
+        actionframe = ActionFrame(self.gui, self.page, self.command)
+        actionframe.build_frame()
+        self.add_frame_seperator()
+        opt_frame = self.add_right_frame()
+        
+        for option in self.gui.opts[self.command]:
+            self.build_tabs(option, opt_frame)
+        
+        self.notebook.add(self.page, text=self.title)
+
+    def add_frame_seperator(self):
+        ''' Add a seperator between left and right frames '''
+        sep = tk.Frame(self.page, width=2, bd=1, relief=tk.SUNKEN)
+        sep.pack(fill=tk.Y, padx=5, side=tk.LEFT)
+
+    def add_right_frame(self):
         ''' Add the options panel to the right frame of each page '''
-        frame = tk.Frame(page)
+        frame = tk.Frame(self.page)
         frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0,5))
 
         canvas = tk.Canvas(frame, width=490, height=450, bd=0, highlightthickness=0)
@@ -282,7 +298,7 @@ class FaceswapGui(object):
         canvas.configure(scrollregion=canvas.bbox('all'))
 
 # Build the Right Frame Options
-    def build_tabs(self, option, page):
+    def build_tabs(self, option, option_frame):
         ''' Build the correct control type for the option passed through '''
         ctl = option['control']
         ctltitle = option['control_title']
@@ -290,7 +306,7 @@ class FaceswapGui(object):
         ctlhelp = ' '.join(option.get('help', '').split())
         ctlhelp = '. '.join(i.capitalize() for i in ctlhelp.split('. '))
         ctlhelp = ctltitle + ' - ' + ctlhelp
-        ctlframe = self.build_control_frame(page)
+        ctlframe = self.build_control_frame(option_frame)
         
         dflt = option.get('default', False) if ctl == tk.Checkbutton else option.get('default', '')
         choices = option['choices'] if ctl == ttk.Combobox else None
@@ -298,17 +314,15 @@ class FaceswapGui(object):
         self.build_control_label(ctlframe, ctltitle)
         option['value'] = self.build_control(ctlframe, ctl, dflt, ctlhelp, choices, sysbrowser)
 
-    @staticmethod
-    def build_control_frame(page):
+    def build_control_frame(self, option_frame):
         ''' Build the frame to hold the control '''
-        frame = tk.Frame(page)
+        frame = tk.Frame(option_frame)
         frame.pack(fill=tk.X)
         return frame
     
-    @staticmethod
-    def build_control_label(frame, title):
+    def build_control_label(self, frame, control_title):
         ''' Build and place the control label '''
-        lbl = tk.Label(frame, text=title, width=15, anchor=tk.W)
+        lbl = tk.Label(frame, text=control_title, width=15, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
     def build_control(self, frame, control, default, helptext, choices, sysbrowser):
@@ -334,12 +348,12 @@ class FaceswapGui(object):
         
         ctl.pack(padx=5, pady=5, **packkwargs)
 
-        self.bind_help(ctl, helptext)
+        self.gui.bind_help(ctl, helptext)
         return(var)
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         ''' Add correct file browser button for control '''
-        img = getattr(self, 'ico' + sysbrowser)
+        img = getattr(self.gui, 'ico' + sysbrowser)
         action = getattr(self, 'ask_' + sysbrowser)
         fileopn = tk.Button(frame, image=img, command=lambda cmd=action: cmd(filepath))
         fileopn.pack(side=tk.RIGHT)
@@ -357,7 +371,6 @@ class FaceswapGui(object):
         filename = filedialog.askopenfilename()
         if filename:
             filepath.set(filename)
-
 
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
@@ -388,16 +401,21 @@ class FaceswapControl(object):
             else:
                 optlist.extend((opt, optval))
         sys.argv = optlist
-        process = Thread(target=self.launch_thread, args=(self.command,))
+        process = Thread(target=self.launch_faceswap, args=(self.command,))
         process.start()
 
-    def launch_thread(self, command):
+    def launch_faceswap(self, command):
         ''' Launch the script inside a subprocess to keep the GUI active '''
-        self.statustext.set('Running - ' + command.title())
-        self.parser.set_defaults(func=self.bad_args)
-        arguments = self.parser.parse_args()
-        arguments.func(arguments)
-        self.statustext.set('Idle')        
+        self.statustext.set('Executing: ' + command.title())
+        try:
+            self.parser.set_defaults(func=self.bad_args)
+            arguments = self.parser.parse_args()
+            arguments.func(arguments)
+        except:
+            self.statustext.set('Failed: ' + command.title())    
+            raise
+        self.statustext.set('Idle')
+        exit()        
 
 class TKGui(object):
     ''' Main GUI Control '''
