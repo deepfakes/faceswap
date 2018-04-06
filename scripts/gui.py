@@ -1,12 +1,14 @@
 import sys
-from threading import Thread
 import tkinter as tk
 
+from os import path
+from threading import Thread
 from tkinter import ttk
 from tkinter import filedialog
 
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
+
 
 class FaceswapGui(tk.Tk):
     ''' The Graphical User Interface '''
@@ -16,11 +18,15 @@ class FaceswapGui(tk.Tk):
 
         self.opts = options
         self.parser = parser
-        self.icofolder = tk.PhotoImage(file='icons/open_folder.png')
-        self.icoload = tk.PhotoImage(file='icons/open_file.png')
-        self.icosave = tk.PhotoImage(file='icons/save.png')
-        self.icoreset = tk.PhotoImage(file='icons/reset.png')
-        self.icoclear = tk.PhotoImage(file='icons/clear.png')
+        
+        pathscript = path.realpath(path.dirname(sys.argv[0]))
+        pathicons = path.join(pathscript, 'icons')
+        self.icofolder = tk.PhotoImage(file=path.join(pathicons,'open_folder.png'))
+        self.icoload = tk.PhotoImage(file=path.join(pathicons,'open_file.png'))
+        self.icosave = tk.PhotoImage(file=path.join(pathicons,'save.png'))
+        self.icoreset = tk.PhotoImage(file=path.join(pathicons,'reset.png'))
+        self.icoclear = tk.PhotoImage(file=path.join(pathicons,'clear.png'))
+
         self.helptext = tk.StringVar()
         self.statustext = tk.StringVar()
         self.serializer = JSONSerializer
