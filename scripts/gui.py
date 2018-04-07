@@ -1,5 +1,7 @@
 import sys
 
+from contextlib import redirect_stdout
+from io import StringIO
 from os import environ, path
 from threading import Thread
 
@@ -68,15 +70,26 @@ class FaceswapGui(object):
         ''' Build the GUI '''
         self.gui.title('faceswap.py')
         self.menu()
-        notebook = ttk.Notebook(self.gui)
-        notebook.pack(fill=tk.BOTH, expand=True)
 
+        mainframe = tk.Frame(self.gui)
+        mainframe.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        optsnotebook = ttk.Notebook(mainframe)
+        optsnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
         # Commands explicitly stated to ensure consistent ordering
         for command in ('extract', 'train', 'convert'):
-            commandtab = CommandTab(self, notebook, command)
+            commandtab = CommandTab(self, optsnotebook, command)
             commandtab.build_tab()
 
-# All pages stuff
+
+        dspnotebook = ttk.Notebook(mainframe)
+        dspnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        for display in ('console', 'graph', 'progress'):
+            displaytab = DisplayTab(dspnotebook, display)
+            displaytab.build_tab()
+
+        self.add_status_bar()
+
     def menu(self):
         ''' Menu bar for loading and saving configs '''
         menubar = tk.Menu(self.gui)
@@ -163,6 +176,21 @@ class FaceswapGui(object):
         ''' Execute the task in Faceswap.py '''
         self.task.execute_script(self.opts, command, self.parser, self.statustext)
 
+    def add_status_bar(self):
+        ''' Build the info text section page '''
+        statusframe = tk.Frame(self.gui)
+        statusframe.pack(side=tk.BOTTOM, anchor=tk.W, padx=10, pady=2, fill=tk.X, expand=False)
+        
+        lbltitle = tk.Label(statusframe, text='Status:', width=6, anchor=tk.W)
+        lbltitle.pack(side=tk.LEFT, expand=False)
+        self.statustext.set('Ready')
+        lblstatus = tk.Label(   statusframe,
+                                height=1,
+                                width=20,
+                                textvariable=self.statustext,
+                                anchor=tk.W)
+        lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
+
 class ActionFrame(object):
     '''Action Frame - Displays information and action controls '''
     def __init__(self, gui, page, command):
@@ -179,7 +207,6 @@ class ActionFrame(object):
         self.add_info_section(frame)
         self.add_action_buttons(frame)
         self.add_util_buttons(frame)
-        self.add_status_section(frame)
         
     def add_info_section(self, frame):
         ''' Build the info text section page '''
@@ -227,24 +254,6 @@ class ActionFrame(object):
             btnutl.pack(padx=2, pady=2, side=tk.LEFT)
             self.gui.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
 
-    def add_status_section(self, frame):
-        ''' Build the info text section page '''
-        statusframe = tk.Frame(frame)
-        statusframe.pack(side=tk.TOP, pady=(5,0))
-        
-        lbltitle = tk.Label(statusframe, text='Status', width=15, anchor=tk.SW)
-        lbltitle.pack(side=tk.TOP)
-        self.gui.statustext.set('Idle')
-        lblstatus = tk.Label(   statusframe,
-                                height=1,
-                                width=15,
-                                textvariable=self.gui.statustext,
-                                wraplength=120,
-                                justify=tk.LEFT,
-                                anchor=tk.NW,
-                                bg="gray90")
-        lblstatus.pack(side=tk.BOTTOM, anchor=tk.N)
-
 class CommandTab(object):
     ''' Tabs to hold the command options '''
     def __init__(self, gui, notebook, command):
@@ -262,7 +271,7 @@ class CommandTab(object):
         opt_frame = self.add_right_frame()
         
         for option in self.gui.opts[self.command]:
-            self.build_tabs(option, opt_frame)
+            self.build_controls(option, opt_frame)
         
         self.notebook.add(self.page, text=self.title)
 
@@ -276,7 +285,7 @@ class CommandTab(object):
         frame = tk.Frame(self.page)
         frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0,5))
 
-        canvas = tk.Canvas(frame, width=490, height=450, bd=0, highlightthickness=0)
+        canvas = tk.Canvas(frame, width=410, height=450, bd=0, highlightthickness=0)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.add_scrollbar(frame, canvas)
@@ -298,7 +307,7 @@ class CommandTab(object):
         canvas.configure(scrollregion=canvas.bbox('all'))
 
 # Build the Right Frame Options
-    def build_tabs(self, option, option_frame):
+    def build_controls(self, option, option_frame):
         ''' Build the correct control type for the option passed through '''
         ctl = option['control']
         ctltitle = option['control_title']
@@ -306,26 +315,26 @@ class CommandTab(object):
         ctlhelp = ' '.join(option.get('help', '').split())
         ctlhelp = '. '.join(i.capitalize() for i in ctlhelp.split('. '))
         ctlhelp = ctltitle + ' - ' + ctlhelp
-        ctlframe = self.build_control_frame(option_frame)
+        ctlframe = self.build_one_control_frame(option_frame)
         
         dflt = option.get('default', False) if ctl == tk.Checkbutton else option.get('default', '')
         choices = option['choices'] if ctl == ttk.Combobox else None
 
-        self.build_control_label(ctlframe, ctltitle)
-        option['value'] = self.build_control(ctlframe, ctl, dflt, ctlhelp, choices, sysbrowser)
+        self.build_one_control_label(ctlframe, ctltitle)
+        option['value'] = self.build_one_control(ctlframe, ctl, dflt, ctlhelp, choices, sysbrowser)
 
-    def build_control_frame(self, option_frame):
+    def build_one_control_frame(self, option_frame):
         ''' Build the frame to hold the control '''
         frame = tk.Frame(option_frame)
         frame.pack(fill=tk.X)
         return frame
     
-    def build_control_label(self, frame, control_title):
+    def build_one_control_label(self, frame, control_title):
         ''' Build and place the control label '''
         lbl = tk.Label(frame, text=control_title, width=15, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
-    def build_control(self, frame, control, default, helptext, choices, sysbrowser):
+    def build_one_control(self, frame, control, default, helptext, choices, sysbrowser):
         ''' Build and place the option controls '''
         default = default if default is not None else ''
 
@@ -339,7 +348,7 @@ class CommandTab(object):
         packkwargs = {'anchor': tk.W} if control == tk.Checkbutton else {'fill': tk.X}
 
         if control == ttk.Combobox: #TODO: Remove this hacky fix to force the width of the frame
-            ctlkwargs['width'] = 40
+            ctlkwargs['width'] = 30
 
         ctl = control(frame, **ctlkwargs)
         
@@ -371,6 +380,34 @@ class CommandTab(object):
         filename = filedialog.askopenfilename()
         if filename:
             filepath.set(filename)
+
+class DisplayTab(object):
+    ''' The display tabs '''
+    def __init__(self, notebook, display):
+        self.notebook = notebook
+        self.page = ttk.Frame(self.notebook)
+        self.display = display
+        self.title = self.display.title()
+        
+    def build_tab(self):
+        ''' Build the tab '''
+        frame = tk.Frame(self.page)
+        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        if self.display == 'console':
+            console = tk.Text(frame, width=100, height=25, bg='gray90', fg='black')
+            console.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
+
+            scrollbar = tk.Scrollbar(frame, command=console.yview)
+            scrollbar.pack(side=tk.LEFT, fill='y')
+            console.configure(yscrollcommand = scrollbar.set)
+        
+            sys.stdout = sys.stderr = ConsoleCapture(console)
+        else:
+            lbl = tk.Label(frame, text=self.display, width=15, anchor=tk.W)
+            lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+        
+        self.notebook.add(self.page, text=self.title)
 
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
@@ -406,16 +443,31 @@ class FaceswapControl(object):
 
     def launch_faceswap(self, command):
         ''' Launch the script inside a subprocess to keep the GUI active '''
-        self.statustext.set('Executing: ' + command.title())
+        self.statustext.set('Executing - ' + command + '.py')
         try:
             self.parser.set_defaults(func=self.bad_args)
             arguments = self.parser.parse_args()
             arguments.func(arguments)
         except:
-            self.statustext.set('Failed: ' + command.title())    
+            self.statustext.set('Failed - ' + command + '.py')    
             raise
-        self.statustext.set('Idle')
+        self.statustext.set('Ready')
         exit()        
+
+class ConsoleCapture(object):
+    ''' Capture the console output and write to tkinter console window '''
+    def __init__(self, console):
+        self.console = console
+
+    def write(self, string):
+        ''' Capture stdout '''
+        string = string.replace('\r','\n')
+        self.console.insert(tk.END, string)
+        self.console.see(tk.END)
+
+    @staticmethod
+    def flush(): #TODO. Do something with this. Just here to suppress attribute error
+        pass
 
 class TKGui(object):
     ''' Main GUI Control '''
