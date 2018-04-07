@@ -23,7 +23,7 @@ def import_tkinter(command):
         from tkinter import filedialog
         tk = tkinter
     except ImportError:
-        if command == 'gui':
+        if 'gui' in command:
             print(  'It looks like TkInter isn''t installed for your OS, so the GUI has been '
                     'disabled. To enable the GUI please install the TkInter application.\n'
                     'You can try:\n'
@@ -38,8 +38,9 @@ def import_tkinter(command):
 
 def check_display(command):
     # Check whether there is a display to output the GUI '''
-    if command == 'gui' and not environ['DISPLAY']:
-        print ('Could not detect a display. The GUI has been disabled')
+    if not environ.get('DISPLAY', None):
+        if 'gui' in command:
+            print ('Could not detect a display. The GUI has been disabled')
         return False
     return True
 
@@ -421,7 +422,7 @@ class TKGui(object):
     ''' Main GUI Control '''
     def __init__ (self, subparser, subparsers, parser, command, description='default'):
     # Don't try to load the GUI if there is no display or there are problems importing tkinter
-        cmd = sys.argv[1]
+        cmd = sys.argv
         if not check_display(cmd) or not import_tkinter(cmd):
             return
        
