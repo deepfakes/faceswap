@@ -27,7 +27,7 @@ if __name__ == "__main__":
         subparser, "convert", "Convert a source image to a new one with the face swapped.")
     guiparsers = {'extract': extract, 'train': train, 'convert': convert}
     gui = TKGui(
-        subparser, guiparsers, parser, "gui", "Launch the Faceswap Graphical User Interface.")
+        subparser, guiparsers, "gui", "Launch the Faceswap Graphical User Interface.")
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
