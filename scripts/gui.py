@@ -1,12 +1,13 @@
 import matplotlib
 import os
+import queue
+import re
 import sys
 
 from contextlib import redirect_stdout
 from io import StringIO
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-from queue import Queue
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
 from threading import Thread
 
@@ -75,6 +76,8 @@ class Utils(object):
         self.runningtask = False
         self.task = FaceswapControl(self)
 
+        self.loss = queue.Queue()
+
     def init_tk(self):
         ''' TK System must be on prior to setting tk variables, so initialised from GUI '''
         pathicons = os.path.join(PATHSCRIPT, 'icons')
@@ -84,8 +87,6 @@ class Utils(object):
         self.icoreset = tk.PhotoImage(file=os.path.join(pathicons,'reset.png'))
         self.icoclear = tk.PhotoImage(file=os.path.join(pathicons,'clear.png'))
 
-        self
-        
         self.helptext = tk.StringVar()
         self.statustext = tk.StringVar()
 
@@ -134,8 +135,12 @@ class Utils(object):
             for cmd, opts in cfg.items():
                 self.set_command_args(cmd, opts)
         else:
-            opts = cfg[command]
-            self.set_command_args(command, opts)
+            opts = cfg.get(command, None)
+            if opts:
+                self.set_command_args(command, opts)
+            else: 
+                self.clear_console()
+                print('No ' + command + ' section found in file')
                 
     def set_command_args(self, command, options):
         ''' Pass the saved config items back to the GUI '''
@@ -455,6 +460,8 @@ class DisplayTab(object):
         self.page = ttk.Frame(self.notebook)
         self.display = display
         self.title = self.display.title()
+        self.graph = Figure(figsize=(4,4), dpi=75)
+        self.plt = self.graph.add_subplot(111)
         
     def build_tab(self):
         ''' Build the tab '''
@@ -469,28 +476,48 @@ class DisplayTab(object):
             scrollbar.pack(side=tk.LEFT, fill='y')
             self.utils.console.configure(yscrollcommand = scrollbar.set)
         
-            sys.stdout = sys.stderr = ConsoleCapture(self.utils.console)
+#            sys.stdout = sys.stderr = ConsoleCapture(self.utils.console)
         elif self.display == 'graph':
-            graph = Figure(figsize=(4,4), dpi=75)
-            plt = graph.add_subplot(111)
+            graphframe = ttk.Frame(frame)
+            graphframe.pack(fill="both", expand=True)
+            canvas = tk.Canvas(graphframe, background="black")
+            canvas.pack(side="top", fill="both", expand=True)
 
-            plt.plot([1,2,3,4,5,6,7,8],[5,6,1,3,8,9,3,5])
-            plt.plot([1,2,3,4,5,6,7,8],[5,3,9,8,3,1,6,5])
-
-            plt.legend(['Loss A', 'Loss B'], loc='lower left')
-
-            canvas = FigureCanvasTkAgg(graph, frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
-
-            canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
+            a_line = canvas.create_line(0,0,0,0, fill="red")
+            b_line = canvas.create_line(0,0,0,0, fill="blue")
+          
+            self.update_plot(graphframe, canvas, a_line, b_line)
+            
         else:
             lbl = ttk.Label(frame, text=self.display, width=15, anchor=tk.W)
             lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         
         self.notebook.add(self.page, text=self.title)
 
+    def update_plot(self, frame, canvas, a_line, b_line):
+        print('running')
+        if self.utils.loss.qsize() != 0:
+            loss = next(self.utils.loss.get_nowait())
+        #if loss != sentinel:
+            lossA, lossB = loss
+            print(loss)
+            print(lossA)
+            print(lossB)
+            self.add_point(canvas, a_line, lossA)
+            self.add_point(canvas, b_line, lossB)
+            canvas.xview_moveto(1.0)
+        frame.after(1000, lambda: self.update_plot(frame, canvas, a_line, b_line))
+
+    def add_point(self, canvas, line, y):
+        coords = canvas.coords(line)
+        x = coords[-2] + 1
+        coords.append(x)
+        coords.append(y)
+        print(coords)
+        coords = coords[-200:] # keep # of points to a manageable size
+        canvas.coords(line, *coords)
+        canvas.configure(scrollregion=canvas.bbox("all"))
+   
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
     def __init__(self, utils):
@@ -538,6 +565,8 @@ class FaceswapControl(object):
             if output == '' and self.process.poll() is not None:
                 break
             if output:
+                if self.command == 'train' and str.startswith(output, '['):
+                    self.capture_loss(output)
                 print(output.strip())
         returncode = self.process.poll()
         self.utils.runningtask = False
@@ -547,6 +576,13 @@ class FaceswapControl(object):
     def thread_stdout(self):
         thread = Thread(target=self.read_stdout)
         thread.start()
+
+    def capture_loss(self, string):
+        ''' Capture loss values from stdout '''
+        loss = re.findall(r'\d+\.\d+', string)
+        if len(loss) != 2:
+            return
+        self.utils.loss.put((float(loss[0]), float(loss[1])))
 
     def terminate(self):
         ''' Terminate the subprocess '''
@@ -585,8 +621,7 @@ class ConsoleCapture(object):
 
     @staticmethod
     def flush(): #TODO. Do something with this. Just here to suppress attribute error
-        sys.stderr.flush()
-        sys.stdout.flush()
+        pass
 
 class TKGui(object):
     ''' Main GUI Control '''
