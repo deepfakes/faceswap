@@ -1,11 +1,11 @@
 import matplotlib
+import os
 import sys
 
 from contextlib import redirect_stdout
 from io import StringIO
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-from os import environ, kill, path
 from queue import Queue
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
 from threading import Thread
@@ -13,7 +13,7 @@ from threading import Thread
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
 
-PATHSCRIPT = path.realpath(path.dirname(sys.argv[0]))
+PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
 
 # Users without tkinter distribution packages or without an X-Console will error out
 # importing tkinter. Therefore run a check on these and only import if required 
@@ -46,8 +46,8 @@ def import_tkinter(command):
     return True    
 
 def check_display(command):
-    # Check whether there is a display to output the GUI '''
-    if not environ.get('DISPLAY', None):
+    # Check whether there is a display to output the GUI and this isn't Windows ''
+    if not os.environ.get('DISPLAY', None) and os.name != 'nt':
         if 'gui' in command:
             print ('Could not detect a display. The GUI has been disabled')
         return False
@@ -77,12 +77,12 @@ class Utils(object):
 
     def init_tk(self):
         ''' TK System must be on prior to setting tk variables, so initialised from GUI '''
-        pathicons = path.join(PATHSCRIPT, 'icons')
-        self.icofolder = tk.PhotoImage(file=path.join(pathicons,'open_folder.png'))
-        self.icoload = tk.PhotoImage(file=path.join(pathicons,'open_file.png'))
-        self.icosave = tk.PhotoImage(file=path.join(pathicons,'save.png'))
-        self.icoreset = tk.PhotoImage(file=path.join(pathicons,'reset.png'))
-        self.icoclear = tk.PhotoImage(file=path.join(pathicons,'clear.png'))
+        pathicons = os.path.join(PATHSCRIPT, 'icons')
+        self.icofolder = tk.PhotoImage(file=os.path.join(pathicons,'open_folder.png'))
+        self.icoload = tk.PhotoImage(file=os.path.join(pathicons,'open_file.png'))
+        self.icosave = tk.PhotoImage(file=os.path.join(pathicons,'save.png'))
+        self.icoreset = tk.PhotoImage(file=os.path.join(pathicons,'reset.png'))
+        self.icoclear = tk.PhotoImage(file=os.path.join(pathicons,'clear.png'))
 
         self
         
@@ -494,7 +494,7 @@ class DisplayTab(object):
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
     def __init__(self, utils):
-        self.pathfaceswap = path.join(PATHSCRIPT, 'faceswap.py')
+        self.pathfaceswap = os.path.join(PATHSCRIPT, 'faceswap.py')
         self.utils = utils
         
         self.command = None
