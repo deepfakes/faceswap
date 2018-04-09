@@ -1,6 +1,7 @@
 import sys
+import os
 
-from os import environ, path
+from os import path
 from threading import Thread
 
 from lib.cli import FullPaths
@@ -37,8 +38,9 @@ def import_tkinter(command):
     return True    
 
 def check_display(command):
-    # Check whether there is a display to output the GUI '''
-    if not environ.get('DISPLAY', None):
+    # Check whether there is a display to output the GUI. If running on Windows
+    # then assume not running in headless mode
+    if not os.environ.get('DISPLAY', None) and os.name != 'nt':
         if 'gui' in command:
             print ('Could not detect a display. The GUI has been disabled')
         return False
