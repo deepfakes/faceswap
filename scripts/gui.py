@@ -1,9 +1,12 @@
 ''' The optional GUI for faceswap.py '''
 import os
-import queue
+import matplotlib.animation as animation
 import re
 import sys
 
+from matplotlib import pyplot as plt
+from matplotlib import style
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
 from threading import Thread
 
@@ -17,14 +20,17 @@ PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
 tk = None
 ttk = None
 filedialog = None
+messagebox = None
 
 def import_tkinter(command):
     ''' Perform checks when importing tkinter module to ensure that GUI will load '''
     global tk
     global ttk
     global filedialog
+    global messagebox
     try:
         import tkinter
+        from tkinter import messagebox
         from tkinter import ttk
         from tkinter import filedialog
         tk = tkinter
@@ -69,7 +75,7 @@ class Utils(object):
 
         self.task = FaceswapControl(self)
 
-        self.loss = queue.Queue()
+        self.loss = {'lossA': [], 'lossB': []}
 
     def init_tk(self):
         ''' TK System must be on prior to setting tk variables, so initialised from GUI '''
@@ -190,6 +196,7 @@ class FaceswapGui(object):
         self.gui = tk.Tk()
         self.utils = utils
         self.utils.init_tk()
+        self.gui.protocol('WM_DELETE_WINDOW', self.close_app)
 
     def build_gui(self):
         ''' Build the GUI '''
@@ -240,6 +247,15 @@ class FaceswapGui(object):
                               textvariable=self.utils.guistate['statustext'],
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
+    
+    def close_app(self):
+        ''' Close Python. This is here because the graph animation function continues to
+            run even when tkinter has gone away '''
+        confirm = messagebox.askokcancel
+        confirmtxt = 'Processes are still running. Are you sure...?'
+        if self.utils.guistate['runningtask'] and not confirm('Close', confirmtxt):
+            return
+        exit()
 
 class CommandTab(object):
     ''' Tabs to hold the command options '''
@@ -359,7 +375,7 @@ class ActionFrame(object):
                                 command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, pady=2, side=tk.LEFT)
             self.utils.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
-
+    
 class OptionControl(object):
     ''' Build the correct control for the option parsed and place it on the frame '''
     def __init__(self, utils, option, option_frame):
@@ -463,8 +479,7 @@ class DisplayTab(object):
 
         if self.display == 'console':
             console = ConsoleOut(frame,
-                                 self.utils.guistate['console'],
-                                 self.utils.guistate['debug'])
+                                 self.utils.guistate)
             console.build_console()
 
         elif self.display == 'graph':
@@ -479,11 +494,11 @@ class DisplayTab(object):
 
 class ConsoleOut(object):
     ''' The Console out tab of the Display section '''
-    def __init__(self, frame, console, debug):
+    def __init__(self, frame, guistate):
         self.frame = frame
-        self.console = console
-        self.debug = debug
-
+        self.guistate = guistate
+        self.console = None
+        
     def build_console(self):
         ''' Build and place the console '''
         self.console = tk.Text(self.frame, width=100, height=25, bg='gray90', fg='black')
@@ -493,8 +508,10 @@ class ConsoleOut(object):
         scrollbar.pack(side=tk.LEFT, fill='y')
         self.console.configure(yscrollcommand=scrollbar.set)
 
-        if not self.debug:
+        if not self.guistate['debug']:
             sys.stdout = sys.stderr = self
+        
+        self.guistate['console'] = self.console
 
     def write(self, string):
         ''' Capture stdout/stderr '''
@@ -510,36 +527,43 @@ class GraphDisplay(object):
     ''' The Graph tab of the Display section '''
     def __init__(self, frame, loss):
         self.frame = frame
-        self.loss = loss
-        self.canvas = tk.Canvas(self.frame, background="black")
-        self.canvas.pack(side="top", fill="both", expand=True)
-        self.line_a = self.canvas.create_line(0, 0, 0, 0, fill="red")
-        self.line_b = self.canvas.create_line(0, 0, 0, 0, fill="blue")
-#        self.graph = Figure(figsize=(4, 4), dpi=75)
-#        self.plt = self.graph.add_subplot(111)
+        self.a_loss = loss['lossA']
+        self.b_loss = loss['lossB']
+        self.ylim = 0
 
+        self.fig = plt.figure(figsize=(4, 4), dpi=75)
+        self.ax1 = self.fig.add_subplot(1, 1, 1)
+        self.a_line, = self.ax1.plot(self.a_loss, color='blue', linewidth=1, label='Loss A')
+        self.b_line, = self.ax1.plot(self.b_loss, color='red', linewidth=1, label='Loss B')
+       
     def build_graph(self):
         ''' Update the plot area with loss values and cycle through to animate '''
-        print('running')
-        if self.loss.qsize() != 0:
-            loss = next(self.loss.get_nowait())
-            loss_a, loss_b = loss
-            self.add_point(self.line_a, loss_a)
-            self.add_point(self.line_b, loss_b)
-            self.canvas.xview_moveto(1.0)
-        self.frame.after(1000, self.build_graph)
+        style.use('ggplot')
+        self.ax1.set_xlabel('Iterations')
+        self.ax1.set_ylabel('Loss')
+        self.ax1.set_ylim(0, 0.01)
+        self.ax1.legend(loc='lower left')
+        plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95, wspace=0.2, hspace=0.2)
 
-    def add_point(self, line, y):
-        ''' Add a point to the canvas '''
-        coords = self.canvas.coords(line)
-        x = coords[-2] + 1
-        coords.append(x)
-        coords.append(y)
-        print(coords)
-        coords = coords[-200:] # keep # of points to a manageable size
-        self.canvas.coords(line, *coords)
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
+        plotcanvas = FigureCanvasTkAgg(self.fig, self.frame)
+        plotcanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        ani = animation.FuncAnimation(self.fig, self.animate, interval=1000, blit=False)
+        plotcanvas.draw()
+        
+    def animate(self, i):
+        ''' Read loss data and apply to graph '''
+        if len(self.a_loss) == 0:
+            return
+    # Take shallow copy because of writes to the list in other thread whilst we're processing
+    # This doubles memory usage. Use thread locking instead to block writes when reading
+        a_loss, b_loss = self.a_loss[:], self.b_loss[:]
+        y_val = round(max(a_loss + b_loss), 2)
+        if y_val > self.ylim:
+            self.ylim = y_val
+            self.ax1.set_ylim(0, self.ylim)
+        self.a_line.set_data(a_loss)
+        self.b_line.set_data(b_loss)
+        
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
     def __init__(self, utils):
@@ -606,7 +630,8 @@ class FaceswapControl(object):
         loss = re.findall(r'\d+\.\d+', string)
         if len(loss) != 2:
             return
-        self.utils.loss.put((float(loss[0]), float(loss[1])))
+        self.utils.loss['lossA'].append(float(loss[0]))
+        self.utils.loss['lossB'].append(float(loss[1]))
 
     def terminate(self):
         ''' Terminate the subprocess '''
