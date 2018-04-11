@@ -35,7 +35,7 @@ def import_tkinter(command):
                     '  CentOS/Redhat:      sudo yum install tkinter\n'
                     '  Fedora:             sudo dnf install python3-tkinter\n')
         return False
-    return True    
+    return True
 
 def check_display(command):
     # Check whether there is a display to output the GUI. If running on Windows
@@ -52,7 +52,7 @@ class FaceswapGui(object):
         self.gui = tk.Tk()
         self.opts = options
         self.parser = parser
-        
+
         pathscript = path.realpath(path.dirname(sys.argv[0]))
         pathicons = path.join(pathscript, 'icons')
         self.icofolder = tk.PhotoImage(file=path.join(pathicons,'open_folder.png'))
@@ -75,11 +75,11 @@ class FaceswapGui(object):
         notebook.pack(fill=tk.BOTH, expand=True)
 
         # Commands explicitly stated to ensure consistent ordering
-        for command in ('extract', 'train', 'convert'):
+        for command in self.opts.keys():
             commandtab = CommandTab(self, notebook, command)
             commandtab.build_tab()
 
-# All pages stuff
+    # All pages stuff
     def menu(self):
         ''' Menu bar for loading and saving configs '''
         menubar = tk.Menu(self.gui)
@@ -106,7 +106,7 @@ class FaceswapGui(object):
         else:
             opts = cfg[command]
             self.set_command_args(command, opts)
-                
+
     def set_command_args(self, command, options):
         ''' Pass the saved config items back to the GUI '''
         for srcopt, srcval in options.items():
@@ -114,20 +114,20 @@ class FaceswapGui(object):
                 if dstopts['control_title'] == srcopt:
                     dstopts['value'].set(srcval)
                     break
-        
+
     def save_config(self, command=None):
         ''' Save the current GUI state to a config file in json format '''
         cfgfile = filedialog.asksaveasfile( mode='w',
-                                            filetypes=self.filetypes, 
+                                            filetypes=self.filetypes,
                                             defaultextension='.fsw')
         if not cfgfile:
             return
         if command is None:
-            cfg = {cmd: {opt['control_title']: opt['value'].get() for opt in opts} 
+            cfg = {cmd: {opt['control_title']: opt['value'].get() for opt in opts}
                    for cmd, opts in self.opts.items()}
         else:
             cfg = {command: {opt['control_title']: opt['value'].get()
-                   for opt in self.opts[command]}}
+                             for opt in self.opts[command]}}
         cfgfile.write(self.serializer.marshal(cfg))
         cfgfile.close
 
@@ -183,7 +183,7 @@ class ActionFrame(object):
         self.add_action_buttons(frame)
         self.add_util_buttons(frame)
         self.add_status_section(frame)
-        
+
     def add_info_section(self, frame):
         ''' Build the info text section page '''
         hlpframe=tk.Frame(frame)
@@ -195,8 +195,8 @@ class ActionFrame(object):
                             height=20,
                             width=15,
                             textvariable=self.gui.helptext,
-                            wraplength=120, 
-                            justify=tk.LEFT, 
+                            wraplength=120,
+                            justify=tk.LEFT,
                             anchor=tk.NW,
                             bg="gray90")
         lblhelp.pack(side=tk.TOP, anchor=tk.N)
@@ -234,7 +234,7 @@ class ActionFrame(object):
         ''' Build the info text section page '''
         statusframe = tk.Frame(frame)
         statusframe.pack(side=tk.TOP, pady=(5,0))
-        
+
         lbltitle = tk.Label(statusframe, text='Status', width=15, anchor=tk.SW)
         lbltitle.pack(side=tk.TOP)
         self.gui.statustext.set('Idle')
@@ -263,10 +263,10 @@ class CommandTab(object):
         actionframe.build_frame()
         self.add_frame_seperator()
         opt_frame = self.add_right_frame()
-        
+
         for option in self.gui.opts[self.command]:
             self.build_tabs(option, opt_frame)
-        
+
         self.notebook.add(self.page, text=self.title)
 
     def add_frame_seperator(self):
@@ -300,7 +300,7 @@ class CommandTab(object):
     def update_scrollbar(event, canvas):
         canvas.configure(scrollregion=canvas.bbox('all'))
 
-# Build the Right Frame Options
+    # Build the Right Frame Options
     def build_tabs(self, option, option_frame):
         ''' Build the correct control type for the option passed through '''
         ctl = option['control']
@@ -310,7 +310,7 @@ class CommandTab(object):
         ctlhelp = '. '.join(i.capitalize() for i in ctlhelp.split('. '))
         ctlhelp = ctltitle + ' - ' + ctlhelp
         ctlframe = self.build_control_frame(option_frame)
-        
+
         dflt = option.get('default', False) if ctl == tk.Checkbutton else option.get('default', '')
         choices = option['choices'] if ctl == ttk.Combobox else None
 
@@ -322,7 +322,7 @@ class CommandTab(object):
         frame = tk.Frame(option_frame)
         frame.pack(fill=tk.X)
         return frame
-    
+
     def build_control_label(self, frame, control_title):
         ''' Build and place the control label '''
         lbl = tk.Label(frame, text=control_title, width=15, anchor=tk.W)
@@ -345,10 +345,10 @@ class CommandTab(object):
             ctlkwargs['width'] = 40
 
         ctl = control(frame, **ctlkwargs)
-        
+
         if control == ttk.Combobox:
             ctl['values'] = [choice for choice in choices]
-        
+
         ctl.pack(padx=5, pady=5, **packkwargs)
 
         self.gui.bind_help(ctl, helptext)
@@ -367,7 +367,7 @@ class CommandTab(object):
         dirname = filedialog.askdirectory()
         if dirname:
             filepath.set(dirname)
-   
+
     @staticmethod
     def ask_load(filepath):
         ''' Pop-up to get path to a file '''
@@ -392,7 +392,7 @@ class FaceswapControl(object):
         self.command = command
         self.parser = parser
         self.statustext = statustext
-        
+
         optlist = ['faceswap.py', self.command]
         for item in self.opts[self.command]:
             optval = str(item.get('value','').get())
@@ -415,19 +415,19 @@ class FaceswapControl(object):
             arguments = self.parser.parse_args()
             arguments.func(arguments)
         except:
-            self.statustext.set('Failed: ' + command.title())    
+            self.statustext.set('Failed: ' + command.title())
             raise
         self.statustext.set('Idle')
-        exit()        
+        exit()
 
 class TKGui(object):
     ''' Main GUI Control '''
     def __init__ (self, subparser, subparsers, parser, command, description='default'):
-    # Don't try to load the GUI if there is no display or there are problems importing tkinter
+        # Don't try to load the GUI if there is no display or there are problems importing tkinter
         cmd = sys.argv
         if not check_display(cmd) or not import_tkinter(cmd):
             return
-       
+
         self.parser = parser
         self.opts = self.extract_options(subparsers)
         self.root = FaceswapGui(self.opts, self.parser)
@@ -435,8 +435,8 @@ class TKGui(object):
 
     def extract_options(self, subparsers):
         ''' Extract the existing ArgParse Options '''
-        opts = {cmd: subparsers[cmd].argument_list + 
-                subparsers[cmd].optional_arguments for cmd in subparsers.keys()}
+        opts = {cmd: subparsers[cmd].argument_list +
+                     subparsers[cmd].optional_arguments for cmd in subparsers.keys()}
         for command in opts.values():
             for opt in command:
                 ctl, sysbrowser = self.set_control(opt)
@@ -451,7 +451,7 @@ class TKGui(object):
         ctltitle = opts[1] if len(opts) == 2 else opts[0]
         ctltitle = ctltitle.replace('-',' ').replace('_',' ').strip().title()
         return ctltitle
- 
+
     @staticmethod
     def set_control(option):
         ''' Set the control and filesystem browser to use for each option '''
@@ -469,17 +469,16 @@ class TKGui(object):
 
     def parse_arguments(self, description, subparser, command):
         parser = subparser.add_parser(
-            command,
-            help="This Launches a GUI for Faceswap.",
-            description=description,
-            epilog="Questions and feedback: \
+                command,
+                help="This Launches a GUI for Faceswap.",
+                description=description,
+                epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground"
         )
-        parser.set_defaults(func=self.process)        
+        parser.set_defaults(func=self.process)
 
     def process(self, arguments):
         ''' Builds the GUI '''
         self.arguments = arguments
         self.root.build_gui()
-        self.root.gui.mainloop()
-
+self.root.gui.mainloop()
