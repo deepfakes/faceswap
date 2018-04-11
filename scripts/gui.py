@@ -1,17 +1,19 @@
 ''' The optional GUI for faceswap.py '''
-import matplotlib.animation as animation
 import os
 import signal
 import re
 import sys
 
 from argparse import SUPPRESS
+from math import ceil, floor
+from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
+from threading import Lock, Thread
+from time import time
+
+import matplotlib.animation as animation
 from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
-from threading import Thread
-from time import time
 
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
@@ -72,17 +74,19 @@ class Utils(object):
         self.icons = {}
         self.guitext = {}
         self.guitext['action'] = {}
-        
+
         self.console = None
         self.debugconsole = False
-        
+
         self.serializer = JSONSerializer
         self.filetypes = (('Faceswap files', '*.fsw'), ('All files', '*.*'))
 
         self.task = FaceswapControl(self)
         self.runningtask = False
 
+        self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
         self.loss = {'lossA': [], 'lossB': []}
+        self.losslock = Lock()
 
     def init_tk(self):
         ''' TK System must be on prior to setting tk variables, so initialised from GUI '''
@@ -197,11 +201,17 @@ class Utils(object):
             else:
                 option['value'].set('')
 
+    def delete_preview(self):
+        ''' Delete the preview file '''
+        if os.path.exists(self.previewloc):
+            os.remove(self.previewloc)
+
 class FaceswapGui(object):
     ''' The Graphical User Interface '''
     def __init__(self, utils):
         self.gui = tk.Tk()
         self.utils = utils
+        self.utils.delete_preview()
         self.utils.init_tk()
         self.gui.protocol('WM_DELETE_WINDOW', self.close_app)
 
@@ -223,7 +233,7 @@ class FaceswapGui(object):
             commandtab = CommandTab(self.utils, optsnotebook, command)
             commandtab.build_tab()
 
-        dspnotebook = ttk.Notebook(topcontainer, width=600)
+        dspnotebook = ttk.Notebook(topcontainer, width=780)
         dspnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         for display in ('graph', 'preview'):
             displaytab = DisplayTab(self.utils, dspnotebook, display)
@@ -252,7 +262,7 @@ class FaceswapGui(object):
         consoleframe.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0), fill=tk.BOTH, expand=True)
         console = ConsoleOut(consoleframe, self.utils)
         console.build_console()
-        
+
     def add_status_bar(self, frame):
         ''' Build the info text section page '''
         statusframe = ttk.Frame(frame)
@@ -266,7 +276,7 @@ class FaceswapGui(object):
                               textvariable=self.utils.guitext['status'],
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
-    
+
     def close_app(self):
         ''' Close Python. This is here because the graph animation function continues to
             run even when tkinter has gone away '''
@@ -276,6 +286,7 @@ class FaceswapGui(object):
             return
         if self.utils.runningtask:
             self.utils.task.terminate()
+        self.utils.delete_preview()
         self.gui.quit()
         exit()
 
@@ -286,7 +297,7 @@ class ConsoleOut(object):
         utils.console = tk.Text(self.frame)
         self.console = utils.console
         self.debug = utils.debugconsole
-        
+
     def build_console(self):
         ''' Build and place the console '''
         self.console.config(width=100, height=4, bg='gray90', fg='black')
@@ -300,7 +311,7 @@ class ConsoleOut(object):
             self.write('Console debug activated. Outputting to main terminal')
         else:
             sys.stdout = sys.stderr = self
-        
+
     def write(self, string):
         ''' Capture stdout/stderr '''
         self.console.insert(tk.END, string)
@@ -429,7 +440,7 @@ class ActionFrame(object):
                                 command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, pady=2, side=tk.LEFT)
             self.utils.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
-    
+
 class OptionControl(object):
     ''' Build the correct control for the option parsed and place it on the frame '''
     def __init__(self, utils, option, option_frame):
@@ -532,24 +543,25 @@ class DisplayTab(object):
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         if self.display == 'graph':
-            graph = GraphDisplay(frame, self.utils.loss)
+            graph = GraphDisplay(frame, self.utils.loss, self.utils.losslock)
             graph.build_graph()
         elif self.display == 'preview':
-            preview = PreviewDisplay(frame)
+            preview = PreviewDisplay(frame, self.utils.previewloc)
             preview.update_preview()
         else:   #Dummy in a placeholder
-            lbl = ttk.Label(frame, text=self.display, width=15, anchor=tk.W)
+            lbl = ttk.Label(frame, text=self.display, width=15, anchor=tk.NW)
             lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
         self.notebook.add(self.page, text=self.title)
 
 class GraphDisplay(object):
     ''' The Graph tab of the Display section '''
-    def __init__(self, frame, loss):
+    def __init__(self, frame, loss, losslock):
         self.frame = frame
         self.a_loss = loss['lossA']
         self.b_loss = loss['lossB']
-        self.ylim = 0
+        self.lock = losslock
+        self.ylim = (100, 0)
 
         style.use('ggplot')
 
@@ -557,7 +569,7 @@ class GraphDisplay(object):
         self.ax1 = self.fig.add_subplot(1, 1, 1)
         self.a_line, = self.ax1.plot(self.a_loss, color='blue', linewidth=1, label='Loss A')
         self.b_line, = self.ax1.plot(self.b_loss, color='red', linewidth=1, label='Loss B')
-       
+
     def build_graph(self):
         ''' Update the plot area with loss values and cycle through to animate '''
         self.ax1.set_xlabel('Iterations')
@@ -571,35 +583,40 @@ class GraphDisplay(object):
         plotcanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         ani = animation.FuncAnimation(self.fig, self.animate, interval=2000, blit=False)
         plotcanvas.draw()
-        
+
     def animate(self, i):
         ''' Read loss data and apply to graph '''
-        if len(self.a_loss) == 0:
+        if not self.a_loss:
             return
     # Take shallow copy because of writes to the list in other thread whilst we're processing
     # This doubles memory usage. Use thread locking instead to block writes when reading
-        a_loss, b_loss = self.a_loss[:], self.b_loss[:]
-        y_val = round(max(a_loss + b_loss), 2)
-        if y_val > self.ylim:
-            self.ylim = y_val
-            self.ax1.set_ylim(0, self.ylim)
-        x_lim = len(a_loss)
-        x_rng = [x for x in range(x_lim)]
-        self.a_line.set_data(x_rng, a_loss)
-        self.b_line.set_data(x_rng, b_loss)
-        self.ax1.set_xlim(0, x_lim)
+    # Locking doesn't seem to work :( At a guess it's because it re-reads the data in idle time
+    # when it redraws. Need to work out if locking there is possible
+    # May also be possible to take an index slice of the list at read time and select that
+    # Therefore anything added after that would be ignored?
+    # Alternatively look to use Queue
+#        a_loss, b_loss = self.a_loss[:], self.b_loss[:]
+        with self.lock:
+            ymin = floor(min(self.a_loss + self.b_loss) * 100) / 100
+            ymax = ceil(max(self.a_loss + self.b_loss) * 100) / 100
+            if ymin < self.ylim[0] or ymax > self.ylim[1]:
+                self.ylim = (ymin, ymax)
+                self.ax1.set_ylim(self.ylim[0], self.ylim[1])
+            xlim = len(self.a_loss)
+            xrng = [x for x in range(xlim)]
+            self.a_line.set_data(xrng, self.a_loss)
+            self.b_line.set_data(xrng, self.b_loss)
+            self.ax1.set_xlim(0, xlim)
 
 class PreviewDisplay(object):
     ''' The Preview tab of the Display section '''
-    def __init__(self, frame):
+    def __init__(self, frame, previewloc):
         self.frame = frame
-        self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
         self.previewimg = None
         self.errcount = 0
+        self.previewloc = previewloc
 
-        self.delete_preview()
-
-        self.previewlbl = ttk.Label(self.frame, image=None)
+        self.previewlbl = ttk.Label(self.frame, image=None, anchor=tk.NW)
         self.previewlbl.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     def update_preview(self):
@@ -610,11 +627,6 @@ class PreviewDisplay(object):
         else:
             self.previewlbl.config(image=self.previewimg)
         self.previewlbl.after(1000, self.update_preview)
-        
-    def delete_preview(self):
-        ''' Delete the preview file '''
-        if os.path.exists(self.previewloc):
-            os.remove(self.previewloc)
 
     def load_preview(self):
         ''' Load the preview image into tk PhotoImage '''
@@ -626,11 +638,9 @@ class PreviewDisplay(object):
                 #This is probably an error reading the file whilst it's being saved
                 #so ignore it for now and only pick up if there have been multiple
                 #consecutive fails
-                print('it''s error')
                 if self.errcount < 10:
                     self.errcount += 1
                     self.previewimg = None
-                    pass
                 else:
                     print('Error reading the preview file')
         else:
@@ -705,8 +715,9 @@ class FaceswapControl(object):
         loss = re.findall(r'\d+\.\d+', string)
         if len(loss) != 2:
             return
-        self.utils.loss['lossA'].append(float(loss[0]))
-        self.utils.loss['lossB'].append(float(loss[1]))
+        with self.utils.losslock:
+            self.utils.loss['lossA'].append(float(loss[0]))
+            self.utils.loss['lossB'].append(float(loss[1]))
 
     def terminate(self):
         ''' Terminate the subprocess '''
@@ -720,7 +731,7 @@ class FaceswapControl(object):
                     if self.process.poll() is not None:
                         break
                     if timeelapsed > 10:
-                        raise ValueError ('Timeout reached sending Exit Signal')
+                        raise ValueError('Timeout reached sending Exit Signal')
                 return
             except ValueError as err:
                 print(err)
