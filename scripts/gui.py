@@ -1,6 +1,7 @@
 ''' The optional GUI for faceswap.py '''
-import os
 import matplotlib.animation as animation
+import os
+import signal
 import re
 import sys
 
@@ -64,16 +65,17 @@ class Utils(object):
         self.opts = options
 
         self.icons = {}
-        self.guistate = {}
-        self.guistate['runningtask'] = False
-        self.guistate['console'] = None
-        self.guistate['actiontext'] = {}
-        self.guistate['debug'] = False
-
+        self.guitext = {}
+        self.guitext['action'] = {}
+        
+        self.console = None
+        self.debugconsole = False
+        
         self.serializer = JSONSerializer
         self.filetypes = (('Faceswap files', '*.fsw'), ('All files', '*.*'))
 
         self.task = FaceswapControl(self)
+        self.runningtask = False
 
         self.loss = {'lossA': [], 'lossB': []}
 
@@ -86,12 +88,12 @@ class Utils(object):
         self.icons['reset'] = tk.PhotoImage(file=os.path.join(pathicons, 'reset.png'))
         self.icons['clear'] = tk.PhotoImage(file=os.path.join(pathicons, 'clear.png'))
 
-        self.guistate['helptext'] = tk.StringVar()
-        self.guistate['statustext'] = tk.StringVar()
+        self.guitext['help'] = tk.StringVar()
+        self.guitext['status'] = tk.StringVar()
 
     def action_command(self, command):
         ''' The action to perform when the action button is pressed '''
-        if self.guistate['runningtask']:
+        if self.runningtask:
             self.action_terminate()
         else:
             self.action_execute(command)
@@ -105,24 +107,24 @@ class Utils(object):
     def action_terminate(self):
         ''' Terminate the subprocess Faceswap.py task '''
         self.task.terminate()
-        self.guistate['runningtask'] = False
+        self.runningtask = False
         self.change_action_button()
 
     def change_action_button(self):
         ''' Change the action button to relevant control '''
-        for cmd in self.guistate['actiontext'].keys():
-            text = 'Terminate' if self.guistate['runningtask'] else cmd.title()
-            self.guistate['actiontext'][cmd].set(text)
+        for cmd in self.guitext['action'].keys():
+            text = 'Terminate' if self.runningtask else cmd.title()
+            self.guitext['action'][cmd].set(text)
 
     def bind_help(self, control, helptext):
         ''' Controls the help text displayed on mouse hover '''
         for action in ('<Enter>', '<FocusIn>', '<Leave>', '<FocusOut>'):
             helptext = helptext if action in ('<Enter>', '<FocusIn>') else ''
-            control.bind(action, lambda event, txt=helptext: self.guistate['helptext'].set(txt))
+            control.bind(action, lambda event, txt=helptext: self.guitext['help'].set(txt))
 
     def clear_console(self):
         ''' Clear the console output screen '''
-        self.guistate['console'].delete(1.0, tk.END)
+        self.console.delete(1.0, tk.END)
 
     def load_config(self, command=None):
         ''' Load a saved config file '''
@@ -203,22 +205,29 @@ class FaceswapGui(object):
         self.gui.title('faceswap.py')
         self.menu()
 
-        mainframe = ttk.Frame(self.gui)
-        mainframe.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        topcontainer = ttk.Frame(self.gui)
+        topcontainer.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        optsnotebook = ttk.Notebook(mainframe)
+        bottomcontainer = ttk.Frame(self.gui)
+        bottomcontainer.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
+        optsnotebook = ttk.Notebook(topcontainer)
         optsnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
     # Commands explicitly stated to ensure consistent ordering
         for command in ('extract', 'train', 'convert'):
             commandtab = CommandTab(self.utils, optsnotebook, command)
             commandtab.build_tab()
 
-        dspnotebook = ttk.Notebook(mainframe)
+        dspnotebook = ttk.Notebook(topcontainer)
         dspnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        for display in ('console', 'graph', 'preview'):
+        for display in ('graph', 'preview'):
+            if display == 'preview':
+                continue # Not yet implemented
             displaytab = DisplayTab(self.utils, dspnotebook, display)
             displaytab.build_tab()
-        self.add_status_bar()
+
+        self.add_console(bottomcontainer)
+        self.add_status_bar(bottomcontainer)
 
     def menu(self):
         ''' Menu bar for loading and saving configs '''
@@ -230,21 +239,28 @@ class FaceswapGui(object):
         filemenu.add_command(label='Reset all to default', command=self.utils.reset_config)
         filemenu.add_command(label='Clear all', command=self.utils.clear_config)
         filemenu.add_separator()
-        filemenu.add_command(label='Quit', command=self.gui.quit)
+        filemenu.add_command(label='Quit', command=self.close_app)
         menubar.add_cascade(label="File", menu=filemenu)
         self.gui.config(menu=menubar)
 
-    def add_status_bar(self):
+    def add_console(self, frame):
+        ''' Build the output console '''
+        consoleframe = ttk.Frame(frame)
+        consoleframe.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0), fill=tk.BOTH, expand=True)
+        console = ConsoleOut(consoleframe, self.utils)
+        console.build_console()
+        
+    def add_status_bar(self, frame):
         ''' Build the info text section page '''
-        statusframe = ttk.Frame(self.gui)
+        statusframe = ttk.Frame(frame)
         statusframe.pack(side=tk.BOTTOM, anchor=tk.W, padx=10, pady=2, fill=tk.X, expand=False)
 
         lbltitle = ttk.Label(statusframe, text='Status:', width=6, anchor=tk.W)
         lbltitle.pack(side=tk.LEFT, expand=False)
-        self.utils.guistate['statustext'].set('Ready')
+        self.utils.guitext['status'].set('Ready')
         lblstatus = ttk.Label(statusframe,
                               width=20,
-                              textvariable=self.utils.guistate['statustext'],
+                              textvariable=self.utils.guitext['status'],
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
     
@@ -253,9 +269,44 @@ class FaceswapGui(object):
             run even when tkinter has gone away '''
         confirm = messagebox.askokcancel
         confirmtxt = 'Processes are still running. Are you sure...?'
-        if self.utils.guistate['runningtask'] and not confirm('Close', confirmtxt):
+        if self.utils.runningtask and not confirm('Close', confirmtxt):
             return
+        if self.utils.runningtask:
+            self.utils.task.terminate()
+        self.gui.quit()
         exit()
+
+class ConsoleOut(object):
+    ''' The Console out tab of the Display section '''
+    def __init__(self, frame, utils):
+        self.frame = frame
+        utils.console = tk.Text(self.frame)
+        self.console = utils.console
+        self.debug = utils.debugconsole
+        
+    def build_console(self):
+        ''' Build and place the console '''
+        self.console.config(width=100, height=4, bg='gray90', fg='black')
+        self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
+
+        scrollbar = ttk.Scrollbar(self.frame, command=self.console.yview)
+        scrollbar.pack(side=tk.LEFT, fill='y')
+        self.console.configure(yscrollcommand=scrollbar.set)
+
+        if self.debug:
+            self.write('Console debug activated. Outputting to main terminal')
+        else:
+            sys.stdout = sys.stderr = self
+        
+    def write(self, string):
+        ''' Capture stdout/stderr '''
+        self.console.insert(tk.END, string)
+        self.console.see(tk.END)
+
+    @staticmethod
+    def flush(): #TODO. Do something with this. Just here to suppress attribute error
+        ''' stdout flush placeholder '''
+        pass
 
 class CommandTab(object):
     ''' Tabs to hold the command options '''
@@ -289,7 +340,7 @@ class CommandTab(object):
         frame = ttk.Frame(self.page)
         frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0, 5))
 
-        canvas = tk.Canvas(frame, width=410, height=450, bd=0, highlightthickness=0)
+        canvas = tk.Canvas(frame, width=390, height=450, bd=0, highlightthickness=0)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.add_scrollbar(frame, canvas)
@@ -322,7 +373,7 @@ class ActionFrame(object):
     def build_frame(self):
         ''' Add help display and Action buttons to the left frame of each page '''
         frame = ttk.Frame(self.page)
-        frame.pack(fill=tk.X, padx=(10, 5), side=tk.LEFT, anchor=tk.N)
+        frame.pack(fill=tk.BOTH, padx=(10, 5), side=tk.LEFT, anchor=tk.N)
 
         self.add_info_section(frame)
         self.add_action_button(frame)
@@ -331,31 +382,31 @@ class ActionFrame(object):
     def add_info_section(self, frame):
         ''' Build the info text section page '''
         hlpframe = ttk.Frame(frame)
-        hlpframe.pack(fill=tk.X, side=tk.TOP, pady=5)
+        hlpframe.pack(side=tk.TOP, pady=5, fill=tk.BOTH, expand=True)
         lbltitle = ttk.Label(hlpframe, text='Info', width=15, anchor=tk.SW)
         lbltitle.pack(side=tk.TOP)
-        self.utils.guistate['helptext'].set('')
+        self.utils.guitext['help'].set('')
         lblhelp = tk.Label(hlpframe,
                            height=20,
                            width=15,
-                           textvariable=self.utils.guistate['helptext'],
+                           textvariable=self.utils.guitext['help'],
                            wraplength=120,
                            justify=tk.LEFT,
                            anchor=tk.NW,
                            bg="gray90")
-        lblhelp.pack(side=tk.TOP, anchor=tk.N)
+        lblhelp.pack(side=tk.TOP, anchor=tk.N, fill=tk.Y, expand=True)
 
     def add_action_button(self, frame):
         ''' Add the action buttons for page '''
         actvar = tk.StringVar(frame)
         actvar.set(self.title)
-        self.utils.guistate['actiontext'][self.command] = actvar
+        self.utils.guitext['action'][self.command] = actvar
 
         actframe = ttk.Frame(frame)
         actframe.pack(fill=tk.X, side=tk.TOP, pady=(15, 0))
 
         btnact = tk.Button(actframe,
-                           textvariable=self.utils.guistate['actiontext'][self.command],
+                           textvariable=self.utils.guitext['action'][self.command],
                            height=2,
                            width=12,
                            command=lambda: self.utils.action_command(self.command))
@@ -365,7 +416,7 @@ class ActionFrame(object):
     def add_util_buttons(self, frame):
         ''' Add the section utility buttons '''
         utlframe = ttk.Frame(frame)
-        utlframe.pack(side=tk.TOP, pady=(5, 0))
+        utlframe.pack(side=tk.TOP, pady=5)
 
         for utl in ('load', 'save', 'clear', 'reset'):
             img = self.utils.icons[utl]
@@ -430,7 +481,7 @@ class OptionControl(object):
         packkwargs = {'anchor': tk.W} if control == ttk.Checkbutton else {'fill': tk.X}
 
         if control == ttk.Combobox: #TODO: Remove this hacky fix to force the width of the frame
-            ctlkwargs['width'] = 30
+            ctlkwargs['width'] = 28
 
         ctl = control(frame, **ctlkwargs)
 
@@ -477,51 +528,14 @@ class DisplayTab(object):
         frame = ttk.Frame(self.page)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        if self.display == 'console':
-            console = ConsoleOut(frame,
-                                 self.utils.guistate)
-            console.build_console()
-
-        elif self.display == 'graph':
+        if self.display == 'graph':
             graph = GraphDisplay(frame, self.utils.loss)
             graph.build_graph()
-
-        else:
+        else:   #Dummy in a placeholder
             lbl = ttk.Label(frame, text=self.display, width=15, anchor=tk.W)
             lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
         self.notebook.add(self.page, text=self.title)
-
-class ConsoleOut(object):
-    ''' The Console out tab of the Display section '''
-    def __init__(self, frame, guistate):
-        self.frame = frame
-        self.guistate = guistate
-        self.console = None
-        
-    def build_console(self):
-        ''' Build and place the console '''
-        self.console = tk.Text(self.frame, width=100, height=25, bg='gray90', fg='black')
-        self.console.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
-
-        scrollbar = ttk.Scrollbar(self.frame, command=self.console.yview)
-        scrollbar.pack(side=tk.LEFT, fill='y')
-        self.console.configure(yscrollcommand=scrollbar.set)
-
-        if not self.guistate['debug']:
-            sys.stdout = sys.stderr = self
-        
-        self.guistate['console'] = self.console
-
-    def write(self, string):
-        ''' Capture stdout/stderr '''
-        self.console.insert(tk.END, string)
-        self.console.see(tk.END)
-
-    @staticmethod
-    def flush(): #TODO. Do something with this. Just here to suppress attribute error
-        ''' stdout flush placeholder '''
-        pass
 
 class GraphDisplay(object):
     ''' The Graph tab of the Display section '''
@@ -542,12 +556,13 @@ class GraphDisplay(object):
         self.ax1.set_xlabel('Iterations')
         self.ax1.set_ylabel('Loss')
         self.ax1.set_ylim(0, 0.01)
+        self.ax1.set_xlim(0, 1)
         self.ax1.legend(loc='lower left')
         plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95, wspace=0.2, hspace=0.2)
 
         plotcanvas = FigureCanvasTkAgg(self.fig, self.frame)
         plotcanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        ani = animation.FuncAnimation(self.fig, self.animate, interval=1000, blit=False)
+        ani = animation.FuncAnimation(self.fig, self.animate, interval=2000, blit=False)
         plotcanvas.draw()
         
     def animate(self, i):
@@ -556,14 +571,19 @@ class GraphDisplay(object):
             return
     # Take shallow copy because of writes to the list in other thread whilst we're processing
     # This doubles memory usage. Use thread locking instead to block writes when reading
+    # Also may not need to copy now X values are no longer being calculated
+#        a_loss, b_loss = self.a_loss[:], self.b_loss[:]
         a_loss, b_loss = self.a_loss[:], self.b_loss[:]
         y_val = round(max(a_loss + b_loss), 2)
         if y_val > self.ylim:
             self.ylim = y_val
             self.ax1.set_ylim(0, self.ylim)
-        self.a_line.set_data(a_loss)
-        self.b_line.set_data(b_loss)
-        
+        x_lim = len(a_loss)
+        x_rng = [x for x in range(x_lim)]
+        self.a_line.set_data(x_rng, a_loss)
+        self.b_line.set_data(x_rng, b_loss)
+        self.ax1.set_xlim(0, x_lim)
+
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
     def __init__(self, utils):
@@ -577,9 +597,9 @@ class FaceswapControl(object):
     def prepare(self, options, command):
         ''' Prepare for running the subprocess '''
         self.command = command
-        self.utils.guistate['runningtask'] = True
+        self.utils.runningtask = True
         self.utils.change_action_button()
-        self.utils.guistate['statustext'].set('Executing - ' + self.command + '.py')
+        self.utils.guitext['status'].set('Executing - ' + self.command + '.py')
         print('Loading...')
         self.args = ['python', '-u', self.pathfaceswap, self.command]
         self.build_args(options)
@@ -616,7 +636,7 @@ class FaceswapControl(object):
                     self.capture_loss(output)
                 print(output.strip())
         returncode = self.process.poll()
-        self.utils.guistate['runningtask'] = False
+        self.utils.runningtask = False
         self.utils.change_action_button()
         self.set_final_status(returncode)
 
@@ -636,6 +656,7 @@ class FaceswapControl(object):
     def terminate(self):
         ''' Terminate the subprocess '''
         print('Terminating Process...')
+        self.process.send_signal(signal.SIGINT)
         try:
             self.process.terminate()
             self.process.wait(timeout=10)
@@ -655,7 +676,7 @@ class FaceswapControl(object):
             status = 'Killed - ' + self.command + '.py'
         else:
             status = 'Failed - ' + self.command + '.py'
-        self.utils.guistate['statustext'].set(status)
+        self.utils.guitext['status'].set(status)
 
 class TKGui(object):
     ''' Main GUI Control '''
@@ -724,7 +745,6 @@ class TKGui(object):
     def process(self, arguments):
         ''' Builds the GUI '''
         self.arguments = arguments
-        if self.arguments.debug:
-            self.utils.guistate['debug'] = True
+        self.utils.debugconsole = self.arguments.debug
         self.root.build_gui()
         self.root.gui.mainloop()
