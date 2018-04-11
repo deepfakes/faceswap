@@ -5,11 +5,13 @@ import signal
 import re
 import sys
 
+from argparse import SUPPRESS
 from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
 from threading import Thread
+from time import time
 
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
@@ -22,6 +24,7 @@ tk = None
 ttk = None
 filedialog = None
 messagebox = None
+TclError = None
 
 def import_tkinter(command):
     ''' Perform checks when importing tkinter module to ensure that GUI will load '''
@@ -29,11 +32,13 @@ def import_tkinter(command):
     global ttk
     global filedialog
     global messagebox
+    global TclError
     try:
         import tkinter
         from tkinter import messagebox
         from tkinter import ttk
         from tkinter import filedialog
+        from tkinter import TclError
         tk = tkinter
 
     except ImportError:
@@ -218,11 +223,9 @@ class FaceswapGui(object):
             commandtab = CommandTab(self.utils, optsnotebook, command)
             commandtab.build_tab()
 
-        dspnotebook = ttk.Notebook(topcontainer)
+        dspnotebook = ttk.Notebook(topcontainer, width=600)
         dspnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         for display in ('graph', 'preview'):
-            if display == 'preview':
-                continue # Not yet implemented
             displaytab = DisplayTab(self.utils, dspnotebook, display)
             displaytab.build_tab()
 
@@ -531,6 +534,9 @@ class DisplayTab(object):
         if self.display == 'graph':
             graph = GraphDisplay(frame, self.utils.loss)
             graph.build_graph()
+        elif self.display == 'preview':
+            preview = PreviewDisplay(frame)
+            preview.update_preview()
         else:   #Dummy in a placeholder
             lbl = ttk.Label(frame, text=self.display, width=15, anchor=tk.W)
             lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
@@ -545,6 +551,8 @@ class GraphDisplay(object):
         self.b_loss = loss['lossB']
         self.ylim = 0
 
+        style.use('ggplot')
+
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
         self.a_line, = self.ax1.plot(self.a_loss, color='blue', linewidth=1, label='Loss A')
@@ -552,7 +560,6 @@ class GraphDisplay(object):
        
     def build_graph(self):
         ''' Update the plot area with loss values and cycle through to animate '''
-        style.use('ggplot')
         self.ax1.set_xlabel('Iterations')
         self.ax1.set_ylabel('Loss')
         self.ax1.set_ylim(0, 0.01)
@@ -571,8 +578,6 @@ class GraphDisplay(object):
             return
     # Take shallow copy because of writes to the list in other thread whilst we're processing
     # This doubles memory usage. Use thread locking instead to block writes when reading
-    # Also may not need to copy now X values are no longer being calculated
-#        a_loss, b_loss = self.a_loss[:], self.b_loss[:]
         a_loss, b_loss = self.a_loss[:], self.b_loss[:]
         y_val = round(max(a_loss + b_loss), 2)
         if y_val > self.ylim:
@@ -583,6 +588,53 @@ class GraphDisplay(object):
         self.a_line.set_data(x_rng, a_loss)
         self.b_line.set_data(x_rng, b_loss)
         self.ax1.set_xlim(0, x_lim)
+
+class PreviewDisplay(object):
+    ''' The Preview tab of the Display section '''
+    def __init__(self, frame):
+        self.frame = frame
+        self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
+        self.previewimg = None
+        self.errcount = 0
+
+        self.delete_preview()
+
+        self.previewlbl = ttk.Label(self.frame, image=None)
+        self.previewlbl.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    def update_preview(self):
+        ''' Display the image if it exists or a place holder if it doesn't '''
+        self.load_preview()
+        if self.previewimg is None:
+            self.previewlbl.config(image=None)
+        else:
+            self.previewlbl.config(image=self.previewimg)
+        self.previewlbl.after(1000, self.update_preview)
+        
+    def delete_preview(self):
+        ''' Delete the preview file '''
+        if os.path.exists(self.previewloc):
+            os.remove(self.previewloc)
+
+    def load_preview(self):
+        ''' Load the preview image into tk PhotoImage '''
+        if os.path.exists(self.previewloc):
+            try:
+                self.previewimg = tk.PhotoImage(file=self.previewloc)
+                self.errcount = 0
+            except TclError:
+                #This is probably an error reading the file whilst it's being saved
+                #so ignore it for now and only pick up if there have been multiple
+                #consecutive fails
+                print('it''s error')
+                if self.errcount < 10:
+                    self.errcount += 1
+                    self.previewimg = None
+                    pass
+                else:
+                    print('Error reading the preview file')
+        else:
+            self.previewimg = None
 
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
@@ -612,7 +664,10 @@ class FaceswapControl(object):
             if optval == 'False' or optval == '':
                 continue
             elif optval == 'True':
-                self.args.append(opt)
+                if self.command == 'train' and opt == '-p':    # Embed the preview pane
+                    self.args.append('-gui')
+                else:
+                    self.args.append(opt)
             else:
                 self.args.extend((opt, optval))
 
@@ -655,8 +710,21 @@ class FaceswapControl(object):
 
     def terminate(self):
         ''' Terminate the subprocess '''
+        if self.command == 'train':
+            print('Sending Exit Signal', flush=True)
+            try:
+                now = time()
+                self.process.send_signal(signal.SIGINT)
+                while True:
+                    timeelapsed = time() - now
+                    if self.process.poll() is not None:
+                        break
+                    if timeelapsed > 10:
+                        raise ValueError ('Timeout reached sending Exit Signal')
+                return
+            except ValueError as err:
+                print(err)
         print('Terminating Process...')
-        self.process.send_signal(signal.SIGINT)
         try:
             self.process.terminate()
             self.process.wait(timeout=10)
@@ -698,6 +766,8 @@ class TKGui(object):
                      subparsers[cmd].optional_arguments for cmd in subparsers.keys()}
         for command in opts.values():
             for opt in command:
+                if opt.get('help', '') == SUPPRESS:
+                    command.remove(opt)
                 ctl, sysbrowser = self.set_control(opt)
                 opt['control_title'] = self.set_control_title(opt.get('opts', ''))
                 opt['control'] = ctl
