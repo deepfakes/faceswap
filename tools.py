@@ -3,6 +3,7 @@ import sys
 from lib.cli import FullHelpArgumentParser
 # Importing the various tools
 from tools.sort import SortProcessor
+from scripts.gui import TKGui
 
 # Python version check
 if sys.version_info[0] < 3:
@@ -27,6 +28,9 @@ if __name__ == "__main__":
     sort = SortProcessor(
         subparser, "sort", "This command lets you sort images using various "
                            "methods.")
+    guiparsers = {'sort': sort}
+    gui = TKGui(
+            subparser, guiparsers, parser, "gui", "Launch the Faceswap Tools Graphical User Interface.")
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)

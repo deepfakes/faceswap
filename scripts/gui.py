@@ -1,85 +1,184 @@
+#!/usr/bin python3
 import sys
 import os
 
 from os import path
 from threading import Thread
+import multiprocessing
+from multiprocessing import Process
+from multiprocessing.queues import Queue
+from time import sleep
 
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
 
-# Users without tkinter distrubtion packages or without an X-Console will error out
-# importing tkinter. Therefore run a check on these and only import if required 
-tk = None
-ttk = None
-filedialog = None
+# An error will be thrown when importing tkinter for users without tkinter
+# distribution packages or without an X-Console. Therefore if importing fails
+# no attempt will be made to instantiate the gui.
+try:
+    import tkinter as tk
+    from tkinter import ttk
+    from tkinter import filedialog
+    from tkinter.scrolledtext import ScrolledText
+except ImportError:
+    tk = None
+    ttk = None
+    filedialog = None
+    ScrolledText = None
 
-def import_tkinter(command):
-    ''' Perform checks when importing tkinter module to ensure that GUI will load '''
-    global tk
-    global ttk
-    global filedialog
-    try:
-        import tkinter
-        from tkinter import ttk
-        from tkinter import filedialog
-        tk = tkinter
-    except ImportError:
-        if 'gui' in command:
-            print(  'It looks like TkInter isn''t installed for your OS, so the GUI has been '
-                    'disabled. To enable the GUI please install the TkInter application.\n'
-                    'You can try:\n'
-                    '  Windows/macOS:      Install ActiveTcl Community Edition from '
-                    'www.activestate.com\n'
-                    '  Ubuntu/Mint/Debian: sudo apt install python3-tk\n'
-                    '  Arch:               sudo pacman -S tk\n'
-                    '  CentOS/Redhat:      sudo yum install tkinter\n'
-                    '  Fedora:             sudo dnf install python3-tkinter\n')
-        return False
-    return True    
 
-def check_display(command):
-    # Check whether there is a display to output the GUI. If running on Windows
-    # then assume not running in headless mode
-    if not os.environ.get('DISPLAY', None) and os.name != 'nt':
-        if 'gui' in command:
-            print ('Could not detect a display. The GUI has been disabled')
-        return False
-    return True
+class TKGui(object):
+    ''' Main GUI Control '''
+
+    def __init__(self, subparser, subparsers, parser, command,
+                 description='default'):
+        # TODO: add option to integrate terminal in gui
+        # Don't try to load the GUI if there is no display or there are
+        # problems importing tkinter
+        cmd = sys.argv
+        if not self.check_display(cmd) or not self.check_tkinter_available(cmd):
+            return
+        self.arguments = None
+        self.parser = parser
+        self.opts = self.extract_options(subparsers)
+        self.root = FaceswapGui(self.opts, self.parser)
+        self.parse_arguments(description, subparser, command)
+
+    @staticmethod
+    def check_display(command):
+        # Check whether there is a display to output the GUI. If running on
+        # Windows then assume not running in headless mode
+        if not os.environ.get('DISPLAY', None) and os.name != 'nt':
+            if 'gui' in command:
+                print('Could not detect a display. The GUI has been disabled')
+            return False
+        return True
+
+    @staticmethod
+    def check_tkinter_available(command):
+        tkinter_vars = [tk, ttk, filedialog, ScrolledText]
+        if any(var is None for var in tkinter_vars):
+            if "gui" in command:
+                print(
+                    "It looks like TkInter isn't installed for your OS, so "
+                    "the GUI has been "
+                    "disabled. To enable the GUI please install the TkInter "
+                    "application.\n"
+                    "You can try:\n"
+                    "  Windows/macOS:      Install ActiveTcl Community "
+                    "Edition from "
+                    "www.activestate.com\n"
+                    "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                    "  Arch:               sudo pacman -S tk\n"
+                    "  CentOS/Redhat:      sudo yum install tkinter\n"
+                    "  Fedora:             sudo dnf install python3-tkinter\n",
+                    file=sys.stderr)
+            return False
+        return True
+
+    def extract_options(self, subparsers):
+        ''' Extract the existing ArgParse Options '''
+        opts = {cmd: subparsers[cmd].argument_list +
+                     subparsers[cmd].optional_arguments for cmd in
+                subparsers.keys()}
+        for command in opts.values():
+            for opt in command:
+                ctl, sysbrowser = self.set_control(opt)
+                opt['control_title'] = self.set_control_title(
+                        opt.get('opts', ''))
+                opt['control'] = ctl
+                opt['filesystem_browser'] = sysbrowser
+        return opts
+
+    @staticmethod
+    def set_control_title(opts):
+        ''' Take the option switch and format it nicely '''
+        ctltitle = opts[1] if len(opts) == 2 else opts[0]
+        ctltitle = ctltitle.replace('-', ' ').replace('_', ' ').strip().title()
+        return ctltitle
+
+    @staticmethod
+    def set_control(option):
+        ''' Set the control and filesystem browser to use for each option '''
+        sysbrowser = None
+        ctl = tk.Entry
+        if option.get('dest', '') == 'alignments_path':
+            sysbrowser = 'load'
+        elif option.get('action', '') == FullPaths:
+            sysbrowser = 'folder'
+        elif option.get('choices', '') != '':
+            ctl = ttk.Combobox
+        elif option.get('action', '') == 'store_true':
+            ctl = tk.Checkbutton
+        elif 'path' in option.get('dest', ''):
+            sysbrowser = 'load'
+        elif 'dir' in option.get('dest', ''):
+            sysbrowser = 'folder'
+        return ctl, sysbrowser
+
+    def parse_arguments(self, description, subparser, command):
+        parser = subparser.add_parser(
+                command,
+                help="This Launches a GUI for Faceswap.",
+                description=description,
+                epilog="Questions and feedback: \
+            https://github.com/deepfakes/faceswap-playground"
+        )
+        parser.set_defaults(func=self.process)
+
+    def process(self, arguments):
+        ''' Builds the GUI '''
+        self.arguments = arguments
+        self.root.build_gui()
+        self.root.gui.mainloop()
+
 
 class FaceswapGui(object):
     ''' The Graphical User Interface '''
+
     def __init__(self, options, parser):
         self.gui = tk.Tk()
         self.opts = options
         self.parser = parser
-        
+        self.gui.term = TerminalOutput()
+
         pathscript = path.realpath(path.dirname(sys.argv[0]))
         pathicons = path.join(pathscript, 'icons')
-        self.icofolder = tk.PhotoImage(file=path.join(pathicons,'open_folder.png'))
-        self.icoload = tk.PhotoImage(file=path.join(pathicons,'open_file.png'))
-        self.icosave = tk.PhotoImage(file=path.join(pathicons,'save.png'))
-        self.icoreset = tk.PhotoImage(file=path.join(pathicons,'reset.png'))
-        self.icoclear = tk.PhotoImage(file=path.join(pathicons,'clear.png'))
+        self.icofolder = tk.PhotoImage(file=path.join(pathicons, 'open_folder.png'))
+        self.icoload = tk.PhotoImage(file=path.join(pathicons, 'open_file.png'))
+        self.icosave = tk.PhotoImage(file=path.join(pathicons, 'save.png'))
+        self.icoreset = tk.PhotoImage(file=path.join(pathicons, 'reset.png'))
+        self.icoclear = tk.PhotoImage(file=path.join(pathicons, 'clear.png'))
 
         self.helptext = tk.StringVar()
         self.statustext = tk.StringVar()
         self.serializer = JSONSerializer
-        self.filetypes=(('Faceswap files', '*.fsw'),  ('All files', '*.*'))
+        self.filetypes = (('Faceswap files', '*.fsw'), ('All files', '*.*'))
         self.task = FaceswapControl()
 
     def build_gui(self):
         ''' Build the GUI '''
-        self.gui.title('faceswap.py')
+        self.gui.title('faceswap.py')  # TODO: find way to assign dynamically
         self.menu()
         notebook = ttk.Notebook(self.gui)
         notebook.pack(fill=tk.BOTH, expand=True)
 
         # Commands explicitly stated to ensure consistent ordering
-        for command in ('extract', 'train', 'convert'):
+        for command in self.opts.keys():
             commandtab = CommandTab(self, notebook, command)
             commandtab.build_tab()
 
-# All pages stuff
+        # Setup a frame to which stdout and stderr will be redirected
+        term_control_frame = tk.Frame(master=self.gui)
+        term_control_frame.pack(side=tk.TOP, anchor=tk.NW)
+        term_title = tk.Label(term_control_frame, text="Terminal Output:", width=15)
+        term_title.pack(side=tk.LEFT, anchor=tk.NW, pady=(2, 0))
+        self.gui.toggle_term = tk.Checkbutton(term_control_frame, text="", command=lambda: self.toggle_term())
+        self.gui.toggle_term.pack(side=tk.LEFT, anchor=tk.NW)
+        self.gui.term = TerminalOutput(master=self.gui, height=8, width=self.gui.winfo_width())
+        self.gui.term['font'] = ('monospace', '9')
+
+    # All pages stuff
     def menu(self):
         ''' Menu bar for loading and saving configs '''
         menubar = tk.Menu(self.gui)
@@ -106,7 +205,7 @@ class FaceswapGui(object):
         else:
             opts = cfg[command]
             self.set_command_args(command, opts)
-                
+
     def set_command_args(self, command, options):
         ''' Pass the saved config items back to the GUI '''
         for srcopt, srcval in options.items():
@@ -114,22 +213,23 @@ class FaceswapGui(object):
                 if dstopts['control_title'] == srcopt:
                     dstopts['value'].set(srcval)
                     break
-        
+
     def save_config(self, command=None):
         ''' Save the current GUI state to a config file in json format '''
-        cfgfile = filedialog.asksaveasfile( mode='w',
-                                            filetypes=self.filetypes, 
-                                            defaultextension='.fsw')
+        cfgfile = filedialog.asksaveasfile(mode='w',
+                                           filetypes=self.filetypes,
+                                           defaultextension='.fsw')
         if not cfgfile:
             return
         if command is None:
-            cfg = {cmd: {opt['control_title']: opt['value'].get() for opt in opts} 
-                   for cmd, opts in self.opts.items()}
+            cfg = {
+                cmd: {opt['control_title']: opt['value'].get() for opt in opts}
+                      for cmd, opts in self.opts.items()}
         else:
             cfg = {command: {opt['control_title']: opt['value'].get()
-                   for opt in self.opts[command]}}
+                             for opt in self.opts[command]}}
         cfgfile.write(self.serializer.marshal(cfg))
-        cfgfile.close
+        cfgfile.close()
 
     def reset_config(self, command=None):
         ''' Reset the GUI to the default values '''
@@ -166,8 +266,30 @@ class FaceswapGui(object):
         ''' Execute the task in Faceswap.py '''
         self.task.execute_script(self.opts, command, self.parser, self.statustext)
 
+    def stop_task(self, command):
+        self.task.stop_script(command)
+
+    def toggle_term(self):
+        # To avoid starting the monitoring threads unnecessarily, only do so if
+        # the user has toggled on the terminal
+        if self.gui.term.check_rerouting_ready():
+            self.gui.term.prepare_rerouting()
+
+        if self.gui.term.winfo_ismapped():
+            sys.stdout = sys.__stdout__
+            sys.stderr = sys.__stderr__
+            self.gui.term.pack_forget()
+            print("Terminal output is no longer rerouted.")
+        else:
+            self.gui.term.pack(fill=tk.X, padx=5, pady=(0, 5), side=tk.TOP)
+            sys.stdout = self.gui.term.queues['stdout']
+            sys.stderr = self.gui.term.queues['stderr']
+            print("Terminal output is now rerouted.")
+
+
 class ActionFrame(object):
     '''Action Frame - Displays information and action controls '''
+
     def __init__(self, gui, page, command):
         self.gui = gui
         self.page = page
@@ -175,30 +297,32 @@ class ActionFrame(object):
         self.title = command.title()
 
     def build_frame(self):
-        ''' Add help display and Action buttons to the left frame of each page '''
+        ''' Add help display and Action buttons to the left frame of each
+        page '''
         frame = tk.Frame(self.page)
-        frame.pack(fill=tk.X, padx=(10,5), side=tk.LEFT, anchor=tk.N)
+        frame.pack(fill=tk.X, padx=(10, 5), side=tk.LEFT, anchor=tk.N)
 
         self.add_info_section(frame)
         self.add_action_buttons(frame)
+        self.add_stop_button(frame)
         self.add_util_buttons(frame)
         self.add_status_section(frame)
-        
+
     def add_info_section(self, frame):
         ''' Build the info text section page '''
-        hlpframe=tk.Frame(frame)
+        hlpframe = tk.Frame(frame)
         hlpframe.pack(fill=tk.X, side=tk.TOP, pady=5)
         lbltitle = tk.Label(hlpframe, text='Info', width=15, anchor=tk.SW)
         lbltitle.pack(side=tk.TOP)
         self.gui.helptext.set('')
-        lblhelp = tk.Label( hlpframe,
-                            height=20,
-                            width=15,
-                            textvariable=self.gui.helptext,
-                            wraplength=120, 
-                            justify=tk.LEFT, 
-                            anchor=tk.NW,
-                            bg="gray90")
+        lblhelp = tk.Label(hlpframe,
+                           height=20,
+                           width=15,
+                           textvariable=self.gui.helptext,
+                           wraplength=120,
+                           justify=tk.LEFT,
+                           anchor=tk.NW,
+                           bg="gray90")
         lblhelp.pack(side=tk.TOP, anchor=tk.N)
 
     def add_action_buttons(self, frame):
@@ -206,50 +330,66 @@ class ActionFrame(object):
         actframe = tk.Frame(frame)
         actframe.pack(fill=tk.X, side=tk.TOP, pady=(15, 0))
 
-        btnexecute = tk.Button( actframe,
-                                text=self.title,
-                                height=2,
-                                width=12,
-                                command=lambda: self.gui.execute_task(self.command))
+        btnexecute = tk.Button(actframe,
+                               text=self.title,
+                               height=2,
+                               width=12,
+                               command=lambda: self.gui.execute_task(self.command))
         btnexecute.pack(side=tk.TOP)
         self.gui.bind_help(btnexecute, 'Run the {} script'.format(self.title))
+
+    def add_stop_button(self, frame):
+        ''' Add the button that sends SIGINT to the subprocess '''
+        actframe = tk.Frame(frame)
+        actframe.pack(fill=tk.X, side=tk.TOP, pady=(15, 0))
+
+        btnexecute = tk.Button(actframe,
+                               text="Stop",
+                               height=2,
+                               width=12,
+                               command=lambda: self.gui.stop_task(self.command))
+        btnexecute.pack(side=tk.TOP)
+        self.gui.bind_help(btnexecute, 'Stop the {} script'.format(self.title))
 
     def add_util_buttons(self, frame):
         ''' Add the section utility buttons '''
         utlframe = tk.Frame(frame)
-        utlframe.pack(side=tk.TOP, pady=(5,0))
+        utlframe.pack(side=tk.TOP, pady=(5, 0))
 
         for utl in ('load', 'save', 'clear', 'reset'):
             img = getattr(self.gui, 'ico' + utl)
             action = getattr(self.gui, utl + '_config')
-            btnutl = tk.Button( utlframe,
-                                height=16,
-                                width=16,
-                                image=img,
-                                command=lambda cmd=action: cmd(self.command))
+            btnutl = tk.Button(utlframe,
+                               height=16,
+                               width=16,
+                               image=img,
+                               command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, pady=2, side=tk.LEFT)
-            self.gui.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
+            self.gui.bind_help(btnutl,
+                               utl.capitalize() + ' ' + self.title + ' config')
 
     def add_status_section(self, frame):
         ''' Build the info text section page '''
         statusframe = tk.Frame(frame)
-        statusframe.pack(side=tk.TOP, pady=(5,0))
-        
+        statusframe.pack(side=tk.TOP, pady=(5, 0))
+
         lbltitle = tk.Label(statusframe, text='Status', width=15, anchor=tk.SW)
         lbltitle.pack(side=tk.TOP)
         self.gui.statustext.set('Idle')
-        lblstatus = tk.Label(   statusframe,
-                                height=1,
-                                width=15,
-                                textvariable=self.gui.statustext,
-                                wraplength=120,
-                                justify=tk.LEFT,
-                                anchor=tk.NW,
-                                bg="gray90")
+        lblstatus = tk.Label(statusframe,
+                             height=1,
+                             width=15,
+                             textvariable=self.gui.statustext,
+                             wraplength=120,
+                             justify=tk.LEFT,
+                             anchor=tk.NW,
+                             bg="gray90")
         lblstatus.pack(side=tk.BOTTOM, anchor=tk.N)
+
 
 class CommandTab(object):
     ''' Tabs to hold the command options '''
+
     def __init__(self, gui, notebook, command):
         self.gui = gui
         self.notebook = notebook
@@ -261,23 +401,23 @@ class CommandTab(object):
         ''' Build the tab '''
         actionframe = ActionFrame(self.gui, self.page, self.command)
         actionframe.build_frame()
-        self.add_frame_seperator()
+        self.add_frame_separator()
         opt_frame = self.add_right_frame()
-        
+
         for option in self.gui.opts[self.command]:
             self.build_tabs(option, opt_frame)
-        
+
         self.notebook.add(self.page, text=self.title)
 
-    def add_frame_seperator(self):
-        ''' Add a seperator between left and right frames '''
+    def add_frame_separator(self):
+        ''' Add a separator between left and right frames '''
         sep = tk.Frame(self.page, width=2, bd=1, relief=tk.SUNKEN)
         sep.pack(fill=tk.Y, padx=5, side=tk.LEFT)
 
     def add_right_frame(self):
         ''' Add the options panel to the right frame of each page '''
         frame = tk.Frame(self.page)
-        frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0,5))
+        frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0, 5))
 
         canvas = tk.Canvas(frame, width=490, height=450, bd=0, highlightthickness=0)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -285,7 +425,7 @@ class CommandTab(object):
         self.add_scrollbar(frame, canvas)
 
         optsframe = tk.Frame(canvas)
-        canvas.create_window((0,0), window=optsframe, anchor=tk.NW)
+        canvas.create_window((0, 0), window=optsframe, anchor=tk.NW)
 
         return optsframe
 
@@ -300,7 +440,7 @@ class CommandTab(object):
     def update_scrollbar(event, canvas):
         canvas.configure(scrollregion=canvas.bbox('all'))
 
-# Build the Right Frame Options
+    # Build the Right Frame Options
     def build_tabs(self, option, option_frame):
         ''' Build the correct control type for the option passed through '''
         ctl = option['control']
@@ -310,7 +450,7 @@ class CommandTab(object):
         ctlhelp = '. '.join(i.capitalize() for i in ctlhelp.split('. '))
         ctlhelp = ctltitle + ' - ' + ctlhelp
         ctlframe = self.build_control_frame(option_frame)
-        
+
         dflt = option.get('default', False) if ctl == tk.Checkbutton else option.get('default', '')
         choices = option['choices'] if ctl == ttk.Combobox else None
 
@@ -322,7 +462,7 @@ class CommandTab(object):
         frame = tk.Frame(option_frame)
         frame.pack(fill=tk.X)
         return frame
-    
+
     def build_control_label(self, frame, control_title):
         ''' Build and place the control label '''
         lbl = tk.Label(frame, text=control_title, width=15, anchor=tk.W)
@@ -341,18 +481,18 @@ class CommandTab(object):
         ctlkwargs = {'variable': var} if control == tk.Checkbutton else {'textvariable': var}
         packkwargs = {'anchor': tk.W} if control == tk.Checkbutton else {'fill': tk.X}
 
-        if control == ttk.Combobox: #TODO: Remove this hacky fix to force the width of the frame
+        if control == ttk.Combobox:  # TODO: Remove this hacky fix to force the width of the frame
             ctlkwargs['width'] = 40
 
         ctl = control(frame, **ctlkwargs)
-        
+
         if control == ttk.Combobox:
             ctl['values'] = [choice for choice in choices]
-        
+
         ctl.pack(padx=5, pady=5, **packkwargs)
 
         self.gui.bind_help(ctl, helptext)
-        return(var)
+        return (var)
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         ''' Add correct file browser button for control '''
@@ -367,7 +507,7 @@ class CommandTab(object):
         dirname = filedialog.askdirectory()
         if dirname:
             filepath.set(dirname)
-   
+
     @staticmethod
     def ask_load(filepath):
         ''' Pop-up to get path to a file '''
@@ -375,27 +515,34 @@ class CommandTab(object):
         if filename:
             filepath.set(filename)
 
+
 class FaceswapControl(object):
     ''' Control the underlying Faceswap tasks '''
+
     def __init__(self):
         self.opts = None
         self.command = None
         self.parser = None
         self.statustext = None
+        self.processes = dict()
 
     def bad_args(self, args):
         self.parser.print_help()
         exit(0)
 
     def execute_script(self, options, command, parser, statustext):
+        # If already running don't do anything
+        if self.check_already_executing(command):
+            return
+
         self.opts = options
         self.command = command
         self.parser = parser
         self.statustext = statustext
-        
+
         optlist = ['faceswap.py', self.command]
         for item in self.opts[self.command]:
-            optval = str(item.get('value','').get())
+            optval = str(item.get('value', '').get())
             opt = item['opts'][0]
             if optval == 'False' or optval == '':
                 continue
@@ -404,8 +551,22 @@ class FaceswapControl(object):
             else:
                 optlist.extend((opt, optval))
         sys.argv = optlist
-        process = Thread(target=self.launch_faceswap, args=(self.command,))
-        process.start()
+        self.processes[command] = ProcessManager()
+        self.processes[command].add_process(target=self.launch_faceswap, args=(self.command,))
+        self.processes[command].run()
+
+    def stop_script(self, command):
+        # If not running don't do anything
+        if self.check_already_executing(command) is False:
+            return
+        print("Stopping: {}".format(command))
+        self.processes[command].stop()
+        sleep(0.1)  # Necessary wait time for process to stop
+        if self.processes[command].is_alive() is False:
+            print("Stopped: {}".format(command))
+            del self.processes[command]
+        else:
+            print("Failed to stop: {}".format(command))
 
     def launch_faceswap(self, command):
         ''' Launch the script inside a subprocess to keep the GUI active '''
@@ -415,71 +576,98 @@ class FaceswapControl(object):
             arguments = self.parser.parse_args()
             arguments.func(arguments)
         except:
-            self.statustext.set('Failed: ' + command.title())    
+            self.statustext.set('Failed: ' + command.title())
             raise
         self.statustext.set('Idle')
-        exit()        
+        exit()
 
-class TKGui(object):
-    ''' Main GUI Control '''
-    def __init__ (self, subparser, subparsers, parser, command, description='default'):
-    # Don't try to load the GUI if there is no display or there are problems importing tkinter
-        cmd = sys.argv
-        if not check_display(cmd) or not import_tkinter(cmd):
-            return
-       
-        self.parser = parser
-        self.opts = self.extract_options(subparsers)
-        self.root = FaceswapGui(self.opts, self.parser)
-        self.parse_arguments(description, subparser, command)
+    def check_already_executing(self, command):
+        if command not in self.processes.keys():
+            return False
+        return self.processes[command].is_alive()
 
-    def extract_options(self, subparsers):
-        ''' Extract the existing ArgParse Options '''
-        opts = {cmd: subparsers[cmd].argument_list + 
-                subparsers[cmd].optional_arguments for cmd in subparsers.keys()}
-        for command in opts.values():
-            for opt in command:
-                ctl, sysbrowser = self.set_control(opt)
-                opt['control_title'] = self.set_control_title(opt.get('opts',''))
-                opt['control'] = ctl
-                opt['filesystem_browser'] = sysbrowser
-        return opts
 
-    @staticmethod
-    def set_control_title(opts):
-        ''' Take the option switch and format it nicely '''
-        ctltitle = opts[1] if len(opts) == 2 else opts[0]
-        ctltitle = ctltitle.replace('-',' ').replace('_',' ').strip().title()
-        return ctltitle
- 
-    @staticmethod
-    def set_control(option):
-        ''' Set the control and filesystem browser to use for each option '''
-        sysbrowser = None
-        ctl = tk.Entry
-        if option.get('dest', '') == 'alignments_path':
-            sysbrowser = 'load'
-        elif option.get('action', '') == FullPaths:
-            sysbrowser = 'folder'
-        elif option.get('choices', '') != '':
-            ctl = ttk.Combobox
-        elif option.get('action', '') == 'store_true':
-            ctl = tk.Checkbutton
-        return ctl, sysbrowser
+class ProcessManager(object):
+    """ Class that allows for easy process management """
+    def __init__(self,):
+        self.process = None
+        self.process_started = False
 
-    def parse_arguments(self, description, subparser, command):
-        parser = subparser.add_parser(
-            command,
-            help="This Launches a GUI for Faceswap.",
-            description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground"
-        )
-        parser.set_defaults(func=self.process)        
+    def add_process(self, target=None, args=None):
+        self.process = Process(target=target, args=args)
 
-    def process(self, arguments):
-        ''' Builds the GUI '''
-        self.arguments = arguments
-        self.root.build_gui()
-        self.root.gui.mainloop()
+    def run(self):
+        if self.process_started is False:
+            self.process_started = True
+            # Close pipes/processes when quiting the gui
+            self.process.daemon = True
+            self.process.start()
+        else:
+            print("Process is already running.")
 
+    def stop(self):
+        if self.process_started:
+            self.process.terminate()
+            self.process.join()
+            self.process = None
+            self.process_started = False
+        else:
+            print("Nothing to stop.")
+
+    def is_alive(self):
+        if self.process is not None:
+            return self.process.is_alive()
+        else:
+            return False
+
+
+class TerminalOutput(ScrolledText):
+    """
+    Class that creates a frame allowing for terminal output in the gui.
+    """
+    def __init__(self, **kwargs):
+        super(TerminalOutput, self).__init__(**kwargs)
+        # The following will be needed to make the 'terminal' window read only
+        # self.bind("<1>", lambda event: self.focus_set())
+        self.queues = None
+        self.stdout_monitor = None
+        self.stderr_monitor = None
+
+    def prepare_rerouting(self):
+        # Prepare queues
+        self.queues = {'stdout': SysOutQueue(), 'stderr': SysOutQueue()}
+
+        # Prepare the queues' monitors
+        self.stdout_monitor = Thread(target=self.text_catcher, args=('stdout',))
+        self.stderr_monitor = Thread(target=self.text_catcher, args=('stderr',))
+        self.stdout_monitor.daemon = True
+        self.stderr_monitor.daemon = True
+        self.stdout_monitor.start()
+        self.stderr_monitor.start()
+
+    def text_catcher(self, out_type):
+        out_color = ('black' if out_type == 'stdout' else 'red')
+        while True:
+            self.insert(tk.END, self.queues[out_type].get(), out_type)
+            self.tag_config(out_type, foreground=out_color)
+            self.see(tk.END)
+
+    def check_rerouting_ready(self):
+        return any(i is None for i in [self.queues, self.stdout_monitor,
+                                       self.stderr_monitor])
+
+
+class SysOutQueue(Queue):
+    """
+    Queue that imitates stdout and stderr, allowing for them to be safely
+    redirected to a tkinter widget.
+    """
+    def __init__(self, *args, **kwargs):
+        ctx = multiprocessing.get_context()
+        super(SysOutQueue, self).__init__(*args, **kwargs, ctx=ctx)
+
+    def write(self, msg):
+        self.put(msg)
+
+    def flush(self):
+        sys.__stdout__.flush()
