@@ -621,7 +621,7 @@ class GraphDisplay(object):
     def animate(self, i):
 
         """ Read loss data and apply to graph """
-        if not self.a_loss:
+        if not self.loss['lossA']:
             return
         # Take shallow copy because of writes to the list in other thread
         # whilst we're processing
