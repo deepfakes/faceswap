@@ -1,14 +1,8 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
-# Windows font slightly different size so:
-#   info box doesn't wrap properly (text cut off at right)
-#   longest labels cut off
-#   Options boxes don't fill pane - This may have been fixed with auto canvas resize. Check
-# SIGINT not working for Windows. Look for another CTRL+C Method
 # TODO
 # Add resizable panels
-# Add trendline to graph
-# Alternate help text on action button
+# SIGINT not working for Windows. Look for another CTRL+C Method
 
 import os
 import signal
@@ -21,6 +15,7 @@ from subprocess import Popen, PIPE, TimeoutExpired
 from threading import Thread
 from time import time
 
+import numpy
 import matplotlib.animation as animation
 from matplotlib import pyplot as plt
 from matplotlib import style
@@ -55,7 +50,7 @@ class Utils(object):
 
         self.icons = dict()
         self.guitext = dict()
-        self.guitext['action'] = dict()
+        self.actionbtns = dict()
 
         self.console = None
         self.debugconsole = False
@@ -104,13 +99,27 @@ class Utils(object):
         """ Terminate the subprocess Faceswap.py task """
         self.task.terminate()
         self.runningtask = False
+        self.clear_display_panel()
         self.change_action_button()
+
+    def clear_display_panel(self):
+        ''' Clear the preview window and graph '''
+        self.delete_preview()
+        self.loss['lossA'] = []
+        self.loss['lossB'] = []
 
     def change_action_button(self):
         """ Change the action button to relevant control """
-        for cmd in self.guitext['action'].keys():
-            text = 'Terminate' if self.runningtask else cmd.title()
-            self.guitext['action'][cmd].set(text)
+        for cmd in self.actionbtns.keys():
+            btnact = self.actionbtns[cmd]
+            if self.runningtask:
+                ttl = 'Terminate'
+                hlp = 'Exit the running process'
+            else:
+                ttl = cmd.title()
+                hlp = 'Run the {} script'.format(cmd.title())
+            btnact.config(text=ttl)
+            Tooltip(btnact, text=hlp, wraplength=200)
 
     def clear_console(self):
         """ Clear the console output screen """
@@ -190,9 +199,9 @@ class Utils(object):
 
 class Tooltip:
     """
-    It creates a tooltip for a given widget as the mouse goes on it.
+    Create a tooltip for a given widget as the mouse goes on it.
 
-    see:
+    Adapted from StackOverflow:
 
     http://stackoverflow.com/questions/3221956/
            what-is-the-simplest-way-to-make-tooltips-
@@ -216,7 +225,6 @@ class Tooltip:
 
       Tested on Ubuntu 16.04/16.10, running Python 3.5.2
 
-    TODO: themes styles support
     """
 
     def __init__(self, widget,
@@ -443,7 +451,6 @@ class FaceswapGui(object):
         self.gui.quit()
         exit()
 
-
 class ConsoleOut(object):
     """ The Console out tab of the Display section """
 
@@ -471,6 +478,7 @@ class ConsoleOut(object):
 
 class SysOutRouter(object):
     """ Route stdout/stderr to the console window """
+
     def __init__(self, console=None, out_type=None):
         self.console = console
         self.out_type = out_type
@@ -489,6 +497,7 @@ class SysOutRouter(object):
 
 
 class CommandTab(object):
+
     """ Tabs to hold the command options """
 
     def __init__(self, utils, notebook, command):
@@ -516,6 +525,7 @@ class CommandTab(object):
 
 class OptionsFrame(object):
     """ Options Frame - Holds the Options for each command """
+
     def __init__(self, utils, page, command):
         self.utils = utils
         self.page = page
@@ -591,7 +601,7 @@ class OptionControl(object):
     @staticmethod
     def build_one_control_label(frame, control_title):
         """ Build and place the control label """
-        lbl = ttk.Label(frame, text=control_title, width=15, anchor=tk.W)
+        lbl = ttk.Label(frame, text=control_title, width=18, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
     def build_one_control(self, frame, control, default, helptext, choices,
@@ -661,22 +671,18 @@ class ActionFrame(object):
 
     def add_action_button(self, frame):
         """ Add the action buttons for page """
-        actvar = tk.StringVar(frame)
-        actvar.set(self.title)
-        self.utils.guitext['action'][self.command] = actvar
-
         actframe = ttk.Frame(frame)
         actframe.pack(fill=tk.X, side=tk.LEFT, padx=5, pady=5)
 
         btnact = tk.Button(actframe,
-                           textvariable=self.utils.guitext['action'][
-                               self.command],
+                           text=self.title,
                            height=1,
                            width=12,
                            command=lambda: self.utils.action_command(
                                self.command))
         btnact.pack(side=tk.TOP)
         Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
+        self.utils.actionbtns[self.command] = btnact
 
     def add_util_buttons(self, frame):
         """ Add the section utility buttons """
@@ -721,24 +727,32 @@ class DisplayTab(object):
 
 
 class GraphDisplay(object):
+    """ The Graph Tab of the Display section """
+
     def __init__(self, frame, loss):
         self.frame = frame
         self.loss = loss
+        self.aloss = None
+        self.bloss = None
+
         self.ylim = (100, 0)
 
         style.use('ggplot')
 
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
+
         self.aline, = self.ax1.plot(0, 0, color='blue', linewidth=1, label='Loss A')
         self.bline, = self.ax1.plot(0, 0, color='red', linewidth=1, label='Loss B')
+        self.atrend, = self.ax1.plot(0, 0, color='navy', linewidth=2, label='Trend A')
+        self.btrend, = self.ax1.plot(0, 0, color='firebrick', linewidth=2, label='Trend B')
 
     def build_graph(self):
         """ Update the plot area with loss values and cycle through to
         animate """
         self.ax1.set_xlabel('Iterations')
         self.ax1.set_ylabel('Loss')
-        self.ax1.set_ylim(0, 0.01)
+        self.ax1.set_ylim(0.00, 0.01)
         self.ax1.set_xlim(0, 1)
         self.ax1.legend(loc='lower left')
         plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95,
@@ -753,27 +767,61 @@ class GraphDisplay(object):
 
         """ Read loss data and apply to graph """
         if not self.loss['lossA']:
+            self.reset_graph()
             return
-        # Take shallow copy because of writes to the list in other thread
-        # whilst we're processing
-        # Locking doesn't seem to work :( At a guess it's because it
-        # re-reads the data in idle time
-        # when it redraws. Need to work out if locking there is possible
-        # Alternatively look to use Queue
-        aloss, bloss = self.loss['lossA'][:], self.loss['lossB'][:]
 
-        ymin = floor(min(aloss + bloss) * 100) / 100
-        ymax = ceil(max(aloss + bloss) * 100) / 100
+        self.aloss, self.bloss = self.loss['lossA'][:], self.loss['lossB'][:]
+
+        xlim = self.recalculate_axes()
+
+        xrng = [x for x in range(xlim)]
+
+        self.raw_plot(xrng)
+
+        if xlim > 10:
+            self.trend_plot(xrng)
+
+    def reset_graph(self):
+        """ Resets the graph if there is no data to process """
+        self.ylim = (100, 0)
+
+        self.aline.set_data(0, 0)
+        self.bline.set_data(0, 0)
+        self.atrend.set_data(0, 0)
+        self.btrend.set_data(0, 0)
+
+        self.ax1.set_ylim(0.00, 0.01)
+        self.ax1.set_xlim(0, 1)
+
+    def recalculate_axes(self):
+        ''' Recalculate the latest x and y axes limits from latest data '''
+        ymin = floor(min(self.aloss + self.bloss) * 100) / 100
+        ymax = ceil(max(self.aloss + self.bloss) * 100) / 100
         if ymin < self.ylim[0] or ymax > self.ylim[1]:
             self.ylim = (ymin, ymax)
             self.ax1.set_ylim(self.ylim[0], self.ylim[1])
 
-        xlim = len(aloss)
-        self.ax1.set_xlim(0, xlim)
+        xlim = len(self.aloss)
+        self.ax1.set_xlim(0, xlim - 1)
 
-        xrng = [x for x in range(xlim)]
-        self.aline.set_data(xrng, aloss)
-        self.bline.set_data(xrng, bloss)
+        return xlim
+
+    def raw_plot(self, x_range):
+        ''' Raw value plotting '''
+        self.aline.set_data(x_range, self.aloss)
+        self.bline.set_data(x_range, self.bloss)
+
+
+    def trend_plot(self, x_range):
+        ''' Trend value plotting '''
+        afit = numpy.polyfit(x_range, self.aloss, 4)
+        bfit = numpy.polyfit(x_range, self.bloss, 4)
+
+        apoly = numpy.poly1d(afit)
+        bpoly = numpy.poly1d(bfit)
+
+        self.atrend.set_data(x_range, apoly(x_range))
+        self.btrend.set_data(x_range, bpoly(x_range))
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -941,11 +989,11 @@ class FaceswapControl(object):
         if returncode == 0:
             status = 'Ready'
         elif returncode == -15:
-            status = 'Terminated - ' + self.command + '.py'
+            status = 'Terminated - {}.py'.format(self.command)
         elif returncode == -9:
-            status = 'Killed - ' + self.command + '.py'
+            status = 'Killed - {}.py'.format(self.command)
         else:
-            status = 'Failed - ' + self.command + '.py'
+            status = 'Failed - {}.py. Return Code: {}'.format(self.command, returncode)
         self.utils.guitext['status'].set(status)
 
 
