@@ -61,7 +61,11 @@ class Utils(object):
         self.runningtask = False
 
         self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
-        self.loss = {'lossA': [], 'lossB': []}
+
+        self.loss = {'lossA': [],
+                     'lossB': [],
+                     'lossGA': [],
+                     'lossGB': []}
 
     def init_tk(self):
         """ TK System must be on prior to setting tk variables,
@@ -106,6 +110,8 @@ class Utils(object):
         self.delete_preview()
         self.loss['lossA'] = []
         self.loss['lossB'] = []
+        self.loss['lossGA'] = []
+        self.loss['lossGB'] = []
 
     def change_action_button(self):
         """ Change the action button to relevant control """
@@ -737,9 +743,11 @@ class GraphDisplay(object):
 
     def __init__(self, frame, loss):
         self.frame = frame
-        self.loss = loss
-        self.aloss = None
-        self.bloss = None
+        self.lossdict = loss
+
+        self.loss = []
+        self.lines = []
+        self.trendlines = []
 
         self.ylim = (100, 0)
 
@@ -748,11 +756,6 @@ class GraphDisplay(object):
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
 
-        self.aline, = self.ax1.plot(0, 0, color='blue', linewidth=1, label='Loss A')
-        self.bline, = self.ax1.plot(0, 0, color='red', linewidth=1, label='Loss B')
-        self.atrend, = self.ax1.plot(0, 0, color='navy', linewidth=2, label='Trend A')
-        self.btrend, = self.ax1.plot(0, 0, color='firebrick', linewidth=2, label='Trend B')
-
     def build_graph(self):
         """ Update the plot area with loss values and cycle through to
         animate """
@@ -760,7 +763,6 @@ class GraphDisplay(object):
         self.ax1.set_ylabel('Loss')
         self.ax1.set_ylim(0.00, 0.01)
         self.ax1.set_xlim(0, 1)
-        self.ax1.legend(loc='lower left')
         plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95,
                             wspace=0.2, hspace=0.2)
 
@@ -770,13 +772,15 @@ class GraphDisplay(object):
         plotcanvas.draw()
 
     def animate(self, i):
-
         """ Read loss data and apply to graph """
-        if not self.loss['lossA']:
+        if not self.lossdict['lossA']:
             self.reset_graph()
             return
 
-        self.aloss, self.bloss = self.loss['lossA'][:], self.loss['lossB'][:]
+        if not self.lines:
+            self.configure_lines()
+
+        self.loss = self.copy_loss_values()
 
         xlim = self.recalculate_axes()
 
@@ -787,47 +791,77 @@ class GraphDisplay(object):
         if xlim > 10:
             self.trend_plot(xrng)
 
+        self.ax1.legend(loc='lower left')
+
     def reset_graph(self):
         """ Resets the graph if there is no data to process """
         self.ylim = (100, 0)
 
-        self.aline.set_data(0, 0)
-        self.bline.set_data(0, 0)
-        self.atrend.set_data(0, 0)
-        self.btrend.set_data(0, 0)
+        for line in self.lines:
+            line.set_data(0, 0)
+
+        for line in self.trendlines:
+            line.set_data(0, 0)
 
         self.ax1.set_ylim(0.00, 0.01)
         self.ax1.set_xlim(0, 1)
 
+    def configure_lines(self):
+        """ get the Loss type based on the number of loss values we have """
+        losscolors = ['blue', 'red', 'green', 'magenta']
+        trendcolors = ['navy', 'firebrick', 'darkgreen', 'purple']
+        if not self.lossdict['lossGA']:
+            labels = ['A', 'B']
+        else:
+            labels = ['DA', 'DB', 'GA', 'GB']
+
+        for idx, loss in enumerate(labels):
+            self.lines.extend(self.ax1.plot(0,
+                                            0,
+                                            color=losscolors[idx],
+                                            linewidth=1,
+                                            label='Loss {}'.format(loss)))
+
+        for idx, trend in enumerate(labels):
+            self.trendlines.extend(self.ax1.plot(0,
+                                                 0,
+                                                 color=trendcolors[idx],
+                                                 linewidth=2,
+                                                 label='Trend {}'.format(trend)))
+
+    def copy_loss_values(self):
+        """ Compile the loss values into a list """
+        loss = [self.lossdict['lossA'][:], self.lossdict['lossB'][:]]
+        if self.lossdict['lossGA']:
+            loss.extend([self.lossdict['lossGA'][:], self.lossdict['lossGB'][:]])
+        return loss
+
     def recalculate_axes(self):
         ''' Recalculate the latest x and y axes limits from latest data '''
-        ymin = floor(min(self.aloss + self.bloss) * 100) / 100
-        ymax = ceil(max(self.aloss + self.bloss) * 100) / 100
+        ymin = floor(min([min(loss) for loss in self.loss]) * 100) / 100
+        ymax = ceil(max([max(loss) for loss in self.loss]) * 100) / 100
+
         if ymin < self.ylim[0] or ymax > self.ylim[1]:
             self.ylim = (ymin, ymax)
             self.ax1.set_ylim(self.ylim[0], self.ylim[1])
 
-        xlim = len(self.aloss)
+        xlim = len(self.loss[0])
         self.ax1.set_xlim(0, xlim - 1)
 
         return xlim
 
     def raw_plot(self, x_range):
         ''' Raw value plotting '''
-        self.aline.set_data(x_range, self.aloss)
-        self.bline.set_data(x_range, self.bloss)
-
+        for idx, loss in enumerate(self.loss):
+            self.lines[idx].set_data(x_range, loss)
 
     def trend_plot(self, x_range):
         ''' Trend value plotting '''
-        afit = numpy.polyfit(x_range, self.aloss, 4)
-        bfit = numpy.polyfit(x_range, self.bloss, 4)
+        for idx, loss in enumerate(self.loss):
+            fit = numpy.polyfit(x_range, loss, 4)
+            poly = numpy.poly1d(fit)
 
-        apoly = numpy.poly1d(afit)
-        bpoly = numpy.poly1d(bfit)
-
-        self.atrend.set_data(x_range, apoly(x_range))
-        self.btrend.set_data(x_range, bpoly(x_range))
+            self.trendlines[idx].set_data(x_range, poly(x_range))
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -932,6 +966,7 @@ class FaceswapControl(object):
         self.utils.runningtask = False
         self.utils.change_action_button()
         self.set_final_status(returncode)
+        print('Process exited.')
 
     def read_stderr(self):
         """ Read stdout from the subprocess. If training, pass the loss
@@ -959,10 +994,13 @@ class FaceswapControl(object):
     def capture_loss(self, string):
         """ Capture loss values from stdout """
         loss = re.findall(r'\d+\.\d+', string)
-        if len(loss) != 2:
+        if len(loss) not in (2, 4):
             return
         self.utils.loss['lossA'].append(float(loss[0]))
         self.utils.loss['lossB'].append(float(loss[1]))
+        if len(loss) == 4:
+            self.utils.loss['lossGA'].append(float(loss[2]))
+            self.utils.loss['lossGB'].append(float(loss[3]))
 
     def terminate(self):
         """ Terminate the subprocess """
