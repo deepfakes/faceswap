@@ -1,7 +1,6 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
 # TODO
-# Add resizable panels
 # SIGINT not working for Windows. Look for another CTRL+C Method
 
 import os
@@ -368,14 +367,21 @@ class FaceswapGui(object):
         self.gui.title(self.calling_file)
         self.menu()
 
-        topcontainer = ttk.Frame(self.gui)
-        topcontainer.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        container = tk.PanedWindow(self.gui,
+                                   sashrelief=tk.RAISED,
+                                   orient=tk.VERTICAL)
+        container.pack(fill=tk.BOTH, expand=1)
 
-        bottomcontainer = ttk.Frame(self.gui)
-        bottomcontainer.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+        topcontainer = tk.PanedWindow(container,
+                                      sashrelief=tk.RAISED,
+                                      orient=tk.HORIZONTAL)
+        container.add(topcontainer)
+
+        bottomcontainer = ttk.Frame(container, height=150)
+        container.add(bottomcontainer)
 
         optsnotebook = ttk.Notebook(topcontainer, width=400, height=500)
-        optsnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+        topcontainer.add(optsnotebook)
 
         if self.calling_file == 'faceswap.py':
             # Commands explicitly stated to ensure consistent ordering
@@ -388,7 +394,8 @@ class FaceswapGui(object):
             commandtab.build_tab()
 
         dspnotebook = ttk.Notebook(topcontainer, width=780)
-        dspnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        topcontainer.add(dspnotebook)
+
         for display in ('graph', 'preview'):
             displaytab = DisplayTab(self.utils, dspnotebook, display)
             displaytab.build_tab()
@@ -674,12 +681,11 @@ class ActionFrame(object):
         actframe = ttk.Frame(frame)
         actframe.pack(fill=tk.X, side=tk.LEFT, padx=5, pady=5)
 
-        btnact = tk.Button(actframe,
-                           text=self.title,
-                           height=1,
-                           width=12,
-                           command=lambda: self.utils.action_command(
-                               self.command))
+        btnact = ttk.Button(actframe,
+                            text=self.title,
+                            width=12,
+                            command=lambda: self.utils.action_command(
+                                self.command))
         btnact.pack(side=tk.TOP)
         Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
         self.utils.actionbtns[self.command] = btnact
