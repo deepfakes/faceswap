@@ -1,5 +1,17 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
+# Windows font slightly different size so:
+#   info box doesn't wrap properly (text cut off at right)
+#   longest labels cut off
+#   Options boxes don't fill pane - This may have been fixed with auto canvas resize. Check
+# SIGINT not working for Windows. Look for another CTRL+C Method
+# TODO
+# Add resizable panels
+# Add trendline to graph
+# STDOUT Flush
+# Alternate help text on action button
+# Tooltips? (Will fix Windows helpbox issue)
+
 import os
 import signal
 import re
@@ -8,7 +20,7 @@ import sys
 from argparse import SUPPRESS
 from math import ceil, floor
 from subprocess import Popen, PIPE, TimeoutExpired
-from threading import Lock, Thread
+from threading import Thread
 from time import time
 
 import matplotlib.animation as animation
@@ -59,7 +71,6 @@ class Utils(object):
 
         self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
         self.loss = {'lossA': [], 'lossB': []}
-        self.losslock = Lock()
 
     def init_tk(self):
         """ TK System must be on prior to setting tk variables,
@@ -210,7 +221,7 @@ class FaceswapGui(object):
         bottomcontainer = ttk.Frame(self.gui)
         bottomcontainer.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-        optsnotebook = ttk.Notebook(topcontainer)
+        optsnotebook = ttk.Notebook(topcontainer, width=500)
         optsnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
         # Commands explicitly stated to ensure consistent ordering
         for command in self.utils.opts.keys():
@@ -342,48 +353,15 @@ class CommandTab(object):
         actionframe.build_frame()
 
         self.add_frame_separator()
-        opt_frame = self.add_right_frame()
+        opts_frame = OptionsFrame(self.utils, self.page, self.command)
+        opts_frame.build_frame()
 
-        for option in self.utils.opts[self.command]:
-            optioncontrol = OptionControl(self.utils, option, opt_frame)
-            optioncontrol.build_full_control()
         self.notebook.add(self.page, text=self.title)
 
     def add_frame_separator(self):
         """ Add a separator between left and right frames """
         sep = ttk.Frame(self.page, width=2, relief=tk.SUNKEN)
         sep.pack(fill=tk.Y, padx=5, side=tk.LEFT)
-
-    def add_right_frame(self):
-        """ Add the options panel to the right frame of each page """
-        frame = ttk.Frame(self.page)
-        frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(0, 5))
-
-        canvas = tk.Canvas(frame, width=390, height=450, bd=0,
-                           highlightthickness=0)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.add_scrollbar(frame, canvas)
-
-        optsframe = ttk.Frame(canvas)
-        canvas.create_window((0, 0), window=optsframe, anchor=tk.NW)
-
-        return optsframe
-
-    def add_scrollbar(self, frame, canvas):
-        """ Add a scrollbar to the options frame """
-        scrollbar = ttk.Scrollbar(frame, command=canvas.yview)
-        scrollbar.pack(side=tk.LEFT, fill='y')
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.bind('<Configure>',
-                    lambda event, cvs=canvas: self.update_scrollbar(event,
-                                                                    cvs))
-
-    @staticmethod
-    def update_scrollbar(event, canvas):
-        """ Update the options frame scrollbar """
-        canvas.configure(scrollregion=canvas.bbox('all'))
-
 
 class ActionFrame(object):
     """Action Frame - Displays information and action controls """
@@ -454,6 +432,43 @@ class ActionFrame(object):
             btnutl.pack(padx=2, pady=2, side=tk.LEFT)
             self.utils.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
 
+class OptionsFrame(object):
+    """ Options Frame - Holds the Options for each command """
+    def __init__(self, utils, page, command):
+        self.utils = utils
+        self.page = page
+        self.command = command
+
+        self.canvas = tk.Canvas(self.page, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.optsframe = tk.Frame(self.canvas)
+        self.optscanvas = self.canvas.create_window((0,0),window=self.optsframe, anchor=tk.NW)
+
+    def build_frame(self):
+        """ Build the options frame for this command """
+        self.add_scrollbar()
+        self.canvas.bind('<Configure>', self.resize_frame)
+
+        for option in self.utils.opts[self.command]:
+            optioncontrol = OptionControl(self.utils, option, self.optsframe)
+            optioncontrol.build_full_control()
+   
+    def add_scrollbar(self):
+        """ Add a scrollbar to the options frame """
+        scrollbar = tk.Scrollbar(self.canvas, command=self.canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.config(yscrollcommand=scrollbar.set)
+        self.optsframe.bind("<Configure>", self.update_scrollbar)
+
+    def update_scrollbar(self, event):
+        """ Update the options frame scrollbar """
+        self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+
+    def resize_frame(self, event):
+        """ Resize the options frame to fit the canvas """
+        canvas_width = event.width - 19
+        self.canvas.itemconfig(self.optscanvas, width=canvas_width)
 
 class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
@@ -488,7 +503,7 @@ class OptionControl(object):
     def build_one_control_frame(self):
         """ Build the frame to hold the control """
         frame = ttk.Frame(self.option_frame)
-        frame.pack(fill=tk.X)
+        frame.pack(fill=tk.X, expand=True)
         return frame
 
     @staticmethod
@@ -512,11 +527,7 @@ class OptionControl(object):
         ctlkwargs = {'variable': var} if control == ttk.Checkbutton else {
             'textvariable': var}
         packkwargs = {'anchor': tk.W} if control == ttk.Checkbutton else {
-            'fill': tk.X}
-
-        if control == ttk.Combobox:  # TODO: Remove this hacky fix to force the width of the frame
-            ctlkwargs['width'] = 28
-
+            'fill': tk.X, 'expand': True}
         ctl = control(frame, **ctlkwargs)
 
         if control == ttk.Combobox:
@@ -566,7 +577,7 @@ class DisplayTab(object):
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         if self.display == 'graph':
-            graph = GraphDisplay(frame, self.utils.loss, self.utils.losslock)
+            graph = GraphDisplay(frame, self.utils.loss)
             graph.build_graph()
         elif self.display == 'preview':
             preview = PreviewDisplay(frame, self.utils.previewloc)
@@ -579,21 +590,17 @@ class DisplayTab(object):
 
 
 class GraphDisplay(object):
-    """ The Graph tab of the Display section """
-
-    def __init__(self, frame, loss, losslock):
+    def __init__(self, frame, loss):
         self.frame = frame
-        self.a_loss = loss['lossA']
-        self.b_loss = loss['lossB']
-        self.lock = losslock
+        self.loss = loss
         self.ylim = (100, 0)
 
         style.use('ggplot')
 
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
-        self.a_line, = self.ax1.plot(self.a_loss, color='blue', linewidth=1, label='Loss A')
-        self.b_line, = self.ax1.plot(self.b_loss, color='red', linewidth=1, label='Loss B')
+        self.aline, = self.ax1.plot(0, 0, color='blue', linewidth=1, label='Loss A')
+        self.bline, = self.ax1.plot(0, 0, color='red', linewidth=1, label='Loss B')
 
     def build_graph(self):
         """ Update the plot area with loss values and cycle through to
@@ -612,33 +619,30 @@ class GraphDisplay(object):
         plotcanvas.draw()
 
     def animate(self, i):
+
         """ Read loss data and apply to graph """
         if not self.a_loss:
             return
         # Take shallow copy because of writes to the list in other thread
         # whilst we're processing
-        # This doubles memory usage. Use thread locking instead to block
-        # writes when reading
         # Locking doesn't seem to work :( At a guess it's because it
         # re-reads the data in idle time
         # when it redraws. Need to work out if locking there is possible
-        # May also be possible to take an index slice of the list at read
-        # time and select that
-        # Therefore anything added after that would be ignored?
         # Alternatively look to use Queue
-        #        a_loss, b_loss = self.a_loss[:], self.b_loss[:]
-        with self.lock:
-            ymin = floor(min(self.a_loss + self.b_loss) * 100) / 100
-            ymax = ceil(max(self.a_loss + self.b_loss) * 100) / 100
-            if ymin < self.ylim[0] or ymax > self.ylim[1]:
-                self.ylim = (ymin, ymax)
-                self.ax1.set_ylim(self.ylim[0], self.ylim[1])
-            xlim = len(self.a_loss)
-            xrng = [x for x in range(xlim)]
-            self.a_line.set_data(xrng, self.a_loss)
-            self.b_line.set_data(xrng, self.b_loss)
-            self.ax1.set_xlim(0, xlim)
+        aloss, bloss = self.loss['lossA'][:], self.loss['lossB'][:]
+        
+        ymin = floor(min(aloss + bloss) * 100) / 100
+        ymax = ceil(max(aloss + bloss) * 100) / 100
+        if ymin < self.ylim[0] or ymax > self.ylim[1]:
+            self.ylim = (ymin, ymax)
+            self.ax1.set_ylim(self.ylim[0], self.ylim[1])
+        
+        xlim = len(aloss)
+        self.ax1.set_xlim(0, xlim)
 
+        xrng = [x for x in range(xlim)]
+        self.aline.set_data(xrng, aloss)
+        self.bline.set_data(xrng, bloss)
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -772,9 +776,8 @@ class FaceswapControl(object):
         loss = re.findall(r'\d+\.\d+', string)
         if len(loss) != 2:
             return
-        with self.utils.losslock:
-            self.utils.loss['lossA'].append(float(loss[0]))
-            self.utils.loss['lossB'].append(float(loss[1]))
+        self.utils.loss['lossA'].append(float(loss[0]))
+        self.utils.loss['lossB'].append(float(loss[1]))
 
     def terminate(self):
         """ Terminate the subprocess """
