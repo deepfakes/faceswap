@@ -8,9 +8,7 @@
 # TODO
 # Add resizable panels
 # Add trendline to graph
-# STDOUT Flush
 # Alternate help text on action button
-# Tooltips? (Will fix Windows helpbox issue)
 
 import os
 import signal
@@ -48,7 +46,6 @@ except ImportError:
     filedialog = None
     messagebox = None
     TclError = None
-
 
 class Utils(object):
     """ Inter-class object holding items that are required across classes """
@@ -115,12 +112,6 @@ class Utils(object):
             text = 'Terminate' if self.runningtask else cmd.title()
             self.guitext['action'][cmd].set(text)
 
-    def bind_help(self, control, helptext):
-        """ Controls the help text displayed on mouse hover """
-        for action in ('<Enter>', '<FocusIn>', '<Leave>', '<FocusOut>'):
-            helptext = helptext if action in ('<Enter>', '<FocusIn>') else ''
-            control.bind(action, lambda event, txt=helptext: self.guitext['help'].set(txt))
-
     def clear_console(self):
         """ Clear the console output screen """
         self.console.delete(1.0, tk.END)
@@ -158,10 +149,8 @@ class Utils(object):
         if not cfgfile:
             return
         if command is None:
-            cfg = {
-                cmd: {opt['control_title']: opt['value'].get() for opt in opts}
-                     for cmd, opts in self.opts.items()
-            }
+            cfg = {cmd: {opt['control_title']: opt['value'].get() for opt in opts}
+                   for cmd, opts in self.opts.items()}
         else:
             cfg = {command: {opt['control_title']: opt['value'].get()
                              for opt in self.opts[command]}}
@@ -199,10 +188,166 @@ class Utils(object):
             os.remove(self.previewloc)
 
 
+class Tooltip:
+    """
+    It creates a tooltip for a given widget as the mouse goes on it.
+
+    see:
+
+    http://stackoverflow.com/questions/3221956/
+           what-is-the-simplest-way-to-make-tooltips-
+           in-tkinter/36221216#36221216
+
+    http://www.daniweb.com/programming/software-development/
+           code/484591/a-tooltip-class-for-tkinter
+
+    - Originally written by vegaseat on 2014.09.09.
+
+    - Modified to include a delay time by Victor Zaccardo on 2016.03.25.
+
+    - Modified
+        - to correct extreme right and extreme bottom behavior,
+        - to stay inside the screen whenever the tooltip might go out on
+          the top but still the screen is higher than the tooltip,
+        - to use the more flexible mouse positioning,
+        - to add customizable background color, padding, waittime and
+          wraplength on creation
+      by Alberto Vassena on 2016.11.05.
+
+      Tested on Ubuntu 16.04/16.10, running Python 3.5.2
+
+    TODO: themes styles support
+    """
+
+    def __init__(self, widget,
+                 *,
+                 background='#FFFFEA',
+                 pad=(5, 3, 5, 3),
+                 text='widget info',
+                 waittime=400,
+                 wraplength=250):
+
+        self.waittime = waittime  # in miliseconds, originally 500
+        self.wraplength = wraplength  # in pixels, originally 180
+        self.widget = widget
+        self.text = text
+        self.widget.bind("<Enter>", self.on_enter)
+        self.widget.bind("<Leave>", self.on_leave)
+        self.widget.bind("<ButtonPress>", self.on_leave)
+        self.background = background
+        self.pad = pad
+        self.ident = None
+        self.topwidget = None
+
+    def on_enter(self, event=None):
+        """ Schedule on an enter event """
+        self.schedule()
+
+    def on_leave(self, event=None):
+        """ Unschedule on a leave event """
+        self.unschedule()
+        self.hide()
+
+    def schedule(self):
+        """ Show the tooltip after wait period """
+        self.unschedule()
+        self.ident = self.widget.after(self.waittime, self.show)
+
+    def unschedule(self):
+        """ Hide the tooltip """
+        id_ = self.ident
+        self.ident = None
+        if id_:
+            self.widget.after_cancel(id_)
+
+    def show(self):
+        """ Show the tooltip """
+        def tip_pos_calculator(widget, label,
+                               *,
+                               tip_delta=(10, 5), pad=(5, 3, 5, 3)):
+            """ Calculate the tooltip position """
+
+            s_width, s_height = widget.winfo_screenwidth(), widget.winfo_screenheight()
+
+            width, height = (pad[0] + label.winfo_reqwidth() + pad[2],
+                             pad[1] + label.winfo_reqheight() + pad[3])
+
+            mouse_x, mouse_y = widget.winfo_pointerxy()
+
+            x_1, y_1 = mouse_x + tip_delta[0], mouse_y + tip_delta[1]
+            x_2, y_2 = x_1 + width, y_1 + height
+
+            x_delta = x_2 - s_width
+            if x_delta < 0:
+                x_delta = 0
+            y_delta = y_2 - s_height
+            if y_delta < 0:
+                y_delta = 0
+
+            offscreen = (x_delta, y_delta) != (0, 0)
+
+            if offscreen:
+
+                if x_delta:
+                    x_1 = mouse_x - tip_delta[0] - width
+
+                if y_delta:
+                    y_1 = mouse_y - tip_delta[1] - height
+
+            offscreen_again = y_1 < 0  # out on the top
+
+            if offscreen_again:
+                # No further checks will be done.
+
+                # TIP:
+                # A further mod might automagically augment the
+                # wraplength when the tooltip is too high to be
+                # kept inside the screen.
+                y_1 = 0
+
+            return x_1, y_1
+
+        background = self.background
+        pad = self.pad
+        widget = self.widget
+
+        # creates a toplevel window
+        self.topwidget = tk.Toplevel(widget)
+
+        # Leaves only the label and removes the app window
+        self.topwidget.wm_overrideredirect(True)
+
+        win = tk.Frame(self.topwidget,
+                       background=background,
+                       borderwidth=0)
+        label = tk.Label(win,
+                         text=self.text,
+                         justify=tk.LEFT,
+                         background=background,
+                         relief=tk.SOLID,
+                         borderwidth=0,
+                         wraplength=self.wraplength)
+
+        label.grid(padx=(pad[0], pad[2]),
+                   pady=(pad[1], pad[3]),
+                   sticky=tk.NSEW)
+        win.grid()
+
+        xpos, ypos = tip_pos_calculator(widget, label)
+
+        self.topwidget.wm_geometry("+%d+%d" % (xpos, ypos))
+
+    def hide(self):
+        """ Hide the tooltip """
+        topwidget = self.topwidget
+        if topwidget:
+            topwidget.destroy()
+        self.topwidget = None
+
 class FaceswapGui(object):
     """ The Graphical User Interface """
 
-    def __init__(self, utils, calling_file="faceswap.py"):
+    def __init__(self, utils, calling_file='faceswap.py'):
         self.gui = tk.Tk()
         self.utils = utils
         self.calling_file = calling_file
@@ -221,10 +366,16 @@ class FaceswapGui(object):
         bottomcontainer = ttk.Frame(self.gui)
         bottomcontainer.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-        optsnotebook = ttk.Notebook(topcontainer, width=500)
+        optsnotebook = ttk.Notebook(topcontainer, width=400, height=500)
         optsnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
-        # Commands explicitly stated to ensure consistent ordering
-        for command in self.utils.opts.keys():
+
+        if self.calling_file == 'faceswap.py':
+            # Commands explicitly stated to ensure consistent ordering
+            cmdlist = ('extract', 'train', 'convert')
+        else:
+            cmdlist = self.utils.opts.keys()
+
+        for command in cmdlist:
             commandtab = CommandTab(self.utils, optsnotebook, command)
             commandtab.build_tab()
 
@@ -304,7 +455,7 @@ class ConsoleOut(object):
 
     def build_console(self):
         """ Build and place the console """
-        self.console.config(width=100, height=4, bg='gray90', fg='black')
+        self.console.config(width=100, height=6, bg='gray90', fg='black')
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self.frame, command=self.console.yview)
@@ -319,7 +470,7 @@ class ConsoleOut(object):
 
 
 class SysOutRouter(object):
-
+    """ Route stdout/stderr to the console window """
     def __init__(self, console=None, out_type=None):
         self.console = console
         self.out_type = out_type
@@ -360,77 +511,8 @@ class CommandTab(object):
 
     def add_frame_separator(self):
         """ Add a separator between left and right frames """
-        sep = ttk.Frame(self.page, width=2, relief=tk.SUNKEN)
-        sep.pack(fill=tk.Y, padx=5, side=tk.LEFT)
-
-class ActionFrame(object):
-    """Action Frame - Displays information and action controls """
-
-    def __init__(self, utils, page, command):
-        self.utils = utils
-        self.page = page
-        self.command = command
-        self.title = command.title()
-
-    def build_frame(self):
-        """ Add help display and Action buttons to the left frame of each
-        page """
-        frame = ttk.Frame(self.page)
-        frame.pack(fill=tk.BOTH, padx=(10, 5), side=tk.LEFT, anchor=tk.N)
-
-        self.add_info_section(frame)
-        self.add_action_button(frame)
-        self.add_util_buttons(frame)
-
-    def add_info_section(self, frame):
-        """ Build the info text section page """
-        hlpframe = ttk.Frame(frame)
-        hlpframe.pack(side=tk.TOP, pady=5, fill=tk.BOTH, expand=True)
-        lbltitle = ttk.Label(hlpframe, text='Info', width=15, anchor=tk.SW)
-        lbltitle.pack(side=tk.TOP)
-        self.utils.guitext['help'].set('')
-        lblhelp = tk.Label(hlpframe,
-                           height=20,
-                           width=15,
-                           textvariable=self.utils.guitext['help'],
-                           wraplength=120,
-                           justify=tk.LEFT,
-                           anchor=tk.NW,
-                           bg="gray90")
-        lblhelp.pack(side=tk.TOP, anchor=tk.N, fill=tk.Y, expand=True)
-
-    def add_action_button(self, frame):
-        """ Add the action buttons for page """
-        actvar = tk.StringVar(frame)
-        actvar.set(self.title)
-        self.utils.guitext['action'][self.command] = actvar
-
-        actframe = ttk.Frame(frame)
-        actframe.pack(fill=tk.X, side=tk.TOP, pady=(15, 0))
-
-        btnact = tk.Button(actframe,
-                           textvariable=self.utils.guitext['action'][
-                               self.command],
-                           height=2,
-                           width=12,
-                           command=lambda: self.utils.action_command(
-                               self.command))
-        btnact.pack(side=tk.TOP)
-        self.utils.bind_help(btnact, 'Run the {} script'.format(self.title))
-
-    def add_util_buttons(self, frame):
-        """ Add the section utility buttons """
-        utlframe = ttk.Frame(frame)
-        utlframe.pack(side=tk.TOP, pady=5)
-
-        for utl in ('load', 'save', 'clear', 'reset'):
-            img = self.utils.icons[utl]
-            action = getattr(self.utils, utl + '_config')
-            btnutl = ttk.Button(utlframe,
-                                image=img,
-                                command=lambda cmd=action: cmd(self.command))
-            btnutl.pack(padx=2, pady=2, side=tk.LEFT)
-            self.utils.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
+        sep = ttk.Frame(self.page, height=2, relief=tk.RIDGE)
+        sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
 
 class OptionsFrame(object):
     """ Options Frame - Holds the Options for each command """
@@ -440,10 +522,10 @@ class OptionsFrame(object):
         self.command = command
 
         self.canvas = tk.Canvas(self.page, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.optsframe = tk.Frame(self.canvas)
-        self.optscanvas = self.canvas.create_window((0,0),window=self.optsframe, anchor=tk.NW)
+        self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
 
     def build_frame(self):
         """ Build the options frame for this command """
@@ -453,7 +535,7 @@ class OptionsFrame(object):
         for option in self.utils.opts[self.command]:
             optioncontrol = OptionControl(self.utils, option, self.optsframe)
             optioncontrol.build_full_control()
-   
+
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
         scrollbar = tk.Scrollbar(self.canvas, command=self.canvas.yview)
@@ -534,8 +616,7 @@ class OptionControl(object):
             ctl['values'] = [choice for choice in choices]
 
         ctl.pack(padx=5, pady=5, **packkwargs)
-
-        self.utils.bind_help(ctl, helptext)
+        Tooltip(ctl, text=helptext, wraplength=200)
         return var
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
@@ -560,6 +641,56 @@ class OptionControl(object):
         if filename:
             filepath.set(filename)
 
+class ActionFrame(object):
+    """Action Frame - Displays information and action controls """
+
+    def __init__(self, utils, page, command):
+        self.utils = utils
+        self.page = page
+        self.command = command
+        self.title = command.title()
+
+    def build_frame(self):
+        """ Add help display and Action buttons to the left frame of each
+        page """
+        frame = ttk.Frame(self.page)
+        frame.pack(fill=tk.BOTH, padx=(10, 5), side=tk.BOTTOM, anchor=tk.N)
+
+        self.add_action_button(frame)
+        self.add_util_buttons(frame)
+
+    def add_action_button(self, frame):
+        """ Add the action buttons for page """
+        actvar = tk.StringVar(frame)
+        actvar.set(self.title)
+        self.utils.guitext['action'][self.command] = actvar
+
+        actframe = ttk.Frame(frame)
+        actframe.pack(fill=tk.X, side=tk.LEFT, padx=5, pady=5)
+
+        btnact = tk.Button(actframe,
+                           textvariable=self.utils.guitext['action'][
+                               self.command],
+                           height=1,
+                           width=12,
+                           command=lambda: self.utils.action_command(
+                               self.command))
+        btnact.pack(side=tk.TOP)
+        Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
+
+    def add_util_buttons(self, frame):
+        """ Add the section utility buttons """
+        utlframe = ttk.Frame(frame)
+        utlframe.pack(side=tk.RIGHT, padx=(5, 10), pady=5)
+
+        for utl in ('load', 'save', 'clear', 'reset'):
+            img = self.utils.icons[utl]
+            action = getattr(self.utils, utl + '_config')
+            btnutl = ttk.Button(utlframe,
+                                image=img,
+                                command=lambda cmd=action: cmd(self.command))
+            btnutl.pack(padx=2, side=tk.LEFT)
+            Tooltip(btnutl, text=utl.capitalize() + ' ' + self.title + ' config', wraplength=200)
 
 class DisplayTab(object):
     """ The display tabs """
@@ -630,13 +761,13 @@ class GraphDisplay(object):
         # when it redraws. Need to work out if locking there is possible
         # Alternatively look to use Queue
         aloss, bloss = self.loss['lossA'][:], self.loss['lossB'][:]
-        
+
         ymin = floor(min(aloss + bloss) * 100) / 100
         ymax = ceil(max(aloss + bloss) * 100) / 100
         if ymin < self.ylim[0] or ymax > self.ylim[1]:
             self.ylim = (ymin, ymax)
             self.ax1.set_ylim(self.ylim[0], self.ylim[1])
-        
+
         xlim = len(aloss)
         self.ax1.set_xlim(0, xlim)
 
@@ -837,8 +968,8 @@ class TKGui(object):
 
     @staticmethod
     def check_display(command):
-        # Check whether there is a display to output the GUI. If running on
-        # Windows then assume not running in headless mode
+        """ Check whether there is a display to output the GUI. If running on
+            Windows then assume not running in headless mode """
         if not os.environ.get('DISPLAY', None) and os.name != 'nt':
             if 'gui' in command:
                 print('Could not detect a display. The GUI has been disabled')
@@ -847,30 +978,31 @@ class TKGui(object):
 
     @staticmethod
     def check_tkinter_available(command):
+        """ Check whether TkInter is installed on user's machine """
         tkinter_vars = [tk, ttk, filedialog, messagebox, TclError]
         if any(var is None for var in tkinter_vars):
             if "gui" in command:
                 print(
-                        "It looks like TkInter isn't installed for your OS, so "
-                        "the GUI has been "
-                        "disabled. To enable the GUI please install the TkInter "
-                        "application.\n"
-                        "You can try:\n"
-                        "  Windows/macOS:      Install ActiveTcl Community "
-                        "Edition from "
-                        "www.activestate.com\n"
-                        "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
-                        "  Arch:               sudo pacman -S tk\n"
-                        "  CentOS/Redhat:      sudo yum install tkinter\n"
-                        "  Fedora:             sudo dnf install python3-tkinter\n",
-                        file=sys.stderr)
+                    "It looks like TkInter isn't installed for your OS, so "
+                    "the GUI has been "
+                    "disabled. To enable the GUI please install the TkInter "
+                    "application.\n"
+                    "You can try:\n"
+                    "  Windows/macOS:      Install ActiveTcl Community "
+                    "Edition from "
+                    "www.activestate.com\n"
+                    "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                    "  Arch:               sudo pacman -S tk\n"
+                    "  CentOS/Redhat:      sudo yum install tkinter\n"
+                    "  Fedora:             sudo dnf install python3-tkinter\n",
+                    file=sys.stderr)
             return False
         return True
 
     def extract_options(self, subparsers):
         """ Extract the existing ArgParse Options """
         opts = {cmd: subparsers[cmd].argument_list + subparsers[cmd].optional_arguments
-                     for cmd in subparsers.keys()}
+                for cmd in subparsers.keys()}
         for command in opts.values():
             for opt in command:
                 if opt.get('help', '') == SUPPRESS:
@@ -907,11 +1039,11 @@ class TKGui(object):
     def parse_arguments(self, description, subparser, command):
         """ Parse the command line arguments for the GUI """
         parser = subparser.add_parser(
-                command,
-                help="This Launches a GUI for Faceswap.",
-                description=description,
-                epilog="Questions and feedback: \
-                        https://github.com/deepfakes/faceswap-playground")
+            command,
+            help="This Launches a GUI for Faceswap.",
+            description=description,
+            epilog="Questions and feedback: \
+                    https://github.com/deepfakes/faceswap-playground")
 
         parser.add_argument('-d', '--debug',
                             action='store_true',
