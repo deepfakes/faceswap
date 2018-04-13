@@ -62,10 +62,7 @@ class Utils(object):
 
         self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
 
-        self.loss = {'lossA': [],
-                     'lossB': [],
-                     'lossGA': [],
-                     'lossGB': []}
+        self.lossdict = dict()
 
     def init_tk(self):
         """ TK System must be on prior to setting tk variables,
@@ -108,10 +105,7 @@ class Utils(object):
     def clear_display_panel(self):
         ''' Clear the preview window and graph '''
         self.delete_preview()
-        self.loss['lossA'] = []
-        self.loss['lossB'] = []
-        self.loss['lossGA'] = []
-        self.loss['lossGB'] = []
+        self.lossdict = dict()
 
     def change_action_button(self):
         """ Change the action button to relevant control """
@@ -376,7 +370,7 @@ class FaceswapGui(object):
         container = tk.PanedWindow(self.gui,
                                    sashrelief=tk.RAISED,
                                    orient=tk.VERTICAL)
-        container.pack(fill=tk.BOTH, expand=1)
+        container.pack(fill=tk.BOTH, expand=True)
 
         topcontainer = tk.PanedWindow(container,
                                       sashrelief=tk.RAISED,
@@ -726,8 +720,8 @@ class DisplayTab(object):
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         if self.display == 'graph':
-            graph = GraphDisplay(frame, self.utils.loss)
-            graph.build_graph()
+            graphframe = GraphDisplay(frame, self.utils)
+            graphframe.create_graphs()
         elif self.display == 'preview':
             preview = PreviewDisplay(frame, self.utils.previewloc)
             preview.update_preview()
@@ -741,13 +735,68 @@ class DisplayTab(object):
 class GraphDisplay(object):
     """ The Graph Tab of the Display section """
 
-    def __init__(self, frame, loss):
+    def __init__(self, frame, utils):
         self.frame = frame
-        self.lossdict = loss
+        self.utils = utils
+        self.losskeys = None
 
-        self.loss = []
-        self.lines = []
-        self.trendlines = []
+        self.graphpane = tk.PanedWindow(self.frame, sashrelief=tk.RAISED, orient=tk.VERTICAL)
+        self.graphpane.pack(fill=tk.BOTH, expand=True)
+
+        self.graphs = list()
+
+    def create_graphs(self):
+        """ create the graph frames when there are loss values to graph """
+        if not self.utils.lossdict:
+            self.frame.after(1000, self.create_graphs)
+            return
+
+        self.losskeys = sorted([key for key in self.utils.lossdict.keys()])
+
+        framecount = int(len(self.utils.lossdict) / 2)
+        for i in range(framecount):
+            self.add_graph(i)
+
+        self.monitor_state()
+
+    def add_graph(self, index):
+        """ Add a single graph to the graph window """
+        graphframe = ttk.Frame(self.graphpane)
+        self.graphpane.add(graphframe)
+
+        selectedkeys = self.losskeys[index * 2:(index + 1) * 2]
+        selectedloss = {key: self.utils.lossdict[key] for key in selectedkeys}
+
+        graph = Graph(graphframe, selectedloss, selectedkeys)
+        self.graphs.append(graph)
+        graph.build_graph()
+
+    def monitor_state(self):
+        """ Check there is a task still running. If not, destroy graphs
+            and reset graph display to waiting state """
+        if self.utils.lossdict:
+            self.frame.after(5000, self.monitor_state)
+            return
+        self.destroy_graphs()
+        self.create_graphs()
+
+    def destroy_graphs(self):
+        """ Destroy graphs when the process has stopped """
+        for graph in self.graphs:
+            del graph
+        self.graphs = list()
+        for child in self.graphpane.panes():
+            self.graphpane.remove(child)
+
+class Graph(object):
+    """ Each graph to be displayed. Until training is run it is not known
+        how many graphs will be required, so they sit in their own class
+        ready to be created when requested """
+
+    def __init__(self, frame, loss, losskeys):
+        self.frame = frame
+        self.loss = loss
+        self.losskeys = losskeys
 
         self.ylim = (100, 0)
 
@@ -755,6 +804,8 @@ class GraphDisplay(object):
 
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
+        self.losslines = list()
+        self.trndlines = list()
 
     def build_graph(self):
         """ Update the plot area with loss values and cycle through to
@@ -763,6 +814,23 @@ class GraphDisplay(object):
         self.ax1.set_ylabel('Loss')
         self.ax1.set_ylim(0.00, 0.01)
         self.ax1.set_xlim(0, 1)
+
+        losslbls = [lbl.replace('_', ' ').title() for lbl in self.losskeys]
+        for idx, linecol in enumerate(['blue', 'red']):
+            self.losslines.extend(self.ax1.plot(0, 0,
+                                                color=linecol,
+                                                linewidth=1,
+                                                label=losslbls[idx]))
+        for idx, linecol in enumerate(['navy', 'firebrick']):
+            lbl = losslbls[idx]
+            lbl = 'Trend{}'.format(lbl[lbl.rfind(' '):])
+            self.trndlines.extend(self.ax1.plot(0, 0,
+                                                color=linecol,
+                                                linewidth=2,
+                                                label=lbl))
+
+        self.ax1.legend(loc='lower left')
+
         plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95,
                             wspace=0.2, hspace=0.2)
 
@@ -773,95 +841,42 @@ class GraphDisplay(object):
 
     def animate(self, i):
         """ Read loss data and apply to graph """
-        if not self.lossdict['lossA']:
-            self.reset_graph()
-            return
+        loss = [self.loss[key][:] for key in self.losskeys]
 
-        if not self.lines:
-            self.configure_lines()
-
-        self.loss = self.copy_loss_values()
-
-        xlim = self.recalculate_axes()
+        xlim = self.recalculate_axes(loss)
 
         xrng = [x for x in range(xlim)]
 
-        self.raw_plot(xrng)
+        self.raw_plot(xrng, loss)
 
         if xlim > 10:
-            self.trend_plot(xrng)
+            self.trend_plot(xrng, loss)
 
-        self.ax1.legend(loc='lower left')
-
-    def reset_graph(self):
-        """ Resets the graph if there is no data to process """
-        self.ylim = (100, 0)
-
-        for line in self.lines:
-            line.set_data(0, 0)
-
-        for line in self.trendlines:
-            line.set_data(0, 0)
-
-        self.ax1.set_ylim(0.00, 0.01)
-        self.ax1.set_xlim(0, 1)
-
-    def configure_lines(self):
-        """ get the Loss type based on the number of loss values we have """
-        losscolors = ['blue', 'red', 'green', 'magenta']
-        trendcolors = ['navy', 'firebrick', 'darkgreen', 'purple']
-        if not self.lossdict['lossGA']:
-            labels = ['A', 'B']
-        else:
-            labels = ['DA', 'DB', 'GA', 'GB']
-
-        for idx, loss in enumerate(labels):
-            self.lines.extend(self.ax1.plot(0,
-                                            0,
-                                            color=losscolors[idx],
-                                            linewidth=1,
-                                            label='Loss {}'.format(loss)))
-
-        for idx, trend in enumerate(labels):
-            self.trendlines.extend(self.ax1.plot(0,
-                                                 0,
-                                                 color=trendcolors[idx],
-                                                 linewidth=2,
-                                                 label='Trend {}'.format(trend)))
-
-    def copy_loss_values(self):
-        """ Compile the loss values into a list """
-        loss = [self.lossdict['lossA'][:], self.lossdict['lossB'][:]]
-        if self.lossdict['lossGA']:
-            loss.extend([self.lossdict['lossGA'][:], self.lossdict['lossGB'][:]])
-        return loss
-
-    def recalculate_axes(self):
+    def recalculate_axes(self, loss):
         ''' Recalculate the latest x and y axes limits from latest data '''
-        ymin = floor(min([min(loss) for loss in self.loss]) * 100) / 100
-        ymax = ceil(max([max(loss) for loss in self.loss]) * 100) / 100
+        ymin = floor(min([min(lossvals) for lossvals in loss]) * 100) / 100
+        ymax = ceil(max([max(lossvals) for lossvals in loss]) * 100) / 100
 
         if ymin < self.ylim[0] or ymax > self.ylim[1]:
             self.ylim = (ymin, ymax)
             self.ax1.set_ylim(self.ylim[0], self.ylim[1])
 
-        xlim = len(self.loss[0])
+        xlim = len(loss[0])
         self.ax1.set_xlim(0, xlim - 1)
 
         return xlim
 
-    def raw_plot(self, x_range):
+    def raw_plot(self, x_range, loss):
         ''' Raw value plotting '''
-        for idx, loss in enumerate(self.loss):
-            self.lines[idx].set_data(x_range, loss)
+        for idx, lossvals in enumerate(loss):
+            self.losslines[idx].set_data(x_range, lossvals)
 
-    def trend_plot(self, x_range):
+    def trend_plot(self, x_range, loss):
         ''' Trend value plotting '''
-        for idx, loss in enumerate(self.loss):
-            fit = numpy.polyfit(x_range, loss, 4)
+        for idx, lossvals in enumerate(loss):
+            fit = numpy.polyfit(x_range, lossvals, 4)
             poly = numpy.poly1d(fit)
-
-            self.trendlines[idx].set_data(x_range, poly(x_range))
+            self.trndlines[idx].set_data(x_range, poly(x_range))
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -915,6 +930,7 @@ class FaceswapControl(object):
         self.command = None
         self.args = None
         self.process = None
+        self.lenloss = 0
 
     def prepare(self, options, command):
         """ Prepare for running the subprocess """
@@ -993,14 +1009,36 @@ class FaceswapControl(object):
 
     def capture_loss(self, string):
         """ Capture loss values from stdout """
-        loss = re.findall(r'\d+\.\d+', string)
-        if len(loss) not in (2, 4):
+        #TODO: Remove this hideous hacky fix. When the subprocess is terminated and
+        # the loss dictionary is reset, 1 set of loss values ALWAYS slips through
+        # and appends to the lossdict AFTER the subprocess has closed meaning that
+        # checks on whether the dictionary is empty fail.
+        # Therefore if the size of current loss dictionary is smaller than the
+        # previous loss dictionary, assume that the process has been terminated
+        # and reset it.
+        # I have tried and failed to empty the subprocess stdout with:
+        #   sys.exit() on the stdout/err threads (no effect)
+        #   sys.stdout/stderr.flush (no effect)
+        #   thread.join (locks the whole process up, because the stdout thread
+        #       stubbonly refuses to release it's last line)
+
+        currentlenloss = len(self.utils.lossdict)
+        if self.lenloss > currentlenloss:
+            self.utils.lossdict = dict()
+            self.lenloss = 0
             return
-        self.utils.loss['lossA'].append(float(loss[0]))
-        self.utils.loss['lossB'].append(float(loss[1]))
-        if len(loss) == 4:
-            self.utils.loss['lossGA'].append(float(loss[2]))
-            self.utils.loss['lossGB'].append(float(loss[3]))
+        self.lenloss = currentlenloss
+
+        loss = re.findall(r'([a-zA-Z_]+):.*?(\d+\.\d+)', string)
+
+        if len(loss) < 2:
+            return
+
+        if not self.utils.lossdict:
+            self.utils.lossdict.update((item[0], []) for item in loss)
+
+        for item in loss:
+            self.utils.lossdict[item[0]].append(float(item[1]))
 
     def terminate(self):
         """ Terminate the subprocess """
@@ -1036,6 +1074,8 @@ class FaceswapControl(object):
             status = 'Terminated - {}.py'.format(self.command)
         elif returncode == -9:
             status = 'Killed - {}.py'.format(self.command)
+        elif returncode == -6:
+            status = 'Aborted - {}.py'.format(self.command)
         else:
             status = 'Failed - {}.py. Return Code: {}'.format(self.command, returncode)
         self.utils.guitext['status'].set(status)
