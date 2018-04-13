@@ -4,6 +4,7 @@ from os.path import basename, exists
 
 from pathlib import Path
 from scandir import scandir
+import os
 
 image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
 
@@ -19,7 +20,7 @@ def get_image_paths(directory, exclude=[], debug=False):
     if not exists(directory):
         directory = get_folder(directory).path
 
-    dir_scanned = list(scandir(directory))
+    dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
     for x in dir_scanned:
         if any([x.name.lower().endswith(ext) for ext in image_extensions]):
             if x.name in exclude_names:
