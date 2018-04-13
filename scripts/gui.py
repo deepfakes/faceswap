@@ -10,7 +10,7 @@ import sys
 
 from argparse import SUPPRESS
 from math import ceil, floor
-from subprocess import Popen, PIPE, TimeoutExpired
+from subprocess import CREATE_NEW_PROCESS_GROUP, PIPE, Popen, TimeoutExpired
 from threading import Thread
 from time import time
 
@@ -862,6 +862,7 @@ class Graph(object):
             self.ax1.set_ylim(self.ylim[0], self.ylim[1])
 
         xlim = len(loss[0])
+        xlim = 2 if xlim == 1 else xlim
         self.ax1.set_xlim(0, xlim - 1)
 
         return xlim
@@ -959,11 +960,13 @@ class FaceswapControl(object):
 
     def execute_script(self):
         """ Execute the requested Faceswap Script """
-        self.process = Popen(self.args,
-                             stdout=PIPE,
-                             stderr=PIPE,
-                             bufsize=1,
-                             universal_newlines=True)
+        kwargs = {'stdout': PIPE,
+                  'stderr': PIPE,
+                  'bufsize': 1,
+                  'universal_newlines': True}
+        if os.name == 'nt':
+            kwargs['creationflags'] = CREATE_NEW_PROCESS_GROUP
+        self.process = Popen(self.args, **kwargs)
         self.thread_stdout()
         self.thread_stderr()
 
@@ -1046,7 +1049,10 @@ class FaceswapControl(object):
             print('Sending Exit Signal', flush=True)
             try:
                 now = time()
-                self.process.send_signal(signal.SIGINT)
+                if os.name == 'nt':
+                    os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+                else:
+                    self.process.send_signal(signal.SIGINT)
                 while True:
                     timeelapsed = time() - now
                     if self.process.poll() is not None:
@@ -1068,7 +1074,7 @@ class FaceswapControl(object):
 
     def set_final_status(self, returncode):
         """ Set the status bar output based on subprocess return code """
-        if returncode == 0:
+        if returncode == 0 or returncode == 3221225786:
             status = 'Ready'
         elif returncode == -15:
             status = 'Terminated - {}.py'.format(self.command)
