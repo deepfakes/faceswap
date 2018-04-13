@@ -244,7 +244,7 @@ class ConvertImage(DirectoryProcessor):
                 if self.have_face(filename):
                     faces = self.get_faces_alignments(filename, image)
                 else:
-                    print ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
+                    tqdm.write ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
                     continue
             else:
                 faces = self.get_faces(image)
