@@ -1,5 +1,6 @@
 # Improved-AutoEncoder base classes
 
+import os, shutil
 
 encoderH5 = 'IAE_encoder.h5'
 decoderH5 = 'IAE_decoder.h5'
@@ -38,6 +39,11 @@ class AutoEncoder:
             return False
 
     def save_weights(self):
+        model_dir = str(self.model_dir)
+        if os.path.isdir(model_dir + "_bk"):
+            shutil.rmtree(model_dir + "_bk")
+        shutil.move(model_dir,  model_dir + "_bk")
+        os.mkdir(model_dir)
         self.encoder.save_weights(str(self.model_dir / encoderH5))
         self.decoder.save_weights(str(self.model_dir / decoderH5))
         self.inter_both.save_weights(str(self.model_dir / inter_bothH5))
