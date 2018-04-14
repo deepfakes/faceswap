@@ -6,15 +6,18 @@
 import os
 import signal
 import re
+import subprocess
 import sys
 
 from argparse import SUPPRESS
 from math import ceil, floor
-from subprocess import CREATE_NEW_PROCESS_GROUP, PIPE, Popen, TimeoutExpired
+from subprocess import PIPE, Popen, TimeoutExpired
 from threading import Thread
 from time import time
 
 import numpy
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.animation as animation
 from matplotlib import pyplot as plt
 from matplotlib import style
@@ -965,7 +968,7 @@ class FaceswapControl(object):
                   'bufsize': 1,
                   'universal_newlines': True}
         if os.name == 'nt':
-            kwargs['creationflags'] = CREATE_NEW_PROCESS_GROUP
+            kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = Popen(self.args, **kwargs)
         self.thread_stdout()
         self.thread_stderr()
