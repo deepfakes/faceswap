@@ -7,11 +7,11 @@ import os
 import signal
 import re
 import subprocess
+from subprocess import PIPE, Popen, TimeoutExpired
 import sys
 
 from argparse import SUPPRESS
 from math import ceil, floor
-from subprocess import PIPE, Popen, TimeoutExpired
 from threading import Thread
 from time import time
 
@@ -832,7 +832,7 @@ class Graph(object):
                                                 linewidth=2,
                                                 label=lbl))
 
-        self.ax1.legend(loc='lower left')
+        self.ax1.legend(loc='upper right')
 
         plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95,
                             wspace=0.2, hspace=0.2)
@@ -878,7 +878,7 @@ class Graph(object):
     def trend_plot(self, x_range, loss):
         ''' Trend value plotting '''
         for idx, lossvals in enumerate(loss):
-            fit = numpy.polyfit(x_range, lossvals, 4)
+            fit = numpy.polyfit(x_range, lossvals, 3)
             poly = numpy.poly1d(fit)
             self.trndlines[idx].set_data(x_range, poly(x_range))
 
@@ -1112,7 +1112,10 @@ class TKGui(object):
             Windows then assume not running in headless mode """
         if not os.environ.get('DISPLAY', None) and os.name != 'nt':
             if 'gui' in command:
-                print('Could not detect a display. The GUI has been disabled')
+                print('Could not detect a display. The GUI has been disabled.')
+                if os.name == 'posix':
+                    print('macOS users need to install XQuartz. '
+                          'See https://support.apple.com/en-gb/HT201341')
             return False
         return True
 
