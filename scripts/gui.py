@@ -1093,8 +1093,7 @@ class FaceswapControl(object):
 class TKGui(object):
     """ Main GUI Control """
 
-    def __init__(self, subparser, subparsers, command, description='default',
-                 calling_file="faceswap.py"):
+    def __init__(self, subparser, subparsers, command, description='default'):
         # Don't try to load the GUI if there is no display or there are
         # problems importing tkinter
         cmd = sys.argv
@@ -1103,8 +1102,8 @@ class TKGui(object):
 
         self.arguments = None
         self.opts = self.extract_options(subparsers)
-        self.utils = Utils(self.opts, calling_file=calling_file)
-        self.root = FaceswapGui(self.utils)
+        self.utils = Utils(self.opts, calling_file=cmd[0])
+        self.root = FaceswapGui(self.utils, calling_file=cmd[0])
         self.parse_arguments(description, subparser, command)
 
     @staticmethod

@@ -29,9 +29,9 @@ if __name__ == "__main__":
         subparser, "sort", "This command lets you sort images using various "
                            "methods.")
     guiparsers = {'sort': sort}
+    print(__file__)
     gui = TKGui(
-            subparser, guiparsers, "gui", "Launch the Faceswap Tools Graphical User Interface.",
-            calling_file=__file__)
+            subparser, guiparsers, "gui", "Launch the Faceswap Tools Graphical User Interface.")
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
