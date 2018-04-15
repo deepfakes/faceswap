@@ -1,7 +1,5 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
-# TODO
-# SIGINT not working for Windows. Look for another CTRL+C Method
 
 import os
 import signal
