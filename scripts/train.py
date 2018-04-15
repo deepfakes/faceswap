@@ -4,7 +4,7 @@ import time
 
 import threading 
 from lib.utils import get_image_paths, get_folder
-from lib.cli import FullPaths
+from lib.cli import FullPaths, argparse, os, sys
 from plugins.PluginLoader import PluginLoader
 
 tf = None
@@ -106,6 +106,13 @@ class TrainingProcessor(object):
                                "type": int,
                                "default": 1,
                                "help": "Number of GPUs to use for training"})
+        # This is a hidden argument to indicate that the GUI is being used, so the preview window
+        # should be redirected Accordingly
+        argument_list.append({ "opts": ("-gui", "--gui"),
+                               "action": "store_true",
+                               "dest": "redirect_gui",
+                               "default": False,
+                               "help": argparse.SUPPRESS})
         return argument_list
 
     @staticmethod
@@ -161,8 +168,11 @@ class TrainingProcessor(object):
                 except KeyboardInterrupt:
                     break
         else:
-            input() # TODO how to catch a specific key instead of Enter?
-            # there isnt a good multiplatform solution: https://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
+            try:
+                input() # TODO how to catch a specific key instead of Enter?
+                # there isnt a good multiplatform solution: https://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
+            except KeyboardInterrupt:
+                pass
 
         print("Exit requested! The trainer will complete its current cycle, save the models and quit (it can take up a couple of seconds depending on your training speed). If you want to kill it now, press Ctrl + c")
         self.stop = True
@@ -225,7 +235,12 @@ class TrainingProcessor(object):
 
     def show(self, image, name=''):
         try:
-            if self.arguments.preview:
+            if self.arguments.redirect_gui:
+                scriptpath = os.path.realpath(os.path.dirname(sys.argv[0]))
+                img = '.gui_preview.png'
+                imgfile = os.path.join(scriptpath, img)
+                cv2.imwrite(imgfile, image)
+            elif self.arguments.preview:
                 with self.lock:
                     self.preview_buffer[name] = image
             elif self.arguments.write_image:
