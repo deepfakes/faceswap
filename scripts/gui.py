@@ -542,7 +542,7 @@ class OptionsFrame(object):
         self.command = command
 
         self.canvas = tk.Canvas(self.page, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.optsframe = tk.Frame(self.canvas)
         self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
@@ -558,7 +558,7 @@ class OptionsFrame(object):
 
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
-        scrollbar = tk.Scrollbar(self.canvas, command=self.canvas.yview)
+        scrollbar = ttk.Scrollbar(self.page, command=self.canvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.config(yscrollcommand=scrollbar.set)
         self.optsframe.bind("<Configure>", self.update_scrollbar)
@@ -569,7 +569,7 @@ class OptionsFrame(object):
 
     def resize_frame(self, event):
         """ Resize the options frame to fit the canvas """
-        canvas_width = event.width - 19
+        canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
 
 class OptionControl(object):
@@ -645,7 +645,7 @@ class OptionControl(object):
         action = getattr(self, 'ask_' + sysbrowser)
         fileopn = ttk.Button(frame, image=img,
                              command=lambda cmd=action: cmd(filepath))
-        fileopn.pack(side=tk.RIGHT)
+        fileopn.pack(padx=(0, 5), side=tk.RIGHT)
 
     @staticmethod
     def ask_folder(filepath):
