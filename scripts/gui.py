@@ -1060,7 +1060,7 @@ class FaceswapControl(object):
                     timeelapsed = time() - now
                     if self.process.poll() is not None:
                         break
-                    if timeelapsed > 10:
+                    if timeelapsed > 30:
                         raise ValueError('Timeout reached sending Exit Signal')
                 return
             except ValueError as err:
