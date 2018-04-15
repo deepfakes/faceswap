@@ -116,7 +116,7 @@ class ConvertImage(DirectoryProcessor):
                                "type": str.lower,
                                "dest": "sharpen_image",
                                "choices": ["bsharpen", "gsharpen"],
-                               "default": "none",
+                               "default": None,
                                "help": "Use Sharpen Image - bsharpen = Box Blur, gsharpen = Gaussian Blur (Masked converter only)"})
         argument_list.append({ "opts": ('-sm', '--smooth-mask'),
                                "action": "store_true",
