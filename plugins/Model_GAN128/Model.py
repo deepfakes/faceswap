@@ -1,6 +1,8 @@
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
+import os
+import shutil
 from keras.models import Model
 from keras.layers import *
 from keras.layers.advanced_activations import LeakyReLU
@@ -184,6 +186,11 @@ class GANModel():
         return True
 
     def save_weights(self):
+        model_dir = str(self.model_dir)
+        if os.path.isdir(model_dir + "_bk"):
+            shutil.rmtree(model_dir + "_bk")
+        shutil.move(model_dir,  model_dir + "_bk")
+        os.mkdir(model_dir)
         if self.gpus > 1:
             self.netGA_sm.save_weights(str(self.model_dir / netGAH5))
             self.netGB_sm.save_weights(str(self.model_dir / netGBH5))
