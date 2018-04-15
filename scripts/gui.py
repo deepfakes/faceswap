@@ -28,7 +28,7 @@ from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from lib.cli import FullPaths
+from lib.cli import FullPaths, DirFullPaths, FileFullPaths, ComboFullPaths
 from lib.Serializer import JSONSerializer
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
@@ -894,10 +894,14 @@ class TKGui(object):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
         ctl = ttk.Entry
-        if option.get('dest', '') == 'alignments_path':
-            sysbrowser = 'load'
-        elif option.get('action', '') == FullPaths:
+        if option.get('action', '') == FullPaths:
             sysbrowser = 'folder'
+        elif option.get('action', '') == FileFullPaths:
+            sysbrowser = 'load'
+        elif option.get('action', '') == DirFullPaths:
+            sysbrowser = 'folder'
+        elif option.get('action', '') == ComboFullPaths:
+            sysbrowser = 'combo'
         elif option.get('choices', '') != '':
             ctl = ttk.Combobox
         elif option.get('action', '') == 'store_true':
