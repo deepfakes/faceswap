@@ -248,15 +248,9 @@ class ConvertImage(DirectoryProcessor):
 
     def check_skipface(self, filename, face_idx):
         """ Check whether face is to be skipped """
-        align_dir = self.input_aligned_dir
         face_name = "{}_{}{}".format(Path(filename).stem, face_idx, Path(filename).suffix)
         face_file = Path(self.arguments.input_aligned_dir) / Path(face_name)
-        # TODO: Remove this temporary fix for backwards compatibility of filenames
-        bk_compat_face_name = "{}{}{}".format(Path(filename).stem,
-                                              face_idx,
-                                              Path(filename).suffix)
-        bk_compat_face_file = Path(self.arguments.input_aligned_dir) / Path(bk_compat_face_name)
-        return face_file not in align_dir and bk_compat_face_file not in align_dir
+        return face_file not in self.input_aligned_dir
 
     def convert(self, converter, item):
         """ Apply the conversion transferring faces onto frames """
