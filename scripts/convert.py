@@ -17,16 +17,6 @@ class ConvertImage(DirectoryProcessor):
     """ Class to parse the command line arguments for conversion and
         run the convert process """
 
-    def __init__(self, subparser, command, description):
-        DirectoryProcessor.__init__(self, subparser, command, description)
-        self.input_aligned_dir = None
-
-        # frame ranges stuff...
-        self.frame_ranges = None
-        # last number regex. I know regex is hacky, but its reliablyhacky(tm).
-        self.imageidxre = re.compile(r"(\d+)(?!.*\d)")
-
-    filename = ""
     def create_parser(self, subparser, command, description):
         self.optional_arguments = self.get_optional_arguments()
         self.parser = subparser.add_parser(
@@ -34,8 +24,7 @@ class ConvertImage(DirectoryProcessor):
             help="Convert a source image to a new one with the face swapped.",
             description=description,
             epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground"
-        )
+            https://github.com/deepfakes/faceswap-playground")
 
     @staticmethod
     def get_optional_arguments():
@@ -167,10 +156,7 @@ class ConvertImage(DirectoryProcessor):
         """ Original & LowMem models go with Adjust or Masked converter
             Note: GAN prediction outputs a mask + an image, while other predicts only an image """
 
-        self.check_aligned_directory()
-
-        if self.arguments.frame_ranges:
-            self.frame_ranges = self.get_frame_ranges()
+        opts = OptionalActions(self)
 
         model = self.load_model()
         converter = self.load_converter(model)
@@ -178,34 +164,7 @@ class ConvertImage(DirectoryProcessor):
         batch = BackgroundGenerator(self.prepare_images(), 1)
 
         for item in batch.iterator():
-            self.convert(converter, item)
-
-    def check_aligned_directory(self):
-        """ Check for the existence of an aligned directory for identifying
-            which faces in the target frames should be swapped """
-        input_aligned_dir = self.arguments.input_aligned_dir
-
-        if input_aligned_dir is None:
-            print("Aligned directory not specified. All faces listed in the alignments file \
-                   will be converted.")
-        elif not os.path.isdir(input_aligned_dir):
-            print("Aligned directory not found. All faces listed in the alignments file \
-                   will be converted.")
-        else:
-            self.input_aligned_dir = [Path(path) for path in get_image_paths(input_aligned_dir)]
-            if not self.input_aligned_dir:
-                print("Aligned directory is empty, no faces will be converted!")
-            elif len(self.input_aligned_dir) <= len(self.input_dir) / 3:
-                print("Aligned directory contains an amount of images much less than the input, \
-                        are you sure this is the right directory?")
-
-    def get_frame_ranges(self):
-        """ split out the frame ranges and parse out 'min' and 'max' values """
-        minmax = {"min": 0, # never any frames less than 0
-                  "max": float("inf")}
-        rng = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-")))
-               for v in self.arguments.frame_ranges]
-        return rng
+            self.convert(opts, converter, item)
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -238,76 +197,144 @@ class ConvertImage(DirectoryProcessor):
                                                      avg_color_adjust=args.avg_color_adjust)
         return converter
 
-    def check_skipframe(self, filename):
-        """ Check whether frame is to be skipped """
-        try:
-            idx = int(self.imageidxre.findall(filename)[0])
-            return not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
-        except:
-            return False
+    def prepare_images(self):
+        """ Prepare the images for conversion """
+        filename = ""
+        have_alignments = self.have_alignments()
+        self.read_alignments()
+        for filename in tqdm(self.read_directory()):
+            image = cv2.imread(filename)
 
-    def check_skipface(self, filename, face_idx):
-        """ Check whether face is to be skipped """
-        face_name = "{}_{}{}".format(Path(filename).stem, face_idx, Path(filename).suffix)
-        face_file = Path(self.arguments.input_aligned_dir) / Path(face_name)
-        return face_file not in self.input_aligned_dir
+            if have_alignments:
+                faces = self.check_alignments(filename, image)
+            else:
+                faces = self.get_faces(image)
 
-    def convert(self, converter, item):
+            if not faces:
+                continue
+
+            yield filename, image, faces
+
+    def check_alignments(self, filename, image):
+        """ If we have alignments file, but no alignments for this face, skip it """
+        faces = None
+        if self.have_face(filename):
+            faces = self.get_faces_alignments(filename, image)
+        else:
+            tqdm.write("no alignment found for {}, skipping".format(os.path.basename(filename)))
+        return faces
+
+    def convert(self, opts, converter, item):
         """ Apply the conversion transferring faces onto frames """
         try:
             (filename, image, faces) = item
+            skip = opts.check_skipframe(filename)
 
-            skip = self.check_skipframe(filename)
-            if self.arguments.discard_frames and skip:
+            if skip == "discard":
                 return
-
-            if not skip: # process frame as normal
-                for idx, face in faces:
-                    if self.input_aligned_dir is not None and self.check_skipface(filename, idx):
-                        print("face {} for frame {} was deleted, skipping".format(
-                            idx, os.path.basename(filename)))
-                        continue
-                    # Check for image rotations and rotate before mapping face
-                    if face.r != 0:
-                        height, width = image.shape[:2]
-                        image = rotate_image(image, face.r)
-                        image = converter.patch_image(
-                            image,
-                            face,
-                            64 if "128" not in self.arguments.trainer else 128)
-                        # TODO: This switch between 64 and 128 is a hack for now.
-                        # We should have a separate cli option for size
-                        image = rotate_image(image,
-                                             face.r * -1,
-                                             rotated_width=width,
-                                             rotated_height=height)
-                    else:
-                        image = converter.patch_image(
-                            image,
-                            face,
-                            64 if "128" not in self.arguments.trainer else 128)
-                        # TODO: This switch between 64 and 128 is a hack for now.
-                        # We should have a separate cli option for size
+            elif not skip:
+                image = (self.convert_one_face(opts,
+                                               converter,
+                                               (filename, image, idx, face))
+                         for idx, face in faces)
 
             output_file = get_folder(self.output_dir) / Path(filename).name
             cv2.imwrite(str(output_file), image)
         except Exception as err:
             print("Failed to convert image: {}. Reason: {}".format(filename, err))
 
-    def prepare_images(self):
-        """ Prepare the images for conversion """
-        self.read_alignments()
-        is_have_alignments = self.have_alignments()
-        for filename in tqdm(self.read_directory()):
-            image = cv2.imread(filename)
+    def convert_one_face(self, opts, converter, imagevars):
+        """ Perform the conversion on the given frame for a single face """
+        (filename, image, idx, face) = imagevars
 
-            if is_have_alignments:
-                if self.have_face(filename):
-                    faces = self.get_faces_alignments(filename, image)
-                else:
-                    tqdm.write("no alignment found for {}, skipping".format(
-                        os.path.basename(filename)))
-                    continue
+        if opts.check_skipface(filename, idx):
+            return image
+
+        image = opts.rotate_image(image, face.r)
+        # TODO: This switch between 64 and 128 is a hack for now.
+        # We should have a separate cli option for size
+        image = converter.patch_image(image,
+                                      face,
+                                      64 if "128" not in self.arguments.trainer else 128)
+        image = opts.rotate_image(image, face.r, reverse=True)
+        return image
+
+class OptionalActions(object):
+    """ Process the optional actions for convert """
+
+    def __init__(self, convertimage):
+        self.args = convertimage.arguments
+        self.input_dir = convertimage.input_dir
+
+        self.faces_to_swap = self.get_aligned_directory()
+
+        self.frame_ranges = self.get_frame_ranges()
+        self.imageidxre = re.compile(r"(\d+)(?!.*\d)")
+
+        self.rotation_height = 0
+        self.rotation_width = 0
+
+    def get_frame_ranges(self):
+        """ split out the frame ranges and parse out 'min' and 'max' values """
+        if not self.args.frame_ranges:
+            return None
+
+        minmax = {"min": 0, # never any frames less than 0
+                  "max": float("inf")}
+        rng = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-")))
+               for v in self.args.frame_ranges]
+        return rng
+
+    def check_skipframe(self, filename):
+        """ Check whether frame is to be skipped """
+        idx = int(self.imageidxre.findall(filename)[0])
+        skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
+        if skipframe and self.args.discard_frames:
+            skipframe = "discard"
+        return skipframe
+
+    def check_skipface(self, filename, face_idx):
+        """ Check whether face is to be skipped """
+        if self.faces_to_swap is None:
+            return False
+        face_name = "{}_{}{}".format(Path(filename).stem, face_idx, Path(filename).suffix)
+        face_file = Path(self.args.input_aligned_dir) / Path(face_name)
+        skip_face = face_file not in self.faces_to_swap
+        if skip_face:
+            print("face {} for frame {} was deleted, skipping".format(
+                face_idx, os.path.basename(filename)))
+        return skip_face
+
+    def get_aligned_directory(self):
+        """ Check for the existence of an aligned directory for identifying
+            which faces in the target frames should be swapped """
+        faces_to_swap = None
+        input_aligned_dir = self.args.input_aligned_dir
+
+        if input_aligned_dir is None:
+            print("Aligned directory not specified. All faces listed in the alignments file \
+                   will be converted.")
+        elif not os.path.isdir(input_aligned_dir):
+            print("Aligned directory not found. All faces listed in the alignments file \
+                   will be converted.")
+        else:
+            faces_to_swap = [Path(path) for path in get_image_paths(input_aligned_dir)]
+            if not faces_to_swap:
+                print("Aligned directory is empty, no faces will be converted!")
+            elif len(faces_to_swap) <= len(self.input_dir) / 3:
+                print("Aligned directory contains an amount of images much less than the input, \
+                        are you sure this is the right directory?")
+        return faces_to_swap
+
+    def rotate_image(self, image, rotation, reverse=False):
+        """ Rotate the image forwards or backwards """
+        if rotation != 0:
+            if not reverse:
+                self.rotation_height, self.rotation_width = image.shape[:2]
+                image = rotate_image(image, rotation)
             else:
-                faces = self.get_faces(image)
-            yield filename, image, faces
+                image = rotate_image(image,
+                                     rotation -1,
+                                     rotated_width=self.rotation_width,
+                                     rotated_height=self.rotation_height)
+        return image
