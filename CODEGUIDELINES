@@ -1,0 +1,5 @@
+Please don't ruin the code and this good (as I think) architecture.
+
+Please follow the same logic and brevity/pithiness.
+
+Don't abstract the code into huge classes if you only win some lines of code in one place, because this can prevent programmers from understanding it quickly.
