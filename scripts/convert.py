@@ -34,17 +34,17 @@ class ConvertImage(DirectoryProcessor):
                               "action": FullPaths,
                               "dest": "model_dir",
                               "default": "models",
-                              "help": "Model directory. A directory containing the trained model \
-                              you wish to process. Defaults to 'models'"})
+                              "help": "Model directory. A directory containing the trained model "
+                                      "you wish to process. Defaults to 'models'"})
         argument_list.append({"opts": ("-a", "--input-aligned-dir"),
                               "action": FullPaths,
                               "dest": "input_aligned_dir",
                               "default": None,
-                              "help": "Input \"aligned directory\". A directory that should \
-                              contain the aligned faces extracted from the input files. If you \
-                              delete faces from this folder, they'll be skipped during \
-                              conversion. If no aligned dir is specified, all faces will \
-                              be converted."})
+                              "help": "Input \"aligned directory\". A directory that should "
+                                      "contain the aligned faces extracted from the input files. "
+                                      "If you delete faces from this folder, they'll be skipped "
+                                      "during conversion. If no aligned dir is specified, all "
+                                      "faces will be converted."})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "type": str,
                               # case sensitive because this is used to load a plug-in.
@@ -67,20 +67,22 @@ class ConvertImage(DirectoryProcessor):
                               # case sensitive because this is used to load a plugin.
                               "choices": ("hog", "cnn"),
                               "default": "hog",
-                              "help": "Detector to use. 'cnn' detects much more angles but \
-                              will be much more resource intensive and may fail on large files."})
+                              "help": "Detector to use. 'cnn' detects much more angles but "
+                                      "will be much more resource intensive and may fail "
+                                      "on large files."})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,
-                              "help": "frame ranges to apply transfer to e.g. For frames 10 to \
-                              50 and 90 to 100 use --frame-ranges 10-50 90-100. Files must have \
-                              the frame-number as the last number in the name!"})
+                              "help": "frame ranges to apply transfer to e.g. For frames 10 to "
+                                      "50 and 90 to 100 use --frame-ranges 10-50 90-100. Files "
+                                      "must have the frame-number as the last number in the "
+                                      "name!"})
         argument_list.append({"opts": ("-d", "--discard-frames"),
                               "action": "store_true",
                               "dest": "discard_frames",
                               "default": False,
-                              "help": "When used with --frame-ranges discards frames that are \
-                              not processed instead of writing them out unchanged."})
+                              "help": "When used with --frame-ranges discards frames that are "
+                                      "not processed instead of writing them out unchanged."})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
                               "type": float,
                               "dest": "ref_threshold",
@@ -91,15 +93,15 @@ class ConvertImage(DirectoryProcessor):
                               "dest": "nfilter",
                               "nargs": "+",
                               "default": "nfilter.jpg",
-                              "help": "Reference image for the persons you do not want to \
-                              process. Should be a front portrait"})
+                              "help": "Reference image for the persons you do not want to "
+                                      "process. Should be a front portrait"})
         argument_list.append({"opts": ("-f", "--filter"),
                               "type": str,
                               "dest": "filter",
                               "nargs": "+",
                               "default": "filter.jpg",
-                              "help": "Reference images for the person you want to process. \
-                              Should be a front portrait"})
+                              "help": "Reference images for the person you want to process. "
+                                      "Should be a front portrait"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": int,
                               "default": 2,
@@ -120,10 +122,10 @@ class ConvertImage(DirectoryProcessor):
                               "dest": "erosion_kernel_size",
                               "type": int,
                               "default": None,
-                              "help": "Erosion kernel size. (Masked converter only). Positive \
-                              values apply erosion which reduces the edge of the swapped face. \
-                              Negative values apply dilation which allows the swapped face to \
-                              cover more space."})
+                              "help": "Erosion kernel size. (Masked converter only). Positive "
+                                      "values apply erosion which reduces the edge of the "
+                                      "swapped face. Negative values apply dilation which allows "
+                                      "the swapped face to cover more space."})
         argument_list.append({"opts": ("-mh", "--match-histgoram"),
                               "action": "store_true",
                               "dest": "match_histogram",
@@ -134,8 +136,8 @@ class ConvertImage(DirectoryProcessor):
                               "dest": "sharpen_image",
                               "choices": ["bsharpen", "gsharpen"],
                               "default": None,
-                              "help": "Use Sharpen Image - bsharpen = Box Blur, gsharpen = \
-                              Gaussian Blur (Masked converter only)"})
+                              "help": "Use Sharpen Image - bsharpen = Box Blur, gsharpen = "
+                                      "Gaussian Blur (Masked converter only)"})
         argument_list.append({"opts": ("-sm", "--smooth-mask"),
                               "action": "store_true",
                               "dest": "smooth_mask",
