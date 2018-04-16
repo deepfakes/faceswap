@@ -17,6 +17,7 @@ class ConverterMasked(ConverterBase):
         self.is_full_face = is_full_face
         self.predictor_input_size = predictor_input_size
         self.mode = mode
+        self.mask_type = mask_type
         
     #override
     def convert (self, img, img_face_landmarks, debug):
@@ -46,12 +47,12 @@ class ConverterMasked(ConverterBase):
         img_prd_face_mask_3D = cv2.warpAffine( prd_face_mask, face_mat, img_size, np.zeros(img.shape, dtype=float), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC )
         img_prd_face_mask_3D = np.clip (img_prd_face_mask_3D, 0.0, 1.0)
         
-        if mask_type == 'predicted':
+        if self.mask_type == 'predicted':
             img_mask_hard = img_prd_face_mask_3D
-        elif mask_type == 'dst':
+        elif self.mask_type == 'dst':
             img_mask_hard = img_face_mask
             img_mask_hard = np.repeat (img_mask_hard, (3,), -1)
-        elif mask_type == 'intersect':
+        elif self.mask_type == 'intersect':
             img_mask_hard = img_face_mask*img_prd_face_mask_3D #intersection  
         
         
