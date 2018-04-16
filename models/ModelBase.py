@@ -157,13 +157,6 @@ class ModelBase(object):
         '''
         initialize your keras models
         
-        ModelBase provides various types of training data - get_training_data (enum TrainingDataType)
-        
-        set_training_data_generators based on this data derived from TrainingDataGeneratorBase class
-            they needed to save state and for debug
-            
-        get_training_data_generators() in onTrainOneEpocch
-        
         store and retrieve your model options in self.options['']
         
         check example
