@@ -47,7 +47,6 @@ class GANModel():
     def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
         self.gpus = gpus
-        assert self.gpus == 1, "Error: GAN128 cannot use multiple gpus right now. See https://github.com/deepfakes/faceswap/issues/287"
 
         optimizer = Adam(1e-4, 0.5)
 
@@ -130,6 +129,8 @@ class GANModel():
         x = Input(shape=self.img_shape)
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))
+        netGA.output_names = ["netGA_out_1", "netGA_out_2"] # Workarounds till https://github.com/keras-team/keras/issues/8962 is fixed.
+        netGB.output_names = ["netGB_out_1", "netGB_out_2"] #
 
         self.netGA_sm = netGA
         self.netGB_sm = netGB
