@@ -151,10 +151,10 @@ class TrainingProcessor(object):
 
     def process(self):
         """ Call the training process object """
-        training = Training(self.arguments)
+        training = Train(self.arguments)
         training.process()
 
-class Training(object):
+class Train(object):
     """ The training object """
     def __init__(self, opts):
         self.args = opts
