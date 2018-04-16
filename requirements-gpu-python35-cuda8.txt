@@ -7,3 +7,4 @@ tensorflow-gpu==1.4.0
 scikit-image
 dlib==19.10.0
 tqdm
+keras_contrib
