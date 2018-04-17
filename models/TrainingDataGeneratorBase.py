@@ -4,6 +4,7 @@ from .BaseTypes import TrainingDataSample
 from utils import iter_utils
 import numpy as np
 import cv2
+import random
 
 '''
 You can implement your own TrainingDataGenerator
@@ -22,7 +23,6 @@ class TrainingDataGeneratorBase(object):
         self.batch_size = 1 if self.debug else batch_size        
         self.trainingdatatype = trainingdatatype
         self.data = modelbase.get_training_data(trainingdatatype)
-        self.data_counter = 0
         
         if self.debug:
             self.generator = iter_utils.ThisThreadGenerator ( self.batch_func )
@@ -45,13 +45,10 @@ class TrainingDataGeneratorBase(object):
         return self
         
     def __next__(self):
-        x = next(self.generator)       
-        self.data_counter = x[0]
-        return x[1]
+        x = next(self.generator) 
+        return x
         
     def batch_func(self):
-        data_counter = self.data_counter
-    
         data_len = len(self.data)
         if data_len == 0:
             raise ValueError('No training data provided.')
@@ -59,23 +56,35 @@ class TrainingDataGeneratorBase(object):
         if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
             if all ( [ x == None for x in self.data] ):
              raise ValueError('Not enough training data. Gather more faces!')
-        
+
+        if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
+            shuffle_idxs = []            
+            shuffle_idxs_2D = [[]]*data_len
+
         while True:                
             batches = None
-            for n_batch in range(0, self.batch_size):      
-               
+            for n_batch in range(0, self.batch_size):
                 while True:
                     sample = None
-                    if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
-                        idx = data_counter % data_len
-                        if self.data[idx] != None:
-                            idx_data_len = len(self.data[idx])
-                            if idx_data_len > 0:
-                                sample = self.data[idx][np.random.randint (0, idx_data_len)]
-                    elif self.trainingdatatype == TrainingDataType.SRC or self.trainingdatatype <= TrainingDataType.DST:
-                        sample = self.data[data_counter % data_len]
                     
-                    data_counter += 1
+                    if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
+                    
+                        if len(shuffle_idxs) == 0:
+                            shuffle_idxs = [ i for i in range(0, data_len) ]
+                            random.shuffle(shuffle_idxs)
+                        
+                        idx = shuffle_idxs.pop()                        
+                        if self.data[idx] != None:
+                            if len(shuffle_idxs_2D[idx]) == 0:
+                                shuffle_idxs_2D[idx] = [ i for i in range(0, len(self.data[idx])) ]
+                                random.shuffle(shuffle_idxs_2D[idx])
+                                
+                            idx2 = shuffle_idxs_2D[idx].pop()                            
+                            sample = self.data[idx][idx2]
+                                
+                    elif self.trainingdatatype == TrainingDataType.SRC or self.trainingdatatype <= TrainingDataType.DST:
+                        sample = self.data[ np.random.randint(0,data_len) ]
+
                     
                     if sample is not None:                        
                         x = self.onProcessSample (sample, self.debug)
@@ -88,11 +97,11 @@ class TrainingDataGeneratorBase(object):
                         for i in range(0,x_len):
                             batches[i].append ( x[i] )
                         break
-            yield data_counter, [ np.array(batch) for batch in batches]
+            yield [ np.array(batch) for batch in batches]
         
     def get_dict_state(self):
-        return {'data_counter' : self.data_counter}
+        return {}
 
     def set_dict_state(self, state):
-        self.data_counter = state['data_counter']
+        pass
 
