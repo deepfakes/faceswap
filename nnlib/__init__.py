@@ -95,7 +95,29 @@ def conv(keras, input_tensor, filters):
     x = keras.layers.convolutional.Conv2D(filters, kernel_size=5, strides=2, padding='same')(x)
     x = keras.layers.advanced_activations.LeakyReLU(0.1)(x)
     return x
+    
+def sepconv(keras, input_tensor, filters):
+    x = input_tensor
+    x = keras.layers.convolutional.SeparableConv2D(filters, kernel_size=5, strides=2, padding='same')(x)
+    x = keras.layers.advanced_activations.LeakyReLU(0.1)(x)
+    return x
 
+def sepupscale(keras, input_tensor, filters):
+    x = input_tensor
+    x = keras.layers.convolutional.SeparableConv2D(filters * 4, kernel_size=3, padding='same')(x)
+    x = keras.layers.advanced_activations.LeakyReLU(0.1)(x)
+    x = PixelShufflerClass(keras)()(x)
+    return x
+    
+def sepres(keras, input_tensor, filters):
+    x = input_tensor
+    x = keras.layers.convolutional.SeparableConv2D(filters, kernel_size=3, kernel_initializer=keras.initializers.RandomNormal(0, 0.02), use_bias=False, padding="same")(x)
+    x = keras.layers.advanced_activations.LeakyReLU(alpha=0.2)(x)
+    x = keras.layers.convolutional.SeparableConv2D(filters, kernel_size=3, kernel_initializer=keras.initializers.RandomNormal(0, 0.02), use_bias=False, padding="same")(x)
+    x = keras.layers.Add()([x, input_tensor])
+    x = keras.layers.advanced_activations.LeakyReLU(alpha=0.2)(x)
+    return x
+    
 def upscale(keras, input_tensor, filters):
     x = input_tensor
     x = keras.layers.convolutional.Conv2D(filters * 4, kernel_size=3, padding='same')(x)

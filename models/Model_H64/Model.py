@@ -111,6 +111,9 @@ class Model(ModelBase):
         return self.autoencoder_src.predict ( np.expand_dims(face,0) ) [0]
     
     #override
+    def get_converter(self, **in_options):
+        from models import ConverterMasked
+        return ConverterMasked(self.predictor_func, 64, 64, False, **in_options)
         
     def Encoder(self, input_layer, created_vram_gb):
         x = input_layer

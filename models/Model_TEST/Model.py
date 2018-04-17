@@ -5,6 +5,9 @@ import cv2
 
 from nnlib import PenalizedLossClass
 from nnlib import conv
+from nnlib import sepconv
+from nnlib import sepupscale
+from nnlib import sepres
 from nnlib import upscale
 from nnlib import res
 
@@ -18,7 +21,7 @@ class Model(ModelBase):
 
     #override
     def get_model_name(self):
-        return "SIAEF128"
+        return "TEST"
  
     #override
     def onInitialize(self, batch_size=-1, **in_options):
@@ -28,7 +31,7 @@ class Model(ModelBase):
             
         self.batch_size = batch_size
         if self.batch_size == 0:   
-            self.batch_size = 2
+            self.batch_size = 8
                 
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
@@ -148,14 +151,14 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 128, 128, True, **in_options)
+        return ConverterMasked(self.predictor_func, 128, 128, 24, **in_options)
         
     def Encoder(self, input_layer):
         x64 = input_layer
-        x32 = conv(self.keras, x64, 128)
-        x16 = conv(self.keras, x32, 256)
-        x8 = conv(self.keras, x16, 512)
-        x4 = conv(self.keras, x8, 1024)
+        x32 = sepconv(self.keras, x64, 128)
+        x16 = sepconv(self.keras, x32, 256)
+        x8 = sepconv(self.keras, x16, 512)
+        x4 = sepconv(self.keras, x8, 1024)
         
         return self.keras.models.Model(input_layer, 
                 [  
@@ -204,7 +207,7 @@ class Model(ModelBase):
         x = upscale(self.keras, x, 32)
         x = res(self.keras, x, 32)
 
-        x = self.keras.layers.convolutional.Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        x = self.keras.layers.convolutional.SeparableConv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         y = input  #mask decoder
         y = upscale(self.keras, y, 512)
@@ -212,7 +215,7 @@ class Model(ModelBase):
         y = upscale(self.keras, y, 128)
         y = upscale(self.keras, y, 64)
         y = upscale(self.keras, y, 32)
-        y = self.keras.layers.convolutional.Conv2D( 1, kernel_size=5, padding='same', activation='sigmoid' )(y)
+        y = self.keras.layers.convolutional.SeparableConv2D( 1, kernel_size=5, padding='same', activation='sigmoid' )(y)
 
         return self.keras.models.Model( [input], [x,y])
   
