@@ -49,8 +49,8 @@ class Model(ModelBase):
 
         optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
         
-        self.autoencoder_src.compile(optimizer=optimizer, loss=[PenalizedLossClass(self.tf)(mask_layer,self.keras_contrib.losses.DSSIMObjective()), 'mse'] )
-        self.autoencoder_dst.compile(optimizer=optimizer, loss=[PenalizedLossClass(self.tf)(mask_layer,self.keras_contrib.losses.DSSIMObjective()), 'mse'] )
+        self.autoencoder_src.compile(optimizer=optimizer, loss=[PenalizedLossClass(self.tf)(mask_layer,self.keras_contrib.losses.DSSIMObjective()), 'mae'] )
+        self.autoencoder_dst.compile(optimizer=optimizer, loss=[PenalizedLossClass(self.tf)(mask_layer,self.keras_contrib.losses.DSSIMObjective()), 'mae'] )
   
         if self.is_training_mode:
             if len(self.gpu_idxs) > 1:
