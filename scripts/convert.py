@@ -165,6 +165,9 @@ class Convert(FSProcess):
     def process(self):
         """ Original & LowMem models go with Adjust or Masked converter
             Note: GAN prediction outputs a mask + an image, while other predicts only an image """
+        if not self.alignments.have_alignments():
+            self.generate_alignments()
+
         model = self.load_model()
         converter = self.load_converter(model)
 
@@ -172,6 +175,19 @@ class Convert(FSProcess):
 
         for item in batch.iterator():
             self.convert(converter, item)
+
+    def generate_alignments(self):
+        """ Generate an alignments file if one does not already
+        exist. Does not save extracted faces """
+        print('Alignments file not found. Generating at default values...')
+        self.export_face = False
+        self.extractor = self.load_extractor()
+
+        for filename in tqdm(self.images.read_directory()):
+            filename, faces = self.extract_face_alignments(filename)
+            self.faces.faces_detected[os.path.basename(filename)] = faces
+
+        self.alignments.write_alignments()
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -207,23 +223,17 @@ class Convert(FSProcess):
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        have_alignments = self.alignments.have_alignments()
         self.alignments.read_alignments()
         for filename in tqdm(self.images.read_directory()):
             image = cv2.imread(filename)
-
-            if have_alignments:
-                faces = self.check_alignments(filename, image)
-            else:
-                faces = self.faces.get_faces(image)
-
+            faces = self.check_alignments(filename, image)
             if not faces:
                 continue
 
             yield filename, image, faces
 
     def check_alignments(self, filename, image):
-        """ If we have alignments file, but no alignments for this face, skip it """
+        """ If we have no alignments for this face, skip it """
         faces = None
         if self.faces.have_face(filename):
             faces = self.faces.get_faces_alignments(filename, image)
@@ -280,7 +290,7 @@ class OptionalActions(object):
         self.rotation_height = 0
         self.rotation_width = 0
 
-    ### SKIP ALIGNMENTS ###
+    ### SKIP FACES ###
     def get_aligned_directory(self):
         """ Check for the existence of an aligned directory for identifying
             which faces in the target frames should be swapped """
@@ -349,7 +359,7 @@ class OptionalActions(object):
         return image
 
 class ConvertImage(object):
-    """ TODO: Change this, it shouldn't be a class. 
+    """ TODO: Change this, it shouldn't be a class.
         It's here to keep compatibility during rewrite """
     def __init__(self, subparser, command, description):
         args = ConvertArgs(subparser, command, description).parser.arguments

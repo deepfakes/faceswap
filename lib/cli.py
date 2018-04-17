@@ -6,8 +6,13 @@ import os
 import sys
 from pathlib import Path
 
+import cv2
+import numpy as np
+
+from lib.detect_blur import is_blurry
 from lib import Serializer
 from lib.utils import get_folder, get_image_paths, rotate_image
+from plugins.PluginLoader import PluginLoader
 
 # DLIB is a GPU Memory hog, so the following modules should only be imported when required
 def import_detect_faces():
@@ -98,7 +103,7 @@ class DirectoryArgs(object):
 
     @staticmethod
     def create_parser(subparser, command, description):
-        """ Create a directory processing parser 
+        """ Create a directory processing parser
             Overide for extract/convert process """
         parser = subparser.add_parser(
             command,
@@ -133,18 +138,112 @@ class FSProcess(object):
 
     def __init__(self, arguments):
         print('Starting, this may take a while...')
-        
+
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
 
         self.images = Images(self.args)
         self.faces = Faces(self.args)
-        self.alignments = Alignments(self.args)
+        self.alignments = Alignments(self.args, self.faces)
+
+        self.extractor = None
+        self.export_face = True
 
     @staticmethod
     def process():
         """ Override with Extract/Convert process """
         raise NotImplementedError
+
+    # EXTRACT ALIGNMENTS FROM IMAGES #
+    @staticmethod
+    def load_extractor():
+        """ Load the requested extractor for extraction """
+        # TODO Pass as argument
+        extractor_name = "Align"
+        extractor = PluginLoader.get_extractor(extractor_name)()
+
+        return extractor
+
+    def extract_face_alignments(self, filename):
+        """ Read an image from a file """
+        try:
+            image = cv2.imread(filename)
+            return filename, self.handle_image(image, filename)
+        except Exception as err:
+            if self.args.verbose:
+                print("Failed to extract from image: {}. Reason: {}".format(filename, err))
+            return filename, []
+
+    def handle_image(self, image, filename):
+        """ Attempt to extract faces from an image """
+        faces = self.faces.get_faces(image)
+        process_faces = [(idx, face) for idx, face in faces]
+
+        # Run image rotator if requested and no faces found
+        if self.images.rotation_angles and not process_faces:
+            process_faces, image = self.rotate_frame(image)
+
+        return [self.process_single_face(idx, face, filename, image)
+                for idx, face in process_faces]
+
+    def process_single_face(self, idx, face, filename, image):
+        """ Perform processing on found faces """
+        output_file = self.output_dir / Path(filename).stem if self.export_face else None
+
+        # Draws landmarks for debug
+        if self.args.debug_landmarks:
+            self.faces.draw_landmarks_on_face(face, image)
+
+        resized_image, t_mat = self.extractor.extract(image,
+                                                      face,
+                                                      256,
+                                                      self.args.align_eyes)
+
+        # Detect blurry images
+        if self.args.blur_thresh is not None:
+            blurry_file = self.detect_blurry_faces(face, t_mat, resized_image, filename)
+            output_file = blurry_file if blurry_file else output_file
+
+        if self.export_face:
+            cv2.imwrite("{}_{}{}".format(str(output_file),
+                                         str(idx),
+                                         Path(filename).suffix),
+                        resized_image)
+
+        return {"r": face.r,
+                "x": face.x,
+                "w": face.w,
+                "y": face.y,
+                "h": face.h,
+                "landmarksXY": face.landmarksAsXY()}
+
+    def rotate_frame(self, image):
+        """ Rotate the image to extract more faces if requested """
+        for angle in self.images.rotation_angles:
+            rotated_image = rotate_image(image, angle)
+            faces = self.faces.get_faces(rotated_image, rotation=angle)
+            rotated_faces = [(idx, face) for idx, face in faces]
+            if rotated_faces and self.args.verbose:
+                print("found face(s) by rotating image {} degrees".format(angle))
+            if rotated_faces:
+                break
+            return rotated_faces, rotated_image
+
+    def detect_blurry_faces(self, face, t_mat, resized_image, filename):
+        """ Detect and move blurry face """
+        blurry_file = None
+        aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
+        feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
+        feature_mask = cv2.blur(feature_mask, (10, 10))
+        isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)
+        blurry, focus_measure = is_blurry(isolated_face, self.args.blur_thresh)
+
+        if blurry:
+            print("{}'s focus measure of {} was below the blur threshold, "
+                  "moving to \"blurry\"".format(Path(filename).stem, focus_measure))
+            blurry_file = get_folder(Path(self.output_dir) / Path("blurry")) / \
+                Path(filename).stem
+        return blurry_file
 
     def finalize(self):
         """ Finalize the image processing """
@@ -212,22 +311,18 @@ class Images(object):
 
     def get_input_images(self):
         """ Return the list of images that are to be processed """
-        try:
-            if not os.path.exists(self.args.input_dir):
-                print("Input directory {} not found.".format(self.args.input_dir))
-                exit(1)
+        if not os.path.exists(self.args.input_dir):
+            print("Input directory {} not found.".format(self.args.input_dir))
+            exit(1)
 
-            print("Input Directory: {}".format(self.args.input_dir))
+        print("Input Directory: {}".format(self.args.input_dir))
 
-            if self.args.skip_existing:
-                input_images = get_image_paths(self.args.input_dir, self.already_processed)
-                print("Excluding %s files" % len(self.already_processed))
-            else:
-                input_images = get_image_paths(self.args.input_dir)
-        except AttributeError:
+        if self.args.skip_existing:
+            input_images = get_image_paths(self.args.input_dir, self.already_processed)
+            print("Excluding %s files" % len(self.already_processed))
+        else:
             input_images = get_image_paths(self.args.input_dir)
-        finally:
-            return input_images
+        return input_images
 
     def read_directory(self):
         """ Return number of images from directory for tqdm """
@@ -313,10 +408,17 @@ class Faces(object):
             print("Note: Found more than one face in an image! File: %s" % filename)
             self.verify_output = True
 
+    @staticmethod
+    def draw_landmarks_on_face(face, image):
+        """ Draw debug landmarks on extracted face """
+        for (pos_x, pos_y) in face.landmarksAsXY():
+            cv2.circle(image, (pos_x, pos_y), 2, (0, 0, 255), -1)
+
 class Alignments(object):
     """ Holds processes pertaining to the alignments file """
-    def __init__(self, arguments):
+    def __init__(self, arguments, faces_detected):
         self.args = arguments
+        self.faces_detected = faces_detected
 
         self.serializer = self.get_serializer()
 
@@ -346,37 +448,35 @@ class Alignments(object):
         alignfile = self.get_alignments_path()
         try:
             with open(alignfile, self.serializer.roptions) as align:
-                faces_detected = self.serializer.unmarshal(align.read())
+                self.faces_detected = self.serializer.unmarshal(align.read())
         except Exception as err:
             print("{} not read!".format(alignfile))
             print(str(err))
-            faces_detected = dict()
-        finally:
-            return faces_detected
+            self.faces_detected = dict()
 
-    def write_alignments(self, faces_detected):
+    def write_alignments(self):
         """ Write the serialized alignments file """
         alignfile = self.get_alignments_path()
 
         if self.args.skip_existing:
-            self.load_skip_alignments(alignfile, faces_detected)
+            self.load_skip_alignments(alignfile)
 
         try:
             print("Writing alignments to: {}".format(alignfile))
             with open(alignfile, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(faces_detected))
+                align.write(self.serializer.marshal(self.faces_detected))
         except Exception as err:
             print("{} not written!".format(alignfile))
             print(str(err))
-            faces_detected = dict()
+            self.faces_detected = dict()
 
-    def load_skip_alignments(self, alignfile, faces_detected):
+    def load_skip_alignments(self, alignfile):
         """ Load existing alignments if skipping existing images """
         if self.have_alignments():
             with open(alignfile, self.serializer.roptions) as inf:
                 data = self.serializer.unmarshal(inf.read())
                 for key, val in data.items():
-                    faces_detected[key] = val
+                    self.faces_detected[key] = val
         else:
             print("Existing alignments file '%s' not found." % alignfile)
 
