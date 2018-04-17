@@ -15,17 +15,14 @@ def import_tensorflow_keras():
     from keras.backend.tensorflow_backend import set_session
     return (tflow, set_session)
 
-class TrainingProcessor(object):
-    """ Class to parse the command line arguments for training and
-        call the training process object """
+class TrainingArgs(object):
+    """ Class to parse the command line arguments for training """
 
     def __init__(self, subparser, command, description="default"):
-        self.arguments = None
-
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
-
-        self.parse_arguments(description, subparser, command)
+        self.parser = self.create_parser(subparser, command, description)
+        self.parse_arguments()
 
     @staticmethod
     def get_argument_list():
@@ -109,63 +106,59 @@ class TrainingProcessor(object):
         return argument_list
 
     @staticmethod
-    def get_optional_arguments():
-        """ Put the arguments in a list so that they are accessible from both argparse and gui """
-        # Override this for custom arguments
-        argument_list = []
-        return argument_list
-
-    def parse_arguments(self, description, subparser, command):
-        """ Parse the arguments passed in from argparse """
+    def create_parser(subparser, command, description):
+        """ Create the train parser """
         parser = subparser.add_parser(
             command,
             help="This command trains the model for the two faces A and B.",
             description=description,
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground")
+        return parser
 
+    @staticmethod
+    def get_optional_arguments():
+        """ Put the arguments in a list so that they are accessible from both argparse and gui """
+        # Override this for custom arguments
+        argument_list = []
+        return argument_list
+
+    def parse_arguments(self):
+        """ Parse the arguments passed in from argparse """
         for option in self.argument_list:
             args = option["opts"]
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
-            parser.add_argument(*args, **kwargs)
+            self.parser.add_argument(*args, **kwargs)
 
-        parser = self.add_optional_arguments(parser)
-        parser.set_defaults(func=self.process_arguments)
+        self.parser = self.add_optional_arguments()
 
-    def add_optional_arguments(self, parser):
+    def add_optional_arguments(self):
         """ Add any optional arguments passed in from argparse """
         for option in self.optional_arguments:
             args = option["opts"]
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
-            parser.add_argument(*args, **kwargs)
-        return parser
-
-    def process_arguments(self, arguments):
-        """ Process the arguments from argparse """
-        self.arguments = arguments
-        print("Model A Directory: {}".format(self.arguments.input_A))
-        print("Model B Directory: {}".format(self.arguments.input_B))
-        print("Training data directory: {}".format(self.arguments.model_dir))
-
-        self.process()
-
-    def process(self):
-        """ Call the training process object """
-        training = Train(self.arguments)
-        training.process()
+            self.parser.add_argument(*args, **kwargs)
 
 class Train(object):
-    """ The training object """
-    def __init__(self, opts):
-        self.args = opts
+    """ The training process.  """
+    def __init__(self, arguments):
+        self.args = arguments
+
         self.stop = False
         self.save_now = False
         self.thread = None
         self.preview_buffer = dict()
         self.lock = threading.Lock()
 
+        # this is so that you can enter case insensitive values for trainer
+        trainer_name = self.args.trainer
+        self.trainer_name = "LowMem" if trainer_name.lower() == "lowmem" else trainer_name
+
     def process(self):
-        """ Perform the training process """
+        """ Call the training process object """
+        print("Model A Directory: {}".format(self.args.input_A))
+        print("Model B Directory: {}".format(self.args.input_B))
+        print("Training data directory: {}".format(self.args.model_dir))
         self.start_thread()
 
         if self.args.preview:
@@ -192,34 +185,16 @@ class Train(object):
     def process_thread(self):
         """ The training process to be run inside a thread """
         try:
-            # this is so that you can enter case insensitive values for trainer
-            trainer_name = self.args.trainer
-            trainer_name = "LowMem" if trainer_name.lower() == "lowmem" else trainer_name
-
             print("Loading data, this may take a while...")
 
             if self.args.allow_growth:
                 self.set_tf_allow_growth()
 
-            model = self.load_model(trainer_name)
-            trainer = self.load_trainer(trainer_name, model)
+            model = self.load_model()
+            trainer = self.load_trainer(model)
 
             print("Starting. Press 'ENTER' or 'CTRL+C' to stop training and save model")
-
-            for epoch in range(0, self.args.epochs):
-                save_iteration = epoch % self.args.save_interval == 0
-                viewer = self.show if save_iteration or self.save_now else None
-                trainer.train_one_step(epoch, viewer)
-
-                if self.stop:
-                    model.save_weights()
-                    exit()
-                elif save_iteration:
-                    model.save_weights()
-                elif self.save_now:
-                    model.save_weights()
-                    self.save_now = False
-
+            self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
                 model.save_weights()
@@ -229,30 +204,43 @@ class Train(object):
         except Exception as err:
             raise err
 
-    def load_model(self, model_name):
+    def load_model(self):
         """ Load the model requested for training """
         model_dir = get_folder(self.args.model_dir)
-
-        model = PluginLoader.get_model(model_name)(model_dir, self.args.gpus)
+        model = PluginLoader.get_model(self.trainer_name)(model_dir, self.args.gpus)
 
         if not model.load(swapped=False):
             raise ValueError("Model Not Found! A valid model must be provided to continue!")
-
         return model
 
-    def load_trainer(self, trainer_name, model):
+    def load_trainer(self, model):
         """ Load the trainer requested for traning """
         images_a = get_image_paths(self.args.input_A)
         images_b = get_image_paths(self.args.input_B)
 
-        trainer = PluginLoader.get_trainer(trainer_name)
+        trainer = PluginLoader.get_trainer(self.trainer_name)
         trainer = trainer(model,
                           images_a,
                           images_b,
                           self.args.batch_size,
                           self.args.perceptual_loss)
-
         return trainer
+
+    def run_training_cycle(self, model, trainer):
+        """ Perform the training cycle """
+        for epoch in range(0, self.args.epochs):
+            save_iteration = epoch % self.args.save_interval == 0
+            viewer = self.show if save_iteration or self.save_now else None
+            trainer.train_one_step(epoch, viewer)
+
+            if self.stop:
+                model.save_weights()
+                exit()
+            elif save_iteration:
+                model.save_weights()
+            elif self.save_now:
+                model.save_weights()
+                self.save_now = False
 
     def monitor_preview(self):
         """ Generate the preview window and wait for keyboard input """
@@ -312,3 +300,12 @@ class Train(object):
         except Exception as err:
             print("could not preview sample")
             raise err
+
+class TrainingProcessor(object):
+    """ TODO: Change this, it shouldn't be a class.
+        It's here to keep compatibility during rewrite """
+    def __init__(self, subparser, command, description):
+        args = TrainingArgs(subparser, command, description).parser.arguments
+
+        self.process = Train(args)
+        self.process.process()

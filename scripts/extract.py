@@ -8,28 +8,17 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.cli import DirectoryProcessor, rotate_image
+from lib.cli import DirectoryArgs, FSProcess, rotate_image
+
 from lib.detect_blur import is_blurry
 from lib.multithreading import pool_process
 from lib.utils import get_folder
 from plugins.PluginLoader import PluginLoader
 
 
-class ExtractTrainingData(DirectoryProcessor):
-    """ Class to parse the command line arguments for extraction and
-        run the extract process """
-    def __init__(self, subparser, command, description):
-        DirectoryProcessor.__init__(subparser, command, description)
-        self.extractor = None
-
-    def create_parser(self, subparser, command, description):
-        self.optional_arguments = self.get_optional_arguments()
-        self.parser = subparser.add_parser(
-            command,
-            help="Extract the faces from a pictures.",
-            description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground")
+class ExtractArgs(DirectoryArgs):
+    """ Class to parse the command line arguments for extraction. 
+        Inherits base options from lib.DirectoryArgs """
 
     @staticmethod
     def get_optional_arguments():
@@ -100,17 +89,24 @@ class ExtractTrainingData(DirectoryProcessor):
                                       "sub-folder. Lower values allow more blur"})
         return argument_list
 
-    def process(self):
-        """ Perform the extraction process """
+    def create_parser(self, subparser, command, description):
+        """ Create the extract parser """
+        self.optional_arguments = self.get_optional_arguments()
+        self.parser = subparser.add_parser(
+            command,
+            help="Extract the faces from a pictures.",
+            description=description,
+            epilog="Questions and feedback: \
+            https://github.com/deepfakes/faceswap-playground")
+
+class Extract(FSProcess):
+    """ The extract process. Inherits from cli.FSProcess, including the additional
+        classes: images, faces, alignments """
+    def __init__(self, arguments):
+        FSProcess.__init__(self, arguments)
+
+        self.opts = OptionalActions(self)
         self.extractor = self.load_extractor()
-        processes = self.arguments.processes
-
-        if processes != 1:
-            self.multi_process(processes)
-        else:
-            self.single_process()
-
-        self.write_alignments()
 
     @staticmethod
     def load_extractor():
@@ -121,19 +117,30 @@ class ExtractTrainingData(DirectoryProcessor):
 
         return extractor
 
+    def process(self):
+        """ Perform the extraction process """
+        processes = self.args.processes
+
+        if processes != 1:
+            self.multi_process(processes)
+        else:
+            self.single_process()
+
+        self.alignments.write_alignments(self.faces.faces_detected)
+
     def multi_process(self, processes):
         """ Run extraction in a multiple processes """
-        files = list(self.read_directory())
+        files = list(self.images.read_directory())
         for filename, faces in tqdm(pool_process(self.process_files, files, processes=processes),
                                     total=len(files)):
-            self.num_faces_detected += 1
-            self.faces_detected[os.path.basename(filename)] = faces
+            self.faces.num_faces_detected += 1
+            self.faces.faces_detected[os.path.basename(filename)] = faces
 
     def single_process(self):
         """ Run extraction in a single process """
-        for filename in tqdm(self.read_directory()):
+        for filename in tqdm(self.images.read_directory()):
             filename, faces = self.process_files(filename)
-            self.faces_detected[os.path.basename(filename)] = faces
+            self.faces.faces_detected[os.path.basename(filename)] = faces
 
     def process_files(self, filename):
         """ Read an image from a file """
@@ -141,40 +148,37 @@ class ExtractTrainingData(DirectoryProcessor):
             image = cv2.imread(filename)
             return filename, self.handle_image(image, filename)
         except Exception as err:
-            if self.arguments.verbose:
+            if self.args.verbose:
                 print("Failed to extract from image: {}. Reason: {}".format(filename, err))
         return filename, []
 
     def handle_image(self, image, filename):
         """ Attempt to extract faces from an image """
-        opts = OptionalActions(self)
-        faces = self.get_faces(image)
+        faces = self.faces.get_faces(image)
         process_faces = [(idx, face) for idx, face in faces]
 
         # Run image rotator if requested and no faces found
-        process_faces, image = opts.rotate_image(process_faces, image)
+        process_faces, image = self.opts.rotate_frame(process_faces, image)
 
-        return [self.process_single_face(opts, (idx, face), (filename, image))
+        return [self.process_single_face(idx, face, filename, image)
                 for idx, face in process_faces]
 
-    def process_single_face(self, opts, facevars, imagevars):
+    def process_single_face(self, idx, face, filename, image):
         """ Perform processing on found faces """
-        idx, face, = facevars
-        filename, image = imagevars
-        output_file = get_folder(self.output_dir) / Path(filename).stem
+        output_file = self.output_dir / Path(filename).stem
 
         # Draws landmarks for debug
-        if self.arguments.debug_landmarks:
-            opts.draw_landmarks_on_face(face, image)
+        if self.args.debug_landmarks:
+            self.opts.draw_landmarks_on_face(face, image)
 
         resized_image, t_mat = self.extractor.extract(image,
                                                       face,
                                                       256,
-                                                      self.arguments.align_eyes)
+                                                      self.args.align_eyes)
 
         # Detect blurry images
-        if self.arguments.blur_thresh is not None:
-            blurry_file = opts.detect_blurry_faces(face, t_mat, resized_image, filename)
+        if self.args.blur_thresh is not None:
+            blurry_file = self.opts.detect_blurry_faces(face, t_mat, resized_image, filename)
             output_file = blurry_file if blurry_file else output_file
 
         cv2.imwrite("{}_{}{}".format(str(output_file),
@@ -190,29 +194,38 @@ class ExtractTrainingData(DirectoryProcessor):
                 "landmarksXY": face.landmarksAsXY()}
 
 class OptionalActions(object):
-    """ Process the optional actions for extract """
-    def __init__(self, extracttrainingdata):
-        self.extract = extracttrainingdata
+    """ Process the optional actions for extract Any actions that 
+        are performed because of an optional value should be placed
+        here """
+    def __init__(self, extract):
+        self.args = extract.args
 
-    def rotate_image(self, process_faces, image):
+        self.images = extract.images
+        self.faces = extract.faces
+        self.alignments = extract.alignments
+
+        self.extractor = extract.extractor
+        self.output_dir = extract.output_dir
+
+    def rotate_frame(self, process_faces, image):
         """ Rotate the image to extract more faces if requested """
-        if self.extract.rotation_angles is not None and not process_faces:
+        if self.images.rotation_angles is not None and not process_faces:
             process_faces, image = self.image_rotator(image)
         return process_faces, image
 
     def get_rotated_image_faces(self, image, angle):
         """ Rotate an image and return the faces with the rotated image """
         rotated_image = rotate_image(image, angle)
-        faces = self.extract.get_faces(rotated_image, rotation=angle)
+        faces = self.faces.get_faces(rotated_image, rotation=angle)
         rotated_faces = [(idx, face) for idx, face in faces]
         return rotated_faces, rotated_image
 
     def image_rotator(self, image):
         """ rotates the image through rotation_angles to try to find a face """
-        for angle in self.extract.rotation_angles:
+        for angle in self.images.rotation_angles:
             rotated_faces, rotated_image = self.get_rotated_image_faces(image, angle)
             if rotated_faces:
-                if self.extract.arguments.verbose:
+                if self.args.verbose:
                     print("found face(s) by rotating image {} degrees".format(angle))
                 break
         return rotated_faces, rotated_image
@@ -226,18 +239,25 @@ class OptionalActions(object):
     def detect_blurry_faces(self, face, t_mat, resized_image, filename):
         """ Detect and move blurry face """
         blurry_file = None
-        aligned_landmarks = self.extract.extractor.transform_points(face.landmarksAsXY(),
-                                                                    t_mat,
-                                                                    256,
-                                                                    48)
-        feature_mask = self.extract.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
+        aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
+        feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
         feature_mask = cv2.blur(feature_mask, (10, 10))
         isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)
-        blurry, focus_measure = is_blurry(isolated_face, self.extract.arguments.blur_thresh)
+        blurry, focus_measure = is_blurry(isolated_face, self.args.blur_thresh)
 
         if blurry:
             print("{}'s focus measure of {} was below the blur threshold, "
                   "moving to \"blurry\"".format(Path(filename).stem, focus_measure))
-            blurry_file = get_folder(Path(self.extract.output_dir) / Path("blurry")) / \
+            blurry_file = get_folder(Path(self.output_dir) / Path("blurry")) / \
                 Path(filename).stem
         return blurry_file
+
+class ExtractTrainingData(object):
+    """ TODO: Change this, it shouldn't be a class. 
+        It's here to keep compatibility during rewrite """
+    def __init__(self, subparser, command, description):
+        args = ExtractArgs(subparser, command, description).parser.arguments
+
+        self.process = Extract(args)
+        self.process.process()
+        self.process.finalize()

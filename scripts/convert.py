@@ -8,23 +8,14 @@ from pathlib import Path
 import cv2
 from tqdm import tqdm
 
-from lib.cli import DirectoryProcessor, FullPaths
+from lib.cli import DirectoryArgs, FSProcess, FullPaths
 from lib.utils import BackgroundGenerator, get_folder, get_image_paths, rotate_image
 
 from plugins.PluginLoader import PluginLoader
 
-class ConvertImage(DirectoryProcessor):
-    """ Class to parse the command line arguments for conversion and
-        run the convert process """
-
-    def create_parser(self, subparser, command, description):
-        self.optional_arguments = self.get_optional_arguments()
-        self.parser = subparser.add_parser(
-            command,
-            help="Convert a source image to a new one with the face swapped.",
-            description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground")
+class ConvertArgs(DirectoryArgs):
+    """ Class to parse the command line arguments for conversion.
+        Inherits base options from lib.DirectoryArgs """
 
     @staticmethod
     def get_optional_arguments():
@@ -154,29 +145,43 @@ class ConvertImage(DirectoryProcessor):
                               "help": "Number of GPUs to use for conversion"})
         return argument_list
 
+    def create_parser(self, subparser, command, description):
+        self.optional_arguments = self.get_optional_arguments()
+        self.parser = subparser.add_parser(
+            command,
+            help="Convert a source image to a new one with the face swapped.",
+            description=description,
+            epilog="Questions and feedback: \
+            https://github.com/deepfakes/faceswap-playground")
+
+class Convert(FSProcess):
+    """ The convert process. Inherits from cli.FSProcess, including the additional
+        classes: images, faces, alignments """
+    def __init__(self, arguments):
+        FSProcess.__init__(self, arguments)
+
+        self.opts = OptionalActions(self)
+
     def process(self):
         """ Original & LowMem models go with Adjust or Masked converter
             Note: GAN prediction outputs a mask + an image, while other predicts only an image """
-
-        opts = OptionalActions(self)
-
         model = self.load_model()
         converter = self.load_converter(model)
 
         batch = BackgroundGenerator(self.prepare_images(), 1)
 
         for item in batch.iterator():
-            self.convert(opts, converter, item)
+            self.convert(converter, item)
 
     def load_model(self):
         """ Load the model requested for conversion """
-        model_name = self.arguments.trainer
-        model_dir = get_folder(self.arguments.model_dir)
-        num_gpus = self.arguments.gpus
+        model_name = self.args.trainer
+        model_dir = get_folder(self.args.model_dir)
+        num_gpus = self.args.gpus
 
         model = PluginLoader.get_model(model_name)(model_dir, num_gpus)
 
-        if not model.load(self.arguments.swap_model):
+        if not model.load(self.args.swap_model):
             print("Model Not Found! A valid model must be provided to continue!")
             exit(1)
 
@@ -184,7 +189,7 @@ class ConvertImage(DirectoryProcessor):
 
     def load_converter(self, model):
         """ Load the requested converter for conversion """
-        args = self.arguments
+        args = self.args
         conv = args.converter
 
         converter = PluginLoader.get_converter(conv)(model.converter(False),
@@ -202,15 +207,15 @@ class ConvertImage(DirectoryProcessor):
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        have_alignments = self.have_alignments()
-        self.read_alignments()
-        for filename in tqdm(self.read_directory()):
+        have_alignments = self.alignments.have_alignments()
+        self.alignments.read_alignments()
+        for filename in tqdm(self.images.read_directory()):
             image = cv2.imread(filename)
 
             if have_alignments:
                 faces = self.check_alignments(filename, image)
             else:
-                faces = self.get_faces(image)
+                faces = self.faces.get_faces(image)
 
             if not faces:
                 continue
@@ -220,23 +225,22 @@ class ConvertImage(DirectoryProcessor):
     def check_alignments(self, filename, image):
         """ If we have alignments file, but no alignments for this face, skip it """
         faces = None
-        if self.have_face(filename):
-            faces = self.get_faces_alignments(filename, image)
+        if self.faces.have_face(filename):
+            faces = self.faces.get_faces_alignments(filename, image)
         else:
             tqdm.write("no alignment found for {}, skipping".format(os.path.basename(filename)))
         return faces
 
-    def convert(self, opts, converter, item):
+    def convert(self, converter, item):
         """ Apply the conversion transferring faces onto frames """
         try:
             (filename, image, faces) = item
-            skip = opts.check_skipframe(filename)
+            skip = self.opts.check_skipframe(filename)
 
             if skip == "discard":
                 return
             elif not skip:
-                image = (self.convert_one_face(opts,
-                                               converter,
+                image = (self.convert_one_face(converter,
                                                (filename, image, idx, face))
                          for idx, face in faces)
 
@@ -245,20 +249,20 @@ class ConvertImage(DirectoryProcessor):
         except Exception as err:
             print("Failed to convert image: {}. Reason: {}".format(filename, err))
 
-    def convert_one_face(self, opts, converter, imagevars):
+    def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """
         (filename, image, idx, face) = imagevars
 
-        if opts.check_skipface(filename, idx):
+        if self.opts.check_skipface(filename, idx):
             return image
 
-        image = opts.rotate_image(image, face.r)
+        image = self.opts.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
         image = converter.patch_image(image,
                                       face,
-                                      64 if "128" not in self.arguments.trainer else 128)
-        image = opts.rotate_image(image, face.r, reverse=True)
+                                      64 if "128" not in self.args.trainer else 128)
+        image = self.opts.rotate_image(image, face.r, reverse=True)
         return image
 
 class OptionalActions(object):
@@ -276,6 +280,29 @@ class OptionalActions(object):
         self.rotation_height = 0
         self.rotation_width = 0
 
+    ### SKIP ALIGNMENTS ###
+    def get_aligned_directory(self):
+        """ Check for the existence of an aligned directory for identifying
+            which faces in the target frames should be swapped """
+        faces_to_swap = None
+        input_aligned_dir = self.args.input_aligned_dir
+
+        if input_aligned_dir is None:
+            print("Aligned directory not specified. All faces listed in the alignments file \
+                   will be converted.")
+        elif not os.path.isdir(input_aligned_dir):
+            print("Aligned directory not found. All faces listed in the alignments file \
+                   will be converted.")
+        else:
+            faces_to_swap = [Path(path) for path in get_image_paths(input_aligned_dir)]
+            if not faces_to_swap:
+                print("Aligned directory is empty, no faces will be converted!")
+            elif len(faces_to_swap) <= len(self.input_dir) / 3:
+                print("Aligned directory contains an amount of images much less than the input, \
+                        are you sure this is the right directory?")
+        return faces_to_swap
+
+    ### SKIP FRAME RANGES ###
     def get_frame_ranges(self):
         """ split out the frame ranges and parse out 'min' and 'max' values """
         if not self.args.frame_ranges:
@@ -307,27 +334,7 @@ class OptionalActions(object):
                 face_idx, os.path.basename(filename)))
         return skip_face
 
-    def get_aligned_directory(self):
-        """ Check for the existence of an aligned directory for identifying
-            which faces in the target frames should be swapped """
-        faces_to_swap = None
-        input_aligned_dir = self.args.input_aligned_dir
-
-        if input_aligned_dir is None:
-            print("Aligned directory not specified. All faces listed in the alignments file \
-                   will be converted.")
-        elif not os.path.isdir(input_aligned_dir):
-            print("Aligned directory not found. All faces listed in the alignments file \
-                   will be converted.")
-        else:
-            faces_to_swap = [Path(path) for path in get_image_paths(input_aligned_dir)]
-            if not faces_to_swap:
-                print("Aligned directory is empty, no faces will be converted!")
-            elif len(faces_to_swap) <= len(self.input_dir) / 3:
-                print("Aligned directory contains an amount of images much less than the input, \
-                        are you sure this is the right directory?")
-        return faces_to_swap
-
+    ### ROTATE IMAGES ###
     def rotate_image(self, image, rotation, reverse=False):
         """ Rotate the image forwards or backwards """
         if rotation != 0:
@@ -340,3 +347,13 @@ class OptionalActions(object):
                                      rotated_width=self.rotation_width,
                                      rotated_height=self.rotation_height)
         return image
+
+class ConvertImage(object):
+    """ TODO: Change this, it shouldn't be a class. 
+        It's here to keep compatibility during rewrite """
+    def __init__(self, subparser, command, description):
+        args = ConvertArgs(subparser, command, description).parser.arguments
+
+        self.process = Convert(args)
+        self.process.process()
+        self.process.finalize()

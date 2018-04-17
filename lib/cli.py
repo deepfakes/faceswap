@@ -42,7 +42,7 @@ class FullHelpArgumentParser(argparse.ArgumentParser):
         args = {"prog": self.prog, "message": message}
         self.exit(2, "%(prog)s: error: %(message)s\n" % args)
 
-class DirectoryArgParse(object):
+class DirectoryArgs(object):
     """ This class is used as a parent class to capture arguments that
         will be used in both the extract and convert process.
 
@@ -55,7 +55,7 @@ class DirectoryArgParse(object):
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
         self.parser = self.create_parser(subparser, command, description)
-        self.parse_arguments(description, subparser, command)
+        self.parse_arguments()
 
     @staticmethod
     def get_argument_list():
@@ -98,7 +98,8 @@ class DirectoryArgParse(object):
 
     @staticmethod
     def create_parser(subparser, command, description):
-        """ Create a directory processing parser """
+        """ Create a directory processing parser 
+            Overide for extract/convert process """
         parser = subparser.add_parser(
             command,
             description=description,
@@ -107,31 +108,23 @@ class DirectoryArgParse(object):
         )
         return parser
 
-    def parse_arguments(self, description, subparser, command):
+    def parse_arguments(self):
         """ Parse the arguments passed in from argparse """
         for option in self.argument_list:
             args = option["opts"]
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
 
-        self.parser = self.add_optional_arguments(self.parser)
-        self.parser.set_defaults()
+        self.add_optional_arguments()
 
-    def add_optional_arguments(self, parser):
+    def add_optional_arguments(self):
         """ Add any optional arguments passed in from argparse """
         for option in self.optional_arguments:
             args = option["opts"]
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
-            parser.add_argument(*args, **kwargs)
-        return parser
+            self.parser.add_argument(*args, **kwargs)
 
-    # for now, we limit this class responsability to the read of files.
-    # images and faces are processed outside this class
-    def process(self):
-        """ Overide for specific image processing """
-        raise NotImplementedError()
-
-class DirectoryProcess(object):
+class FSProcess(object):
     """ Class for directory processing.
 
         This class contains functions that are used in both the extract
@@ -139,11 +132,19 @@ class DirectoryProcess(object):
         doesn't meet that criteria then it shouldn't be placed here """
 
     def __init__(self, arguments):
+        print('Starting, this may take a while...')
+        
         self.args = arguments
+        self.output_dir = get_folder(self.args.output_dir)
 
         self.images = Images(self.args)
         self.faces = Faces(self.args)
         self.alignments = Alignments(self.args)
+
+    @staticmethod
+    def process():
+        """ Override with Extract/Convert process """
+        raise NotImplementedError
 
     def finalize(self):
         """ Finalize the image processing """
@@ -243,6 +244,10 @@ class Faces(object):
         self.num_faces_detected = 0
         self.verify_output = False
 
+    def have_face(self, filename):
+        """ return path of images that have faces """
+        return os.path.basename(filename) in self.faces_detected
+
     def load_face_filter(self):
         """ Load faces to filter out of images """
         facefilter = None
@@ -265,10 +270,6 @@ class Faces(object):
                 filter_files = [filter_args]
             filter_files = list(filter(lambda fnc: Path(fnc).exists(), filter_files))
         return filter_files
-
-    def have_face(self, filename):
-        """ return path of images that have faces """
-        return os.path.basename(filename) in self.faces_detected
 
     def get_faces(self, image, rotation=0):
         """ Extract the faces from an image """
@@ -319,8 +320,6 @@ class Alignments(object):
 
         self.serializer = self.get_serializer()
 
-        self.faces_detected = dict()
-
     def get_serializer(self):
         """ Set the serializer to be used for loading and saving alignments """
         if not self.args.serializer and self.args.alignments_path:
@@ -347,35 +346,37 @@ class Alignments(object):
         alignfile = self.get_alignments_path()
         try:
             with open(alignfile, self.serializer.roptions) as align:
-                self.faces_detected = self.serializer.unmarshal(align.read())
+                faces_detected = self.serializer.unmarshal(align.read())
         except Exception as err:
             print("{} not read!".format(alignfile))
             print(str(err))
-            self.faces_detected = dict()
+            faces_detected = dict()
+        finally:
+            return faces_detected
 
-    def write_alignments(self):
+    def write_alignments(self, faces_detected):
         """ Write the serialized alignments file """
         alignfile = self.get_alignments_path()
 
         if self.args.skip_existing:
-            self.load_skip_alignments(alignfile)
+            self.load_skip_alignments(alignfile, faces_detected)
 
         try:
             print("Writing alignments to: {}".format(alignfile))
             with open(alignfile, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(self.faces_detected))
+                align.write(self.serializer.marshal(faces_detected))
         except Exception as err:
             print("{} not written!".format(alignfile))
             print(str(err))
-            self.faces_detected = dict()
+            faces_detected = dict()
 
-    def load_skip_alignments(self, alignfile):
+    def load_skip_alignments(self, alignfile, faces_detected):
         """ Load existing alignments if skipping existing images """
         if self.have_alignments():
             with open(alignfile, self.serializer.roptions) as inf:
                 data = self.serializer.unmarshal(inf.read())
                 for key, val in data.items():
-                    self.faces_detected[key] = val
+                    faces_detected[key] = val
         else:
             print("Existing alignments file '%s' not found." % alignfile)
 
