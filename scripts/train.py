@@ -187,6 +187,7 @@ class Train(object):
               "on your training speed). If you want to kill it now, press Ctrl + c")
         self.stop = True
         self.thread.join()
+        sys.stdout.flush()
 
     def process_thread(self):
         """ The training process to be run inside a thread """
