@@ -113,7 +113,8 @@ class Model(ModelBase):
                 BB[i], 
                 #BB[i]*mBB[i], 
                 AB[i], 
-                #AB[i]*mAB[i]], 
+                #AB[i]*mAB[i] 
+                ],
                 axis=1) )
             
         return [ ('src, dst, src->dst masked', np.concatenate ( st, axis=0 ) ) ]
