@@ -136,7 +136,7 @@ class Convert(FSProcess):
     def __init__(self, arguments):
         FSProcess.__init__(self, arguments)
 
-        self.opts = OptionalActions(self)
+        self.opts = OptionalActions(self.args, self.images.input_images)
 
     def process(self):
         """ Original & LowMem models go with Adjust or Masked converter
@@ -151,8 +151,6 @@ class Convert(FSProcess):
 
         for item in batch.iterator():
             self.convert(converter, item)
-        
-        self.finalize()
 
     def generate_alignments(self):
         """ Generate an alignments file if one does not already
@@ -166,6 +164,7 @@ class Convert(FSProcess):
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
         self.alignments.write_alignments()
+        self.finalize()
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -216,30 +215,27 @@ class Convert(FSProcess):
         if self.faces.have_face(filename):
             faces = self.faces.get_faces_alignments(filename, image)
         else:
-            tqdm.write("no alignment found for {}, skipping".format(os.path.basename(filename)))
+            tqdm.write("No alignment found for {}, skipping".format(os.path.basename(filename)))
         return faces
 
     def convert(self, converter, item):
         """ Apply the conversion transferring faces onto frames """
         try:
-            (filename, image, faces) = item
+            filename, image, faces = item
             skip = self.opts.check_skipframe(filename)
 
-            if skip == "discard":
-                return
-            elif not skip:
-                image = (self.convert_one_face(converter,
-                                               (filename, image, idx, face))
-                         for idx, face in faces)
-
-            output_file = get_folder(self.output_dir) / Path(filename).name
-            cv2.imwrite(str(output_file), image)
+            if not skip:
+                for idx, face in faces:
+                    image = self.convert_one_face(converter, (filename, image, idx, face))
+            if skip != "discard":
+                output_file = get_folder(self.output_dir) / Path(filename).name
+                cv2.imwrite(str(output_file), image)
         except Exception as err:
             print("Failed to convert image: {}. Reason: {}".format(filename, err))
 
     def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """
-        (filename, image, idx, face) = imagevars
+        filename, image, idx, face = imagevars
 
         if self.opts.check_skipface(filename, idx):
             return image
@@ -256,9 +252,9 @@ class Convert(FSProcess):
 class OptionalActions(object):
     """ Process the optional actions for convert """
 
-    def __init__(self, convertimage):
-        self.args = convertimage.arguments
-        self.input_dir = convertimage.input_dir
+    def __init__(self, args, input_images):
+        self.args = args
+        self.input_images = input_images
 
         self.faces_to_swap = self.get_aligned_directory()
 
@@ -276,16 +272,16 @@ class OptionalActions(object):
         input_aligned_dir = self.args.input_aligned_dir
 
         if input_aligned_dir is None:
-            print("Aligned directory not specified. All faces listed in the alignments file \
-                   will be converted.")
+            print("Aligned directory not specified. All faces listed in the alignments file "
+                  "will be converted")
         elif not os.path.isdir(input_aligned_dir):
-            print("Aligned directory not found. All faces listed in the alignments file \
-                   will be converted.")
+            print("Aligned directory not found. All faces listed in the alignments file "
+                  "will be converted")
         else:
             faces_to_swap = [Path(path) for path in get_image_paths(input_aligned_dir)]
             if not faces_to_swap:
                 print("Aligned directory is empty, no faces will be converted!")
-            elif len(faces_to_swap) <= len(self.input_dir) / 3:
+            elif len(faces_to_swap) <= len(self.input_images) / 3:
                 print("Aligned directory contains an amount of images much less than the input, \
                         are you sure this is the right directory?")
         return faces_to_swap
@@ -304,6 +300,8 @@ class OptionalActions(object):
 
     def check_skipframe(self, filename):
         """ Check whether frame is to be skipped """
+        if not self.frame_ranges:
+            return
         idx = int(self.imageidxre.findall(filename)[0])
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
         if skipframe and self.args.discard_frames:

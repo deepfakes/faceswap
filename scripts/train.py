@@ -6,7 +6,7 @@ import threading
 import cv2
 
 from lib.cli import FullPaths, argparse, os, sys
-from lib.utils import get_folder, get_image_paths
+from lib.utils import get_folder, get_image_paths, set_system_verbosity
 from plugins.PluginLoader import PluginLoader
 
 def import_tensorflow_keras():
@@ -134,7 +134,8 @@ class TrainingProcessor(object):
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
 
-    def execute_process(self, arguments):
+    @staticmethod
+    def execute_process(arguments):
         """ The process to run if this command is called """
         process = Train(arguments)
         process.process()
@@ -143,10 +144,10 @@ class Train(object):
     """ The training process.  """
     def __init__(self, arguments):
         self.args = arguments
+        self.images = self.get_images()
 
         self.stop = False
         self.save_now = False
-        self.thread = None
         self.preview_buffer = dict()
         self.lock = threading.Lock()
 
@@ -156,30 +157,50 @@ class Train(object):
 
     def process(self):
         """ Call the training process object """
-        print("Model A Directory: {}".format(self.args.input_A))
-        print("Model B Directory: {}".format(self.args.input_B))
         print("Training data directory: {}".format(self.args.model_dir))
-        self.start_thread()
+
+        lvl = '0' if self.args.verbose else '2'
+        set_system_verbosity(lvl)
+
+        thread = self.start_thread()
 
         if self.args.preview:
             self.monitor_preview()
         else:
             self.monitor_console()
 
-        self.end_thread()
+        self.end_thread(thread)
+
+    def get_images(self):
+        """ Check the image dirs exist, contain images and return the image objects """
+        images = []
+        for image_dir in [self.args.input_A, self.args.input_B]:
+            if not os.path.isdir(image_dir):
+                print('Error: {} does not exist'.format(image_dir))
+                exit(1)
+
+            if not os.listdir(image_dir):
+                print('Error: {} contains no images'.format(image_dir))
+                exit(1)
+
+            images.append(get_image_paths(image_dir))
+        print("Model A Directory: {}".format(self.args.input_A))
+        print("Model B Directory: {}".format(self.args.input_B))
+        return images
 
     def start_thread(self):
         """ Put the training process in a thread so we can keep control """
-        self.thread = threading.Thread(target=self.process_thread)
-        self.thread.start()
+        thread = threading.Thread(target=self.process_thread)
+        thread.start()
+        return thread
 
-    def end_thread(self):
+    def end_thread(self, thread):
         """ On termination output message and join thread back to main """
         print("Exit requested! The trainer will complete its current cycle, save "
               "the models and quit (it can take up a couple of seconds depending "
               "on your training speed). If you want to kill it now, press Ctrl + c")
         self.stop = True
-        self.thread.join()
+        thread.join()
         sys.stdout.flush()
 
     def process_thread(self):
@@ -193,7 +214,6 @@ class Train(object):
             model = self.load_model()
             trainer = self.load_trainer(model)
 
-            print("Starting. Press 'ENTER' or 'CTRL+C' to stop training and save model")
             self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
@@ -209,14 +229,12 @@ class Train(object):
         model_dir = get_folder(self.args.model_dir)
         model = PluginLoader.get_model(self.trainer_name)(model_dir, self.args.gpus)
 
-        if not model.load(swapped=False):
-            raise ValueError("Model Not Found! A valid model must be provided to continue!")
+        model.load(swapped=False)
         return model
 
     def load_trainer(self, model):
         """ Load the trainer requested for traning """
-        images_a = get_image_paths(self.args.input_A)
-        images_b = get_image_paths(self.args.input_B)
+        images_a, images_b = self.images
 
         trainer = PluginLoader.get_trainer(self.trainer_name)
         trainer = trainer(model,
@@ -232,7 +250,6 @@ class Train(object):
             save_iteration = epoch % self.args.save_interval == 0
             viewer = self.show if save_iteration or self.save_now else None
             trainer.train_one_step(epoch, viewer)
-
             if self.stop:
                 break
             elif save_iteration:
@@ -241,13 +258,13 @@ class Train(object):
                 model.save_weights()
                 self.save_now = False
         model.save_weights()
-        exit()
+        self.stop = True
 
     def monitor_preview(self):
         """ Generate the preview window and wait for keyboard input """
         print("Using live preview.\n"
-              "\tPress 'ENTER' on the preview window to save and quit."
-              "\tPress 'S' on the preview window to save model weights immediately")
+              "Press 'ENTER' on the preview window to save and quit.\n"
+              "Press 'S' on the preview window to save model weights immediately")
         while True:
             try:
                 with self.lock:
@@ -259,16 +276,22 @@ class Train(object):
                     break
                 if key == ord("s"):
                     self.save_now = True
+                if self.stop:
+                    break
             except KeyboardInterrupt:
                 break
 
     @staticmethod
     def monitor_console():
         """ Monitor the console for any input followed by enter or ctrl+c """
+        # TODO: how to catch a specific key instead of Enter?
+        # there isnt a good multiplatform solution:
+        # https://stackoverflow.com/questions/3523174
+        # TODO: Find a way to interrupt input() if the target iterations are reached.
+        # At the moment, setting a target iteration and using the -p flag is the only guaranteed
+        # way to exit the training loop on hitting target iterations. """
+        print("Starting. Press 'ENTER' to stop training and save model")
         try:
-            # TODO how to catch a specific key instead of Enter?
-            # there isnt a good multiplatform solution:
-            # https://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
             input()
         except KeyboardInterrupt:
             pass

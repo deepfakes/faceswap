@@ -11,7 +11,7 @@ import numpy as np
 
 from lib.detect_blur import is_blurry
 from lib import Serializer
-from lib.utils import get_folder, get_image_paths, rotate_image
+from lib.utils import get_folder, get_image_paths, rotate_image, set_system_verbosity
 from plugins.PluginLoader import PluginLoader
 
 # DLIB is a GPU Memory hog, so the following modules should only be imported when required
@@ -156,7 +156,7 @@ class DirectoryArgs(object):
     def execute_process(self, arguments):
         """ The process to run if this command is called """
         process = self.process(arguments)
-        process.process()
+        process.process_wrapper()
 
 class FSProcess(object):
     """ Class for directory processing.
@@ -173,10 +173,18 @@ class FSProcess(object):
 
         self.images = Images(self.args)
         self.faces = Faces(self.args)
-        self.alignments = Alignments(self.args, self.faces.faces_detected)
+        self.alignments = Alignments(self.args, self.faces)
 
         self.extractor = None
         self.export_face = True
+
+    def process_wrapper(self):
+        """ Actions to perform before and after running the extract or train process """
+        lvl = '0' if self.args.verbose else '2'
+        set_system_verbosity(lvl)
+
+        self.process()
+        self.finalize()
 
     @staticmethod
     def process():
@@ -207,7 +215,6 @@ class FSProcess(object):
         """ Attempt to extract faces from an image """
         faces = self.faces.get_faces(image)
         process_faces = [(idx, face) for idx, face in faces]
-
         # Run image rotator if requested and no faces found
         if self.images.rotation_angles and not process_faces:
             process_faces, image = self.rotate_frame(image)
@@ -220,16 +227,14 @@ class FSProcess(object):
         output_file = self.output_dir / Path(filename).stem if self.export_face else None
 
         # Draws landmarks for debug
-        if self.args.debug_landmarks:
+        if hasattr(self.args, 'debug_landmarks') and self.args.debug_landmarks:
             self.faces.draw_landmarks_on_face(face, image)
 
-        resized_image, t_mat = self.extractor.extract(image,
-                                                      face,
-                                                      256,
-                                                      self.args.align_eyes)
+        align_eyes = self.args.align_eyes if hasattr(self.args, 'align_eyes') else False
+        resized_image, t_mat = self.extractor.extract(image, face, 256, align_eyes)
 
         # Detect blurry images
-        if self.args.blur_thresh is not None:
+        if hasattr(self.args, 'blur_thresh') and self.args.blur_thresh:
             blurry_file = self.detect_blurry_faces(face, t_mat, resized_image, filename)
             output_file = blurry_file if blurry_file else output_file
 
@@ -286,6 +291,9 @@ class FSProcess(object):
             print("Multiple faces were detected in one or more pictures.")
             print("Double check your results.")
             print("-------------------------")
+
+        self.images.images_found = 0
+        self.faces.num_faces_detected = 0
         print("Done!")
 
 class Images(object):
@@ -303,30 +311,29 @@ class Images(object):
             and 'off' options:
                 - 'on' - increment 90 degrees
                 - 'off' - disable """
-        try:
-            if not self.args.rotate_images or self.args.rotate_images == "off":
-                rotation_angles = None
-            elif self.rotation_angles == "on":
-                rotation_angles = range(90, 360, 90)
+        if (not hasattr(self.args, 'rotate_images')
+                or not self.args.rotate_images
+                or self.args.rotate_images == "off"):
+            rotation_angles = None
+        elif self.rotation_angles == "on":
+            rotation_angles = range(90, 360, 90)
+        else:
+            rotation_angles = [int(angle)
+                               for angle in self.args.rotate_images.split(",")]
+            if len(rotation_angles) == 1:
+                rotation_step_size = rotation_angles[0]
+                rotation_angles = range(rotation_step_size, 360, rotation_step_size)
+            elif len(rotation_angles) > 1:
+                rotation_angles = rotation_angles
             else:
-                rotation_angles = [int(angle)
-                                   for angle in self.args.rotate_images.split(",")]
-                if len(rotation_angles) == 1:
-                    rotation_step_size = rotation_angles[0]
-                    rotation_angles = range(rotation_step_size, 360, rotation_step_size)
-                elif len(rotation_angles) > 1:
-                    rotation_angles = rotation_angles
-                else:
-                    rotation_angles = None
-            return rotation_angles
-        except AttributeError:
-            pass
+                rotation_angles = None
+        return rotation_angles
 
     def get_already_processed(self):
         """ Return the images that already exist in the output directory """
         print("Output Directory: {}".format(self.args.output_dir))
 
-        if not self.args.skip_existing:
+        if not hasattr(self.args, 'skip_existing') or not self.args.skip_existing:
             return None
 
         return get_image_paths(self.args.output_dir)
@@ -339,11 +346,12 @@ class Images(object):
 
         print("Input Directory: {}".format(self.args.input_dir))
 
-        if self.args.skip_existing:
+        if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
             input_images = get_image_paths(self.args.input_dir, self.already_processed)
             print("Excluding %s files" % len(self.already_processed))
         else:
             input_images = get_image_paths(self.args.input_dir)
+
         return input_images
 
     def read_directory(self):
@@ -395,7 +403,7 @@ class Faces(object):
         faces = detect_faces(image, self.args.detector, self.args.verbose, rotation)
 
         for face in faces:
-            if self.filter is not None and not self.filter.check(face):
+            if self.filter and not self.filter.check(face):
                 if self.args.verbose:
                     print("Skipping not recognized face!")
                 continue
@@ -438,9 +446,9 @@ class Faces(object):
 
 class Alignments(object):
     """ Holds processes pertaining to the alignments file """
-    def __init__(self, arguments, faces_detected):
+    def __init__(self, arguments, faces):
         self.args = arguments
-        self.faces_detected = faces_detected
+        self.faces = faces
 
         self.serializer = self.get_serializer()
 
@@ -470,27 +478,27 @@ class Alignments(object):
         alignfile = self.get_alignments_path()
         try:
             with open(alignfile, self.serializer.roptions) as align:
-                self.faces_detected = self.serializer.unmarshal(align.read())
+                self.faces.faces_detected = self.serializer.unmarshal(align.read())
         except Exception as err:
             print("{} not read!".format(alignfile))
             print(str(err))
-            self.faces_detected = dict()
+            self.faces.faces_detected = dict()
 
     def write_alignments(self):
         """ Write the serialized alignments file """
         alignfile = self.get_alignments_path()
 
-        if self.args.skip_existing:
+        if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
             self.load_skip_alignments(alignfile)
 
         try:
             print("Writing alignments to: {}".format(alignfile))
             with open(alignfile, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(self.faces_detected))
+                align.write(self.serializer.marshal(self.faces.faces_detected))
         except Exception as err:
             print("{} not written!".format(alignfile))
             print(str(err))
-            self.faces_detected = dict()
+            self.faces.faces_detected = dict()
 
     def load_skip_alignments(self, alignfile):
         """ Load existing alignments if skipping existing images """
@@ -498,7 +506,7 @@ class Alignments(object):
             with open(alignfile, self.serializer.roptions) as inf:
                 data = self.serializer.unmarshal(inf.read())
                 for key, val in data.items():
-                    self.faces_detected[key] = val
+                    self.faces.faces_detected[key] = val
         else:
             print("Existing alignments file '%s' not found." % alignfile)
 

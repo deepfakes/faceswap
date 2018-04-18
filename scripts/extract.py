@@ -92,7 +92,6 @@ class Extract(FSProcess):
             self.single_process()
 
         self.alignments.write_alignments()
-        self.finalize()
 
     def multi_process(self, processes):
         """ Run extraction in a multiple processes """
