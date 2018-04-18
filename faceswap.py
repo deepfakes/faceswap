@@ -20,14 +20,14 @@ if __name__ == "__main__":
     parser = FullHelpArgumentParser()
     subparser = parser.add_subparsers()
     extract = ExtractTrainingData(
-        subparser, "extract", "Extract the faces from a pictures.")
+        subparser, "extract", "Extract the faces from a pictures")
     train = TrainingProcessor(
-        subparser, "train", "This command trains the model for the two faces A and B.")
+        subparser, "train", "This command trains the model for the two faces A and B")
     convert = ConvertImage(
-        subparser, "convert", "Convert a source image to a new one with the face swapped.")
+        subparser, "convert", "Convert a source image to a new one with the face swapped")
     guiparsers = {'extract': extract, 'train': train, 'convert': convert}
     gui = TKGui(
-        subparser, guiparsers, "gui", "Launch the Faceswap Graphical User Interface.")
+        subparser, guiparsers, "gui", "Launch the Faceswap Graphical User Interface")
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
