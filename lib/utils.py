@@ -14,7 +14,7 @@ def get_folder(path):
     return output_dir
 
 def get_image_paths(directory, exclude=[], debug=False):
-    exclude_names = [basename(Path(x).stem[:-1] + Path(x).suffix) for x in exclude]
+    exclude_names = [basename(Path(x).stem[:-2] + Path(x).suffix) for x in exclude]
     dir_contents = []
 
     if not exists(directory):
