@@ -1,5 +1,6 @@
 import os
 import sys
+import contextlib
 
 from utils import std_utils
 from .pynvml import *
@@ -34,21 +35,26 @@ def import_tf( device_idxs_list, allow_growth ):
     if tf_module is not None:
         raise Exception ('Multiple import of tf is not allowed, reorganize your program.')
 
-    with std_utils.suppress_stdout_stderr():
-        import tensorflow as tf
-        tf_module = tf
-    
-        os.environ['TF_MIN_GPU_MULTIPROCESSOR_COUNT'] = '2'
+    if 'TF_SUPPRESS_STD' in os.environ.keys() and os.environ['TF_SUPPRESS_STD'] == '1':
+        suppressor = std_utils.suppress_stdout_stderr().__enter__()
 
-        visible_device_list = ''
-        for idx in device_idxs_list: visible_device_list += str(idx) + ','
-        visible_device_list = visible_device_list[:-1]
-            
-        config = tf_module.ConfigProto()
-        config.gpu_options.allow_growth = allow_growth
-        config.gpu_options.visible_device_list=visible_device_list
-        tf_session = tf_module.Session(config=config)
+    import tensorflow as tf
+    tf_module = tf
+
+    os.environ['TF_MIN_GPU_MULTIPROCESSOR_COUNT'] = '2'
+
+    visible_device_list = ''
+    for idx in device_idxs_list: visible_device_list += str(idx) + ','
+    visible_device_list = visible_device_list[:-1]
         
+    config = tf_module.ConfigProto()
+    config.gpu_options.allow_growth = allow_growth
+    config.gpu_options.visible_device_list=visible_device_list
+    tf_session = tf_module.Session(config=config)
+    
+    if 'TF_SUPPRESS_STD' in os.environ.keys() and os.environ['TF_SUPPRESS_STD'] == '1':        
+        suppressor.__exit__()
+      
     return tf_module
 
 def finalize_tf():

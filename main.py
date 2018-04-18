@@ -16,6 +16,8 @@ if __name__ == "__main__":
     os_utils.set_process_lowest_prio()
 
     parser = argparse.ArgumentParser()    
+    parser.add_argument('--tf-suppress-std', action="store_true", dest="tf_suppress_std", default=False, help="Suppress tensorflow initialization info. May not works on some python builds such as anaconda python 3.6.4. If you can fix it, you are welcome.")
+ 
     subparsers = parser.add_subparsers()
     
     def process_extract(arguments):
@@ -107,7 +109,9 @@ if __name__ == "__main__":
         exit(0)
     parser.set_defaults(func=bad_args)
     
-    arguments = parser.parse_args()    
+    arguments = parser.parse_args()
+    if arguments.tf_suppress_std:
+        os.environ['TF_SUPPRESS_STD'] = '1'
     arguments.func(arguments)
 
 

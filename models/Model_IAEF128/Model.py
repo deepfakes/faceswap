@@ -120,12 +120,12 @@ class Model(ModelBase):
             st.append ( np.concatenate ( (
                 test_A[i,:,:,0:3],
                 AA[i],
-                mAA[i],
+                #mAA[i],
                 test_B[i,:,:,0:3], 
                 BB[i], 
-                mBB[i],                
+                #mBB[i],                
                 AB[i],
-                mAB[i]
+                #mAB[i]
                 ), axis=1) )
             
         return [ ('src, dst, src->dst', np.concatenate ( st, axis=0 ) ) ]
