@@ -28,15 +28,15 @@ if __name__ == "__main__":
     parser = FullHelpArgumentParser()
     subparser = parser.add_subparsers()
     effmpeg = Effmpeg(
-            subparser, "effmpeg", "This command allows you to easily execute "
-                               "common ffmpeg tasks.")
+            subparser, "effmpeg",
+            "This command allows you to easily execute common ffmpeg tasks.")
     sort = SortProcessor(
         subparser, "sort", "This command lets you sort images using various "
                            "methods.")
     guiparsers = {'effmpeg': effmpeg, 'sort': sort}
     gui = TKGui(
-            subparser, guiparsers, "gui", "Launch the Faceswap Tools Graphical User Interface.",
-            calling_file=__file__)
+            subparser, guiparsers, "gui",
+            "Launch the Faceswap Tools Graphical User Interface.")
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)

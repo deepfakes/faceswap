@@ -1,28 +1,21 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
-# Windows font slightly different size so:
-#   info box doesn't wrap properly (text cut off at right)
-#   longest labels cut off
-#   Options boxes don't fill pane - This may have been fixed with auto canvas resize. Check
-# SIGINT not working for Windows. Look for another CTRL+C Method
-# TODO
-# Add resizable panels
-# Add trendline to graph
-# STDOUT Flush
-# Alternate help text on action button
-# Tooltips? (Will fix Windows helpbox issue)
 
 import os
 import signal
 import re
+import subprocess
+from subprocess import PIPE, Popen, TimeoutExpired
 import sys
 
 from argparse import SUPPRESS
 from math import ceil, floor
-from subprocess import Popen, PIPE, TimeoutExpired
 from threading import Thread
 from time import time
 
+import numpy
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.animation as animation
 from matplotlib import pyplot as plt
 from matplotlib import style
@@ -49,7 +42,6 @@ except ImportError:
     messagebox = None
     TclError = None
 
-
 class Utils(object):
     """ Inter-class object holding items that are required across classes """
 
@@ -58,7 +50,7 @@ class Utils(object):
 
         self.icons = dict()
         self.guitext = dict()
-        self.guitext['action'] = dict()
+        self.actionbtns = dict()
 
         self.console = None
         self.debugconsole = False
@@ -70,7 +62,8 @@ class Utils(object):
         self.runningtask = False
 
         self.previewloc = os.path.join(PATHSCRIPT, '.gui_preview.png')
-        self.loss = {'lossA': [], 'lossB': []}
+
+        self.lossdict = dict()
 
     def init_tk(self):
         """ TK System must be on prior to setting tk variables,
@@ -107,19 +100,26 @@ class Utils(object):
         """ Terminate the subprocess Faceswap.py task """
         self.task.terminate()
         self.runningtask = False
+        self.clear_display_panel()
         self.change_action_button()
+
+    def clear_display_panel(self):
+        ''' Clear the preview window and graph '''
+        self.delete_preview()
+        self.lossdict = dict()
 
     def change_action_button(self):
         """ Change the action button to relevant control """
-        for cmd in self.guitext['action'].keys():
-            text = 'Terminate' if self.runningtask else cmd.title()
-            self.guitext['action'][cmd].set(text)
-
-    def bind_help(self, control, helptext):
-        """ Controls the help text displayed on mouse hover """
-        for action in ('<Enter>', '<FocusIn>', '<Leave>', '<FocusOut>'):
-            helptext = helptext if action in ('<Enter>', '<FocusIn>') else ''
-            control.bind(action, lambda event, txt=helptext: self.guitext['help'].set(txt))
+        for cmd in self.actionbtns.keys():
+            btnact = self.actionbtns[cmd]
+            if self.runningtask:
+                ttl = 'Terminate'
+                hlp = 'Exit the running process'
+            else:
+                ttl = cmd.title()
+                hlp = 'Run the {} script'.format(cmd.title())
+            btnact.config(text=ttl)
+            Tooltip(btnact, text=hlp, wraplength=200)
 
     def clear_console(self):
         """ Clear the console output screen """
@@ -158,10 +158,8 @@ class Utils(object):
         if not cfgfile:
             return
         if command is None:
-            cfg = {
-                cmd: {opt['control_title']: opt['value'].get() for opt in opts}
-                     for cmd, opts in self.opts.items()
-            }
+            cfg = {cmd: {opt['control_title']: opt['value'].get() for opt in opts}
+                   for cmd, opts in self.opts.items()}
         else:
             cfg = {command: {opt['control_title']: opt['value'].get()
                              for opt in self.opts[command]}}
@@ -199,10 +197,165 @@ class Utils(object):
             os.remove(self.previewloc)
 
 
+class Tooltip:
+    """
+    Create a tooltip for a given widget as the mouse goes on it.
+
+    Adapted from StackOverflow:
+
+    http://stackoverflow.com/questions/3221956/
+           what-is-the-simplest-way-to-make-tooltips-
+           in-tkinter/36221216#36221216
+
+    http://www.daniweb.com/programming/software-development/
+           code/484591/a-tooltip-class-for-tkinter
+
+    - Originally written by vegaseat on 2014.09.09.
+
+    - Modified to include a delay time by Victor Zaccardo on 2016.03.25.
+
+    - Modified
+        - to correct extreme right and extreme bottom behavior,
+        - to stay inside the screen whenever the tooltip might go out on
+          the top but still the screen is higher than the tooltip,
+        - to use the more flexible mouse positioning,
+        - to add customizable background color, padding, waittime and
+          wraplength on creation
+      by Alberto Vassena on 2016.11.05.
+
+      Tested on Ubuntu 16.04/16.10, running Python 3.5.2
+
+    """
+
+    def __init__(self, widget,
+                 *,
+                 background='#FFFFEA',
+                 pad=(5, 3, 5, 3),
+                 text='widget info',
+                 waittime=400,
+                 wraplength=250):
+
+        self.waittime = waittime  # in miliseconds, originally 500
+        self.wraplength = wraplength  # in pixels, originally 180
+        self.widget = widget
+        self.text = text
+        self.widget.bind("<Enter>", self.on_enter)
+        self.widget.bind("<Leave>", self.on_leave)
+        self.widget.bind("<ButtonPress>", self.on_leave)
+        self.background = background
+        self.pad = pad
+        self.ident = None
+        self.topwidget = None
+
+    def on_enter(self, event=None):
+        """ Schedule on an enter event """
+        self.schedule()
+
+    def on_leave(self, event=None):
+        """ Unschedule on a leave event """
+        self.unschedule()
+        self.hide()
+
+    def schedule(self):
+        """ Show the tooltip after wait period """
+        self.unschedule()
+        self.ident = self.widget.after(self.waittime, self.show)
+
+    def unschedule(self):
+        """ Hide the tooltip """
+        id_ = self.ident
+        self.ident = None
+        if id_:
+            self.widget.after_cancel(id_)
+
+    def show(self):
+        """ Show the tooltip """
+        def tip_pos_calculator(widget, label,
+                               *,
+                               tip_delta=(10, 5), pad=(5, 3, 5, 3)):
+            """ Calculate the tooltip position """
+
+            s_width, s_height = widget.winfo_screenwidth(), widget.winfo_screenheight()
+
+            width, height = (pad[0] + label.winfo_reqwidth() + pad[2],
+                             pad[1] + label.winfo_reqheight() + pad[3])
+
+            mouse_x, mouse_y = widget.winfo_pointerxy()
+
+            x_1, y_1 = mouse_x + tip_delta[0], mouse_y + tip_delta[1]
+            x_2, y_2 = x_1 + width, y_1 + height
+
+            x_delta = x_2 - s_width
+            if x_delta < 0:
+                x_delta = 0
+            y_delta = y_2 - s_height
+            if y_delta < 0:
+                y_delta = 0
+
+            offscreen = (x_delta, y_delta) != (0, 0)
+
+            if offscreen:
+
+                if x_delta:
+                    x_1 = mouse_x - tip_delta[0] - width
+
+                if y_delta:
+                    y_1 = mouse_y - tip_delta[1] - height
+
+            offscreen_again = y_1 < 0  # out on the top
+
+            if offscreen_again:
+                # No further checks will be done.
+
+                # TIP:
+                # A further mod might automagically augment the
+                # wraplength when the tooltip is too high to be
+                # kept inside the screen.
+                y_1 = 0
+
+            return x_1, y_1
+
+        background = self.background
+        pad = self.pad
+        widget = self.widget
+
+        # creates a toplevel window
+        self.topwidget = tk.Toplevel(widget)
+
+        # Leaves only the label and removes the app window
+        self.topwidget.wm_overrideredirect(True)
+
+        win = tk.Frame(self.topwidget,
+                       background=background,
+                       borderwidth=0)
+        label = tk.Label(win,
+                         text=self.text,
+                         justify=tk.LEFT,
+                         background=background,
+                         relief=tk.SOLID,
+                         borderwidth=0,
+                         wraplength=self.wraplength)
+
+        label.grid(padx=(pad[0], pad[2]),
+                   pady=(pad[1], pad[3]),
+                   sticky=tk.NSEW)
+        win.grid()
+
+        xpos, ypos = tip_pos_calculator(widget, label)
+
+        self.topwidget.wm_geometry("+%d+%d" % (xpos, ypos))
+
+    def hide(self):
+        """ Hide the tooltip """
+        topwidget = self.topwidget
+        if topwidget:
+            topwidget.destroy()
+        self.topwidget = None
+
 class FaceswapGui(object):
     """ The Graphical User Interface """
 
-    def __init__(self, utils, calling_file="faceswap.py"):
+    def __init__(self, utils, calling_file='faceswap.py'):
         self.gui = tk.Tk()
         self.utils = utils
         self.calling_file = calling_file
@@ -215,21 +368,35 @@ class FaceswapGui(object):
         self.gui.title(self.calling_file)
         self.menu()
 
-        topcontainer = ttk.Frame(self.gui)
-        topcontainer.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        container = tk.PanedWindow(self.gui,
+                                   sashrelief=tk.RAISED,
+                                   orient=tk.VERTICAL)
+        container.pack(fill=tk.BOTH, expand=True)
 
-        bottomcontainer = ttk.Frame(self.gui)
-        bottomcontainer.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+        topcontainer = tk.PanedWindow(container,
+                                      sashrelief=tk.RAISED,
+                                      orient=tk.HORIZONTAL)
+        container.add(topcontainer)
 
-        optsnotebook = ttk.Notebook(topcontainer, width=500)
-        optsnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
-        # Commands explicitly stated to ensure consistent ordering
-        for command in self.utils.opts.keys():
+        bottomcontainer = ttk.Frame(container, height=150)
+        container.add(bottomcontainer)
+
+        optsnotebook = ttk.Notebook(topcontainer, width=400, height=500)
+        topcontainer.add(optsnotebook)
+
+        if self.calling_file == 'faceswap.py':
+            # Commands explicitly stated to ensure consistent ordering
+            cmdlist = ('extract', 'train', 'convert')
+        else:
+            cmdlist = self.utils.opts.keys()
+
+        for command in cmdlist:
             commandtab = CommandTab(self.utils, optsnotebook, command)
             commandtab.build_tab()
 
         dspnotebook = ttk.Notebook(topcontainer, width=780)
-        dspnotebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        topcontainer.add(dspnotebook)
+
         for display in ('graph', 'preview'):
             displaytab = DisplayTab(self.utils, dspnotebook, display)
             displaytab.build_tab()
@@ -292,7 +459,6 @@ class FaceswapGui(object):
         self.gui.quit()
         exit()
 
-
 class ConsoleOut(object):
     """ The Console out tab of the Display section """
 
@@ -304,7 +470,7 @@ class ConsoleOut(object):
 
     def build_console(self):
         """ Build and place the console """
-        self.console.config(width=100, height=4, bg='gray90', fg='black')
+        self.console.config(width=100, height=6, bg='gray90', fg='black')
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self.frame, command=self.console.yview)
@@ -319,6 +485,7 @@ class ConsoleOut(object):
 
 
 class SysOutRouter(object):
+    """ Route stdout/stderr to the console window """
 
     def __init__(self, console=None, out_type=None):
         self.console = console
@@ -338,6 +505,7 @@ class SysOutRouter(object):
 
 
 class CommandTab(object):
+
     """ Tabs to hold the command options """
 
     def __init__(self, utils, notebook, command):
@@ -360,80 +528,12 @@ class CommandTab(object):
 
     def add_frame_separator(self):
         """ Add a separator between left and right frames """
-        sep = ttk.Frame(self.page, width=2, relief=tk.SUNKEN)
-        sep.pack(fill=tk.Y, padx=5, side=tk.LEFT)
-
-class ActionFrame(object):
-    """Action Frame - Displays information and action controls """
-
-    def __init__(self, utils, page, command):
-        self.utils = utils
-        self.page = page
-        self.command = command
-        self.title = command.title()
-
-    def build_frame(self):
-        """ Add help display and Action buttons to the left frame of each
-        page """
-        frame = ttk.Frame(self.page)
-        frame.pack(fill=tk.BOTH, padx=(10, 5), side=tk.LEFT, anchor=tk.N)
-
-        self.add_info_section(frame)
-        self.add_action_button(frame)
-        self.add_util_buttons(frame)
-
-    def add_info_section(self, frame):
-        """ Build the info text section page """
-        hlpframe = ttk.Frame(frame)
-        hlpframe.pack(side=tk.TOP, pady=5, fill=tk.BOTH, expand=True)
-        lbltitle = ttk.Label(hlpframe, text='Info', width=15, anchor=tk.SW)
-        lbltitle.pack(side=tk.TOP)
-        self.utils.guitext['help'].set('')
-        lblhelp = tk.Label(hlpframe,
-                           height=20,
-                           width=15,
-                           textvariable=self.utils.guitext['help'],
-                           wraplength=120,
-                           justify=tk.LEFT,
-                           anchor=tk.NW,
-                           bg="gray90")
-        lblhelp.pack(side=tk.TOP, anchor=tk.N, fill=tk.Y, expand=True)
-
-    def add_action_button(self, frame):
-        """ Add the action buttons for page """
-        actvar = tk.StringVar(frame)
-        actvar.set(self.title)
-        self.utils.guitext['action'][self.command] = actvar
-
-        actframe = ttk.Frame(frame)
-        actframe.pack(fill=tk.X, side=tk.TOP, pady=(15, 0))
-
-        btnact = tk.Button(actframe,
-                           textvariable=self.utils.guitext['action'][
-                               self.command],
-                           height=2,
-                           width=12,
-                           command=lambda: self.utils.action_command(
-                               self.command))
-        btnact.pack(side=tk.TOP)
-        self.utils.bind_help(btnact, 'Run the {} script'.format(self.title))
-
-    def add_util_buttons(self, frame):
-        """ Add the section utility buttons """
-        utlframe = ttk.Frame(frame)
-        utlframe.pack(side=tk.TOP, pady=5)
-
-        for utl in ('load', 'save', 'clear', 'reset'):
-            img = self.utils.icons[utl]
-            action = getattr(self.utils, utl + '_config')
-            btnutl = ttk.Button(utlframe,
-                                image=img,
-                                command=lambda cmd=action: cmd(self.command))
-            btnutl.pack(padx=2, pady=2, side=tk.LEFT)
-            self.utils.bind_help(btnutl, utl.capitalize() + ' ' + self.title + ' config')
+        sep = ttk.Frame(self.page, height=2, relief=tk.RIDGE)
+        sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
 
 class OptionsFrame(object):
     """ Options Frame - Holds the Options for each command """
+
     def __init__(self, utils, page, command):
         self.utils = utils
         self.page = page
@@ -443,7 +543,7 @@ class OptionsFrame(object):
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.optsframe = tk.Frame(self.canvas)
-        self.optscanvas = self.canvas.create_window((0,0),window=self.optsframe, anchor=tk.NW)
+        self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
 
     def build_frame(self):
         """ Build the options frame for this command """
@@ -453,10 +553,10 @@ class OptionsFrame(object):
         for option in self.utils.opts[self.command]:
             optioncontrol = OptionControl(self.utils, option, self.optsframe)
             optioncontrol.build_full_control()
-   
+
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
-        scrollbar = tk.Scrollbar(self.canvas, command=self.canvas.yview)
+        scrollbar = ttk.Scrollbar(self.page, command=self.canvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.config(yscrollcommand=scrollbar.set)
         self.optsframe.bind("<Configure>", self.update_scrollbar)
@@ -467,7 +567,7 @@ class OptionsFrame(object):
 
     def resize_frame(self, event):
         """ Resize the options frame to fit the canvas """
-        canvas_width = event.width - 19
+        canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
 
 class OptionControl(object):
@@ -509,7 +609,7 @@ class OptionControl(object):
     @staticmethod
     def build_one_control_label(frame, control_title):
         """ Build and place the control label """
-        lbl = ttk.Label(frame, text=control_title, width=15, anchor=tk.W)
+        lbl = ttk.Label(frame, text=control_title, width=18, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
     def build_one_control(self, frame, control, default, helptext, choices,
@@ -534,8 +634,7 @@ class OptionControl(object):
             ctl['values'] = [choice for choice in choices]
 
         ctl.pack(padx=5, pady=5, **packkwargs)
-
-        self.utils.bind_help(ctl, helptext)
+        Tooltip(ctl, text=helptext, wraplength=200)
         return var
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
@@ -544,7 +643,7 @@ class OptionControl(object):
         action = getattr(self, 'ask_' + sysbrowser)
         fileopn = ttk.Button(frame, image=img,
                              command=lambda cmd=action: cmd(filepath))
-        fileopn.pack(side=tk.RIGHT)
+        fileopn.pack(padx=(0, 5), side=tk.RIGHT)
 
     @staticmethod
     def ask_folder(filepath):
@@ -560,6 +659,59 @@ class OptionControl(object):
         if filename:
             filepath.set(filename)
 
+    def ask_combo(self, filepath):
+        """
+        Pop-up that asks for either a file or a directory based on the chosen
+        action
+        """
+
+
+
+class ActionFrame(object):
+    """Action Frame - Displays information and action controls """
+
+    def __init__(self, utils, page, command):
+        self.utils = utils
+        self.page = page
+        self.command = command
+        self.title = command.title()
+
+    def build_frame(self):
+        """ Add help display and Action buttons to the left frame of each
+        page """
+        frame = ttk.Frame(self.page)
+        frame.pack(fill=tk.BOTH, padx=(10, 5), side=tk.BOTTOM, anchor=tk.N)
+
+        self.add_action_button(frame)
+        self.add_util_buttons(frame)
+
+    def add_action_button(self, frame):
+        """ Add the action buttons for page """
+        actframe = ttk.Frame(frame)
+        actframe.pack(fill=tk.X, side=tk.LEFT, padx=5, pady=5)
+
+        btnact = ttk.Button(actframe,
+                            text=self.title,
+                            width=12,
+                            command=lambda: self.utils.action_command(
+                                self.command))
+        btnact.pack(side=tk.TOP)
+        Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
+        self.utils.actionbtns[self.command] = btnact
+
+    def add_util_buttons(self, frame):
+        """ Add the section utility buttons """
+        utlframe = ttk.Frame(frame)
+        utlframe.pack(side=tk.RIGHT, padx=(5, 10), pady=5)
+
+        for utl in ('load', 'save', 'clear', 'reset'):
+            img = self.utils.icons[utl]
+            action = getattr(self.utils, utl + '_config')
+            btnutl = ttk.Button(utlframe,
+                                image=img,
+                                command=lambda cmd=action: cmd(self.command))
+            btnutl.pack(padx=2, side=tk.LEFT)
+            Tooltip(btnutl, text=utl.capitalize() + ' ' + self.title + ' config', wraplength=200)
 
 class DisplayTab(object):
     """ The display tabs """
@@ -577,8 +729,8 @@ class DisplayTab(object):
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         if self.display == 'graph':
-            graph = GraphDisplay(frame, self.utils.loss)
-            graph.build_graph()
+            graphframe = GraphDisplay(frame, self.utils)
+            graphframe.create_graphs()
         elif self.display == 'preview':
             preview = PreviewDisplay(frame, self.utils.previewloc)
             preview.update_preview()
@@ -590,26 +742,104 @@ class DisplayTab(object):
 
 
 class GraphDisplay(object):
-    def __init__(self, frame, loss):
+    """ The Graph Tab of the Display section """
+
+    def __init__(self, frame, utils):
+        self.frame = frame
+        self.utils = utils
+        self.losskeys = None
+
+        self.graphpane = tk.PanedWindow(self.frame, sashrelief=tk.RAISED, orient=tk.VERTICAL)
+        self.graphpane.pack(fill=tk.BOTH, expand=True)
+
+        self.graphs = list()
+
+    def create_graphs(self):
+        """ create the graph frames when there are loss values to graph """
+        if not self.utils.lossdict:
+            self.frame.after(1000, self.create_graphs)
+            return
+
+        self.losskeys = sorted([key for key in self.utils.lossdict.keys()])
+
+        framecount = int(len(self.utils.lossdict) / 2)
+        for i in range(framecount):
+            self.add_graph(i)
+
+        self.monitor_state()
+
+    def add_graph(self, index):
+        """ Add a single graph to the graph window """
+        graphframe = ttk.Frame(self.graphpane)
+        self.graphpane.add(graphframe)
+
+        selectedkeys = self.losskeys[index * 2:(index + 1) * 2]
+        selectedloss = {key: self.utils.lossdict[key] for key in selectedkeys}
+
+        graph = Graph(graphframe, selectedloss, selectedkeys)
+        self.graphs.append(graph)
+        graph.build_graph()
+
+    def monitor_state(self):
+        """ Check there is a task still running. If not, destroy graphs
+            and reset graph display to waiting state """
+        if self.utils.lossdict:
+            self.frame.after(5000, self.monitor_state)
+            return
+        self.destroy_graphs()
+        self.create_graphs()
+
+    def destroy_graphs(self):
+        """ Destroy graphs when the process has stopped """
+        for graph in self.graphs:
+            del graph
+        self.graphs = list()
+        for child in self.graphpane.panes():
+            self.graphpane.remove(child)
+
+class Graph(object):
+    """ Each graph to be displayed. Until training is run it is not known
+        how many graphs will be required, so they sit in their own class
+        ready to be created when requested """
+
+    def __init__(self, frame, loss, losskeys):
         self.frame = frame
         self.loss = loss
+        self.losskeys = losskeys
+
         self.ylim = (100, 0)
 
         style.use('ggplot')
 
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
-        self.aline, = self.ax1.plot(0, 0, color='blue', linewidth=1, label='Loss A')
-        self.bline, = self.ax1.plot(0, 0, color='red', linewidth=1, label='Loss B')
+        self.losslines = list()
+        self.trndlines = list()
 
     def build_graph(self):
         """ Update the plot area with loss values and cycle through to
         animate """
         self.ax1.set_xlabel('Iterations')
         self.ax1.set_ylabel('Loss')
-        self.ax1.set_ylim(0, 0.01)
+        self.ax1.set_ylim(0.00, 0.01)
         self.ax1.set_xlim(0, 1)
-        self.ax1.legend(loc='lower left')
+
+        losslbls = [lbl.replace('_', ' ').title() for lbl in self.losskeys]
+        for idx, linecol in enumerate(['blue', 'red']):
+            self.losslines.extend(self.ax1.plot(0, 0,
+                                                color=linecol,
+                                                linewidth=1,
+                                                label=losslbls[idx]))
+        for idx, linecol in enumerate(['navy', 'firebrick']):
+            lbl = losslbls[idx]
+            lbl = 'Trend{}'.format(lbl[lbl.rfind(' '):])
+            self.trndlines.extend(self.ax1.plot(0, 0,
+                                                color=linecol,
+                                                linewidth=2,
+                                                label=lbl))
+
+        self.ax1.legend(loc='upper right')
+
         plt.subplots_adjust(left=0.075, bottom=0.075, right=0.95, top=0.95,
                             wspace=0.2, hspace=0.2)
 
@@ -619,30 +849,44 @@ class GraphDisplay(object):
         plotcanvas.draw()
 
     def animate(self, i):
-
         """ Read loss data and apply to graph """
-        if not self.loss['lossA']:
-            return
-        # Take shallow copy because of writes to the list in other thread
-        # whilst we're processing
-        # Locking doesn't seem to work :( At a guess it's because it
-        # re-reads the data in idle time
-        # when it redraws. Need to work out if locking there is possible
-        # Alternatively look to use Queue
-        aloss, bloss = self.loss['lossA'][:], self.loss['lossB'][:]
-        
-        ymin = floor(min(aloss + bloss) * 100) / 100
-        ymax = ceil(max(aloss + bloss) * 100) / 100
+        loss = [self.loss[key][:] for key in self.losskeys]
+
+        xlim = self.recalculate_axes(loss)
+
+        xrng = [x for x in range(xlim)]
+
+        self.raw_plot(xrng, loss)
+
+        if xlim > 10:
+            self.trend_plot(xrng, loss)
+
+    def recalculate_axes(self, loss):
+        ''' Recalculate the latest x and y axes limits from latest data '''
+        ymin = floor(min([min(lossvals) for lossvals in loss]) * 100) / 100
+        ymax = ceil(max([max(lossvals) for lossvals in loss]) * 100) / 100
+
         if ymin < self.ylim[0] or ymax > self.ylim[1]:
             self.ylim = (ymin, ymax)
             self.ax1.set_ylim(self.ylim[0], self.ylim[1])
-        
-        xlim = len(aloss)
-        self.ax1.set_xlim(0, xlim)
 
-        xrng = [x for x in range(xlim)]
-        self.aline.set_data(xrng, aloss)
-        self.bline.set_data(xrng, bloss)
+        xlim = len(loss[0])
+        xlim = 2 if xlim == 1 else xlim
+        self.ax1.set_xlim(0, xlim - 1)
+
+        return xlim
+
+    def raw_plot(self, x_range, loss):
+        ''' Raw value plotting '''
+        for idx, lossvals in enumerate(loss):
+            self.losslines[idx].set_data(x_range, lossvals)
+
+    def trend_plot(self, x_range, loss):
+        ''' Trend value plotting '''
+        for idx, lossvals in enumerate(loss):
+            fit = numpy.polyfit(x_range, lossvals, 3)
+            poly = numpy.poly1d(fit)
+            self.trndlines[idx].set_data(x_range, poly(x_range))
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -696,6 +940,7 @@ class FaceswapControl(object):
         self.command = None
         self.args = None
         self.process = None
+        self.lenloss = 0
 
     def prepare(self, options, command):
         """ Prepare for running the subprocess """
@@ -724,11 +969,13 @@ class FaceswapControl(object):
 
     def execute_script(self):
         """ Execute the requested Faceswap Script """
-        self.process = Popen(self.args,
-                             stdout=PIPE,
-                             stderr=PIPE,
-                             bufsize=1,
-                             universal_newlines=True)
+        kwargs = {'stdout': PIPE,
+                  'stderr': PIPE,
+                  'bufsize': 1,
+                  'universal_newlines': True}
+        if os.name == 'nt':
+            kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+        self.process = Popen(self.args, **kwargs)
         self.thread_stdout()
         self.thread_stderr()
 
@@ -747,6 +994,7 @@ class FaceswapControl(object):
         self.utils.runningtask = False
         self.utils.change_action_button()
         self.set_final_status(returncode)
+        print('Process exited.')
 
     def read_stderr(self):
         """ Read stdout from the subprocess. If training, pass the loss
@@ -773,11 +1021,36 @@ class FaceswapControl(object):
 
     def capture_loss(self, string):
         """ Capture loss values from stdout """
-        loss = re.findall(r'\d+\.\d+', string)
-        if len(loss) != 2:
+        # TODO: Remove this hideous hacky fix. When the subprocess is terminated and
+        # the loss dictionary is reset, 1 set of loss values ALWAYS slips through
+        # and appends to the lossdict AFTER the subprocess has closed meaning that
+        # checks on whether the dictionary is empty fail.
+        # Therefore if the size of current loss dictionary is smaller than the
+        # previous loss dictionary, assume that the process has been terminated
+        # and reset it.
+        # I have tried and failed to empty the subprocess stdout with:
+        #   sys.exit() on the stdout/err threads (no effect)
+        #   sys.stdout/stderr.flush (no effect)
+        #   thread.join (locks the whole process up, because the stdout thread
+        #       stubbornly refuses to release its last line)
+
+        currentlenloss = len(self.utils.lossdict)
+        if self.lenloss > currentlenloss:
+            self.utils.lossdict = dict()
+            self.lenloss = 0
             return
-        self.utils.loss['lossA'].append(float(loss[0]))
-        self.utils.loss['lossB'].append(float(loss[1]))
+        self.lenloss = currentlenloss
+
+        loss = re.findall(r'([a-zA-Z_]+):.*?(\d+\.\d+)', string)
+
+        if len(loss) < 2:
+            return
+
+        if not self.utils.lossdict:
+            self.utils.lossdict.update((item[0], []) for item in loss)
+
+        for item in loss:
+            self.utils.lossdict[item[0]].append(float(item[1]))
 
     def terminate(self):
         """ Terminate the subprocess """
@@ -785,12 +1058,15 @@ class FaceswapControl(object):
             print('Sending Exit Signal', flush=True)
             try:
                 now = time()
-                self.process.send_signal(signal.SIGINT)
+                if os.name == 'nt':
+                    os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+                else:
+                    self.process.send_signal(signal.SIGINT)
                 while True:
                     timeelapsed = time() - now
                     if self.process.poll() is not None:
                         break
-                    if timeelapsed > 10:
+                    if timeelapsed > 30:
                         raise ValueError('Timeout reached sending Exit Signal')
                 return
             except ValueError as err:
@@ -807,22 +1083,23 @@ class FaceswapControl(object):
 
     def set_final_status(self, returncode):
         """ Set the status bar output based on subprocess return code """
-        if returncode == 0:
+        if returncode == 0 or returncode == 3221225786:
             status = 'Ready'
         elif returncode == -15:
-            status = 'Terminated - ' + self.command + '.py'
+            status = 'Terminated - {}.py'.format(self.command)
         elif returncode == -9:
-            status = 'Killed - ' + self.command + '.py'
+            status = 'Killed - {}.py'.format(self.command)
+        elif returncode == -6:
+            status = 'Aborted - {}.py'.format(self.command)
         else:
-            status = 'Failed - ' + self.command + '.py'
+            status = 'Failed - {}.py. Return Code: {}'.format(self.command, returncode)
         self.utils.guitext['status'].set(status)
 
 
 class TKGui(object):
     """ Main GUI Control """
 
-    def __init__(self, subparser, subparsers, command, description='default',
-                 calling_file="faceswap.py"):
+    def __init__(self, subparser, subparsers, command, description='default'):
         # Don't try to load the GUI if there is no display or there are
         # problems importing tkinter
         cmd = sys.argv
@@ -831,46 +1108,50 @@ class TKGui(object):
 
         self.arguments = None
         self.opts = self.extract_options(subparsers)
-        self.utils = Utils(self.opts, calling_file=calling_file)
-        self.root = FaceswapGui(self.utils)
+        self.utils = Utils(self.opts, calling_file=cmd[0])
+        self.root = FaceswapGui(self.utils, calling_file=cmd[0])
         self.parse_arguments(description, subparser, command)
 
     @staticmethod
     def check_display(command):
-        # Check whether there is a display to output the GUI. If running on
-        # Windows then assume not running in headless mode
+        """ Check whether there is a display to output the GUI. If running on
+            Windows then assume not running in headless mode """
         if not os.environ.get('DISPLAY', None) and os.name != 'nt':
             if 'gui' in command:
-                print('Could not detect a display. The GUI has been disabled')
+                print('Could not detect a display. The GUI has been disabled.')
+                if os.name == 'posix':
+                    print('macOS users need to install XQuartz. '
+                          'See https://support.apple.com/en-gb/HT201341')
             return False
         return True
 
     @staticmethod
     def check_tkinter_available(command):
+        """ Check whether TkInter is installed on user's machine """
         tkinter_vars = [tk, ttk, filedialog, messagebox, TclError]
         if any(var is None for var in tkinter_vars):
             if "gui" in command:
                 print(
-                        "It looks like TkInter isn't installed for your OS, so "
-                        "the GUI has been "
-                        "disabled. To enable the GUI please install the TkInter "
-                        "application.\n"
-                        "You can try:\n"
-                        "  Windows/macOS:      Install ActiveTcl Community "
-                        "Edition from "
-                        "www.activestate.com\n"
-                        "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
-                        "  Arch:               sudo pacman -S tk\n"
-                        "  CentOS/Redhat:      sudo yum install tkinter\n"
-                        "  Fedora:             sudo dnf install python3-tkinter\n",
-                        file=sys.stderr)
+                    "It looks like TkInter isn't installed for your OS, so "
+                    "the GUI has been "
+                    "disabled. To enable the GUI please install the TkInter "
+                    "application.\n"
+                    "You can try:\n"
+                    "  Windows/macOS:      Install ActiveTcl Community "
+                    "Edition from "
+                    "www.activestate.com\n"
+                    "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                    "  Arch:               sudo pacman -S tk\n"
+                    "  CentOS/Redhat:      sudo yum install tkinter\n"
+                    "  Fedora:             sudo dnf install python3-tkinter\n",
+                    file=sys.stderr)
             return False
         return True
 
     def extract_options(self, subparsers):
         """ Extract the existing ArgParse Options """
         opts = {cmd: subparsers[cmd].argument_list + subparsers[cmd].optional_arguments
-                     for cmd in subparsers.keys()}
+                for cmd in subparsers.keys()}
         for command in opts.values():
             for opt in command:
                 if opt.get('help', '') == SUPPRESS:
@@ -894,14 +1175,10 @@ class TKGui(object):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
         ctl = ttk.Entry
-        if option.get('action', '') == FullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == FileFullPaths:
+        if option.get('dest', '') == 'alignments_dir':
             sysbrowser = 'load'
-        elif option.get('action', '') == DirFullPaths:
+        elif option.get('action', '') == FullPaths:
             sysbrowser = 'folder'
-        elif option.get('action', '') == ComboFullPaths:
-            sysbrowser = 'combo'
         elif option.get('choices', '') != '':
             ctl = ttk.Combobox
         elif option.get('action', '') == 'store_true':
@@ -911,11 +1188,11 @@ class TKGui(object):
     def parse_arguments(self, description, subparser, command):
         """ Parse the command line arguments for the GUI """
         parser = subparser.add_parser(
-                command,
-                help="This Launches a GUI for Faceswap.",
-                description=description,
-                epilog="Questions and feedback: \
-                        https://github.com/deepfakes/faceswap-playground")
+            command,
+            help="This Launches a GUI for Faceswap.",
+            description=description,
+            epilog="Questions and feedback: \
+                    https://github.com/deepfakes/faceswap-playground")
 
         parser.add_argument('-d', '--debug',
                             action='store_true',
