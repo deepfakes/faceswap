@@ -15,14 +15,17 @@ def import_tensorflow_keras():
     from keras.backend.tensorflow_backend import set_session
     return (tflow, set_session)
 
-class TrainingArgs(object):
+class TrainingProcessor(object):
     """ Class to parse the command line arguments for training """
 
     def __init__(self, subparser, command, description="default"):
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
+
         self.parser = self.create_parser(subparser, command, description)
-        self.parse_arguments()
+
+        self.add_arguments()
+        self.parser.set_defaults(func=self.execute_process)
 
     @staticmethod
     def get_argument_list():
@@ -46,56 +49,57 @@ class TrainingArgs(object):
                               "default": "models",
                               "help": "Model directory. This is where the training data will "
                                       "be stored. Defaults to 'model'"})
+        argument_list.append({"opts": ("-s", "--save-interval"),
+                              "type": int,
+                              "dest": "save_interval",
+                              "default": 100,
+                              "help": "Sets the number of iterations before saving the model"})
+        argument_list.append({"opts": ("-t", "--trainer"),
+                              "type": str,
+                              "choices": PluginLoader.get_available_models(),
+                              "default": PluginLoader.get_default_model(),
+                              "help": "Select which trainer to use, Use LowMem for cards with "
+                                      " less than 2GB of VRAM"})
+        argument_list.append({"opts": ("-bs", "--batch-size"),
+                              "type": int,
+                              "default": 64,
+                              "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
+        argument_list.append({"opts": ("-ep", "--epochs"),
+                              "type": int,
+                              "default": 1000000,
+                              "help": "Length of training in epochs"})
+        argument_list.append({"opts": ("-g", "--gpus"),
+                              "type": int,
+                              "default": 1,
+                              "help": "Number of GPUs to use for training"})
         argument_list.append({"opts": ("-p", "--preview"),
                               "action": "store_true",
                               "dest": "preview",
                               "default": False,
                               "help": "Show preview output. If not specified, write progress "
-                                      "to file."})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
-        argument_list.append({"opts": ("-s", "--save-interval"),
-                              "type": int,
-                              "dest": "save_interval",
-                              "default": 100,
-                              "help": "Sets the number of iterations before saving the model."})
+                                      "to file"})
         argument_list.append({"opts": ("-w", "--write-image"),
                               "action": "store_true",
                               "dest": "write_image",
                               "default": False,
                               "help": "Writes the training result to a file even on "
-                                      "preview mode."})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str,
-                              "choices": PluginLoader.get_available_models(),
-                              "default": PluginLoader.get_default_model(),
-                              "help": "Select which trainer to use, LowMem for cards < 2gb."})
+                                      "preview mode"})
         argument_list.append({"opts": ("-pl", "--use-perceptual-loss"),
                               "action": "store_true",
                               "dest": "perceptual_loss",
                               "default": False,
                               "help": "Use perceptual loss while training"})
-        argument_list.append({"opts": ("-bs", "--batch-size"),
-                              "type": int,
-                              "default": 64,
-                              "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",
                               "default": False,
                               "help": "Sets allow_growth option of Tensorflow to spare memory "
                                       "on some configs"})
-        argument_list.append({"opts": ("-ep", "--epochs"),
-                              "type": int,
-                              "default": 1000000,
-                              "help": "Length of training in epochs."})
-        argument_list.append({"opts": ("-g", "--gpus"),
-                              "type": int,
-                              "default": 1,
-                              "help": "Number of GPUs to use for training"})
+        argument_list.append({"opts": ("-v", "--verbose"),
+                              "action": "store_true",
+                              "dest": "verbose",
+                              "default": False,
+                              "help": "Show verbose output"})
         # This is a hidden argument to indicate that the GUI is being used,
         # so the preview window should be redirected Accordingly
         argument_list.append({"opts": ("-gui", "--gui"),
@@ -123,21 +127,17 @@ class TrainingArgs(object):
         argument_list = []
         return argument_list
 
-    def parse_arguments(self):
+    def add_arguments(self):
         """ Parse the arguments passed in from argparse """
-        for option in self.argument_list:
+        for option in self.argument_list + self.optional_arguments:
             args = option["opts"]
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
 
-        self.parser = self.add_optional_arguments()
-
-    def add_optional_arguments(self):
-        """ Add any optional arguments passed in from argparse """
-        for option in self.optional_arguments:
-            args = option["opts"]
-            kwargs = {key: option[key] for key in option.keys() if key != "opts"}
-            self.parser.add_argument(*args, **kwargs)
+    def execute_process(self, arguments):
+        """ The process to run if this command is called """
+        process = Train(arguments)
+        process.process()
 
 class Train(object):
     """ The training process.  """
@@ -300,12 +300,3 @@ class Train(object):
         except Exception as err:
             print("could not preview sample")
             raise err
-
-class TrainingProcessor(object):
-    """ TODO: Change this, it shouldn't be a class.
-        It's here to keep compatibility during rewrite """
-    def __init__(self, subparser, command, description):
-        args = TrainingArgs(subparser, command, description).parser.arguments
-
-        self.process = Train(args)
-        self.process.process()

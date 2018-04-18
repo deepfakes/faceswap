@@ -13,7 +13,7 @@ from lib.utils import BackgroundGenerator, get_folder, get_image_paths, rotate_i
 
 from plugins.PluginLoader import PluginLoader
 
-class ConvertArgs(DirectoryArgs):
+class ConvertImage(DirectoryArgs):
     """ Class to parse the command line arguments for conversion.
         Inherits base options from lib.DirectoryArgs """
 
@@ -35,32 +35,49 @@ class ConvertArgs(DirectoryArgs):
                                       "contain the aligned faces extracted from the input files. "
                                       "If you delete faces from this folder, they'll be skipped "
                                       "during conversion. If no aligned dir is specified, all "
-                                      "faces will be converted."})
+                                      "faces will be converted"})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "type": str,
                               # case sensitive because this is used to load a plug-in.
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
-                              "help": "Select the trainer that was used to create the model."})
-        argument_list.append({"opts": ("-s", "--swap-model"),
-                              "action": "store_true",
-                              "dest": "swap_model",
-                              "default": False,
-                              "help": "Swap the model. Instead of A -> B, swap B -> A."})
+                              "help": "Select the trainer that was used to create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "type": str,
                               # case sensitive because this is used to load a plugin.
                               "choices": ("Masked", "Adjust"),
                               "default": "Masked",
-                              "help": "Converter to use."})
-        argument_list.append({"opts": ("-D", "--detector"),
-                              "type": str,
-                              # case sensitive because this is used to load a plugin.
-                              "choices": ("hog", "cnn"),
-                              "default": "hog",
-                              "help": "Detector to use. 'cnn' detects much more angles but "
-                                      "will be much more resource intensive and may fail "
-                                      "on large files."})
+                              "help": "Converter to use"})
+        argument_list.append({"opts": ("-b", "--blur-size"),
+                              "type": int,
+                              "default": 2,
+                              "help": "Blur size. (Masked converter only)"})
+        argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
+                              "dest": "erosion_kernel_size",
+                              "type": int,
+                              "default": None,
+                              "help": "Erosion kernel size. Positive values apply erosion "
+                                      "which reduces the edge of the swapped face. Negative "
+                                      "values apply dilation which allows the swapped face "
+                                      "to cover more space. (Masked converter only)"})
+        argument_list.append({"opts": ("-M", "--mask-type"),
+                              #lowercase this, because its just a string later on.
+                              "type": str.lower,
+                              "dest": "mask_type",
+                              "choices": ["rect", "facehull", "facehullandrect"],
+                              "default": "facehullandrect",
+                              "help": "Mask to use to replace faces. (Masked converter only)"})
+        argument_list.append({"opts": ("-sh", "--sharpen"),
+                              "type": str.lower,
+                              "dest": "sharpen_image",
+                              "choices": ["bsharpen", "gsharpen"],
+                              "default": None,
+                              "help": "Use Sharpen Image.bsharpen for Box Blur, gsharpen for "
+                                      "Gaussian Blur (Masked converter only)"})
+        argument_list.append({"opts": ("-g", "--gpus"),
+                              "type": int,
+                              "default": 1,
+                              "help": "Number of GPUs to use for conversion"})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,
@@ -73,62 +90,22 @@ class ConvertArgs(DirectoryArgs):
                               "dest": "discard_frames",
                               "default": False,
                               "help": "When used with --frame-ranges discards frames that are "
-                                      "not processed instead of writing them out unchanged."})
-        argument_list.append({"opts": ("-l", "--ref_threshold"),
-                              "type": float,
-                              "dest": "ref_threshold",
-                              "default": 0.6,
-                              "help": "Threshold for positive face recognition"})
-        argument_list.append({"opts": ("-n", "--nfilter"),
-                              "type": str,
-                              "dest": "nfilter",
-                              "nargs": "+",
-                              "default": "nfilter.jpg",
-                              "help": "Reference image for the persons you do not want to "
-                                      "process. Should be a front portrait"})
-        argument_list.append({"opts": ("-f", "--filter"),
-                              "type": str,
-                              "dest": "filter",
-                              "nargs": "+",
-                              "default": "filter.jpg",
-                              "help": "Reference images for the person you want to process. "
-                                      "Should be a front portrait"})
-        argument_list.append({"opts": ("-b", "--blur-size"),
-                              "type": int,
-                              "default": 2,
-                              "help": "Blur size. (Masked converter only)"})
+                                      "not processed instead of writing them out unchanged"})
+        argument_list.append({"opts": ("-s", "--swap-model"),
+                              "action": "store_true",
+                              "dest": "swap_model",
+                              "default": False,
+                              "help": "Swap the model. Instead of A -> B, swap B -> A"})
         argument_list.append({"opts": ("-S", "--seamless"),
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
                               "help": "Use cv2's seamless clone. (Masked converter only)"})
-        argument_list.append({"opts": ("-M", "--mask-type"),
-                              #lowercase this, because its just a string later on.
-                              "type": str.lower,
-                              "dest": "mask_type",
-                              "choices": ["rect", "facehull", "facehullandrect"],
-                              "default": "facehullandrect",
-                              "help": "Mask to use to replace faces. (Masked converter only)"})
-        argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
-                              "dest": "erosion_kernel_size",
-                              "type": int,
-                              "default": None,
-                              "help": "Erosion kernel size. (Masked converter only). Positive "
-                                      "values apply erosion which reduces the edge of the "
-                                      "swapped face. Negative values apply dilation which allows "
-                                      "the swapped face to cover more space."})
         argument_list.append({"opts": ("-mh", "--match-histgoram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
                               "help": "Use histogram matching. (Masked converter only)"})
-        argument_list.append({"opts": ("-sh", ),
-                              "type": str.lower,
-                              "dest": "sharpen_image",
-                              "choices": ["bsharpen", "gsharpen"],
-                              "default": None,
-                              "help": "Use Sharpen Image - bsharpen = Box Blur, gsharpen = "
-                                      "Gaussian Blur (Masked converter only)"})
         argument_list.append({"opts": ("-sm", "--smooth-mask"),
                               "action": "store_true",
                               "dest": "smooth_mask",
@@ -139,20 +116,19 @@ class ConvertArgs(DirectoryArgs):
                               "dest": "avg_color_adjust",
                               "default": True,
                               "help": "Average color adjust. (Adjust converter only)"})
-        argument_list.append({"opts": ("-g", "--gpus"),
-                              "type": int,
-                              "default": 1,
-                              "help": "Number of GPUs to use for conversion"})
         return argument_list
 
     def create_parser(self, subparser, command, description):
         self.optional_arguments = self.get_optional_arguments()
-        self.parser = subparser.add_parser(
+        self.process = Convert
+
+        parser = subparser.add_parser(
             command,
             help="Convert a source image to a new one with the face swapped.",
             description=description,
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground")
+        return parser
 
 class Convert(FSProcess):
     """ The convert process. Inherits from cli.FSProcess, including the additional
@@ -175,6 +151,8 @@ class Convert(FSProcess):
 
         for item in batch.iterator():
             self.convert(converter, item)
+        
+        self.finalize()
 
     def generate_alignments(self):
         """ Generate an alignments file if one does not already
@@ -357,13 +335,3 @@ class OptionalActions(object):
                                      rotated_width=self.rotation_width,
                                      rotated_height=self.rotation_height)
         return image
-
-class ConvertImage(object):
-    """ TODO: Change this, it shouldn't be a class.
-        It's here to keep compatibility during rewrite """
-    def __init__(self, subparser, command, description):
-        args = ConvertArgs(subparser, command, description).parser.arguments
-
-        self.process = Convert(args)
-        self.process.process()
-        self.process.finalize()
