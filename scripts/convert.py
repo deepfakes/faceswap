@@ -116,7 +116,7 @@ class ConvertImage(DirectoryProcessor):
                                "type": str.lower,
                                "dest": "sharpen_image",
                                "choices": ["bsharpen", "gsharpen"],
-                               "default": "none",
+                               "default": None,
                                "help": "Use Sharpen Image - bsharpen = Box Blur, gsharpen = Gaussian Blur (Masked converter only)"})
         argument_list.append({ "opts": ('-sm', '--smooth-mask'),
                                "action": "store_true",
@@ -244,7 +244,7 @@ class ConvertImage(DirectoryProcessor):
                 if self.have_face(filename):
                     faces = self.get_faces_alignments(filename, image)
                 else:
-                    print ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
+                    tqdm.write ('no alignment found for {}, skipping'.format(os.path.basename(filename)))
                     continue
             else:
                 faces = self.get_faces(image)

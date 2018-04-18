@@ -1,8 +1,17 @@
 # AutoEncoder base classes
 
-encoderH5 = 'encoder.h5'
-decoder_AH5 = 'decoder_A.h5'
-decoder_BH5 = 'decoder_B.h5'
+import os, shutil
+
+encoderH5 = 'lowmem_encoder.h5'
+decoder_AH5 = 'lowmem_decoder_A.h5'
+decoder_BH5 = 'lowmem_decoder_B.h5'
+
+#Part of Filename migration, should be remopved some reasonable time after first added
+import os.path
+old_encoderH5 = 'encoder.h5'
+old_decoder_AH5 = 'decoder_A.h5'
+old_decoder_BH5 = 'decoder_B.h5'
+#End filename migration
 
 class AutoEncoder:
     def __init__(self, model_dir, gpus):
@@ -19,6 +28,17 @@ class AutoEncoder:
         (face_A,face_B) = (decoder_AH5, decoder_BH5) if not swapped else (decoder_BH5, decoder_AH5)
 
         try:
+            #Part of Filename migration, should be remopved some reasonable time after first added
+            if os.path.isfile(str(self.model_dir / old_encoderH5)):
+                print('Migrating to new filenames: ', end='')
+                if os.path.isfile(str(self.model_dir / encoderH5)) is not True:
+                    os.rename(str(self.model_dir / old_decoder_AH5), str(self.model_dir / decoder_AH5))
+                    os.rename(str(self.model_dir / old_decoder_BH5), str(self.model_dir / decoder_BH5))
+                    os.rename(str(self.model_dir / old_encoderH5), str(self.model_dir / encoderH5))
+                    print('Complete')
+                else:
+                    print('Failed due to existing files in folder.  Loading already migrated files')
+            #End filename migration
             self.encoder.load_weights(str(self.model_dir / encoderH5))
             self.decoder_A.load_weights(str(self.model_dir / face_A))
             self.decoder_B.load_weights(str(self.model_dir / face_B))
@@ -30,6 +50,11 @@ class AutoEncoder:
             return False
 
     def save_weights(self):
+        model_dir = str(self.model_dir)
+        if os.path.isdir(model_dir + "_bk"):
+            shutil.rmtree(model_dir + "_bk")
+        shutil.move(model_dir,  model_dir + "_bk")
+        os.mkdir(model_dir)
         self.encoder.save_weights(str(self.model_dir / encoderH5))
         self.decoder_A.save_weights(str(self.model_dir / decoder_AH5))
         self.decoder_B.save_weights(str(self.model_dir / decoder_BH5))

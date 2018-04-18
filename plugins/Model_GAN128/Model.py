@@ -1,6 +1,8 @@
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
+import os
+import shutil
 from keras.models import Model
 from keras.layers import *
 from keras.layers.advanced_activations import LeakyReLU
@@ -45,7 +47,6 @@ class GANModel():
     def __init__(self, model_dir, gpus):
         self.model_dir = model_dir
         self.gpus = gpus
-        assert self.gpus == 1, "Error: GAN128 cannot use multiple gpus right now. See https://github.com/deepfakes/faceswap/issues/287"
 
         optimizer = Adam(1e-4, 0.5)
 
@@ -128,6 +129,8 @@ class GANModel():
         x = Input(shape=self.img_shape)
         netGA = Model(x, decoder_A(encoder(x)))
         netGB = Model(x, decoder_B(encoder(x)))
+        netGA.output_names = ["netGA_out_1", "netGA_out_2"] # Workarounds till https://github.com/keras-team/keras/issues/8962 is fixed.
+        netGB.output_names = ["netGB_out_1", "netGB_out_2"] #
 
         self.netGA_sm = netGA
         self.netGB_sm = netGB
@@ -184,6 +187,11 @@ class GANModel():
         return True
 
     def save_weights(self):
+        model_dir = str(self.model_dir)
+        if os.path.isdir(model_dir + "_bk"):
+            shutil.rmtree(model_dir + "_bk")
+        shutil.move(model_dir,  model_dir + "_bk")
+        os.mkdir(model_dir)
         if self.gpus > 1:
             self.netGA_sm.save_weights(str(self.model_dir / netGAH5))
             self.netGB_sm.save_weights(str(self.model_dir / netGBH5))
