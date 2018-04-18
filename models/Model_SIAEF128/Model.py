@@ -21,8 +21,7 @@ class Model(ModelBase):
         return "SIAEF128"
  
     #override
-    def onInitialize(self, batch_size=-1, **in_options):
-   
+    def onInitialize(self, batch_size=-1, **in_options):   
         if self.gpu_total_vram_gb < 6:
             raise Exception ('Sorry, this model works only on 6GB+ GPU')
             

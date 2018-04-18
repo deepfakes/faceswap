@@ -18,7 +18,22 @@ class Model(ModelBase):
  
     #override
     def onInitialize(self, batch_size=-1, **in_options):
-  
+        if self.gpu_total_vram_gb < 3:
+            raise Exception ('Sorry, this model works only on 2GB+ GPU')
+            
+        self.batch_size = batch_size
+        if self.batch_size == 0:
+            if self.gpu_total_vram_gb == 2:
+                self.batch_size = 1
+            elif self.gpu_total_vram_gb == 3:
+                self.batch_size = 4
+            elif self.gpu_total_vram_gb == 4:
+                self.batch_size = 8
+            elif self.gpu_total_vram_gb == 5:
+                self.batch_size = 16
+            else:    
+                self.batch_size = 32
+                
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 4))
 
         self.encoder = self.Encoder(ae_input_layer, self.created_vram_gb)
@@ -32,20 +47,7 @@ class Model(ModelBase):
 
         self.autoencoder_src = self.keras.models.Model(ae_input_layer, self.decoder_src(self.encoder(ae_input_layer)))
         self.autoencoder_dst = self.keras.models.Model(ae_input_layer, self.decoder_dst(self.encoder(ae_input_layer)))
-        
-        self.batch_size = batch_size
-        if self.batch_size == 0:
-            if self.gpu_total_vram_gb <= 2:
-                self.batch_size = 1
-            elif self.gpu_total_vram_gb <= 3:
-                self.batch_size = 4
-            elif self.gpu_total_vram_gb <= 4:
-                self.batch_size = 8
-            elif self.gpu_total_vram_gb <= 5:
-                self.batch_size = 16
-            else:    
-                self.batch_size = 32
-            
+
         optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
         self.autoencoder_src.compile(optimizer=optimizer, loss='mae')
         self.autoencoder_dst.compile(optimizer=optimizer, loss='mae')
