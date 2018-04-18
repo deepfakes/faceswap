@@ -59,8 +59,13 @@ class DirectoryArgs(object):
 
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
+
+        #process gets replaces in convert or extract
+        self.process = FSProcess
         self.parser = self.create_parser(subparser, command, description)
-        self.parse_arguments()
+        self.add_arguments()
+
+        self.parser.set_defaults(func=self.execute_process)
 
     @staticmethod
     def get_argument_list():
@@ -78,15 +83,44 @@ class DirectoryArgs(object):
                               "default": "output",
                               "help": "Output directory. This is where the converted files will "
                                       "be stored. Defaults to 'output'"})
+        argument_list.append({"opts": ("--alignments", ),
+                              "type": str,
+                              "dest": "alignments_path",
+                              "help": "optional path to alignments file"})
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
                               "dest": "serializer",
                               "choices": ("yaml", "json", "pickle"),
                               "help": "serializer for alignments file"})
-        argument_list.append({"opts": ("--alignments", ),
+        argument_list.append({"opts": ("-D", "--detector"),
                               "type": str,
-                              "dest": "alignments_path",
-                              "help": "optional path to alignments file."})
+                              # case sensitive because this is used to load a plugin.
+                              "choices": ("hog", "cnn"),
+                              "default": "hog",
+                              "help": "Detector to use. 'cnn' detects many more angles but "
+                                      "will be much more resource intensive and may fail "
+                                      "on large files"})
+        argument_list.append({"opts": ("-l", "--ref_threshold"),
+                              "type": float,
+                              "dest": "ref_threshold",
+                              "default": 0.6,
+                              "help": "Threshold for positive face recognition"})
+        argument_list.append({"opts": ("-n", "--nfilter"),
+                              "type": str,
+                              "dest": "nfilter",
+                              "nargs": "+",
+                              "default": None,
+                              "help": "Reference image for the persons you do not want to "
+                                      "process. Should be a front portrait. Multiple images"
+                                      "can be added space separated"})
+        argument_list.append({"opts": ("-f", "--filter"),
+                              "type": str,
+                              "dest": "filter",
+                              "nargs": "+",
+                              "default": None,
+                              "help": "Reference images for the person you want to process. "
+                                      "Should be a front portrait. Multiple images"
+                                      "can be added space separated"})
         argument_list.append({"opts": ("-v", "--verbose"),
                               "action": "store_true",
                               "dest": "verbose",
@@ -109,25 +143,20 @@ class DirectoryArgs(object):
             command,
             description=description,
             epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground"
-        )
+            https://github.com/deepfakes/faceswap-playground")
         return parser
 
-    def parse_arguments(self):
+    def add_arguments(self):
         """ Parse the arguments passed in from argparse """
-        for option in self.argument_list:
+        for option in self.argument_list + self.optional_arguments:
             args = option["opts"]
             kwargs = {key: option[key] for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
 
-        self.add_optional_arguments()
-
-    def add_optional_arguments(self):
-        """ Add any optional arguments passed in from argparse """
-        for option in self.optional_arguments:
-            args = option["opts"]
-            kwargs = {key: option[key] for key in option.keys() if key != "opts"}
-            self.parser.add_argument(*args, **kwargs)
+    def execute_process(self, arguments):
+        """ The process to run if this command is called """
+        process = self.process(arguments)
+        process.process()
 
 class FSProcess(object):
     """ Class for directory processing.
@@ -144,7 +173,7 @@ class FSProcess(object):
 
         self.images = Images(self.args)
         self.faces = Faces(self.args)
-        self.alignments = Alignments(self.args, self.faces)
+        self.alignments = Alignments(self.args, self.faces.faces_detected)
 
         self.extractor = None
         self.export_face = True
@@ -295,19 +324,12 @@ class Images(object):
 
     def get_already_processed(self):
         """ Return the images that already exist in the output directory """
-        try:
-            output_dir = None
-            if not os.path.exists(self.args.output_dir):
-                print("Output directory {} not found.".format(self.args.input_dir))
-                exit(1)
+        print("Output Directory: {}".format(self.args.output_dir))
 
-            print("Output Directory: {}".format(self.args.output_dir))
+        if not self.args.skip_existing:
+            return None
 
-            if self.args.skip_existing:
-                output_dir = get_image_paths(self.args.output_dir)
-            return output_dir
-        except AttributeError:
-            pass
+        return get_image_paths(self.args.output_dir)
 
     def get_input_images(self):
         """ Return the list of images that are to be processed """
@@ -427,10 +449,10 @@ class Alignments(object):
         if not self.args.serializer and self.args.alignments_path:
             ext = os.path.splitext(self.args.alignments_path)[-1]
             serializer = Serializer.get_serializer_fromext(ext)
-            print(serializer, self.args.alignments_path)
+            print("Alignments Output: {}".format(self.args.alignments_path))
         else:
             serializer = Serializer.get_serializer(self.args.serializer or "json")
-        print("Using {} serializer".format(self.serializer.ext))
+        print("Using {} serializer".format(serializer.ext))
         return serializer
 
     def get_alignments_path(self):

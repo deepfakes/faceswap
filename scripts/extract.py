@@ -8,7 +8,7 @@ from tqdm import tqdm
 from lib.cli import DirectoryArgs, FSProcess
 from lib.multithreading import pool_process
 
-class ExtractArgs(DirectoryArgs):
+class ExtractTrainingData(DirectoryArgs):
     """ Class to parse the command line arguments for extraction.
         Inherits base options from lib.DirectoryArgs """
 
@@ -16,47 +16,6 @@ class ExtractArgs(DirectoryArgs):
     def get_optional_arguments():
         """ Put the arguments in a list so that they are accessible from both argparse and gui """
         argument_list = []
-        argument_list.append({"opts": ("-D", "--detector"),
-                              "type": str,
-                              # case sensitive because this is used to load a plugin.
-                              "choices": ("hog", "cnn", "all"),
-                              "default": "hog",
-                              "help": "Detector to use. 'cnn' detects much more angles but will "
-                                      "be much more resource intensive and may fail on large "
-                                      "files."})
-        argument_list.append({"opts": ("-l", "--ref_threshold"),
-                              "type": float,
-                              "dest": "ref_threshold",
-                              "default": 0.6,
-                              "help": "Threshold for positive face recognition"})
-        argument_list.append({"opts": ("-n", "--nfilter"),
-                              "type": str,
-                              "dest": "nfilter",
-                              "nargs": "+",
-                              "default": "nfilter.jpg",
-                              "help": "Reference image for the persons you do not want to "
-                                      "process. Should be a front portrait"})
-        argument_list.append({"opts": ("-f", "--filter"),
-                              "type": str,
-                              "dest": "filter",
-                              "nargs": "+",
-                              "default": "filter.jpg",
-                              "help": "Reference image for the person you want to process. "
-                                      "Should be a front portrait"})
-        argument_list.append({"opts": ("-j", "--processes"),
-                              "type": int,
-                              "default": 1,
-                              "help": "Number of processes to use."})
-        argument_list.append({"opts": ("-s", "--skip-existing"),
-                              "action": "store_true",
-                              "dest": "skip_existing",
-                              "default": False,
-                              "help": "Skips frames already extracted."})
-        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
-                              "action": "store_true",
-                              "dest": "debug_landmarks",
-                              "default": False,
-                              "help": "Draw landmarks for debug."})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -65,13 +24,7 @@ class ExtractArgs(DirectoryArgs):
                                       "find a face. Can find more faces at the cost of extraction "
                                       "speed. Pass in a single number to use increments of that "
                                       "size up to 360, or pass in a list of numbers to enumerate "
-                                      "exactly what angles to check."})
-        argument_list.append({"opts": ("-ae", "--align-eyes"),
-                              "action": "store_true",
-                              "dest": "align_eyes",
-                              "default": False,
-                              "help": "Perform extra alignment to ensure left/right eyes "
-                                      "lie at the same height"})
+                                      "exactly what angles to check"})
         argument_list.append({"opts": ("-bt", "--blur-threshold"),
                               "type": int,
                               "dest": "blur_thresh",
@@ -79,17 +32,42 @@ class ExtractArgs(DirectoryArgs):
                               "help": "Automatically discard images blurrier than the specified "
                                       "threshold. Discarded images are moved into a \"blurry\" "
                                       "sub-folder. Lower values allow more blur"})
+        argument_list.append({"opts": ("-j", "--processes"),
+                              "type": int,
+                              "default": 1,
+                              "help": "Number of CPU processes to use. WARNING: ONLY USE THIS "
+                                      " IF YOU ARE NOT EXTRACTING ON A GPU. Anything above 1 "
+                                      " process on a GPU will run out of memory and will crash"})
+        argument_list.append({"opts": ("-s", "--skip-existing"),
+                              "action": "store_true",
+                              "dest": "skip_existing",
+                              "default": False,
+                              "help": "Skips frames that have already been extracted"})
+        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
+                              "action": "store_true",
+                              "dest": "debug_landmarks",
+                              "default": False,
+                              "help": "Draw landmarks on the ouput faces for debug"})
+        argument_list.append({"opts": ("-ae", "--align-eyes"),
+                              "action": "store_true",
+                              "dest": "align_eyes",
+                              "default": False,
+                              "help": "Perform extra alignment to ensure left/right eyes "
+                                      "are  at the same height"})
         return argument_list
 
     def create_parser(self, subparser, command, description):
         """ Create the extract parser """
         self.optional_arguments = self.get_optional_arguments()
-        self.parser = subparser.add_parser(
+        self.process = Extract
+
+        parser = subparser.add_parser(
             command,
             help="Extract the faces from a pictures.",
             description=description,
             epilog="Questions and feedback: \
             https://github.com/deepfakes/faceswap-playground")
+        return parser
 
 class Extract(FSProcess):
     """ The extract process. Inherits from cli.FSProcess, including the additional
@@ -114,6 +92,7 @@ class Extract(FSProcess):
             self.single_process()
 
         self.alignments.write_alignments()
+        self.finalize()
 
     def multi_process(self, processes):
         """ Run extraction in a multiple processes """
@@ -130,13 +109,3 @@ class Extract(FSProcess):
         for filename in tqdm(self.images.read_directory()):
             filename, faces = self.extract_face_alignments(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
-
-class ExtractTrainingData(object):
-    """ TODO: Change this, it shouldn't be a class.
-        It's here to keep compatibility during rewrite """
-    def __init__(self, subparser, command, description):
-        args = ExtractArgs(subparser, command, description).parser.arguments
-
-        self.process = Extract(args)
-        self.process.process()
-        self.process.finalize()
