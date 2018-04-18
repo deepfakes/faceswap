@@ -21,7 +21,7 @@ from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from lib.cli import FullPaths, DirFullPaths, FileFullPaths, ComboFullPaths
+from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
@@ -659,14 +659,6 @@ class OptionControl(object):
         if filename:
             filepath.set(filename)
 
-    def ask_combo(self, filepath):
-        """
-        Pop-up that asks for either a file or a directory based on the chosen
-        action
-        """
-
-
-
 class ActionFrame(object):
     """Action Frame - Displays information and action controls """
 
@@ -1021,7 +1013,7 @@ class FaceswapControl(object):
 
     def capture_loss(self, string):
         """ Capture loss values from stdout """
-        # TODO: Remove this hideous hacky fix. When the subprocess is terminated and
+        #TODO: Remove this hideous hacky fix. When the subprocess is terminated and
         # the loss dictionary is reset, 1 set of loss values ALWAYS slips through
         # and appends to the lossdict AFTER the subprocess has closed meaning that
         # checks on whether the dictionary is empty fail.
@@ -1032,7 +1024,7 @@ class FaceswapControl(object):
         #   sys.exit() on the stdout/err threads (no effect)
         #   sys.stdout/stderr.flush (no effect)
         #   thread.join (locks the whole process up, because the stdout thread
-        #       stubbornly refuses to release its last line)
+        #       stubbonly refuses to release it's last line)
 
         currentlenloss = len(self.utils.lossdict)
         if self.lenloss > currentlenloss:
@@ -1175,7 +1167,7 @@ class TKGui(object):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
         ctl = ttk.Entry
-        if option.get('dest', '') == 'alignments_dir':
+        if option.get('dest', '') == 'alignments_path':
             sysbrowser = 'load'
         elif option.get('action', '') == FullPaths:
             sysbrowser = 'folder'
