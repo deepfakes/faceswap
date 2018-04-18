@@ -234,13 +234,14 @@ class Train(object):
             trainer.train_one_step(epoch, viewer)
 
             if self.stop:
-                model.save_weights()
-                exit()
+                break
             elif save_iteration:
                 model.save_weights()
             elif self.save_now:
                 model.save_weights()
                 self.save_now = False
+        model.save_weights()
+        exit()
 
     def monitor_preview(self):
         """ Generate the preview window and wait for keyboard input """
