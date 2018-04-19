@@ -191,7 +191,19 @@ class ModelBase(object):
         #return existing or your own converter which derived from base        
         from .ConverterBase import ConverterBase
         return ConverterBase(self, **in_options) 
-        
+     
+    def to_multi_gpu_model_if_possible (self, models_list):
+        if len(self.gpu_idxs) > 1:
+            #make batch_size to divide on GPU count without remainder
+            self.batch_size = int( self.batch_size / len(self.gpu_idxs) )
+            if self.batch_size == 0:
+                self.batch_size = 1                
+            self.batch_size *= len(self.gpu_idxs)
+            
+            return [ self.keras.utils.multi_gpu_model( model, self.gpu_idxs ) for model in models_list ]
+        else:
+            return models_list
+     
     def get_previews(self):       
         return self.onGetPreview ( self.last_sample )
         

@@ -186,7 +186,7 @@ def getDeviceIdxsEqualModel(idx):
 
     for i in range(0, nvmlDeviceGetCount() ):
         if nvmlDeviceGetName(nvmlDeviceGetHandleByIndex(i)).decode() == idx_name:
-            result.append (idx)
+            result.append (i)
          
     nvmlShutdown()
     return result

@@ -30,8 +30,10 @@ class Model(ModelBase):
                 self.batch_size = 4
             elif self.gpu_total_vram_gb == 5:
                 self.batch_size = 8
-            else:    
+            elif self.gpu_total_vram_gb < 12: 
                 self.batch_size = 16
+            else:    
+                self.batch_size = 32
                 
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 4))
 
@@ -47,22 +49,14 @@ class Model(ModelBase):
         self.autoencoder_src = self.keras.models.Model(ae_input_layer, self.decoder_src(self.encoder(ae_input_layer)))
         self.autoencoder_dst = self.keras.models.Model(ae_input_layer, self.decoder_dst(self.encoder(ae_input_layer)))
 
-        optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        
+        if self.is_training_mode:
+            self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
+                
+        optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)        
         self.autoencoder_src.compile(optimizer=optimizer, loss='mae')
         self.autoencoder_dst.compile(optimizer=optimizer, loss='mae')
   
         if self.is_training_mode:
-            if len(self.gpu_idxs) > 1:
-                self.autoencoder_src = self.keras.utils.multi_gpu_model( self.autoencoder_src, self.gpu_idxs )
-                self.autoencoder_dst = self.keras.utils.multi_gpu_model( self.autoencoder_dst, self.gpu_idxs )            
-                #make batch_size to divide on GPU count without remainder
-                self.batch_size = int( self.batch_size / len(self.gpu_idxs) )
-                if self.batch_size == 0:
-                    self.batch_size = 1                
-                self.batch_size *= len(self.gpu_idxs)
-
-
             from models import FullFaceTrainingDataGenerator
             self.set_training_data_generators ([
                     FullFaceTrainingDataGenerator(self, TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) ),
