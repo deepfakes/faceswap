@@ -71,8 +71,8 @@ class HalfFaceTrainingDataGenerator(TrainingDataGeneratorBase):
         warped_image = cv2.warpAffine( warped_image, random_transform_mat, (w,w))
         target_image = cv2.warpAffine( image, random_transform_mat, (w,w))
 
-        warped_image = cv2.warpAffine( warped_image, LandmarksProcessor.get_transform_mat (landmarks, warped_size[0], is_full_face=False), warped_size )
-        target_image = cv2.warpAffine( target_image, LandmarksProcessor.get_transform_mat (landmarks, target_size[0], is_full_face=False), target_size )
+        warped_image = cv2.warpAffine( warped_image, LandmarksProcessor.get_transform_mat (landmarks, warped_size[0], 'half_face'), warped_size )
+        target_image = cv2.warpAffine( target_image, LandmarksProcessor.get_transform_mat (landmarks, target_size[0], 'half_face'), target_size )
         return warped_image, target_image
 
 

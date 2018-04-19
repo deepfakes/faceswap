@@ -48,16 +48,14 @@ class Model(ModelBase):
             self.inter_B.load_weights  (self.get_strpath_storage_for_file(self.inter_BH5))
             self.inter_AB.load_weights (self.get_strpath_storage_for_file(self.inter_ABH5))
 
-        src_inter_A = self.inter_A(self.encoder(ae_input_layer))
-        src_inter_AB = self.inter_AB(self.encoder(ae_input_layer))               
+        inter_A = self.inter_A(self.encoder(ae_input_layer))
+        inter_B = self.inter_B(self.encoder(ae_input_layer))
+        inter_AB = self.inter_AB(self.encoder(ae_input_layer))               
         
-        src_c = self.keras.layers.Concatenate()( [src_inter_A, src_inter_AB] )   
+        src_c = self.keras.layers.Concatenate()( [inter_A, inter_AB] )   
         self.autoencoder_src = self.keras.models.Model( [ae_input_layer,mask_layer], self.decoder(src_c) )
-        
-        dst_inter_B = self.inter_B(self.encoder(ae_input_layer))
-        dst_inter_AB = self.inter_AB(self.encoder(ae_input_layer))       
-        
-        dst_c = self.keras.layers.Concatenate()( [dst_inter_B, dst_inter_AB] )
+
+        dst_c = self.keras.layers.Concatenate()( [inter_B, inter_AB] )
         self.autoencoder_dst = self.keras.models.Model( [ae_input_layer,mask_layer], self.decoder(dst_c) )
         
         if self.is_training_mode:
@@ -142,7 +140,7 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 128, 128, True, **in_options)
+        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', **in_options)
         
     def Encoder(self, input_layer):
         x64 = input_layer
@@ -178,7 +176,45 @@ class Model(ModelBase):
             
         return self.keras.models.Model( [input_x32, input_x16,  input_x8, input_x4], [x]  )
         
+    def Decoder_face(self):            
+        input  = self.keras.layers.Input(shape=(4, 4, 1024))
+        x = input
+        x = upscale(self.keras, x, 512)
+        x = res(self.keras, x, 512)        
         
+        x = upscale(self.keras, x, 256)
+        x = res(self.keras, x, 256)        
+        
+        x = upscale(self.keras, x, 128)
+        x = res(self.keras, x, 128)        
+        
+        x = upscale(self.keras, x, 64)
+        x = res(self.keras, x, 64)        
+        
+        x = upscale(self.keras, x, 32)
+        x = res(self.keras, x, 32)
+
+        x = self.keras.layers.convolutional.Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+
+        return self.keras.models.Model( [input], x)
+        
+    def Decoder_mask(self):            
+        input  = self.keras.layers.Input(shape=(4, 4, 1024))
+        y = input  #mask decoder
+        y = upscale(self.keras, y, 512)
+        y = upscale(self.keras, y, 256)
+        y = upscale(self.keras, y, 128)
+        y = upscale(self.keras, y, 64)
+        y = upscale(self.keras, y, 32)
+        y = self.keras.layers.convolutional.Conv2D( 1, kernel_size=5, padding='same', activation='sigmoid' )(y)
+        return self.keras.models.Model( [input], y)   
+        
+    '''    
+    def Decoder(self):            
+        input  = self.keras.layers.Input(shape=(4, 4, 1024))
+        return self.keras.models.Model( [input], [ self.Decoder_face()(input), self.Decoder_mask()(input) ])
+        
+    '''     
     def Decoder(self):
             
         input  = self.keras.layers.Input(shape=(4, 4, 1024))
@@ -209,4 +245,4 @@ class Model(ModelBase):
         y = self.keras.layers.convolutional.Conv2D( 1, kernel_size=5, padding='same', activation='sigmoid' )(y)
 
         return self.keras.models.Model( [input], [x,y])
-  
+    

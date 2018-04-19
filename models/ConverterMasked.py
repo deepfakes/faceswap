@@ -11,10 +11,10 @@ predictor_func:
 '''
 
 class ConverterMasked(ConverterBase):
-    def __init__(self, predictor_func, predictor_input_size, output_size, is_full_face, mode='seamless', mask_type='intersect', **in_options):
+    def __init__(self, predictor_func, predictor_input_size, output_size, face_type, mode='seamless', mask_type='intersect', **in_options):
         self.predictor_func = predictor_func
         self.output_size = output_size
-        self.is_full_face = is_full_face
+        self.face_type = face_type
         self.predictor_input_size = predictor_input_size
         self.mode = mode
         self.mask_type = mask_type
@@ -28,7 +28,7 @@ class ConverterMasked(ConverterBase):
 
         img_face_mask = LandmarksProcessor.get_image_hull_mask (img, img_face_landmarks)
         
-        face_mat = LandmarksProcessor.get_transform_mat (img_face_landmarks, self.output_size, is_full_face=self.is_full_face)
+        face_mat = LandmarksProcessor.get_transform_mat (img_face_landmarks, self.output_size, face_type=self.face_type)
         dst_face      = cv2.warpAffine( img          , face_mat, (self.output_size, self.output_size) )
         dst_face_mask = cv2.warpAffine( img_face_mask, face_mat, (self.output_size, self.output_size) )
 

@@ -137,7 +137,7 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 128, 128, True, **in_options)
+        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', **in_options)
   
 
     def Encoder(self, input_layer,):

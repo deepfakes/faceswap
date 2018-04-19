@@ -24,7 +24,8 @@ def extract_pass_process(sq, cq):
     debug = False
     output_path = None
     detector = None
-    face_size = None
+    image_size = None
+    face_type = None
     while True:
         obj = sq.get()
         obj_op = obj['op']
@@ -61,13 +62,13 @@ def extract_pass_process(sq, cq):
                         for (face_idx, face) in enumerate(faces):                            
                             rect = face[0]
                             image_landmarks = np.array(face[1])
-                            image_to_face_mat = facelib.LandmarksProcessor.get_transform_mat (image_landmarks, face_size, is_full_face=True)
+                            image_to_face_mat = facelib.LandmarksProcessor.get_transform_mat (image_landmarks, image_size, face_type)
                             output_file = '{}_{}{}'.format(str(output_path / filename_path.stem), str(face_idx), '.png')
 
                             if debug:
-                                facelib.LandmarksProcessor.draw_rect_landmarks (debug_image, rect, image_landmarks, face_size, is_full_face=True)
+                                facelib.LandmarksProcessor.draw_rect_landmarks (debug_image, rect, image_landmarks, image_size, face_type)
    
-                            face_image = cv2.warpAffine(image, image_to_face_mat, (face_size, face_size))
+                            face_image = cv2.warpAffine(image, image_to_face_mat, (image_size, image_size))
                             face_image_landmarks = facelib.LandmarksProcessor.transform_points (image_landmarks, image_to_face_mat)
                             
                             cv2.imwrite(output_file, face_image)
@@ -75,6 +76,7 @@ def extract_pass_process(sq, cq):
                             a_png = AlignedPNG.load (output_file)
                             
                             d = {
+                              'type': 'face',
                               'landmarks': face_image_landmarks.tolist(),
                               'yaw_value': facelib.LandmarksProcessor.calc_face_yaw (face_image_landmarks),
                               'pitch_value': facelib.LandmarksProcessor.calc_face_pitch (face_image_landmarks),
@@ -99,7 +101,8 @@ def extract_pass_process(sq, cq):
         elif obj_op == 'init':
             try:
                 type = obj['type']
-                face_size = obj['face_size']
+                image_size = obj['image_size']
+                face_type = obj['face_type']
                 device_idx = obj['device_idx']
                 output_path = Path(obj['output_dir']) if 'output_dir' in obj.keys() else None
                 debug = obj['debug']
@@ -134,7 +137,7 @@ def extract_pass_process(sq, cq):
     if detector is not None and (type == 'rects' or type == 'landmarks'):
         e.__exit__()        
                 
-def start_processes ( devices, type, face_size, debug, detector, output_path ):
+def start_processes ( devices, type, image_size, face_type, debug, detector, output_path ):
     extract_processes = []
     for (device_idx, device_name, device_total_vram_gb) in devices:   
         if type == 'rects':
@@ -152,7 +155,7 @@ def start_processes ( devices, type, face_size, debug, detector, output_path ):
             p.daemon = True
             p.start()
 
-            sq.put ( {'op': 'init', 'type' : type, 'device_idx' : device_idx, 'face_size':face_size, 'debug':debug, 'output_dir': str(output_path), 'detector':detector } )
+            sq.put ( {'op': 'init', 'type' : type, 'device_idx' : device_idx, 'image_size':image_size, 'face_type':face_type, 'debug':debug, 'output_dir': str(output_path), 'detector':detector } )
             
             device_name_for_process = device_name if num_processes == 1 else '%s #%d' % (device_name,i)
 
@@ -202,13 +205,13 @@ def get_devices_for_type (type, multi_gpu):
     return devices    
     
 #type='rects 'landmarks' 'final'
-def extract_pass(input_data, type, face_size, debug, multi_gpu, detector=None, output_path=None):
+def extract_pass(input_data, type, image_size, face_type, debug, multi_gpu, detector=None, output_path=None):
     if type=='landmarks':
         if all ( np.array ( [ len(data[1]) == 0 for data in input_data] ) == True ):
             #no rects - no landmarks
             return [ (data[0], []) for data in input_data]
     
-    extract_processes = start_processes (get_devices_for_type(type, multi_gpu), type, face_size, debug, detector, output_path)
+    extract_processes = start_processes (get_devices_for_type(type, multi_gpu), type, image_size, face_type, debug, detector, output_path)
     if len(extract_processes) == 0:
         if (type == 'rects' or type == 'landmarks'):
             print ( 'You have no capable GPUs. Try to close programs which can consume VRAM, and run again.')
@@ -277,8 +280,8 @@ def extract_pass(input_data, type, face_size, debug, multi_gpu, detector=None, o
     progress_bar.close()
     return result
 
-def manual_pass( extracted_faces, face_size ):
-    extract_processes = start_processes (get_devices_for_type('landmarks',False), 'landmarks', face_size, False, None, None)
+def manual_pass( extracted_faces, image_size, face_type ):
+    extract_processes = start_processes (get_devices_for_type('landmarks',False), 'landmarks', image_size, face_type, False, None, None)
     if len(extract_processes) == 0:
         if (type == 'rects' or type == 'landmarks'):
             print ('You have no capable GPUs. Try to close programs which can consume VRAM, and run again.')
@@ -355,7 +358,7 @@ def manual_pass( extracted_faces, face_size ):
                                 image = cv2.addWeighted (original_image,1.0,text_lines_img,1.0,0)                    
                                 view_rect = (np.array(rect) * view_scale).astype(np.int).tolist()
                                 view_landmarks  = (np.array(landmarks) * view_scale).astype(np.int).tolist()
-                                facelib.LandmarksProcessor.draw_rect_landmarks (image, view_rect, view_landmarks, face_size, is_full_face=True)
+                                facelib.LandmarksProcessor.draw_rect_landmarks (image, view_rect, view_landmarks, image_size, face_type)
                                 
                                 cv2.imshow (wnd_name, image)                            
                             elif obj_op == 'error':
@@ -371,7 +374,12 @@ def manual_pass( extracted_faces, face_size ):
                         
     return extracted_faces
  
-def main (input_dir, output_dir, debug, detector='mt', multi_gpu=True, manual_fix=False, face_size=256):
+'''
+face_type
+    'full_face'
+    'head' - unused
+'''
+def main (input_dir, output_dir, debug, detector='mt', multi_gpu=True, manual_fix=False, image_size=256, face_type='full_face'):
     print ("Running extractor.\r\n")
     
     input_path = Path(input_dir)
@@ -403,13 +411,13 @@ def main (input_dir, output_dir, debug, detector='mt', multi_gpu=True, manual_fi
         if detector == 'manual':
             print ('Performing manual extract...')
             extracted_faces = [ (filename,[]) for filename in input_path_image_paths ]
-            extracted_faces = manual_pass(extracted_faces, face_size)
+            extracted_faces = manual_pass(extracted_faces, image_size, face_type)
         else:
             print ('Performing 1st pass...')
-            extracted_rects = extract_pass( [ (x,) for x in input_path_image_paths ], 'rects', face_size, debug, multi_gpu, detector=detector)
+            extracted_rects = extract_pass( [ (x,) for x in input_path_image_paths ], 'rects', image_size, face_type, debug, multi_gpu, detector=detector)
 
             print ('Performing 2nd pass...')
-            extracted_faces = extract_pass(extracted_rects, 'landmarks', face_size, debug, multi_gpu)
+            extracted_faces = extract_pass(extracted_rects, 'landmarks', image_size, face_type, debug, multi_gpu)
                 
             if manual_fix:
                 print ('Performing manual fix...')
@@ -417,11 +425,11 @@ def main (input_dir, output_dir, debug, detector='mt', multi_gpu=True, manual_fi
                 if all ( np.array ( [ len(data[1]) > 0 for data in extracted_faces] ) == True ):
                     print ('All faces are detected, manual fix not needed.')
                 else:
-                    extracted_faces = manual_pass(extracted_faces, face_size)
+                    extracted_faces = manual_pass(extracted_faces, image_size, face_type)
         
         if len(extracted_faces) > 0:
             print ('Performing 3rd pass...')
-            final_imgs_paths = extract_pass (extracted_faces, 'final', face_size, debug, multi_gpu, face_size, output_path=output_path)
+            final_imgs_paths = extract_pass (extracted_faces, 'final', image_size, face_type, debug, multi_gpu, image_size, output_path=output_path)
             faces_detected = len(final_imgs_paths)
     else:
         faces_detected = 0

@@ -26,12 +26,17 @@ mean_face_y = np.array([
 
 landmarks_2D = np.stack( [ mean_face_x, mean_face_y ], axis=1 )
 
-def get_transform_mat (image_landmarks, output_size, is_full_face):
+def get_transform_mat (image_landmarks, output_size, face_type):
     if output_size != 64 and output_size != 128 and output_size != 256 and output_size != 512:
         raise ValueError ('get_transform_mat() output_size must be power of 2')
         
-    padding = (output_size // 64) * 12 if is_full_face else 0
-
+    if face_type == 'half_face':
+        padding = 0
+    elif face_type == 'full_face':
+        padding = (output_size // 64) * 12
+    elif face_type == 'head':
+        padding = (output_size // 64) * 24
+        
     if not isinstance(image_landmarks, np.ndarray):
         image_landmarks = np.array (image_landmarks) 
     mat = umeyama(image_landmarks[17:], landmarks_2D, True)[0:2]
@@ -138,11 +143,11 @@ def draw_landmarks (image, image_landmarks, color):
         #text_color = colorsys.hsv_to_rgb ( (i%4) * (0.25), 1.0, 1.0 )
         #cv2.putText(image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.1,text_color,1)
         
-def draw_rect_landmarks (image, rect, image_landmarks, face_size, is_full_face):
+def draw_rect_landmarks (image, rect, image_landmarks, face_size, face_type):
     image_utils.draw_rect (image, rect, (255,0,0), 2 )
     draw_landmarks(image, image_landmarks, (0,255,0) )
     
-    image_to_face_mat = get_transform_mat (image_landmarks, face_size, is_full_face)        
+    image_to_face_mat = get_transform_mat (image_landmarks, face_size, face_type)        
     points = transform_points ( [ (0,0), (0,face_size-1), (face_size-1, face_size-1), (face_size-1,0) ], image_to_face_mat, True)
     image_utils.draw_polygon (image, points, (0,0,255), 2)  
     
