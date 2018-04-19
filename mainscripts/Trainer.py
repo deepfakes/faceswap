@@ -86,9 +86,12 @@ def trainerThread (input_queue, output_queue, training_data_src_dir, training_da
                     
                 if i==0:
                     if is_reached_goal:
-                            model.pass_one_epoch()    
+                        model.pass_one_epoch()    
                     send_preview()
-                        
+                    
+                if debug:
+                    time.sleep(0.005)
+                    
                 while not input_queue.empty():
                     input = input_queue.get()
                     op = input['op']

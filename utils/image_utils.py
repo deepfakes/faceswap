@@ -61,7 +61,10 @@ def get_text_image( shape, text, color=(1,1,1), border=0.2, font=None):
         return pil_font    
 
     if font is None:
-        font = localization.get_default_ttf_font_name()
+        try:
+            font = localization.get_default_ttf_font_name()
+        except:
+            font = ImageFont.load_default()
     
     size = shape[1]
     
