@@ -29,3 +29,6 @@ class suppress_stdout_stderr(object):
 
         self.outnull_file.close()
         self.errnull_file.close()
+
+        os.close ( self.old_stdout_fileno )
+        os.close ( self.old_stderr_fileno )
