@@ -1,39 +1,46 @@
-import cv2
-import sys
+#!/usr/bin python3
+""" Utilities available across all scripts """
+
+import os
 from os.path import basename, exists
+import queue as Queue
+import threading
+import warnings
 
 from pathlib import Path
-from scandir import scandir
-import os
 
-image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+import cv2
 
 def get_folder(path):
+    """ Return a path to a folder, creating it if it doesn't exist """
     output_dir = Path(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
-def get_image_paths(directory, exclude=[], debug=False):
-    exclude_names = [basename(Path(x).stem[:-1] + Path(x).suffix) for x in exclude]
-    dir_contents = []
+def get_image_paths(directory, exclude=list(), debug=False):
+    """ Return a list of images that reside in a folder """
+    image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+    exclude_names = [basename(Path(x).stem[:-2] + Path(x).suffix) for x in exclude]
+    dir_contents = list()
 
     if not exists(directory):
-        directory = get_folder(directory).path
+        directory = get_folder(directory)
 
     dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
-    for x in dir_scanned:
-        if any([x.name.lower().endswith(ext) for ext in image_extensions]):
-            if x.name in exclude_names:
+    for chkfile in dir_scanned:
+        if any([chkfile.name.lower().endswith(ext) for ext in image_extensions]):
+            if chkfile.name in exclude_names:
                 if debug:
-                    print("Already processed %s" % x.name)
+                    print("Already processed %s" % chkfile.name)
                 continue
             else:
-                dir_contents.append(x.path)
+                dir_contents.append(chkfile.path)
 
     return dir_contents
 
-# From: https://stackoverflow.com/questions/22041699/rotate-an-image-without-cropping-in-opencv-in-c
 def rotate_image(image, angle, rotated_width=None, rotated_height=None):
+    """ Rotate an image by a given angle. From:
+        https://stackoverflow.com/questions/22041699 """
     height, width = image.shape[:2]
     image_center = (width/2, height/2)
     rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
@@ -48,10 +55,26 @@ def rotate_image(image, angle, rotated_width=None, rotated_height=None):
     rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
     return cv2.warpAffine(image, rotation_matrix, (rotated_width, rotated_height))
 
-# From: https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
-import threading
-import queue as Queue
+def set_system_verbosity(loglevel):
+    """ Set the verbosity level of tensorflow and suppresses
+        future and deprecation warnings from any modules
+        From:
+        https://stackoverflow.com/questions/35911252/disable-tensorflow-debugging-information
+        Can be set to:
+        0 - all logs shown
+        1 - filter out INFO logs
+        2 - filter out WARNING logs
+        3 - filter out ERROR logs  """
+    # TODO suppress tensorflow deprecation warnings """
+
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
+    if loglevel != '0':
+        for warncat in (FutureWarning, DeprecationWarning):
+            warnings.simplefilter(action='ignore', category=warncat)
+
 class BackgroundGenerator(threading.Thread):
+    """ Run a queue in the background. From:
+        https://stackoverflow.com/questions/7323664/python-generator-pre-fetch """
     def __init__(self, generator, prefetch=1): #See below why prefetch count is flawed
         threading.Thread.__init__(self)
         self.queue = Queue.Queue(prefetch)
@@ -60,13 +83,15 @@ class BackgroundGenerator(threading.Thread):
         self.start()
 
     def run(self):
-        # Put until queue size is reached. Note: put blocks only if put is called while queue has already reached max size
-        # => this makes 2 prefetched items! One in the queue, one waiting for insertion!
+        """ Put until queue size is reached.
+            Note: put blocks only if put is called while queue has already reached max size
+            => this makes 2 prefetched items! One in the queue, one waiting for insertion! """
         for item in self.generator:
             self.queue.put(item)
         self.queue.put(None)
 
     def iterator(self):
+        """ Iterate items out of the queue """
         while True:
             next_item = self.queue.get()
             if next_item is None:
