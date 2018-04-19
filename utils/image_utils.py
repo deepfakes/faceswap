@@ -60,15 +60,13 @@ def get_text_image( shape, text, color=(1,1,1), border=0.2, font=None):
         pil_font = pil_fonts[font_str_id]
         return pil_font    
 
-    if font is None:
-        try:
-            font = localization.get_default_ttf_font_name()
-        except:
-            font = ImageFont.load_default()
-    
     size = shape[1]
     
-    pil_font = get_pil_font(font, size)
+    try:
+        pil_font = get_pil_font( localization.get_default_ttf_font_name() , size)
+    except:
+        pil_font = ImageFont.load_default()
+    
     text_width, text_height = pil_font.getsize(text)
 
     canvas = Image.new('RGB', shape[0:2], (0,0,0) )
