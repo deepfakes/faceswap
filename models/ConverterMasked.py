@@ -60,6 +60,8 @@ class ConverterMasked(ConverterBase):
         if debug:
             debugs += [img_mask_hard.copy()]
             
+        img_mask_hard [ img_mask_hard <= 0.1 ] = 0.0
+            
         img_mask_hard_copy = img_mask_hard.copy()
         img_mask_hard_copy[img_mask_hard_copy > 0.1] = 1.0
 
@@ -73,10 +75,12 @@ class ConverterMasked(ConverterBase):
             masky = int(minx+(lenx//2))
             maskx = int(miny+(leny//2))
             lowest_len = min (lenx, leny)
-            ero = int( lowest_len * 0.085 )
+            
+            ero = int( lowest_len * 0.120 )
             blur = int( lowest_len * 0.10 )       
             img_mask_blurry = cv2.erode(img_mask_hard, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(ero,ero)), iterations = 1 )
             img_mask_blurry = cv2.blur(img_mask_blurry, (blur, blur) )
+            img_mask_blurry = np.clip( img_mask_blurry, 0, 1.0 )
             
             if self.mode == 'hist-match':
                 prd_face = image_utils.color_hist_match(prd_face* prd_face_mask_1D, dst_face* prd_face_mask_1D)
