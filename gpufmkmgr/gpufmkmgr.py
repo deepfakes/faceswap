@@ -76,11 +76,16 @@ def import_keras():
     if sess is None:
         raise Exception ('No TF session found. Import tf first.')
         
-    with std_utils.suppress_stdout_stderr():
-        import keras
-        import keras_contrib        
+    if 'TF_SUPPRESS_STD' in os.environ.keys() and os.environ['TF_SUPPRESS_STD'] == '1':
+        suppressor = std_utils.suppress_stdout_stderr().__enter__()
+        
+    import keras
+    import keras_contrib        
 
-        keras.backend.tensorflow_backend.set_session(sess)
+    keras.backend.tensorflow_backend.set_session(sess)
+    
+    if 'TF_SUPPRESS_STD' in os.environ.keys() and os.environ['TF_SUPPRESS_STD'] == '1':        
+        suppressor.__exit__()
 
     keras_module = keras
     keras_contrib_module = keras_contrib

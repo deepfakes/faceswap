@@ -51,36 +51,36 @@ def color_hist_match(src_im, tar_im, mask=None):
     
 
 pil_fonts = {}
-def get_text_image( shape, text, color=(1,1,1), border=0.2, font=None):
-    def get_pil_font (font, size):
-        global pil_fonts
+def _get_pil_font (font, size):
+    global pil_fonts
+    try:
         font_str_id = '%s_%d' % (font, size)
         if font_str_id not in pil_fonts.keys():
             pil_fonts[font_str_id] = ImageFont.truetype(font + ".ttf", size=size, encoding="unic")
         pil_font = pil_fonts[font_str_id]
         return pil_font    
-
-    size = shape[1]
-    
-    try:
-        pil_font = get_pil_font( localization.get_default_ttf_font_name() , size)
     except:
-        pil_font = ImageFont.load_default()
+        return ImageFont.load_default()
+                
+def get_text_image( shape, text, color=(1,1,1), border=0.2, font=None):
+    try:     
+        size = shape[1]
+        pil_font = _get_pil_font( localization.get_default_ttf_font_name() , size)
+        text_width, text_height = pil_font.getsize(text)
+        
+        canvas = Image.new('RGB', shape[0:2], (0,0,0) )
+        draw = ImageDraw.Draw(canvas)
+        offset = ( 0, 0)
+        draw.text(offset, text, font=pil_font, fill=tuple((np.array(color)*255).astype(np.int)) )
+        
+        result = np.asarray(canvas) / 255
+        if shape[2] != 3:        
+            result = np.concatenate ( (result, np.ones ( (shape[1],) + (shape[0],) + (shape[2]-3,)) ), axis=2 )
+
+        return result
+    except:    
+        return np.zeros ( (shape[1], shape[0], shape[2]), dtype=np.float32 )
     
-    text_width, text_height = pil_font.getsize(text)
-
-    canvas = Image.new('RGB', shape[0:2], (0,0,0) )
-
-    draw = ImageDraw.Draw(canvas)
-    offset = ( 0, 0) #int(min(shape[0],shape[1])*border)
-    draw.text(offset, text, font=pil_font, fill=tuple((np.array(color)*255).astype(np.int)) )
-    
-    result = np.asarray(canvas) / 255
-    if shape[2] != 3:        
-        result = np.concatenate ( (result, np.ones ( (shape[1],) + (shape[0],) + (shape[2]-3,)) ), axis=2 )
-
-    return result
-
 def draw_text( image, rect, text, color=(1,1,1), border=0.2, font=None):
     h,w,c = image.shape
  
