@@ -47,14 +47,119 @@ class DirFullPaths(FullPaths):
 
 
 class FileFullPaths(FullPaths):
-    """ Class that gui uses to determine if you need to open a file """
-    pass
+    """
+    Class that gui uses to determine if you need to open a file.
+
+    Filetypes added as an argparse argument must be an iterable, i.e. a
+    list of lists, tuple of tuples, list of tuples etc... formatted like so:
+        [("File Type", ["*.ext", "*.extension"])]
+    A more realistic example:
+        [("Video File", ["*.mkv", "mp4", "webm"])]
+
+    If the file extensions are not prepended with '*.', use the
+    prep_filetypes() method to format them in the arguments_list.
+    """
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
+                 **kwargs):
+        super(FileFullPaths, self).__init__(option_strings, dest, **kwargs)
+        if nargs is not None:
+            raise ValueError("nargs not allowed")
+        self.filetypes = filetypes
+
+    @staticmethod
+    def prep_filetypes(filetypes):
+        all_files = ("All Files", "*.*")
+        filetypes_l = list()
+        for i in range(len(filetypes)):
+            filetypes_l.append(FileFullPaths._process_filetypes(filetypes[i]))
+        filetypes_l.append(all_files)
+        return tuple(filetypes_l)
+
+    @staticmethod
+    def _process_filetypes(filetypes):
+        """        """
+        if filetypes is None:
+            return None
+
+        filetypes_name = filetypes[0]
+        filetypes_l = filetypes[1]
+        if (type(filetypes_l) == list or type(filetypes_l) == tuple) \
+                and all("*." in i for i in filetypes_l):
+            return filetypes  # assume filetypes properly formatted
+
+        if type(filetypes_l) != list and type(filetypes_l) != tuple:
+            raise ValueError("The filetypes extensions list was "
+                             "neither a list nor a tuple: "
+                             "{}".format(filetypes_l))
+
+        filetypes_list = list()
+        for i in range(len(filetypes_l)):
+            filetype = filetypes_l[i].strip("*.")
+            filetype = filetype.strip(';')
+            filetypes_list.append("*." + filetype)
+        return filetypes_name, filetypes_list
+
+    def _get_kwargs(self):
+        names = [
+            'option_strings',
+            'dest',
+            'nargs',
+            'const',
+            'default',
+            'type',
+            'choices',
+            'help',
+            'metavar',
+            'filetypes'
+        ]
+        return [(name, getattr(self, name)) for name in names]
 
 
-class ComboFullPaths(FullPaths):
-    """ Class that gui uses to determine if you need to open a file or a
-     directory based on which action you are choosing """
-    pass
+class ComboFullPaths(FileFullPaths):
+    """
+    Class that gui uses to determine if you need to open a file or a
+    directory based on which action you are choosing
+    """
+    def __init__(self,  option_strings, dest, nargs=None, filetypes=None,
+                 actions_open_type=None, **kwargs):
+        if nargs is not None:
+            raise ValueError("nargs not allowed")
+        super(ComboFullPaths, self).__init__(option_strings, dest,
+                                             filetypes=None, **kwargs)
+
+        self.actions_open_type = actions_open_type
+        self.filetypes = filetypes
+
+    @staticmethod
+    def prep_filetypes(filetypes):
+        all_files = ("All Files", "*.*")
+        filetypes_d = dict()
+        for k, v in filetypes.items():
+            filetypes_d[k] = ()
+            if v is None:
+                filetypes_d[k] = None
+                continue
+            filetypes_l = list()
+            for i in range(len(v)):
+                filetypes_l.append(ComboFullPaths._process_filetypes(v[i]))
+            filetypes_d[k] = (tuple(filetypes_l), all_files)
+        return filetypes_d
+
+    def _get_kwargs(self):
+        names = [
+            'option_strings',
+            'dest',
+            'nargs',
+            'const',
+            'default',
+            'type',
+            'choices',
+            'help',
+            'metavar',
+            'filetypes',
+            'actions_open_type'
+        ]
+        return [(name, getattr(self, name)) for name in names]
 
 
 class FullHelpArgumentParser(argparse.ArgumentParser):
@@ -98,14 +203,14 @@ class DirectoryProcessor(object):
         both argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ('-i', '--input-dir'),
-                              "action": FullPaths,
+                              "action": DirFullPaths,
                               "dest": "input_dir",
                               "default": "input",
                               "help": "Input directory. A directory "
                                       "containing the files \
                                 you wish to process. Defaults to 'input'"})
         argument_list.append({"opts": ('-o', '--output-dir'),
-                              "action": FullPaths,
+                              "action": DirFullPaths,
                               "dest": "output_dir",
                               "default": "output",
                               "help": "Output directory. This is where the "

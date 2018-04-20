@@ -21,7 +21,7 @@ from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from lib.cli import FullPaths
+from lib.cli import FullPaths, ComboFullPaths, DirFullPaths, FileFullPaths
 from lib.Serializer import JSONSerializer
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
@@ -41,6 +41,7 @@ except ImportError:
     filedialog = None
     messagebox = None
     TclError = None
+
 
 class Utils(object):
     """ Inter-class object holding items that are required across classes """
@@ -104,7 +105,7 @@ class Utils(object):
         self.change_action_button()
 
     def clear_display_panel(self):
-        ''' Clear the preview window and graph '''
+        """ Clear the preview window and graph """
         self.delete_preview()
         self.lossdict = dict()
 
@@ -195,6 +196,9 @@ class Utils(object):
         """ Delete the preview file """
         if os.path.exists(self.previewloc):
             os.remove(self.previewloc)
+
+    def get_chosen_action(self, task_name):
+        return self.opts[task_name][0]['value'].get()
 
 
 class Tooltip:
@@ -352,6 +356,7 @@ class Tooltip:
             topwidget.destroy()
         self.topwidget = None
 
+
 class FaceswapGui(object):
     """ The Graphical User Interface """
 
@@ -459,6 +464,7 @@ class FaceswapGui(object):
         self.gui.quit()
         exit()
 
+
 class ConsoleOut(object):
     """ The Console out tab of the Display section """
 
@@ -505,7 +511,6 @@ class SysOutRouter(object):
 
 
 class CommandTab(object):
-
     """ Tabs to hold the command options """
 
     def __init__(self, utils, notebook, command):
@@ -530,6 +535,7 @@ class CommandTab(object):
         """ Add a separator between left and right frames """
         sep = ttk.Frame(self.page, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
+
 
 class OptionsFrame(object):
     """ Options Frame - Holds the Options for each command """
@@ -569,6 +575,7 @@ class OptionsFrame(object):
         """ Resize the options frame to fit the canvas """
         canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
+
 
 class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
@@ -622,7 +629,10 @@ class OptionControl(object):
         var.set(default)
 
         if sysbrowser is not None:
+            # if sysbrowser in "load file":
             self.add_browser_buttons(frame, sysbrowser, var)
+            # elif sysbrowser == "combo":
+            #    self.add_browser_combo_button(frame, sysbrowser, var)
 
         ctlkwargs = {'variable': var} if control == ttk.Checkbutton else {
             'textvariable': var}
@@ -639,25 +649,56 @@ class OptionControl(object):
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
-        img = self.utils.icons[sysbrowser]
+        if sysbrowser == "combo":
+            img = self.utils.icons['load']
+        else:
+            img = self.utils.icons[sysbrowser]
         action = getattr(self, 'ask_' + sysbrowser)
+        filetypes = self.option['filetypes']
         fileopn = ttk.Button(frame, image=img,
-                             command=lambda cmd=action: cmd(filepath))
+                             command=lambda cmd=action: cmd(filepath,
+                                                            filetypes))
         fileopn.pack(padx=(0, 5), side=tk.RIGHT)
 
     @staticmethod
-    def ask_folder(filepath):
-        """ Pop-up to get path to a folder """
+    def ask_folder(filepath, filetypes=None):
+        """
+        Pop-up to get path to a directory
+        :param filepath: tkinter StringVar object that will store the path to a
+        directory.
+        :param filetypes: Unused argument to allow filetypes to be given in
+        ask_load().
+        """
         dirname = filedialog.askdirectory()
         if dirname:
             filepath.set(dirname)
 
     @staticmethod
-    def ask_load(filepath):
+    def ask_load(filepath, filetypes=None):
         """ Pop-up to get path to a file """
-        filename = filedialog.askopenfilename()
+        if filetypes is None:
+            filename = filedialog.askopenfilename()
+        else:
+            # In case filetypes were not configured properly in the
+            # arguments_list
+            try:
+                filename = filedialog.askopenfilename(filetypes=filetypes)
+            except TclError as te1:
+                filetypes = FileFullPaths.prep_filetypes(filetypes)
+                filename = filedialog.askopenfilename(filetypes=filetypes)
+            except TclError as te2:
+                filename = filedialog.askopenfilename()
         if filename:
             filepath.set(filename)
+
+    def ask_combo(self, filepath, filetypes):
+        actions_open_type = self.option['actions_open_type']
+        task_name = actions_open_type['task_name']
+        chosen_action = self.utils.get_chosen_action(task_name)
+        action = getattr(self, "ask_" + actions_open_type[chosen_action])
+        filetypes = filetypes[chosen_action]
+        action(filepath, filetypes)
+
 
 class ActionFrame(object):
     """Action Frame - Displays information and action controls """
@@ -704,6 +745,7 @@ class ActionFrame(object):
                                 command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, side=tk.LEFT)
             Tooltip(btnutl, text=utl.capitalize() + ' ' + self.title + ' config', wraplength=200)
+
 
 class DisplayTab(object):
     """ The display tabs """
@@ -789,6 +831,7 @@ class GraphDisplay(object):
         for child in self.graphpane.panes():
             self.graphpane.remove(child)
 
+
 class Graph(object):
     """ Each graph to be displayed. Until training is run it is not known
         how many graphs will be required, so they sit in their own class
@@ -854,7 +897,7 @@ class Graph(object):
             self.trend_plot(xrng, loss)
 
     def recalculate_axes(self, loss):
-        ''' Recalculate the latest x and y axes limits from latest data '''
+        """ Recalculate the latest x and y axes limits from latest data """
         ymin = floor(min([min(lossvals) for lossvals in loss]) * 100) / 100
         ymax = ceil(max([max(lossvals) for lossvals in loss]) * 100) / 100
 
@@ -869,16 +912,17 @@ class Graph(object):
         return xlim
 
     def raw_plot(self, x_range, loss):
-        ''' Raw value plotting '''
+        """ Raw value plotting """
         for idx, lossvals in enumerate(loss):
             self.losslines[idx].set_data(x_range, lossvals)
 
     def trend_plot(self, x_range, loss):
-        ''' Trend value plotting '''
+        """ Trend value plotting """
         for idx, lossvals in enumerate(loss):
             fit = numpy.polyfit(x_range, lossvals, 3)
             poly = numpy.poly1d(fit)
             self.trndlines[idx].set_data(x_range, poly(x_range))
+
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -1098,6 +1142,10 @@ class TKGui(object):
         if not self.check_display(cmd) or not self.check_tkinter_available(cmd):
             return
 
+        # If not running in gui mode return before starting to create a window
+        if 'gui' not in cmd:
+            return
+
         self.arguments = None
         self.opts = self.extract_options(subparsers)
         self.utils = Utils(self.opts, calling_file=cmd[0])
@@ -1148,11 +1196,13 @@ class TKGui(object):
             for opt in command:
                 if opt.get('help', '') == SUPPRESS:
                     command.remove(opt)
-                ctl, sysbrowser = self.set_control(opt)
+                ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
                 opt['control_title'] = self.set_control_title(
                     opt.get('opts', ''))
                 opt['control'] = ctl
                 opt['filesystem_browser'] = sysbrowser
+                opt['filetypes'] = filetypes
+                opt['actions_open_types'] = actions_open_types
         return opts
 
     @staticmethod
@@ -1166,16 +1216,25 @@ class TKGui(object):
     def set_control(option):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
+        filetypes = None
+        actions_open_type = None
         ctl = ttk.Entry
-        if option.get('dest', '') == 'alignments_path':
-            sysbrowser = 'load'
-        elif option.get('action', '') == FullPaths:
+        if option.get('action', '') == FullPaths:
             sysbrowser = 'folder'
+        elif option.get('action', '') == DirFullPaths:
+            sysbrowser = 'folder'
+        elif option.get('action', '') == FileFullPaths:
+            sysbrowser = 'load'
+            filetypes = option.get('filetypes', None)
+        elif option.get('action', '') == ComboFullPaths:
+            sysbrowser = 'combo'
+            actions_open_type = option['actions_open_type']
+            filetypes = option.get('filetypes', None)
         elif option.get('choices', '') != '':
             ctl = ttk.Combobox
         elif option.get('action', '') == 'store_true':
             ctl = ttk.Checkbutton
-        return ctl, sysbrowser
+        return ctl, sysbrowser, filetypes, actions_open_type
 
     def parse_arguments(self, description, subparser, command):
         """ Parse the command line arguments for the GUI """

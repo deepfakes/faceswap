@@ -8,7 +8,7 @@ import cv2
 from tqdm import tqdm
 from shutil import copyfile
 import json
-from lib.cli import FullPaths, DirFullPaths, FileFullPaths
+from lib.cli import DirFullPaths, FileFullPaths
 
 # DLIB is a GPU Memory hog, so the following modules should only be imported
 # when required
@@ -129,6 +129,7 @@ class SortProcessor(object):
 
         arguments_list.append({"opts": ('-lf', '--log-file'),
                                "action": FileFullPaths,
+                               "filetypes": ("JSON", "*.json"),
                                "dest": 'log_file_path',
                                "default": 'sort_log.json',
                                "help": "Specify a log file to use for saving the "

@@ -4,8 +4,7 @@ from lib.cli import FullHelpArgumentParser
 # Importing the various tools
 from tools.sort import SortProcessor
 from tools.effmpeg import Effmpeg
-# from scripts.gui import TKGui
-from tools.gui import TKGui
+from scripts.gui import TKGui
 
 # Python version check
 if sys.version_info[0] < 3:
@@ -31,8 +30,8 @@ if __name__ == "__main__":
             subparser, "effmpeg",
             "This command allows you to easily execute common ffmpeg tasks.")
     sort = SortProcessor(
-        subparser, "sort", "This command lets you sort images using various "
-                           "methods.")
+            subparser, "sort",
+            "This command lets you sort images using various methods.")
     guiparsers = {'effmpeg': effmpeg, 'sort': sort}
     gui = TKGui(
             subparser, guiparsers, "gui",
