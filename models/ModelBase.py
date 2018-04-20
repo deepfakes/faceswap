@@ -102,7 +102,8 @@ class ModelBase(object):
                 self.created_vram_gb = gpu_total_vram_gb
             
         if self.multi_gpu:
-            self.gpu_idxs = gpufmkmgr.getDeviceIdxsEqualModel( gpu_idx )
+            #self.gpu_idxs = gpufmkmgr.getDeviceIdxsEqualModel( gpu_idx )
+            self.gpu_idxs = gpufmkmgr.getAllDevicesIdxsList ()
             if len(self.gpu_idxs) <= 1:
                 self.multi_gpu = False
         else:
@@ -200,7 +201,13 @@ class ModelBase(object):
                 self.batch_size = 1                
             self.batch_size *= len(self.gpu_idxs)
             
-            return [ self.keras.utils.multi_gpu_model( model, self.gpu_idxs ) for model in models_list ]
+            result = []
+            for model in models_list:
+                for i in range( len(model.output_names) ):
+                    model.output_names = 'output_%d' % (i)                 
+                result += [ self.keras.utils.multi_gpu_model( model, self.gpu_idxs ) ]    
+                
+            return result                
         else:
             return models_list
      
