@@ -47,15 +47,16 @@ class ConverterMasked(ConverterBase):
         img_prd_face_mask_3D = cv2.warpAffine( prd_face_mask, face_mat, img_size, np.zeros(img.shape, dtype=float), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC )
         img_prd_face_mask_3D = np.clip (img_prd_face_mask_3D, 0.0, 1.0)
         
+        if np.argwhere(img_prd_face_mask_3D > 0.1).size == 0:
+            self.mask_type == 'dst' #force to dst mask, if predicted mask is empty
+        
         if self.mask_type == 'predicted':
             img_mask_hard = img_prd_face_mask_3D
+        elif self.mask_type == 'intersect':
+            img_mask_hard = img_face_mask*img_prd_face_mask_3D #intersection              
         elif self.mask_type == 'dst':
             img_mask_hard = img_face_mask
             img_mask_hard = np.repeat (img_mask_hard, (3,), -1)
-        elif self.mask_type == 'intersect':
-            img_mask_hard = img_face_mask*img_prd_face_mask_3D #intersection  
-        
-        
 
         if debug:
             debugs += [img_mask_hard.copy()]
