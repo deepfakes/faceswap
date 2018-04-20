@@ -21,6 +21,8 @@ class ConverterMasked(ConverterBase):
         
     #override
     def convert (self, img, img_face_landmarks, debug):
+        frame_mask_type = self.mask_type
+        
         if debug:        
             debugs = [img.copy()]
 
@@ -48,13 +50,13 @@ class ConverterMasked(ConverterBase):
         img_prd_face_mask_3D = np.clip (img_prd_face_mask_3D, 0.0, 1.0)
         
         if np.argwhere(img_prd_face_mask_3D > 0.1).size == 0:
-            self.mask_type == 'dst' #force to dst mask, if predicted mask is empty
+            frame_mask_type == 'dst' #force to dst mask, if predicted mask is empty
         
-        if self.mask_type == 'predicted':
+        if frame_mask_type == 'predicted':
             img_mask_hard = img_prd_face_mask_3D
-        elif self.mask_type == 'intersect':
+        elif frame_mask_type == 'intersect':
             img_mask_hard = img_face_mask*img_prd_face_mask_3D #intersection              
-        elif self.mask_type == 'dst':
+        elif frame_mask_type == 'dst':
             img_mask_hard = img_face_mask
             img_mask_hard = np.repeat (img_mask_hard, (3,), -1)
 
