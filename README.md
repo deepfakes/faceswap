@@ -37,6 +37,3 @@
 - **DF (4GB+)** - @dfaker model. It is as F128, but + DSSIM loss func which excludes background around face.
 
 - **IAEF128 (5GB+)** - new model, as dfaker, but model trying to morph src face to dst, while keeping facial features of src face. Can produce strange faces.
-
-- **SIAEF128 (6GB+)** - as IAEF128 , but more deep morphing prediction and can produce more strange bugs.
-![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/SIAEF128%20example.jpg)
