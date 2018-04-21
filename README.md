@@ -46,10 +46,17 @@ If there is not enough training data, start with someone who looks similar, then
 
 #### Docker
 If you prefer using Docker, You can start the project with:
- - Build: `docker build -t deepfakes .`
- - Run: `docker run --rm --name deepfakes -v [src_folder]:/srv -it deepfakes bash` . `bash` can be replaced by your command line 
-Note that the Dockerfile does not have all good requirments, so it will fail on some python 3 commands.
-Also note that it does not have a GUI output, so the train.py will fail on showing image. You can comment this, or save it as a file.
+ - GPU:
+   - Prerequiste: Install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) and a CUDA driver on the host machine.
+   - Build: `docker build -t deepfakes-gpu -f Dockerfile.gpu .`
+   - Run: `nvidia-docker run --name deepfakes-gpu -p 8888:8888 -v [src_folder]:/src -it deepfakes-gpu`
+   - Execute: `docker exec -it deepfakes bash`
+     - Tested working on training.
+ - CPU: 
+   - Build: `docker build -t deepfakes -f Dockerfile.cpu .`                                                                     
+   - Run: `docker run --rm --name deepfakes -v [src_folder]:/srv -it deepfakes bash` . `bash` can be replaced by your command line
+     - Note that Dockerfile.cpu does not have all good requirments, so it will fail on some python 3 commands.
+     - Also note that it does not have a GUI output, so the train.py will fail on showing image. You can comment this, or save it as a file.
 
 ## How to contribute
 
