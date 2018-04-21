@@ -9,8 +9,6 @@ import warnings
 
 from pathlib import Path
 
-import cv2
-
 def get_folder(path):
     """ Return a path to a folder, creating it if it doesn't exist """
     output_dir = Path(path)
@@ -37,23 +35,6 @@ def get_image_paths(directory, exclude=list(), debug=False):
                 dir_contents.append(chkfile.path)
 
     return dir_contents
-
-def rotate_image(image, angle, rotated_width=None, rotated_height=None):
-    """ Rotate an image by a given angle. From:
-        https://stackoverflow.com/questions/22041699 """
-    height, width = image.shape[:2]
-    image_center = (width/2, height/2)
-    rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
-    if rotated_width is None or rotated_height is None:
-        abs_cos = abs(rotation_matrix[0, 0])
-        abs_sin = abs(rotation_matrix[0, 1])
-        if rotated_width is None:
-            rotated_width = int(height*abs_sin + width*abs_cos)
-        if rotated_height is None:
-            rotated_height = int(height*abs_cos + width*abs_sin)
-    rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
-    rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
-    return cv2.warpAffine(image, rotation_matrix, (rotated_width, rotated_height))
 
 def set_system_verbosity(loglevel):
     """ Set the verbosity level of tensorflow and suppresses

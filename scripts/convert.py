@@ -5,144 +5,35 @@ import re
 import os
 from pathlib import Path
 
-import cv2
 from tqdm import tqdm
 
-from lib.cli import DirectoryArgs, FSProcess, FullPaths
-from lib.utils import BackgroundGenerator, get_folder, get_image_paths, rotate_image
+from scripts.inout import Alignments, Images, Faces, Utils
+from scripts.extract import Extract
+from lib.utils import BackgroundGenerator, get_folder, get_image_paths
 
 from plugins.PluginLoader import PluginLoader
 
-class ConvertImage(DirectoryArgs):
-    """ Class to parse the command line arguments for conversion.
-        Inherits base options from lib.DirectoryArgs """
-
-    @staticmethod
-    def get_optional_arguments():
-        """ Put the arguments in a list so that they are accessible from both argparse and gui """
-        argument_list = []
-        argument_list.append({"opts": ("-m", "--model-dir"),
-                              "action": FullPaths,
-                              "dest": "model_dir",
-                              "default": "models",
-                              "help": "Model directory. A directory containing the trained model "
-                                      "you wish to process. Defaults to 'models'"})
-        argument_list.append({"opts": ("-a", "--input-aligned-dir"),
-                              "action": FullPaths,
-                              "dest": "input_aligned_dir",
-                              "default": None,
-                              "help": "Input \"aligned directory\". A directory that should "
-                                      "contain the aligned faces extracted from the input files. "
-                                      "If you delete faces from this folder, they'll be skipped "
-                                      "during conversion. If no aligned dir is specified, all "
-                                      "faces will be converted"})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str,
-                              # case sensitive because this is used to load a plug-in.
-                              "choices": PluginLoader.get_available_models(),
-                              "default": PluginLoader.get_default_model(),
-                              "help": "Select the trainer that was used to create the model"})
-        argument_list.append({"opts": ("-c", "--converter"),
-                              "type": str,
-                              # case sensitive because this is used to load a plugin.
-                              "choices": ("Masked", "Adjust"),
-                              "default": "Masked",
-                              "help": "Converter to use"})
-        argument_list.append({"opts": ("-b", "--blur-size"),
-                              "type": int,
-                              "default": 2,
-                              "help": "Blur size. (Masked converter only)"})
-        argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
-                              "dest": "erosion_kernel_size",
-                              "type": int,
-                              "default": None,
-                              "help": "Erosion kernel size. Positive values apply erosion "
-                                      "which reduces the edge of the swapped face. Negative "
-                                      "values apply dilation which allows the swapped face "
-                                      "to cover more space. (Masked converter only)"})
-        argument_list.append({"opts": ("-M", "--mask-type"),
-                              #lowercase this, because its just a string later on.
-                              "type": str.lower,
-                              "dest": "mask_type",
-                              "choices": ["rect", "facehull", "facehullandrect"],
-                              "default": "facehullandrect",
-                              "help": "Mask to use to replace faces. (Masked converter only)"})
-        argument_list.append({"opts": ("-sh", "--sharpen"),
-                              "type": str.lower,
-                              "dest": "sharpen_image",
-                              "choices": ["bsharpen", "gsharpen"],
-                              "default": None,
-                              "help": "Use Sharpen Image.bsharpen for Box Blur, gsharpen for "
-                                      "Gaussian Blur (Masked converter only)"})
-        argument_list.append({"opts": ("-g", "--gpus"),
-                              "type": int,
-                              "default": 1,
-                              "help": "Number of GPUs to use for conversion"})
-        argument_list.append({"opts": ("-fr", "--frame-ranges"),
-                              "nargs": "+",
-                              "type": str,
-                              "help": "frame ranges to apply transfer to e.g. For frames 10 to "
-                                      "50 and 90 to 100 use --frame-ranges 10-50 90-100. Files "
-                                      "must have the frame-number as the last number in the "
-                                      "name!"})
-        argument_list.append({"opts": ("-d", "--discard-frames"),
-                              "action": "store_true",
-                              "dest": "discard_frames",
-                              "default": False,
-                              "help": "When used with --frame-ranges discards frames that are "
-                                      "not processed instead of writing them out unchanged"})
-        argument_list.append({"opts": ("-s", "--swap-model"),
-                              "action": "store_true",
-                              "dest": "swap_model",
-                              "default": False,
-                              "help": "Swap the model. Instead of A -> B, swap B -> A"})
-        argument_list.append({"opts": ("-S", "--seamless"),
-                              "action": "store_true",
-                              "dest": "seamless_clone",
-                              "default": False,
-                              "help": "Use cv2's seamless clone. (Masked converter only)"})
-        argument_list.append({"opts": ("-mh", "--match-histgoram"),
-                              "action": "store_true",
-                              "dest": "match_histogram",
-                              "default": False,
-                              "help": "Use histogram matching. (Masked converter only)"})
-        argument_list.append({"opts": ("-sm", "--smooth-mask"),
-                              "action": "store_true",
-                              "dest": "smooth_mask",
-                              "default": True,
-                              "help": "Smooth mask (Adjust converter only)"})
-        argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
-                              "action": "store_true",
-                              "dest": "avg_color_adjust",
-                              "default": True,
-                              "help": "Average color adjust. (Adjust converter only)"})
-        return argument_list
-
-    def create_parser(self, subparser, command, description):
-        self.optional_arguments = self.get_optional_arguments()
-        self.process = Convert
-
-        parser = subparser.add_parser(
-            command,
-            help="Convert a source image to a new one with the face swapped.",
-            description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground")
-        return parser
-
-class Convert(FSProcess):
-    """ The convert process. Inherits from cli.FSProcess, including the additional
-        classes: images, faces, alignments """
+class Convert(object):
+    """ The convert process. """
     def __init__(self, arguments):
-        FSProcess.__init__(self, arguments)
+        self.args = arguments
+        self.output_dir = get_folder(self.args.output_dir)
+
+        self.images = Images(self.args)
+        self.faces = Faces(self.args)
+        self.alignments = Alignments(self.args)
 
         self.opts = OptionalActions(self.args, self.images.input_images)
 
     def process(self):
         """ Original & LowMem models go with Adjust or Masked converter
             Note: GAN prediction outputs a mask + an image, while other predicts only an image """
+        Utils.set_verbosity(self.args.verbose)
+
         if not self.alignments.have_alignments():
             self.generate_alignments()
+
+        self.faces.faces_detected = self.alignments.read_alignments()
 
         model = self.load_model()
         converter = self.load_converter(model)
@@ -152,19 +43,17 @@ class Convert(FSProcess):
         for item in batch.iterator():
             self.convert(converter, item)
 
+        Utils.finalize(self.images.images_found,
+                       self.faces.num_faces_detected,
+                       self.faces.verify_output)
+
     def generate_alignments(self):
         """ Generate an alignments file if one does not already
         exist. Does not save extracted faces """
         print('Alignments file not found. Generating at default values...')
-        self.export_face = False
-        self.extractor = self.load_extractor()
-
-        for filename in tqdm(self.images.read_directory()):
-            filename, faces = self.extract_face_alignments(filename)
-            self.faces.faces_detected[os.path.basename(filename)] = faces
-
-        self.alignments.write_alignments()
-        self.finalize()
+        extract = Extract(self.args)
+        extract.export_face = False
+        extract.process()
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -200,23 +89,22 @@ class Convert(FSProcess):
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        self.alignments.read_alignments()
-        for filename in tqdm(self.images.read_directory()):
-            image = cv2.imread(filename)
-            faces = self.check_alignments(filename, image)
+        for filename in tqdm(self.images.input_images):
+            if not self.check_alignments(filename):
+                continue
+            image = self.images.cv2_read_write('read', filename)
+            faces = self.faces.get_faces_alignments(filename, image)
             if not faces:
                 continue
 
             yield filename, image, faces
 
-    def check_alignments(self, filename, image):
-        """ If we have no alignments for this face, skip it """
-        faces = None
-        if self.faces.have_face(filename):
-            faces = self.faces.get_faces_alignments(filename, image)
-        else:
+    def check_alignments(self, filename):
+        """ If we have no alignments for this image, skip it """
+        have_alignments = self.faces.have_face(filename)
+        if not have_alignments:
             tqdm.write("No alignment found for {}, skipping".format(os.path.basename(filename)))
-        return faces
+        return have_alignments
 
     def convert(self, converter, item):
         """ Apply the conversion transferring faces onto frames """
@@ -228,8 +116,8 @@ class Convert(FSProcess):
                 for idx, face in faces:
                     image = self.convert_one_face(converter, (filename, image, idx, face))
             if skip != "discard":
-                output_file = get_folder(self.output_dir) / Path(filename).name
-                cv2.imwrite(str(output_file), image)
+                filename = str(self.output_dir / Path(filename).name)
+                self.images.cv2_read_write('write', filename, image)
         except Exception as err:
             print("Failed to convert image: {}. Reason: {}".format(filename, err))
 
@@ -240,13 +128,13 @@ class Convert(FSProcess):
         if self.opts.check_skipface(filename, idx):
             return image
 
-        image = self.opts.rotate_image(image, face.r)
+        image = self.images.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
         image = converter.patch_image(image,
                                       face,
                                       64 if "128" not in self.args.trainer else 128)
-        image = self.opts.rotate_image(image, face.r, reverse=True)
+        image = self.images.rotate_image(image, face.r, reverse=True)
         return image
 
 class OptionalActions(object):
@@ -260,9 +148,6 @@ class OptionalActions(object):
 
         self.frame_ranges = self.get_frame_ranges()
         self.imageidxre = re.compile(r"(\d+)(?!.*\d)")
-
-        self.rotation_height = 0
-        self.rotation_width = 0
 
     ### SKIP FACES ###
     def get_aligned_directory(self):
@@ -301,7 +186,7 @@ class OptionalActions(object):
     def check_skipframe(self, filename):
         """ Check whether frame is to be skipped """
         if not self.frame_ranges:
-            return
+            return None
         idx = int(self.imageidxre.findall(filename)[0])
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
         if skipframe and self.args.discard_frames:
@@ -319,17 +204,3 @@ class OptionalActions(object):
             print("face {} for frame {} was deleted, skipping".format(
                 face_idx, os.path.basename(filename)))
         return skip_face
-
-    ### ROTATE IMAGES ###
-    def rotate_image(self, image, rotation, reverse=False):
-        """ Rotate the image forwards or backwards """
-        if rotation != 0:
-            if not reverse:
-                self.rotation_height, self.rotation_width = image.shape[:2]
-                image = rotate_image(image, rotation)
-            else:
-                image = rotate_image(image,
-                                     rotation -1,
-                                     rotated_width=self.rotation_width,
-                                     rotated_height=self.rotation_height)
-        return image
