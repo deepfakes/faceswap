@@ -115,6 +115,9 @@ class ModelBase(object):
         
         self.onInitialize(**in_options)
         
+        if self.debug:
+            self.batch_size = 1 
+        
         if self.is_training_mode:
             if self.generator_list is None:
                 raise Exception( 'You didnt set_training_data_generators()')
