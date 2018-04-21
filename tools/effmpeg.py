@@ -263,33 +263,39 @@ class Effmpeg(object):
 
         arguments_list.append({"opts": ('-m', '--mux-audio'),
                                "action": "store_true",
-                               "dest": "mux",
+                               "dest": "mux_audio",
                                "default": False,
-                               "help": """Mux the audio from either the input 
-                                          file or the reference video. If both
-                                          are provided then the reference file
-                                          will be used as the audio
-                                          source."""})
+                               "help": """Mux the audio from the reference 
+                                          video into the input video. This
+                                          option is only used for the 'gen-vid'
+                                          action. 'mux-audio' action has this
+                                          turned on implicitly."""})
 
-        arguments_list.append({"opts": ('-ro', '--rotation'),
-                               "choices": ("90", "180", "270"),
-                               "dest": "mux",
-                               "default": False,
-                               "help": """Mux the audio from either the input 
-                                          file or the reference video. If both
-                                          are provided then the reference file
-                                          will be used as the audio
-                                          source."""})
+        arguments_list.append({"opts": ('-tr', '--transpose'),
+                               "choices": ("0", "1", "2", "3", "None"),
+                               "dest": "transpose",
+                               "default": "None",
+                               "help": """Transpose the video. If transpose is 
+                                          set, then rotate will be ignored.
+                                          0 = 90 counter-clockwise and vertical
+                                          flip
+                                          1 = 90 clockwise
+                                          2 = 90 counter clockwise
+                                          3 = 90 clockwise and vertical flip"""})
 
-        arguments_list.append({"opts": ('-m', '--mux-audio'),
-                               "action": "store_true",
-                               "dest": "mux",
-                               "default": False,
-                               "help": """Mux the audio from either the input 
-                                          file or the reference video. If both
-                                          are provided then the reference file
-                                          will be used as the audio
-                                          source."""})
+        arguments_list.append({"opts": ('-ro', '--rotate'),
+                               "type": str,
+                               "dest": "rotate",
+                               "default": "None",
+                               "help": """Rotate the video clockwise by the 
+                                          given number of degrees."""})
+
+        arguments_list.append({"opts": ('-sc', '--scale'),
+                               "type": str,
+                               "dest": "scale",
+                               "default": "1920x1080",
+                               "help": """Set the new resolution scale if the
+                                          chosen action is 'rescale'."""})
 
         return arguments_list
 
@@ -369,7 +375,7 @@ class Effmpeg(object):
                              "{}".format(self.output.path))
 
         # Check that ref_vid is a video
-        if not self.ref_vid.is_type("none"):
+        if self.ref_vid.is_type("none"):
             raise ValueError("The file chosen as the reference video is not a "
                              "video, either leave the field blank or type "
                              "'None': {}".format(self.ref_vid.path))
@@ -382,31 +388,41 @@ class Effmpeg(object):
         else:
             self.duration = self.parse_time(str(self.args.duration))
 
+        # If fps was left blank in gui, set it to default -1.0 value
+        if self.args.fps == '':
+            self.args.fps = str(-1.0)
+
         # Try to set fps automatically if needed and not supplied by user
-        if self.args.action in self._actions_req_fps and self.__convert_fps(self.args.fps) <= 0:
-            if self.__check_have_fps(['r', 'i', 'o']):
+        if self.args.action in self._actions_req_fps \
+                and self.__convert_fps(self.args.fps) <= 0:
+            if self.__check_have_fps(['r', 'i']):
                 _error_str = "No fps, input or reference video was supplied, "
                 _error_str += "hence it's not possible to "
                 _error_str += "'{}'.".format(self.args.action)
                 raise ValueError(_error_str)
             elif self.output.fps is not None and self.__check_have_fps(['r', 'i']):
                 self.args.fps = self.output.fps
-            elif self.ref_vid.fps is not None and self.__check_have_fps(['i', 'o']):
+            elif self.ref_vid.fps is not None and self.__check_have_fps(['i']):
                 self.args.fps = self.ref_vid.fps
-            elif self.input.fps is not None and self.__check_have_fps(['r', 'o']):
+            elif self.input.fps is not None and self.__check_have_fps(['r']):
                 self.args.fps = self.input.fps
+
+        # Processing rotate
+        if self.args.rotate.lower() == "none":
+            self.args.rotate = 0
 
         self.process()
 
     def process(self):
         kwargs = {"input_": self.input,
                   "output": self.output,
-                  "ref_vid": self.ref_vid.path,
-                  "mux": self.args.mux,
+                  "ref_vid": self.ref_vid,
+                  "mux_audio": self.args.mux_audio,
                   "start": self.start,
                   "duration": self.duration,
                   "fps": self.args.fps,
-                  "rotation": self.args.rotation,
+                  "rotate": self.args.rotate,
+                  "transpose": self.args.transpose,
                   "scale": self.args.scale}
         action = getattr(self, self.args.action)
         action(**kwargs)
@@ -414,7 +430,7 @@ class Effmpeg(object):
     @staticmethod
     def extract(input_=None, output=None, fps=None, **kwargs):
         _input = {input_.path: None}
-        _output_opts = '-vf fps="' + str(fps) + '"'
+        _output_opts = '-y -vf fps="' + str(fps) + '"'
         _output_path = output.path + "/" + input_.name + "%05d.png"
         _output = {_output_path: _output_opts}
         ff = FFmpeg(inputs=_input, outputs=_output)
@@ -422,12 +438,18 @@ class Effmpeg(object):
         ff.run(stderr=subprocess.STDOUT)
 
     @staticmethod
-    def gen_vid(input_=None, output=None, fps=None, mux=False, ref_vid=None,
-                **kwargs):
+    def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
+                ref_vid=None, **kwargs):
         _input_path = os.path.join(input_.path,
-                                   os.listdir(input_.path)[0][:-9] + "%05d.png")
-        _inputs = {_input_path: None}
-        _output_opts = '-c:v libx264 -vf fps="' + str(fps) + '"'
+                                   os.listdir(input_.path)[0][:-9]
+                                   + "%05d.png")
+        _output_opts = '-y -c:v libx264 -vf fps="' + str(fps) + '"'
+        if mux_audio:
+            _ref_vid_opts = '-c copy -map 0:0 -map 1:1 -shortest'
+            _output_opts = _ref_vid_opts + ' ' + _output_opts
+            _inputs = {_input_path: None, ref_vid.path: None}
+        else:
+            _inputs = {_input_path: None}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
         ff.run(stderr=subprocess.STDOUT)
@@ -447,25 +469,44 @@ class Effmpeg(object):
         return _fps
 
     @staticmethod
-    def get_info(input_=None, **kwargs):
+    def get_info(input_=None, print_=True, **kwargs):
         _input_opts = ''
         _inputs = {input_.path: _input_opts}
         ff = FFprobe(inputs=_inputs)
-        return ff.run(stderr=subprocess.STDOUT)
+        out = ff.run(stdout=subprocess.PIPE,
+                     stderr=subprocess.STDOUT)[0].decode('utf-8')
+        if print_:
+            print(out)
+        else:
+            return out
 
     @staticmethod
     def rescale(input_=None, output=None, scale=None, **kwargs):
         _input_opts = None
-        _output_opts = '-vf scale="' + str(scale) + '"'
+        _output_opts = '-y -vf scale="' + str(scale) + '"'
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
         ff.run(stderr=subprocess.STDOUT)
 
     @staticmethod
-    def rotate(input_=None, output=None, rotation=None, **kwargs):
+    def rotate(input_=None, output=None, rotate=None, transpose=None,
+               **kwargs):
         _input_opts = None
-        _output_opts = '-vf transpose="' + str(rotation) + '"'
+        _output_opts = '-y -c:a copy -vf '
+        _bilinear = ''
+        if transpose is not None and transpose != "None":
+            _output_opts += 'transpose="' + str(transpose) + '"'
+        elif int(rotate) != 0:
+            if int(rotate) % 90 == 0 and int(rotate) != 0:
+                _bilinear = ":bilinear=0"
+            _output_opts += 'rotate="' + str(rotate) + '*(PI/180)'
+            _output_opts += _bilinear + '" '
+        else:
+            raise ValueError("You have not supplied a valid rotate or "
+                             "transpose value:\nrotate: {}\ntranspose: "
+                             "{}".format(rotate, transpose))
+
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
@@ -474,7 +515,7 @@ class Effmpeg(object):
     @staticmethod
     def mux_audio(input_=None, output=None, ref_vid=None, **kwargs):
         _input_opts = None
-        _output_opts = '-c copy -map 0:0 -map 1:1 -shortest'
+        _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
         _inputs = {input_.path: _input_opts, ref_vid: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
@@ -483,7 +524,7 @@ class Effmpeg(object):
     @staticmethod
     def slice(input_=None, output=None, start='', duration=None, **kwargs):
         _input = {input_.path: None}
-        _output_opts = "-ss " + start + " "
+        _output_opts = "-y -ss " + start + " "
         _output_opts += "-t " + duration + " "
         _output_opts += "-vcodec copy -acodec copy -y"
         _output = {output.path: _output_opts}
@@ -499,8 +540,10 @@ class Effmpeg(object):
                 return os.path.join(self.input.dirname, 'out')
             elif self.args.action in self._actions_have_vid_output:
                 if self.input.is_type("media"):
+                    # Using the same extension as input leads to very poor
+                    # output quality, hence the default is mkv for now
                     return os.path.join(self.input.dirname,
-                                        "out." + self.input.ext)
+                                        "out.mkv")  # + self.input.ext)
                 else:  # case if input was a directory
                     return os.path.join(self.input.dirname, 'out.mkv')
 
