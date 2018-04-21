@@ -26,17 +26,17 @@ class Model(ModelBase):
         self.batch_size = batch_size
         if self.batch_size == 0:     
             if self.gpu_total_vram_gb == 4:
-                self.batch_size = 2
-            elif self.gpu_total_vram_gb <= 5:
                 self.batch_size = 4
-            elif self.gpu_total_vram_gb < 12: 
+            elif self.gpu_total_vram_gb <= 5:
                 self.batch_size = 8
-            else:    
+            elif self.gpu_total_vram_gb < 12: 
                 self.batch_size = 16
+            else:    
+                self.batch_size = 32
                 
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
-
+        
         self.encoder = self.Encoder(ae_input_layer, self.created_vram_gb)
         self.decoder_src = self.Decoder(self.created_vram_gb)
         self.decoder_dst = self.Decoder(self.created_vram_gb)        

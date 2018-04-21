@@ -254,8 +254,13 @@ class ModelBase(object):
             supressor = std_utils.suppress_stdout_stderr()
             supressor.__enter__()
             
-        self.last_sample = self.generate_next_sample()        
+        self.last_sample = self.generate_next_sample() 
+
+        epoch_time = time.time()
+        
         losses = self.onTrainOneEpoch(self.last_sample)
+        
+        epoch_time = time.time() - epoch_time
 
         self.loss_history.append ( [float(loss[1]) for loss in losses] )
         
@@ -271,10 +276,10 @@ class ModelBase(object):
         self.epoch += 1
         
         #............."Saving... 
-        loss_string = "Training [#{0:06d}]".format ( self.epoch )
+        loss_string = "Training [#{0:06d}][{1:04d}ms]".format ( self.epoch, int(epoch_time*1000) % 10000 )
         for (loss_name, loss_value) in losses:
             loss_string += " %s: %.5f" % (loss_name, loss_value)
-        
+
         return loss_string
         
     def pass_one_epoch(self):
