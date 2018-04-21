@@ -37,3 +37,24 @@
 - **DF (4GB+)** - @dfaker model. It is as F128, but + DSSIM loss func which excludes background around face.
 
 - **IAEF128 (5GB+)** - new model, as dfaker, but model trying to morph src face to dst, while keeping facial features of src face. Can produce strange faces.
+
+### **Sort tool**:
+
+`hist` groups images by similar content
+
+`hist-dissim` places most similar to each other images to end
+
+`face` and `face-dissim` currently useless
+
+Best practice for gather src faceset:
+
+1) delete first unsorted aligned groups of images what you can to delete. Dont touch target face mixed with others.
+2) `blur` -> delete ~half of them
+3) `hist` -> delete groups of similar and leave only target face
+4) `hist-dissim` -> delete at end of list straight looking faces
+5) `face-yaw` -> just finalize faceset
+
+Best practice for dst faces:
+
+1) delete first unsorted aligned groups of images what you can to delete. Dont touch target face mixed with others.
+2) `hist` -> delete groups of similar and leave only target face
