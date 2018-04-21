@@ -102,8 +102,7 @@ class ModelBase(object):
                 self.created_vram_gb = gpu_total_vram_gb
             
         if self.multi_gpu:
-            #self.gpu_idxs = gpufmkmgr.getDeviceIdxsEqualModel( gpu_idx )
-            self.gpu_idxs = gpufmkmgr.getAllDevicesIdxsList ()
+            self.gpu_idxs = gpufmkmgr.getDeviceIdxsEqualModel( gpu_idx )
             if len(self.gpu_idxs) <= 1:
                 self.multi_gpu = False
         else:
