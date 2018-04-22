@@ -92,7 +92,7 @@ class Convert(object):
         for filename in tqdm(self.images.input_images):
             if not self.check_alignments(filename):
                 continue
-            image = self.images.cv2_read_write('read', filename)
+            image = Utils.cv2_read_write('read', filename)
             faces = self.faces.get_faces_alignments(filename, image)
             if not faces:
                 continue
@@ -117,7 +117,7 @@ class Convert(object):
                     image = self.convert_one_face(converter, (filename, image, idx, face))
             if skip != "discard":
                 filename = str(self.output_dir / Path(filename).name)
-                self.images.cv2_read_write('write', filename, image)
+                Utils.cv2_read_write('write', filename, image)
         except Exception as err:
             print("Failed to convert image: {}. Reason: {}".format(filename, err))
 

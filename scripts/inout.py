@@ -48,6 +48,15 @@ class Utils(object):
         return cv2.warpAffine(image, rotation_matrix, (rotated_width, rotated_height))
 
     @staticmethod
+    def cv2_read_write(action, filename, image=None):
+        """ Read or write an image using cv2 """
+        if action == 'read':
+            image = cv2.imread(filename)
+        if action == 'write':
+            cv2.imwrite(filename, image)
+        return image
+
+    @staticmethod
     def finalize(images_found, num_faces_detected, verify_output):
         """ Finalize the image processing """
         print("-------------------------")
@@ -141,15 +150,6 @@ class Images(object):
                                                     rotation * -1,
                                                     rotated_width=self.rotation_width,
                                                     rotated_height=self.rotation_height)
-        return image
-
-    @staticmethod
-    def cv2_read_write(action, filename, image=None):
-        """ Read or write an image using cv2 """
-        if action == 'read':
-            image = cv2.imread(filename)
-        if action == 'write':
-            cv2.imwrite(filename, image)
         return image
 
 class Faces(object):

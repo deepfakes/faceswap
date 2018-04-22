@@ -24,14 +24,6 @@ class Extract(object):
 
         self.export_face = True
 
-    def set_defaults(self):
-        """ Set default arguments.
-
-        The Extract process may be called by convert (if alignments are
-        not found). Not all options are available, so the arguments need
-        to be set to default values for those that are not available """
-        pass
-
     def process(self):
         """ Perform the extraction process """
         print('Starting, this may take a while...')
@@ -73,7 +65,7 @@ class Extract(object):
             to process the individual faces """
         retval = filename, list()
         try:
-            image = self.images.cv2_read_write('read', filename)
+            image = Utils.cv2_read_write('read', filename)
 
             for angle in self.images.rotation_angles:
                 image = Utils.rotate_image_by_angle(image, angle)
@@ -109,7 +101,7 @@ class Extract(object):
 
         if self.export_face:
             filename = "{}_{}{}".format(str(output_file), str(idx), Path(filename).suffix)
-            self.images.cv2_read_write('write', filename, resized_face)
+            Utils.cv2_read_write('write', filename, resized_face)
 
         return {"r": face.r,
                 "x": face.x,
