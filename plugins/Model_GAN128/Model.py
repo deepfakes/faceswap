@@ -1,8 +1,6 @@
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
-import os
-import shutil
 from keras.models import Model
 from keras.layers import *
 from keras.layers.advanced_activations import LeakyReLU
@@ -13,13 +11,14 @@ from keras.optimizers import Adam
 
 from lib.PixelShuffler import PixelShuffler
 from .instance_normalization import InstanceNormalization
+from lib.utils import backup_file
 
 from keras.utils import multi_gpu_model
 
-netGAH5 = 'netGA_GAN128.h5'
-netGBH5 = 'netGB_GAN128.h5'
-netDAH5 = 'netDA_GAN128.h5'
-netDBH5 = 'netDB_GAN128.h5'
+hdf = {'netGAH5':'netGA_GAN128.h5',
+       'netGBH5': 'netGB_GAN128.h5',
+       'netDAH5': 'netDA_GAN128.h5',
+       'netDBH5': 'netDB_GAN128.h5'}
 
 def __conv_init(a):
     print("conv_init", a)
@@ -136,8 +135,8 @@ class GANModel():
         self.netGB_sm = netGB
 
         try:
-            netGA.load_weights(str(self.model_dir / netGAH5))
-            netGB.load_weights(str(self.model_dir / netGBH5))
+            netGA.load_weights(str(self.model_dir / hdf['netGAH5']))
+            netGB.load_weights(str(self.model_dir / hdf['netGBH5']))
             print ("Generator models loaded.")
         except:
             print ("Generator weights files not found.")
@@ -172,8 +171,8 @@ class GANModel():
         netDB = Discriminator(self.nc_D_inp)
 
         try:
-            netDA.load_weights(str(self.model_dir / netDAH5))
-            netDB.load_weights(str(self.model_dir / netDBH5))
+            netDA.load_weights(str(self.model_dir / hdf['netDAH5']))
+            netDB.load_weights(str(self.model_dir / hdf['netDBH5']))
             print ("Discriminator models loaded.")
         except:
             print ("Discriminator weights files not found.")
@@ -188,16 +187,14 @@ class GANModel():
 
     def save_weights(self):
         model_dir = str(self.model_dir)
-        if os.path.isdir(model_dir + "_bk"):
-            shutil.rmtree(model_dir + "_bk")
-        shutil.move(model_dir,  model_dir + "_bk")
-        os.mkdir(model_dir)
+        for model in hdf.values():
+            backup_file(model_dir, model)
         if self.gpus > 1:
-            self.netGA_sm.save_weights(str(self.model_dir / netGAH5))
-            self.netGB_sm.save_weights(str(self.model_dir / netGBH5))
+            self.netGA_sm.save_weights(str(self.model_dir / hdf['netGAH5']))
+            self.netGB_sm.save_weights(str(self.model_dir / hdf['netGBH5']))
         else:
-            self.netGA.save_weights(str(self.model_dir / netGAH5))
-            self.netGB.save_weights(str(self.model_dir / netGBH5))
-        self.netDA.save_weights(str(self.model_dir / netDAH5))
-        self.netDB.save_weights(str(self.model_dir / netDBH5))
+            self.netGA.save_weights(str(self.model_dir / hdf['netGAH5']))
+            self.netGB.save_weights(str(self.model_dir / hdf['netGBH5']))
+        self.netDA.save_weights(str(self.model_dir / hdf['netDAH5']))
+        self.netDB.save_weights(str(self.model_dir / hdf['netDBH5']))
         print ("Models saved.")

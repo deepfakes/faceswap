@@ -1,6 +1,6 @@
 import cv2
 import sys
-from os.path import basename, exists
+from os.path import basename, exists, join
 
 from pathlib import Path
 from scandir import scandir
@@ -31,6 +31,14 @@ def get_image_paths(directory, exclude=[], debug=False):
                 dir_contents.append(x.path)
 
     return dir_contents
+
+def backup_file(directory, filename):
+    """ Backup a given file by appending .bk to the end """
+    origfile = join(directory, filename)
+    backupfile = origfile + '.bk'
+    if exists(backupfile):
+        os.remove(backupfile)
+    os.rename(origfile, backupfile)
 
 # From: https://stackoverflow.com/questions/22041699/rotate-an-image-without-cropping-in-opencv-in-c
 def rotate_image(image, angle, rotated_width=None, rotated_height=None):
