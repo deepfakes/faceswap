@@ -101,7 +101,7 @@ class Images(object):
                 or self.args.rotate_images == "off"):
             return rotation_angles
 
-        if self.rotation_angles == "on":
+        if self.args.rotate_images == "on":
             rotation_angles.extend(range(90, 360, 90))
         else:
             passed_angles = [int(angle)
@@ -324,9 +324,9 @@ class Alignments(object):
     def load_skip_alignments(self, alignfile, faces_detected):
         """ Load existing alignments if skipping existing images """
         if self.have_alignments():
-            with open(alignfile, self.serializer.roptions) as inf:
-                data = self.serializer.unmarshal(inf.read())
-                for key, val in data.items():
+            existing_alignments = self.read_alignments()
+            for key, val in existing_alignments.items():
+                if val:
                     faces_detected[key] = val
         else:
             print("Existing alignments file '%s' not found." % alignfile)

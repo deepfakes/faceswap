@@ -7,7 +7,6 @@ from pathlib import Path
 from tqdm import tqdm
 
 from lib.multithreading import pool_process
-from lib.utils import set_system_verbosity
 from scripts.fsmedia import Alignments, Faces, Images, Utils
 
 class Extract(object):
