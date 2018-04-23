@@ -7,7 +7,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from scripts.inout import Alignments, Images, Faces, Utils
+from scripts.fsmedia import Alignments, Images, Faces, Utils
 from scripts.extract import Extract
 from lib.utils import BackgroundGenerator, get_folder, get_image_paths
 
