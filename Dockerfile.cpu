@@ -1,29 +1,14 @@
-FROM debian:stretch
+FROM tensorflow/tensorflow:latest-py3
 
-# install debian packages
-ENV DEBIAN_FRONTEND noninteractive
-
-RUN apt-get update -qq \
- && apt-get install --no-install-recommends -y \
-    # install essentials
-	build-essential \ 
-	# install python 3
-	python3.5 \ 
-	python3-dev \
-	python3-pip \ 
-	python3-wheel \ 
-	# Boost for dlib
-	cmake \
-	libboost-all-dev \ 
-	# requirements for keras
-	python3-h5py \
-	python3-yaml \
-	python3-pydot \
-	python3-setuptools \
+RUN apt-get update -qq -y \
+ && apt-get install -y cmake libsm6 libxrender1 libxext-dev python3-tk\
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-COPY ./requirements-python35.txt .
-RUN pip3 --no-cache-dir install -r ./requirements-python35.txt
+COPY requirements-docker.txt /opt/
+RUN pip3 install cmake
+RUN pip3 install dlib --install-option=--yes --install-option=USE_AVX_INSTRUCTIONS
+RUN pip3 --no-cache-dir install -r /opt/requirements-docker.txt && rm /opt/requirements-docker.txt
 
-WORKDIR /srv/
+WORKDIR "/notebooks"
+CMD ["/run_jupyter.sh", "--allow-root"]
