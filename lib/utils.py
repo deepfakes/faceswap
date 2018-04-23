@@ -2,7 +2,7 @@
 """ Utilities available across all scripts """
 
 import os
-from os.path import basename, exists
+from os.path import basename, exists, join
 import queue as Queue
 import threading
 import warnings
@@ -35,6 +35,15 @@ def get_image_paths(directory, exclude=list(), debug=False):
                 dir_contents.append(chkfile.path)
 
     return dir_contents
+
+def backup_file(directory, filename):
+    """ Backup a given file by appending .bk to the end """
+    origfile = join(directory, filename)
+    backupfile = origfile + '.bk'
+    if exists(backupfile):
+        os.remove(backupfile)
+    if exists(origfile):
+        os.rename(origfile, backupfile)
 
 def set_system_verbosity(loglevel):
     """ Set the verbosity level of tensorflow and suppresses
