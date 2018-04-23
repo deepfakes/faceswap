@@ -2,8 +2,8 @@
 """ The optional GUI for faceswap """
 
 import os
-import signal
 import re
+import signal
 import subprocess
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
@@ -13,16 +13,19 @@ from math import ceil, floor
 from threading import Thread
 from time import time
 
-import numpy
 import matplotlib
-matplotlib.use('TkAgg')
 import matplotlib.animation as animation
 from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+import numpy
+
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
+
+matplotlib.use('TkAgg')
+
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
 
@@ -1088,55 +1091,51 @@ class FaceswapControl(object):
         self.utils.guitext['status'].set(status)
 
 
-class TKGui(object):
-    """ Main GUI Control """
-
-    def __init__(self, subparser, subparsers, command, description='default'):
+class Gui(object):
+    """ The GUI process. """
+    def __init__(self, arguments, subparsers):
         # Don't try to load the GUI if there is no display or there are
         # problems importing tkinter
-        cmd = sys.argv
-        if not self.check_display(cmd) or not self.check_tkinter_available(cmd):
+        if not self.check_display() or not self.check_tkinter_available():
             return
 
-        self.arguments = None
+        cmd = sys.argv
+
+        self.args = arguments
         self.opts = self.extract_options(subparsers)
         self.utils = Utils(self.opts, calling_file=cmd[0])
         self.root = FaceswapGui(self.utils, calling_file=cmd[0])
-        self.parse_arguments(description, subparser, command)
 
     @staticmethod
-    def check_display(command):
+    def check_display():
         """ Check whether there is a display to output the GUI. If running on
             Windows then assume not running in headless mode """
         if not os.environ.get('DISPLAY', None) and os.name != 'nt':
-            if 'gui' in command:
-                print('Could not detect a display. The GUI has been disabled.')
-                if os.name == 'posix':
-                    print('macOS users need to install XQuartz. '
-                          'See https://support.apple.com/en-gb/HT201341')
+            if os.name == 'posix':
+                print('macOS users need to install XQuartz. '
+                      'See https://support.apple.com/en-gb/HT201341')
             return False
         return True
 
     @staticmethod
-    def check_tkinter_available(command):
+    def check_tkinter_available():
         """ Check whether TkInter is installed on user's machine """
         tkinter_vars = [tk, ttk, filedialog, messagebox, TclError]
         if any(var is None for var in tkinter_vars):
-            if "gui" in command:
-                print(
-                    "It looks like TkInter isn't installed for your OS, so "
-                    "the GUI has been "
-                    "disabled. To enable the GUI please install the TkInter "
-                    "application.\n"
-                    "You can try:\n"
-                    "  Windows/macOS:      Install ActiveTcl Community "
-                    "Edition from "
-                    "www.activestate.com\n"
-                    "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
-                    "  Arch:               sudo pacman -S tk\n"
-                    "  CentOS/Redhat:      sudo yum install tkinter\n"
-                    "  Fedora:             sudo dnf install python3-tkinter\n",
-                    file=sys.stderr)
+            print(
+                "It looks like TkInter isn't installed for your OS, so "
+                "the GUI has been "
+                "disabled. To enable the GUI please install the TkInter "
+                "application.\n"
+                "You can try:\n"
+                "  Windows/macOS:      Install ActiveTcl Community "
+                "Edition from "
+                "www.activestate.com\n"
+                "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                "  Arch:               sudo pacman -S tk\n"
+                "  CentOS/Redhat:      sudo yum install tkinter\n"
+                "  Fedora:             sudo dnf install python3-tkinter\n",
+                file=sys.stderr)
             return False
         return True
 
@@ -1177,25 +1176,8 @@ class TKGui(object):
             ctl = ttk.Checkbutton
         return ctl, sysbrowser
 
-    def parse_arguments(self, description, subparser, command):
-        """ Parse the command line arguments for the GUI """
-        parser = subparser.add_parser(
-            command,
-            help="This Launches a GUI for Faceswap.",
-            description=description,
-            epilog="Questions and feedback: \
-                    https://github.com/deepfakes/faceswap-playground")
-
-        parser.add_argument('-d', '--debug',
-                            action='store_true',
-                            dest='debug',
-                            default=False,
-                            help='Output to Shell console instead of GUI console')
-        parser.set_defaults(func=self.process)
-
-    def process(self, arguments):
+    def process(self):
         """ Builds the GUI """
-        self.arguments = arguments
-        self.utils.debugconsole = self.arguments.debug
+        self.utils.debugconsole = self.args.debug
         self.root.build_gui()
         self.root.gui.mainloop()
