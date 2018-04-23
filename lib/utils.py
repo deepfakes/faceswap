@@ -38,7 +38,8 @@ def backup_file(directory, filename):
     backupfile = origfile + '.bk'
     if exists(backupfile):
         os.remove(backupfile)
-    os.rename(origfile, backupfile)
+    if exists(origfile):
+        os.rename(origfile, backupfile)
 
 # From: https://stackoverflow.com/questions/22041699/rotate-an-image-without-cropping-in-opencv-in-c
 def rotate_image(image, angle, rotated_width=None, rotated_height=None):
