@@ -691,6 +691,29 @@ class OptionControl(object):
         if filename:
             filepath.set(filename)
 
+    @staticmethod
+    def ask_save(filepath, filetypes=None):
+        """ Pop-up to get path to save a new file """
+        if filetypes is None:
+            filename = filedialog.asksaveasfilename()
+        else:
+            # In case filetypes were not configured properly in the
+            # arguments_list
+            try:
+                filename = filedialog.asksaveasfilename(filetypes=filetypes)
+            except TclError as te1:
+                filetypes = FileFullPaths.prep_filetypes(filetypes)
+                filename = filedialog.asksaveasfilename(filetypes=filetypes)
+            except TclError as te2:
+                filename = filedialog.asksaveasfilename()
+        if filename:
+            filepath.set(filename)
+
+    @staticmethod
+    def ask_nothing(filepath, filetypes=None):
+        """ Method that does nothing, used for disabling open/save pop up """
+        return
+
     def ask_combo(self, filepath, filetypes):
         actions_open_type = self.option['actions_open_type']
         task_name = actions_open_type['task_name']

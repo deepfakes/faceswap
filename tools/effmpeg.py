@@ -10,7 +10,7 @@ import os
 import sys
 import subprocess
 import datetime
-from lib.cli import FullPaths, DirFullPaths, FileFullPaths, ComboFullPaths
+from lib.cli import FileFullPaths, ComboFullPaths
 
 from ffmpy import FFprobe, FFmpeg, FFRuntimeError, FFExecutableNotFoundError
 
@@ -25,8 +25,8 @@ class DataItem(object):
     A simple class used for storing the media data items and directories that
     Effmpeg uses for 'input', 'output' and 'ref_vid'.
     """
-    vid_ext = ["mp4", "mpeg", "webm", "mkv"]
-    audio_ext = ["mp3", "wav", "flac"]
+    vid_ext = [".mp4", ".mpeg", ".webm", ".mkv"]
+    audio_ext = [".mp3", ".wav", ".flac"]
 
     def __init__(self, path=None, name=None, item_type=None, ext=None,
                  fps=None):
@@ -56,15 +56,15 @@ class DataItem(object):
         if path is not None:
             self.path = path
         if self.path is not None:
-            item_ext = self.path.split('.')[-1]
+            item_ext = os.path.splitext(self.path)[1]
             if item_ext in DataItem.vid_ext:
                 item_type = 'vid'
             elif item_ext in DataItem.audio_ext:
                 item_type = 'audio'
             else:
                 item_type = 'dir'
-            self.type = item_type if self.type is None else self.type
-            self.ext = item_ext if self.ext is None else self.ext
+            self.type = item_type
+            self.ext = item_ext
         else:
             return
 
@@ -106,6 +106,8 @@ class Effmpeg(object):
     """
 
     _actions_req_fps = ["extract", "gen_vid"]
+    _actions_req_ref_video = ["mux_audio"]
+    _actions_can_use_ref_video = ["gen_vid"]
     _actions_have_dir_output = ["extract"]
     _actions_have_vid_output = ["gen_vid", "mux_audio", "rescale", "rotate",
                                 "slice"]
@@ -183,23 +185,26 @@ class Effmpeg(object):
                                           meant to be a directory then a 
                                           directory called 'out' will be 
                                           created inside the input 
-                                          directory.""",
+                                          directory.
+                                          Note: the chosen output file 
+                                          extension will determine the file
+                                          encoding.""",
                                "actions_open_type": {
                                    "task_name": "effmpeg",
-                                   "extract": "folder",
-                                   "gen-vid": "load",
-                                   "get-fps": "load",
-                                   "get-info": "load",
-                                   "mux-audio": "load",
-                                   "rescale": "load",
-                                   "rotate": "load",
-                                   "slice": "load"
+                                   "extract": "save",
+                                   "gen-vid": "save",
+                                   "get-fps": "nothing",
+                                   "get-info": "nothing",
+                                   "mux-audio": "save",
+                                   "rescale": "save",
+                                   "rotate": "save",
+                                   "slice": "save"
                                },
                                "filetypes": {
                                    "extract": None,
                                    "gen-vid": vid_files,
-                                   "get-fps": vid_files,
-                                   "get-info": vid_files,
+                                   "get-fps": None,
+                                   "get-info": None,
                                    "mux-audio": vid_files,
                                    "rescale": vid_files,
                                    "rotate": vid_files,
@@ -207,12 +212,32 @@ class Effmpeg(object):
                                }})
 
         arguments_list.append({"opts": ('-r', '--reference-video'),
-                               "action": FileFullPaths,
-                               "filetypes": vid_files,
+                               "action": ComboFullPaths,
                                "dest": "ref_vid",
                                "default": "None",
                                "help": """Path to reference video if 'input' 
-                                          was not a video."""})
+                                          was not a video.""",
+                               "actions_open_type": {
+                                   "task_name": "effmpeg",
+                                   "extract": "nothing",
+                                   "gen-vid": "load",
+                                   "get-fps": "nothing",
+                                   "get-info": "nothing",
+                                   "mux-audio": "load",
+                                   "rescale": "nothing",
+                                   "rotate": "nothing",
+                                   "slice": "nothing"
+                               },
+                               "filetypes": {
+                                   "extract": None,
+                                   "gen-vid": vid_files,
+                                   "get-fps": None,
+                                   "get-info": None,
+                                   "mux-audio": vid_files,
+                                   "rescale": None,
+                                   "rotate": None,
+                                   "slice": None
+                               }})
 
         arguments_list.append({"opts": ('-fps', '--fps'),
                                "type": str,
@@ -342,15 +367,15 @@ class Effmpeg(object):
 
         # Instantiate output DataItem object
         if self.args.action in self._actions_have_dir_output:
-            self.output = DataItem(path=self.__get_default_vid_output())
+            self.output = DataItem(path=self.__get_default_output())
         elif self.args.action in self._actions_have_vid_output:
             if self.__check_have_fps(self.args.fps) > 0:
-                self.output = DataItem(path=self.__get_default_vid_output(),
+                self.output = DataItem(path=self.__get_default_output(),
                                        fps=self.args.fps)
             else:
-                self.output = DataItem(path=self.__get_default_vid_output())
+                self.output = DataItem(path=self.__get_default_output())
 
-        if self.args.ref_vid == "None" or self.args.ref_vid == '':
+        if self.args.ref_vid.lower() == "none" or self.args.ref_vid == '':
             self.args.ref_vid = None
 
         # Instantiate ref_vid DataItem object
@@ -374,11 +399,18 @@ class Effmpeg(object):
                              "output, but you entered: "
                              "{}".format(self.output.path))
 
-        # Check that ref_vid is a video
-        if self.ref_vid.is_type("none"):
-            raise ValueError("The file chosen as the reference video is not a "
-                             "video, either leave the field blank or type "
-                             "'None': {}".format(self.ref_vid.path))
+        # Check that ref_vid is a video when it needs to be
+        if self.args.action in self._actions_req_ref_video:
+            if self.ref_vid.is_type("none"):
+                raise ValueError("The file chosen as the reference video is "
+                                 "not a video, either leave the field blank "
+                                 "or type 'None': "
+                                 "{}".format(self.ref_vid.path))
+        elif self.args.action in self._actions_can_use_ref_video:
+            if self.ref_vid.is_type("none"):
+                print("Warning: no reference video was supplied, even though "
+                      "one may be used with the chosen action. If this is "
+                      "intentional then ignore this warning.", file=sys.stderr)
 
         # Process start and duration arguments
         self.start = self.parse_time(str(self.args.start))
@@ -532,7 +564,7 @@ class Effmpeg(object):
         ff.run(stderr=subprocess.STDOUT)
 
     # Various helper methods
-    def __get_default_vid_output(self):
+    def __get_default_output(self):
         # Set output to the same directory as input
         # if the user didn't specify it.
         if self.args.output == "":
@@ -546,6 +578,8 @@ class Effmpeg(object):
                                         "out.mkv")  # + self.input.ext)
                 else:  # case if input was a directory
                     return os.path.join(self.input.dirname, 'out.mkv')
+        else:
+            return self.args.output
 
     def __check_have_fps(self, items):
         items_to_check = list()
