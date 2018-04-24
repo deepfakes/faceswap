@@ -20,12 +20,12 @@ from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import numpy
+from PIL import Image, ImageTk
 
 from lib.cli import FullPaths
 from lib.Serializer import JSONSerializer
 
 matplotlib.use('TkAgg')
-
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
 
@@ -384,7 +384,7 @@ class FaceswapGui(object):
         bottomcontainer = ttk.Frame(container, height=150)
         container.add(bottomcontainer)
 
-        optsnotebook = ttk.Notebook(topcontainer, width=400, height=500)
+        optsnotebook = ttk.Notebook(topcontainer, width=420, height=500)
         topcontainer.add(optsnotebook)
 
         if self.calling_file == 'faceswap.py':
@@ -547,6 +547,7 @@ class OptionsFrame(object):
 
         self.optsframe = tk.Frame(self.canvas)
         self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
+        self.chkbtns = self.checkbuttons_frame()
 
     def build_frame(self):
         """ Build the options frame for this command """
@@ -554,8 +555,11 @@ class OptionsFrame(object):
         self.canvas.bind('<Configure>', self.resize_frame)
 
         for option in self.utils.opts[self.command]:
-            optioncontrol = OptionControl(self.utils, option, self.optsframe)
+            optioncontrol = OptionControl(self.utils, option, self.optsframe, self.chkbtns[1])
             optioncontrol.build_full_control()
+
+        if self.chkbtns[1].winfo_children():
+            self.chkbtns[0].pack(side=tk.BOTTOM, fill=tk.X, expand=True)
 
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
@@ -573,14 +577,33 @@ class OptionsFrame(object):
         canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
 
+    def checkbuttons_frame(self):
+        """ Build and format frame for holding the check buttons """
+        container = ttk.Frame(self.optsframe)
+
+        lbl = ttk.Label(container, text="Options", width=16, anchor=tk.W)
+        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+
+        chkframe = ttk.Frame(container)
+        chkframe.pack(side=tk.BOTTOM, expand=True)
+
+        chkleft = ttk.Frame(chkframe, name="leftFrame")
+        chkleft.pack(side=tk.LEFT, anchor=tk.N, expand=True)
+
+        chkright = ttk.Frame(chkframe, name="rightFrame")
+        chkright.pack(side=tk.RIGHT, anchor=tk.N, expand=True)
+
+        return container, chkframe
+
 class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
     frame """
 
-    def __init__(self, utils, option, option_frame):
+    def __init__(self, utils, option, option_frame, checkbuttons_frame):
         self.utils = utils
         self.option = option
         self.option_frame = option_frame
+        self.chkbtns = checkbuttons_frame
 
     def build_full_control(self):
         """ Build the correct control type for the option passed through """
@@ -590,14 +613,18 @@ class OptionControl(object):
         ctlhelp = ' '.join(self.option.get('help', '').split())
         ctlhelp = '. '.join(i.capitalize() for i in ctlhelp.split('. '))
         ctlhelp = ctltitle + ' - ' + ctlhelp
-        ctlframe = self.build_one_control_frame()
         dflt = self.option.get('default', '')
         dflt = self.option.get('default', False) if ctl == ttk.Checkbutton else dflt
         choices = self.option['choices'] if ctl == ttk.Combobox else None
 
-        self.build_one_control_label(ctlframe, ctltitle)
+        ctlframe = self.build_one_control_frame()
+
+        if ctl != ttk.Checkbutton:
+            self.build_one_control_label(ctlframe, ctltitle)
+
         self.option['value'] = self.build_one_control(ctlframe,
                                                       ctl,
+                                                      ctltitle,
                                                       dflt,
                                                       ctlhelp,
                                                       choices,
@@ -612,11 +639,11 @@ class OptionControl(object):
     @staticmethod
     def build_one_control_label(frame, control_title):
         """ Build and place the control label """
-        lbl = ttk.Label(frame, text=control_title, width=18, anchor=tk.W)
+        lbl = ttk.Label(frame, text=control_title, width=16, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
-    def build_one_control(self, frame, control, default, helptext, choices,
-                          sysbrowser):
+    def build_one_control(self, frame, control, control_title, default, helptext,
+                          choices, sysbrowser):
         """ Build and place the option controls """
         default = default if default is not None else ''
 
@@ -627,18 +654,35 @@ class OptionControl(object):
         if sysbrowser is not None:
             self.add_browser_buttons(frame, sysbrowser, var)
 
-        ctlkwargs = {'variable': var} if control == ttk.Checkbutton else {
-            'textvariable': var}
-        packkwargs = {'anchor': tk.W} if control == ttk.Checkbutton else {
-            'fill': tk.X, 'expand': True}
-        ctl = control(frame, **ctlkwargs)
+        if control == ttk.Checkbutton:
+            self.checkbutton_to_checkframe(control, control_title, var, helptext)
+        else:
+            self.control_to_optionsframe(control, frame, var, choices, helptext)
+        return var
+
+    def checkbutton_to_checkframe(self, control, control_title, var, helptext):
+        """ Add checkbuttons to the checkbutton frame """
+        leftframe = self.chkbtns.children['leftFrame']
+        rightframe = self.chkbtns.children['rightFrame']
+        chkbtn_count = len({**leftframe.children, **rightframe.children})
+
+        frame = leftframe if chkbtn_count % 2 == 0 else rightframe
+
+        ctl = control(frame, variable=var, text=control_title)
+        ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
+
+        Tooltip(ctl, text=helptext, wraplength=200)
+
+    def control_to_optionsframe(self, control, frame, var, choices, helptext):
+        """ Standard non-check buttons sit in the main options frame """
+        ctl = control(frame, textvariable=var)
+        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
 
         if control == ttk.Combobox:
             ctl['values'] = [choice for choice in choices]
 
-        ctl.pack(padx=5, pady=5, **packkwargs)
         Tooltip(ctl, text=helptext, wraplength=200)
-        return var
+
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
@@ -858,8 +902,8 @@ class Graph(object):
 
     def recalculate_axes(self, loss):
         ''' Recalculate the latest x and y axes limits from latest data '''
-        ymin = floor(min([min(lossvals) for lossvals in loss]) * 100) / 100
-        ymax = ceil(max([max(lossvals) for lossvals in loss]) * 100) / 100
+        ymin = floor(min([min(lossvals) for lossvals in loss]) * 1000) / 1000
+        ymax = ceil(max([max(lossvals) for lossvals in loss]) * 1000) / 1000
 
         if ymin < self.ylim[0] or ymax > self.ylim[1]:
             self.ylim = (ymin, ymax)
@@ -887,43 +931,70 @@ class PreviewDisplay(object):
     """ The Preview tab of the Display section """
 
     def __init__(self, frame, previewloc):
-        self.frame = frame
+        self.canvas = tk.Canvas(frame, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.imgoriginal = None
+        self.framesize = None
         self.previewimg = None
         self.errcount = 0
         self.previewloc = previewloc
 
-        self.previewlbl = ttk.Label(self.frame, image=None, anchor=tk.NW)
-        self.previewlbl.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.imgcanvas = self.canvas.create_image(0, 0, image=self.previewimg, anchor=tk.NW)
+        frame.bind("<Configure>", self.resize)
 
     def update_preview(self):
         """ Display the image if it exists or a place holder if it doesn't """
         self.load_preview()
-        if self.previewimg is None:
-            self.previewlbl.config(image=None)
-        else:
-            self.previewlbl.config(image=self.previewimg)
-        self.previewlbl.after(1000, self.update_preview)
+        self.canvas.itemconfig(self.imgcanvas, image=self.previewimg)
+        self.canvas.after(1000, self.update_preview)
 
     def load_preview(self):
         """ Load the preview image into tk PhotoImage """
         if os.path.exists(self.previewloc):
             try:
-                self.previewimg = tk.PhotoImage(file=self.previewloc)
+                self.imgoriginal = Image.open(self.previewloc)
+                self.display_image()
                 self.errcount = 0
             except TclError:
                 # This is probably an error reading the file whilst it's
-                # being saved
-                # so ignore it for now and only pick up if there have been
-                # multiple
-                # consecutive fails
+                # being saved  so ignore it for now and only pick up if
+                # there have been multiple consecutive fails
                 if self.errcount < 10:
                     self.errcount += 1
                     self.previewimg = None
                 else:
                     print('Error reading the preview file')
         else:
+            self.imgoriginal = None
             self.previewimg = None
 
+    def display_image(self):
+        """ Set the display image size based on the current frame size """
+        if not self.framesize:
+            self.previewimg = ImageTk.PhotoImage(self.imgoriginal)
+            return
+
+        imgsize = self.imgoriginal.size
+        frameratio = float(self.framesize[0]) / float(self.framesize[1])
+        imgratio = float(imgsize[0]) / float(imgsize[1])
+
+        if frameratio <= imgratio:
+            imgsize = (self.framesize[0], int(self.framesize[0] / imgratio))
+        else:
+            imgsize = (int(self.framesize[1] * imgratio), self.framesize[1])
+
+        resized = self.imgoriginal.resize(imgsize, Image.ANTIALIAS)
+        self.previewimg = ImageTk.PhotoImage(resized)
+
+    def resize(self, event):
+        """  Resize the image to fit the frame, maintaining aspect ratio """
+        self.framesize = (event.width, event.height)
+        if self.imgoriginal:
+            self.display_image()
+        else:
+            self.previewimg = None
+        self.canvas.itemconfig(self.imgcanvas, image=self.previewimg)
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
@@ -936,6 +1007,7 @@ class FaceswapControl(object):
         self.args = None
         self.process = None
         self.lenloss = 0
+        self.consoleloss = re.compile(r'([a-zA-Z_]+):.*?(\d+\.\d+)')
 
     def prepare(self, options, command):
         """ Prepare for running the subprocess """
@@ -1036,7 +1108,7 @@ class FaceswapControl(object):
             return
         self.lenloss = currentlenloss
 
-        loss = re.findall(r'([a-zA-Z_]+):.*?(\d+\.\d+)', string)
+        loss = self.consoleloss.findall(string)
 
         if len(loss) < 2:
             return
