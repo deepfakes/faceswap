@@ -30,7 +30,7 @@ class Convert(object):
             Note: GAN prediction outputs a mask + an image, while other predicts only an image """
         Utils.set_verbosity(self.args.verbose)
 
-        if not self.alignments.have_alignments():
+        if not self.alignments.have_alignments_file:
             self.generate_alignments()
 
         self.faces.faces_detected = self.alignments.read_alignments()

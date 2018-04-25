@@ -18,7 +18,8 @@ def get_folder(path):
 def get_image_paths(directory, exclude=list(), debug=False):
     """ Return a list of images that reside in a folder """
     image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
-    exclude_names = [basename(Path(x).stem[:-2] + Path(x).suffix) for x in exclude]
+    exclude_names = [basename(Path(x).stem[:Path(x).stem.rfind('_')] +
+        Path(x).suffix) for x in exclude]
     dir_contents = list()
 
     if not exists(directory):

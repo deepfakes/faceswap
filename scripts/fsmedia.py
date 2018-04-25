@@ -272,6 +272,8 @@ class Alignments(object):
     def __init__(self, arguments):
         self.args = arguments
         self.serializer = self.get_serializer()
+        self.alignments_path = self.get_alignments_path()
+        self.have_alignments_file = os.path.exists(self.alignments_path)
 
     def get_serializer(self):
         """ Set the serializer to be used for loading and saving alignments """
@@ -296,34 +298,31 @@ class Alignments(object):
 
     def read_alignments(self):
         """ Read the serialized alignments file """
-        alignfile = self.get_alignments_path()
         try:
-            with open(alignfile, self.serializer.roptions) as align:
+            with open(self.alignments_path, self.serializer.roptions) as align:
                 faces_detected = self.serializer.unmarshal(align.read())
         except Exception as err:
-            print("{} not read!".format(alignfile))
+            print("{} not read!".format(self.alignments_path))
             print(str(err))
             faces_detected = dict()
         return faces_detected
 
     def write_alignments(self, faces_detected):
         """ Write the serialized alignments file """
-        alignfile = self.get_alignments_path()
-
         if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
-            faces_detected = self.load_skip_alignments(alignfile, faces_detected)
+            faces_detected = self.load_skip_alignments(self.alignments_path, faces_detected)
 
         try:
-            print("Writing alignments to: {}".format(alignfile))
-            with open(alignfile, self.serializer.woptions) as align:
+            print("Writing alignments to: {}".format(self.alignments_path))
+            with open(self.alignments_path, self.serializer.woptions) as align:
                 align.write(self.serializer.marshal(faces_detected))
         except Exception as err:
-            print("{} not written!".format(alignfile))
+            print("{} not written!".format(self.alignments_path))
             print(str(err))
 
     def load_skip_alignments(self, alignfile, faces_detected):
         """ Load existing alignments if skipping existing images """
-        if self.have_alignments():
+        if self.have_alignments_file:
             existing_alignments = self.read_alignments()
             for key, val in existing_alignments.items():
                 if val:
@@ -331,8 +330,3 @@ class Alignments(object):
         else:
             print("Existing alignments file '%s' not found." % alignfile)
         return faces_detected
-
-    def have_alignments(self):
-        """ Check if an alignments file exists """
-        alignfile = self.get_alignments_path()
-        return os.path.exists(alignfile)
