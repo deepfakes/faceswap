@@ -135,7 +135,7 @@ class ExtractConvertArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-D", "--detector"),
                               "type": str,
                               # case sensitive because this is used to load a plugin.
-                              "choices": ("hog", "cnn"),
+                              "choices": ("hog", "cnn", "all"),
                               "default": "hog",
                               "help": "Detector to use. 'cnn' detects many more angles but "
                                       "will be much more resource intensive and may fail "
