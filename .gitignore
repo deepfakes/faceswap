@@ -5,7 +5,6 @@
 !*.png
 !Dockerfile*
 !requirements*
-!icons
 !lib
 !scripts
 !plugins
