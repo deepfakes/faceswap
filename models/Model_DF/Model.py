@@ -3,7 +3,7 @@ from models import TrainingDataType
 import numpy as np
 import cv2
 
-from nnlib import PenalizedLossClass
+from nnlib import DSSIMMaskLossClass
 from nnlib import conv
 from nnlib import upscale
 from nnlib import res
@@ -53,8 +53,8 @@ class Model(ModelBase):
             self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
                 
         optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)        
-        self.autoencoder_src.compile(optimizer=optimizer, loss=[PenalizedLossClass(self.tf)(mask_layer,self.keras_contrib.losses.DSSIMObjective()), 'mae'] )
-        self.autoencoder_dst.compile(optimizer=optimizer, loss=[PenalizedLossClass(self.tf)(mask_layer,self.keras_contrib.losses.DSSIMObjective()), 'mae'] )
+        self.autoencoder_src.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mae'] )
+        self.autoencoder_dst.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mae'] )
   
         if self.is_training_mode:
             from models import FullFaceTrainingDataGenerator

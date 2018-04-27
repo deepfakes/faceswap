@@ -1,12 +1,11 @@
-def PenalizedLossClass(tf):
-    class PenalizedLoss(object):
-        def __init__(self,mask,lossFunc):
-            self.lossFunc = lossFunc
+def DSSIMMaskLossClass(tf, keras_contrib):
+    class DSSIMMaskLoss(object):
+        def __init__(self,mask):
             self.mask = mask
             
         def __call__(self,y_true, y_pred):
-            return self.lossFunc (y_true*self.mask,y_pred*self.mask)
-    return PenalizedLoss
+            return keras_contrib.losses.DSSIMObjective() (y_true*self.mask,y_pred*self.mask)
+    return DSSIMMaskLoss
         
 def PixelShufflerClass(keras):
     class PixelShuffler(keras.engine.topology.Layer):

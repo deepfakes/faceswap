@@ -12,13 +12,12 @@ class Model(ModelBase):
 
     encoderH5 = 'encoder.h5'
     decoderH5 = 'decoder.h5'
-    inter_AH5 = 'inter_A.h5'
     inter_BH5 = 'inter_B.h5'
     inter_ABH5 = 'inter_AB.h5'
 
     #override
     def get_model_name(self):
-        return "IAEF128"
+        return "LIAEF128"
  
     #override
     def onInitialize(self, batch_size=-1, **in_options):
@@ -29,38 +28,40 @@ class Model(ModelBase):
         if self.batch_size == 0:          
             if self.gpu_total_vram_gb == 4:
                 self.batch_size = 4
-            elif self.gpu_total_vram_gb <= 6:
+            elif self.gpu_total_vram_gb == 5:
                 self.batch_size = 8
-            elif self.gpu_total_vram_gb < 12: 
+            elif self.gpu_total_vram_gb == 6:
                 self.batch_size = 16
-            else: 
+            elif self.gpu_total_vram_gb < 12: 
                 self.batch_size = 32
+            else: 
+                self.batch_size = 64
                 
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
 
         self.encoder = self.Encoder(ae_input_layer)
         self.decoder = self.Decoder()
-        self.inter_A = self.Intermediate ()
         self.inter_B = self.Intermediate ()
         self.inter_AB = self.Intermediate ()
         
         if not self.is_first_run():
             self.encoder.load_weights  (self.get_strpath_storage_for_file(self.encoderH5))
             self.decoder.load_weights  (self.get_strpath_storage_for_file(self.decoderH5))
-            self.inter_A.load_weights  (self.get_strpath_storage_for_file(self.inter_AH5))
             self.inter_B.load_weights  (self.get_strpath_storage_for_file(self.inter_BH5))
             self.inter_AB.load_weights (self.get_strpath_storage_for_file(self.inter_ABH5))
 
-        self.autoencoder_src = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([self.inter_A(self.encoder(ae_input_layer)), self.inter_AB(self.encoder(ae_input_layer))])) )
-        self.autoencoder_dst = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([self.inter_B(self.encoder(ae_input_layer)), self.inter_AB(self.encoder(ae_input_layer))])) )
-        self.autoencoder_test = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([self.inter_AB(self.encoder(ae_input_layer)), self.inter_AB(self.encoder(ae_input_layer))])) )
-        
-        
+        code = self.encoder(ae_input_layer)
+        AB = self.inter_AB(code)
+        B = self.inter_B(code)
+        self.autoencoder_src = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([AB, AB])) )
+        self.autoencoder_dst = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([B, AB])) )
+            
         if self.is_training_mode:
             self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
                 
         optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)        
+        
         self.autoencoder_src.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mae'] )
         self.autoencoder_dst.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mae'] )
   
@@ -75,7 +76,6 @@ class Model(ModelBase):
     def onSave(self):        
         self.encoder.save_weights  (self.get_strpath_storage_for_file(self.encoderH5))
         self.decoder.save_weights  (self.get_strpath_storage_for_file(self.decoderH5))
-        self.inter_A.save_weights  (self.get_strpath_storage_for_file(self.inter_AH5))
         self.inter_B.save_weights  (self.get_strpath_storage_for_file(self.inter_BH5))
         self.inter_AB.save_weights (self.get_strpath_storage_for_file(self.inter_ABH5))
         
@@ -107,8 +107,6 @@ class Model(ModelBase):
         AB, mAB = self.autoencoder_src.predict([test_B_64, test_B_m])
         BB, mBB = self.autoencoder_dst.predict([test_B_64, test_B_m])
         
-        CC, mCC = self.autoencoder_test.predict([test_B_64, test_B_m])
-        
         mAA = np.repeat ( mAA, (3,), -1)
         mAB = np.repeat ( mAB, (3,), -1)
         mBB = np.repeat ( mBB, (3,), -1)
@@ -124,7 +122,6 @@ class Model(ModelBase):
                 #mBB[i],                
                 AB[i],
                 #mAB[i]
-                CC[i]
                 ), axis=1) )
             
         return [ ('src, dst, src->dst', np.concatenate ( st, axis=0 ) ) ]

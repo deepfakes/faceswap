@@ -35,6 +35,8 @@
 
 - **IAEF128 (5GB+)** - new model, as dfaker, but model trying to morph src face to dst, while keeping facial features of src face. Can produce strange faces.
 
+- **LIAEF128 (4GB+)** - as IAEF128 but "lighter". Less aggressive morphing.
+
 ### **Sort tool**:
 
 `hist` groups images by similar content
