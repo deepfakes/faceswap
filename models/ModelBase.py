@@ -316,44 +316,54 @@ class ModelBase(object):
             raise Exception('get_training_data dtype is not TrainingDataType')
     
         if dtype == TrainingDataType.SRC:
-            if self.training_datas[TrainingDataType.SRC] is None:  
-                self.training_datas[TrainingDataType.SRC] = X_LOAD( [ TrainingDataSample(filename=filename) for filename in Path_utils.get_image_paths(self.training_data_src_path) ] )
-            return self.training_datas[TrainingDataType.SRC]
-
+            if self.training_datas[dtype] is None:  
+                self.training_datas[dtype] = X_LOAD( [ TrainingDataSample(filename=filename) for filename in Path_utils.get_image_paths(self.training_data_src_path) ] )
+            return self.training_datas[dtype]
+            
         elif dtype == TrainingDataType.DST:
-            if self.training_datas[TrainingDataType.DST] is None:
-                self.training_datas[TrainingDataType.DST] = X_LOAD( [ TrainingDataSample(filename=filename) for filename in Path_utils.get_image_paths(self.training_data_dst_path) ] )
-            return self.training_datas[TrainingDataType.DST]
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_LOAD( [ TrainingDataSample(filename=filename) for filename in Path_utils.get_image_paths(self.training_data_dst_path) ] )
+            return self.training_datas[dtype]
+            
+        elif dtype == TrainingDataType.SRC_WITH_NEAREST:
+            if self.training_datas[dtype] is None:  
+                self.training_datas[dtype] = X_WITH_NEAREST_Y( self.get_training_data(TrainingDataType.SRC), self.get_training_data(TrainingDataType.DST) )
+            return self.training_datas[dtype]
+            
+        elif dtype == TrainingDataType.DST_WITH_NEAREST:
+            if self.training_datas[dtype] is None:  
+                self.training_datas[dtype] = X_WITH_NEAREST_Y( self.get_training_data(TrainingDataType.DST), self.get_training_data(TrainingDataType.SRC) )
+            return self.training_datas[dtype]
             
         elif dtype == TrainingDataType.SRC_YAW_SORTED:
-            if self.training_datas[TrainingDataType.SRC_YAW_SORTED] is None:
-                self.training_datas[TrainingDataType.SRC_YAW_SORTED] = X_YAW_SORTED( self.get_training_data(TrainingDataType.SRC) )
-            return self.training_datas[TrainingDataType.SRC_YAW_SORTED]
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_SORTED( self.get_training_data(TrainingDataType.SRC) )
+            return self.training_datas[dtype]
 
         elif dtype == TrainingDataType.DST_YAW_SORTED:
-            if self.training_datas[TrainingDataType.DST_YAW_SORTED] is None:
-                self.training_datas[TrainingDataType.DST_YAW_SORTED] = X_YAW_SORTED( self.get_training_data(TrainingDataType.DST))
-            return self.training_datas[TrainingDataType.DST_YAW_SORTED]
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_SORTED( self.get_training_data(TrainingDataType.DST))
+            return self.training_datas[dtype]
     
         elif dtype == TrainingDataType.SRC_YAW_SORTED_AS_DST:            
-            if self.training_datas[TrainingDataType.SRC_YAW_SORTED_AS_DST] is None:
-                self.training_datas[TrainingDataType.SRC_YAW_SORTED_AS_DST] = X_YAW_AS_Y_SORTED( self.get_training_data(TrainingDataType.SRC_YAW_SORTED), self.get_training_data(TrainingDataType.DST_YAW_SORTED) )
-            return self.training_datas[TrainingDataType.SRC_YAW_SORTED_AS_DST]
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_AS_Y_SORTED( self.get_training_data(TrainingDataType.SRC_YAW_SORTED), self.get_training_data(TrainingDataType.DST_YAW_SORTED) )
+            return self.training_datas[dtype]
         
         elif dtype == TrainingDataType.DST_YAW_SORTED_AS_SRC:            
-            if self.training_datas[TrainingDataType.DST_YAW_SORTED_AS_SRC] is None:
-                self.training_datas[TrainingDataType.DST_YAW_SORTED_AS_SRC] = X_YAW_AS_Y_SORTED( self.get_training_data(TrainingDataType.DST_YAW_SORTED), self.get_training_data(TrainingDataType.SRC_YAW_SORTED) )
-            return self.training_datas[TrainingDataType.DST_YAW_SORTED_AS_SRC]
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_AS_Y_SORTED( self.get_training_data(TrainingDataType.DST_YAW_SORTED), self.get_training_data(TrainingDataType.SRC_YAW_SORTED) )
+            return self.training_datas[dtype]
             
         elif dtype == TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST:
-            if self.training_datas[TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST] is None:     
-                self.training_datas[TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST] = calc_X_YAW_AS_Y_SORTED_WITH_NEAREST_Y ( self.get_training_data(TrainingDataType.SRC_YAW_SORTED_AS_DST), self.get_training_data(TrainingDataType.DST) )             
-                return self.training_datas[TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST]
+            if self.training_datas[dtype] is None:     
+                self.training_datas[dtype] = calc_X_YAW_AS_Y_SORTED_WITH_NEAREST_Y ( self.get_training_data(TrainingDataType.SRC_YAW_SORTED_AS_DST), self.get_training_data(TrainingDataType.DST) )             
+                return self.training_datas[dtype]
     
         elif dtype == TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
-            if self.training_datas[TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST] is None:     
-                self.training_datas[TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST] = calc_X_YAW_AS_Y_SORTED_WITH_NEAREST_Y ( self.get_training_data(TrainingDataType.DST_YAW_SORTED_AS_SRC), self.get_training_data(TrainingDataType.SRC) )             
-                return self.training_datas[TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST]
+            if self.training_datas[dtype] is None:     
+                self.training_datas[dtype] = calc_X_YAW_AS_Y_SORTED_WITH_NEAREST_Y ( self.get_training_data(TrainingDataType.DST_YAW_SORTED_AS_SRC), self.get_training_data(TrainingDataType.SRC) )             
+                return self.training_datas[dtype]
                 
         return None
 
@@ -382,6 +392,16 @@ def X_LOAD ( RAWS ):
         sample_list.append( s.copy_and_set(shape=a_png.get_shape(), landmarks=d['landmarks'], yaw=d['yaw_value']) )
         
     return sample_list
+    
+def X_WITH_NEAREST_Y (X,Y ):
+    new_sample_list = []
+    for sample in X:
+        nearest = [ (i, np.square( d.landmarks-sample.landmarks ).sum() ) for i,d in enumerate(Y) ]                
+        nearest = sorted(nearest, key=operator.itemgetter(-1), reverse=False)
+        
+        nearest = [ Y[x[0]] for x in nearest[0:10] ]          
+        new_sample_list.append ( sample.copy_and_set( nearest_target_list=nearest ) )
+    return new_sample_list
     
 def X_YAW_SORTED( YAW_RAWS ):
 

@@ -29,7 +29,7 @@ class Model(ModelBase):
         if self.batch_size == 0:          
             if self.gpu_total_vram_gb == 4:
                 self.batch_size = 4
-            elif self.gpu_total_vram_gb <= 5:
+            elif self.gpu_total_vram_gb <= 6:
                 self.batch_size = 8
             elif self.gpu_total_vram_gb < 12: 
                 self.batch_size = 16
@@ -54,7 +54,9 @@ class Model(ModelBase):
 
         self.autoencoder_src = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([self.inter_A(self.encoder(ae_input_layer)), self.inter_AB(self.encoder(ae_input_layer))])) )
         self.autoencoder_dst = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([self.inter_B(self.encoder(ae_input_layer)), self.inter_AB(self.encoder(ae_input_layer))])) )
-            
+        self.autoencoder_test = self.keras.models.Model([ae_input_layer,mask_layer], self.decoder(self.keras.layers.Concatenate()([self.inter_AB(self.encoder(ae_input_layer)), self.inter_AB(self.encoder(ae_input_layer))])) )
+        
+        
         if self.is_training_mode:
             self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
                 
@@ -65,8 +67,8 @@ class Model(ModelBase):
         if self.is_training_mode:
             from models import FullFaceTrainingDataGenerator
             self.set_training_data_generators ([
-                    FullFaceTrainingDataGenerator(self, TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) ),
-                    FullFaceTrainingDataGenerator(self, TrainingDataType.DST_YAW_SORTED,                     batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
+                    FullFaceTrainingDataGenerator(self, TrainingDataType.SRC_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) ),
+                    FullFaceTrainingDataGenerator(self, TrainingDataType.DST,                     batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
                 ])
             
     #override
@@ -105,6 +107,8 @@ class Model(ModelBase):
         AB, mAB = self.autoencoder_src.predict([test_B_64, test_B_m])
         BB, mBB = self.autoencoder_dst.predict([test_B_64, test_B_m])
         
+        CC, mCC = self.autoencoder_test.predict([test_B_64, test_B_m])
+        
         mAA = np.repeat ( mAA, (3,), -1)
         mAB = np.repeat ( mAB, (3,), -1)
         mBB = np.repeat ( mBB, (3,), -1)
@@ -120,6 +124,7 @@ class Model(ModelBase):
                 #mBB[i],                
                 AB[i],
                 #mAB[i]
+                CC[i]
                 ), axis=1) )
             
         return [ ('src, dst, src->dst', np.concatenate ( st, axis=0 ) ) ]

@@ -60,7 +60,9 @@ class TrainingDataGeneratorBase(object):
         if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
             shuffle_idxs = []            
             shuffle_idxs_2D = [[]]*data_len
-
+        if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.SRC_WITH_NEAREST:
+            shuffle_idxs = []          
+            
         while True:                
             batches = None
             for n_batch in range(0, self.batch_size):
@@ -68,7 +70,6 @@ class TrainingDataGeneratorBase(object):
                     sample = None
                     
                     if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.DST_YAW_SORTED_AS_SRC_WITH_NEAREST:
-                    
                         if len(shuffle_idxs) == 0:
                             shuffle_idxs = [ i for i in range(0, data_len) ]
                             random.shuffle(shuffle_idxs)
@@ -82,11 +83,16 @@ class TrainingDataGeneratorBase(object):
                             idx2 = shuffle_idxs_2D[idx].pop()                            
                             sample = self.data[idx][idx2]
                                 
-                    elif self.trainingdatatype == TrainingDataType.SRC or self.trainingdatatype <= TrainingDataType.DST:
-                        sample = self.data[ np.random.randint(0,data_len) ]
+                    elif self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.SRC_WITH_NEAREST:
+                        if len(shuffle_idxs) == 0:
+                            shuffle_idxs = [ i for i in range(0, data_len) ]
+                            random.shuffle(shuffle_idxs)
+                            
+                        idx = shuffle_idxs.pop()
+                        sample = self.data[ idx ]
 
                     
-                    if sample is not None:                        
+                    if sample is not None:          
                         x = self.onProcessSample (sample, self.debug)
                         
                         if type(x) != tuple and type(x) != list:

@@ -28,7 +28,7 @@ class Model(ModelBase):
                 self.batch_size = 1
             elif self.gpu_total_vram_gb == 4:
                 self.batch_size = 4
-            elif self.gpu_total_vram_gb == 5:
+            elif self.gpu_total_vram_gb <= 6:
                 self.batch_size = 8
             elif self.gpu_total_vram_gb < 12: 
                 self.batch_size = 16
@@ -59,8 +59,8 @@ class Model(ModelBase):
         if self.is_training_mode:
             from models import HalfFaceTrainingDataGenerator
             self.set_training_data_generators ([
-                    HalfFaceTrainingDataGenerator(self, TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) ),
-                    HalfFaceTrainingDataGenerator(self, TrainingDataType.DST_YAW_SORTED,                     batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
+                    HalfFaceTrainingDataGenerator(self, TrainingDataType.SRC_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) ),
+                    HalfFaceTrainingDataGenerator(self, TrainingDataType.DST,                     batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
                 ])
             
     #override

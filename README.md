@@ -23,9 +23,6 @@
 [![Watch the video](https://i.imgur.com/BDrPKR2.jpg)](https://webm.video/i/ogL0DL.mp4)
 ![Result](https://user-images.githubusercontent.com/8076202/38454756-0fa7a86c-3a7e-11e8-9065-182b4a8a7a43.gif)
 
-- better **nn feeder**
-![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/nnfeedprinciple.jpg)
-
 ### **Model types**:
 
 - **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but better due to new sample generator, nn feeder, and ConverterMasked.

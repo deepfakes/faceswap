@@ -8,18 +8,24 @@ class TrainingDataType(IntEnum):
     SRC = 0 # raw unsorted
     DST = 1
     
-    SRC_YAW_SORTED = 2 # sorted by yaw
-    DST_YAW_SORTED = 3
+    SRC_WITH_NEAREST = 2 # as raw unsorted but samples can return get_random_nearest_target_sample()
     
-    SRC_YAW_SORTED_AS_DST = 4 #sorted by yaw but included only yaws which exist in DST_YAW_SORTED also automatic mirrored
+    #below unused
     
-    DST_YAW_SORTED_AS_SRC = 5 #<- actually you dont need it, because we are swapping face only in src->dst way
+    DST_WITH_NEAREST = 3 #<- actually you dont need it, because we are swapping face only in src->dst way
     
-    SRC_YAW_SORTED_AS_DST_WITH_NEAREST = 6 #same as SRC_YAW_SORTED_AS_DST but samples can return get_random_nearest_target_sample()
+    SRC_YAW_SORTED = 4 # sorted by yaw
+    DST_YAW_SORTED = 5
     
-    DST_YAW_SORTED_AS_SRC_WITH_NEAREST = 7 #<- actually you dont need it, because we are swapping face only in src->dst way
+    SRC_YAW_SORTED_AS_DST = 6 #sorted by yaw but included only yaws which exist in DST_YAW_SORTED also automatic mirrored
+    
+    DST_YAW_SORTED_AS_SRC = 7 #<- actually you dont need it, because we are swapping face only in src->dst way
+    
+    SRC_YAW_SORTED_AS_DST_WITH_NEAREST = 8 #same as SRC_YAW_SORTED_AS_DST but samples can return get_random_nearest_target_sample()
+    
+    DST_YAW_SORTED_AS_SRC_WITH_NEAREST = 9 #<- actually you dont need it, because we are swapping face only in src->dst way
 
-    QTY = 8
+    QTY = 10
     
 class TrainingDataSample(object):
 
