@@ -43,9 +43,9 @@ class ConverterMasked(ConverterBase):
         prd_face_mask_1D_0 = np.clip (predict_result[:,:,3], 0.0, 1.0)
         prd_face_mask_1D_0[ prd_face_mask_1D_0 < 0.001 ] = 0.0
         prd_face_mask_1D = np.expand_dims (prd_face_mask_1D_0, axis=2)
-        prd_face_mask    = np.repeat ( prd_face_mask_1D, (3,), axis=2)
+        prd_face_mask_3D = np.repeat ( prd_face_mask_1D, (3,), axis=2)
 
-        img_prd_face_mask_3D = cv2.warpAffine( prd_face_mask, face_mat, img_size, np.zeros(img.shape, dtype=float), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC )
+        img_prd_face_mask_3D = cv2.warpAffine( prd_face_mask_3D, face_mat, img_size, np.zeros(img.shape, dtype=float), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC )
         img_prd_face_mask_3D = np.clip (img_prd_face_mask_3D, 0.0, 1.0)
         
         
@@ -56,6 +56,8 @@ class ConverterMasked(ConverterBase):
         elif self.mask_type == 'dst':
             img_mask_hard = img_face_mask
             img_mask_hard = np.repeat (img_mask_hard, (3,), -1)
+            
+        img_mask_hard_1D = img_mask_hard[...,0]
 
         if debug:
             debugs += [img_mask_hard.copy()]
@@ -76,8 +78,12 @@ class ConverterMasked(ConverterBase):
             maskx = int(miny+(leny//2))
             lowest_len = min (lenx, leny)
             
-            ero = int( lowest_len * 0.120 )
-            blur = int( lowest_len * 0.10 )       
+            if debug:
+                print ("lowest_len = %f" % (lowest_len) )
+
+            ero = int( lowest_len * ( 0.126 - lowest_len * 0.00004551365 ) )
+            blur = int( lowest_len * 0.10 )
+          
             img_mask_blurry = cv2.erode(img_mask_hard, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(ero,ero)), iterations = 1 )
             img_mask_blurry = cv2.blur(img_mask_blurry, (blur, blur) )
             img_mask_blurry = np.clip( img_mask_blurry, 0, 1.0 )

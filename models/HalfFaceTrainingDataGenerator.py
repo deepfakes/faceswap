@@ -15,10 +15,11 @@ kwargs options to constructor:
 class HalfFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
     #overrided
-    def onInitialize(self, warped_size=(64,64), target_size=(64,64),**kwargs ):
+    def onInitialize(self, warped_size=(64,64), target_size=(64,64), random_flip=False ,**kwargs ):
         self.warped_size = warped_size
         self.target_size = target_size
-
+        self.random_flip = random_flip
+        
     #overrided
     def onProcessSample(self, sample, debug):
         image = sample.load_image()
@@ -32,6 +33,9 @@ class HalfFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
         warped_img, target_img = HalfFaceTrainingDataGenerator.warp (s_image, sample.landmarks, self.warped_size, self.target_size)
         
+        if self.random_flip and np.random.randint(2) == 1:
+            warped_img = warped_img[:,::-1,:]
+            target_img = target_img[:,::-1,:]
 
         if debug:
             return (self.target_size[1], image, target_img, warped_img[...,0:3], warped_img[...,0:3]*np.expand_dims(warped_img[...,3],2) )

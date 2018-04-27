@@ -59,8 +59,8 @@ class Model(ModelBase):
         if self.is_training_mode:
             from models import FullFaceTrainingDataGenerator
             self.set_training_data_generators ([
-                    FullFaceTrainingDataGenerator(self, TrainingDataType.SRC_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) ),
-                    FullFaceTrainingDataGenerator(self, TrainingDataType.DST,                     batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
+                    FullFaceTrainingDataGenerator(self, TrainingDataType.SRC_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128), random_flip=True ),
+                    FullFaceTrainingDataGenerator(self, TrainingDataType.DST,              batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
                 ])
             
     #override

@@ -395,7 +395,7 @@ def X_LOAD ( RAWS ):
     
 def X_WITH_NEAREST_Y (X,Y ):
     new_sample_list = []
-    for sample in X:
+    for sample in tqdm(X, desc="Sorting"):
         nearest = [ (i, np.square( d.landmarks-sample.landmarks ).sum() ) for i,d in enumerate(Y) ]                
         nearest = sorted(nearest, key=operator.itemgetter(-1), reverse=False)
         

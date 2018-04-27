@@ -18,9 +18,10 @@ thx to dfaker for original idea
 class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
     #overrided
-    def onInitialize(self, warped_size=(64,64), target_size=(128,128), **kwargs):
+    def onInitialize(self, warped_size=(64,64), target_size=(128,128), random_flip=False, **kwargs):
         self.warped_size = warped_size
         self.target_size = target_size
+        self.random_flip = random_flip
         
     #overrided
     def onProcessSample(self, sample, debug):
@@ -41,6 +42,12 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
         warped, target_image, debug_image = FullFaceTrainingDataGenerator.warp (s_image, sample.landmarks, d_landmarks, self.warped_size, self.target_size, debug)
 
+        if self.random_flip and np.random.randint(2) == 1:
+            warped = warped[:,::-1,:]
+            target_image = target_image[:,::-1,:]
+            if debug:
+                debug_image = debug_image[:,::-1,:]
+            
         if debug:
             result = (self.target_size[0], s_image)            
             if d_image is not None:
