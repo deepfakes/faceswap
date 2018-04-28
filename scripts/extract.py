@@ -1,175 +1,110 @@
-import cv2
+#!/usr/bin python3
+""" The script to run the extract process of faceswap """
 
-from pathlib import Path
-from tqdm import tqdm
 import os
-import numpy as np
+from pathlib import Path
 
-from lib.cli import DirectoryProcessor, rotate_image
-from lib.utils import get_folder
+from tqdm import tqdm
+
 from lib.multithreading import pool_process
-from lib.detect_blur import is_blurry
-from plugins.PluginLoader import PluginLoader
+from scripts.fsmedia import Alignments, Faces, Images, Utils
 
-class ExtractTrainingData(DirectoryProcessor):
-    def create_parser(self, subparser, command, description):
-        self.optional_arguments = self.get_optional_arguments()
-        self.parser = subparser.add_parser(
-            command,
-            help="Extract the faces from a pictures.",
-            description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground"
-            )
+class Extract(object):
+    """ The extract process. """
 
-    @staticmethod
-    def get_optional_arguments():
-        ''' Put the arguments in a list so that they are accessible from both argparse and gui '''
-        argument_list = []
-        argument_list.append({ "opts": ('-D', '--detector'),
-                               "type": str,
-                               "choices": ("hog", "cnn", "all"), # case sensitive because this is used to load a plugin.
-                               "default": "hog",
-                               "help": "Detector to use. 'cnn' detects much more angles but will be much more resource intensive and may fail on large files."})
-        argument_list.append({ "opts": ('-l', '--ref_threshold'),
-                               "type": float,
-                               "dest": "ref_threshold",
-                               "default": 0.6,
-                               "help": "Threshold for positive face recognition"})
-        argument_list.append({ "opts": ('-n', '--nfilter'),
-                               "type": str,
-                               "dest": "nfilter",
-                               "nargs": '+',
-                               "default": "nfilter.jpg",
-                               "help": "Reference image for the persons you do not want to process. Should be a front portrait"})
-        argument_list.append({ "opts": ('-f', '--filter'),
-                               "type": str,
-                               "dest": "filter",
-                               "nargs": '+',
-                               "default": "filter.jpg",
-                               "help": "Reference image for the person you want to process. Should be a front portrait"})
-        argument_list.append({ "opts": ('-j', '--processes'),
-                               "type": int,
-                               "default": 1,
-                               "help": "Number of processes to use."})
-        argument_list.append({ "opts": ('-s', '--skip-existing'),
-                               "action": 'store_true',
-                               "dest": 'skip_existing',
-                               "default": False,
-                               "help": "Skips frames already extracted."})
-        argument_list.append({ "opts": ('-dl', '--debug-landmarks'),
-                               "action": "store_true",
-                               "dest": "debug_landmarks",
-                               "default": False,
-                               "help": "Draw landmarks for debug."})
-        argument_list.append({ "opts": ('-r', '--rotate-images'),
-                               "type": str,
-                               "dest": "rotate_images",
-                               "default": None,
-                               "help": "If a face isn't found, rotate the images to try to find a face. Can find more faces at the "
-                                 "cost of extraction speed.  Pass in a single number to use increments of that size up to 360, "
-                                 "or pass in a list of numbers to enumerate exactly what angles to check."})
-        argument_list.append({ "opts": ('-ae', '--align-eyes'),
-                               "action": "store_true",
-                               "dest": "align_eyes",
-                               "default": False,
-                               "help": "Perform extra alignment to ensure left/right eyes lie at the same height"})
-        argument_list.append({ "opts": ('-bt', '--blur-threshold'),
-                               "type": int,
-                               "dest": "blur_thresh",
-                               "default": None,
-                               "help": "Automatically discard images blurrier than the specified threshold. Discarded images are moved into a \"blurry\" sub-folder. Lower values allow more blur"})
-        return argument_list
+    def __init__(self, arguments):
+        self.args = arguments
+
+        self.images = Images(self.args)
+        self.faces = Faces(self.args)
+        self.alignments = Alignments(self.args)
+
+        self.output_dir = self.faces.output_dir
+
+        self.export_face = True
 
     def process(self):
-        extractor_name = "Align" # TODO Pass as argument
-        self.extractor = PluginLoader.get_extractor(extractor_name)()
-        processes = self.arguments.processes
+        """ Perform the extraction process """
+        print('Starting, this may take a while...')
+        Utils.set_verbosity(self.args.verbose)
+
+        if hasattr(self.args, 'processes') and self.args.processes > 1:
+            self.extract_multi_process()
+        else:
+            self.extract_single_process()
+
+        self.alignments.write_alignments(self.faces.faces_detected)
+
+        images, faces = Utils.finalize(self.images.images_found,
+                                       self.faces.num_faces_detected,
+                                       self.faces.verify_output)
+        self.images.images_found = images
+        self.faces.num_faces_detected = faces
+
+    def extract_single_process(self):
+        """ Run extraction in a single process """
+        for filename in tqdm(self.images.input_images):
+            filename, faces = self.process_single_image(filename)
+            self.faces.faces_detected[os.path.basename(filename)] = faces
+
+    def extract_multi_process(self):
+        """ Run the extraction on the correct number of processes """
+        for filename, faces in tqdm(pool_process(self.process_single_image,
+                                                 self.images.input_images,
+                                                 processes=self.args.processes),
+                                    total=self.images.images_found):
+            self.faces.num_faces_detected += 1
+            self.faces.faces_detected[os.path.basename(filename)] = faces
+
+    def process_single_image(self, filename):
+        """ Detect faces in an image. Rotate the image the specified amount
+            until at least one face is found, or until image rotations are
+            depleted.
+            Once at least one face has been detected, pass to process_single_face
+            to process the individual faces """
+        retval = filename, list()
         try:
-            if processes != 1:
-                files = list(self.read_directory())
-                for filename, faces in tqdm(pool_process(self.processFiles, files, processes=processes), total = len(files)):
-                    self.num_faces_detected += 1
-                    self.faces_detected[os.path.basename(filename)] = faces
-            else:
-                for filename in tqdm(self.read_directory()):
-                    try:
-                        image = cv2.imread(filename)
-                        self.faces_detected[os.path.basename(filename)] = self.handleImage(image, filename)
-                    except Exception as e:
-                        if self.arguments.verbose:
-                            print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
-                        pass
-        finally:
-            self.write_alignments()
+            image = Utils.cv2_read_write('read', filename)
 
-    def processFiles(self, filename):
-        try:
-            image = cv2.imread(filename)
-            return filename, self.handleImage(image, filename)
-        except Exception as e:
-            if self.arguments.verbose:
-                print('Failed to extract from image: {}. Reason: {}'.format(filename, e))
-            pass
-        return filename, []
+            for angle in self.images.rotation_angles:
+                image = Utils.rotate_image_by_angle(image, angle)
+                faces = self.faces.get_faces(image, angle)
+                process_faces = [(idx, face) for idx, face in faces]
+                if process_faces and angle != 0 and self.args.verbose:
+                    print("found face(s) by rotating image {} degrees".format(angle))
+                if process_faces:
+                    break
 
-    def getRotatedImageFaces(self, image, angle):
-        rotated_image = rotate_image(image, angle)
-        faces = self.get_faces(rotated_image, rotation=angle)
-        rotated_faces = [(idx, face) for idx, face in faces]
-        return rotated_faces, rotated_image
+            final_faces = [self.process_single_face(idx, face, filename, image)
+                           for idx, face in process_faces]
 
-    def imageRotator(self, image):
-        ''' rotates the image through rotation_angles to try to find a face '''
-        for angle in self.rotation_angles:
-            rotated_faces, rotated_image = self.getRotatedImageFaces(image, angle)
-            if len(rotated_faces) > 0:
-                if self.arguments.verbose:
-                    print('found face(s) by rotating image {} degrees'.format(angle))
-                break
-        return rotated_faces, rotated_image
+            retval = filename, final_faces
+        except Exception as err:
+            if self.args.verbose:
+                print("Failed to extract from image: {}. Reason: {}".format(filename, err))
+        return retval
 
-    def handleImage(self, image, filename):
-        faces = self.get_faces(image)
-        process_faces = [(idx, face) for idx, face in faces]
+    def process_single_face(self, idx, face, filename, image):
+        """ Perform processing on found faces """
+        output_file = self.output_dir / Path(filename).stem if self.export_face else None
 
-        # Run image rotator if requested and no faces found
-        if self.rotation_angles is not None and len(process_faces) == 0:
-            process_faces, image = self.imageRotator(image)
+        self.faces.draw_landmarks_on_face(face, image)
 
-        rvals = []
-        for idx, face in process_faces:
-            # Draws landmarks for debug
-            if self.arguments.debug_landmarks:
-                for (x, y) in face.landmarksAsXY():
-                    cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
+        resized_face, t_mat = self.faces.extractor.extract(image,
+                                                           face,
+                                                           256,
+                                                           self.faces.align_eyes)
 
-            resized_image, t_mat = self.extractor.extract(image, face, 256, self.arguments.align_eyes)
-            output_file = get_folder(self.output_dir) / Path(filename).stem
+        blurry_file = self.faces.detect_blurry_faces(face, t_mat, resized_face, filename)
+        output_file = blurry_file if blurry_file else output_file
 
-            # Detect blurry images
-            if self.arguments.blur_thresh is not None:
-                aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
-                feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
-                feature_mask = cv2.blur(feature_mask, (10, 10))
-                isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)
-                blurry, focus_measure = is_blurry(isolated_face, self.arguments.blur_thresh)
-                # print("{} focus measure: {}".format(Path(filename).stem, focus_measure))
-                # cv2.imshow("Isolated Face", isolated_face)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
-                if blurry:
-                    print("{}'s focus measure of {} was below the blur threshold, moving to \"blurry\"".format(Path(filename).stem, focus_measure))
-                    output_file = get_folder(Path(self.output_dir) / Path("blurry")) / Path(filename).stem
+        if self.export_face:
+            filename = "{}_{}{}".format(str(output_file), str(idx), Path(filename).suffix)
+            Utils.cv2_read_write('write', filename, resized_face)
 
-            cv2.imwrite('{}_{}{}'.format(str(output_file), str(idx), Path(filename).suffix), resized_image)
-            f = {
-                "r": face.r,
+        return {"r": face.r,
                 "x": face.x,
                 "w": face.w,
                 "y": face.y,
                 "h": face.h,
-                "landmarksXY": face.landmarksAsXY()
-            }
-            rvals.append(f)
-        return rvals
+                "landmarksXY": face.landmarksAsXY()}

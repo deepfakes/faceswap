@@ -47,18 +47,16 @@ class Convert():
 
         cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
         
-        if "bsharpen" in self.sharpen_image:
+        if self.sharpen_image == "bsharpen":
             # Sharpening using filter2D
             kernel = numpy.ones((3, 3)) * (-1)
             kernel[1, 1] = 9
             new_image = cv2.filter2D(new_image, -1, kernel)
-        elif "gsharpen" in self.sharpen_image:
+        elif self.sharpen_image == "gsharpen":
             # Sharpening using Weighted Method
             gaussain_blur = cv2.GaussianBlur(new_image, (0, 0), 3.0)
             new_image = cv2.addWeighted(
                 new_image, 1.5, gaussain_blur, -0.5, 0, new_image)
-        elif "none" in self.sharpen_image:
-            pass
 
         outimage = None
         if self.seamless_clone:
