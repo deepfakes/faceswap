@@ -1166,11 +1166,11 @@ class Gui(object):
         if not self.check_display() or not self.check_tkinter_available():
             return
 
+        cmd = sys.argv
+
         # If not running in gui mode return before starting to create a window
         if 'gui' not in cmd:
             return
-
-        cmd = sys.argv
 
         self.args = arguments
         self.opts = self.extract_options(subparsers)

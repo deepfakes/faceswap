@@ -236,13 +236,13 @@ class ExtractConvertArgs(FaceSwapArgs):
         """ Put the arguments in a list so that they are accessible from both argparse and gui """
         argument_list = []
         argument_list.append({"opts": ("-i", "--input-dir"),
-                              "action": DirFullPaths,
+                              "action": FullPaths,
                               "dest": "input_dir",
                               "default": "input",
                               "help": "Input directory. A directory containing the files "
                                       "you wish to process. Defaults to 'input'"})
         argument_list.append({"opts": ("-o", "--output-dir"),
-                              "action": DirFullPaths,
+                              "action": FullPaths,
                               "dest": "output_dir",
                               "default": "output",
                               "help": "Output directory. This is where the converted files will "
