@@ -37,6 +37,9 @@
 
 - **LIAEF128 (4GB+)** - as IAEF128 but "lighter". Less aggressive morphing.
 
+- **L2IAEF128 (5GB+)** - as LIAEF128 but increased model size, deeper encoder, deeper intermediate.
+
+
 ### **Sort tool**:
 
 `hist` groups images by similar content
