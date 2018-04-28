@@ -306,7 +306,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "dest": "seamless_clone",
                               "default": False,
                               "help": "Use cv2's seamless clone. (Masked converter only)"})
-        argument_list.append({"opts": ("-mh", "--match-histgoram"),
+        argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
