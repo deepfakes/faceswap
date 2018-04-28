@@ -25,7 +25,7 @@
 
 ### **Model types**:
 
-- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but better due to new sample generator, nn feeder, and ConverterMasked.
+- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but better due to new sample generator and ConverterMasked.
 
 - **H128 (3GB+)** - as H64, but in 128 resolution. Better face details.
 
