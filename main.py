@@ -48,7 +48,15 @@ if __name__ == "__main__":
     sort_parser.add_argument('--by', required=True, dest="sort_by_method", help="Sort by method.", choices=("blur", "face", "face-dissim", "face-yaw", "hist", "hist-dissim"))
     sort_parser.set_defaults (func=process_sort)
     
-    def process_train(arguments):         
+    def process_train(arguments):      
+    
+        if 'ODFS_TARGET_EPOCH' in os.environ.keys():
+            arguments.target_epoch = int ( os.environ['ODFS_TARGET_EPOCH'] )
+    
+        if 'ODFS_BATCH_SIZE' in os.environ.keys():
+            arguments.batch_size = int ( os.environ['ODFS_BATCH_SIZE'] )
+    
+    
         from mainscripts import Trainer
         Trainer.main (
             training_data_src_dir=arguments.training_data_src_dir, 
@@ -72,8 +80,8 @@ if __name__ == "__main__":
     train_parser.add_argument('--model', required=True, dest="model_name", choices=Path_utils.get_all_dir_names_startswith ( Path(__file__).parent / 'models' , 'Model_'), help="Type of model")
     train_parser.add_argument('--write-preview-history', action="store_true", dest="write_preview_history", default=False, help="Enable write preview history.")
     train_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Debug training.")    
-    train_parser.add_argument('--batch-size', type=int, dest="batch_size", default=0, help="Model batch size. Default - auto.") 
-    train_parser.add_argument('--target-epoch', type=int, dest="target_epoch", default=0, help="Train until target epoch. Default - unlimited.")    
+    train_parser.add_argument('--batch-size', type=int, dest="batch_size", default=0, help="Model batch size. Default - auto. Environment variable: ODFS_BATCH_SIZE.") 
+    train_parser.add_argument('--target-epoch', type=int, dest="target_epoch", default=0, help="Train until target epoch. Default - unlimited. Environment variable: ODFS_TARGET_EPOCH.")
     train_parser.add_argument('--save-interval-min', type=int, dest="save_interval_min", default=10, help="Save interval in minutes. Default 10.") 
     train_parser.add_argument('--force-best-gpu-idx', type=int, dest="force_best_gpu_idx", default=-1, help="Force to choose this GPU idx as best.")
     train_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="MultiGPU option. It will select only same GPU models.")
