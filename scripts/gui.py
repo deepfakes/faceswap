@@ -14,6 +14,7 @@ from threading import Thread
 from time import time
 
 import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.animation as animation
 from matplotlib import pyplot as plt
 from matplotlib import style
@@ -23,8 +24,6 @@ import numpy
 
 from lib.cli import FullPaths, ComboFullPaths, DirFullPaths, FileFullPaths
 from lib.Serializer import JSONSerializer
-
-matplotlib.use('TkAgg')
 
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
