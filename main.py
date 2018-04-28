@@ -55,8 +55,7 @@ if __name__ == "__main__":
     
         if 'ODFS_BATCH_SIZE' in os.environ.keys():
             arguments.batch_size = int ( os.environ['ODFS_BATCH_SIZE'] )
-    
-    
+
         from mainscripts import Trainer
         Trainer.main (
             training_data_src_dir=arguments.training_data_src_dir, 
@@ -70,7 +69,8 @@ if __name__ == "__main__":
             target_epoch       = arguments.target_epoch,
             save_interval_min  = arguments.save_interval_min,
             force_best_gpu_idx = arguments.force_best_gpu_idx,
-            multi_gpu          = arguments.multi_gpu
+            multi_gpu          = arguments.multi_gpu,
+            force_gpu_idxs     = arguments.force_gpu_idxs,
             )
         
     train_parser = subparsers.add_parser( "train", help="Trainer") 
@@ -84,7 +84,8 @@ if __name__ == "__main__":
     train_parser.add_argument('--target-epoch', type=int, dest="target_epoch", default=0, help="Train until target epoch. Default - unlimited. Environment variable: ODFS_TARGET_EPOCH.")
     train_parser.add_argument('--save-interval-min', type=int, dest="save_interval_min", default=10, help="Save interval in minutes. Default 10.") 
     train_parser.add_argument('--force-best-gpu-idx', type=int, dest="force_best_gpu_idx", default=-1, help="Force to choose this GPU idx as best.")
-    train_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="MultiGPU option. It will select only same GPU models.")
+    train_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="MultiGPU option. It will select only same best GPU models.")
+    train_parser.add_argument('--force-gpu-idxs', type=str, dest="force_gpu_idxs", default=None, help="Override final GPU idxs. Example: 0,1,2")
     train_parser.set_defaults (func=process_train)
     
     def process_convert(arguments):        

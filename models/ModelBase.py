@@ -28,6 +28,7 @@ class ModelBase(object):
     def __init__(self, model_path, training_data_src_path=None, training_data_dst_path=None,
                         multi_gpu = False,
                         force_best_gpu_idx = -1,
+                        force_gpu_idxs = None,
                         write_preview_history = False,
                         debug = False, **in_options
                 ):
@@ -101,12 +102,16 @@ class ModelBase(object):
                 self.options['created_vram_gb'] = gpu_total_vram_gb
                 self.created_vram_gb = gpu_total_vram_gb
             
-        if self.multi_gpu:
-            self.gpu_idxs = gpufmkmgr.getDeviceIdxsEqualModel( gpu_idx )
-            if len(self.gpu_idxs) <= 1:
-                self.multi_gpu = False
+        if force_gpu_idxs is not None:
+            self.gpu_idxs = [ int(x) for x in force_gpu_idxs.split(',') ]
         else:
-            self.gpu_idxs = [gpu_idx]
+            if self.multi_gpu:
+                self.gpu_idxs = gpufmkmgr.getDeviceIdxsEqualModel( gpu_idx )
+                if len(self.gpu_idxs) <= 1:
+                    self.multi_gpu = False
+            else:
+                self.gpu_idxs = [gpu_idx]
+
 
         self.tf = gpufmkmgr.import_tf(self.gpu_idxs,allow_growth=False)
         self.keras = gpufmkmgr.import_keras()   
