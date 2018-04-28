@@ -19,7 +19,7 @@
 - added **MTCNN extractor** which produce less jittered aligned face than DLIBCNN, but can produce more false faces. Look at ear:
 ![](https://i.imgur.com/5qLiiOV.gif)
 
-- added **Manual extractor**, video:
+- added **Manual extractor**. You can fix missed faces manually or do full manual extract, video:
 [![Watch the video](https://i.imgur.com/BDrPKR2.jpg)](https://webm.video/i/ogL0DL.mp4)
 ![Result](https://user-images.githubusercontent.com/8076202/38454756-0fa7a86c-3a7e-11e8-9065-182b4a8a7a43.gif)
 
