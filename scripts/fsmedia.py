@@ -109,8 +109,8 @@ class Images(object):
             if len(passed_angles) == 1:
                 rotation_step_size = passed_angles[0]
                 rotation_angles.extend(range(rotation_step_size, 360, rotation_step_size))
-            elif len(rotation_angles) > 1:
-                rotation_angles.extend(rotation_angles)
+            elif len(passed_angles) > 1:
+                rotation_angles.extend(passed_angles)
 
         return rotation_angles
 
