@@ -67,15 +67,15 @@ class Extract(object):
             image = Utils.cv2_read_write('read', filename)
 
             for angle in self.images.rotation_angles:
-                image = Utils.rotate_image_by_angle(image, angle)
-                faces = self.faces.get_faces(image, angle)
+                currentimage = Utils.rotate_image_by_angle(image, angle)
+                faces = self.faces.get_faces(currentimage, angle)
                 process_faces = [(idx, face) for idx, face in faces]
                 if process_faces and angle != 0 and self.args.verbose:
                     print("found face(s) by rotating image {} degrees".format(angle))
                 if process_faces:
                     break
 
-            final_faces = [self.process_single_face(idx, face, filename, image)
+            final_faces = [self.process_single_face(idx, face, filename, currentimage)
                            for idx, face in process_faces]
 
             retval = filename, final_faces
