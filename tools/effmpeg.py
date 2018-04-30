@@ -12,7 +12,7 @@ import subprocess
 import datetime
 from lib.cli import FileFullPaths, ComboFullPaths
 
-from ffmpy import FFprobe, FFmpeg, FFRuntimeError, FFExecutableNotFoundError
+from ffmpy import FFprobe, FFmpeg, FFRuntimeError
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
@@ -111,9 +111,18 @@ class Effmpeg(object):
     _actions_have_dir_output = ["extract"]
     _actions_have_vid_output = ["gen_vid", "mux_audio", "rescale", "rotate",
                                 "slice"]
+    _actions_have_print_output = ["get_fps", "get_info"]
     _actions_have_dir_input = ["gen_vid"]
     _actions_have_vid_input = ["extract", "get_fps", "get_info", "rescale",
                                "rotate", "slice"]
+
+    # Class variable that stores the common ffmpeg arguments based on verbosity
+    __common_ffmpeg_args_dict = {"verbose": '', "simple": "-hide_banner "}
+
+    # _common_ffmpeg_args is the class variable that will get used by various
+    # actions and it will be set by the process_arguments() method based on
+    # passed verbosity
+    _common_ffmpeg_args = ''
 
     def __init__(self, subparser, command, description='default'):
         self.argument_list = self.get_argument_list()
@@ -125,6 +134,7 @@ class Effmpeg(object):
         self.start = ""
         self.end = ""
         self.duration = ""
+        self.print_ = False
         self.parse_arguments(description, subparser, command)
 
     @staticmethod
@@ -322,6 +332,12 @@ class Effmpeg(object):
                                "help": """Set the new resolution scale if the
                                           chosen action is 'rescale'."""})
 
+        arguments_list.append({"opts": ('-v', '--verbose'),
+                               "action": "store_true",
+                               "dest": "verbose",
+                               "default": False,
+                               "help": """Increases output verbosity."""})
+
         return arguments_list
 
     @staticmethod
@@ -443,6 +459,13 @@ class Effmpeg(object):
         if self.args.rotate.lower() == "none":
             self.args.rotate = 0
 
+        # Set verbosity of output
+        self.__set_verbosity(self.args.verbose)
+
+        # Set self.print_ to True if output needs to be printed to stdout
+        if self.args.action in self._actions_have_print_output:
+            self.print_ = True
+
         self.process()
 
     def process(self):
@@ -455,19 +478,21 @@ class Effmpeg(object):
                   "fps": self.args.fps,
                   "rotate": self.args.rotate,
                   "transpose": self.args.transpose,
-                  "scale": self.args.scale}
+                  "scale": self.args.scale,
+                  "print_": self.print_}
         action = getattr(self, self.args.action)
         action(**kwargs)
 
     @staticmethod
     def extract(input_=None, output=None, fps=None, **kwargs):
         _input = {input_.path: None}
-        _output_opts = '-y -vf fps="' + str(fps) + '"'
+        _output_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts += '-y -vf fps="' + str(fps) + '"'
         _output_path = output.path + "/" + input_.name + "%05d.png"
         _output = {_output_path: _output_opts}
         ff = FFmpeg(inputs=_input, outputs=_output)
         os.makedirs(output.path, exist_ok=True)
-        ff.run(stderr=subprocess.STDOUT)
+        Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
@@ -475,7 +500,8 @@ class Effmpeg(object):
         _input_path = os.path.join(input_.path,
                                    os.listdir(input_.path)[0][:-9]
                                    + "%05d.png")
-        _output_opts = '-y -c:v libx264 -vf fps="' + str(fps) + '"'
+        _output_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts += '-y -c:v libx264 -vf fps="' + str(fps) + '"'
         if mux_audio:
             _ref_vid_opts = '-c copy -map 0:0 -map 1:1 -shortest'
             _output_opts = _ref_vid_opts + ' ' + _output_opts
@@ -484,10 +510,10 @@ class Effmpeg(object):
             _inputs = {_input_path: None}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        ff.run(stderr=subprocess.STDOUT)
+        Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
-    def get_fps(input_=None, **kwargs):
+    def get_fps(input_=None, print_=False, **kwargs):
         _input_opts = '-v error -select_streams v -of '
         _input_opts += 'default=noprint_wrappers=1:nokey=1 '
         _input_opts += '-show_entries stream=r_frame_rate'
@@ -498,11 +524,14 @@ class Effmpeg(object):
         ff = FFprobe(inputs=_inputs)
         _fps = ff.run(stdout=subprocess.PIPE)[0].decode("utf-8")
         _fps = _fps.strip()
-        return _fps
+        if print_:
+            print("Video fps:", _fps)
+        else:
+            return _fps
 
     @staticmethod
-    def get_info(input_=None, print_=True, **kwargs):
-        _input_opts = ''
+    def get_info(input_=None, print_=False, **kwargs):
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
         _inputs = {input_.path: _input_opts}
         ff = FFprobe(inputs=_inputs)
         out = ff.run(stdout=subprocess.PIPE,
@@ -515,17 +544,19 @@ class Effmpeg(object):
     @staticmethod
     def rescale(input_=None, output=None, scale=None, **kwargs):
         _input_opts = None
-        _output_opts = '-y -vf scale="' + str(scale) + '"'
+        _output_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts += '-y -vf scale="' + str(scale) + '"'
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        ff.run(stderr=subprocess.STDOUT)
+        Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
     def rotate(input_=None, output=None, rotate=None, transpose=None,
                **kwargs):
         _input_opts = None
-        _output_opts = '-y -c:a copy -vf '
+        _output_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts += '-y -c:a copy -vf '
         _bilinear = ''
         if transpose is not None and transpose != "None":
             _output_opts += 'transpose="' + str(transpose) + '"'
@@ -542,28 +573,37 @@ class Effmpeg(object):
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        ff.run(stderr=subprocess.STDOUT)
+        Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
     def mux_audio(input_=None, output=None, ref_vid=None, **kwargs):
         _input_opts = None
-        _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
-        _inputs = {input_.path: _input_opts, ref_vid: _input_opts}
+        _output_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts += '-y -c copy -map 0:0 -map 1:1 -shortest'
+        _inputs = {input_.path: _input_opts, ref_vid.path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        ff.run(stderr=subprocess.STDOUT)
+        Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
     def slice(input_=None, output=None, start='', duration=None, **kwargs):
         _input = {input_.path: None}
-        _output_opts = "-y -ss " + start + " "
+        _output_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts += "-y -ss " + start + " "
         _output_opts += "-t " + duration + " "
         _output_opts += "-vcodec copy -acodec copy -y"
         _output = {output.path: _output_opts}
         ff = FFmpeg(inputs=_input, outputs=_output)
-        ff.run(stderr=subprocess.STDOUT)
+        Effmpeg.__run_ffmpeg(ff)
 
     # Various helper methods
+    @classmethod
+    def __set_verbosity(cls, verbose):
+        if verbose:
+            cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["verbose"]
+        else:
+            cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["simple"]
+
     def __get_default_output(self):
         # Set output to the same directory as input
         # if the user didn't specify it.
@@ -594,6 +634,17 @@ class Effmpeg(object):
         return all(getattr(self, i).fps is None for i in items_to_check)
 
     @staticmethod
+    def __run_ffmpeg(ff):
+        try:
+            ff.run(stderr=subprocess.STDOUT)
+        except FFRuntimeError as ffe:
+            if ffe.exit_code == 255:
+                pass
+            else:
+                raise ValueError("An unexpected FFRuntimeError occurred: "
+                                 "{}".format(ffe))
+
+    @staticmethod
     def __convert_fps(fps):
         if '/' in fps:
             _fps = fps.split('/')
@@ -610,11 +661,6 @@ class Effmpeg(object):
         delta = end - start
         s = delta.total_seconds()
         return '{:02}:{:02}:{:02}'.format(int(s // 3600), int(s % 3600 // 60), int(s % 60))
-
-    @staticmethod
-    def zero_pad(text, num):
-        string = "{:0" + str(num) + "d}"
-        return string.format(text)
 
     @staticmethod
     def parse_time(txt):

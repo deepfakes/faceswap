@@ -7,6 +7,7 @@ import signal
 import subprocess
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
+import psutil
 
 from argparse import SUPPRESS
 from math import ceil, floor
@@ -1115,6 +1116,8 @@ class FaceswapControl(object):
 
     def terminate(self):
         """ Terminate the subprocess """
+        __nested_processes = ["effmpeg"]
+
         if self.command == 'train':
             print('Sending Exit Signal', flush=True)
             try:
@@ -1132,6 +1135,27 @@ class FaceswapControl(object):
                 return
             except ValueError as err:
                 print(err)
+        elif self.command in __nested_processes:
+            parent_pid = self.process.pid
+            parent = psutil.Process(parent_pid)
+            children = parent.children(recursive=True)
+            num_children = len(children)
+            print('Stopping sub-subprocesses...')
+            for i in range(num_children):
+                child = children[i]
+                print('Stopping sub-subprocess: {} of {}'.format(i + 1,
+                                                                 num_children))
+                try:
+                    child.terminate()
+                    child.wait(timeout=10)
+                    print('Terminated sub-subprocess:',
+                          '{} of {}'.format(i + 1, num_children))
+                except TimeoutExpired:
+                    print('Termination timed out. Killing sub-subprocess:',
+                          '{} of {}'.format(i + 1, num_children))
+                    child.kill()
+                    print('Killed sub-subprocesses:',
+                          '{} of {}'.format(i + 1, num_children))
         print('Terminating Process...')
         try:
             self.process.terminate()
