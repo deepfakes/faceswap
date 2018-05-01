@@ -2,32 +2,27 @@
 """ Console section of the GUI """
 
 import sys
+import tkinter as tk
+from tkinter import ttk
 
-# An error will be thrown when importing tkinter for users without tkinter
-# distribution packages or without an X-Console. This error is handled in
-# gui.py but import errors still need to be captured here
-try:
-    import tkinter as tk
-    from tkinter import ttk
-except ImportError:
-    tk = None
-    ttk = None
+from .utils import Singleton
 
-class ConsoleOut(object):
-    """ The Console out tab of the Display section """
+class ConsoleOut(ttk.Frame, metaclass=Singleton):
+    """ The Console out section of the GUI """
 
-    def __init__(self, frame, utils):
-        self.frame = frame
-        utils.console = tk.Text(self.frame)
-        self.console = utils.console
-        self.debug = utils.debugconsole
+    def __init__(self, parent=None, debug=None):
+        ttk.Frame.__init__(self, parent)
+        self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
+                  fill=tk.BOTH, expand=True)
+        self.console = tk.Text(self)
+        self.debug = debug
 
     def build_console(self):
         """ Build and place the console """
         self.console.config(width=100, height=6, bg='gray90', fg='black')
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
-        scrollbar = ttk.Scrollbar(self.frame, command=self.console.yview)
+        scrollbar = ttk.Scrollbar(self, command=self.console.yview)
         scrollbar.pack(side=tk.LEFT, fill='y')
         self.console.configure(yscrollcommand=scrollbar.set)
 
@@ -40,6 +35,10 @@ class ConsoleOut(object):
         else:
             sys.stdout = SysOutRouter(console=self.console, out_type="stdout")
             sys.stderr = SysOutRouter(console=self.console, out_type="stderr")
+
+    def clear(self):
+        """ Clear the console output screen """
+        self.console.delete(1.0, tk.END)
 
 class SysOutRouter(object):
     """ Route stdout/stderr to the console window """

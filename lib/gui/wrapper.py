@@ -1,6 +1,5 @@
 #!/usr/bin python3
-""" Controls the underlying faceswap python scripts """
-
+""" Process wrapper for underlying faceswap commands for the GUI """
 import os
 import re
 import signal
@@ -10,13 +9,93 @@ import sys
 from threading import Thread
 from time import time
 
+from .console import ConsoleOut
+from .statusbar import StatusBar
+from .tooltip import Tooltip
+from .utils import Images, Singleton
+
+class ProcessWrapper(object, metaclass=Singleton):
+    """ Builds command, launches and terminates the underlying
+        faceswap process. Updates GUI display depending on state """
+
+    def __init__(self, pathscript=None, calling_file='faceswap.py'):
+        self.runningtask = False
+        self.pathexecscript = os.path.join(pathscript, calling_file)
+        self.task = FaceswapControl(self)
+        self.actionbtns = dict()
+        self.lossdict = dict()
+        self.command = None
+
+    def action_command(self, command, opts):
+        """ The action to perform when the action button is pressed """
+        if self.runningtask:
+            self.task.terminate()
+            self.command = None
+        else:
+            self.command = command
+            self.prepare()
+            args = self.build_args(opts)
+            self.task.execute_script(command, args)
+
+    def prepare(self):
+        """ Prepare the environment for execution """
+        self.runningtask = True
+        ConsoleOut().clear()
+        print('Loading...')
+        self.change_action_button()
+        StatusBar().status_message.set('Executing - ' + self.command + '.py')
+        mode = 'indeterminate' if self.command == 'train' else 'determinate'
+        StatusBar().progress_start(mode)
+
+    def build_args(self, opts):
+        """ Build the faceswap command and arguments list """
+        args = ['python', '-u', self.pathexecscript, self.command]
+        for item in opts[self.command]:
+            optval = str(item.get('value', '').get())
+            opt = item['opts'][0]
+            if optval == 'False' or optval == '':
+                continue
+            elif optval == 'True':
+                args.append(opt)
+            else:
+                args.extend((opt, optval))
+            if self.command == 'train':
+                args.append('-gui')  # Embed the preview pane
+        return args
+
+    def terminate(self, message):
+        """ Finalise wrapper when process has exited """
+        self.runningtask = False
+        StatusBar().progress_stop()
+        StatusBar().status_message.set(message)
+        self.change_action_button()
+        self.clear_display_panel()
+        print('Process exited.')
+
+    def change_action_button(self):
+        """ Change the action button to relevant control """
+        for cmd in self.actionbtns.keys():
+            btnact = self.actionbtns[cmd]
+            if self.runningtask:
+                ttl = 'Terminate'
+                hlp = 'Exit the running process'
+            else:
+                ttl = cmd.title()
+                hlp = 'Run the {} script'.format(cmd.title())
+            btnact.config(text=ttl)
+            Tooltip(btnact, text=hlp, wraplength=200)
+
+    def clear_display_panel(self):
+        ''' Clear the preview window and graph '''
+        Images().delete_preview()
+        self.lossdict = dict()
+
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
 
-    def __init__(self, utils, pathscript, calling_file="faceswap.py"):
-        self.pathexecscript = os.path.join(pathscript, calling_file)
-        self.utils = utils
+    def __init__(self, wrapper):
 
+        self.wrapper = wrapper
         self.command = None
         self.args = None
         self.process = None
@@ -24,42 +103,16 @@ class FaceswapControl(object):
         self.consoleregex = {'loss': re.compile(r'([a-zA-Z_]+):.*?(\d+\.\d+)'),
                              'tqdm': re.compile(r'(\d+%|\d+/\d+|\d+:\d+|\d+\.\d+[a-zA-Z/]+)')}
 
-    def prepare(self, options, command):
-        """ Prepare for running the subprocess """
-        self.command = command
-        self.utils.runningtask = True
-        self.utils.change_action_button()
-        self.utils.guitext['status'].set('Executing - ' + self.command + '.py')
-        mode = 'indeterminate' if command == 'train' else 'determinate'
-        self.utils.set_progress_bar_type(mode)
-        print('Loading...')
-        self.args = ['python', '-u', self.pathexecscript, self.command]
-        self.build_args(options)
-
-    def build_args(self, options):
-        """ Build the faceswap command and arguments list """
-        for item in options[self.command]:
-            optval = str(item.get('value', '').get())
-            opt = item['opts'][0]
-            if optval == 'False' or optval == '':
-                continue
-            elif optval == 'True':
-                if self.command == 'train' and opt == '-p':  # Embed the preview pane
-                    self.args.append('-gui')
-                else:
-                    self.args.append(opt)
-            else:
-                self.args.extend((opt, optval))
-
-    def execute_script(self):
+    def execute_script(self, command, args):
         """ Execute the requested Faceswap Script """
+        self.command = command
         kwargs = {'stdout': PIPE,
                   'stderr': PIPE,
                   'bufsize': 1,
                   'universal_newlines': True}
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
-        self.process = Popen(self.args, **kwargs)
+        self.process = Popen(args, **kwargs)
         self.thread_stdout()
         self.thread_stderr()
 
@@ -75,12 +128,8 @@ class FaceswapControl(object):
                     continue
                 print(output.strip())
         returncode = self.process.poll()
-        self.utils.runningtask = False
-        self.utils.change_action_button()
-        self.utils.update_progress('', 0, True)
-        self.utils.set_progress_bar_type('determinate')
-        self.set_final_status(returncode)
-        print('Process exited.')
+        message = self.set_final_status(returncode)
+        self.wrapper.terminate(message)
 
     def read_stderr(self):
         """ Read stdout from the subprocess. If training, pass the loss
@@ -123,7 +172,7 @@ class FaceswapControl(object):
             return False
 
         message = 'Iteration: {}  {}'.format(self.lenloss, message)
-        self.utils.update_progress(message, 0, False)
+        StatusBar().progress_update(message, 0, False)
         return True
 
     def update_lossdict(self, loss):
@@ -142,21 +191,21 @@ class FaceswapControl(object):
         #       stubbonly refuses to release it's last line)
 
         currentlenloss = max(len(lossvals)
-                             for lossvals in self.utils.lossdict.values()
-                            ) if self.utils.lossdict else 0
+                             for lossvals in self.wrapper.lossdict.values()
+                            ) if self.wrapper.lossdict else 0
         if self.lenloss > currentlenloss:
-            self.utils.lossdict = dict()
+            self.wrapper.lossdict = dict()
             self.lenloss = 0
             return False
 
         self.lenloss = currentlenloss
 
-        if not self.utils.lossdict:
-            self.utils.lossdict.update((item[0], []) for item in loss)
+        if not self.wrapper.lossdict:
+            self.wrapper.lossdict.update((item[0], []) for item in loss)
 
         message = ''
         for item in loss:
-            self.utils.lossdict[item[0]].append(float(item[1]))
+            self.wrapper.lossdict[item[0]].append(float(item[1]))
             message += '{}: {}  '.format(item[0], item[1])
 
         return message
@@ -176,7 +225,7 @@ class FaceswapControl(object):
         current, total = processed.split('/')
         position = int((float(current) / float(total)) * 1000)
 
-        self.utils.update_progress(message, position, True)
+        StatusBar().progress_update(message, position, True)
         return True
 
     def terminate(self):
@@ -220,4 +269,4 @@ class FaceswapControl(object):
             status = 'Aborted - {}.py'.format(self.command)
         else:
             status = 'Failed - {}.py. Return Code: {}'.format(self.command, returncode)
-        self.utils.guitext['status'].set(status)
+        return status

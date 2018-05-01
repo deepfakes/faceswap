@@ -1,70 +1,98 @@
 #!/usr/bin python3
-""" Display Frame of the Faceswap GUI """
-import os
+""" Display Frame of the Faceswap GUI
 
+    What is displayed in the Display Frame varies
+    depending on what tasked is being run """
+import os
+import tkinter as tk
+from tkinter import TclError, ttk
 from math import ceil, floor
+
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib import pyplot as plt, style
+import matplotlib.animation as animation
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import numpy
 from PIL import Image, ImageTk
 
-import matplotlib
-import matplotlib.animation as animation
-from matplotlib import pyplot as plt
-from matplotlib import style
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from .utils import Images
+from .wrapper import ProcessWrapper
 
-matplotlib.use('TkAgg')
-# An error will be thrown when importing tkinter for users without tkinter
-# distribution packages or without an X-Console. This error is handled in
-# gui.py but import errors still need to be captured here
-try:
-    import tkinter as tk
-    from tkinter import ttk
-    from tkinter import TclError
-except ImportError:
-    tk = None
-    ttk = None
-    TclError = None
-
-
-
-class DisplayTab(object):
+class DisplayNotebook(ttk.Notebook):
     """ The display tabs """
 
-    def __init__(self, utils, notebook, display):
-        self.utils = utils
-        self.notebook = notebook
-        self.page = ttk.Frame(self.notebook)
-        self.display = display
-        self.title = self.display.title()
+    def __init__(self, parent):
+        ttk.Notebook.__init__(self, parent, width=780)
+        parent.add(self)
 
-    def build_tab(self):
-        """ Build the tab """
-        frame = ttk.Frame(self.page)
+        self.images = Images()
+        self.add_static_tabs()
+        self.static_tabs = [child for child in self.tabs()]
+        print(self.static_tabs)
+
+    def add_static_tabs(self):
+        """ Add tabs that are permanently available """
+        for tab in ('job queue', 'analysis'):
+            frame = self.add_frame()
+
+            self.add(frame, text=tab.title())
+
+    def add_frame(self):
+        """ Add a single frame for holding tab's contents """
+        frame = ttk.Frame(self)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        return frame
 
-        if self.display == 'graph':
-            graphframe = GraphDisplay(frame, self.utils)
-            graphframe.create_graphs()
-        elif self.display == 'preview':
-            preview = PreviewDisplay(frame, self.utils.previewloc)
-            preview.update_preview()
-        else:  # Dummy in a placeholder
-            lbl = ttk.Label(frame, text=self.display, width=15, anchor=tk.NW)
-            lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+    def command_display(self, command):
+        """ Select what to display based on incoming
+            command """
+        build_tabs = getattr(self, '{}_tabs'.format(command))()
+        build_tabs()
 
-        self.add_tab()
+    def extract_tabs(self):
+        """ Build the extract tabs """
+        for tab in "preview":
+            frame = self.add_frame()
 
-    def add_tab(self):
-        """ Add the tab to the notebook """
-        self.notebook.add(self.page, text=self.title)
+            if tab == 'preview':
+                preview = PreviewDisplay(frame, self.images.pathpreview)
+                preview.update_preview()
+
+            self.add(frame, text=tab.title())
+
+    def train_tabs(self):
+        """ Build the train tabs """
+        for tab in ("graph", "preview"):
+            frame = self.add_frame()
+
+            if tab == 'graph':
+                graphframe = GraphDisplay(frame)
+                graphframe.create_graphs()
+            elif tab == 'preview':
+                preview = PreviewDisplay(frame, self.images.pathpreview)
+                preview.update_preview()
+
+            self.add(frame, text=tab.title())
+
+    def convert_tabs(self):
+        """ Build the convert tabs
+            Currently identical to Extract, so just call that """
+        self.extract_tabs()
+
+    def remove_tabs(self):
+        """ Remove all command specific tabs """
+        for child in self.tabs():
+            if child not in self.static_tabs:
+                self.forget(child)
 
 class GraphDisplay(object):
     """ The Graph Tab of the Display section """
 
-    def __init__(self, frame, utils):
+    def __init__(self, frame):
         self.frame = frame
-        self.utils = utils
+        self.wrapper = ProcessWrapper()
         self.losskeys = None
 
         self.graphpane = tk.PanedWindow(self.frame, sashrelief=tk.RAISED, orient=tk.VERTICAL)
@@ -74,13 +102,13 @@ class GraphDisplay(object):
 
     def create_graphs(self):
         """ create the graph frames when there are loss values to graph """
-        if not self.utils.lossdict:
+        if not self.wrapper.lossdict:
             self.frame.after(1000, self.create_graphs)
             return
 
-        self.losskeys = sorted([key for key in self.utils.lossdict.keys()])
+        self.losskeys = sorted([key for key in self.wrapper.lossdict.keys()])
 
-        framecount = int(len(self.utils.lossdict) / 2)
+        framecount = int(len(self.wrapper.lossdict) / 2)
         for i in range(framecount):
             self.add_graph(i)
 
@@ -92,7 +120,7 @@ class GraphDisplay(object):
         self.graphpane.add(graphframe)
 
         selectedkeys = self.losskeys[index * 2:(index + 1) * 2]
-        selectedloss = {key: self.utils.lossdict[key] for key in selectedkeys}
+        selectedloss = {key: self.wrapper.lossdict[key] for key in selectedkeys}
 
         graph = Graph(graphframe, selectedloss, selectedkeys)
         self.graphs.append(graph)
@@ -101,7 +129,7 @@ class GraphDisplay(object):
     def monitor_state(self):
         """ Check there is a task still running. If not, destroy graphs
             and reset graph display to waiting state """
-        if self.utils.lossdict:
+        if self.wrapper.lossdict:
             self.frame.after(5000, self.monitor_state)
             return
         self.destroy_graphs()
@@ -124,6 +152,7 @@ class Graph(object):
         self.frame = frame
         self.loss = loss
         self.losskeys = losskeys
+        self.anim = None
 
         self.ylim = (100, 0)
 
@@ -162,7 +191,7 @@ class Graph(object):
 
         plotcanvas = FigureCanvasTkAgg(self.fig, self.frame)
         plotcanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        ani = animation.FuncAnimation(self.fig, self.animate, interval=2000, blit=False)
+        self.anim = animation.FuncAnimation(self.fig, self.animate, interval=200, blit=False)
         plotcanvas.draw()
 
     def animate(self, i):
@@ -170,6 +199,8 @@ class Graph(object):
         loss = [self.loss[key][:] for key in self.losskeys]
 
         xlim = self.recalculate_axes(loss)
+
+        self.set_animation_rate(xlim)
 
         xrng = [x for x in range(xlim)]
 
@@ -193,6 +224,30 @@ class Graph(object):
 
         return xlim
 
+    def set_animation_rate(self, iterations):
+        """ Change the animation update interval based on how
+            many iterations have been
+            There's no point calculating a graph over thousands of
+            points of data when the change will be miniscule """
+        if iterations > 30000:
+            speed = 60000           #1 min updates
+        elif iterations > 20000:
+            speed = 30000           #30 sec updates
+        elif iterations > 10000:
+            speed = 10000           #10 sec updates
+        elif iterations > 5000:
+            speed = 5000            #5 sec updates
+        elif iterations > 1000:
+            speed = 2000            #2 sec updates
+        elif iterations > 500:
+            speed = 1000            #1 sec updates
+        elif iterations > 100:
+            speed = 500             #0.5 sec updates
+        else:
+            speed = 200             #200ms updates
+        if not self.anim.event_source.interval == speed:
+            self.anim.event_source.interval = speed
+
     def raw_plot(self, x_range, loss):
         ''' Raw value plotting '''
         for idx, lossvals in enumerate(loss):
@@ -208,7 +263,7 @@ class Graph(object):
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
 
-    def __init__(self, frame, previewloc):
+    def __init__(self, frame, pathpreview):
         self.canvas = tk.Canvas(frame, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
@@ -216,7 +271,7 @@ class PreviewDisplay(object):
         self.imgoriginal = None
         self.previewimg = None
         self.errcount = 0
-        self.previewloc = previewloc
+        self.pathpreview = os.path.join(pathpreview, '.gui_preview.png')
 
         self.imgcanvas = self.canvas.create_image(0, 0, image=self.previewimg, anchor=tk.NW)
         frame.bind("<Configure>", self.resize)
@@ -229,9 +284,9 @@ class PreviewDisplay(object):
 
     def load_preview(self):
         """ Load the preview image into tk PhotoImage """
-        if os.path.exists(self.previewloc):
+        if os.path.exists(self.pathpreview):
             try:
-                self.imgoriginal = Image.open(self.previewloc)
+                self.imgoriginal = Image.open(self.pathpreview)
                 self.display_image()
                 self.errcount = 0
             except (ValueError, TclError):

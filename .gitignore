@@ -6,5 +6,9 @@
 !Dockerfile*
 !requirements*
 !lib
+!lib/gui
+!lib/gui/.cache
+!lib/gui/.cache/preview
+!lib/gui/.cache/icons
 !scripts
 !plugins

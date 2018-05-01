@@ -25,10 +25,50 @@ class ScriptExecutor(object):
         elif self.command == 'convert':
             from scripts.convert import Convert as script
         elif self.command == 'gui':
+            self.test_tkinter()
+            self.check_display()
             from scripts.gui import Gui as script
         else:
             script = None
         return script
+
+    @staticmethod
+    def test_tkinter():
+        """ If the user is running the GUI, test whether the
+            tkinter app is available on their machine. If not
+            exit gracefully.
+
+            This avoids having to import every tk function
+            within the GUI in a wrapper and potentially spamming
+            traceback errors to console """
+
+        try:
+            import tkinter as tk
+        except ImportError:
+            print(
+                "It looks like TkInter isn't installed for your OS, so "
+                "the GUI has been disabled. To enable the GUI please "
+                "install the TkInter application.\n\n"
+                "You can try:\n"
+                "  Windows/macOS:      Install ActiveTcl Community "
+                "Edition from "
+                "www.activestate.com\n"
+                "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                "  Arch:               sudo pacman -S tk\n"
+                "  CentOS/Redhat:      sudo yum install tkinter\n"
+                "  Fedora:             sudo dnf install python3-tkinter\n")
+            exit(1)
+
+    @staticmethod
+    def check_display():
+        """ Check whether there is a display to output the GUI. If running on
+            Windows then assume not running in headless mode """
+        if not os.environ.get("DISPLAY", None) and os.name != "nt":
+            print("No display detected. GUI mode has been disabled.")
+            if os.name == "posix":
+                print("macOS users need to install XQuartz. "
+                      "See https://support.apple.com/en-gb/HT201341")
+            exit(1)
 
     def execute_script(self, arguments):
         """ Run the script for called command """
