@@ -53,16 +53,17 @@ class TrainingDataGeneratorBase(object):
         if data_len == 0:
             raise ValueError('No training data provided.')
             
-        if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.SRC_WITH_NEAREST:
+        if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.DST_ONLY_1:
             shuffle_idxs = []          
             
         while True:                
+            
             batches = None
             for n_batch in range(0, self.batch_size):
                 while True:
                     sample = None
                                 
-                    if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.SRC_WITH_NEAREST:
+                    if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.DST_ONLY_1:
                         if len(shuffle_idxs) == 0:
                             shuffle_idxs = [ i for i in range(0, data_len) ]
                             random.shuffle(shuffle_idxs)

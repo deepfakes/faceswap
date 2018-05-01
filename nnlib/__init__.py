@@ -6,7 +6,25 @@ def DSSIMMaskLossClass(tf, keras_contrib):
         def __call__(self,y_true, y_pred):
             return keras_contrib.losses.DSSIMObjective() (y_true*self.mask,y_pred*self.mask)
     return DSSIMMaskLoss
-        
+    
+def MAEMaskLossClass(tf, keras):
+    class MAEMaskLoss(object):
+        def __init__(self,mask):
+            self.mask = mask
+            
+        def __call__(self,y_true, y_pred):
+            return keras.losses.mean_absolute_error(y_true*self.mask,y_pred*self.mask)
+    return MAEMaskLoss
+    
+def CCEMaskLossClass(tf, keras):
+    class CCEMaskLoss(object):
+        def __init__(self,mask):
+            self.mask = mask
+            
+        def __call__(self,y_true, y_pred):
+            return keras.losses.categorical_crossentropy(y_true*self.mask,y_pred*self.mask)
+    return CCEMaskLoss
+    
 def PixelShufflerClass(keras):
     class PixelShuffler(keras.engine.topology.Layer):
         def __init__(self, size=(2, 2), data_format=None, **kwargs):

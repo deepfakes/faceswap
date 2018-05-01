@@ -87,6 +87,7 @@ class ConverterMasked(ConverterBase):
 
         maxregion = np.argwhere(img_mask_flatten_aaa==1.0)        
 
+        out_img = img_bgr.copy()
         if maxregion.size != 0:
             miny,minx = maxregion.min(axis=0)[:2]
             maxy,maxx = maxregion.max(axis=0)[:2]
@@ -150,7 +151,7 @@ class ConverterMasked(ConverterBase):
             if self.mode == 'hist-match-bw':
                 prd_face_bgr = prd_face_bgr.astype(np.float32)
                     
-            out_img = cv2.warpAffine( prd_face_bgr, face_mat, img_size, img_bgr.copy(), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
+            out_img = cv2.warpAffine( prd_face_bgr, face_mat, img_size, out_img, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
 
             if debug:
                 debugs += [out_img.copy()]
@@ -174,7 +175,8 @@ class ConverterMasked(ConverterBase):
                 img_mask_blurry_aaa *= img_prd_border_rect_mask_a
             
             out_img =  np.clip( img_bgr*(1-img_mask_blurry_aaa) + (out_img*img_mask_blurry_aaa) , 0, 1.0 )
-           
+
+             
         if debug:
             debugs += [out_img.copy()]
             

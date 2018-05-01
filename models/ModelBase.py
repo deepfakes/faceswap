@@ -334,6 +334,16 @@ class ModelBase(object):
             if self.training_datas[dtype] is None:  
                 self.training_datas[dtype] = X_WITH_NEAREST_Y( self.get_training_data(TrainingDataType.SRC), self.get_training_data(TrainingDataType.DST) )
             return self.training_datas[dtype]
+            
+        elif dtype == TrainingDataType.SRC_ONLY_10_NEAREST_TO_DST_ONLY_1:
+            if self.training_datas[dtype] is None:  
+                self.training_datas[dtype] = X_ONLY_n_NEAREST_TO_Y_ONLY_1( self.get_training_data(TrainingDataType.SRC), 10, self.get_training_data(TrainingDataType.DST_ONLY_1) )
+            return self.training_datas[dtype]
+        
+        elif dtype == TrainingDataType.DST_ONLY_1:
+            if self.training_datas[dtype] is None:  
+                self.training_datas[dtype] = X_ONLY_1( self.get_training_data(TrainingDataType.DST)  )
+            return self.training_datas[dtype]
                 
         return None
 
@@ -371,3 +381,16 @@ def X_WITH_NEAREST_Y (X,Y ):
         nearest = [ Y[x[0]] for x in nearest[0:10] ]          
         new_sample_list.append ( sample.copy_and_set( nearest_target_list=nearest ) )
     return new_sample_list
+
+def X_ONLY_1(X):
+    if len(X) == 0:
+        raise Exception('Not enough training data.')
+     
+    return [ X[0] ]
+
+def X_ONLY_n_NEAREST_TO_Y_ONLY_1(X,n,Y):
+    target = Y[0]    
+    nearest = [ (i, np.square( d.landmarks[17:]-target.landmarks[17:] ).sum() ) for i,d in enumerate(X) ]
+    nearest = sorted(nearest, key=operator.itemgetter(-1), reverse=False)
+    nearest = [ X[s[0]].copy_and_set (nearest_target_list=[target]) for s in nearest[0:n] ]      
+    return nearest

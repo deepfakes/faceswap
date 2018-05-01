@@ -45,12 +45,11 @@ class Model(ModelBase):
         self.encoder = self.Encoder(ae_input_layer)
         self.decoderMask = self.DecoderMask()
         self.decoderCommonA = self.DecoderCommon()
-        self.decoderCommonB = self.DecoderCommon()
-        
+        self.decoderCommonB = self.DecoderCommon()        
         self.decoderRGB = self.DecoderRGB()
         self.decoderBW = self.DecoderBW()
-        self.inter_B = self.Intermediate ()
         self.inter_A = self.Intermediate ()
+        self.inter_B = self.Intermediate ()        
         
         if not self.is_first_run():
             self.encoder.load_weights  (self.get_strpath_storage_for_file(self.encoderH5))
@@ -59,8 +58,8 @@ class Model(ModelBase):
             self.decoderCommonB.load_weights  (self.get_strpath_storage_for_file(self.decoderCommonBH5))
             self.decoderRGB.load_weights  (self.get_strpath_storage_for_file(self.decoderRGBH5))
             self.decoderBW.load_weights  (self.get_strpath_storage_for_file(self.decoderBWH5))
-            self.inter_B.load_weights  (self.get_strpath_storage_for_file(self.inter_BH5))
             self.inter_A.load_weights (self.get_strpath_storage_for_file(self.inter_AH5))
+            self.inter_B.load_weights  (self.get_strpath_storage_for_file(self.inter_BH5))            
 
         code = self.encoder(ae_input_layer)
         A = self.inter_A(code)
@@ -119,8 +118,9 @@ class Model(ModelBase):
         self.decoderCommonB.save_weights  (self.get_strpath_storage_for_file(self.decoderCommonBH5))
         self.decoderRGB.save_weights  (self.get_strpath_storage_for_file(self.decoderRGBH5))
         self.decoderBW.save_weights  (self.get_strpath_storage_for_file(self.decoderBWH5))
-        self.inter_B.save_weights  (self.get_strpath_storage_for_file(self.inter_BH5))
         self.inter_A.save_weights (self.get_strpath_storage_for_file(self.inter_AH5))
+        self.inter_B.save_weights  (self.get_strpath_storage_for_file(self.inter_BH5))
+        
         
     #override
     def onTrainOneEpoch(self, sample):

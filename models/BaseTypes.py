@@ -10,7 +10,11 @@ class TrainingDataType(IntEnum):
     
     SRC_WITH_NEAREST = 2 # as raw unsorted but samples can return get_random_nearest_target_sample()
 
-    QTY = 3
+    SRC_ONLY_10_NEAREST_TO_DST_ONLY_1 = 3 #
+    
+    DST_ONLY_1 = 4
+    
+    QTY = 5
     
 class TrainingDataSample(object):
 
