@@ -11,6 +11,8 @@ where (warped) matches dst face if sample contains get_random_nearest_target_sam
 kwargs options to constructor:
     warped_size=(64,64)
     target_size=(128,128)
+    random_flip 
+    warped/target modes = 'bgra', 'ga', 'ggga'
 
 thx to dfaker for original idea
 '''
@@ -18,10 +20,12 @@ thx to dfaker for original idea
 class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
     #overrided
-    def onInitialize(self, warped_size=(64,64), target_size=(128,128), random_flip=False, **kwargs):
+    def onInitialize(self, warped_size=(64,64), target_size=(128,128), random_flip=False, warped_mode='bgra', target_mode='bgra', **kwargs):
         self.warped_size = warped_size
         self.target_size = target_size
         self.random_flip = random_flip
+        self.warped_mode = warped_mode
+        self.target_mode = target_mode
         
     #overrided
     def onProcessSample(self, sample, debug):
@@ -40,27 +44,34 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
                 d_image = target_sample.load_image()
                 LandmarksProcessor.draw_landmarks (d_image, d_landmarks, (0, 1, 0))
 
-        warped, target_image, debug_image = FullFaceTrainingDataGenerator.warp (s_image, sample.landmarks, d_landmarks, self.warped_size, self.target_size, debug)
+        warped, target, debug_image = FullFaceTrainingDataGenerator.warp (s_image, sample.landmarks, d_landmarks, self.warped_size, self.target_size, debug)
+
+        warped = self.bgra_to_mode (warped, self.warped_mode)
+        target = self.bgra_to_mode (target, self.target_mode)    
 
         if self.random_flip and np.random.randint(2) == 1:
             warped = warped[:,::-1,:]
-            target_image = target_image[:,::-1,:]
+            target = target[:,::-1,:]
             if debug:
                 debug_image = debug_image[:,::-1,:]
             
         if debug:
             result = (self.target_size[0], s_image)            
             if d_image is not None:
-                result += (d_image,)                
-            result += (debug_image, target_image[...,0:3], warped[...,0:3], warped[...,0:3]*np.expand_dims(warped[...,3],-1))
+                result += (d_image,)
+                
+            result += (debug_image, target[...,0:-1], warped[...,0:-1], warped[...,0:-1]*np.expand_dims(warped[...,-1],-1))
             return result            
         else:
-            return ( warped, target_image )
+            return ( warped, target )
             
     @staticmethod
     def warp(s_image, s_landmarks, d_landmarks, warped_size, target_size, debug):
         if d_landmarks is None:
             d_landmarks = s_landmarks
+            
+        s_landmarks_original = s_landmarks
+        d_landmarks_original = d_landmarks
             
         h,w,c = s_image.shape
         if (h != w) or (w != 64 and w != 128 and w != 256 and w != 512 and w != 1024):
@@ -87,7 +98,7 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
                 
         #choose landmarks which not close to each other in random dist
         dist = np.random.ranf()*8.0 + 8.0
-        chk_dist = dist*dist            
+        chk_dist = dist*dist   
         
         ar = idx_list
         idx_list = []
@@ -149,11 +160,11 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
         #embedding mask as 4 channel
         s_image = np.concatenate( (s_image,
-                                    cv2.fillConvexPoly( np.zeros(s_image.shape[0:2]+(1,),dtype=np.float32), cv2.convexHull (s_landmarks), (1,) ))
+                                    cv2.fillConvexPoly( np.zeros(s_image.shape[0:2]+(1,),dtype=np.float32), cv2.convexHull (s_landmarks_original), (1,) ))
                                    , -1 )
         
         warped = np.concatenate( (warped,
-                                    cv2.fillConvexPoly( np.zeros(warped.shape[0:2]+(1,),dtype=np.float32), cv2.convexHull (d_landmarks), (1,) ))
+                                    cv2.fillConvexPoly( np.zeros(warped.shape[0:2]+(1,),dtype=np.float32), cv2.convexHull (d_landmarks_original), (1,) ))
                                    , -1 )
                                    
         random_transform_mat = cv2.getRotationMatrix2D((w // 2, w // 2), rotation, scale)
@@ -166,3 +177,18 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
         warped        = cv2.resize( warped      , warped_size, cv2.INTER_LINEAR)
         
         return warped, target_image, debug_image
+        
+    def bgra_to_mode (self, img, mode):
+        if mode == 'ga':
+            img = np.concatenate( ( np.expand_dims(cv2.cvtColor(img[...,0:3], cv2.COLOR_BGR2GRAY),-1),
+                                    np.expand_dims(img[...,-1],-1)
+                                   )
+                                   , -1
+                                 )
+        elif mode == 'ggga':
+            img = np.concatenate( ( np.repeat ( np.expand_dims(cv2.cvtColor(img[...,0:3], cv2.COLOR_BGR2GRAY),-1), (3,), -1),
+                                    np.expand_dims(img[...,-1],-1)
+                                   )
+                                   , -1
+                                 )
+        return img

@@ -18,7 +18,7 @@ class Model(ModelBase):
  
     #override
     def onInitialize(self, batch_size=-1, **in_options):
-        if self.gpu_total_vram_gb < 3:
+        if self.gpu_total_vram_gb < 2:
             raise Exception ('Sorry, this model works only on 2GB+ GPU')
             
         self.batch_size = batch_size
@@ -121,7 +121,7 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 64, 64, 'half_face', **in_options)
+        return ConverterMasked(self.predictor_func, 64, 64, 'half_face', erode_mask=True, blur_mask=True, default_erode_mask_modifier=100, default_blur_mask_modifier=100, masked_hist_match=True,  **in_options)
         
     def Encoder(self, input_layer, created_vram_gb):
         x = input_layer

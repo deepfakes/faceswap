@@ -37,9 +37,9 @@ class Model(ModelBase):
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
         
-        self.encoder = self.Encoder(ae_input_layer, self.created_vram_gb)
-        self.decoder_src = self.Decoder(self.created_vram_gb)
-        self.decoder_dst = self.Decoder(self.created_vram_gb)        
+        self.encoder = self.Encoder(ae_input_layer)
+        self.decoder_src = self.Decoder()
+        self.decoder_dst = self.Decoder()        
         
         if not self.is_first_run():
             self.encoder.load_weights     (self.get_strpath_storage_for_file(self.encoderH5))
@@ -53,8 +53,8 @@ class Model(ModelBase):
             self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
                 
         optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)        
-        self.autoencoder_src.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mae'] )
-        self.autoencoder_dst.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mae'] )
+        self.autoencoder_src.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mse'] )
+        self.autoencoder_dst.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mse'] )
   
         if self.is_training_mode:
             from models import FullFaceTrainingDataGenerator
@@ -129,65 +129,41 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', **in_options)
+        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', erode_mask=True, blur_mask=True, default_blur_mask_modifier=100, clip_border_mask_per=0.046875, masked_hist_match=False, **in_options)
         
-    def Encoder(self, input_layer, created_vram_gb):
+    def Encoder(self, input_layer):
         x = input_layer
         x = conv(self.keras, x, 128)
         x = conv(self.keras, x, 256)
         x = conv(self.keras, x, 512)
         x = conv(self.keras, x, 1024)
 
-        if created_vram_gb >= 4:
-            x = self.keras.layers.Dense(1024)(self.keras.layers.Flatten()(x))
-            x = self.keras.layers.Dense(4 * 4 * 1024)(x)
-            x = self.keras.layers.Reshape((4, 4, 1024))(x)
-            x = upscale(self.keras, x, 512)
-        else:
-            x = self.keras.layers.Dense(512)(self.keras.layers.Flatten()(x))
-            x = self.keras.layers.Dense(4 * 4 * 512)(x)
-            x = self.keras.layers.Reshape((4, 4, 512))(x)
-            x = upscale(self.keras, x, 256)
+        x = self.keras.layers.Dense(1024)(self.keras.layers.Flatten()(x))
+        x = self.keras.layers.Dense(4 * 4 * 1024)(x)
+        x = self.keras.layers.Reshape((4, 4, 1024))(x)
+        x = upscale(self.keras, x, 512)
             
         return self.keras.models.Model(input_layer, x)
 
-    def Decoder(self, created_vram_gb):
-        if created_vram_gb >= 4:   
-            input_ = self.keras.layers.Input(shape=(8, 8, 512))
-            x = input_
-            x = upscale(self.keras, x, 512)
-            x = res(self.keras, x, 512)
-            x = upscale(self.keras, x, 256)
-            x = res(self.keras, x, 256)
-            x = upscale(self.keras, x, 128)
-            x = res(self.keras, x, 128)
-            x = upscale(self.keras, x, 64)
-            x = res(self.keras, x, 64)
-            
-            y = input_  #mask decoder
-            y = upscale(self.keras, y, 512)
-            y = upscale(self.keras, y, 256)
-            y = upscale(self.keras, y, 128)
-            y = upscale(self.keras, y, 64)
-        else:
-            input_ = self.keras.layers.Input(shape=(8, 8, 256))            
-            x = input_
-            x = upscale(self.keras, x, 256)
-            x = res(self.keras, x, 256)
-            x = upscale(self.keras, x, 128)
-            x = res(self.keras, x, 128)
-            x = upscale(self.keras, x, 64)
-            x = res(self.keras, x, 64)
-            x = upscale(self.keras, x, 32)
-            x = res(self.keras, x, 32)
-            
-            y = input_  #mask decoder
-            y = self.upscale(256)(y)
-            y = self.upscale(128)(y)
-            y = self.upscale(64)(y)
-            y = self.upscale(32)(y)
+    def Decoder(self):
+        input_ = self.keras.layers.Input(shape=(8, 8, 512))
+        x = input_
+        x = upscale(self.keras, x, 512)
+        x = res(self.keras, x, 512)
+        x = upscale(self.keras, x, 256)
+        x = res(self.keras, x, 256)
+        x = upscale(self.keras, x, 128)
+        x = res(self.keras, x, 128)
+        x = upscale(self.keras, x, 64)
+        x = res(self.keras, x, 64)
+        
+        y = input_  #mask decoder
+        y = upscale(self.keras, y, 512)
+        y = upscale(self.keras, y, 256)
+        y = upscale(self.keras, y, 128)
+        y = upscale(self.keras, y, 64)
             
         x = self.keras.layers.convolutional.Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         y = self.keras.layers.convolutional.Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(y)
-  
+        
         return self.keras.models.Model(input_, [x,y])

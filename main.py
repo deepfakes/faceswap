@@ -4,6 +4,7 @@ import argparse
 from utils import Path_utils
 from utils import os_utils
 from pathlib import Path
+import numpy as np
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 2):
     raise Exception("This program requires at least Python 3.2")
@@ -85,10 +86,13 @@ if __name__ == "__main__":
     train_parser.add_argument('--save-interval-min', type=int, dest="save_interval_min", default=10, help="Save interval in minutes. Default 10.") 
     train_parser.add_argument('--force-best-gpu-idx', type=int, dest="force_best_gpu_idx", default=-1, help="Force to choose this GPU idx as best.")
     train_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="MultiGPU option. It will select only same best GPU models.")
-    train_parser.add_argument('--force-gpu-idxs', type=str, dest="force_gpu_idxs", default=None, help="Override final GPU idxs. Example: 0,1,2")
+    train_parser.add_argument('--force-gpu-idxs', type=str, dest="force_gpu_idxs", default=None, help="Override final GPU idxs. Example: 0,1,2.")
     train_parser.set_defaults (func=process_train)
     
-    def process_convert(arguments):        
+    def process_convert(arguments):
+        arguments.erode_mask_modifier = np.clip ( int(arguments.erode_mask_modifier), -100, 100)
+        arguments.blur_mask_modifier = np.clip ( int(arguments.blur_mask_modifier), -100, 100)
+        
         from mainscripts import Converter
         Converter.main (
             input_dir=arguments.input_dir, 
@@ -98,7 +102,8 @@ if __name__ == "__main__":
             model_name=arguments.model_name, 
             debug = arguments.debug,
             mode = arguments.mode,
-            mask_type = arguments.mask_type
+            erode_mask_modifier = arguments.erode_mask_modifier,
+            blur_mask_modifier = arguments.blur_mask_modifier
             )
         
     convert_parser = subparsers.add_parser( "convert", help="Converter") 
@@ -107,9 +112,10 @@ if __name__ == "__main__":
     convert_parser.add_argument('--aligned-dir', required=True, action=fixPathAction, dest="aligned_dir", help="Aligned directory. This is where the aligned files stored.")
     convert_parser.add_argument('--model-dir', required=True, action=fixPathAction, dest="model_dir", help="Model dir.")
     convert_parser.add_argument('--model', required=True, dest="model_name", choices=Path_utils.get_all_dir_names_startswith ( Path(__file__).parent / 'models' , 'Model_'), help="Type of model")
-    convert_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Debug converter.")        
-    convert_parser.add_argument('--mode',  dest="mode", choices=['seamless','hist-match'], default='seamless', help="Face overlaying mode. Seriously affects result.")
-    convert_parser.add_argument('--mask-type',  dest="mask_type", choices=['predicted','dst','intersect'], default='predicted', help="Seriously affects result.")
+    convert_parser.add_argument('--mode',  dest="mode", choices=['seamless','hist-match', 'hist-match-bw'], default='seamless', help="Face overlaying mode. Seriously affects result.")
+    convert_parser.add_argument('--erode-mask-modifier', type=int, dest="erode_mask_modifier", default=0, help="Automatic erode mask modifier. Valid range [-100..100].")
+    convert_parser.add_argument('--blur-mask-modifier', type=int, dest="blur_mask_modifier", default=0, help="Automatic blur mask modifier. Valid range [-100..100]")    
+    convert_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Debug converter.")   
     
     convert_parser.set_defaults(func=process_convert)
 

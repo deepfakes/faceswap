@@ -25,20 +25,18 @@
 
 ### **Model types**:
 
-- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but better due to new sample generator and ConverterMasked.
+- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but better due to better ConverterMasked.
 
 - **H128 (3GB+)** - as H64, but in 128 resolution. Better face details.
 
-- **F128 (3GB+)** - as H128, but full face + full face match warper sample generator. Fullface 128 has less details than half face 128, but allows to cover a jaw.
+- **DF (4GB+)** - @dfaker model. Fullface 128 model. Contains DSSIM loss func which excludes background around face.
 
-- **DF (4GB+)** - @dfaker model. It is as F128, but + DSSIM loss func which excludes background around face.
+- **LIAEF128 (5GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
 
-- **IAEF128 (5GB+)** - new model, as dfaker, but model trying to morph src face to dst, while keeping facial features of src face. Can produce strange faces.
-
-- **LIAEF128 (4GB+)** - as IAEF128 but "lighter". Less aggressive morphing.
-
-- **L2IAEF128 (5GB+)** - as LIAEF128 but increased model size, deeper encoder, deeper intermediate.
-
+- **MIAEF128 (5GB+)** - as LIAEF128, but also it tries to match brightness/color features.
+![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
+![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_0.jpg)
+![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_1.jpg)
 
 ### **Sort tool**:
 

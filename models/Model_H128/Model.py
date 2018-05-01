@@ -110,8 +110,8 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 64, 128, 'half_face', **in_options)
-        
+        return ConverterMasked(self.predictor_func, 64, 128, 'half_face', erode_mask=True, blur_mask=True, default_erode_mask_modifier=100, default_blur_mask_modifier=100, masked_hist_match=True, **in_options)
+
     def Encoder(self, input_layer, created_vram_gb):
         x = input_layer
         x = conv(self.keras, x, 128)

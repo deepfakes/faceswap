@@ -5,7 +5,7 @@ import localization
 from scipy.spatial import Delaunay
 from PIL import Image, ImageDraw, ImageFont
 
-def hist_match(source, template, mask=None):
+def channel_hist_match(source, template, mask=None):
     # Code borrowed from:
     # https://stackoverflow.com/questions/32655686/histogram-matching-of-two-images-in-python-2-x
     masked_source = source
@@ -37,16 +37,16 @@ def hist_match(source, template, mask=None):
 
 def color_hist_match(src_im, tar_im, mask=None):
     h,w,c = src_im.shape
-    matched_R = hist_match(src_im[:,:,0], tar_im[:,:,0], mask)
-    matched_G = hist_match(src_im[:,:,1], tar_im[:,:,1], mask)
-    matched_B = hist_match(src_im[:,:,2], tar_im[:,:,2], mask)
+    matched_R = channel_hist_match(src_im[:,:,0], tar_im[:,:,0], mask)
+    matched_G = channel_hist_match(src_im[:,:,1], tar_im[:,:,1], mask)
+    matched_B = channel_hist_match(src_im[:,:,2], tar_im[:,:,2], mask)
     
     to_stack = (matched_R, matched_G, matched_B)
     for i in range(3, c):
         to_stack += ( src_im[:,:,i],)
     
     
-    matched = np.stack(to_stack, axis=2).astype(src_im.dtype)
+    matched = np.stack(to_stack, axis=-1).astype(src_im.dtype)
     return matched
     
 
@@ -166,10 +166,13 @@ def equalize_and_stack (wh, images, axis=1):
         if c < max_c:
             if c == 1:
                 if len(image.shape) == 2:
-                    image = np.expand_dims ( image, 2 )                
-                image = np.concatenate ( (image,)*max_c, axis=2 )
+                    image = np.expand_dims ( image, -1 )                
+                image = np.concatenate ( (image,)*max_c, -1 )
+            elif c == 2: #GA
+                image = np.expand_dims ( image[...,0], -1 )
+                image = np.concatenate ( (image,)*max_c, -1 )                
             else:
-                image = np.concatenate ( (image, np.ones((h,w,max_c - c))), axis=2 )
+                image = np.concatenate ( (image, np.ones((h,w,max_c - c))), -1 )
 
         if h != wh or w != wh:
             image = cv2.resize ( image, (wh, wh) )
