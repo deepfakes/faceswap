@@ -10,9 +10,12 @@ import os
 import sys
 import subprocess
 import datetime
-from lib.cli import FileFullPaths, ComboFullPaths
 
 from ffmpy import FFprobe, FFmpeg, FFRuntimeError
+
+# faceswap imports
+from lib.cli import FileFullPaths, ComboFullPaths
+
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
@@ -117,7 +120,9 @@ class Effmpeg(object):
                                "rotate", "slice"]
 
     # Class variable that stores the common ffmpeg arguments based on verbosity
-    __common_ffmpeg_args_dict = {"verbose": '', "simple": "-hide_banner "}
+    __common_ffmpeg_args_dict = {"normal": "-hide_banner ",
+                                 "quiet": "-loglevel panic -hide_banner ",
+                                 "verbose": ''}
 
     # _common_ffmpeg_args is the class variable that will get used by various
     # actions and it will be set by the process_arguments() method based on
@@ -126,7 +131,7 @@ class Effmpeg(object):
 
     def __init__(self, subparser, command, description='default'):
         self.argument_list = self.get_argument_list()
-        self.optional_arguments = self.get_optional_arguments()
+        self.optional_arguments = list()
         self.args = None
         self.input = DataItem()
         self.output = DataItem()
@@ -307,20 +312,24 @@ class Effmpeg(object):
                                           turned on implicitly."""})
 
         arguments_list.append({"opts": ('-tr', '--transpose'),
-                               "choices": ("0", "1", "2", "3", "None"),
+                               "choices": ("(0, 90CounterClockwise&VerticalFlip)",
+                                           "(1, 90Clockwise)",
+                                           "(2, 90CounterClockwise)",
+                                           "(3, 90Clockwise&VerticalFlip)",
+                                           "None"),
+                               "type": lambda v: Effmpeg.__parse_transpose(v),
                                "dest": "transpose",
                                "default": "None",
                                "help": """Transpose the video. If transpose is 
-                                          set, then rotate will be ignored.
-                                          0 = 90 counter-clockwise and vertical
-                                          flip
-                                          1 = 90 clockwise
-                                          2 = 90 counter clockwise
-                                          3 = 90 clockwise and vertical flip"""})
+                                          set, then degrees will be ignored. For
+                                          cli you can enter either the number
+                                          or the long command name, 
+                                          e.g. to use (1, 90Clockwise)
+                                          -tr 1 or -tr 90Clockwise"""})
 
-        arguments_list.append({"opts": ('-ro', '--rotate'),
+        arguments_list.append({"opts": ('-de', '--degrees'),
                                "type": str,
-                               "dest": "rotate",
+                               "dest": "degrees",
                                "default": "None",
                                "help": """Rotate the video clockwise by the 
                                           given number of degrees."""})
@@ -332,23 +341,24 @@ class Effmpeg(object):
                                "help": """Set the new resolution scale if the
                                           chosen action is 'rescale'."""})
 
+        arguments_list.append({"opts": ('-q', '--quiet'),
+                               "action": "store_true",
+                               "dest": "quiet",
+                               "default": False,
+                               "help": """Reduces output verbosity so that only
+                                          serious errors are printed. If both
+                                          quiet and verbose are set, verbose
+                                          will override quiet."""})
+
         arguments_list.append({"opts": ('-v', '--verbose'),
                                "action": "store_true",
                                "dest": "verbose",
                                "default": False,
-                               "help": """Increases output verbosity."""})
+                               "help": """Increases output verbosity. If both
+                                          quiet and verbose are set, verbose
+                                          will override quiet."""})
 
         return arguments_list
-
-    @staticmethod
-    def get_optional_arguments():
-        """
-        Put the arguments in a list so that they are accessible from both
-        argparse and gui.
-        """
-        # Override this for custom arguments
-        argument_list = []
-        return argument_list
 
     def parse_arguments(self, description, subparser, command):
         parser = subparser.add_parser(
@@ -365,17 +375,12 @@ class Effmpeg(object):
             kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
             parser.add_argument(*args, **kwargs)
 
-        parser = self.add_optional_arguments(parser)
         parser.set_defaults(func=self.process_arguments)
-
-    @staticmethod
-    def add_optional_arguments(parser):
-        # Override this for custom arguments
-        return parser
 
     def process_arguments(self, arguments):
         self.args = arguments
 
+        # Format action to match the method name
         self.args.action = self.args.action.replace('-', '_')
 
         # Instantiate input DataItem object
@@ -455,12 +460,25 @@ class Effmpeg(object):
             elif self.input.fps is not None and self.__check_have_fps(['r']):
                 self.args.fps = self.input.fps
 
-        # Processing rotate
-        if self.args.rotate.lower() == "none":
-            self.args.rotate = 0
+        # Processing transpose
+        if self.args.transpose.lower() == "none":
+            self.args.transpose = None
+        else:
+            self.args.transpose = self.args.transpose[1]
+
+        # Processing degrees
+        if self.args.degrees.lower() == "none" or self.args.degrees == '':
+            self.args.degrees = None
+        elif self.args.transpose is None:
+            try:
+                int(self.args.degrees)
+            except ValueError as ve:
+                print("You have entered an invalid value for degrees: "
+                      "{}".format(self.args.degrees), file=sys.stderr)
+                exit(1)
 
         # Set verbosity of output
-        self.__set_verbosity(self.args.verbose)
+        self.__set_verbosity(self.args.quiet, self.args.verbose)
 
         # Set self.print_ to True if output needs to be printed to stdout
         if self.args.action in self._actions_have_print_output:
@@ -476,7 +494,7 @@ class Effmpeg(object):
                   "start": self.start,
                   "duration": self.duration,
                   "fps": self.args.fps,
-                  "rotate": self.args.rotate,
+                  "degrees": self.args.degrees,
                   "transpose": self.args.transpose,
                   "scale": self.args.scale,
                   "print_": self.print_}
@@ -485,9 +503,9 @@ class Effmpeg(object):
 
     @staticmethod
     def extract(input_=None, output=None, fps=None, **kwargs):
-        _input = {input_.path: None}
-        _output_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts += '-y -vf fps="' + str(fps) + '"'
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
+        _input = {input_.path: _input_opts}
+        _output_opts = '-y -vf fps="' + str(fps) + '"'
         _output_path = output.path + "/" + input_.name + "%05d.png"
         _output = {_output_path: _output_opts}
         ff = FFmpeg(inputs=_input, outputs=_output)
@@ -497,17 +515,17 @@ class Effmpeg(object):
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
                 ref_vid=None, **kwargs):
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_path = os.path.join(input_.path,
                                    os.listdir(input_.path)[0][:-9]
                                    + "%05d.png")
-        _output_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts += '-y -c:v libx264 -vf fps="' + str(fps) + '"'
+        _output_opts = '-y -c:v libx264 -vf fps="' + str(fps) + '"'
         if mux_audio:
             _ref_vid_opts = '-c copy -map 0:0 -map 1:1 -shortest'
             _output_opts = _ref_vid_opts + ' ' + _output_opts
-            _inputs = {_input_path: None, ref_vid.path: None}
+            _inputs = {_input_path: _input_opts, ref_vid.path: None}
         else:
-            _inputs = {_input_path: None}
+            _inputs = {_input_path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
         Effmpeg.__run_ffmpeg(ff)
@@ -543,32 +561,31 @@ class Effmpeg(object):
 
     @staticmethod
     def rescale(input_=None, output=None, scale=None, **kwargs):
-        _input_opts = None
-        _output_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts += '-y -vf scale="' + str(scale) + '"'
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts = '-y -vf scale="' + str(scale) + '"'
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
         Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
-    def rotate(input_=None, output=None, rotate=None, transpose=None,
+    def rotate(input_=None, output=None, degrees=None, transpose=None,
                **kwargs):
-        _input_opts = None
-        _output_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts += '-y -c:a copy -vf '
+        if transpose is None and degrees is None:
+            raise ValueError("You have not supplied a valid transpose or "
+                             "degrees value:\ntranspose: {}\ndegrees: "
+                             "{}".format(transpose, degrees))
+
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts = '-y -c:a copy -vf '
         _bilinear = ''
-        if transpose is not None and transpose != "None":
+        if transpose is not None:
             _output_opts += 'transpose="' + str(transpose) + '"'
-        elif int(rotate) != 0:
-            if int(rotate) % 90 == 0 and int(rotate) != 0:
+        elif int(degrees) != 0:
+            if int(degrees) % 90 == 0 and int(degrees) != 0:
                 _bilinear = ":bilinear=0"
-            _output_opts += 'rotate="' + str(rotate) + '*(PI/180)'
+            _output_opts += 'rotate="' + str(degrees) + '*(PI/180)'
             _output_opts += _bilinear + '" '
-        else:
-            raise ValueError("You have not supplied a valid rotate or "
-                             "transpose value:\nrotate: {}\ntranspose: "
-                             "{}".format(rotate, transpose))
 
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
@@ -577,32 +594,34 @@ class Effmpeg(object):
 
     @staticmethod
     def mux_audio(input_=None, output=None, ref_vid=None, **kwargs):
-        _input_opts = None
-        _output_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts += '-y -c copy -map 0:0 -map 1:1 -shortest'
-        _inputs = {input_.path: _input_opts, ref_vid.path: _input_opts}
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
+        _ref_vid_opts = None
+        _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
+        _inputs = {input_.path: _input_opts, ref_vid.path: _ref_vid_opts}
         _outputs = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_outputs)
         Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
     def slice(input_=None, output=None, start='', duration=None, **kwargs):
-        _input = {input_.path: None}
-        _output_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts += "-y -ss " + start + " "
+        _input_opts = Effmpeg._common_ffmpeg_args[:]
+        _output_opts = "-y -ss " + start + " "
         _output_opts += "-t " + duration + " "
         _output_opts += "-vcodec copy -acodec copy -y"
+        _inputs = {input_.path: _input_opts}
         _output = {output.path: _output_opts}
-        ff = FFmpeg(inputs=_input, outputs=_output)
+        ff = FFmpeg(inputs=_inputs, outputs=_output)
         Effmpeg.__run_ffmpeg(ff)
 
     # Various helper methods
     @classmethod
-    def __set_verbosity(cls, verbose):
+    def __set_verbosity(cls, quiet, verbose):
         if verbose:
             cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["verbose"]
+        elif quiet:
+            cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["quiet"]
         else:
-            cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["simple"]
+            cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["normal"]
 
     def __get_default_output(self):
         # Set output to the same directory as input
@@ -638,6 +657,7 @@ class Effmpeg(object):
         try:
             ff.run(stderr=subprocess.STDOUT)
         except FFRuntimeError as ffe:
+            # After receiving SIGINT ffmpeg has a 255 exit code
             if ffe.exit_code == 255:
                 pass
             else:
@@ -661,6 +681,23 @@ class Effmpeg(object):
         delta = end - start
         s = delta.total_seconds()
         return '{:02}:{:02}:{:02}'.format(int(s // 3600), int(s % 3600 // 60), int(s % 60))
+
+    @staticmethod
+    def __parse_transpose(value):
+        index = 0
+        opts = ["(0, 90CounterClockwise&VerticalFlip)",
+                "(1, 90Clockwise)",
+                "(2, 90CounterClockwise)",
+                "(3, 90Clockwise&VerticalFlip)",
+                "None"]
+        if len(value) == 1:
+            index = int(value)
+        else:
+            for i in range(5):
+                if value in opts[i]:
+                    index = i
+                    break
+        return opts[index]
 
     @staticmethod
     def parse_time(txt):

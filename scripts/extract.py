@@ -9,6 +9,7 @@ from tqdm import tqdm
 from lib.multithreading import pool_process
 from scripts.fsmedia import Alignments, Faces, Images, Utils
 
+
 class Extract(object):
     """ The extract process. """
 
