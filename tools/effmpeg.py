@@ -28,8 +28,9 @@ class DataItem(object):
     A simple class used for storing the media data items and directories that
     Effmpeg uses for 'input', 'output' and 'ref_vid'.
     """
-    vid_ext = [".mp4", ".mpeg", ".webm", ".mkv"]
+    vid_ext = [".mp4", ".mpeg", ".webm", ".mkv", ".avi", ".flv"]
     audio_ext = [".mp3", ".wav", ".flac"]
+    img_ext = [".png", ".bmp", ".jpg", ".jpeg"]
 
     def __init__(self, path=None, name=None, item_type=None, ext=None,
                  fps=None):
@@ -264,6 +265,17 @@ class Effmpeg(object):
                                           fps from the input or reference 
                                           videos."""})
 
+        arguments_list.append({"opts": ("-ef", "--extract-filetype"),
+                               "choices": DataItem.img_ext,
+                               "dest": "extract_ext",
+                               "default": ".png",
+                               "help": """Image format that extracted images
+                                          should be saved as. '.bmp' will offer
+                                          the fastest extraction speed, but
+                                          will take the most storage space.
+                                          '.png' will be slower but will take
+                                          less storage."""})
+
         arguments_list.append({"opts": ('-s', '--start'),
                                "type": str,
                                "dest": "start",
@@ -434,9 +446,9 @@ class Effmpeg(object):
                       "intentional then ignore this warning.", file=sys.stderr)
 
         # Process start and duration arguments
-        self.start = self.parse_time(str(self.args.start))
-        self.end = self.parse_time(str(self.args.end))
-        if self.end != "00:00:00" or self.end != "":
+        self.start = self.parse_time(self.args.start)
+        self.end = self.parse_time(self.args.end)
+        if not self.__check_equals_time(self.args.end, "00:00:00"):
             self.duration = self.__get_duration(self.start, self.end)
         else:
             self.duration = self.parse_time(str(self.args.duration))
@@ -490,10 +502,11 @@ class Effmpeg(object):
         kwargs = {"input_": self.input,
                   "output": self.output,
                   "ref_vid": self.ref_vid,
-                  "mux_audio": self.args.mux_audio,
+                  "fps": self.args.fps,
+                  "extract_ext": self.args.extract_ext,
                   "start": self.start,
                   "duration": self.duration,
-                  "fps": self.args.fps,
+                  "mux_audio": self.args.mux_audio,
                   "degrees": self.args.degrees,
                   "transpose": self.args.transpose,
                   "scale": self.args.scale,
@@ -502,11 +515,12 @@ class Effmpeg(object):
         action(**kwargs)
 
     @staticmethod
-    def extract(input_=None, output=None, fps=None, **kwargs):
+    def extract(input_=None, output=None, fps=None, extract_ext=None,
+                **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input = {input_.path: _input_opts}
         _output_opts = '-y -vf fps="' + str(fps) + '"'
-        _output_path = output.path + "/" + input_.name + "%05d.png"
+        _output_path = output.path + "/" + input_.name + "%05d" + extract_ext
         _output = {_output_path: _output_opts}
         ff = FFmpeg(inputs=_input, outputs=_output)
         os.makedirs(output.path, exist_ok=True)
@@ -515,13 +529,12 @@ class Effmpeg(object):
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
                 ref_vid=None, **kwargs):
+        filename = Effmpeg.__get_extracted_filename(input_.path)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _input_path = os.path.join(input_.path,
-                                   os.listdir(input_.path)[0][:-9]
-                                   + "%05d.png")
-        _output_opts = '-y -c:v libx264 -vf fps="' + str(fps) + '"'
+        _input_path = os.path.join(input_.path, filename)
+        _output_opts = '-y -c:v libx264 -vf fps="' + str(fps) + '" '
         if mux_audio:
-            _ref_vid_opts = '-c copy -map 0:0 -map 1:1 -shortest'
+            _ref_vid_opts = '-c copy -map 0:0 -map 1:1'
             _output_opts = _ref_vid_opts + ' ' + _output_opts
             _inputs = {_input_path: _input_opts, ref_vid.path: None}
         else:
@@ -603,11 +616,11 @@ class Effmpeg(object):
         Effmpeg.__run_ffmpeg(ff)
 
     @staticmethod
-    def slice(input_=None, output=None, start='', duration=None, **kwargs):
+    def slice(input_=None, output=None, start=None, duration=None, **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts = "-y -ss " + start + " "
-        _output_opts += "-t " + duration + " "
-        _output_opts += "-vcodec copy -acodec copy -y"
+        _input_opts += "-ss " + start
+        _output_opts = "-y -t " + duration + " "
+        _output_opts += "-vcodec copy -acodec copy"
         _inputs = {input_.path: _input_opts}
         _output = {output.path: _output_opts}
         ff = FFmpeg(inputs=_inputs, outputs=_output)
@@ -683,6 +696,29 @@ class Effmpeg(object):
         return '{:02}:{:02}:{:02}'.format(int(s // 3600), int(s % 3600 // 60), int(s % 60))
 
     @staticmethod
+    def __get_extracted_filename(path):
+        filename = ''
+        for file in os.listdir(path):
+            if any(i in file for i in DataItem.img_ext):
+                filename = file
+                break
+        filename = filename.split('.')
+        img_ext = filename[-1]
+        zero_pad = filename[-2]
+        name = '.'.join(filename[:-2])
+
+        vid_ext = ''
+        for ve in [ve.replace('.', '') for ve in DataItem.vid_ext]:
+            if ve in zero_pad:
+                vid_ext = ve
+                zero_pad = len(zero_pad.replace(ve, ''))
+                break
+
+        zero_pad = str(zero_pad).zfill(2)
+        filename_list = [name, vid_ext + '%0' + zero_pad + 'd', img_ext]
+        return '.'.join(filename_list)
+
+    @staticmethod
     def __parse_transpose(value):
         index = 0
         opts = ["(0, 90CounterClockwise&VerticalFlip)",
@@ -698,6 +734,17 @@ class Effmpeg(object):
                     index = i
                     break
         return opts[index]
+
+    @staticmethod
+    def __check_is_valid_time(value):
+        val = value.replace(':', '')
+        return val.isdigit()
+
+    @staticmethod
+    def __check_equals_time(value, time):
+        v = value.replace(':', '')
+        t = time.replace(':', '')
+        return v.zfill(6) == t.zfill(6)
 
     @staticmethod
     def parse_time(txt):
