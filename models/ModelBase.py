@@ -94,9 +94,6 @@ class ModelBase(object):
         else: 
             #not first run        
             if 'created_vram_gb' in self.options.keys():
-                if self.options['created_vram_gb'] > gpu_total_vram_gb:
-                    raise Exception('Unable to run this model on GPU, because it was created on GPU with higher amount of VRAM.')
-                
                 self.created_vram_gb = self.options['created_vram_gb']
             else:
                 self.options['created_vram_gb'] = gpu_total_vram_gb

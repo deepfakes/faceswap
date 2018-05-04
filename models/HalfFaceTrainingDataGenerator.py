@@ -65,8 +65,8 @@ class HalfFaceTrainingDataGenerator(TrainingDataGeneratorBase):
 
         half_cell_size = cell_size // 2
         
-        mapx = cv2.resize(mapx, (w+cell_size,)*2 )[half_cell_size:-half_cell_size-1,half_cell_size:-half_cell_size-1].astype('float32')
-        mapy = cv2.resize(mapy, (w+cell_size,)*2 )[half_cell_size:-half_cell_size-1,half_cell_size:-half_cell_size-1].astype('float32')
+        mapx = cv2.resize(mapx, (w+cell_size,)*2 )[half_cell_size:-half_cell_size-1,half_cell_size:-half_cell_size-1].astype(np.float32)
+        mapy = cv2.resize(mapy, (w+cell_size,)*2 )[half_cell_size:-half_cell_size-1,half_cell_size:-half_cell_size-1].astype(np.float32)
         warped_image = cv2.remap(image, mapx, mapy, cv2.INTER_LINEAR )
         
         random_transform_mat = cv2.getRotationMatrix2D((w // 2, w // 2), rotation, scale)

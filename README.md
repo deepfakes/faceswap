@@ -25,7 +25,7 @@
 
 ### **Model types**:
 
-- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but better due to better ConverterMasked.
+- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but with DSSIM Loss func and separated mask decoder + better ConverterMasked.
 
 - **H128 (3GB+)** - as H64, but in 128 resolution. Better face details.
 

@@ -68,32 +68,26 @@ class Model(ModelBase):
         inter_A_A = self.keras.layers.Concatenate()([A, A])
         inter_B_A = self.keras.layers.Concatenate()([B, A])
  
+        x1,m1 = self.decoderCommonA (inter_A_A)
+        x2,m2 = self.decoderCommonA (inter_A_A)
         self.autoencoder_src     = self.keras.models.Model([ae_input_layer,mask_layer],
-                    [ self.decoderBW (
-                        self.keras.layers.Concatenate()(
-                                       [self.decoderCommonA (inter_A_A), 
-                                        self.decoderCommonA (inter_A_A) ])
-                      ) ,
-                   
-                    self.decoderMask(inter_A_A)] )
-
-        self.autoencoder_src_RGB = self.keras.models.Model([ae_input_layer,mask_layer], 
-                    [ self.decoderRGB (
-                        self.keras.layers.Concatenate()(
-                                      [ self.decoderCommonA (inter_A_A), 
-                                        self.decoderCommonB (inter_A_A) ])
-                      ),                   
+                    [ self.decoderBW  (self.keras.layers.Concatenate()([x1,x2]) ),
+                      self.decoderMask(self.keras.layers.Concatenate()([m1,m2]) )
+                    ])
                     
-                      self.decoderMask(inter_A_A)
+        x1,m1 = self.decoderCommonA (inter_A_A)
+        x2,m2 = self.decoderCommonB (inter_A_A)
+        self.autoencoder_src_RGB = self.keras.models.Model([ae_input_layer,mask_layer], 
+                    [ self.decoderRGB  (self.keras.layers.Concatenate()([x1,x2]) ),
+                      self.decoderMask (self.keras.layers.Concatenate()([m1,m2]) )
                     ])
         
+        x1,m1 = self.decoderCommonA (inter_B_A)
+        x2,m2 = self.decoderCommonB (inter_B_A)
         self.autoencoder_dst     = self.keras.models.Model([ae_input_layer,mask_layer], 
-                   [ self.decoderRGB (
-                       self.keras.layers.Concatenate()(
-                                [ self.decoderCommonA (inter_B_A), 
-                                  self.decoderCommonB (inter_B_A) ])
-                     ), 
-                     self.decoderMask(inter_B_A)] )
+                    [ self.decoderRGB  (self.keras.layers.Concatenate()([x1,x2]) ),
+                      self.decoderMask (self.keras.layers.Concatenate()([m1,m2]) )
+                    ])
         
         if self.is_training_mode:
             self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
@@ -197,28 +191,17 @@ class Model(ModelBase):
     def Intermediate(self):
         input_layer = self.keras.layers.Input(shape=(None, 4 * 4 * 1024))
         x = input_layer
-        x = self.keras.layers.Dense(1536)(x)
+        x = self.keras.layers.Dense(1024)(x)
         x = self.keras.layers.Dense(4 * 4 * 512)(x)
         x = self.keras.layers.Reshape((4, 4, 512))(x)
             
         return self.keras.models.Model(input_layer, x)
-    
-    def DecoderMask(self):
-        input_ = self.keras.layers.Input(shape=(4, 4, 1024))        
-        y = input_
-        y = upscale(self.keras, y, 256)
-        y = upscale(self.keras, y, 128)
-        y = upscale(self.keras, y, 64)
-        y = upscale(self.keras, y, 32)
-        y = upscale(self.keras, y, 16)
-        y = self.keras.layers.convolutional.Conv2D( 1, kernel_size=5, padding='same', activation='sigmoid' )(y)
-        return self.keras.models.Model(input_, [y])
 
     def DecoderCommon(self): 
         input_ = self.keras.layers.Input(shape=(4, 4, 1024))
         x = input_
-        x = upscale(self.keras, x, 384)
-        x = res(self.keras, x, 384)
+        x = upscale(self.keras, x, 512)
+        x = res(self.keras, x, 512)
         x = upscale(self.keras, x, 256)
         x = res(self.keras, x, 256)
         x = upscale(self.keras, x, 128)
@@ -226,8 +209,16 @@ class Model(ModelBase):
         x = upscale(self.keras, x, 64)
         x = res(self.keras, x, 64)
         x = upscale(self.keras, x, 32)
-        x = res(self.keras, x, 32)
-        return self.keras.models.Model(input_, [x])
+        x = res(self.keras, x, 32)  
+        
+        y = input_
+        y = upscale(self.keras, y, 256)
+        y = upscale(self.keras, y, 128)
+        y = upscale(self.keras, y, 64)
+        y = upscale(self.keras, y, 32)
+        y = upscale(self.keras, y, 16)
+        
+        return self.keras.models.Model(input_, [x,y])
         
     def DecoderRGB(self): 
         input_ = self.keras.layers.Input(shape=(128, 128, 64))
@@ -240,3 +231,9 @@ class Model(ModelBase):
         x = input_
         x = self.keras.layers.convolutional.Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(x)
         return self.keras.models.Model(input_, [x])
+        
+    def DecoderMask(self):
+        input_ = self.keras.layers.Input(shape=(128, 128, 32))        
+        y = input_
+        y = self.keras.layers.convolutional.Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(y)
+        return self.keras.models.Model(input_, [y])

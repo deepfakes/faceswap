@@ -75,17 +75,17 @@ class ConverterMasked(ConverterBase):
         img_prd_face_mask_aaa = cv2.warpAffine( prd_face_mask_aaa, face_mat, img_size, np.zeros(img_bgr.shape, dtype=float), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC )
         img_prd_face_mask_aaa = np.clip (img_prd_face_mask_aaa, 0.0, 1.0)
             
-        img_mask_aaa = img_prd_face_mask_aaa
+        img_face_mask_aaa = img_prd_face_mask_aaa
         
         if debug:
-            debugs += [img_mask_aaa.copy()]
+            debugs += [img_face_mask_aaa.copy()]
         
-        img_mask_aaa [ img_mask_aaa <= 0.1 ] = 0.0
+        img_face_mask_aaa [ img_face_mask_aaa <= 0.1 ] = 0.0
             
-        img_mask_flatten_aaa = img_mask_aaa.copy()
-        img_mask_flatten_aaa[img_mask_flatten_aaa > 1.0] = 1.0
+        img_face_mask_flatten_aaa = img_face_mask_aaa.copy()
+        img_face_mask_flatten_aaa[img_face_mask_flatten_aaa > 0.9] = 1.0
 
-        maxregion = np.argwhere(img_mask_flatten_aaa==1.0)        
+        maxregion = np.argwhere(img_face_mask_flatten_aaa==1.0)        
 
         out_img = img_bgr.copy()
         if maxregion.size != 0:
@@ -106,7 +106,7 @@ class ConverterMasked(ConverterBase):
             if debug:
                 print ("ero = %d, blur = %d" % (ero, blur) )
                 
-            img_mask_blurry_aaa = img_mask_aaa
+            img_mask_blurry_aaa = img_face_mask_aaa
             if self.erode_mask:
                 if ero > 0:
                     img_mask_blurry_aaa = cv2.erode(img_mask_blurry_aaa, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(ero,ero)), iterations = 1 )
@@ -132,7 +132,7 @@ class ConverterMasked(ConverterBase):
                 prd_face_bgr = cv2.cvtColor(prd_face_bgr, cv2.COLOR_BGR2GRAY)
                 prd_face_bgr = np.repeat( np.expand_dims (prd_face_bgr, -1), (3,), -1 )
             
-            if 'hist-match' in self.mode:
+            if self.mode == 'hist-match' or self.mode == 'hist-match-bw':
                 if debug:
                     debugs += [ cv2.warpAffine( prd_face_bgr, face_mat, img_size, np.zeros(img_bgr.shape, dtype=np.float32), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT ) ]
                     
@@ -142,9 +142,6 @@ class ConverterMasked(ConverterBase):
                     hist_mask_a *= prd_face_mask_a
 
                 new_prd_face_bgr = image_utils.color_hist_match(prd_face_bgr*hist_mask_a, dst_face_bgr*hist_mask_a )
-            
-                #if self.masked_hist_match:
-                #    new_prd_face_bgr += prd_face_bgr*(1-hist_mask_a)
 
                 prd_face_bgr = new_prd_face_bgr
                     
@@ -157,11 +154,11 @@ class ConverterMasked(ConverterBase):
                 debugs += [out_img.copy()]
                 debugs += [img_mask_blurry_aaa.copy()]
 
-            if self.mode == 'seamless':
-                out_img = np.clip( img_bgr*(1-img_mask_aaa) + (out_img*img_mask_aaa) , 0, 1.0 )
+            if self.mode == 'seamless' or self.mode == 'seamless-hist-match':
+                out_img = np.clip( img_bgr*(1-img_face_mask_aaa) + (out_img*img_face_mask_aaa) , 0, 1.0 )
                 if debug:
                     debugs += [out_img.copy()]
-                out_img = cv2.seamlessClone( (out_img*255).astype(np.uint8), (img_bgr*255).astype(np.uint8), (img_mask_flatten_aaa*255).astype(np.uint8), (masky,maskx) , cv2.NORMAL_CLONE )
+                out_img = cv2.seamlessClone( (out_img*255).astype(np.uint8), (img_bgr*255).astype(np.uint8), (img_face_mask_flatten_aaa*255).astype(np.uint8), (masky,maskx) , cv2.NORMAL_CLONE )
                 out_img = out_img.astype(np.float32) / 255.0
                 
                 if debug:
@@ -176,7 +173,12 @@ class ConverterMasked(ConverterBase):
             
             out_img =  np.clip( img_bgr*(1-img_mask_blurry_aaa) + (out_img*img_mask_blurry_aaa) , 0, 1.0 )
 
-             
+            if self.mode == 'seamless-hist-match':
+                out_face_bgr = cv2.warpAffine( out_img, face_mat, (self.output_size, self.output_size) )                
+                new_out_face_bgr = image_utils.color_hist_match(out_face_bgr, dst_face_bgr )                
+                new_out = cv2.warpAffine( new_out_face_bgr, face_mat, img_size, img_bgr.copy(), cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
+                out_img =  np.clip( img_bgr*(1-img_mask_blurry_aaa) + (new_out*img_mask_blurry_aaa) , 0, 1.0 )
+ 
         if debug:
             debugs += [out_img.copy()]
             

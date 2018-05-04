@@ -115,9 +115,10 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
                     
             ar = np.delete ( ar, idxs_to_remove)
 
-        unrandomized_d_landmarks = d_landmarks.copy()
+        unmodified_d_landmarks = d_landmarks.copy()
  
         #randomizing d_landmarks
+        '''
         d_landmarks = d_landmarks.copy()
         for idx in idx_list[:]:
             d_l = d_landmarks[idx]
@@ -139,24 +140,25 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
             if not (s_l[0] >= 1 and s_l[0] <= w-2 and s_l[1] >= 1 and s_l[1] <= w-2) or \
                not (d_l[0] >= 1 and d_l[0] <= w-2 and d_l[1] >= 1 and d_l[1] <= w-2):
                 idx_list = np.delete (idx_list, np.argwhere (idx_list == idx)[:,0] )      
-    
+        '''
         s_landmarks = s_landmarks[idx_list]
         d_landmarks = d_landmarks[idx_list]
-        unrandomized_d_landmarks = unrandomized_d_landmarks[idx_list]
-
+        unmodified_d_landmarks = unmodified_d_landmarks[idx_list]
+        
         #4 anchors for warper
         edgeAnchors = np.array ( [ (0,0), (0,h-1), (w-1,h-1), (w-1,0)] )
         
         s_landmarks_anchored = np.concatenate ((edgeAnchors, s_landmarks)) 
         d_landmarks_anchored = np.concatenate ((edgeAnchors, d_landmarks)) 
-        unrandomized_d_landmarks_anchored = np.concatenate ((edgeAnchors, unrandomized_d_landmarks)) 
+        unmodified_d_landmarks_anchored = np.concatenate ((edgeAnchors, unmodified_d_landmarks)) 
 
         if debug:
-            debug_image = image_utils.morph_by_points (s_image, s_landmarks_anchored, unrandomized_d_landmarks_anchored )
+            debug_image = image_utils.morph_by_points (s_image, s_landmarks_anchored, unmodified_d_landmarks_anchored )
         else:
             debug_image = None
         
-        warped = image_utils.morph_by_points (s_image, s_landmarks_anchored, d_landmarks_anchored)
+        #warped = image_utils.morph_by_points (s_image, s_landmarks_anchored, d_landmarks_anchored)
+        warped = image_utils.morph_by_points (s_image, s_landmarks_anchored, unmodified_d_landmarks_anchored)
 
         #embedding mask as 4 channel
         s_image = np.concatenate( (s_image,
@@ -166,6 +168,25 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
         warped = np.concatenate( (warped,
                                     cv2.fillConvexPoly( np.zeros(warped.shape[0:2]+(1,),dtype=np.float32), cv2.convexHull (d_landmarks_original), (1,) ))
                                    , -1 )
+                                   
+        #
+        cell_size = 32
+        cell_count = w // cell_size + 1
+        
+        grid_points = np.linspace( 0, w, cell_count)
+        mapx = np.broadcast_to(grid_points, (cell_count, cell_count)).copy()
+        mapy = mapx.T
+        
+        mapx[1:-1,1:-1] = mapx[1:-1,1:-1] + np.random.uniform(low=-cell_size*0.2, high=cell_size*0.2, size=(cell_count-2, cell_count-2))
+        mapy[1:-1,1:-1] = mapy[1:-1,1:-1] + np.random.uniform(low=-cell_size*0.2, high=cell_size*0.2, size=(cell_count-2, cell_count-2))
+
+        half_cell_size = cell_size // 2
+        
+        mapx = cv2.resize(mapx, (w+cell_size,)*2 )[half_cell_size:-half_cell_size-1,half_cell_size:-half_cell_size-1].astype(np.float32)
+        mapy = cv2.resize(mapy, (w+cell_size,)*2 )[half_cell_size:-half_cell_size-1,half_cell_size:-half_cell_size-1].astype(np.float32)
+        #target_image = cv2.remap(s_image, mapx, mapy, cv2.INTER_LINEAR )
+        warped = cv2.remap(warped, mapx, mapy, cv2.INTER_LINEAR )
+        #
                                    
         random_transform_mat = cv2.getRotationMatrix2D((w // 2, w // 2), rotation, scale)
         random_transform_mat[:, 2] += (tx*w, ty*w)
