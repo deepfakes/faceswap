@@ -36,7 +36,6 @@ class ModelBase(object):
         self.model_path = model_path
         self.model_data_path = Path( self.get_strpath_storage_for_file('data.dat') )
         
-        
         self.training_data_src_path = training_data_src_path
         self.training_data_dst_path = training_data_dst_path
         self.training_datas = [None]*TrainingDataType.QTY
@@ -76,8 +75,7 @@ class ModelBase(object):
                 if self.epoch == 0:
                     for filename in Path_utils.get_image_paths(self.preview_history_path):
                         Path(filename).unlink()    
-            
-        
+
         self.multi_gpu = multi_gpu
    
         gpu_idx = force_best_gpu_idx if (force_best_gpu_idx >= 0 and gpufmkmgr.isValidDeviceIdx(force_best_gpu_idx)) else gpufmkmgr.getBestDeviceIdx()
@@ -85,8 +83,7 @@ class ModelBase(object):
         is_gpu_low_mem = (gpu_total_vram_gb < 4)
         
         self.gpu_total_vram_gb = gpu_total_vram_gb
-        
-        
+
         if self.epoch == 0: 
             #first run         
             self.options['created_vram_gb'] = gpu_total_vram_gb
@@ -108,7 +105,6 @@ class ModelBase(object):
                     self.multi_gpu = False
             else:
                 self.gpu_idxs = [gpu_idx]
-
 
         self.tf = gpufmkmgr.import_tf(self.gpu_idxs,allow_growth=False)
         self.keras = gpufmkmgr.import_keras()   
@@ -133,7 +129,6 @@ class ModelBase(object):
             if self.sample_for_preview is None:
                 self.sample_for_preview = self.generate_next_sample()
                 
-        
         print ("===== Model summary =====")
         print ("== Model name: " + self.get_model_name())
         print ("==")

@@ -5,6 +5,7 @@ from utils import iter_utils
 import numpy as np
 import cv2
 import random
+import traceback
 
 '''
 You can implement your own TrainingDataGenerator

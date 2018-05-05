@@ -66,7 +66,7 @@ if __name__ == "__main__":
             debug              = arguments.debug,
             #**options
             batch_size         = arguments.batch_size,
-            write_preview_history=arguments.write_preview_history,
+            write_preview_history = arguments.write_preview_history,
             target_epoch       = arguments.target_epoch,
             save_interval_min  = arguments.save_interval_min,
             force_best_gpu_idx = arguments.force_best_gpu_idx,

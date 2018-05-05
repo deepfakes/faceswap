@@ -34,7 +34,7 @@ class Model(ModelBase):
                 self.batch_size = 16
             else: 
                 self.batch_size = 32
-                
+
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
 
