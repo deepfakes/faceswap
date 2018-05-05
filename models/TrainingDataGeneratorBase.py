@@ -73,7 +73,10 @@ class TrainingDataGeneratorBase(object):
 
                     
                     if sample is not None:          
-                        x = self.onProcessSample (sample, self.debug)
+                        try:
+                            x = self.onProcessSample (sample, self.debug)
+                        except:
+                            raise Exception ("Exception occured in sample %s. Error: %s" % (sample.filename, traceback.format_exc() ) )
                         
                         if type(x) != tuple and type(x) != list:
                             raise Exception('TrainingDataGenerator.onProcessSample() returns NOT tuple/list')
