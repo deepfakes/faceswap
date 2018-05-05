@@ -97,6 +97,7 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
                 idx_list = np.delete (idx_list, np.argwhere (idx_list == idx)[:,0] )
                 
         #choose landmarks which not close to each other in random dist
+        '''
         dist = np.random.ranf()*8.0 + 8.0
         chk_dist = dist*dist   
         
@@ -114,8 +115,9 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
                     idxs_to_remove.append (i)
                     
             ar = np.delete ( ar, idxs_to_remove)
+        '''
 
-        unmodified_d_landmarks = d_landmarks.copy()
+        #unmodified_d_landmarks = d_landmarks.copy()
  
         #randomizing d_landmarks
         '''
@@ -130,7 +132,7 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
             dl = (d_l+dxy).astype(np.int)
             if (dl[0] >= 1 and dl[0] <= w-2 and dl[1] >= 1 and dl[1] <= w-2):
                 d_landmarks[idx] = dl
-
+        '''
 
         #remove outside and boundary points
         for idx in idx_list[:]:
@@ -140,25 +142,25 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
             if not (s_l[0] >= 1 and s_l[0] <= w-2 and s_l[1] >= 1 and s_l[1] <= w-2) or \
                not (d_l[0] >= 1 and d_l[0] <= w-2 and d_l[1] >= 1 and d_l[1] <= w-2):
                 idx_list = np.delete (idx_list, np.argwhere (idx_list == idx)[:,0] )      
-        '''
+        
         s_landmarks = s_landmarks[idx_list]
         d_landmarks = d_landmarks[idx_list]
-        unmodified_d_landmarks = unmodified_d_landmarks[idx_list]
+        #unmodified_d_landmarks = unmodified_d_landmarks[idx_list]
         
         #4 anchors for warper
         edgeAnchors = np.array ( [ (0,0), (0,h-1), (w-1,h-1), (w-1,0)] )
         
         s_landmarks_anchored = np.concatenate ((edgeAnchors, s_landmarks)) 
         d_landmarks_anchored = np.concatenate ((edgeAnchors, d_landmarks)) 
-        unmodified_d_landmarks_anchored = np.concatenate ((edgeAnchors, unmodified_d_landmarks)) 
+        #unmodified_d_landmarks_anchored = np.concatenate ((edgeAnchors, unmodified_d_landmarks)) 
 
         if debug:
-            debug_image = image_utils.morph_by_points (s_image, s_landmarks_anchored, unmodified_d_landmarks_anchored )
+            debug_image = image_utils.morph_by_points (s_image, s_landmarks_anchored, d_landmarks_anchored ) #unmodified_d_landmarks_anchored )
         else:
             debug_image = None
         
         #warped = image_utils.morph_by_points (s_image, s_landmarks_anchored, d_landmarks_anchored)
-        warped = image_utils.morph_by_points (s_image, s_landmarks_anchored, unmodified_d_landmarks_anchored)
+        warped = image_utils.morph_by_points (s_image, s_landmarks_anchored, d_landmarks_anchored ) #unmodified_d_landmarks_anchored)
 
         #embedding mask as 4 channel
         s_image = np.concatenate( (s_image,
