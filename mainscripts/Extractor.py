@@ -36,63 +36,64 @@ def extract_pass_process(sq, cq):
             filename_path = Path( data[0] )
 
             if not filename_path.exists():
-                cq.put ( {'op': 'error', 'close': False, 'is_file_not_found' : True, 'data' : obj['data'], 'message': 'Failed to extract %s, reason: file not found.' % ( str(filename_path) ) } )
+                cq.put ( {'op': 'error', 'close': False, 'message': 'Failed to extract %s, reason: file not found.' % ( str(filename_path) ) } )
             else:                
                 try:
                     image = cv2.imread( str(filename_path) )
-                    
-
-                    if type == 'rects':
-                        rects = e.extract_from_bgr (image)    
-                        cq.put ( {'op': 'extract_success', 'data' : obj['data'], 'result' : [str(filename_path), rects] } )
-                        
-                    elif type == 'landmarks':
-                        rects = data[1]   
-                        landmarks = e.extract_from_bgr (image, rects)                    
-                        cq.put ( {'op': 'extract_success', 'data' : obj['data'], 'result' : [str(filename_path), landmarks] } )
-
-                    elif type == 'final':     
-                        result = []
-                        faces = data[1]
-                        
-                        if debug:
-                            debug_output_file = '{}_{}'.format( str(Path(str(output_path) + '_debug') / filename_path.stem),  'debug.png')
-                            debug_image = image.copy()
+                    if image is None:
+                        cq.put ( {'op': 'error', 'close': False, 'message': 'Failed to extract %s, reason: cv2.imread() fail.' % ( str(filename_path) ) } )
+                    else:
+                        if type == 'rects':
+                            rects = e.extract_from_bgr (image)    
+                            cq.put ( {'op': 'extract_success', 'data' : obj['data'], 'result' : [str(filename_path), rects] } )
                             
-                        for (face_idx, face) in enumerate(faces):                            
-                            rect = face[0]
-                            image_landmarks = np.array(face[1])
-                            image_to_face_mat = facelib.LandmarksProcessor.get_transform_mat (image_landmarks, image_size, face_type)
-                            output_file = '{}_{}{}'.format(str(output_path / filename_path.stem), str(face_idx), '.png')
+                        elif type == 'landmarks':
+                            rects = data[1]   
+                            landmarks = e.extract_from_bgr (image, rects)                    
+                            cq.put ( {'op': 'extract_success', 'data' : obj['data'], 'result' : [str(filename_path), landmarks] } )
 
+                        elif type == 'final':     
+                            result = []
+                            faces = data[1]
+                            
                             if debug:
-                                facelib.LandmarksProcessor.draw_rect_landmarks (debug_image, rect, image_landmarks, image_size, face_type)
-   
-                            face_image = cv2.warpAffine(image, image_to_face_mat, (image_size, image_size))
-                            face_image_landmarks = facelib.LandmarksProcessor.transform_points (image_landmarks, image_to_face_mat)
-                            
-                            cv2.imwrite(output_file, face_image)
-                            
-                            a_png = AlignedPNG.load (output_file)
-                            
-                            d = {
-                              'type': 'face',
-                              'landmarks': face_image_landmarks.tolist(),
-                              'yaw_value': facelib.LandmarksProcessor.calc_face_yaw (face_image_landmarks),
-                              'pitch_value': facelib.LandmarksProcessor.calc_face_pitch (face_image_landmarks),
-                              'source_filename': filename_path.name,
-                              'source_rect': rect,
-                              'source_landmarks': image_landmarks.tolist()
-                            }
-                            a_png.setFaceswapDictData (d)
-                            a_png.save(output_file)  
+                                debug_output_file = '{}_{}'.format( str(Path(str(output_path) + '_debug') / filename_path.stem),  'debug.png')
+                                debug_image = image.copy()
                                 
-                            result.append (output_file)
-                            
-                        if debug:
-                            cv2.imwrite(debug_output_file, debug_image )
-                            
-                        cq.put ( {'op': 'extract_success', 'data' : obj['data'], 'result' : result} )
+                            for (face_idx, face) in enumerate(faces):                            
+                                rect = face[0]
+                                image_landmarks = np.array(face[1])
+                                image_to_face_mat = facelib.LandmarksProcessor.get_transform_mat (image_landmarks, image_size, face_type)
+                                output_file = '{}_{}{}'.format(str(output_path / filename_path.stem), str(face_idx), '.png')
+
+                                if debug:
+                                    facelib.LandmarksProcessor.draw_rect_landmarks (debug_image, rect, image_landmarks, image_size, face_type)
+       
+                                face_image = cv2.warpAffine(image, image_to_face_mat, (image_size, image_size))
+                                face_image_landmarks = facelib.LandmarksProcessor.transform_points (image_landmarks, image_to_face_mat)
+                                
+                                cv2.imwrite(output_file, face_image)
+                                
+                                a_png = AlignedPNG.load (output_file)
+                                
+                                d = {
+                                  'type': 'face',
+                                  'landmarks': face_image_landmarks.tolist(),
+                                  'yaw_value': facelib.LandmarksProcessor.calc_face_yaw (face_image_landmarks),
+                                  'pitch_value': facelib.LandmarksProcessor.calc_face_pitch (face_image_landmarks),
+                                  'source_filename': filename_path.name,
+                                  'source_rect': rect,
+                                  'source_landmarks': image_landmarks.tolist()
+                                }
+                                a_png.setFaceswapDictData (d)
+                                a_png.save(output_file)  
+                                    
+                                result.append (output_file)
+                                
+                            if debug:
+                                cv2.imwrite(debug_output_file, debug_image )
+                                
+                            cq.put ( {'op': 'extract_success', 'data' : obj['data'], 'result' : result} )
                     
                 except Exception as e:
                     cq.put ( {'op': 'error', 'close': True, 'data' : obj['data'], 'message' : 'Failed to extract %s, reason: %s. \r\n%s' % ( str(filename_path), str(e), traceback.format_exc() ) } )
@@ -239,12 +240,10 @@ def extract_pass(input_data, type, image_size, face_type, debug, multi_gpu, dete
                     progress_bar.update(1)
 
                 elif obj_op == 'error':
-                    is_file_not_found = ('is_file_not_found' in obj.keys() and obj['is_file_not_found'] == True)
                     print (obj['message'])
                     if 'data' in obj.keys():
                         filename = obj['data'][0]
-                        if not is_file_not_found:
-                            input_data.insert(0, obj['data'])                    
+                        input_data.insert(0, obj['data'])                    
                     if obj['close'] == True:
                         p['process'].terminate()
                         p['process'].join()
