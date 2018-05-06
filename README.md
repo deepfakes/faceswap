@@ -37,6 +37,8 @@
 ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
 ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_0.jpg)
 ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_1.jpg)
+Cage fail case:
+![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Cage_fail.jpg)
 
 ### **Sort tool**:
 
