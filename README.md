@@ -34,11 +34,12 @@
 - **LIAEF128 (5GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
 
 - **MIAEF128 (5GB+)** - as LIAEF128, but also it tries to match brightness/color features.
-![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
-![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_0.jpg)
-![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_1.jpg)
-Cage fail case:
-![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Cage_fail.jpg)
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
+* Ford success case:
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_0.jpg)
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_1.jpg)
+* Cage fail case:
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Cage_fail.jpg)
 
 ### **Sort tool**:
 
