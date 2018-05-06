@@ -51,7 +51,7 @@ Best practice for gather src faceset:
 1) delete first unsorted aligned groups of images what you can to delete. Dont touch target face mixed with others.
 2) `blur` -> delete ~half of them
 3) `hist` -> delete groups of similar and leave only target face
-4) `hist-dissim` -> leave only first 1000-2000 faces
+4) `hist-dissim` -> leave only first **1000-1500 faces**, because number of src faces can affect result.
 5) `face-yaw` -> just for finalize faceset
 
 Best practice for dst faces:

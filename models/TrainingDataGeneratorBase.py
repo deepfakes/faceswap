@@ -67,11 +67,9 @@ class TrainingDataGeneratorBase(object):
                     if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.DST_ONLY_1:
                         if len(shuffle_idxs) == 0:
                             shuffle_idxs = [ i for i in range(0, data_len) ]
-                            random.shuffle(shuffle_idxs)
-                            
+                            random.shuffle(shuffle_idxs)                            
                         idx = shuffle_idxs.pop()
                         sample = self.data[ idx ]
-
                     
                     if sample is not None:          
                         try:
