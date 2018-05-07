@@ -86,6 +86,7 @@ class Convert(object):
                                                      avg_color_adjust=args.avg_color_adjust)
         return converter
 
+
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
@@ -129,11 +130,13 @@ class Convert(object):
             return image
 
         image = self.images.rotate_image(image, face.r)
+        
+        size = 128 if (self.args.trainer.strip().lower() in ('gan128', 'originalhighres')) else 64
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
         image = converter.patch_image(image,
                                       face,
-                                      64 if "128" not in self.args.trainer else 128)
+                                      size)
         image = self.images.rotate_image(image, face.r, reverse=True)
         return image
 
