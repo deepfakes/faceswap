@@ -74,4 +74,6 @@ Best practice for dst faces:
 
 ### **Prebuilt binary**:
 
-Windows 7,8,8.1,10 zero dependency binary except NVidia Video Drivers can be downloaded from torrent, magnet link: 
+Windows 7,8,8.1,10 zero dependency binary except NVidia Video Drivers can be downloaded from torrent.
+magnet:?xt=urn:btih:8204495FB6B1D1F59D6F484157268E65191D512E
+Torrent page: https://rutracker.org/forum/viewtopic.php?t=5558863
