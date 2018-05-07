@@ -38,7 +38,7 @@
 - **DF (4GB+)** - @dfaker model. Fullface 128 model. Contains DSSIM loss func which excludes background around face.
 * DF example - later
 
-- **LIAEF128 (5GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
+- **LIAEF128 (4GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
 * LIAEF128 Cage:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/LIAEF128_Cage_0.jpg)
 
