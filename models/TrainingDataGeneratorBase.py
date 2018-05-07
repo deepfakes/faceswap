@@ -54,6 +54,9 @@ class TrainingDataGeneratorBase(object):
         if data_len == 0:
             raise ValueError('No training data provided.')
             
+        if (self.trainingdatatype == TrainingDataType.SRC or self.trainingdatatype == TrainingDataType.SRC_WITH_NEAREST) and data_len > 1500:
+            print ("Warning, your src faceset contains more than 1500 faces. This can make worse result. Reduce it by sort --by hist-dissim.")
+            
         if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.DST_ONLY_1:
             shuffle_idxs = []          
             

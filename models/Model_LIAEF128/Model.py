@@ -21,19 +21,19 @@ class Model(ModelBase):
  
     #override
     def onInitialize(self, batch_size=-1, **in_options):
-        if self.gpu_total_vram_gb < 5:
-            raise Exception ('Sorry, this model works only on 5GB+ GPU')
+        if self.gpu_total_vram_gb < 4:
+            raise Exception ('Sorry, this model works only on 4GB+ GPU')
             
         self.batch_size = batch_size
         if self.batch_size == 0:          
-            if self.gpu_total_vram_gb == 5:
-                self.batch_size = 4
-            elif self.gpu_total_vram_gb == 6:
+            if self.gpu_total_vram_gb == 4:
                 self.batch_size = 8
-            elif self.gpu_total_vram_gb < 12: 
+            elif self.gpu_total_vram_gb == 5:
                 self.batch_size = 16
-            else: 
+            elif self.gpu_total_vram_gb == 6:
                 self.batch_size = 32
+            else: 
+                self.batch_size = 64
 
         ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
@@ -137,14 +137,25 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', erode_mask=True, blur_mask=True, default_erode_mask_modifier=30, default_blur_mask_modifier=0, clip_border_mask_per=0.046875, masked_hist_match=False, **in_options)
+        
+        if 'masked_hist_match' not in in_options.keys() or in_options['masked_hist_match'] == None:
+            in_options['masked_hist_match'] = True
+
+        if 'erode_mask_modifier' not in in_options.keys():
+            in_options['erode_mask_modifier'] = 0
+        in_options['erode_mask_modifier'] += 30
+            
+        if 'blur_mask_modifier' not in in_options.keys():
+            in_options['blur_mask_modifier'] = 0
+            
+        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', clip_border_mask_per=0.046875, **in_options)
   
 
     def Encoder(self, input_layer,):
         x = input_layer
+        x = conv(self.keras, x, 128)
         x = conv(self.keras, x, 256)
         x = conv(self.keras, x, 512)
-        x = conv(self.keras, x, 768)
         x = conv(self.keras, x, 1024)
         x = self.keras.layers.Flatten()(x)
         return self.keras.models.Model(input_layer, x)
@@ -152,7 +163,7 @@ class Model(ModelBase):
     def Intermediate(self):
         input_layer = self.keras.layers.Input(shape=(None, 4 * 4 * 1024))
         x = input_layer
-        x = self.keras.layers.Dense(1536)(x)
+        x = self.keras.layers.Dense(1024)(x)
         x = self.keras.layers.Dense(4 * 4 * 512)(x)
         x = self.keras.layers.Reshape((4, 4, 512))(x)
             

@@ -10,7 +10,7 @@
 
 - face data embedded to png files, so you can sort them by `sort` command, or you can delete them, then these faces will not be converted in destination images
 
-- automatic GPU manager, which chooses best gpu(s) and supports --multi-gpu
+- automatic GPU manager, chooses best gpu(s) and supports --multi-gpu
 
 - new preview window
 
@@ -23,22 +23,32 @@
 [![Watch the video](https://i.imgur.com/BDrPKR2.jpg)](https://webm.video/i/ogL0DL.mp4)
 ![Result](https://user-images.githubusercontent.com/8076202/38454756-0fa7a86c-3a7e-11e8-9065-182b4a8a7a43.gif)
 
+- new models
+
 ### **Model types**:
 
 - **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but with DSSIM Loss func and separated mask decoder + better ConverterMasked.
+* H64 Robert Downey Jr.:
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/H64_Downey_0.jpg)
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/H64_Downey_1.jpg)
 
 - **H128 (3GB+)** - as H64, but in 128 resolution. Better face details.
+* H128 example - later
 
 - **DF (4GB+)** - @dfaker model. Fullface 128 model. Contains DSSIM loss func which excludes background around face.
+* DF example - later
 
 - **LIAEF128 (5GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
+* LIAEF128 Cage:
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/LIAEF128_Cage_0.jpg)
 
 - **MIAEF128 (5GB+)** - as LIAEF128, but also it tries to match brightness/color features.
+* MIAEF128 model diagramm:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
-* Ford success case:
-* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_0.jpg)
-* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_example_1.jpg)
-* Cage fail case:
+* MIAEF128 Ford success case:
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Ford_0.jpg)
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Ford_1.jpg)
+* MIAEF128 Cage fail case:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Cage_fail.jpg)
 
 ### **Sort tool**:
@@ -61,3 +71,7 @@ Best practice for dst faces:
 
 1) delete first unsorted aligned groups of images what you can to delete. Dont touch target face mixed with others.
 2) `hist` -> delete groups of similar and leave only target face
+
+### **Prebuilt binary**:
+
+Windows 7,8,8.1,10 zero dependency binary except NVidia Video Drivers can be downloaded from torrent, magnet link: 

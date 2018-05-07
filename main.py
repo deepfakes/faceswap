@@ -12,7 +12,15 @@ if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] 
 class fixPathAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(os.path.expanduser(values)))
-            
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+        
 if __name__ == "__main__":
     os_utils.set_process_lowest_prio()
 
@@ -90,8 +98,40 @@ if __name__ == "__main__":
     train_parser.set_defaults (func=process_train)
     
     def process_convert(arguments):
+        if arguments.ask_for_params:
+            try:
+                mode = int ( input ("Choose mode: (1) hist match, (2) hist match bw, (3) seamless (default), (4) seamless hist match : ") )
+            except:
+                mode = 3
+                
+            if mode == 1:
+                arguments.mode = 'hist-match'
+            elif mode == 2:
+                arguments.mode = 'hist-match-bw'
+            elif mode == 3:
+                arguments.mode = 'seamless'
+            elif mode == 4:
+                arguments.mode = 'seamless-hist-match'
+            
+            if arguments.mode == 'hist-match' or arguments.mode == 'hist-match-bw':
+                try:
+                    choice = int ( input ("Masked hist match? [0..1] (default - model choice) : ") )
+                    arguments.masked_hist_match = (choice != 0)
+                except:
+                    arguments.masked_hist_match = None               
+            
+            try:
+                arguments.erode_mask_modifier = int ( input ("Choose erode mask modifier [-100..100] (default 0) : ") )
+            except:
+                arguments.erode_mask_modifier = 0
+                
+            try:
+                arguments.blur_mask_modifier = int ( input ("Choose blur mask modifier [-100..200] (default 0) : ") )
+            except:
+                arguments.blur_mask_modifier = 0
+    
         arguments.erode_mask_modifier = np.clip ( int(arguments.erode_mask_modifier), -100, 100)
-        arguments.blur_mask_modifier = np.clip ( int(arguments.blur_mask_modifier), -100, 100)
+        arguments.blur_mask_modifier = np.clip ( int(arguments.blur_mask_modifier), -100, 200)
         
         from mainscripts import Converter
         Converter.main (
@@ -102,6 +142,7 @@ if __name__ == "__main__":
             model_name=arguments.model_name, 
             debug = arguments.debug,
             mode = arguments.mode,
+            masked_hist_match = arguments.masked_hist_match,
             erode_mask_modifier = arguments.erode_mask_modifier,
             blur_mask_modifier = arguments.blur_mask_modifier
             )
@@ -112,10 +153,12 @@ if __name__ == "__main__":
     convert_parser.add_argument('--aligned-dir', required=True, action=fixPathAction, dest="aligned_dir", help="Aligned directory. This is where the aligned files stored.")
     convert_parser.add_argument('--model-dir', required=True, action=fixPathAction, dest="model_dir", help="Model dir.")
     convert_parser.add_argument('--model', required=True, dest="model_name", choices=Path_utils.get_all_dir_names_startswith ( Path(__file__).parent / 'models' , 'Model_'), help="Type of model")
+    convert_parser.add_argument('--ask-for-params', action="store_true", dest="ask_for_params", default=False, help="Ask for params.")    
     convert_parser.add_argument('--mode',  dest="mode", choices=['seamless','hist-match', 'hist-match-bw','seamless-hist-match'], default='seamless', help="Face overlaying mode. Seriously affects result.")
+    convert_parser.add_argument('--masked-hist-match', type=str2bool, nargs='?', const=True, default=None, help="True or False. Excludes background for hist match. Default - model decide.")
     convert_parser.add_argument('--erode-mask-modifier', type=int, dest="erode_mask_modifier", default=0, help="Automatic erode mask modifier. Valid range [-100..100].")
-    convert_parser.add_argument('--blur-mask-modifier', type=int, dest="blur_mask_modifier", default=0, help="Automatic blur mask modifier. Valid range [-100..100].")    
-    convert_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Debug converter.")   
+    convert_parser.add_argument('--blur-mask-modifier', type=int, dest="blur_mask_modifier", default=0, help="Automatic blur mask modifier. Valid range [-100..200].")    
+    convert_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Debug converter.")
     
     convert_parser.set_defaults(func=process_convert)
 

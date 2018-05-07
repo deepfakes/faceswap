@@ -17,10 +17,8 @@ class ConverterMasked(ConverterBase):
                         erode_mask = True, 
                         blur_mask = True,
                         clip_border_mask_per = 0,
-                        masked_hist_match = None, 
+                        masked_hist_match = False, 
                         mode='seamless', 
-                        default_erode_mask_modifier=0,
-                        default_blur_mask_modifier=0,
                         erode_mask_modifier=0, 
                         blur_mask_modifier=0,                         
                         **in_options):
@@ -33,11 +31,9 @@ class ConverterMasked(ConverterBase):
         self.blur_mask = blur_mask
         self.clip_border_mask_per = clip_border_mask_per
         self.masked_hist_match = masked_hist_match
-        if self.masked_hist_match is None:
-            self.masked_hist_match = self.erode_mask            
         self.mode = mode
-        self.erode_mask_modifier = default_erode_mask_modifier + erode_mask_modifier
-        self.blur_mask_modifier = default_blur_mask_modifier + blur_mask_modifier
+        self.erode_mask_modifier = erode_mask_modifier
+        self.blur_mask_modifier = blur_mask_modifier
         
         if self.erode_mask_modifier != 0 and not self.erode_mask:
             print ("Erode mask modifier not used in this model.")

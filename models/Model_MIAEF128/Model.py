@@ -176,7 +176,18 @@ class Model(ModelBase):
     #override
     def get_converter(self, **in_options):
         from models import ConverterMasked
-        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', erode_mask=True, blur_mask=True, clip_border_mask_per=0.046875, masked_hist_match=False, **in_options)
+        
+        if 'masked_hist_match' not in in_options.keys() or in_options['masked_hist_match'] == None:
+            in_options['masked_hist_match'] = False
+
+        if 'erode_mask_modifier' not in in_options.keys():
+            in_options['erode_mask_modifier'] = 0
+        in_options['erode_mask_modifier'] += 30
+            
+        if 'blur_mask_modifier' not in in_options.keys():
+            in_options['blur_mask_modifier'] = 0
+            
+        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', clip_border_mask_per=0.046875, **in_options)
   
 
     def Encoder(self, input_layer,):
