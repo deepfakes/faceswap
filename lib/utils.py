@@ -9,15 +9,22 @@ import warnings
 
 from pathlib import Path
 
+
+# Global variables
+_image_extensions = ['.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
+_video_extensions = ['.avi', '.flv', '.mkv', '.mov', '.mp4', '.mpeg', '.webm']
+
+
 def get_folder(path):
     """ Return a path to a folder, creating it if it doesn't exist """
     output_dir = Path(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
+
 def get_image_paths(directory, exclude=list(), debug=False):
     """ Return a list of images that reside in a folder """
-    image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+    image_extensions = _image_extensions
     exclude_names = [basename(Path(x).stem[:Path(x).stem.rfind('_')] +
         Path(x).suffix) for x in exclude]
     dir_contents = list()
@@ -37,6 +44,7 @@ def get_image_paths(directory, exclude=list(), debug=False):
 
     return dir_contents
 
+
 def backup_file(directory, filename):
     """ Backup a given file by appending .bk to the end """
     origfile = join(directory, filename)
@@ -45,6 +53,7 @@ def backup_file(directory, filename):
         os.remove(backupfile)
     if exists(origfile):
         os.rename(origfile, backupfile)
+
 
 def set_system_verbosity(loglevel):
     """ Set the verbosity level of tensorflow and suppresses
@@ -63,10 +72,11 @@ def set_system_verbosity(loglevel):
         for warncat in (FutureWarning, DeprecationWarning):
             warnings.simplefilter(action='ignore', category=warncat)
 
+
 class BackgroundGenerator(threading.Thread):
     """ Run a queue in the background. From:
         https://stackoverflow.com/questions/7323664/python-generator-pre-fetch """
-    def __init__(self, generator, prefetch=1): #See below why prefetch count is flawed
+    def __init__(self, generator, prefetch=1):  # See below why prefetch count is flawed
         threading.Thread.__init__(self)
         self.queue = Queue.Queue(prefetch)
         self.generator = generator
@@ -75,8 +85,9 @@ class BackgroundGenerator(threading.Thread):
 
     def run(self):
         """ Put until queue size is reached.
-            Note: put blocks only if put is called while queue has already reached max size
-            => this makes 2 prefetched items! One in the queue, one waiting for insertion! """
+            Note: put blocks only if put is called while queue has already
+            reached max size => this makes 2 prefetched items! One in the
+            queue, one waiting for insertion! """
         for item in self.generator:
             self.queue.put(item)
         self.queue.put(None)

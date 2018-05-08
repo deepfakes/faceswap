@@ -15,6 +15,7 @@ from ffmpy import FFprobe, FFmpeg, FFRuntimeError
 
 # faceswap imports
 from lib.cli import FileFullPaths, ComboFullPaths
+from lib.utils import _image_extensions, _video_extensions
 
 
 if sys.version_info[0] < 3:
@@ -28,9 +29,10 @@ class DataItem(object):
     A simple class used for storing the media data items and directories that
     Effmpeg uses for 'input', 'output' and 'ref_vid'.
     """
-    vid_ext = [".mp4", ".mpeg", ".webm", ".mkv", ".avi", ".flv"]
-    audio_ext = [".mp3", ".wav", ".flac"]
-    img_ext = [".png", ".bmp", ".jpg", ".jpeg"]
+    vid_ext = _video_extensions
+    # future option in effmpeg to use audio file for muxing
+    audio_ext = ['.aiff', '.flac', '.mp3', '.wav']
+    img_ext = _image_extensions
 
     def __init__(self, path=None, name=None, item_type=None, ext=None,
                  fps=None):
@@ -676,6 +678,8 @@ class Effmpeg(object):
             else:
                 raise ValueError("An unexpected FFRuntimeError occurred: "
                                  "{}".format(ffe))
+        except KeyboardInterrupt:
+            pass  # Do nothing if voluntary interruption
 
     @staticmethod
     def __convert_fps(fps):

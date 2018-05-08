@@ -7,7 +7,6 @@ import signal
 import subprocess
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
-import psutil
 
 from argparse import SUPPRESS
 from math import ceil, floor
@@ -994,6 +993,7 @@ class PreviewDisplay(object):
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
+    __group_processes = ["effmpeg"]
 
     def __init__(self, utils, calling_file="faceswap.py"):
         self.pathexecscript = os.path.join(PATHSCRIPT, calling_file)
@@ -1035,6 +1035,8 @@ class FaceswapControl(object):
                   'stderr': PIPE,
                   'bufsize': 1,
                   'universal_newlines': True}
+        if self.command in self.__group_processes:
+            kwargs['preexec_fn'] = os.setsid
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = Popen(self.args, **kwargs)
@@ -1083,7 +1085,7 @@ class FaceswapControl(object):
 
     def capture_loss(self, string):
         """ Capture loss values from stdout """
-        #TODO: Remove this hideous hacky fix. When the subprocess is terminated and
+        # TODO: Remove this hideous hacky fix. When the subprocess is terminated and
         # the loss dictionary is reset, 1 set of loss values ALWAYS slips through
         # and appends to the lossdict AFTER the subprocess has closed meaning that
         # checks on whether the dictionary is empty fail.
@@ -1094,7 +1096,7 @@ class FaceswapControl(object):
         #   sys.exit() on the stdout/err threads (no effect)
         #   sys.stdout/stderr.flush (no effect)
         #   thread.join (locks the whole process up, because the stdout thread
-        #       stubbonly refuses to release it's last line)
+        #   stubbornly refuses to release its last line)
 
         currentlenloss = len(self.utils.lossdict)
         if self.lenloss > currentlenloss:
@@ -1116,8 +1118,6 @@ class FaceswapControl(object):
 
     def terminate(self):
         """ Terminate the subprocess """
-        __nested_processes = ["effmpeg"]
-
         if self.command == 'train':
             print('Sending Exit Signal', flush=True)
             try:
@@ -1135,36 +1135,27 @@ class FaceswapControl(object):
                 return
             except ValueError as err:
                 print(err)
-        elif self.command in __nested_processes:
-            parent_pid = self.process.pid
-            parent = psutil.Process(parent_pid)
-            children = parent.children(recursive=True)
-            num_children = len(children)
-            print('Stopping sub-subprocesses...')
-            for i in range(num_children):
-                child = children[i]
-                print('Stopping sub-subprocess: {} of {}'.format(i + 1,
-                                                                 num_children))
-                try:
-                    child.terminate()
-                    child.wait(timeout=10)
-                    print('Terminated sub-subprocess:',
-                          '{} of {}'.format(i + 1, num_children))
-                except TimeoutExpired:
-                    print('Termination timed out. Killing sub-subprocess:',
-                          '{} of {}'.format(i + 1, num_children))
-                    child.kill()
-                    print('Killed sub-subprocesses:',
-                          '{} of {}'.format(i + 1, num_children))
-        print('Terminating Process...')
-        try:
-            self.process.terminate()
-            self.process.wait(timeout=10)
-            print('Terminated')
-        except TimeoutExpired:
-            print('Termination timed out. Killing Process...')
-            self.process.kill()
-            print('Killed')
+        elif self.command in self.__group_processes:
+            print('Terminating Process Group...')
+            pgid = os.getpgid(self.process.pid)
+            try:
+                os.killpg(pgid, signal.SIGINT)
+                self.process.wait(timeout=10)
+                print('Terminated')
+            except TimeoutExpired:
+                print('Termination timed out. Killing Process Group...')
+                os.killpg(pgid, signal.SIGKILL)
+                print('Killed')
+        else:
+            print('Terminating Process...')
+            try:
+                self.process.terminate()
+                self.process.wait(timeout=10)
+                print('Terminated')
+            except TimeoutExpired:
+                print('Termination timed out. Killing Process...')
+                self.process.kill()
+                print('Killed')
 
     def set_final_status(self, returncode):
         """ Set the status bar output based on subprocess return code """

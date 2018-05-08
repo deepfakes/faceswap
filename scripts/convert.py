@@ -3,6 +3,7 @@
 
 import re
 import os
+import sys
 from pathlib import Path
 
 from tqdm import tqdm
@@ -92,7 +93,7 @@ class Convert(object):
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        for filename in tqdm(self.images.input_images):
+        for filename in tqdm(self.images.input_images, file=sys.stdout):
             if not self.check_alignments(filename):
                 continue
             image = Utils.cv2_read_write('read', filename)
