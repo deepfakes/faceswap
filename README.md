@@ -45,7 +45,8 @@
 - **LIAEF128 (4GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
 * LIAEF128 Cage:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/LIAEF128_Cage_0.jpg)
-
+* LIAEF128 Cage video:
+* [![Watch the video](https://img.youtube.com/vi/lv0v4Pbyk_o/0.jpg)](https://youtu.be/lv0v4Pbyk_o)
 - **MIAEF128 (5GB+)** - as LIAEF128, but also it tries to match brightness/color features.
 * MIAEF128 model diagramm:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
