@@ -11,9 +11,12 @@ predictor_func:
 '''
 
 class ConverterMasked(ConverterBase):
-    def __init__(self, predictor_func, predictor_input_size, 
-                        output_size, 
-                        face_type, 
+
+    #override
+    def __init__(self,  predictor,
+                        predictor_input_size=0, 
+                        output_size=0, 
+                        face_type='full_face', 
                         erode_mask = True, 
                         blur_mask = True,
                         clip_border_mask_per = 0,
@@ -23,10 +26,11 @@ class ConverterMasked(ConverterBase):
                         blur_mask_modifier=0,                         
                         **in_options):
                         
-        self.predictor_func = predictor_func
-        self.output_size = output_size
-        self.face_type = face_type
+        super().__init__(predictor)
+         
         self.predictor_input_size = predictor_input_size
+        self.output_size = output_size
+        self.face_type = face_type        
         self.erode_mask = erode_mask
         self.blur_mask = blur_mask
         self.clip_border_mask_per = clip_border_mask_per
@@ -41,6 +45,9 @@ class ConverterMasked(ConverterBase):
         if self.blur_mask_modifier != 0 and not self.blur_mask:
             print ("Blur modifier not used in this model.")
             
+    #override
+    def dummy_predict(self):
+        self.predictor ( np.zeros ( (self.predictor_input_size,self.predictor_input_size,4) ) )
         
     #override
     def convert (self, img_bgr, img_face_landmarks, debug):        
@@ -59,7 +66,7 @@ class ConverterMasked(ConverterBase):
         predictor_input_mask_a_0 = cv2.resize (dst_face_mask_a_0, (self.predictor_input_size,self.predictor_input_size))
         predictor_input_mask_a   = np.expand_dims (predictor_input_mask_a_0, -1) 
         
-        predicted_bgra = self.predictor_func ( np.concatenate( (predictor_input_bgr, predictor_input_mask_a), -1) )
+        predicted_bgra = self.predictor ( np.concatenate( (predictor_input_bgr, predictor_input_mask_a), -1) )
 
         prd_face_bgr      = np.clip (predicted_bgra[:,:,0:3], 0, 1.0 )
         prd_face_mask_a_0 = np.clip (predicted_bgra[:,:,3], 0.0, 1.0)

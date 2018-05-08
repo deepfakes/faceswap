@@ -143,7 +143,7 @@ class Model(ModelBase):
             in_options['blur_mask_modifier'] = 0
         in_options['blur_mask_modifier'] += 100
         
-        return ConverterMasked(self.predictor_func, 128, 128, 'half_face', **in_options)
+        return ConverterMasked(self.predictor_func, predictor_input_size=128, output_size=128, face_type='half_face', **in_options)
         
     def Encoder(self, input_layer, created_vram_gb):
         x = input_layer

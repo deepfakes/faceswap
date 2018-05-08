@@ -187,7 +187,7 @@ class Model(ModelBase):
         if 'blur_mask_modifier' not in in_options.keys():
             in_options['blur_mask_modifier'] = 0
             
-        return ConverterMasked(self.predictor_func, 128, 128, 'full_face', clip_border_mask_per=0.046875, **in_options)
+        return ConverterMasked(self.predictor_func, predictor_input_size=128, output_size=128, face_type='full_face', clip_border_mask_per=0.046875, **in_options)
   
 
     def Encoder(self, input_layer,):
