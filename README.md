@@ -14,6 +14,10 @@
 
 - new preview window
 
+- extractor in parallel
+
+- convertor in parallel
+
 - added **--debug** option for all stages
 
 - added **MTCNN extractor** which produce less jittered aligned face than DLIBCNN, but can produce more false faces. Look at ear:
