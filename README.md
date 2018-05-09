@@ -6,7 +6,7 @@
 
 - new architecture, easy to experiment with models
 
-- works on 2GB old cards , such as GT730. Example of fake trained on 2GB gtx850m notebook in 18 hours https://www.youtube.com/watch?v=EVG13JU31d8
+- works on 2GB old cards , such as GT730. Example of fake trained on 2GB gtx850m notebook in 18 hours https://www.youtube.com/watch?v=bprVuRxBA34
 
 - face data embedded to png files, so you can sort them by `sort` command, or you can delete them, then these faces will not be converted in destination images
 
