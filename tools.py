@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import sys
-from lib.cli import FullHelpArgumentParser
 # Importing the various tools
 from tools.sort import SortProcessor
-from scripts.gui import TKGui
+from tools.effmpeg import Effmpeg
+import lib.cli as cli
 
 # Python version check
 if sys.version_info[0] < 3:
@@ -13,7 +13,7 @@ if sys.version_info[0] == 3 and sys.version_info[1] < 2:
 
 
 def bad_args(args):
-    parser.print_help()
+    PARSER.print_help()
     exit(0)
 
 
@@ -23,15 +23,18 @@ if __name__ == "__main__":
     _tools_warning += "understand how it works."
     print(_tools_warning)
 
-    parser = FullHelpArgumentParser()
-    subparser = parser.add_subparsers()
-    sort = SortProcessor(
-        subparser, "sort", "This command lets you sort images using various "
-                           "methods.")
-    guiparsers = {'sort': sort}
-    print(__file__)
-    gui = TKGui(
-            subparser, guiparsers, "gui", "Launch the Faceswap Tools Graphical User Interface.")
-    parser.set_defaults(func=bad_args)
-    arguments = parser.parse_args()
-    arguments.func(arguments)
+    PARSER = cli.FullHelpArgumentParser()
+    SUBPARSER = PARSER.add_subparsers()
+    EFFMPEG = Effmpeg(
+            SUBPARSER, "effmpeg",
+            "This command allows you to easily execute common ffmpeg tasks.")
+    SORT = SortProcessor(
+            SUBPARSER, "sort",
+            "This command lets you sort images using various methods.")
+    GUIPARSERS = {'effmpeg': EFFMPEG, 'sort': SORT}
+    GUI = cli.GuiArgs(
+            SUBPARSER, "gui",
+            "Launch the Faceswap Tools Graphical User Interface.", GUIPARSERS)
+    PARSER.set_defaults(func=bad_args)
+    ARGUMENTS = PARSER.parse_args()
+    ARGUMENTS.func(ARGUMENTS)

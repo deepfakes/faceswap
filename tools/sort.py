@@ -8,7 +8,7 @@ import cv2
 from tqdm import tqdm
 from shutil import copyfile
 import json
-from lib.cli import FullPaths
+from lib.cli import DirFullPaths, FileFullPaths
 
 # DLIB is a GPU Memory hog, so the following modules should only be imported
 # when required
@@ -43,13 +43,14 @@ class SortProcessor(object):
     def get_argument_list():
         arguments_list = list()
         arguments_list.append({"opts": ('-i', '--input'),
-                               "action": FullPaths,
+                               "action": DirFullPaths,
                                "dest": "input_dir",
                                "default": "input_dir",
                                "help": "Input directory of aligned faces.",
                                "required": True})
 
         arguments_list.append({"opts": ('-o', '--output'),
+                               "action": DirFullPaths,
                                "dest": "output_dir",
                                "default": "output_dir",
                                "help": "Output directory for sorted aligned "
@@ -127,6 +128,8 @@ class SortProcessor(object):
                                        "will be created in the input directory."})
 
         arguments_list.append({"opts": ('-lf', '--log-file'),
+                               "action": FileFullPaths,
+                               "filetypes": ("JSON", "*.json"),
                                "dest": 'log_file_path',
                                "default": 'sort_log.json',
                                "help": "Specify a log file to use for saving the "
@@ -170,10 +173,8 @@ class SortProcessor(object):
     def parse_arguments(self, description, subparser, command):
         parser = subparser.add_parser(
                 command,
-                help="This command lets you sort images using various methods."
-                     " Please backup your data and/or test this tool with a "
-                     "smaller data set to make sure you understand how it"
-                     "works.",
+                help="This command lets you sort images using various "
+                     "methods.",
                 description=description,
                 epilog="Questions and feedback: \
                         https://github.com/deepfakes/faceswap-playground"

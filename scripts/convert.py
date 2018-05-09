@@ -3,6 +3,7 @@
 
 import re
 import os
+import sys
 from pathlib import Path
 
 from tqdm import tqdm
@@ -12,6 +13,7 @@ from scripts.extract import Extract
 from lib.utils import BackgroundGenerator, get_folder, get_image_paths
 
 from plugins.PluginLoader import PluginLoader
+
 
 class Convert(object):
     """ The convert process. """
@@ -27,7 +29,9 @@ class Convert(object):
 
     def process(self):
         """ Original & LowMem models go with Adjust or Masked converter
-            Note: GAN prediction outputs a mask + an image, while other predicts only an image """
+
+            Note: GAN prediction outputs a mask + an image, while other
+            predicts only an image. """
         Utils.set_verbosity(self.args.verbose)
 
         if not self.alignments.have_alignments_file:
@@ -89,7 +93,7 @@ class Convert(object):
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        for filename in tqdm(self.images.input_images):
+        for filename in tqdm(self.images.input_images, file=sys.stdout):
             if not self.check_alignments(filename):
                 continue
             image = Utils.cv2_read_write('read', filename)
@@ -157,18 +161,19 @@ class OptionalActions(object):
         input_aligned_dir = self.args.input_aligned_dir
 
         if input_aligned_dir is None:
-            print("Aligned directory not specified. All faces listed in the alignments file "
-                  "will be converted")
+            print("Aligned directory not specified. All faces listed in the "
+                  "alignments file will be converted")
         elif not os.path.isdir(input_aligned_dir):
-            print("Aligned directory not found. All faces listed in the alignments file "
-                  "will be converted")
+            print("Aligned directory not found. All faces listed in the "
+                  "alignments file will be converted")
         else:
             faces_to_swap = [Path(path) for path in get_image_paths(input_aligned_dir)]
             if not faces_to_swap:
                 print("Aligned directory is empty, no faces will be converted!")
             elif len(faces_to_swap) <= len(self.input_images) / 3:
-                print("Aligned directory contains an amount of images much less than the input, \
-                        are you sure this is the right directory?")
+                print("Aligned directory contains an amount of images much "
+                      "less than the input, are you sure this is the right "
+                      "directory?")
         return faces_to_swap
 
     ### SKIP FRAME RANGES ###
