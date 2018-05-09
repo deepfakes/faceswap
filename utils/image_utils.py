@@ -150,7 +150,7 @@ def morph_by_points (image, sp, dp):
 
     for tri in Delaunay(dp).simplices:                                    
         morphTriangle(result_image, image, sp[tri], dp[tri])
-        
+       
     return result_image
     
 def equalize_and_stack (wh, images, axis=1):

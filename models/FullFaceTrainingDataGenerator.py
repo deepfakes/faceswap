@@ -81,18 +81,24 @@ class FullFaceTrainingDataGenerator(TrainingDataGeneratorBase):
         
         idx_list = np.array( range(0,61) ) #all wo tooth
          
-        #remove 'jaw landmarks' which in region of 'not jaw landmarks' and outside
+        #remove 'jaw landmarks' which in region of 'not jaw landmarks'
         face_contour = cv2.convexHull( s_landmarks[idx_list[np.argwhere ( idx_list >= 17 )[:,0] ]] )        
         for idx in idx_list[ np.argwhere ( idx_list < 17 )[:,0] ][:]:
             s_l = s_landmarks[idx]
             d_l = d_landmarks[idx]
    
-            if not (s_l[0] >= 1 and s_l[0] <= w-2 and s_l[1] >= 1 and s_l[1] <= w-2) or \
-               not (d_l[0] >= 1 and d_l[0] <= w-2 and d_l[1] >= 1 and d_l[1] <= w-2) or \
-               cv2.pointPolygonTest(face_contour, tuple(s_l[::-1]),False) >= 0 or \
+            if cv2.pointPolygonTest(face_contour, tuple(s_l[::-1]),False) >= 0 or \
                cv2.pointPolygonTest(face_contour, tuple(d_l[::-1]),False) >= 0:
                 idx_list = np.delete (idx_list, np.argwhere (idx_list == idx)[:,0] )
 
+        #remove outside points
+        for idx in idx_list[:]:
+            s_l = s_landmarks[idx]
+            d_l = d_landmarks[idx]   
+            if not (s_l[0] >= 1 and s_l[0] <= w-2 and s_l[1] >= 1 and s_l[1] <= w-2) or \
+               not (d_l[0] >= 1 and d_l[0] <= w-2 and d_l[1] >= 1 and d_l[1] <= w-2):
+                idx_list = np.delete (idx_list, np.argwhere (idx_list == idx)[:,0] )
+                
         s_landmarks = s_landmarks[idx_list]
         d_landmarks = d_landmarks[idx_list]
 
