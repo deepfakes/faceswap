@@ -65,6 +65,10 @@
 
 `hist-dissim` places most similar to each other images to end.
 
+`brightness` 
+
+`hue`
+
 `face` and `face-dissim` currently useless
 
 Best practice for gather src faceset:

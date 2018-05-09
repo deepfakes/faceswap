@@ -11,6 +11,20 @@ from utils import Path_utils
 from utils.AlignedPNG import AlignedPNG
 from facelib import LandmarksProcessor
 
+def sort_by_brightness(input_path):
+    print ("Sorting by brightness...")
+    img_list = [ [x, np.mean ( cv2.cvtColor(cv2.imread(x), cv2.COLOR_BGR2HSV)[...,2].flatten()  )] for x in tqdm( Path_utils.get_image_paths(input_path), desc="Loading") ]
+    print ("Sorting...")
+    img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)    
+    return img_list
+    
+def sort_by_hue(input_path):
+    print ("Sorting by hue...")
+    img_list = [ [x, np.mean ( cv2.cvtColor(cv2.imread(x), cv2.COLOR_BGR2HSV)[...,0].flatten()  )] for x in tqdm( Path_utils.get_image_paths(input_path), desc="Loading") ]
+    print ("Sorting...")
+    img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)    
+    return img_list
+    
 def sort_by_blur(input_path):
     def estimate_blur(image):
         if image.ndim == 3:
@@ -23,25 +37,8 @@ def sort_by_blur(input_path):
     img_list = []
     print ("Sorting by blur...")        
     for filepath in tqdm( Path_utils.get_image_paths(input_path), desc="Loading"):
-        filepath = Path(filepath)
-        
-        if filepath.suffix != '.png':
-            print ("%s is not a png file required for sort_by_face" % (filepath.name) ) 
-            continue
-        
-        a_png = AlignedPNG.load (str(filepath))
-        if a_png is None:
-            print ("%s failed to load" % (filepath.name) ) 
-            continue
-            
-        d = a_png.getFaceswapDictData()
-        
-        if d is None or d['landmarks'] is None:          
-            print ("%s - no embedded data found required for sort_by_face" % (filepath.name) )
-            continue
-        landmarks = np.array (d['landmarks'])            
-        img = cv2.imread( str(filepath) ) #never mask it by face hull, it worse than whole image blur estimate
-        img_list.append ( [str(filepath), estimate_blur (img)] )
+        #never mask it by face hull, it worse than whole image blur estimate
+        img_list.append ( [filepath, estimate_blur (cv2.imread( filepath ))] )
     
     print ("Sorting...")
     img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
@@ -165,14 +162,19 @@ def sort_by_hist(input_path):
 
     print ("Sorting by histogram similarity...")
 
-    img_list = [ [x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256]) ] for x in tqdm( Path_utils.get_image_paths(input_path), desc="Loading") ]
+    img_list = [ [x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256]),
+                     cv2.calcHist([cv2.imread(x)], [1], None, [256], [0, 256]),
+                     cv2.calcHist([cv2.imread(x)], [2], None, [256], [0, 256])
+                     ] for x in tqdm( Path_utils.get_image_paths(input_path), desc="Loading") ]
 
     img_list_len = len(img_list)
     for i in tqdm( range(0, img_list_len-1), desc="Sorting", file=sys.stdout):
         min_score = float("inf")
         j_min_score = i+1
         for j in range(i+1,len(img_list)):
-            score = cv2.compareHist(img_list[i][1], img_list[j][1], cv2.HISTCMP_BHATTACHARYYA)
+            score = cv2.compareHist(img_list[i][1], img_list[j][1], cv2.HISTCMP_BHATTACHARYYA) + \
+                    cv2.compareHist(img_list[i][2], img_list[j][2], cv2.HISTCMP_BHATTACHARYYA) + \
+                    cv2.compareHist(img_list[i][3], img_list[j][3], cv2.HISTCMP_BHATTACHARYYA)
             if score < min_score:
                 min_score = score
                 j_min_score = j
@@ -184,21 +186,27 @@ def sort_by_hist_dissim(input_path):
 
     print ("Sorting by histogram dissimilarity...")
 
-    img_list = [ [x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256]), 0] for x in tqdm( Path_utils.get_image_paths(input_path), desc="Loading") ]
-
+    img_list = [ [x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256]),
+                     cv2.calcHist([cv2.imread(x)], [1], None, [256], [0, 256]),
+                     cv2.calcHist([cv2.imread(x)], [2], None, [256], [0, 256]),
+                     0
+                     ] for x in tqdm( Path_utils.get_image_paths(input_path), desc="Loading") ]
+    
     img_list_len = len(img_list)
     for i in tqdm ( range(0, img_list_len), desc="Sorting"):
         score_total = 0
         for j in range( 0, img_list_len):
             if i == j:
                 continue
-            score_total += cv2.compareHist(img_list[i][1], img_list[j][1], cv2.HISTCMP_BHATTACHARYYA)
+            score_total += cv2.compareHist(img_list[i][1], img_list[j][1], cv2.HISTCMP_BHATTACHARYYA) + \
+                           cv2.compareHist(img_list[i][2], img_list[j][2], cv2.HISTCMP_BHATTACHARYYA) + \
+                           cv2.compareHist(img_list[i][3], img_list[j][3], cv2.HISTCMP_BHATTACHARYYA)
 
-        img_list[i][2] = score_total
+        img_list[i][4] = score_total
 
 
     print ("Sorting...")
-    img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
+    img_list = sorted(img_list, key=operator.itemgetter(4), reverse=True)
 
     return img_list
             
@@ -234,5 +242,7 @@ def main (input_path, sort_by_method):
     elif sort_by_method == 'face-yaw':      img_list = sort_by_face_yaw (input_path)
     elif sort_by_method == 'hist':          img_list = sort_by_hist (input_path)
     elif sort_by_method == 'hist-dissim':   img_list = sort_by_hist_dissim (input_path)
-
+    elif sort_by_method == 'brightness':    img_list = sort_by_brightness (input_path)
+    elif sort_by_method == 'hue':           img_list = sort_by_hue (input_path)
+    
     final_rename (input_path, img_list)
