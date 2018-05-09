@@ -10,11 +10,16 @@ class TrainingDataType(IntEnum):
     
     SRC_WITH_NEAREST = 2 # as raw unsorted but samples can return get_random_nearest_target_sample()
 
-    SRC_ONLY_10_NEAREST_TO_DST_ONLY_1 = 3 #
+    #below unused
     
+    SRC_ONLY_10_NEAREST_TO_DST_ONLY_1 = 3 #    
     DST_ONLY_1 = 4
+    SRC_YAW_SORTED = 5 # sorted by yaw
+    DST_YAW_SORTED = 6 # sorted by yaw
+    SRC_YAW_SORTED_AS_DST = 7 #sorted by yaw but included only yaws which exist in DST_YAW_SORTED also automatic mirrored
+    SRC_YAW_SORTED_AS_DST_WITH_NEAREST = 8 #same as SRC_YAW_SORTED_AS_DST but samples can return get_random_nearest_target_sample()
     
-    QTY = 5
+    QTY = 9
     
 class TrainingDataSample(object):
 

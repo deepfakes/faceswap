@@ -55,6 +55,7 @@
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Ford_1.jpg)
 * MIAEF128 Cage fail case:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Cage_fail.jpg)
+- **LIAEF128YAW (4GB+)** - currently testing. It feeds NN by sorted samples by yaw, so you can use unlimited of src samples.
 
 ### **Sort tool**:
 

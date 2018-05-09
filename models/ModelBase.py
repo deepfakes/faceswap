@@ -336,6 +336,26 @@ class ModelBase(object):
             if self.training_datas[dtype] is None:  
                 self.training_datas[dtype] = X_ONLY_1( self.get_training_data(TrainingDataType.DST)  )
             return self.training_datas[dtype]
+          
+        elif dtype == TrainingDataType.SRC_YAW_SORTED:
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_SORTED( self.get_training_data(TrainingDataType.SRC) )
+            return self.training_datas[dtype]
+
+        elif dtype == TrainingDataType.DST_YAW_SORTED:
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_SORTED( self.get_training_data(TrainingDataType.DST))
+            return self.training_datas[dtype]
+          
+        elif dtype == TrainingDataType.SRC_YAW_SORTED_AS_DST:            
+            if self.training_datas[dtype] is None:
+                self.training_datas[dtype] = X_YAW_AS_Y_SORTED( self.get_training_data(TrainingDataType.SRC_YAW_SORTED), self.get_training_data(TrainingDataType.DST_YAW_SORTED) )
+            return self.training_datas[dtype]
+         
+        elif dtype == TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST:
+            if self.training_datas[dtype] is None:     
+                self.training_datas[dtype] = calc_X_YAW_AS_Y_SORTED_WITH_NEAREST_Y ( self.get_training_data(TrainingDataType.SRC_YAW_SORTED_AS_DST), self.get_training_data(TrainingDataType.DST) )             
+                return self.training_datas[dtype]
                 
         return None
 
@@ -386,3 +406,73 @@ def X_ONLY_n_NEAREST_TO_Y_ONLY_1(X,n,Y):
     nearest = sorted(nearest, key=operator.itemgetter(-1), reverse=False)
     nearest = [ X[s[0]].copy_and_set (nearest_target_list=[target]) for s in nearest[0:n] ]      
     return nearest
+    
+def X_YAW_SORTED( YAW_RAWS ):
+
+    lowest_yaw, highest_yaw = -32, +32      
+    gradations = 64
+    diff_rot_per_grad = abs(highest_yaw-lowest_yaw) / gradations
+
+    yaws_sample_list = [None]*gradations
+    
+    for i in tqdm( range(0, gradations), desc="Sorting" ):
+        yaw = lowest_yaw + i*diff_rot_per_grad
+        next_yaw = lowest_yaw + (i+1)*diff_rot_per_grad
+
+        yaw_samples = []        
+        for s in YAW_RAWS:                
+            s_yaw = s.yaw
+            if (i == 0            and s_yaw < next_yaw) or \
+               (i  < gradations-1 and s_yaw >= yaw and s_yaw < next_yaw) or \
+               (i == gradations-1 and s_yaw >= yaw):
+                yaw_samples.append ( s )
+                
+        if len(yaw_samples) > 0:
+            yaws_sample_list[i] = yaw_samples
+    
+    return yaws_sample_list
+    
+def X_YAW_AS_Y_SORTED (s, t):
+    l = len(s)
+    if l != len(t):
+        raise Exception('X_YAW_AS_Y_SORTED() s_len != t_len')
+    b = l // 2
+    
+    s_idxs = np.argwhere ( np.array ( [ 1 if x != None else 0  for x in s] ) == 1 )[:,0]
+    t_idxs = np.argwhere ( np.array ( [ 1 if x != None else 0  for x in t] ) == 1 )[:,0]
+    
+    new_s = [None]*l    
+    
+    for t_idx in t_idxs:
+        search_idxs = []        
+        for i in range(0,l):
+            search_idxs += [t_idx - i, (l-t_idx-1) - i, t_idx + i, (l-t_idx-1) + i]
+
+        for search_idx in search_idxs:            
+            if search_idx in s_idxs:
+                mirrored = ( t_idx != search_idx and ((t_idx < b and search_idx >= b) or (search_idx < b and t_idx >= b)) )
+                new_s[t_idx] = [ sample.copy_and_set(mirror=True, yaw=-sample.yaw, landmarks=LandmarksProcessor.mirror_landmarks (sample.landmarks, sample.shape[1] ))
+                                      for sample in s[search_idx] 
+                                    ] if mirrored else s[search_idx]                
+                break
+             
+    return new_s
+    
+def calc_X_YAW_AS_Y_SORTED_WITH_NEAREST_Y( X, Y):                       
+    new_X = []
+    for sample_list in tqdm(X, desc="Sorting"):
+        new_sample_list = None
+        
+        if sample_list != None:
+            new_sample_list = []
+            for s in sample_list:  
+                sss = [ (i, np.square( d.landmarks-s.landmarks ).sum() ) for i,d in enumerate(Y) ]                
+                sss = sorted(sss, key=operator.itemgetter(-1), reverse=False)
+                
+                nearest_target_list = [ Y[x[0]] for x in sss[0:10] ]              
+               
+                new_sample_list.append ( s.copy_and_set( nearest_target_list=nearest_target_list ) )
+                
+        new_X.append ( new_sample_list )
+
+    return new_X  

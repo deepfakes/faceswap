@@ -56,9 +56,16 @@ class TrainingDataGeneratorBase(object):
             
         if (self.trainingdatatype == TrainingDataType.SRC or self.trainingdatatype == TrainingDataType.SRC_WITH_NEAREST) and data_len > 1500:
             print ("Warning, your src faceset contains more than 1500 faces. This can make worse result. Reduce it by sort --by hist-dissim.")
-            
+        
+        if self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST:
+            if all ( [ x == None for x in self.data] ):
+                raise ValueError('Not enough training data. Gather more faces!')
+             
         if self.trainingdatatype >= TrainingDataType.SRC and self.trainingdatatype <= TrainingDataType.DST_ONLY_1:
             shuffle_idxs = []          
+        elif self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST:
+            shuffle_idxs = []            
+            shuffle_idxs_2D = [[]]*data_len
             
         while True:                
             
@@ -73,7 +80,20 @@ class TrainingDataGeneratorBase(object):
                             random.shuffle(shuffle_idxs)                            
                         idx = shuffle_idxs.pop()
                         sample = self.data[ idx ]
-                    
+                    elif self.trainingdatatype >= TrainingDataType.SRC_YAW_SORTED and self.trainingdatatype <= TrainingDataType.SRC_YAW_SORTED_AS_DST_WITH_NEAREST:
+                        if len(shuffle_idxs) == 0:
+                            shuffle_idxs = [ i for i in range(0, data_len) ]
+                            random.shuffle(shuffle_idxs)
+                        
+                        idx = shuffle_idxs.pop()                        
+                        if self.data[idx] != None:
+                            if len(shuffle_idxs_2D[idx]) == 0:
+                                shuffle_idxs_2D[idx] = [ i for i in range(0, len(self.data[idx])) ]
+                                random.shuffle(shuffle_idxs_2D[idx])
+                                
+                            idx2 = shuffle_idxs_2D[idx].pop()                            
+                            sample = self.data[idx][idx2]
+                            
                     if sample is not None:          
                         try:
                             x = self.onProcessSample (sample, self.debug)
