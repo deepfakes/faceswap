@@ -95,7 +95,7 @@ magnet:?xt=urn:btih:F1E13AD71895F03341E809F5DD47E07A3E9E3538
 
 Torrent page: https://rutracker.org/forum/viewtopic.php?p=75318742
 
-### ** Facesets **:
+### **Facesets**:
 
 - Nicolas Cage.
 
