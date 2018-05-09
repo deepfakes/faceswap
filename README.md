@@ -29,6 +29,8 @@
 
 - new models
 
+- standalone prebuilt binary for Windows , see below
+
 ### **Model types**:
 
 - **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but with DSSIM Loss func and separated mask decoder + better ConverterMasked.
