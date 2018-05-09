@@ -3,7 +3,7 @@ import sys
 from lib.cli import FullHelpArgumentParser
 # Importing the various tools
 from tools.sort import SortProcessor
-from scripts.gui import TKGui
+import lib.cli as cli
 
 # Python version check
 if sys.version_info[0] < 3:
@@ -30,8 +30,8 @@ if __name__ == "__main__":
                            "methods.")
     guiparsers = {'sort': sort}
     print(__file__)
-    gui = TKGui(
-            subparser, guiparsers, "gui", "Launch the Faceswap Tools Graphical User Interface.")
+    GUI = cli.GuiArgs(
+        subparser, "gui", "Launch the Faceswap Graphical User Interface", guiparsers)
     parser.set_defaults(func=bad_args)
     arguments = parser.parse_args()
     arguments.func(arguments)
