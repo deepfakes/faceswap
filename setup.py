@@ -177,7 +177,7 @@ cuDNN: https://developer.nvidia.com/rdp/cudnn-download
 def Continue():
     i = input("Are System Dependencies met? [y/N] ")
     if i == "" or i == "N" or i == "n":
-        exit(1)
+        ERROR('Please install system dependencies to continue')
 
 def Check_Missing_Dep():
     global Missing_Packages, Installed_Packages
@@ -232,7 +232,7 @@ def Update_TF_Dep():
     Required_Packages[0] = "tensorflow-gpu"
     if CUDA_Version.startswith("8.0"):
         Required_Packages[0] += "==1.4.0"
-    elif CUDA_Version >= "9.1":
+    elif not CUDA_Version.startswith("9.0"):
             WARNING("Tensorflow has no official prebuild for CUDA 9.1 currently.\r\n"
                     "To continue, You have to build and install your own tensorflow-gpu.\r\n"
                     "Help: https://www.tensorflow.org/install/install_sources")
@@ -244,17 +244,6 @@ def Update_TF_Dep():
                 Required_Packages[0] = custom_tf
             else:
                 ERROR("{} not found".format(custom_tf))
-                exit(1)
-    elif not (CUDA_Version.startswith("9.1") or CUDA_Version.startswith("8.0") or CUDA_Version.startswith("9.0")):
-        WARNING("Unknown CUDA version {}. \r\n"
-                "You may want to Reinstall CUDA to version 9.0/8.0\r\n"
-                "Or manually compile and install your own tensorflow-gpu\r\n"
-                "Help: https://www.tensorflow.org/install/install_sources".format(CUDA_Version))
-        custom_tf_v = input("To continue anyway, specify tensorflow-gpu version or leave blank to not install tensorflow: ")
-        if custom_tf_v:
-            Required_Packages[0] = Required_Packages[0] + "==" + custom_tf_v
-        else:
-            del Required_Packages[0]
 
 
 def Tips_1_1():
