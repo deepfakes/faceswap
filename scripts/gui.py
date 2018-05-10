@@ -2,8 +2,8 @@
 """ The optional GUI for faceswap """
 
 import os
-import signal
 import re
+import signal
 import subprocess
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
@@ -13,7 +13,6 @@ from math import ceil, floor
 from threading import Thread
 from time import time
 
-import numpy
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.animation as animation
@@ -21,8 +20,11 @@ from matplotlib import pyplot as plt
 from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from lib.cli import FullPaths
+import numpy
+
+from lib.cli import FullPaths, ComboFullPaths, DirFullPaths, FileFullPaths
 from lib.Serializer import JSONSerializer
+
 
 PATHSCRIPT = os.path.realpath(os.path.dirname(sys.argv[0]))
 
@@ -41,6 +43,7 @@ except ImportError:
     filedialog = None
     messagebox = None
     TclError = None
+
 
 class Utils(object):
     """ Inter-class object holding items that are required across classes """
@@ -104,7 +107,7 @@ class Utils(object):
         self.change_action_button()
 
     def clear_display_panel(self):
-        ''' Clear the preview window and graph '''
+        """ Clear the preview window and graph """
         self.delete_preview()
         self.lossdict = dict()
 
@@ -195,6 +198,9 @@ class Utils(object):
         """ Delete the preview file """
         if os.path.exists(self.previewloc):
             os.remove(self.previewloc)
+
+    def get_chosen_action(self, task_name):
+        return self.opts[task_name][0]['value'].get()
 
 
 class Tooltip:
@@ -352,6 +358,7 @@ class Tooltip:
             topwidget.destroy()
         self.topwidget = None
 
+
 class FaceswapGui(object):
     """ The Graphical User Interface """
 
@@ -459,6 +466,7 @@ class FaceswapGui(object):
         self.gui.quit()
         exit()
 
+
 class ConsoleOut(object):
     """ The Console out tab of the Display section """
 
@@ -505,7 +513,6 @@ class SysOutRouter(object):
 
 
 class CommandTab(object):
-
     """ Tabs to hold the command options """
 
     def __init__(self, utils, notebook, command):
@@ -530,6 +537,7 @@ class CommandTab(object):
         """ Add a separator between left and right frames """
         sep = ttk.Frame(self.page, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
+
 
 class OptionsFrame(object):
     """ Options Frame - Holds the Options for each command """
@@ -569,6 +577,7 @@ class OptionsFrame(object):
         """ Resize the options frame to fit the canvas """
         canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
+
 
 class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
@@ -622,7 +631,10 @@ class OptionControl(object):
         var.set(default)
 
         if sysbrowser is not None:
+            # if sysbrowser in "load file":
             self.add_browser_buttons(frame, sysbrowser, var)
+            # elif sysbrowser == "combo":
+            #    self.add_browser_combo_button(frame, sysbrowser, var)
 
         ctlkwargs = {'variable': var} if control == ttk.Checkbutton else {
             'textvariable': var}
@@ -639,25 +651,79 @@ class OptionControl(object):
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
-        img = self.utils.icons[sysbrowser]
+        if sysbrowser == "combo":
+            img = self.utils.icons['load']
+        else:
+            img = self.utils.icons[sysbrowser]
         action = getattr(self, 'ask_' + sysbrowser)
+        filetypes = self.option['filetypes']
         fileopn = ttk.Button(frame, image=img,
-                             command=lambda cmd=action: cmd(filepath))
+                             command=lambda cmd=action: cmd(filepath,
+                                                            filetypes))
         fileopn.pack(padx=(0, 5), side=tk.RIGHT)
 
     @staticmethod
-    def ask_folder(filepath):
-        """ Pop-up to get path to a folder """
+    def ask_folder(filepath, filetypes=None):
+        """
+        Pop-up to get path to a directory
+        :param filepath: tkinter StringVar object that will store the path to a
+        directory.
+        :param filetypes: Unused argument to allow filetypes to be given in
+        ask_load().
+        """
         dirname = filedialog.askdirectory()
         if dirname:
             filepath.set(dirname)
 
     @staticmethod
-    def ask_load(filepath):
+    def ask_load(filepath, filetypes=None):
         """ Pop-up to get path to a file """
-        filename = filedialog.askopenfilename()
+        if filetypes is None:
+            filename = filedialog.askopenfilename()
+        else:
+            # In case filetypes were not configured properly in the
+            # arguments_list
+            try:
+                filename = filedialog.askopenfilename(filetypes=filetypes)
+            except TclError as te1:
+                filetypes = FileFullPaths.prep_filetypes(filetypes)
+                filename = filedialog.askopenfilename(filetypes=filetypes)
+            except TclError as te2:
+                filename = filedialog.askopenfilename()
         if filename:
             filepath.set(filename)
+
+    @staticmethod
+    def ask_save(filepath, filetypes=None):
+        """ Pop-up to get path to save a new file """
+        if filetypes is None:
+            filename = filedialog.asksaveasfilename()
+        else:
+            # In case filetypes were not configured properly in the
+            # arguments_list
+            try:
+                filename = filedialog.asksaveasfilename(filetypes=filetypes)
+            except TclError as te1:
+                filetypes = FileFullPaths.prep_filetypes(filetypes)
+                filename = filedialog.asksaveasfilename(filetypes=filetypes)
+            except TclError as te2:
+                filename = filedialog.asksaveasfilename()
+        if filename:
+            filepath.set(filename)
+
+    @staticmethod
+    def ask_nothing(filepath, filetypes=None):
+        """ Method that does nothing, used for disabling open/save pop up """
+        return
+
+    def ask_combo(self, filepath, filetypes):
+        actions_open_type = self.option['actions_open_type']
+        task_name = actions_open_type['task_name']
+        chosen_action = self.utils.get_chosen_action(task_name)
+        action = getattr(self, "ask_" + actions_open_type[chosen_action])
+        filetypes = filetypes[chosen_action]
+        action(filepath, filetypes)
+
 
 class ActionFrame(object):
     """Action Frame - Displays information and action controls """
@@ -704,6 +770,7 @@ class ActionFrame(object):
                                 command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, side=tk.LEFT)
             Tooltip(btnutl, text=utl.capitalize() + ' ' + self.title + ' config', wraplength=200)
+
 
 class DisplayTab(object):
     """ The display tabs """
@@ -789,6 +856,7 @@ class GraphDisplay(object):
         for child in self.graphpane.panes():
             self.graphpane.remove(child)
 
+
 class Graph(object):
     """ Each graph to be displayed. Until training is run it is not known
         how many graphs will be required, so they sit in their own class
@@ -854,7 +922,7 @@ class Graph(object):
             self.trend_plot(xrng, loss)
 
     def recalculate_axes(self, loss):
-        ''' Recalculate the latest x and y axes limits from latest data '''
+        """ Recalculate the latest x and y axes limits from latest data """
         ymin = floor(min([min(lossvals) for lossvals in loss]) * 100) / 100
         ymax = ceil(max([max(lossvals) for lossvals in loss]) * 100) / 100
 
@@ -869,16 +937,17 @@ class Graph(object):
         return xlim
 
     def raw_plot(self, x_range, loss):
-        ''' Raw value plotting '''
+        """ Raw value plotting """
         for idx, lossvals in enumerate(loss):
             self.losslines[idx].set_data(x_range, lossvals)
 
     def trend_plot(self, x_range, loss):
-        ''' Trend value plotting '''
+        """ Trend value plotting """
         for idx, lossvals in enumerate(loss):
             fit = numpy.polyfit(x_range, lossvals, 3)
             poly = numpy.poly1d(fit)
             self.trndlines[idx].set_data(x_range, poly(x_range))
+
 
 class PreviewDisplay(object):
     """ The Preview tab of the Display section """
@@ -924,6 +993,7 @@ class PreviewDisplay(object):
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
+    __group_processes = ["effmpeg"]
 
     def __init__(self, utils, calling_file="faceswap.py"):
         self.pathexecscript = os.path.join(PATHSCRIPT, calling_file)
@@ -965,6 +1035,8 @@ class FaceswapControl(object):
                   'stderr': PIPE,
                   'bufsize': 1,
                   'universal_newlines': True}
+        if self.command in self.__group_processes:
+            kwargs['preexec_fn'] = os.setsid
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = Popen(self.args, **kwargs)
@@ -1013,7 +1085,7 @@ class FaceswapControl(object):
 
     def capture_loss(self, string):
         """ Capture loss values from stdout """
-        #TODO: Remove this hideous hacky fix. When the subprocess is terminated and
+        # TODO: Remove this hideous hacky fix. When the subprocess is terminated and
         # the loss dictionary is reset, 1 set of loss values ALWAYS slips through
         # and appends to the lossdict AFTER the subprocess has closed meaning that
         # checks on whether the dictionary is empty fail.
@@ -1024,7 +1096,7 @@ class FaceswapControl(object):
         #   sys.exit() on the stdout/err threads (no effect)
         #   sys.stdout/stderr.flush (no effect)
         #   thread.join (locks the whole process up, because the stdout thread
-        #       stubbonly refuses to release it's last line)
+        #   stubbornly refuses to release its last line)
 
         currentlenloss = len(self.utils.lossdict)
         if self.lenloss > currentlenloss:
@@ -1063,15 +1135,27 @@ class FaceswapControl(object):
                 return
             except ValueError as err:
                 print(err)
-        print('Terminating Process...')
-        try:
-            self.process.terminate()
-            self.process.wait(timeout=10)
-            print('Terminated')
-        except TimeoutExpired:
-            print('Termination timed out. Killing Process...')
-            self.process.kill()
-            print('Killed')
+        elif self.command in self.__group_processes:
+            print('Terminating Process Group...')
+            pgid = os.getpgid(self.process.pid)
+            try:
+                os.killpg(pgid, signal.SIGINT)
+                self.process.wait(timeout=10)
+                print('Terminated')
+            except TimeoutExpired:
+                print('Termination timed out. Killing Process Group...')
+                os.killpg(pgid, signal.SIGKILL)
+                print('Killed')
+        else:
+            print('Terminating Process...')
+            try:
+                self.process.terminate()
+                self.process.wait(timeout=10)
+                print('Terminated')
+            except TimeoutExpired:
+                print('Termination timed out. Killing Process...')
+                self.process.kill()
+                print('Killed')
 
     def set_final_status(self, returncode):
         """ Set the status bar output based on subprocess return code """
@@ -1088,55 +1172,55 @@ class FaceswapControl(object):
         self.utils.guitext['status'].set(status)
 
 
-class TKGui(object):
-    """ Main GUI Control """
-
-    def __init__(self, subparser, subparsers, command, description='default'):
+class Gui(object):
+    """ The GUI process. """
+    def __init__(self, arguments, subparsers):
         # Don't try to load the GUI if there is no display or there are
         # problems importing tkinter
-        cmd = sys.argv
-        if not self.check_display(cmd) or not self.check_tkinter_available(cmd):
+        if not self.check_display() or not self.check_tkinter_available():
             return
 
-        self.arguments = None
+        cmd = sys.argv
+
+        # If not running in gui mode return before starting to create a window
+        if 'gui' not in cmd:
+            return
+
+        self.args = arguments
         self.opts = self.extract_options(subparsers)
         self.utils = Utils(self.opts, calling_file=cmd[0])
         self.root = FaceswapGui(self.utils, calling_file=cmd[0])
-        self.parse_arguments(description, subparser, command)
 
     @staticmethod
-    def check_display(command):
+    def check_display():
         """ Check whether there is a display to output the GUI. If running on
             Windows then assume not running in headless mode """
         if not os.environ.get('DISPLAY', None) and os.name != 'nt':
-            if 'gui' in command:
-                print('Could not detect a display. The GUI has been disabled.')
-                if os.name == 'posix':
-                    print('macOS users need to install XQuartz. '
-                          'See https://support.apple.com/en-gb/HT201341')
+            if os.name == 'posix':
+                print('macOS users need to install XQuartz. '
+                      'See https://support.apple.com/en-gb/HT201341')
             return False
         return True
 
     @staticmethod
-    def check_tkinter_available(command):
+    def check_tkinter_available():
         """ Check whether TkInter is installed on user's machine """
         tkinter_vars = [tk, ttk, filedialog, messagebox, TclError]
         if any(var is None for var in tkinter_vars):
-            if "gui" in command:
-                print(
-                    "It looks like TkInter isn't installed for your OS, so "
-                    "the GUI has been "
-                    "disabled. To enable the GUI please install the TkInter "
-                    "application.\n"
-                    "You can try:\n"
-                    "  Windows/macOS:      Install ActiveTcl Community "
-                    "Edition from "
-                    "www.activestate.com\n"
-                    "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
-                    "  Arch:               sudo pacman -S tk\n"
-                    "  CentOS/Redhat:      sudo yum install tkinter\n"
-                    "  Fedora:             sudo dnf install python3-tkinter\n",
-                    file=sys.stderr)
+            print(
+                "It looks like TkInter isn't installed for your OS, so "
+                "the GUI has been "
+                "disabled. To enable the GUI please install the TkInter "
+                "application.\n"
+                "You can try:\n"
+                "  Windows/macOS:      Install ActiveTcl Community "
+                "Edition from "
+                "www.activestate.com\n"
+                "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                "  Arch:               sudo pacman -S tk\n"
+                "  CentOS/Redhat:      sudo yum install tkinter\n"
+                "  Fedora:             sudo dnf install python3-tkinter\n",
+                file=sys.stderr)
             return False
         return True
 
@@ -1148,11 +1232,13 @@ class TKGui(object):
             for opt in command:
                 if opt.get('help', '') == SUPPRESS:
                     command.remove(opt)
-                ctl, sysbrowser = self.set_control(opt)
+                ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
                 opt['control_title'] = self.set_control_title(
                     opt.get('opts', ''))
                 opt['control'] = ctl
                 opt['filesystem_browser'] = sysbrowser
+                opt['filetypes'] = filetypes
+                opt['actions_open_types'] = actions_open_types
         return opts
 
     @staticmethod
@@ -1166,36 +1252,28 @@ class TKGui(object):
     def set_control(option):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
+        filetypes = None
+        actions_open_type = None
         ctl = ttk.Entry
-        if option.get('dest', '') == 'alignments_path':
-            sysbrowser = 'load'
-        elif option.get('action', '') == FullPaths:
+        if option.get('action', '') == FullPaths:
             sysbrowser = 'folder'
+        elif option.get('action', '') == DirFullPaths:
+            sysbrowser = 'folder'
+        elif option.get('action', '') == FileFullPaths:
+            sysbrowser = 'load'
+            filetypes = option.get('filetypes', None)
+        elif option.get('action', '') == ComboFullPaths:
+            sysbrowser = 'combo'
+            actions_open_type = option['actions_open_type']
+            filetypes = option.get('filetypes', None)
         elif option.get('choices', '') != '':
             ctl = ttk.Combobox
         elif option.get('action', '') == 'store_true':
             ctl = ttk.Checkbutton
-        return ctl, sysbrowser
+        return ctl, sysbrowser, filetypes, actions_open_type
 
-    def parse_arguments(self, description, subparser, command):
-        """ Parse the command line arguments for the GUI """
-        parser = subparser.add_parser(
-            command,
-            help="This Launches a GUI for Faceswap.",
-            description=description,
-            epilog="Questions and feedback: \
-                    https://github.com/deepfakes/faceswap-playground")
-
-        parser.add_argument('-d', '--debug',
-                            action='store_true',
-                            dest='debug',
-                            default=False,
-                            help='Output to Shell console instead of GUI console')
-        parser.set_defaults(func=self.process)
-
-    def process(self, arguments):
+    def process(self):
         """ Builds the GUI """
-        self.arguments = arguments
-        self.utils.debugconsole = self.arguments.debug
+        self.utils.debugconsole = self.args.debug
         self.root.build_gui()
         self.root.gui.mainloop()
