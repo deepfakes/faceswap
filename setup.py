@@ -6,6 +6,7 @@ import sys
 import platform
 OS_Version = (platform.system(), platform.release())
 Py_Version = (platform.python_version(), platform.architecture()[0])
+LD_LIBRARY_PATH = os.environ.get("LD_LIBRARY_PATH", None)
 IS_ADMIN = False
 IS_VIRTUALENV = False
 CUDA_Version = ""
@@ -19,7 +20,7 @@ Installed_Packages = {}
 Missing_Packages = []
 
 # load requirements list
-with open('requirements-docker.txt') as req:
+with open("requirements.txt") as req:
     for r in req.readlines():
         r = r.strip()
         if r and (not r.startswith("#")):
@@ -28,18 +29,18 @@ with open('requirements-docker.txt') as req:
 ### <<< ENV
 
 ### >>> OUTPUT
-color_red = '\033[31m'
-color_green = '\033[32m'
-color_yellow = '\033[33m'
-color_default = '\033[0m'
+color_red = "\033[31m"
+color_green = "\033[32m"
+color_yellow = "\033[33m"
+color_default = "\033[0m"
 
 def __indent_text_block(text):
     a = text.splitlines()
     if len(a)>1:
-        b = a[0] + '\r\n'
+        b = a[0] + "\r\n"
         for i in range(1, len(a)-1):
-            b = b + '        ' + a[i] + '\r\n'
-        b = b +  '        ' + a[-1]
+            b = b + "        " + a[i] + "\r\n"
+        b = b +  "        " + a[-1]
         return b
     else:
         return text
@@ -49,15 +50,15 @@ def Term_Support_Color():
     return (OS_Version[0] == "Linux" or OS_Version[0] == "Darwin")
 
 def INFO(text):
-    t = '%sINFO   %s ' % (color_green, color_default) if Term_Support_Color() else 'INFO    '
+    t = "%sINFO   %s " % (color_green, color_default) if Term_Support_Color() else "INFO    "
     print(t + __indent_text_block(text))
 
 def WARNING(text):
-    t = '%sWARNING%s ' % (color_yellow, color_default) if Term_Support_Color() else 'WARNING '
+    t = "%sWARNING%s " % (color_yellow, color_default) if Term_Support_Color() else "WARNING "
     print(t + __indent_text_block(text))
 
 def ERROR(text):
-    t = '%sERROR  %s ' % (color_red, color_default) if Term_Support_Color() else 'ERROR   '
+    t = "%sERROR  %s " % (color_red, color_default) if Term_Support_Color() else "ERROR   "
     print(t + __indent_text_block(text))
     exit(1)
 
@@ -71,9 +72,9 @@ def Check_Permission():
     except AttributeError:
         IS_ADMIN = ctypes.windll.shell32.IsUserAnAdmin() != 0
     if IS_ADMIN:
-        INFO('Running as Root/Admin')
+        INFO("Running as Root/Admin")
     else:
-        WARNING('Running without root/admin privileges')
+        WARNING("Running without root/admin privileges")
 
 def Check_System():
     global OS_Version
@@ -85,7 +86,7 @@ def Check_System():
 def Enable_CUDA():
     global ENABLE_CUDA
     i = input("Enable  CUDA? [Y/n] ")
-    if i == '' or i == 'Y' or i == 'y':
+    if i == "" or i == "Y" or i == "y":
         INFO("CUDA Enabled")
         ENABLE_CUDA = True
     else:
@@ -95,7 +96,7 @@ def Enable_CUDA():
 def Enable_Docker():
     global ENABLE_DOCKER
     i = input("Enable  Docker? [Y/n] ")
-    if i == '' or i == 'Y' or i == 'y':
+    if i == "" or i == "Y" or i == "y":
         INFO("Docker Enabled")
         ENABLE_DOCKER = True
     else:
@@ -105,11 +106,9 @@ def Enable_Docker():
 def Check_Python():
     global Py_Version, IS_VIRTUALENV
     # check if in virtualenv
-    if hasattr(sys, 'real_prefix'):
-        IS_VIRTUALENV = True
-    else:
-        IS_VIRTUALENV = False
-    if Py_Version[0].split('.')[0] == '3' and  Py_Version[1] == '64bit':
+    IS_VIRTUALENV = (hasattr(sys, "real_prefix")
+                     or (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
+    if Py_Version[0].split(".")[0] == "3" and  Py_Version[1] == "64bit":
         INFO("Installed Python: {0} {1}".format(Py_Version[0],Py_Version[1]))
         return True
     else:
@@ -124,7 +123,7 @@ def Check_PIP():
             from pip.utils import get_installed_distributions, get_installed_version
         global Installed_Packages
         Installed_Packages = {pkg.project_name:pkg.version for pkg in get_installed_distributions()}
-        INFO("Installed PIP: " + get_installed_version('pip'))
+        INFO("Installed PIP: " + get_installed_version("pip"))
         return True
     except ImportError:
         ERROR("Import pip failed. Please Install python3-pip and try again")
@@ -133,58 +132,72 @@ def Check_PIP():
 # only invoked in linux
 def Check_CUDA():
     global CUDA_Version
-    a=os.popen('ldconfig -p | grep -P -o "libcudart.so.\d.\d" | head -n 1')
+    a=os.popen("ldconfig -p | grep -P -o \"libcudart.so.\d.\d\" | head -n 1")
     libcudart = a.read()
+    if LD_LIBRARY_PATH and not libcudart:
+        paths = LD_LIBRARY_PATH.split(":")
+        for path in paths:
+            a = os.popen("ls {} | grep -P -o \"libcudart.so.\d.\d\" | head -n 1".format(path))
+            libcudart = a.read()
+            if libcudart:
+                break
     if libcudart:
         CUDA_Version = libcudart[13:].rstrip()
         if CUDA_Version:
             INFO("CUDA version: " + CUDA_Version)
     else:
-        ERROR('''CUDA not found. Install and try again.
+        ERROR("""CUDA not found. Install and try again.
 Recommended version:      CUDA 9.0     cuDNN 7.1.3
 CUDA: https://developer.nvidia.com/cuda-downloads
 cuDNN: https://developer.nvidia.com/rdp/cudnn-download
-''')
+""")
 
 # only invoked in linux
 def Check_cuDNN():
-    a=os.popen('ldconfig -p | grep -P -o "libcudnn.so.\d" | head -n 1')
+    a=os.popen("ldconfig -p | grep -P -o \"libcudnn.so.\d\" | head -n 1")
     libcudnn = a.read()
+    if LD_LIBRARY_PATH and not libcudnn:
+        paths = LD_LIBRARY_PATH.split(":")
+        for path in paths:
+            a = os.popen("ls {} | grep -P -o \"libcudnn.so.\d\" | head -n 1".format(path))
+            libcudnn = a.read()
+            if libcudnn:
+                break
     if libcudnn:
         cudnn_version = libcudnn[12:].rstrip()
         if cudnn_version:
             INFO("cuDNN version: " + cudnn_version)
     else:
-        ERROR('''cuDNN not found. Install and try again.
+        ERROR("""cuDNN not found. Install and try again.
 Recommended version:      CUDA 9.0     cuDNN 7.1.3
 CUDA: https://developer.nvidia.com/cuda-downloads
 cuDNN: https://developer.nvidia.com/rdp/cudnn-download
-''')
+""")
 
 def Continue():
     i = input("Are System Dependencies met? [y/N] ")
-    if i == '' or i == 'N' or i == 'n':
+    if i == "" or i == "N" or i == "n":
         exit(1)
 
 def Check_Missing_Dep():
     global Missing_Packages, Installed_Packages
     Missing_Packages = []
     for pkg in Required_Packages:
-        key = pkg.split('==')[0]
+        key = pkg.split("==")[0]
         if not key in Installed_Packages:
             Missing_Packages.append(pkg)
             continue
         else:
-            if len(pkg.split('=='))>1:
-                if pkg.split('==')[1] != Installed_Packages.get(key):
+            if len(pkg.split("=="))>1:
+                if pkg.split("==")[1] != Installed_Packages.get(key):
                     Missing_Packages.append(pkg)
                     continue
 
 def Check_dlib():
     global Missing_Packages, COMPILE_DLIB_WITH_AVX_CUDA
-    if 'dlib' in Missing_Packages:
+    if "dlib" in Missing_Packages:
         i = input("Compile dlib with AVX (and CUDA if enabled)? [Y/n] ")
-        if i == '' or i == 'Y' or i == 'y':
+        if i == "" or i == "Y" or i == "y":
             INFO("dlib Configured")
             WARNING("Make sure you are using gcc-5/g++-5 and CUDA bin/lib in path")
             COMPILE_DLIB_WITH_AVX_CUDA = True
@@ -194,21 +207,21 @@ def Check_dlib():
 def Install_Missing_Dep():
     global Missing_Packages
     if len(Missing_Packages):
-        INFO('''Installing Missing Python Packages...''')
+        INFO("""Installing Required Python Packages. This may take some time...""")
         try:
             from pip._internal import main as pipmain
         except:
             from pip import main as pipmain
         for m in Missing_Packages:
-            msg = 'Installing {}'.format(m)
+            msg = "Installing {}".format(m)
             INFO(msg)
-            # hide info/warning
-            pipargs = ['install', '-qq']
+            # hide info/warning and fix cache hang
+            pipargs = ["install", "-qq", "--no-cache-dir"]
             # install as user to solve perm restriction
             if not IS_ADMIN and not IS_VIRTUALENV:
-                pipargs.append('--user')
+                pipargs.append("--user")
             # compile dlib with AVX ins and CUDA
-            if m.startswith('dlib') and COMPILE_DLIB_WITH_AVX_CUDA:
+            if m.startswith("dlib") and COMPILE_DLIB_WITH_AVX_CUDA:
                 pipargs.extend(["--install-option=--yes", "--install-option=USE_AVX_INSTRUCTIONS"])
             pipargs.append(m)
             # pip install -qq (--user) (--install-options) m
@@ -220,15 +233,32 @@ def Update_TF_Dep():
     if CUDA_Version.startswith("8.0"):
         Required_Packages[0] += "==1.4.0"
     elif CUDA_Version >= "9.1":
-            WARNING("Tensorflow has no official prebuild for CUDA 9.1 currently.\r\nTo continue, You have to build your own tensorflow-gpu.\r\nHelp: https://www.tensorflow.org/install/install_sources")
+            WARNING("Tensorflow has no official prebuild for CUDA 9.1 currently.\r\n"
+                    "To continue, You have to build and install your own tensorflow-gpu.\r\n"
+                    "Help: https://www.tensorflow.org/install/install_sources")
+            custom_tf = input("Location of custom tensorflow-gpu wheel (leave blank to manually install): ")
+            if not custom_tf:
+                del Required_Packages[0]
+                return
+            if os.path.isfile(custom_tf):
+                Required_Packages[0] = custom_tf
+            else:
+                ERROR("{} not found".format(custom_tf))
+                exit(1)
     elif not (CUDA_Version.startswith("9.1") or CUDA_Version.startswith("8.0") or CUDA_Version.startswith("9.0")):
-        WARNING("Unknown CUDA version %s. \r\nYou may want to Reinstall CUDA to version 9.0/8.0\r\nOr manually compile tensorflow-gpu\r\nHelp: https://www.tensorflow.org/install/install_sources" % CUDA_Version)
-        custom_tf_v = input("To continue any way, specify tensorflow-gpu version manually: ")
-        Required_Packages[0] = Required_Packages[0] + "==" + custom_tf_v
+        WARNING("Unknown CUDA version {}. \r\n"
+                "You may want to Reinstall CUDA to version 9.0/8.0\r\n"
+                "Or manually compile and install your own tensorflow-gpu\r\n"
+                "Help: https://www.tensorflow.org/install/install_sources".format(CUDA_Version))
+        custom_tf_v = input("To continue anyway, specify tensorflow-gpu version or leave blank to not install tensorflow: ")
+        if custom_tf_v:
+            Required_Packages[0] = Required_Packages[0] + "==" + custom_tf_v
+        else:
+            del Required_Packages[0]
 
 
 def Tips_1_1():
-    INFO('''1. Install Docker
+    INFO("""1. Install Docker
 https://www.docker.com/community-edition
 
 2. Build Docker Image For Faceswap
@@ -253,11 +283,11 @@ docker run -p 8888:8888 \\
 
 4. Open a new terminal to run faceswap.py in /srv
 docker exec -it faceswap-cpu bash
-'''.format(path=sys.path[0]))
+""".format(path=sys.path[0]))
     INFO("That's all you need to do with a docker. Have fun.")
 
 def Tips_1_2():
-    INFO('''1. Install Docker
+    INFO("""1. Install Docker
 https://www.docker.com/community-edition
 
 2. Install latest CUDA
@@ -287,10 +317,10 @@ docker run -p 8888:8888 \\
 
 6. Open a new terminal to interact with the project
 docker exec faceswap-gpu python /srv/tools.py gui
-'''.format(path=sys.path[0]))
+""".format(path=sys.path[0]))
 
 def Tips_2_1():
-    INFO('''Tensorflow has no official prebuilts for CUDA 9.1 currently.
+    INFO("""Tensorflow has no official prebuilts for CUDA 9.1 currently.
 
 1. Install CUDA 9.0 and cuDNN
 CUDA: https://developer.nvidia.com/cuda-downloads
@@ -300,27 +330,27 @@ cuDNN: https://developer.nvidia.com/rdp/cudnn-download (Add DLL to %PATH% in Win
 In Windows:
 Install CMake x64: https://cmake.org/download/
 
-In Debian/Ubuntu, it's like:
+In Debian/Ubuntu, try:
 apt-get install -y cmake libsm6 libxrender1 libxext-dev python3-tk
 
 3. Install PIP requirements
 You may want to execute `chcp 866` in cmd line
 to fix Unicode issues on Windows when installing dependencies
-''')
+""")
 
 
 def Tips_2_2():
-    INFO('''1. Install System Dependencies.
+    INFO("""1. Install System Dependencies.
 In Windows:
 Install CMake x64: https://cmake.org/download/
 
-In Debian/Ubuntu, it's like:
+In Debian/Ubuntu, try:
 apt-get install -y cmake libsm6 libxrender1 libxext-dev python3-tk
 
 2. Install PIP requirements
 You may want to execute `chcp 866` in cmd line
 to fix Unicode issues on Windows when installing dependencies
-''')
+""")
 
 
 def Main():
@@ -364,7 +394,7 @@ def Main():
         Check_Missing_Dep()
         Check_dlib()
         Install_Missing_Dep()
-        INFO('All All python3 dependencies are met.\r\nYou are good to go.')
+        INFO("All python3 dependencies are met.\r\nYou are good to go.")
 
 if __name__ == "__main__":
     Main()

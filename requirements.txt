@@ -9,9 +9,10 @@ dlib
 face-recognition
 tqdm
 matplotlib
+ffmpy==0.2.2
 
-# tensorflow is included in docker image
-# Still, if you are looking for dependencies for your manual install,
+# tensorflow is included within the docker image.
+# If you are looking for dependencies for a manual install,
 # you may want to install tensorflow-gpu==1.4.0 for CUDA 8.0 or tensorflow-gpu>=1.5.0 for CUDA 9.0
 
-# cmake need to be installed before compiling dlib.
+# cmake needs to be installed before compiling dlib.
