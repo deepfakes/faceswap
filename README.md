@@ -21,12 +21,16 @@ From your setup folder, run `python faceswap.py train`. This will take photos fr
 ### Convert
 From your setup folder, run `python faceswap.py convert`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
-#### General notes:
+### GUI
+Alternatively you can run the GUI by running `python faceswap.py gui`
+
+## General notes:
 - All of the scripts mentioned have `-h`/`--help` options with arguments that they will accept. You're smart, you can figure out how this works, right?!
 
-Note: there is no conversion for video yet. You can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
+NB: there is a conversion tool for video. This can be accessed by running `python tools.py effmpeg.py -h`. Alternatively you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
 
 ## Training Data
+A pre-trained model is not required, but you can download the following pre-trained Cage/Trump training model:
 **Whole project with training images and trained model (~300MB):**
 https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
@@ -35,11 +39,9 @@ https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https:
 ### Setup
 Clone the repo and setup you environment.
 
-Docker + Linux will get you straight to the point. Still there is another option to manually decide every detail. 
+You can either use the docker image or run `python setup.py`
 
-For more information, Try the setup helper `install-guide.py`
-
-Check out [INSTALL.md](INSTALL.md) and [USAGE.md](USAGE.md) for basic information on how to configure virtualenv and use the program.
+Check out [INSTALL.md](INSTALL.md) and [USAGE.md](USAGE.md) for more detailed instructions and basic information on how to configure virtualenv.
 
 You also need a modern GPU with CUDA support for best performance
 
