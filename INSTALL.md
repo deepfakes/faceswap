@@ -27,15 +27,11 @@ The type of computations that the process does are well suited for graphics card
 Alternatively there is a docker image that is based on Debian.
 
 # Important before you proceed
-**In its current iteration, the project relies heavily on the use of the command line. If you are unfamiliar with command line tools, you should not attempt any of the steps described in this guide.** Wait instead for this tool to become usable, or start learning more about working with the command line. This guide assumes you have intermediate knowledge of the command line. 
+**In its current iteration, the project relies heavily on the use of the command line, although a gui is available. if you are unfamiliar with command line tools, you may have difficulty setting up the environment and should perhaps not attempt any of the steps described in this guide.** This guide assumes you have intermediate knowledge of the command line. 
 
 The developers are also not responsible for any damage you might cause to your own computer.
 
 # Installation Instructions
-
-Basically, you can follow the hints given by `install-guide.py` to finish the environment setup. The script will provides instructions/links depending on your system status.
-
-
 ## Installing dependencies
 - Python >= 3.2
   - apt/yum install python3 (Linux)
@@ -43,20 +39,30 @@ Basically, you can follow the hints given by `install-guide.py` to finish the en
   - [brew](https://brew.sh/) install python3 (macOS)
 
 - [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
-
+- If you are using an Nvidia graphics card You should install CUDA (https://developer.nvidia.com/cuda-zone) and CUDNN (https://developer.nvidia.com/cudnn). If you do not plan to build Tensorflow yourself, make sure you install no higher than version 9.0 of CUDA and 7.0.x of CUDNN
+- dlib is required for face recognition and is compiled as part of the setup process. You will need the following applications for your os to successfully install dlib (nb: list may be incomplete. Please raise an issue if another prerequisite is required for your OS):
+    - Windows: Visual Studio 2015, CMake v3.8.2
+    - Linux: build-essential, cmake
+    - macOS: xquartz 
 
 ## Getting the faceswap code
 Simply download the code from http://github.com/deepfakes/faceswap - For development it is recommended to use git instead of downloading the code and extracting it.
 
 For now, extract the code to a directory where you're comfortable working with it. Navigate to it with the command line. For our example we will use `~/faceswap/` as our project directory.
 
-
 ## Setting up for our project
 
-Information for deciding every option:
-  - CUDA: For acceleration. Requires a good nVidia Graphics Card (which supports CUDA inside)
-  - Docker: Provide a ready-made image. Hide trivial details. Get you straight to the project.
-  - nVidia-Docker: Access to the nVidia GPU on host machine from inside container.
+### Setup
+Enter the folder that faceswap has been downloaded to and run:
+```bash
+python setup.py
+```
+If setup fails for any reason you can still manually install the packages listed within requirements.txt
+
+### About some of the options:
+   - CUDA: For acceleration. Requires a good nVidia Graphics Card (which supports CUDA inside)
+   - Docker: Provide a ready-made image. Hide trivial details. Get you straight to the project.
+   - nVidia-Docker: Access to the nVidia GPU on host machine from inside container.
 
 CUDA with Docker in 20 minutes.
 ```
@@ -135,6 +141,12 @@ Once all these requirements are installed, you can attempt to run the faceswap t
 ```bash
 python faceswap.py -h
 ```
+
+or run with `gui` to launch the GUI
+```bash
+python faceswap.py gui
+```
+
 
 Proceed to [../blob/master/USAGE.md](USAGE.md)
 
