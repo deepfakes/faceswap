@@ -31,6 +31,7 @@ NB: there is a conversion tool for video. This can be accessed by running `pytho
 
 ## Training Data
 A pre-trained model is not required, but you can download the following pre-trained Cage/Trump training model:
+
 **Whole project with training images and trained model (~300MB):**
 https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
