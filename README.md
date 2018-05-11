@@ -27,7 +27,7 @@ Alternatively you can run the GUI by running `python faceswap.py gui`
 ## General notes:
 - All of the scripts mentioned have `-h`/`--help` options with arguments that they will accept. You're smart, you can figure out how this works, right?!
 
-NB: there is a conversion tool for video. This can be accessed by running `python tools.py effmpeg.py -h`. Alternatively you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
+NB: there is a conversion tool for video. This can be accessed by running `python tools.py effmpeg -h`. Alternatively you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
 
 ## Training Data
 A pre-trained model is not required, but you can download the following pre-trained Cage/Trump training model:
