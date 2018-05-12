@@ -1,8 +1,21 @@
-import json, pickle
+#!/usr/bin/env python3
+"""
+Library providing convenient classes and methods for writing data to files.
+"""
+import sys
+import json
+import pickle
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+
 class Serializer(object):
-    ext = "wtf"
-    woptions = "????"
-    roptions = "????"
+    ext = ""
+    woptions = ""
+    roptions = ""
 
     @classmethod
     def marshal(cls, input_data):
@@ -20,20 +33,11 @@ class YAMLSerializer(Serializer):
 
     @classmethod
     def marshal(cls, input_data):
-        try:
-            import yaml
-        except ImportError:
-            print("You must have PyYAML installed to use YAMLSerializer")
         return yaml.dump(input_data, default_flow_style=False)
 
     @classmethod
     def unmarshal(cls, input_string):
-        try:
-            import yaml
-        except ImportError:
-            print("You must have PyYAML installed to use YAMLSerializer")
         return yaml.load(input_string)
-
 
 
 class JSONSerializer(Serializer):
@@ -63,21 +67,28 @@ class PickleSerializer(Serializer):
     def unmarshal(cls, input_bytes):
         return pickle.loads(input_bytes)
 
+
 def get_serializer(serializer):
-    if serializer == "yaml":
-        return YAMLSerializer
     if serializer == "json":
         return JSONSerializer
-    if serializer == "pickle":
+    elif serializer == "pickle":
         return PickleSerializer
-    raise NotImplementedError()
-
-
-def get_serializer_fromext(ext):
-    if ext in (".yaml", ".yml"):
+    elif serializer == "yaml" and yaml is not None:
         return YAMLSerializer
+    elif serializer == "yaml" and yaml is None:
+        print("You must have PyYAML installed to use YAML as the serializer.\n"
+              "Switching to JSON as the serializer.", file=sys.stderr)
+    return JSONSerializer
+
+
+def get_serializer_from_ext(ext):
     if ext == ".json":
         return JSONSerializer
-    if ext == ".p":
+    elif ext == ".p":
         return PickleSerializer
-    raise NotImplementedError("No serializer matching that file type.")
+    elif ext in (".yaml", ".yml") and yaml is not None:
+        return YAMLSerializer
+    elif ext in (".yaml", ".yml") and yaml is None:
+        print("You must have PyYAML installed to use YAML as the serializer.\n"
+              "Switching to JSON as the serializer.", file=sys.stderr)
+    return JSONSerializer
