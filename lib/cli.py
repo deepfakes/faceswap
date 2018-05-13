@@ -1,4 +1,4 @@
-#!/usr/bin python3
+#!/usr/bin/env python3
 """ Command Line Arguments """
 import argparse
 import os
@@ -236,7 +236,7 @@ class ExtractConvertArgs(FaceSwapArgs):
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        alignments_filetypes = [["Serializers", ['json', 'yaml', 'p']],
+        alignments_filetypes = [["Serializers", ['json', 'p', 'yaml']],
                                 ["JSON", ["json"]],
                                 ["Pickle", ["p"]],
                                 ["YAML", ["yaml"]]]
@@ -261,15 +261,20 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "filetypes": alignments_filetypes,
                               "type": str,
                               "dest": "alignments_path",
-                              "help": "optional path to alignments file"})
+                              "help": "Optional path to an alignments file."})
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
                               "dest": "serializer",
+                              "default": "json",
                               "choices": ("json", "pickle", "yaml"),
-                              "help": "serializer for alignments file"})
+                              "help": "Serializer for alignments file. If "
+                                      "yaml is chosen and not available, then "
+                                      "json will be used as the default "
+                                      "fallback."})
         argument_list.append({"opts": ("-D", "--detector"),
                               "type": str,
-                              # case sensitive because this is used to load a plugin.
+                              # case sensitive because this is used to load a
+                              # plugin.
                               "choices": ("hog", "cnn", "all"),
                               "default": "hog",
                               "help": "Detector to use. 'cnn' detects many "

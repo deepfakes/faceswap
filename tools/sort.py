@@ -1,4 +1,7 @@
-#!/usr/bin python3
+#!/usr/bin/env python3
+"""
+A tool that allows for sorting and grouping images in different ways.
+"""
 import argparse
 import os
 import sys
@@ -7,8 +10,10 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 from shutil import copyfile
-import json
+
+# faceswap imports
 from lib.cli import DirFullPaths, FileFullPaths
+import lib.Serializer as Serializer
 
 # DLIB is a GPU Memory hog, so the following modules should only be imported
 # when required
@@ -37,10 +42,16 @@ class SortProcessor(object):
         self.optional_arguments = self.get_optional_arguments()
         self.args = None
         self.changes = None
+        self.serializer = None
         self.parse_arguments(description, subparser, command)
 
     @staticmethod
     def get_argument_list():
+        log_filetypes = [["Serializers", ['json', 'yaml']],
+                         ["JSON", ["json"]],
+                         ["YAML", ["yaml"]]]
+        log_filetypes = FileFullPaths.prep_filetypes(log_filetypes)
+
         arguments_list = list()
         arguments_list.append({"opts": ('-i', '--input'),
                                "action": DirFullPaths,
@@ -52,11 +63,11 @@ class SortProcessor(object):
         arguments_list.append({"opts": ('-o', '--output'),
                                "action": DirFullPaths,
                                "dest": "output_dir",
-                               "default": "output_dir",
+                               "default": "_output_dir",
                                "help": "Output directory for sorted aligned "
                                        "faces."})
 
-        arguments_list.append({"opts": ('-f', '--final-process'),
+        arguments_list.append({"opts": ('-fp', '--final-process'),
                                "type": str,
                                "choices": ("folders", "rename"),
                                "dest": 'final_process',
@@ -69,72 +80,16 @@ class SortProcessor(object):
                                        "-s/--sort-by then they are renamed. "
                                        "Default: rename"})
 
-        arguments_list.append({"opts": ('-t', '--ref_threshold'),
-                               "type": float,
-                               "dest": 'min_threshold',
-                               "default": -1.0,
-                               "help": "Float value. "
-                                       "Minimum threshold to use for grouping "
-                                       "comparison with 'face' and 'hist' methods. "
-                                       "The lower the value the more discriminating "
-                                       "the grouping is. "
-                                       "Leaving -1.0 will make the program "
-                                       "set the default value automatically. "
-                                       "For face 0.6 should be enough, with 0.5 "
-                                       "being very discriminating. "
-                                       "For face-cnn 7.2 should be enough, with 4 "
-                                       "being very discriminating. "
-                                       "For hist 0.3 should be enough, with 0.2 "
-                                       "being very discriminating. "
-                                       "Be careful setting a value that's too "
-                                       "low in a directory with many images, as "
-                                       "this could result in a lot of directories "
-                                       " being created. "
-                                       "Defaults: face 0.6, face-cnn 7.2, hist 0.3"})
-
-        arguments_list.append({"opts": ('-b', '--bins'),
-                               "type": int,
-                               "dest": 'num_bins',
-                               "default": 5,
-                               "help": "Integer value. "
-                                       "Number of folders that will be used to "
-                                       "group by blur. Folder 0 will be the least "
-                                       "blurry, while the last folder will be the "
-                                       "blurriest. If the number of images doesn't "
-                                       "divide evenly into the number of bins, the "
-                                       "remaining images get put in the last bin as "
-                                       "they will be the blurriest by definition. "
-                                       "Default value: 5"})
-
         arguments_list.append({"opts": ('-k', '--keep'),
                                "action": 'store_true',
                                "dest": 'keep_original',
                                "default": False,
                                "help": "Keeps the original files in the input "
-                                       "directory. Be careful when using this with "
-                                       "rename grouping and no specified output "
-                                       "directory as this would keep the original "
-                                       "and renamed files in the same directory."})
-
-        arguments_list.append({"opts": ('-l', '--log-changes'),
-                               "action": 'store_true',
-                               "dest": 'log_changes',
-                               "default": False,
-                               "help": "Logs file renaming changes if grouping by "
-                                       "renaming, or it logs the file "
-                                       "copying/movement if grouping by folders. "
-                                       "If no log file is specified with "
-                                       "'--log-file', then a 'sort_log.json' file "
-                                       "will be created in the input directory."})
-
-        arguments_list.append({"opts": ('-lf', '--log-file'),
-                               "action": FileFullPaths,
-                               "filetypes": ("JSON", "*.json"),
-                               "dest": 'log_file_path',
-                               "default": 'sort_log.json',
-                               "help": "Specify a log file to use for saving the "
-                                       "renaming or grouping information. "
-                                       "Default: sort_log.json"})
+                                       "directory. Be careful when using this "
+                                       "with rename grouping and no specified "
+                                       "output directory as this would keep "
+                                       "the original and renamed files in the "
+                                       "same directory."})
 
         arguments_list.append({"opts": ('-s', '--sort-by'),
                                "type": str,
@@ -150,14 +105,89 @@ class SortProcessor(object):
 
         arguments_list.append({"opts": ('-g', '--group-by'),
                                "type": str,
-                               "choices": ("blur", "face", "face-cnn", "hist"),
+                               "choices": ("blur", "face", "face-cnn",
+                                           "face-yaw", "hist"),
                                "dest": 'group_method',
                                "default": "hist",
                                "help": "Group by method. "
-                                       "When -fp/--final-processing by folders "
-                                       "choose the how the images are grouped after "
-                                       "sorting. "
+                                       "When -fp/--final-processing by "
+                                       "folders choose the how the images are "
+                                       "grouped after sorting. "
                                        "Default: hist"})
+
+        arguments_list.append({"opts": ('-t', '--ref_threshold'),
+                               "type": float,
+                               "dest": 'min_threshold',
+                               "default": -1.0,
+                               "help": "Float value. "
+                                       "Minimum threshold to use for grouping "
+                                       "comparison with 'face' and 'hist' "
+                                       "methods. The lower the value the more "
+                                       "discriminating the grouping is. "
+                                       "Leaving -1.0 will make the program "
+                                       "set the default value automatically. "
+                                       "For face 0.6 should be enough, with "
+                                       "0.5 being very discriminating. "
+                                       "For face-cnn 7.2 should be enough, "
+                                       "with 4 being very discriminating. "
+                                       "For hist 0.3 should be enough, with "
+                                       "0.2 being very discriminating. "
+                                       "Be careful setting a value that's too "
+                                       "low in a directory with many images, "
+                                       "as this could result in a lot of "
+                                       "directories being created. "
+                                       "Defaults: face 0.6, face-cnn 7.2, "
+                                       "hist 0.3"})
+
+        arguments_list.append({"opts": ('-b', '--bins'),
+                               "type": int,
+                               "dest": 'num_bins',
+                               "default": 5,
+                               "help": "Integer value. "
+                                       "Number of folders that will be used "
+                                       "to group by blur and face-yaw. "
+                                       "For blur folder 0 will be the least "
+                                       "blurry, while the last folder will be "
+                                       "the blurriest. "
+                                       "For face-yaw the number of bins is by "
+                                       "how much 180 degrees is divided. So "
+                                       "if you use 18, then each folder will "
+                                       "be a 10 degree increment. Folder 0 "
+                                       "will contain faces looking the most "
+                                       "to the left whereas the last folder "
+                                       "will contain the faces looking the "
+                                       "most to the right. "
+                                       "If the number of images doesn't "
+                                       "divide evenly into the number of "
+                                       "bins, the remaining images get put in "
+                                       "the last bin."
+                                       "Default value: 5"})
+
+        arguments_list.append({"opts": ('-l', '--log-changes'),
+                               "action": 'store_true',
+                               "dest": 'log_changes',
+                               "default": False,
+                               "help": "Logs file renaming changes if "
+                                       "grouping by renaming, or it logs the "
+                                       "file copying/movement if grouping by "
+                                       "folders. If no log file is specified "
+                                       "with '--log-file', then a "
+                                       "'sort_log.json' file will be created "
+                                       "in the input directory."})
+
+        arguments_list.append({"opts": ('-lf', '--log-file'),
+                               "action": FileFullPaths,
+                               "filetypes": log_filetypes,
+                               "dest": 'log_file_path',
+                               "default": 'sort_log.json',
+                               "help": "Specify a log file to use for saving "
+                                       "the renaming or grouping information. "
+                                       "If specified extension isn't 'json' "
+                                       "or 'yaml', then json will be used as "
+                                       "the serializer, with the supplied "
+                                       "filename. "
+                                       "Default: sort_log.json"})
+
         return arguments_list
 
     @staticmethod
@@ -202,19 +232,11 @@ class SortProcessor(object):
 
         # Set output dir to the same value as input dir
         # if the user didn't specify it.
-        if self.args.output_dir.lower() == "--default":
+        if self.args.output_dir.lower() == "_output_dir":
             self.args.output_dir = self.args.input_dir
 
-        # Set final_process to group if folders was chosen
-        if self.args.final_process.lower() == "folders":
-            self.args.final_process = "group"
-
-        # Assign default group_method if not set by user
-        #if self.args.group_method == '--default':
-        #    self.args.group_method = self.args.sort_method.replace('-dissim', '')
-
         # Assigning default threshold values based on grouping method
-        if self.args.min_threshold == -1.0 and self.args.final_process == "group":
+        if self.args.final_process == "folders" and self.args.min_threshold == -1.0:
             method = self.args.group_method.lower()
             if method == 'face':
                 self.args.min_threshold = 0.6
@@ -227,9 +249,14 @@ class SortProcessor(object):
         if self.args.log_changes:
             self.changes = dict()
 
-        # Assign default sort_log.json value if user didn't specify one
-        if self.args.log_file_path.lower() == 'sort_log.json':
-            self.args.log_file_path = os.path.join(self.args.input_dir, 'sort_log.json')
+            # Assign default sort_log.json value if user didn't specify one
+            if self.args.log_file_path == 'sort_log.json':
+                self.args.log_file_path = os.path.join(self.args.input_dir,
+                                                       'sort_log.json')
+
+            # Set serializer based on logfile extension
+            serializer_ext = os.path.splitext(self.args.log_file_path)[-1]
+            self.serializer = Serializer.get_serializer_from_ext(serializer_ext)
 
         # Prepare sort, group and final process method names
         _sort = "sort_" + self.args.sort_method.lower()
@@ -252,7 +279,7 @@ class SortProcessor(object):
         final_method = self.args.final_process.lower()
 
         img_list = getattr(self, sort_method)()
-        if "group" in final_method:
+        if "folders" in final_method:
             # Check if non-dissim sort method and group method are not the same
             if group_method.replace('group_', '') not in sort_method:
                 img_list = self.reload_images(group_method, img_list)
@@ -395,25 +422,15 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_yaw(self):
-        def calc_landmarks_face_pitch(fl):  # unused
-            t = ((fl[6][1] - fl[8][1]) + (fl[10][1] - fl[8][1])) / 2.0
-            b = fl[8][1]
-            return b - t
-
-        def calc_landmarks_face_yaw(fl):
-            l = ((fl[27][0] - fl[0][0]) + (fl[28][0] - fl[1][0]) + (fl[29][0] - fl[2][0])) / 3.0
-            r = ((fl[16][0] - fl[27][0]) + (fl[15][0] - fl[28][0]) + (fl[14][0] - fl[29][0])) / 3.0
-            return r - l
-
         import_FaceLandmarksExtractor()
         input_dir = self.args.input_dir
 
         img_list = []
         for x in tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout):
             d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True, input_is_predetected_face=True)
-            img_list.append([x, calc_landmarks_face_yaw(np.array(d[0][1]))])
+            img_list.append([x, self.calc_landmarks_face_yaw(np.array(d[0][1]))])
 
-        print("Sorting...")
+        print("Sorting by face-yaw...")
         img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
 
         return img_list
@@ -590,6 +607,29 @@ class SortProcessor(object):
 
         return bins
 
+    def group_face_yaw(self, img_list):
+        # Starting the binning process
+        num_bins = self.args.num_bins
+
+        # The last bin will get all extra images if it's
+        # not possible to distribute them evenly
+        num_per_bin = len(img_list) // num_bins
+        remainder = len(img_list) % num_bins
+
+        print("Grouping by face-yaw...")
+        bins = [[] for _ in range(num_bins)]
+        image_index = 0
+        for i in range(num_bins):
+            for j in range(num_per_bin):
+                bins[i].append(img_list[image_index][0])
+                image_index += 1
+
+        # If remainder is 0, nothing gets added to the last bin.
+        for i in range(1, remainder + 1):
+            bins[-1].append(img_list[-i][0])
+
+        return bins
+
     def group_hist(self, img_list):
         print("Grouping by histogram...")
 
@@ -660,9 +700,9 @@ class SortProcessor(object):
                 print('fail to rename {}'.format(src))
 
         if self.args.log_changes:
-            self.write_to_log(self.args.log_file_path, self.changes)
+            self.write_to_log(self.changes)
 
-    def final_process_group(self, bins):
+    def final_process_folders(self, bins):
         output_dir = self.args.output_dir
 
         process_file = self.set_process_file_method(self.args.log_changes,
@@ -695,9 +735,14 @@ class SortProcessor(object):
                     print('Failed to move {0} to {1}'.format(src, dst))
 
         if self.args.log_changes:
-            self.write_to_log(self.args.log_file_path, self.changes)
+            self.write_to_log(self.changes)
 
     # Various helper methods
+    def write_to_log(self, changes):
+        print("Writing sort log to: {}".format(self.args.log_file_path))
+        with open(self.args.log_file_path, 'w') as lf:
+            lf.write(self.serializer.marshal(changes))
+
     def reload_images(self, group_method, img_list):
         """
         Reloads the image list by replacing the comparative values with those
@@ -727,6 +772,13 @@ class SortProcessor(object):
                 d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True,
                                                    input_is_predetected_face=True)
                 temp_list.append([x, np.array(d[0][1]) if len(d) > 0 else np.zeros((68, 2))])
+        elif group_method == 'group_face_yaw':
+            import_FaceLandmarksExtractor()
+            temp_list = []
+            for x in tqdm(self.find_images(input_dir), desc="Reloading", file=sys.stdout):
+                d = FaceLandmarksExtractor.extract(cv2.imread(x), 'cnn', True,
+                                                   input_is_predetected_face=True)
+                temp_list.append([x, self.calc_landmarks_face_yaw(np.array(d[0][1]))])
         elif group_method == 'group_hist':
             temp_list = [
                 [x, cv2.calcHist([cv2.imread(x)], [0], None, [256], [0, 256])]
@@ -782,6 +834,24 @@ class SortProcessor(object):
         blur_map = cv2.Laplacian(image, cv2.CV_64F)
         score = np.var(blur_map)
         return score
+
+    @staticmethod
+    def calc_landmarks_face_pitch(fl):  # unused
+        t = ((fl[6][1] - fl[8][1]) + (fl[10][1] - fl[8][1])) / 2.0
+        b = fl[8][1]
+        return b - t
+
+    @staticmethod
+    def calc_landmarks_face_yaw(fl):
+        l = ((fl[27][0] - fl[0][0])
+             + (fl[28][0] - fl[1][0])
+             + (fl[29][0] - fl[2][0])) \
+            / 3.0
+        r = ((fl[16][0] - fl[27][0])
+             + (fl[15][0] - fl[28][0])
+             + (fl[14][0] - fl[29][0])) \
+            / 3.0
+        return r - l
 
     @staticmethod
     def set_process_file_method(log_changes, keep_original):
@@ -864,11 +934,6 @@ class SortProcessor(object):
             score = np.sum(np.absolute((fl2 - fl1).flatten()))
             scores.append(score)
         return sum(scores) / len(scores)
-
-    @staticmethod
-    def write_to_log(log_file_path, changes):
-        with open(log_file_path, 'w') as lf:
-            json.dump(changes, lf, sort_keys=True, indent=4)
 
 
 def bad_args(args):
