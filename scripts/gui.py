@@ -393,7 +393,7 @@ class FaceswapGui(object):
 
         if self.calling_file == 'faceswap.py':
             # Commands explicitly stated to ensure consistent ordering
-            cmdlist = ('extract', 'train', 'convert')
+            cmdlist = ('extract', 'train', 'convert', 'effmpeg', 'sort')
         else:
             cmdlist = self.utils.opts.keys()
 
