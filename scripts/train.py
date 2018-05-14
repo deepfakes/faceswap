@@ -186,7 +186,7 @@ class Train(object):
                 imgfile = os.path.join(scriptpath, img)
                 cv2.imwrite(imgfile, image)
             if self.args.redirect_gui:
-                img = ".gui_preview_{}.png".format(name)
+                img = ".gui_preview_{}.jpg".format(name)
                 imgfile = os.path.join(scriptpath, "lib", "gui", ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)
             if self.args.preview:

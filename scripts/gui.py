@@ -9,8 +9,8 @@ from tkinter import messagebox, ttk
 from argparse import SUPPRESS
 
 from lib.cli import FullPaths
-from lib.gui import CommandNotebook, Config, ConsoleOut, DisplayNotebook
-from lib.gui import Images, ProcessWrapper, Settings, StatusBar
+from lib.gui import CurrentSession, CommandNotebook, Config, ConsoleOut
+from lib.gui import  DisplayNotebook, Images, ProcessWrapper, StatusBar
 
 class FaceswapGui(tk.Tk):
     """ The Graphical User Interface """
@@ -19,11 +19,15 @@ class FaceswapGui(tk.Tk):
         tk.Tk.__init__(self)
 
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        self.settings = Settings(pathcache)
+        #TODO Remove DisplayNotebook from wrapper and handle internally
+        #TODO Fix circular imports:
+        #   singletion/console
+        #TODO Saving session stats currently overwrites last session. Fix
         self.images = Images(pathcache)
         self.opts = opts
         self.calling_file = calling_file
-        self.wrapper = ProcessWrapper(pathscript, calling_file)
+        self.session = CurrentSession()
+        self.wrapper = ProcessWrapper(self.session, pathscript, calling_file)
 
         StatusBar(self)
         self.images.delete_preview()
@@ -40,13 +44,12 @@ class FaceswapGui(tk.Tk):
         console.build_console()
 
         CommandNotebook(topcontainer, self.opts, self.calling_file)
-        DisplayNotebook(topcontainer)
+        self.wrapper.displaybook = DisplayNotebook(topcontainer, self.session)
 
     def menu(self):
         """ Menu bar for loading and saving configs """
         menubar = tk.Menu(self)
         filemenu = tk.Menu(menubar, tearoff=0)
-        editmenu = tk.Menu(menubar, tearoff=0)
 
         config = Config(self.opts)
 
@@ -68,12 +71,7 @@ class FaceswapGui(tk.Tk):
                              underline=0,
                              command=self.close_app)
 
-        editmenu.add_command(label="Settings",
-                             underline=0,
-                             command=self.settings.popup)
-
         menubar.add_cascade(label="File", menu=filemenu, underline=0)
-        menubar.add_cascade(label="Edit", menu=editmenu, underline=0)
         self.config(menu=menubar)
 
     def add_containers(self):

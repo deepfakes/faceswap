@@ -12,7 +12,7 @@ class StatusBar(ttk.Frame, metaclass=Singleton):
 
     def __init__(self, parent=None):
         ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=True)
+        self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=False)
 
         self.status_message = tk.StringVar()
         self.pbar_message = tk.StringVar()

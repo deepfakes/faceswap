@@ -18,12 +18,13 @@ class ProcessWrapper(object, metaclass=Singleton):
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, pathscript=None, calling_file='faceswap.py'):
+    def __init__(self, session=None, pathscript=None, calling_file='faceswap.py'):
+        self.session = session
         self.runningtask = False
         self.pathexecscript = os.path.join(pathscript, calling_file)
         self.task = FaceswapControl(self)
+        self.displaybook = None
         self.actionbtns = dict()
-        self.lossdict = dict()
         self.command = None
 
     def action_command(self, command, opts):
@@ -33,24 +34,40 @@ class ProcessWrapper(object, metaclass=Singleton):
             self.command = None
         else:
             self.command = command
-            self.prepare()
-            args = self.build_args(opts)
+            args = self.prepare(opts)
             self.task.execute_script(command, args)
 
-    def prepare(self):
+    def generate_command(self, command, opts):
+        """ Generate the command line arguments and output """
+        args = self.build_args(opts, command=command, generate=True)
+        ConsoleOut().clear()
+        print(' '.join(args))
+
+    def prepare(self, opts):
         """ Prepare the environment for execution """
         self.runningtask = True
+
         ConsoleOut().clear()
         print('Loading...')
+
         self.change_action_button()
+
         StatusBar().status_message.set('Executing - ' + self.command + '.py')
         mode = 'indeterminate' if self.command == 'train' else 'determinate'
         StatusBar().progress_start(mode)
 
-    def build_args(self, opts):
+        self.set_display_panel(opts)
+
+        return self.build_args(opts)
+
+    def build_args(self, opts, command=None, generate=False):
         """ Build the faceswap command and arguments list """
-        args = ['python', '-u', self.pathexecscript, self.command]
-        for item in opts[self.command]:
+        command = self.command if not command else command
+
+        args = ['python'] if generate else ['python', '-u']
+        args.extend([self.pathexecscript, command])
+
+        for item in opts[command]:
             optval = str(item.get('value', '').get())
             opt = item['opts'][0]
             if optval == 'False' or optval == '':
@@ -59,8 +76,11 @@ class ProcessWrapper(object, metaclass=Singleton):
                 args.append(opt)
             else:
                 args.extend((opt, optval))
-            if self.command == 'train':
-                args.append('-gui')  # Embed the preview pane
+            if command == 'train' and not generate:
+                self.session.batchsize = int(optval) if opt == '-bs' else self.session.batchsize
+                self.session.modeldir = optval if opt == '-m' else self.session.modeldir
+        if command == 'train' and not generate:
+            args.append('-gui')  # Embed the preview pane
         return args
 
     def terminate(self, message):
@@ -70,6 +90,9 @@ class ProcessWrapper(object, metaclass=Singleton):
         StatusBar().status_message.set(message)
         self.change_action_button()
         self.clear_display_panel()
+        if self.command == 'train':
+            self.session.save_session()
+        self.session.__init__()
         print('Process exited.')
 
     def change_action_button(self):
@@ -85,10 +108,20 @@ class ProcessWrapper(object, metaclass=Singleton):
             btnact.config(text=ttl)
             Tooltip(btnact, text=hlp, wraplength=200)
 
+    def set_display_panel(self, opts):
+        """ Set the display tabs based on executing task """
+        self.displaybook.remove_tabs()
+        if self.command not in ('extract', 'train', 'convert'):
+            return
+        if self.command in ('extract', 'convert'):
+            Images().pathoutput = next(item['value'].get()
+                                       for item in opts[self.command] if item['opts'][0] == '-o')
+        self.displaybook.command_display(self.command)
+
     def clear_display_panel(self):
-        ''' Clear the preview window and graph '''
+        """ Clear the preview window and graph """
+        self.displaybook.remove_tabs()
         Images().delete_preview()
-        self.lossdict = dict()
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
@@ -99,7 +132,6 @@ class FaceswapControl(object):
         self.command = None
         self.args = None
         self.process = None
-        self.lenloss = 0
         self.consoleregex = {'loss': re.compile(r'([a-zA-Z_]+):.*?(\d+\.\d+)'),
                              'tqdm': re.compile(r'(\d+%|\d+/\d+|\d+:\d+|\d+\.\d+[a-zA-Z/]+)')}
 
@@ -167,48 +199,20 @@ class FaceswapControl(object):
         if len(loss) < 2:
             return False
 
-        message = self.update_lossdict(loss)
-        if not message:
-            return False
-
-        message = 'Iteration: {}  {}'.format(self.lenloss, message)
-        StatusBar().progress_update(message, 0, False)
-        return True
-
-    def update_lossdict(self, loss):
-        """ Update the loss dictionary for graphing and stats """
-        #TODO: Remove this hideous hacky fix. When the subprocess is terminated and
-        # the loss dictionary is reset, 1 set of loss values ALWAYS slips through
-        # and appends to the lossdict AFTER the subprocess has closed meaning that
-        # checks on whether the dictionary is empty fail.
-        # Therefore if the size of current loss dictionary is smaller than the
-        # previous loss dictionary, assume that the process has been terminated
-        # and reset it.
-        # I have tried and failed to empty the subprocess stdout with:
-        #   sys.exit() on the stdout/err threads (no effect)
-        #   sys.stdout/stderr.flush (no effect)
-        #   thread.join (locks the whole process up, because the stdout thread
-        #       stubbonly refuses to release it's last line)
-
-        currentlenloss = max(len(lossvals)
-                             for lossvals in self.wrapper.lossdict.values()
-                            ) if self.wrapper.lossdict else 0
-        if self.lenloss > currentlenloss:
-            self.wrapper.lossdict = dict()
-            self.lenloss = 0
-            return False
-
-        self.lenloss = currentlenloss
-
-        if not self.wrapper.lossdict:
-            self.wrapper.lossdict.update((item[0], []) for item in loss)
+        self.wrapper.session.add_loss(loss)
 
         message = ''
         for item in loss:
-            self.wrapper.lossdict[item[0]].append(float(item[1]))
             message += '{}: {}  '.format(item[0], item[1])
+        if not message:
+            return False
 
-        return message
+        elapsed = self.wrapper.session.timestats['elapsed']
+        iterations = self.wrapper.session.iterations
+
+        message = 'Elapsed: {}  Iteration: {}  {}'.format(elapsed, iterations, message)
+        StatusBar().progress_update(message, 0, False)
+        return True
 
     def capture_tqdm(self, string):
         """ Capture tqdm output for progress bar """

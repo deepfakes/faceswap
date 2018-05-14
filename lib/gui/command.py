@@ -2,11 +2,11 @@
 """ The command frame for Faceswap GUI """
 
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import ttk
 
 from .settings import Config
 from .tooltip import Tooltip
-from .utils import Images
+from .utils import Images, FileHandler
 from .wrapper import ProcessWrapper
 
 class CommandNotebook(ttk.Notebook):
@@ -51,7 +51,7 @@ class CommandTab(ttk.Frame):
         ActionFrame(self, self.opts, self.command)
 
     def add_frame_separator(self):
-        """ Add a separator between left and right frames """
+        """ Add a separator between top and bottom frames """
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
 
@@ -125,7 +125,6 @@ class OptionControl(object):
     frame """
 
     def __init__(self, option, option_frame, checkbuttons_frame):
-        self.images = Images()
         self.option = option
         self.option_frame = option_frame
         self.chkbtns = checkbuttons_frame
@@ -209,7 +208,7 @@ class OptionControl(object):
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
-        img = self.images.icons[sysbrowser]
+        img = Images().icons[sysbrowser]
         action = getattr(self, 'ask_' + sysbrowser)
         fileopn = ttk.Button(frame, image=img,
                              command=lambda cmd=action: cmd(filepath))
@@ -218,14 +217,14 @@ class OptionControl(object):
     @staticmethod
     def ask_folder(filepath):
         """ Pop-up to get path to a folder """
-        dirname = filedialog.askdirectory()
+        dirname = FileHandler('dir').retfile
         if dirname:
             filepath.set(dirname)
 
     @staticmethod
     def ask_load(filepath):
         """ Pop-up to get path to a file """
-        filename = filedialog.askopenfilename()
+        filename = FileHandler('filename').retfile
         if filename:
             filepath.set(filename)
 
@@ -234,11 +233,9 @@ class ActionFrame(ttk.Frame):
 
     def __init__(self, parent, opts, command):
         ttk.Frame.__init__(self, parent)
-        self.pack(fill=tk.BOTH, padx=(10, 5), side=tk.BOTTOM, anchor=tk.N)
+        self.pack(fill=tk.BOTH, padx=5, pady=5, side=tk.BOTTOM, anchor=tk.N)
 
-        self.actions = ProcessWrapper()
         self.config = Config(opts)
-        self.images = Images()
         self.command = command
         self.title = command.title()
 
@@ -248,24 +245,32 @@ class ActionFrame(ttk.Frame):
     def add_action_button(self, opts):
         """ Add the action buttons for page """
         actframe = ttk.Frame(self)
-        actframe.pack(fill=tk.X, side=tk.LEFT, padx=5, pady=5)
+        actframe.pack(fill=tk.X, side=tk.LEFT)
 
         btnact = ttk.Button(actframe,
                             text=self.title,
-                            width=12,
-                            command=lambda: self.actions.action_command(
+                            width=10,
+                            command=lambda: ProcessWrapper().action_command(
                                 self.command, opts))
-        btnact.pack(side=tk.TOP)
+        btnact.pack(side=tk.LEFT)
         Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
-        self.actions.actionbtns[self.command] = btnact
+        ProcessWrapper().actionbtns[self.command] = btnact
+
+        btngen = ttk.Button(actframe,
+                            text="Generate",
+                            width=10,
+                            command=lambda: ProcessWrapper().generate_command(
+                                self.command, opts))
+        btngen.pack(side=tk.RIGHT, padx=5)
+        Tooltip(btngen, text='Output command line options to the console', wraplength=200)
 
     def add_util_buttons(self):
         """ Add the section utility buttons """
         utlframe = ttk.Frame(self)
-        utlframe.pack(side=tk.RIGHT, padx=(5, 10), pady=5)
+        utlframe.pack(side=tk.RIGHT)
 
         for utl in ('load', 'save', 'clear', 'reset'):
-            img = self.images.icons[utl]
+            img = Images().icons[utl]
             action = getattr(self.config, utl)
             btnutl = ttk.Button(utlframe,
                                 image=img,
