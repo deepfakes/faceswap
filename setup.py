@@ -255,10 +255,16 @@ docker build -t deepfakes-cpu -f Dockerfile.cpu .
 
 3. Mount faceswap volume and Run it
 # without gui. tools.py gui not working.
-docker run -p 8888:8888 --hostname faceswap-cpu --name faceswap-cpu -v {path}:/srv faceswap-cpu
+docker run -p 8888:8888 \
+    --hostname faceswap-cpu --name faceswap-cpu \
+    -v {path}:/srv \
+    faceswap-cpu
 
 # with gui. tools.py gui working.
-docker run -p 8888:8888 \\
+## enable local access to X11 server
+xhost +local:
+## create container
+nvidia-docker run -p 8888:8888 \\
     --hostname faceswap-cpu --name faceswap-cpu \\
     -v {path}:/srv \\
     -v /tmp/.X11-unix:/tmp/.X11-unix \\
@@ -282,18 +288,26 @@ https://www.docker.com/community-edition
 2. Install latest CUDA
 CUDA: https://developer.nvidia.com/cuda-downloads
 
-3. Install Nvidia-Docker
+3. Install Nvidia-Docker & Restart Docker Service
 https://github.com/NVIDIA/nvidia-docker
 
 4. Build Docker Image For Faceswap
 docker build -t deepfakes-gpu -f Dockerfile.gpu .
 
 5. Mount faceswap volume and Run it
-# without gui. tools.py gui working.
-docker run -p 8888:8888 --hostname faceswap-gpu --name faceswap-gpu -v {path}:/srv faceswap-gpu
+# without gui. tools.py gui not working.
+docker run -p 8888:8888 \
+    --hostname faceswap-gpu --name faceswap-gpu \
+    -v {path}:/srv \
+    faceswap-gpu
 
-# with gui. tools.py gui not working.
-docker run -p 8888:8888 \\
+# with gui. tools.py gui working.
+## enable local access to X11 server
+xhost +local:
+## enable nvidia device if working under bumblebee
+echo ON > /proc/acpi/bbswitch
+## create container
+nvidia-docker run -p 8888:8888 \\
     --hostname faceswap-gpu --name faceswap-gpu \\
     -v {path}:/srv \\
     -v /tmp/.X11-unix:/tmp/.X11-unix \\
