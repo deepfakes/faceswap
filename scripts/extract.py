@@ -2,12 +2,15 @@
 """ The script to run the extract process of faceswap """
 
 import os
+import sys
 from pathlib import Path
 
 from tqdm import tqdm
+tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 
 from lib.multithreading import pool_process
 from scripts.fsmedia import Alignments, Faces, Images, Utils
+
 
 class Extract(object):
     """ The extract process. """
@@ -43,7 +46,7 @@ class Extract(object):
 
     def extract_single_process(self):
         """ Run extraction in a single process """
-        for filename in tqdm(self.images.input_images):
+        for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
@@ -52,7 +55,8 @@ class Extract(object):
         for filename, faces in tqdm(pool_process(self.process_single_image,
                                                  self.images.input_images,
                                                  processes=self.args.processes),
-                                    total=self.images.images_found):
+                                    total=self.images.images_found,
+                                    file=sys.stdout):
             self.faces.num_faces_detected += 1
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
@@ -60,8 +64,8 @@ class Extract(object):
         """ Detect faces in an image. Rotate the image the specified amount
             until at least one face is found, or until image rotations are
             depleted.
-            Once at least one face has been detected, pass to process_single_face
-            to process the individual faces """
+            Once at least one face has been detected, pass to
+            process_single_face to process the individual faces """
         retval = filename, list()
         try:
             image = Utils.cv2_read_write('read', filename)

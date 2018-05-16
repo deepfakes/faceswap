@@ -21,21 +21,28 @@ From your setup folder, run `python faceswap.py train`. This will take photos fr
 ### Convert
 From your setup folder, run `python faceswap.py convert`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
-#### General notes:
+### GUI
+Alternatively you can run the GUI by running `python faceswap.py gui`
+
+## General notes:
 - All of the scripts mentioned have `-h`/`--help` options with arguments that they will accept. You're smart, you can figure out how this works, right?!
 
-Note: there is no conversion for video yet. You can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
+NB: there is a conversion tool for video. This can be accessed by running `python tools.py effmpeg -h`. Alternatively you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
 
 ## Training Data
+A pre-trained model is not required, but you can download the following pre-trained Cage/Trump training model:
+
 **Whole project with training images and trained model (~300MB):**
 https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
 ## How To setup and run the project
 
 ### Setup
-Clone the repo and setup you environment. There is a Dockerfile that should kickstart you. Otherwise you can setup things manually, see in the Dockerfiles for dependencies.
+Clone the repo and setup you environment.
 
-Check out [../blob/master/INSTALL.md](INSTALL.md) and [../blob/master/USAGE.md](USAGE.md) for basic information on how to configure virtualenv and use the program.
+You can either use the docker image or run `python setup.py`
+
+Check out [INSTALL.md](INSTALL.md) and [USAGE.md](USAGE.md) for more detailed instructions and basic information on how to configure virtualenv.
 
 You also need a modern GPU with CUDA support for best performance
 
@@ -43,20 +50,6 @@ You also need a modern GPU with CUDA support for best performance
 
 Reusing existing models will train much faster than starting from nothing.  
 If there is not enough training data, start with someone who looks similar, then switch the data.
-
-#### Docker
-If you prefer using Docker, You can start the project with:
- - GPU:
-   - Prerequiste: Install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) and a CUDA driver on the host machine.
-   - Build: `docker build -t deepfakes-gpu -f Dockerfile.gpu .`
-   - Run: `nvidia-docker run --name deepfakes-gpu -p 8888:8888 -v [src_folder]:/src -it deepfakes-gpu`
-   - Execute: `docker exec -it deepfakes bash`
-     - Tested working on training.
- - CPU: 
-   - Build: `docker build -t deepfakes -f Dockerfile.cpu .`                                                                     
-   - Run: `docker run --rm --name deepfakes -v [src_folder]:/srv -it deepfakes bash` . `bash` can be replaced by your command line
-     - Note that Dockerfile.cpu does not have all good requirments, so it will fail on some python 3 commands.
-     - Also note that it does not have a GUI output, so the train.py will fail on showing image. You can comment this, or save it as a file.
 
 ## How to contribute
 
