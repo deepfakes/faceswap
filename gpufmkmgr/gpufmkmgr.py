@@ -18,9 +18,7 @@ def import_dlib(device_idx):
 
 tf_module = None
 tf_session = None
-
 keras_module = None
-keras_contrib_module = None
 
 def get_tf_session():
     global tf_session
@@ -73,20 +71,18 @@ def finalize_tf():
 
 def import_keras():
     global keras_module
-    global keras_contrib_module
     
     if keras_module is not None:
         raise Exception ('Multiple import of keras is not allowed, reorganize your program.')
         
     sess = get_tf_session()
     if sess is None:
-        raise Exception ('No TF session found. Import tf first.')
+        raise Exception ('No TF session found. Import TF first.')
         
     if 'TF_SUPPRESS_STD' in os.environ.keys() and os.environ['TF_SUPPRESS_STD'] == '1':
         suppressor = std_utils.suppress_stdout_stderr().__enter__()
         
-    import keras
-    import keras_contrib        
+    import keras     
 
     keras.backend.tensorflow_backend.set_session(sess)
     
@@ -94,26 +90,13 @@ def import_keras():
         suppressor.__exit__()
 
     keras_module = keras
-    keras_contrib_module = keras_contrib
     return keras_module
     
 def finalize_keras():
     global keras_module
+    keras_module.backend.clear_session()
     keras_module = None
-    global keras_contrib_module
-    keras_contrib_module = None
     
-def import_keras_contrib():
-    global keras_contrib_module
-    if keras_contrib_module is None:
-        raise Exception('import keras first')
-    return keras_contrib_module
-
-def finalize_keras_contrib():
-    global keras_contrib_module
-    keras_contrib_module = None
-    
-
 
 #returns [ (device_idx, device_name), ... ]
 def getDevicesWithAtLeastFreeMemory(freememsize):
@@ -177,6 +160,20 @@ def getBestDeviceIdx():
         handle = nvmlDeviceGetHandleByIndex(i)
         memInfo = nvmlDeviceGetMemoryInfo( handle )
         if memInfo.total > idx_mem:
+            idx = i
+            idx_mem = memInfo.total
+
+    nvmlShutdown()
+    return idx
+    
+def getWorstDeviceIdx():
+    nvmlInit()    
+    idx = -1
+    idx_mem = sys.maxsize
+    for i in range(0, nvmlDeviceGetCount() ):
+        handle = nvmlDeviceGetHandleByIndex(i)
+        memInfo = nvmlDeviceGetMemoryInfo( handle )
+        if memInfo.total < idx_mem:
             idx = i
             idx_mem = memInfo.total
 

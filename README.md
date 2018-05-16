@@ -33,15 +33,16 @@
 
 ### **Model types**:
 
-- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but with DSSIM Loss func and separated mask decoder + better ConverterMasked.
+- **H64 (2GB+)** - half face with 64 resolution. It is as original FakeApp or FaceSwap, but with TensorFlow DSSIM Loss func and separated mask decoder + better ConverterMasked.
 * H64 Robert Downey Jr.:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/H64_Downey_0.jpg)
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/H64_Downey_1.jpg)
 
 - **H128 (3GB+)** - as H64, but in 128 resolution. Better face details.
-* H128 example - later
+* H128 Cage:
+* ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/H128_Cage_0.jpg)
 
-- **DF (4GB+)** - @dfaker model. Fullface 128 model. Contains DSSIM loss func which excludes background around face.
+- **DF (4GB+)** - @dfaker model. As H128, but fullface model.
 * DF example - later
 
 - **LIAEF128 (4GB+)** - new model. Result of combining DF, IAE, + experiments. Model tries to morph src face to dst, while keeping facial features of src face, but less agressive morphing.
@@ -49,6 +50,7 @@
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/LIAEF128_Cage_0.jpg)
 * LIAEF128 Cage video:
 * [![Watch the video](https://img.youtube.com/vi/lv0v4Pbyk_o/0.jpg)](https://youtu.be/lv0v4Pbyk_o)
+- **LIAEF128YAW (4GB+)** - currently testing. Useful when your src faceset has too many side faces vs dst faceset. It feeds NN by sorted samples by yaw, so you can use unlimited of src samples.
 - **MIAEF128 (5GB+)** - as LIAEF128, but also it tries to match brightness/color features.
 * MIAEF128 model diagramm:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_diagramm.png)
@@ -57,7 +59,6 @@
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Ford_1.jpg)
 * MIAEF128 Cage fail case:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/MIAEF128_Cage_fail.jpg)
-- **LIAEF128YAW (4GB+)** - currently testing. It feeds NN by sorted samples by yaw, so you can use unlimited of src samples.
 
 ### **Sort tool**:
 

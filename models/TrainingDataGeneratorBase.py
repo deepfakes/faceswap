@@ -10,9 +10,8 @@ import traceback
 '''
 You can implement your own TrainingDataGenerator
 '''
-
 class TrainingDataGeneratorBase(object):
-    
+   
     #DONT OVERRIDE
     #use YourOwnTrainingDataGenerator (..., your_opt=1)
     #and then this opt will be passed in YourOwnTrainingDataGenerator.onInitialize ( your_opt )
@@ -26,9 +25,12 @@ class TrainingDataGeneratorBase(object):
         self.data = modelbase.get_training_data(trainingdatatype)
         
         if self.debug:
-            self.generator = iter_utils.ThisThreadGenerator ( self.batch_func )
+            self.generators = [iter_utils.ThisThreadGenerator ( self.batch_func, self.data)]
         else:
-            self.generator = iter_utils.SubprocessGenerator ( self.batch_func )
+            self.generators = [iter_utils.SubprocessGenerator ( self.batch_func, self.data[0::2] ),
+                               iter_utils.SubprocessGenerator ( self.batch_func, self.data[1::2] )]
+                               
+        self.generator_counter = -1
             
         self.onInitialize(**kwargs)
         
@@ -46,11 +48,13 @@ class TrainingDataGeneratorBase(object):
         return self
         
     def __next__(self):
-        x = next(self.generator) 
+        self.generator_counter += 1
+        generator = self.generators[self.generator_counter % len(self.generators) ]    
+        x = next(generator) 
         return x
         
-    def batch_func(self):
-        data_len = len(self.data)
+    def batch_func(self, data):
+        data_len = len(data)
         if data_len == 0:
             raise ValueError('No training data provided.')
             

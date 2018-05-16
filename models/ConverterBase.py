@@ -2,7 +2,6 @@ import copy
 '''
 You can implement your own Converter, check example ConverterMasked.py
 '''
-import multiprocessing
 
 class ConverterBase(object):
 
@@ -13,7 +12,7 @@ class ConverterBase(object):
     #overridable
     def convert (self, image, image_face_landmarks, debug):
         #return float32 image        
-        #if debug , return tuple (128, images of any size and channels, ...) where 128 is desired size for all images
+        #if debug , return tuple ( images of any size and channels, ...)
         return image
         
     #overridable

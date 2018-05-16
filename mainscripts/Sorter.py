@@ -222,10 +222,7 @@ def sort_by_hist_blur(input_path):
                 new_img_list = s + new_img_list
                 
             start_group_i = i + 1
-    
-    #import code
-    #code.interact(local=dict(globals(), **locals()))
-    
+
     return new_img_list
     
 def sort_by_hist(input_path):
@@ -303,7 +300,35 @@ def final_rename(input_path, img_list):
             src.rename (dst)
         except:
             print ('fail to rename %s' % (src.name) )    
+
+def sort_by_origname(input_path):
+    print ("Sort by original filename...")
+    
+    img_list = []
+    for filepath in tqdm( Path_utils.get_image_paths(input_path), desc="Loading"):
+        filepath = Path(filepath)
+        
+        if filepath.suffix != '.png':
+            print ("%s is not a png file required for sort_by_origname" % (filepath.name) ) 
+            continue
+        
+        a_png = AlignedPNG.load (str(filepath))
+        if a_png is None:
+            print ("%s failed to load" % (filepath.name) ) 
+            continue
             
+        d = a_png.getFaceswapDictData()
+        
+        if d is None or d['source_filename'] is None:          
+            print ("%s - no embedded data found required for sort_by_origname" % (filepath.name) )
+            continue
+
+        img_list.append( [str(filepath), d['source_filename']] )
+
+    print ("Sorting...")
+    img_list = sorted(img_list, key=operator.itemgetter(1))
+    return img_list
+    
 def main (input_path, sort_by_method):
     input_path = Path(input_path)
     sort_by_method = sort_by_method.lower()
@@ -311,6 +336,7 @@ def main (input_path, sort_by_method):
     print ("Running sort tool.\r\n")
     
     img_list = []
+
     if sort_by_method == 'blur':            img_list = sort_by_blur (input_path)
     elif sort_by_method == 'face':          img_list = sort_by_face (input_path)
     elif sort_by_method == 'face-dissim':   img_list = sort_by_face_dissim (input_path)
@@ -320,5 +346,6 @@ def main (input_path, sort_by_method):
     elif sort_by_method == 'hist-blur':     img_list = sort_by_hist_blur (input_path)
     elif sort_by_method == 'brightness':    img_list = sort_by_brightness (input_path)
     elif sort_by_method == 'hue':           img_list = sort_by_hue (input_path)
+    elif sort_by_method == 'origname':      img_list = sort_by_origname (input_path)       
     
     final_rename (input_path, img_list)

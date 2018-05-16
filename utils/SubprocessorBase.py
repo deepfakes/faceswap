@@ -2,10 +2,14 @@ import traceback
 from tqdm import tqdm
 import multiprocessing
 import time
+import sys
 
 class SubprocessorBase(object):
-    def __init__(self, name): 
+
+    #overridable
+    def __init__(self, name, no_response_time_sec = 60): 
         self.name = name
+        self.no_response_time_sec = no_response_time_sec
         
     #overridable    
     def process_info_generator(self):
@@ -49,23 +53,43 @@ class SubprocessorBase(object):
         return None  
         
     #overridable
+    def onHostClientsInitialized(self):
+        pass
+        
+    #overridable
     def onHostResult (self, data, result):
         #return count of progress bar update
         return 1
     
     #overridable
+    def onHostProcessEnd(self):
+        pass
+    
+    #overridable
     def get_start_return(self):
         return None
+        
+    def inc_progress_bar(self, c):
+        self.progress_bar.update(c)
     
-    def start(self):
+    def safe_print(self, msg):
+        self.print_lock.acquire()
+        print (msg)
+        self.print_lock.release()
+    
+    def process(self):
         #returns start_return
         
         self.processes = []
         
+        self.print_lock = multiprocessing.Lock()        
         for name, host_dict, client_dict in self.process_info_generator():            
             sq = multiprocessing.Queue()
             cq = multiprocessing.Queue()
-            p = multiprocessing.Process(target=self.process, args=(sq,cq,client_dict))
+            
+            client_dict.update ( {'print_lock' : self.print_lock} ) 
+            
+            p = multiprocessing.Process(target=self.subprocess, args=(sq,cq,client_dict))
             p.daemon = True
             p.start()
             self.processes.append ( { 'process' : p,
@@ -97,9 +121,11 @@ class SubprocessorBase(object):
                 
         if len(self.processes) == 0:
             print ( self.get_no_process_started_message() )
-            return
+            return self.get_start_return()
             
-        progress_bar = tqdm( total=self.onHostGetProgressBarLen(), desc=self.onHostGetProgressBarDesc() )  
+        self.onHostClientsInitialized()
+        
+        self.progress_bar = tqdm( total=self.onHostGetProgressBarLen(), desc=self.onHostGetProgressBarDesc() )  
         
         try: 
             while True:
@@ -114,7 +140,7 @@ class SubprocessorBase(object):
                             
                             c = self.onHostResult (data, result)                        
                             if c > 0:
-                                progress_bar.update(c)
+                                self.progress_bar.update(c)
                                 
                             p['state'] = 'free'
                             
@@ -139,7 +165,7 @@ class SubprocessorBase(object):
                             p['state'] = 'busy'                    
                         
                     elif p['state'] == 'busy':
-                        if (time.time() - p['sent_time']) > 60:
+                        if (time.time() - p['sent_time']) > self.no_response_time_sec:
                             print ( '%s doesnt response, terminating it.' % (p['name']) )
                             self.onHostDataReturn ( p['sent_data'] )                        
                             p['sq'].put ( {'op': 'close'} )
@@ -153,15 +179,32 @@ class SubprocessorBase(object):
         except:
             print ("Exception occured in Subprocessor.start(): %s" % (traceback.format_exc()) )
         
-        progress_bar.close()
+        self.progress_bar.close()
         
         for p in self.processes[:]:
             p['sq'].put ( {'op': 'close'} )
-            p['process'].join()
+            
+        while True:
+            for p in self.processes[:]:
+                while not p['cq'].empty():
+                    obj = p['cq'].get()
+                    obj_op = obj['op']                    
+                    if obj_op == 'finalized':
+                        p['state'] = 'finalized'
+                        
+            if all ([p['state'] == 'finalized' for p in self.processes]):
+                break
+                    
+        for p in self.processes[:]:
+            p['process'].terminate()
+         
+        self.onHostProcessEnd() 
          
         return self.get_start_return()
          
-    def process(self, sq, cq, client_dict):
+    def subprocess(self, sq, cq, client_dict):    
+        self.print_lock = client_dict['print_lock']
+        
         try:
             fail_message = self.onClientInitialize(client_dict)
         except:
@@ -192,3 +235,6 @@ class SubprocessorBase(object):
             time.sleep(0.005)
                 
         self.onClientFinalize()
+        cq.put ( {'op': 'finalized'} )
+        while True:
+            time.sleep(0.1)

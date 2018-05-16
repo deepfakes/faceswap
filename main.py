@@ -35,6 +35,7 @@ if __name__ == "__main__":
             input_dir=arguments.input_dir, 
             output_dir=arguments.output_dir, 
             debug=arguments.debug,
+            face_type=arguments.face_type,
             detector=arguments.detector,
             multi_gpu=arguments.multi_gpu,
             manual_fix=arguments.manual_fix)
@@ -43,6 +44,7 @@ if __name__ == "__main__":
     extract_parser.add_argument('--input-dir', required=True, action=fixPathAction, dest="input_dir", help="Input directory. A directory containing the files you wish to process.")
     extract_parser.add_argument('--output-dir', required=True, action=fixPathAction, dest="output_dir", help="Output directory. This is where the extracted files will be stored.")
     extract_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Writes debug images to [output_dir]_debug\ directory.")    
+    extract_parser.add_argument('--face-type', dest="face_type", choices=['full_face', 'avatar'], default='full_face', help="Default full-face. 'avatar' for model avatar")    
     extract_parser.add_argument('--detector', dest="detector", choices=['dlib','mt','manual'], default='dlib', help="Type of detector. Default 'dlib'. 'mt' (MTCNNv1) - faster, better, almost no jitter, perfect for gathering thousands faces for src-set. It is also good for dst-set, but can generate false faces in frames where main face not recognized! In this case for dst-set use either 'dlib' with '--manual-mode misses' or 'manual' detector. Manual detector suitable only for dst-set.")
     extract_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="Enables multi GPU.")
     extract_parser.add_argument('--manual-fix', action="store_true", dest="manual_fix", default=False, help="Enables manual extract only frames where faces were not recognized.")
@@ -54,7 +56,7 @@ if __name__ == "__main__":
         
     sort_parser = subparsers.add_parser( "sort", help="Sort faces in a directory.")     
     sort_parser.add_argument('--input-dir', required=True, action=fixPathAction, dest="input_dir", help="Input directory. A directory containing the files you wish to process.")
-    sort_parser.add_argument('--by', required=True, dest="sort_by_method", help="Sort by method.", choices=("blur", "face", "face-dissim", "face-yaw", "hist", "hist-dissim", "hist-blur", "brightness"))
+    sort_parser.add_argument('--by', required=True, dest="sort_by_method", choices=("blur", "face", "face-dissim", "face-yaw", "hist", "hist-dissim", "hist-blur", "ssim", "brightness", "hue", "origname"), help="Method of sorting. 'origname' sort by original filename to recover original sequence." )
     sort_parser.set_defaults (func=process_sort)
     
     def process_train(arguments):      
@@ -77,6 +79,7 @@ if __name__ == "__main__":
             write_preview_history = arguments.write_preview_history,
             target_epoch       = arguments.target_epoch,
             save_interval_min  = arguments.save_interval_min,
+            choose_worst_gpu   = arguments.choose_worst_gpu,
             force_best_gpu_idx = arguments.force_best_gpu_idx,
             multi_gpu          = arguments.multi_gpu,
             force_gpu_idxs     = arguments.force_gpu_idxs,
@@ -91,9 +94,10 @@ if __name__ == "__main__":
     train_parser.add_argument('--debug', action="store_true", dest="debug", default=False, help="Debug training.")    
     train_parser.add_argument('--batch-size', type=int, dest="batch_size", default=0, help="Model batch size. Default - auto. Environment variable: ODFS_BATCH_SIZE.") 
     train_parser.add_argument('--target-epoch', type=int, dest="target_epoch", default=0, help="Train until target epoch. Default - unlimited. Environment variable: ODFS_TARGET_EPOCH.")
-    train_parser.add_argument('--save-interval-min', type=int, dest="save_interval_min", default=10, help="Save interval in minutes. Default 10.") 
-    train_parser.add_argument('--force-best-gpu-idx', type=int, dest="force_best_gpu_idx", default=-1, help="Force to choose this GPU idx as best.")
-    train_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="MultiGPU option. It will select only same best GPU models.")
+    train_parser.add_argument('--save-interval-min', type=int, dest="save_interval_min", default=10, help="Save interval in minutes. Default 10.")
+    train_parser.add_argument('--choose-worst-gpu', action="store_true", dest="choose_worst_gpu", default=False, help="Choose worst GPU instead of best.")
+    train_parser.add_argument('--force-best-gpu-idx', type=int, dest="force_best_gpu_idx", default=-1, help="Force to choose this GPU idx as best(worst).")
+    train_parser.add_argument('--multi-gpu', action="store_true", dest="multi_gpu", default=False, help="MultiGPU option. It will select only same best(worst) GPU models.")
     train_parser.add_argument('--force-gpu-idxs', type=str, dest="force_gpu_idxs", default=None, help="Override final GPU idxs. Example: 0,1,2.")
     train_parser.set_defaults (func=process_train)
     

@@ -96,8 +96,7 @@ class LandmarksExtractor(object):
                 return dict(list(base_config.items()) + list(config.items()))
         self.TorchBatchNorm2D = TorchBatchNorm2D
         
-    def __enter__(self):
-        
+    def __enter__(self):        
         keras_model_path = Path(__file__).parent / "2DFAN-4.h5"
         if not keras_model_path.exists():
             return None
@@ -106,8 +105,9 @@ class LandmarksExtractor(object):
     
         return self
         
-    def __exit__(self, exc_type, exc_value, traceback):
-        del self.keras_model        
+    def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+        del self.keras_model
+        return False #pass exception between __enter__ and __exit__ to outter level
         
     def extract_from_bgr (self, input_image, rects):
         input_image = input_image[:,:,::-1].copy()

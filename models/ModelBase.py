@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 import gpufmkmgr
 import time
+from facelib import FaceType
 from facelib import LandmarksProcessor
 from .TrainingDataGeneratorBase import TrainingDataGeneratorBase
 
@@ -27,6 +28,7 @@ class ModelBase(object):
     #DONT OVERRIDE
     def __init__(self, model_path, training_data_src_path=None, training_data_dst_path=None,
                         multi_gpu = False,
+                        choose_worst_gpu = False,
                         force_best_gpu_idx = -1,
                         force_gpu_idxs = None,
                         write_preview_history = False,
@@ -78,7 +80,7 @@ class ModelBase(object):
 
         self.multi_gpu = multi_gpu
    
-        gpu_idx = force_best_gpu_idx if (force_best_gpu_idx >= 0 and gpufmkmgr.isValidDeviceIdx(force_best_gpu_idx)) else gpufmkmgr.getBestDeviceIdx()
+        gpu_idx = force_best_gpu_idx if (force_best_gpu_idx >= 0 and gpufmkmgr.isValidDeviceIdx(force_best_gpu_idx)) else gpufmkmgr.getBestDeviceIdx() if not choose_worst_gpu else gpufmkmgr.getWorstDeviceIdx()
         gpu_total_vram_gb = gpufmkmgr.getDeviceVRAMTotalGb (gpu_idx)
         is_gpu_low_mem = (gpu_total_vram_gb < 4)
         
@@ -107,8 +109,7 @@ class ModelBase(object):
                 self.gpu_idxs = [gpu_idx]
 
         self.tf = gpufmkmgr.import_tf(self.gpu_idxs,allow_growth=False)
-        self.keras = gpufmkmgr.import_keras()   
-        self.keras_contrib = gpufmkmgr.import_keras_contrib()        
+        self.keras = gpufmkmgr.import_keras()    
         
         self.onInitialize(**in_options)
         
@@ -215,10 +216,11 @@ class ModelBase(object):
         
     def get_static_preview(self):        
         return self.onGetPreview (self.sample_for_preview)[0][1] #first preview, and bgr
-        
-        
+       
     def save(self):    
         print ("Saving...")
+        
+        self.onSave()
         
         model_data = {
             'epoch': self.epoch,
@@ -228,22 +230,26 @@ class ModelBase(object):
             'sample_for_preview' : self.sample_for_preview
         }            
         self.model_data_path.write_bytes( pickle.dumps(model_data) )
-        
-        self.onSave()
+
+    def save_weights_safe(self, model_filename_list):
+        for model, filename in model_filename_list:
+            model.save_weights( filename + '.tmp' )
+            
+        for model, filename in model_filename_list:
+            source_filename = Path(filename+'.tmp')
+            target_filename = Path(filename)
+            if target_filename.exists():
+                target_filename.unlink()
+                
+            source_filename.rename ( str(target_filename) )
         
     def debug_one_epoch(self):
-        wh = 64
         images = []
         for generator in self.generator_list:        
             for i,batch in enumerate(next(generator)):
-                if i == 0:                    
-                    wh = max(wh, int(batch[0]))
-                    if wh < 64 or wh > 256:
-                        raise Exception('in debug mode onProcessSample() check size of samples')
-                    continue
                 images.append( batch[0] )
         
-        return image_utils.equalize_and_stack (wh, images)
+        return image_utils.equalize_and_stack_square (images)
         
     def generate_next_sample(self):
         return [next(generator) for generator in self.generator_list]
@@ -379,8 +385,10 @@ def X_LOAD ( RAWS ):
         if d is None or d['landmarks'] is None or d['yaw_value'] is None:
             print ("%s - no embedded faceswap info found required for training" % (s_filename_path.name) ) 
             continue
- 
-        sample_list.append( s.copy_and_set(shape=a_png.get_shape(), landmarks=d['landmarks'], yaw=d['yaw_value']) )
+            
+        face_type = d['face_type'] if 'face_type' in d.keys() else 'full_face'        
+        face_type = FaceType.fromString (face_type) 
+        sample_list.append( s.copy_and_set(face_type=face_type, shape=a_png.get_shape(), landmarks=d['landmarks'], yaw=d['yaw_value']) )
         
     return sample_list
     

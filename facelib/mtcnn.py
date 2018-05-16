@@ -209,9 +209,9 @@ class Network(object):
     """
     @layer
     def softmax(self, target, axis, name=None):
-        max_axis = self.tf.reduce_max(target, axis, keep_dims=True)
+        max_axis = self.tf.reduce_max(target, axis, keepdims=True)
         target_exp = self.tf.exp(target-max_axis)
-        normalize = self.tf.reduce_sum(target_exp, axis, keep_dims=True)
+        normalize = self.tf.reduce_sum(target_exp, axis, keepdims=True)
         softmax = self.tf.div(target_exp, normalize, name)
         return softmax
     

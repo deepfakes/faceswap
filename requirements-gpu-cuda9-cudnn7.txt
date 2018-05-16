@@ -1,0 +1,9 @@
+pathlib==1.0.1
+scandir==1.6
+h5py==2.7.1
+Keras==2.1.6
+opencv-python==3.4.0.12
+tensorflow-gpu==1.8.0
+scikit-image
+dlib==19.10.0
+tqdm

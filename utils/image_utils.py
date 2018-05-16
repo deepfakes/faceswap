@@ -153,8 +153,22 @@ def morph_by_points (image, sp, dp):
        
     return result_image
     
-def equalize_and_stack (wh, images, axis=1):
+def equalize_and_stack_square (images, axis=1):
     max_c = max ([ 1 if len(image.shape) == 2 else image.shape[2]  for image in images ] )
+    
+    max_wh = 0
+    for i,image in enumerate(images):
+        if len(image.shape) == 2:
+            h,w = image.shape
+            c = 1
+        else:
+            h,w,c = image.shape
+        
+        if h > max_wh:
+            max_wh = h
+    
+        if w > max_wh:
+            max_wh = w
             
     for i,image in enumerate(images):
         if len(image.shape) == 2:
@@ -174,8 +188,8 @@ def equalize_and_stack (wh, images, axis=1):
             else:
                 image = np.concatenate ( (image, np.ones((h,w,max_c - c))), -1 )
 
-        if h != wh or w != wh:
-            image = cv2.resize ( image, (wh, wh) )
+        if h != max_wh or w != max_wh:
+            image = cv2.resize ( image, (max_wh, max_wh) )
             h,w,c = image.shape
                 
         images[i] = image

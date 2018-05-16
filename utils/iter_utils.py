@@ -5,9 +5,10 @@ import time
 
 
 class ThisThreadGenerator(object):
-    def __init__(self, generator_func): 
+    def __init__(self, generator_func, user_param=None): 
         super().__init__()
         self.generator_func = generator_func
+        self.user_param = user_param
         self.initialized = False
 
     def __iter__(self):
@@ -16,21 +17,22 @@ class ThisThreadGenerator(object):
     def __next__(self):
         if not self.initialized:  
             self.initialized = True
-            self.generator_func = self.generator_func()
+            self.generator_func = self.generator_func(self.user_param)
 
         return next(self.generator_func)
 
 class SubprocessGenerator(object):
-    def __init__(self, generator_func, prefetch=2): 
+    def __init__(self, generator_func, user_param=None, prefetch=2): 
         super().__init__()        
         self.prefetch = prefetch
         self.generator_func = generator_func
+        self.user_param = user_param
         self.sc_queue = multiprocessing.Queue()
         self.cs_queue = multiprocessing.Queue()
         self.p = None
     
     def process_func(self):
-        self.generator_func = self.generator_func()
+        self.generator_func = self.generator_func(self.user_param)
         while True:        
             while self.prefetch > -1:
                 try:

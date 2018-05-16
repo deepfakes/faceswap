@@ -4,7 +4,8 @@ import numpy as np
 from enum import IntEnum
 from mathlib.umeyama import umeyama
 from utils import image_utils
-
+from facelib import FaceType
+import math
 
 mean_face_x = np.array([
 0.000213256, 0.0752622, 0.18113, 0.29077, 0.393397, 0.586856, 0.689483, 0.799124,
@@ -29,19 +30,36 @@ landmarks_2D = np.stack( [ mean_face_x, mean_face_y ], axis=1 )
 def get_transform_mat (image_landmarks, output_size, face_type):
     if output_size != 64 and output_size != 128 and output_size != 256 and output_size != 512:
         raise ValueError ('get_transform_mat() output_size must be power of 2')
-        
-    if face_type == 'half_face':
-        padding = 0
-    elif face_type == 'full_face':
-        padding = (output_size // 64) * 12
-    elif face_type == 'head':
-        padding = (output_size // 64) * 24
-        
+ 
     if not isinstance(image_landmarks, np.ndarray):
         image_landmarks = np.array (image_landmarks) 
-    mat = umeyama(image_landmarks[17:], landmarks_2D, True)[0:2]
-    mat = mat * (output_size - 2 * padding)
-    mat[:,2] += padding
+        
+    if face_type == FaceType.AVATAR:
+        centroid = np.mean (image_landmarks, axis=0)
+        
+        mat = umeyama(image_landmarks[17:], landmarks_2D, True)[0:2]
+        a, c = mat[0,0], mat[1,0]
+        scale = math.sqrt((a * a) + (c * c))
+        
+        mat = np.eye ( 2,3 )
+        mat[0,2] = -centroid[0]
+        mat[1,2] = -centroid[1]
+        mat = mat * scale * (output_size / 4)
+        mat[:,2] += output_size / 2        
+    else:
+        if face_type == FaceType.HALF:
+            padding = 0
+        elif face_type == FaceType.FULL:
+            padding = (output_size // 64) * 12
+        elif face_type == FaceType.HEAD:
+            padding = (output_size // 64) * 24
+        else:
+            raise ValueError ('wrong face_type')
+            
+        mat = umeyama(image_landmarks[17:], landmarks_2D, True)[0:2]
+        mat = mat * (output_size - 2 * padding)
+        mat[:,2] += padding
+
     return mat
 
 def transform_points(points, mat, invert=False):
@@ -137,7 +155,6 @@ def mirror_landmarks (landmarks, val):
     return result
     
 def draw_landmarks (image, image_landmarks, color):
-
     for i, (x, y) in enumerate(image_landmarks):
         cv2.circle(image, (x, y), 2, color, -1)
         #text_color = colorsys.hsv_to_rgb ( (i%4) * (0.25), 1.0, 1.0 )

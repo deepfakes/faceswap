@@ -227,7 +227,7 @@ def main (input_dir, output_dir, aligned_dir, model_dir, model_name, **in_option
                     input_path_image_paths = Path_utils.get_image_paths(input_path), 
                     output_path            = output_path,
                     alignments             = alignments,                                     
-                    debug                  = debug ).start()
+                    debug                  = debug ).process()
                               
         model_sq.put ( {'op':'close'} )
         model_p.join()

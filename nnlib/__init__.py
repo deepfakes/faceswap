@@ -1,10 +1,27 @@
-def DSSIMMaskLossClass(tf, keras_contrib):
+def tf_image_histogram (tf, input):
+    x = input
+    x += 1 / 255.0
+    
+    output = []
+    for i in range(256, 0, -1):
+        v = i / 255.0
+        y = (x - v) * 1000
+        
+        y = tf.clip_by_value (y, -1.0, 0.0) + 1
+
+        output.append ( tf.reduce_sum (y) )
+        x -= y*v
+
+    return tf.stack ( output[::-1] )
+
+def DSSIMMaskLossClass(tf):
     class DSSIMMaskLoss(object):
         def __init__(self,mask):
             self.mask = mask
             
         def __call__(self,y_true, y_pred):
-            return keras_contrib.losses.DSSIMObjective() (y_true*self.mask,y_pred*self.mask)
+            return (1.0 - tf.image.ssim (y_true*self.mask, y_pred*self.mask, 1.0)) / 2.0
+            
     return DSSIMMaskLoss
     
 def MAEMaskLossClass(tf, keras):
@@ -118,6 +135,13 @@ def upscale(keras, input_tensor, filters):
     x = keras.layers.convolutional.Conv2D(filters * 4, kernel_size=3, padding='same')(x)
     x = keras.layers.advanced_activations.LeakyReLU(0.1)(x)
     x = PixelShufflerClass(keras)()(x)
+    return x
+    
+def upscale4(keras, input_tensor, filters):
+    x = input_tensor
+    x = keras.layers.convolutional.Conv2D(filters * 16, kernel_size=3, padding='same')(x)
+    x = keras.layers.advanced_activations.LeakyReLU(0.1)(x)
+    x = PixelShufflerClass(keras)(size=(4, 4))(x)
     return x
     
 def res(keras, input_tensor, filters):

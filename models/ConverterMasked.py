@@ -1,5 +1,6 @@
 from models import ConverterBase
 from facelib import LandmarksProcessor
+from facelib import FaceType
 import cv2
 import numpy as np
 from utils import image_utils
@@ -16,7 +17,7 @@ class ConverterMasked(ConverterBase):
     def __init__(self,  predictor,
                         predictor_input_size=0, 
                         output_size=0, 
-                        face_type='full_face', 
+                        face_type=FaceType.FULL, 
                         erode_mask = True, 
                         blur_mask = True,
                         clip_border_mask_per = 0,

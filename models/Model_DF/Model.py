@@ -6,7 +6,7 @@ import cv2
 from nnlib import DSSIMMaskLossClass
 from nnlib import conv
 from nnlib import upscale
-from nnlib import res
+from facelib import FaceType
 
 class Model(ModelBase):
 
@@ -34,7 +34,7 @@ class Model(ModelBase):
             else:    
                 self.batch_size = 64
                 
-        ae_input_layer = self.keras.layers.Input(shape=(64, 64, 3))
+        ae_input_layer = self.keras.layers.Input(shape=(128, 128, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
         
         self.encoder = self.Encoder(ae_input_layer)
@@ -53,49 +53,43 @@ class Model(ModelBase):
             self.autoencoder_src, self.autoencoder_dst = self.to_multi_gpu_model_if_possible ( [self.autoencoder_src, self.autoencoder_dst] )
                 
         optimizer = self.keras.optimizers.Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)        
-        self.autoencoder_src.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mse'] )
-        self.autoencoder_dst.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf, self.keras_contrib)(mask_layer), 'mse'] )
+        self.autoencoder_src.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf)(mask_layer), 'mse'] )
+        self.autoencoder_dst.compile(optimizer=optimizer, loss=[DSSIMMaskLossClass(self.tf)(mask_layer), 'mse'] )
   
         if self.is_training_mode:
-            from models import FullFaceTrainingDataGenerator
-            self.set_training_data_generators ([
-                    FullFaceTrainingDataGenerator(self, TrainingDataType.SRC_WITH_NEAREST, batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128), random_flip=True ),
-                    FullFaceTrainingDataGenerator(self, TrainingDataType.DST,              batch_size=self.batch_size, warped_size=(64,64), target_size=(128,128) )
+            from models import TrainingDataGenerator
+            f = TrainingDataGenerator.SampleTypeFlags 
+            self.set_training_data_generators ([            
+                    TrainingDataGenerator(self, TrainingDataType.SRC,  batch_size=self.batch_size, output_sample_types_flags=[ f.WARPED | f.FULL_FACE | f.MODE_BGR | f.SIZE_128, f.TARGET | f.FULL_FACE | f.MODE_BGR | f.SIZE_128, f.TARGET | f.FULL_FACE | f.MODE_M | f.SIZE_128], random_flip=True ),
+                    TrainingDataGenerator(self, TrainingDataType.DST,  batch_size=self.batch_size, output_sample_types_flags=[ f.WARPED | f.FULL_FACE | f.MODE_BGR | f.SIZE_128, f.TARGET | f.FULL_FACE | f.MODE_BGR | f.SIZE_128, f.TARGET | f.FULL_FACE | f.MODE_M | f.SIZE_128] )
                 ])
-            
     #override
     def onSave(self):        
-        self.encoder.save_weights  (self.get_strpath_storage_for_file(self.encoderH5))
-        self.decoder_src.save_weights  (self.get_strpath_storage_for_file(self.decoder_srcH5))
-        self.decoder_dst.save_weights  (self.get_strpath_storage_for_file(self.decoder_dstH5))
+        self.save_weights_safe( [[self.encoder, self.get_strpath_storage_for_file(self.encoderH5)],
+                                [self.decoder_src, self.get_strpath_storage_for_file(self.decoder_srcH5)],
+                                [self.decoder_dst, self.get_strpath_storage_for_file(self.decoder_dstH5)]] )
         
     #override
     def onTrainOneEpoch(self, sample):
-        warped_src, target_src = sample[0]
-        warped_dst, target_dst = sample[1]    
-        
-        target_src_mask = np.expand_dims (target_src[...,3],-1)
-        target_dst_mask = np.expand_dims (target_dst[...,3],-1)
-        
-        loss_src = self.autoencoder_src.train_on_batch( [warped_src[...,0:3], target_src_mask], [target_src[...,0:3], target_src_mask] )
-        loss_dst = self.autoencoder_dst.train_on_batch( [warped_dst[...,0:3], target_dst_mask], [target_dst[...,0:3], target_dst_mask] )
+        warped_src, target_src, target_src_mask = sample[0]
+        warped_dst, target_dst, target_dst_mask = sample[1]    
+  
+        loss_src = self.autoencoder_src.train_on_batch( [warped_src, target_src_mask], [target_src, target_src_mask] )
+        loss_dst = self.autoencoder_dst.train_on_batch( [warped_dst, target_dst_mask], [target_dst, target_dst_mask] )
         
         return ( ('loss_src', loss_src[0]), ('loss_dst', loss_dst[0]) )
         
 
     #override
     def onGetPreview(self, sample):
-        test_A = sample[0][1][0:4] #first 4 samples
-        test_B = sample[1][1][0:4]
+        test_A   = sample[0][1][0:4] #first 4 samples
+        test_A_m = sample[0][2][0:4] #first 4 samples
+        test_B   = sample[1][1][0:4]
+        test_B_m = sample[1][2][0:4]
         
-        test_A_64 = np.array( [ cv2.resize ( test, (64,64) ) for test in test_A[...,0:3] ] )
-        test_A_m = np.expand_dims (test_A[...,3], -1)
-        test_B_64 = np.array( [ cv2.resize ( test, (64,64) ) for test in test_B[...,0:3] ] )
-        test_B_m = np.expand_dims (test_B[...,3], -1)
-        
-        AA, mAA = self.autoencoder_src.predict([test_A_64, test_A_m])                                       
-        AB, mAB = self.autoencoder_src.predict([test_B_64, test_B_m])
-        BB, mBB = self.autoencoder_dst.predict([test_B_64, test_B_m])
+        AA, mAA = self.autoencoder_src.predict([test_A, test_A_m])                                       
+        AB, mAB = self.autoencoder_src.predict([test_B, test_B_m])
+        BB, mBB = self.autoencoder_dst.predict([test_B, test_B_m])
         
         mAA = np.repeat ( mAA, (3,), -1)
         mAB = np.repeat ( mAB, (3,), -1)
@@ -118,10 +112,10 @@ class Model(ModelBase):
     
     def predictor_func (self, face):
         
-        face_64_bgr = cv2.resize ( face[...,0:3], (64,64) )
+        face_128_bgr = face[...,0:3]
         face_128_mask = np.expand_dims(face[...,3],-1)
         
-        x, mx = self.autoencoder_src.predict ( [ np.expand_dims(face_64_bgr,0), np.expand_dims(face_128_mask,0) ] )
+        x, mx = self.autoencoder_src.predict ( [ np.expand_dims(face_128_bgr,0), np.expand_dims(face_128_mask,0) ] )
         x, mx = x[0], mx[0]
         
         return np.concatenate ( (x,mx), -1 )
@@ -140,7 +134,7 @@ class Model(ModelBase):
         if 'blur_mask_modifier' not in in_options.keys():
             in_options['blur_mask_modifier'] = 0
             
-        return ConverterMasked(self.predictor_func, predictor_input_size=128, output_size=128, face_type='full_face',clip_border_mask_per=0.046875, **in_options)
+        return ConverterMasked(self.predictor_func, predictor_input_size=128, output_size=128, face_type=FaceType.FULL, clip_border_mask_per=0.046875, **in_options)
         
     def Encoder(self, input_layer):
         x = input_layer
@@ -149,30 +143,24 @@ class Model(ModelBase):
         x = conv(self.keras, x, 512)
         x = conv(self.keras, x, 1024)
 
-        x = self.keras.layers.Dense(1024)(self.keras.layers.Flatten()(x))
-        x = self.keras.layers.Dense(4 * 4 * 1024)(x)
-        x = self.keras.layers.Reshape((4, 4, 1024))(x)
+        x = self.keras.layers.Dense(512)(self.keras.layers.Flatten()(x))
+        x = self.keras.layers.Dense(8 * 8 * 512)(x)
+        x = self.keras.layers.Reshape((8, 8, 512))(x)
         x = upscale(self.keras, x, 512)
             
         return self.keras.models.Model(input_layer, x)
 
     def Decoder(self):
-        input_ = self.keras.layers.Input(shape=(8, 8, 512))
+        input_ = self.keras.layers.Input(shape=(16, 16, 512))
         x = input_
         x = upscale(self.keras, x, 512)
-        x = res(self.keras, x, 512)
         x = upscale(self.keras, x, 256)
-        x = res(self.keras, x, 256)
         x = upscale(self.keras, x, 128)
-        x = res(self.keras, x, 128)
-        x = upscale(self.keras, x, 64)
-        x = res(self.keras, x, 64)
         
         y = input_  #mask decoder
         y = upscale(self.keras, y, 512)
         y = upscale(self.keras, y, 256)
         y = upscale(self.keras, y, 128)
-        y = upscale(self.keras, y, 64)
             
         x = self.keras.layers.convolutional.Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         y = self.keras.layers.convolutional.Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(y)

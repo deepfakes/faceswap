@@ -2,6 +2,8 @@ from enum import IntEnum
 import cv2
 import numpy as np
 from random import randint
+from facelib import FaceType
+from facelib import LandmarksProcessor
 
 class TrainingDataType(IntEnum):
     
@@ -17,37 +19,37 @@ class TrainingDataType(IntEnum):
     
     QTY = 9
     
+    
 class TrainingDataSample(object):
 
-    def __init__(self, filename=None, shape=None, landmarks=None, yaw=None, mirror=None, nearest_target_list=None):
+    def __init__(self, filename=None, face_type=None, shape=None, landmarks=None, yaw=None, mirror=None, nearest_target_list=None):
         self.filename = filename
+        self.face_type = face_type
         self.shape = shape
         self.landmarks = np.array(landmarks)
         self.yaw = yaw
         self.mirror = mirror
         self.nearest_target_list = nearest_target_list
         
-    def copy_and_set(self, filename=None, shape=None, landmarks=None, yaw=None, mirror=None, nearest_target_list=None):
+    def copy_and_set(self, filename=None, face_type=None, shape=None, landmarks=None, yaw=None, mirror=None, nearest_target_list=None):
         return TrainingDataSample( 
             filename=filename if filename is not None else self.filename, 
+            face_type=face_type if face_type is not None else self.face_type, 
             shape=shape if shape is not None else self.shape, 
             landmarks=landmarks if landmarks is not None else self.landmarks.copy(), 
             yaw=yaw if yaw is not None else self.yaw, 
             mirror=mirror if mirror is not None else self.mirror, 
             nearest_target_list=nearest_target_list if nearest_target_list is not None else self.nearest_target_list)
     
-    def load_image(self):
+    def load_bgr(self):
         img = cv2.imread (self.filename).astype(np.float32) / 255.0
         if self.mirror:
             img = img[:,::-1].copy()
         return img
         
-    def load_image_hsv(self):
-        return cv2.cvtColor( self.load_image(), cv2.COLOR_BGR2HSV )
-    
-        img = cv2.cvtColor( cv2.imread (self.filename) , cv2.COLOR_BGR2HSV ) / 255.0
-        if self.mirror:
-            img = img[:,::-1].copy()
+    def load_bgrm(self):
+        img = self.load_bgr()
+        img = np.concatenate( (img, LandmarksProcessor.get_image_hull_mask (img, self.landmarks)) , -1 )        
         return img
         
     def get_random_nearest_target_sample(self):
