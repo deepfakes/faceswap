@@ -49,7 +49,7 @@
 * LIAEF128 Cage:
 * ![](https://github.com/iperov/OpenDeepFaceSwap/blob/master/doc/LIAEF128_Cage_0.jpg)
 * LIAEF128 Cage video:
-* [![Watch the video](https://img.youtube.com/vi/lv0v4Pbyk_o/0.jpg)](https://youtu.be/lv0v4Pbyk_o)
+* (later) [![Watch the video](https://img.youtube.com/vi/xx/0.jpg)]()
 - **LIAEF128YAW (4GB+)** - currently testing. Useful when your src faceset has too many side faces vs dst faceset. It feeds NN by sorted samples by yaw, so you can use unlimited of src samples.
 - **MIAEF128 (5GB+)** - as LIAEF128, but also it tries to match brightness/color features.
 * MIAEF128 model diagramm:
