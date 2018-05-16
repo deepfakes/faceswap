@@ -41,13 +41,12 @@ class Encoders():
     REGULAR = 'v2' # high memory consumption encoder
     NEW_SLIM = 'v3' # slightly lighter on resources and taining speed is faster
 
-
+    
 ENCODER = Encoders.NEW_SLIM
 
-
-hdf = {'encoderH5': f'encoder_{version_str}{ENCODER}.h5',
-       'decoder_AH5': f'decoder_A_{version_str}{ENCODER}.h5',
-       'decoder_BH5': f'decoder_B_{version_str}{ENCODER}.h5'}
+hdf = {'encoderH5': 'encoder_{version_str}{ENCODER}.h5'.format(**vars()),
+       'decoder_AH5': 'decoder_A_{version_str}{ENCODER}.h5'.format(**vars()),
+       'decoder_BH5': 'decoder_B_{version_str}{ENCODER}.h5'.format(**vars())}
 
 
 class Model():
