@@ -33,7 +33,7 @@ class Model(ModelBase):
             elif self.gpu_total_vram_gb == 6:
                 self.batch_size = 8
             else: 
-                self.batch_size = 32
+                self.batch_size = 16
 
         ae_input_layer = self.keras.layers.Input(shape=(128, 128, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
@@ -157,7 +157,7 @@ class Model(ModelBase):
     def Intermediate(self):
         input_layer = self.keras.layers.Input(shape=(None, 8 * 8 * 1024))
         x = input_layer
-        x = self.keras.layers.Dense(256)(x)
+        x = self.keras.layers.Dense(512)(x)
         x = self.keras.layers.Dense(8 * 8 * 512)(x)
         x = self.keras.layers.Reshape((8, 8, 512))(x)
         x = upscale(self.keras, x, 512)

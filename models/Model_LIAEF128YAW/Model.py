@@ -33,7 +33,7 @@ class Model(ModelBase):
             elif self.gpu_total_vram_gb == 6:
                 self.batch_size = 8
             else: 
-                self.batch_size = 32
+                self.batch_size = 16
 
         ae_input_layer = self.keras.layers.Input(shape=(128, 128, 3))
         mask_layer = self.keras.layers.Input(shape=(128, 128, 1)) #same as output
