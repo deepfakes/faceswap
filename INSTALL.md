@@ -27,97 +27,133 @@ The type of computations that the process does are well suited for graphics card
 Alternatively there is a docker image that is based on Debian.
 
 # Important before you proceed
-**In its current iteration, the project relies heavily on the use of the command line. If you are unfamiliar with command line tools, you should not attempt any of the steps described in this guide.** Wait instead for this tool to become usable, or start learning more about working with the command line. This guide assumes you have intermediate knowledge of the command line. 
+**In its current iteration, the project relies heavily on the use of the command line, although a gui is available. if you are unfamiliar with command line tools, you may have difficulty setting up the environment and should perhaps not attempt any of the steps described in this guide.** This guide assumes you have intermediate knowledge of the command line. 
 
 The developers are also not responsible for any damage you might cause to your own computer.
 
 # Installation Instructions
-
 ## Installing dependencies
+- Python >= 3.2
+  - apt/yum install python3 (Linux)
+  - [Installer](https://www.python.org/downloads/) (Windows)
+  - [brew](https://brew.sh/) install python3 (macOS)
 
-
-### Python >= 3.2
-
-Note that you will need the 64bit version of Python, especially to setup the GPU version!
-
-#### Windows
-Download the latest version of Python 3 from Python.org: https://www.python.org/downloads/release/python-364
-
-#### macOS
-
-By default, macOS comes with Python 2.7. For best usage, need at least Python 3.2.  The easiest way to do so is to install it through `Homebrew`. If you are not familiar with `homebrew`, read more about it here: https://brew.sh/
-
-To install Python 3.2 or higher:
-
-```
-brew install python3
-```
-
-#### Linux
-You know how this works, don't you?
-
-### Virtualenv
-Install virtualenv next. Virtualenv helps us make a containing environment for our project. This means that any python packages we install for this project will be compartmentalized to this specific environment. We'll install virtualenv with `pip` which is Python's package/dependency manager.
-
-```pip install virtualenv```
-
-or
-
-```pip3 install virtualenv```
-
-Alternative, if your Linux distribution provides its own virtualenv through apt or yum, you can use that as well.
-
-#### Windows specific:
-`virtualenvwrapper-win` is a package that makes virtualenvs easier to manage on Windows.
-
-```pip install virtualenvwrapper-win```
+- [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
+- If you are using an Nvidia graphics card You should install CUDA (https://developer.nvidia.com/cuda-zone) and CUDNN (https://developer.nvidia.com/cudnn). If you do not plan to build Tensorflow yourself, make sure you install no higher than version 9.0 of CUDA and 7.0.x of CUDNN
+- dlib is required for face recognition and is compiled as part of the setup process. You will need the following applications for your os to successfully install dlib (nb: list may be incomplete. Please raise an issue if another prerequisite is required for your OS):
+    - Windows: Visual Studio 2015, CMake v3.8.2
+    - Linux: build-essential, cmake
+    - macOS: xquartz 
 
 ## Getting the faceswap code
 Simply download the code from http://github.com/deepfakes/faceswap - For development it is recommended to use git instead of downloading the code and extracting it.
 
 For now, extract the code to a directory where you're comfortable working with it. Navigate to it with the command line. For our example we will use `~/faceswap/` as our project directory.
 
-## Setting up our virtualenv
-### First steps
-We will now initialize our virtualenv:
+## Setting up for our project
 
-```
-virtualenv faceswap_env/
-```
-
-On Windows you can use: 
-
-```
-mkvirtualenv faceswap
-setprojectdir .
-```
-
-This will create a folder with python, pip, and setuptools all ready to go in its own little environment. It will also activate the Virtual Environment which is indicated with the (faceswap) on the left side of the prompt. Anything we install now will be specific to this project. And available to the projects we connect to this environment. 
-
-Let's say you’re content with the work you’ve contributed to this project and you want to move onto something else in the command line. Simply type `deactivate` to deactivate your environment. 
-
-To reactive your environment on Windows, you can use `workon faceswap`. On Mac and Linux, you can use `source ./faceswap_env/bin/activate`. Note that the Mac/Linux command is relative to the project and virtualenv directory.
-
-### Setting up for our project
-With your virtualenv activated, install the dependencies from the requirements files. Like so:
-
+### Setup
+Enter the folder that faceswap has been downloaded to and run:
 ```bash
-pip install -r requirements.txt
+python setup.py
+```
+If setup fails for any reason you can still manually install the packages listed within requirements.txt
+
+### About some of the options:
+   - CUDA: For acceleration. Requires a good nVidia Graphics Card (which supports CUDA inside)
+   - Docker: Provide a ready-made image. Hide trivial details. Get you straight to the project.
+   - nVidia-Docker: Access to the nVidia GPU on host machine from inside container.
+
+CUDA with Docker in 20 minutes.
+```
+INFO    The tool provides tips for installation
+        and installs required python packages
+INFO    Setup in Linux 4.14.39-1-MANJARO
+INFO    Installed Python: 3.6.5 64bit
+INFO    Installed PIP: 10.0.1
+Enable  Docker? [Y/n] 
+INFO    Docker Enabled
+Enable  CUDA? [Y/n] 
+INFO    CUDA Enabled
+INFO    1. Install Docker
+        https://www.docker.com/community-edition
+        
+        2. Install latest CUDA
+        CUDA: https://developer.nvidia.com/cuda-downloads
+        
+        3. Install Nvidia-Docker & Restart Docker Service
+        https://github.com/NVIDIA/nvidia-docker
+        
+        4. Build Docker Image For Faceswap
+        docker build -t deepfakes-gpu -f Dockerfile.gpu .
+        
+        5. Mount faceswap volume and Run it
+        # without gui. tools.py gui not working.
+        docker run -p 8888:8888 \
+            --hostname faceswap-gpu --name faceswap-gpu \
+            -v /opt/faceswap:/srv \
+            faceswap-gpu
+        
+        # with gui. tools.py gui working.
+        ## enable local access to X11 server
+        xhost +local:
+        ## enable nvidia device if working under bumblebee
+        echo ON > /proc/acpi/bbswitch
+        ## create container 
+        nvidia-docker run -p 8888:8888 \
+            --hostname faceswap-gpu --name faceswap-gpu \
+            -v /opt/faceswap:/srv \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -e DISPLAY=unix$DISPLAY \
+            -e AUDIO_GID=`getent group audio | cut -d: -f3` \
+            -e VIDEO_GID=`getent group video | cut -d: -f3` \
+            -e GID=`id -g` \
+            -e UID=`id -u` \
+            faceswap-gpu
+        
+        6. Open a new terminal to interact with the project
+        docker exec faceswap-gpu python /srv/tools.py gui
 ```
 
-If you want to use your GPU instead of your CPU, substitute `requirements.txt` with `requirements-gpu.txt`:
-
-```bash
-pip install -r requirements-gpu.txt
+A successful setup log, without docker.
+```
+INFO    The tool provides tips for installation
+        and installs required python packages
+INFO    Setup in Linux 4.14.39-1-MANJARO
+INFO    Installed Python: 3.6.5 64bit
+INFO    Installed PIP: 10.0.1
+Enable  Docker? [Y/n] n
+INFO    Docker Disabled
+Enable  CUDA? [Y/n] 
+INFO    CUDA Enabled
+INFO    CUDA version: 9.1
+INFO    cuDNN version: 7
+WARNING Tensorflow has no official prebuild for CUDA 9.1 currently.
+        To continue, You have to build your own tensorflow-gpu.
+        Help: https://www.tensorflow.org/install/install_sources
+Are System Dependencies met? [y/N] y
+INFO    Installing Missing Python Packages...
+INFO    Installing tensorflow-gpu
+INFO    Installing pathlib==1.0.1
+......
+INFO    Installing tqdm
+INFO    Installing matplotlib
+INFO    All python3 dependencies are met.
+        You are good to go.
 ```
 
-Should you choose the GPU version, Tensorflow might ask you to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-zone) and the [cuDNN libraries](https://developer.nvidia.com/cudnn). Instructions on installing those can be found on Nvidia's website. (For Ubuntu, maybe all Linux, see: https://yangcha.github.io/Install-CUDA8)
-
+## Run the project
 Once all these requirements are installed, you can attempt to run the faceswap tools. Use the `-h` or `--help` options for a list of options.
 
 ```bash
 python faceswap.py -h
 ```
+
+or run with `gui` to launch the GUI
+```bash
+python faceswap.py gui
+```
+
 
 Proceed to [../blob/master/USAGE.md](USAGE.md)
 

@@ -1,0 +1,18 @@
+pathlib==1.0.1
+scandir==1.6
+h5py==2.7.1
+Keras==2.1.2
+opencv-python==3.3.0.10
+scikit-image
+cmake
+dlib
+face-recognition
+tqdm
+matplotlib
+ffmpy==0.2.2
+
+# tensorflow is included within the docker image.
+# If you are looking for dependencies for a manual install,
+# you may want to install tensorflow-gpu==1.4.0 for CUDA 8.0 or tensorflow-gpu>=1.5.0 for CUDA 9.0
+
+# cmake needs to be installed before compiling dlib.
