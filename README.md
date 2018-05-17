@@ -13,7 +13,7 @@ The project has multiple entry points. You will have to:
  - **Convert** your sources with the model
 
 ### Extract
-From your setup folder, run `python faceswap.py extract`. This will take photos from `src` folder and extract faces into `extract` folder.
+From your setup folder, run `python faceswap.py extract`. This will take photos from `input` folder and extract faces into `extract` folder.
 
 ### Train
 From your setup folder, run `python faceswap.py train`. This will take photos from two folders containing pictures of both faces and train a model that will be saved inside the `models` folder.
