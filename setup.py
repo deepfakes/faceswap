@@ -255,11 +255,17 @@ docker build -t deepfakes-cpu -f Dockerfile.cpu .
 
 3. Mount faceswap volume and Run it
 # without gui. tools.py gui not working.
-docker run -p 8888:8888 --hostname faceswap-cpu --name faceswap-cpu -v {path}:/srv faceswap-cpu
+docker run -p 8888:8888 \
+    --hostname deepfakes-cpu --name deepfakes-cpu \
+    -v {path}:/srv \
+    deepfakes-cpu
 
 # with gui. tools.py gui working.
-docker run -p 8888:8888 \\
-    --hostname faceswap-cpu --name faceswap-cpu \\
+## enable local access to X11 server
+xhost +local:
+## create container
+nvidia-docker run -p 8888:8888 \\
+    --hostname deepfakes-cpu --name deepfakes-cpu \\
     -v {path}:/srv \\
     -v /tmp/.X11-unix:/tmp/.X11-unix \\
     -e DISPLAY=unix$DISPLAY \\
@@ -267,11 +273,11 @@ docker run -p 8888:8888 \\
     -e VIDEO_GID=`getent group video | cut -d: -f3` \\
     -e GID=`id -g` \\
     -e UID=`id -u` \\
-    faceswap-cpu
+    deepfakes-cpu
 
 
 4. Open a new terminal to run faceswap.py in /srv
-docker exec -it faceswap-cpu bash
+docker exec -it deepfakes-cpu bash
 """.format(path=sys.path[0]))
     INFO("That's all you need to do with a docker. Have fun.")
 
@@ -282,19 +288,27 @@ https://www.docker.com/community-edition
 2. Install latest CUDA
 CUDA: https://developer.nvidia.com/cuda-downloads
 
-3. Install Nvidia-Docker
+3. Install Nvidia-Docker & Restart Docker Service
 https://github.com/NVIDIA/nvidia-docker
 
 4. Build Docker Image For Faceswap
 docker build -t deepfakes-gpu -f Dockerfile.gpu .
 
 5. Mount faceswap volume and Run it
-# without gui. tools.py gui working.
-docker run -p 8888:8888 --hostname faceswap-gpu --name faceswap-gpu -v {path}:/srv faceswap-gpu
+# without gui. tools.py gui not working.
+docker run -p 8888:8888 \
+    --hostname deepfakes-gpu --name deepfakes-gpu \
+    -v {path}:/srv \
+    deepfakes-gpu
 
-# with gui. tools.py gui not working.
-docker run -p 8888:8888 \\
-    --hostname faceswap-gpu --name faceswap-gpu \\
+# with gui. tools.py gui working.
+## enable local access to X11 server
+xhost +local:
+## enable nvidia device if working under bumblebee
+echo ON > /proc/acpi/bbswitch
+## create container
+nvidia-docker run -p 8888:8888 \\
+    --hostname deepfakes-gpu --name deepfakes-gpu \\
     -v {path}:/srv \\
     -v /tmp/.X11-unix:/tmp/.X11-unix \\
     -e DISPLAY=unix$DISPLAY \\
@@ -302,10 +316,10 @@ docker run -p 8888:8888 \\
     -e VIDEO_GID=`getent group video | cut -d: -f3` \\
     -e GID=`id -g` \\
     -e UID=`id -u` \\
-    faceswap-gpu
+    deepfakes-gpu
 
 6. Open a new terminal to interact with the project
-docker exec faceswap-gpu python /srv/tools.py gui
+docker exec deepfakes-gpu python /srv/tools.py gui
 """.format(path=sys.path[0]))
 
 def Tips_2_1():

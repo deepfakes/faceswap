@@ -1,4 +1,4 @@
-#!/usr/bin python3
+#!/usr/bin/env python3
 """ Holds the classes for the 3 main Faceswap 'media' objects for
     input (extract) and output (convert) tasks. Those being:
             Images
@@ -281,10 +281,10 @@ class Alignments(object):
         """ Set the serializer to be used for loading and saving alignments """
         if not self.args.serializer and self.args.alignments_path:
             ext = os.path.splitext(self.args.alignments_path)[-1]
-            serializer = Serializer.get_serializer_fromext(ext)
+            serializer = Serializer.get_serializer_from_ext(ext)
             print("Alignments Output: {}".format(self.args.alignments_path))
         else:
-            serializer = Serializer.get_serializer(self.args.serializer or "json")
+            serializer = Serializer.get_serializer(self.args.serializer)
         print("Using {} serializer".format(serializer.ext))
         return serializer
 
