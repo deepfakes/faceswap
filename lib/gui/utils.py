@@ -67,6 +67,8 @@ class Images(object, metaclass=Singleton):
         self.icons["reset"] = tk.PhotoImage(file=os.path.join(self.pathicons, "reset.png"))
         self.icons["clear"] = tk.PhotoImage(file=os.path.join(self.pathicons, "clear.png"))
         self.icons["graph"] = tk.PhotoImage(file=os.path.join(self.pathicons, "graph.png"))
+        self.icons["zoom"] = tk.PhotoImage(file=os.path.join(self.pathicons, "zoom.png"))
+        self.icons["move"] = tk.PhotoImage(file=os.path.join(self.pathicons, "move.png"))
 
     def delete_preview(self):
         """ Delete the preview files """

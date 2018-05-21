@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from argparse import SUPPRESS
 
-from lib.cli import FullPaths
+import lib.cli as cli
 from lib.gui import CurrentSession, CommandNotebook, Config, ConsoleOut
 from lib.gui import  DisplayNotebook, Images, ProcessWrapper, StatusBar
 
@@ -17,7 +17,7 @@ class FaceswapGui(tk.Tk):
 
     def __init__(self, opts, pathscript, calling_file="faceswap.py"):
         tk.Tk.__init__(self)
-
+        self.geometry('1200x640+80+80')
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
         #TODO Remove DisplayNotebook from wrapper and handle internally
         #TODO Fix circular imports:
@@ -144,7 +144,7 @@ class Gui(object):
         ctl = ttk.Entry
         if option.get("dest", "") == "alignments_path":
             sysbrowser = "load"
-        elif option.get("action", "") == FullPaths:
+        elif option.get("action", "") == cli.FullPaths:
             sysbrowser = "folder"
         elif option.get("choices", "") != "":
             ctl = ttk.Combobox
