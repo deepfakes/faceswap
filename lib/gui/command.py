@@ -2,41 +2,44 @@
 """ The command frame for Faceswap GUI """
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import TclError, ttk
 
-from .settings import Config
+from lib.cli import FileFullPaths
+
 from .tooltip import Tooltip
-from .utils import Images, FileHandler
+from .utils import Config, Images, FileHandler
 from .wrapper import ProcessWrapper
+
 
 class CommandNotebook(ttk.Notebook):
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, opts, calling_file):
+    def __init__(self, parent, opts):
         ttk.Notebook.__init__(self, parent, width=420, height=500)
         parent.add(self)
 
-        self.build_tabs(opts, calling_file)
+        self.build_tabs(opts)
 
-    def build_tabs(self, opts, calling_file):
+    def build_tabs(self, opts):
         """ Build the tabs for the relevant command """
-        if calling_file == "faceswap.py":
-            # Commands explicitly stated to ensure consistent ordering
-            cmdlist = ("extract", "train", "convert")
-        else:
-            cmdlist = opts.keys()
+        for category in sorted(key for key in opts.keys()):
+            if category == 'faceswap':
+                cmdlist = ("extract", "train", "convert")
+            else:
+                cmdlist = sorted(key for key in opts['tools'].keys())
 
-        for command in cmdlist:
-            title = command.title()
-            commandtab = CommandTab(self, opts, command)
-            self.add(commandtab, text=title)
+            for command in cmdlist:
+                title = command.title()
+                commandtab = CommandTab(self, category, opts[category], command)
+                self.add(commandtab, text=title)
 
 class CommandTab(ttk.Frame):
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, opts, command):
+    def __init__(self, parent, category, opts, command):
         ttk.Frame.__init__(self, parent)
 
+        self.category = category
         self.opts = opts
         self.command = command
 
@@ -48,7 +51,7 @@ class CommandTab(ttk.Frame):
 
         self.add_frame_separator()
 
-        ActionFrame(self, self.opts, self.command)
+        ActionFrame(self, self.category, self.opts, self.command)
 
     def add_frame_separator(self):
         """ Add a separator between top and bottom frames """
@@ -98,7 +101,7 @@ class OptionsFrame(ttk.Frame):
         self.canvas.bind('<Configure>', self.resize_frame)
 
         for option in self.opts[self.command]:
-            optioncontrol = OptionControl(option, self.optsframe, self.chkbtns[1])
+            optioncontrol = OptionControl(option, self.opts, self.optsframe, self.chkbtns[1])
             optioncontrol.build_full_control()
 
         if self.chkbtns[1].winfo_children():
@@ -124,10 +127,11 @@ class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
     frame """
 
-    def __init__(self, option, option_frame, checkbuttons_frame):
+    def __init__(self, option, opts, option_frame, checkbuttons_frame):
         self.option = option
         self.option_frame = option_frame
         self.chkbtns = checkbuttons_frame
+        self.opts = opts
 
     def build_full_control(self):
         """ Build the correct control type for the option passed through """
@@ -205,33 +209,86 @@ class OptionControl(object):
             ctl['values'] = [choice for choice in choices]
 
         Tooltip(ctl, text=helptext, wraplength=200)
-
+    #TODO: Review all of the file handling changes brought in by merge Master
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
-        img = Images().icons[sysbrowser]
+        if sysbrowser == "combo":
+            img = Images().icons['load']
+        else:
+            img = Images().icons[sysbrowser]
         action = getattr(self, 'ask_' + sysbrowser)
+        filetypes = self.option['filetypes']
         fileopn = ttk.Button(frame, image=img,
-                             command=lambda cmd=action: cmd(filepath))
+                             command=lambda cmd=action: cmd(filepath,
+                                                            filetypes))
         fileopn.pack(padx=(0, 5), side=tk.RIGHT)
 
     @staticmethod
-    def ask_folder(filepath):
-        """ Pop-up to get path to a folder """
+    def ask_folder(filepath, filetypes=None):
+        """ Pop-up to get path to a directory
+            :param filepath: tkinter StringVar object
+            that will store the path to a directory.
+            :param filetypes: Unused argument to allow
+            filetypes to be given in ask_load(). """
         dirname = FileHandler('dir').retfile
         if dirname:
             filepath.set(dirname)
 
     @staticmethod
-    def ask_load(filepath):
+    def ask_load(filepath, filetypes=None):
         """ Pop-up to get path to a file """
-        filename = FileHandler('filename').retfile
+        if filetypes is None:
+            filename = FileHandler('filename').retfile
+        else:
+            # In case filetypes were not configured properly in the
+            # arguments_list
+            try:
+                filename = FileHandler('filename', filetype=filetypes).retfile
+            except TclError as te1:
+                filetypes = FileFullPaths.prep_filetypes(filetypes)
+                filename = FileHandler('filename', filetype=filetypes).retfile
+            except TclError as te2:
+                filename = FileHandler('filename').retfile
         if filename:
             filepath.set(filename)
+
+    #TODO CHECK THIS WORKS. AB ORIGINALLY HAD IN AS ASKSAVEASFILENAME
+    @staticmethod
+    def ask_save(filepath, filetypes=None):
+        """ Pop-up to get path to save a new file """
+        if filetypes is None:
+            filename = FileHandler('save').retfile
+        else:
+            # In case filetypes were not configured properly in the
+            # arguments_list
+            try:
+                filename = FileHandler('save', filetype=filetypes).retfile
+            except TclError as te1:
+                filetypes = FileFullPaths.prep_filetypes(filetypes)
+                filename = FileHandler('save', filetype=filetypes).retfile
+            except TclError as te2:
+                filename = FileHandler('save').retfile
+        if filename:
+            filepath.set(filename)
+
+    @staticmethod
+    def ask_nothing(filepath, filetypes=None):
+        """ Method that does nothing, used for disabling open/save pop up """
+        return
+
+    def ask_combo(self, filepath, filetypes):
+        """ Method to pop the correct dialog depending on context """
+        actions_open_type = self.option['actions_open_type']
+        task_name = actions_open_type['task_name']
+        chosen_action = self.opts[task_name][0]['value'].get()
+        action = getattr(self, "ask_" + actions_open_type[chosen_action])
+        filetypes = filetypes[chosen_action]
+        action(filepath, filetypes)
 
 class ActionFrame(ttk.Frame):
     """Action Frame - Displays action controls for the command tab """
 
-    def __init__(self, parent, opts, command):
+    def __init__(self, parent, category, opts, command):
         ttk.Frame.__init__(self, parent)
         self.pack(fill=tk.BOTH, padx=5, pady=5, side=tk.BOTTOM, anchor=tk.N)
 
@@ -239,10 +296,10 @@ class ActionFrame(ttk.Frame):
         self.command = command
         self.title = command.title()
 
-        self.add_action_button(opts)
+        self.add_action_button(category, opts)
         self.add_util_buttons()
 
-    def add_action_button(self, opts):
+    def add_action_button(self, category, opts):
         """ Add the action buttons for page """
         actframe = ttk.Frame(self)
         actframe.pack(fill=tk.X, side=tk.LEFT)
@@ -251,7 +308,7 @@ class ActionFrame(ttk.Frame):
                             text=self.title,
                             width=10,
                             command=lambda: ProcessWrapper().action_command(
-                                self.command, opts))
+                                category, self.command, opts))
         btnact.pack(side=tk.LEFT)
         Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
         ProcessWrapper().actionbtns[self.command] = btnact
@@ -260,7 +317,7 @@ class ActionFrame(ttk.Frame):
                             text="Generate",
                             width=10,
                             command=lambda: ProcessWrapper().generate_command(
-                                self.command, opts))
+                                category, self.command, opts))
         btngen.pack(side=tk.RIGHT, padx=5)
         Tooltip(btngen, text='Output command line options to the console', wraplength=200)
 

@@ -6,28 +6,23 @@ import sys
 import tkinter as tk
 
 from tkinter import messagebox, ttk
-from argparse import SUPPRESS
 
-import lib.cli as cli
 from lib.gui import CurrentSession, CommandNotebook, Config, ConsoleOut
-from lib.gui import  DisplayNotebook, Images, ProcessWrapper, StatusBar
+from lib.gui import  DisplayNotebook, Images, Options, ProcessWrapper, StatusBar
 
 class FaceswapGui(tk.Tk):
     """ The Graphical User Interface """
 
-    def __init__(self, opts, pathscript, calling_file="faceswap.py"):
+    def __init__(self, opts, pathscript):
         tk.Tk.__init__(self)
         self.geometry('1200x640+80+80')
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
         #TODO Remove DisplayNotebook from wrapper and handle internally
-        #TODO Fix circular imports:
-        #   singletion/console
         #TODO Saving session stats currently overwrites last session. Fix
         self.images = Images(pathcache)
         self.opts = opts
-        self.calling_file = calling_file
         self.session = CurrentSession()
-        self.wrapper = ProcessWrapper(self.session, pathscript, calling_file)
+        self.wrapper = ProcessWrapper(self.session, pathscript)
 
         StatusBar(self)
         self.images.delete_preview()
@@ -35,7 +30,7 @@ class FaceswapGui(tk.Tk):
 
     def build_gui(self, debug_console):
         """ Build the GUI """
-        self.title(self.calling_file)
+        self.title('Faceswap.py')
         self.menu()
 
         topcontainer, bottomcontainer = self.add_containers()
@@ -43,7 +38,7 @@ class FaceswapGui(tk.Tk):
         console = ConsoleOut(bottomcontainer, debug_console)
         console.build_console()
 
-        CommandNotebook(topcontainer, self.opts, self.calling_file)
+        CommandNotebook(topcontainer, self.opts)
         self.wrapper.displaybook = DisplayNotebook(topcontainer, self.session)
 
     def menu(self):
@@ -107,60 +102,12 @@ class FaceswapGui(tk.Tk):
 
 class Gui(object):
     """ The GUI process. """
-    def __init__(self, arguments, subparsers):
+    def __init__(self, arguments):
         cmd = sys.argv[0]
         self.pathscript = os.path.realpath(os.path.dirname(cmd))
         self.args = arguments
-        self.opts = self.extract_options(subparsers)
-        self.root = FaceswapGui(self.opts, self.pathscript, calling_file=cmd)
-
-    def extract_options(self, subparsers):
-        """ Extract the existing ArgParse Options """
-        opts = {cmd: subparsers[cmd].argument_list + subparsers[cmd].optional_arguments
-                for cmd in subparsers.keys()}
-        for command in opts.values():
-            for opt in command:
-                if opt.get("help", "") == SUPPRESS:
-                    command.remove(opt)
-                ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
-                opt['control_title'] = self.set_control_title(
-                    opt.get('opts', ''))
-                opt['control'] = ctl
-                opt['filesystem_browser'] = sysbrowser
-                opt['filetypes'] = filetypes
-                opt['actions_open_types'] = actions_open_types
-        return opts
-
-    @staticmethod
-    def set_control_title(opts):
-        """ Take the option switch and format it nicely """
-        ctltitle = opts[1] if len(opts) == 2 else opts[0]
-        ctltitle = ctltitle.replace("-", " ").replace("_", " ").strip().title()
-        return ctltitle
-
-    @staticmethod
-    def set_control(option):
-        """ Set the control and filesystem browser to use for each option """
-        sysbrowser = None
-        filetypes = None
-        actions_open_type = None
-        ctl = ttk.Entry
-        if option.get('action', '') == cli.FullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == cli.DirFullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == cli.FileFullPaths:
-            sysbrowser = 'load'
-            filetypes = option.get('filetypes', None)
-        elif option.get('action', '') == cli.ComboFullPaths:
-            sysbrowser = 'combo'
-            actions_open_type = option['actions_open_type']
-            filetypes = option.get('filetypes', None)
-        elif option.get('choices', '') != '':
-            ctl = ttk.Combobox
-        elif option.get("action", "") == "store_true":
-            ctl = ttk.Checkbutton
-        return ctl, sysbrowser, filetypes, actions_open_type
+        self.opts = Options().opts
+        self.root = FaceswapGui(self.opts, self.pathscript)
 
     def process(self):
         """ Builds the GUI """

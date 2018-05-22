@@ -9,41 +9,40 @@ import sys
 from threading import Thread
 from time import time
 
-from .console import ConsoleOut
 from .statusbar import StatusBar
 from .tooltip import Tooltip
-from .utils import Images, Singleton
+from .utils import ConsoleOut, Images, Singleton
 
 class ProcessWrapper(object, metaclass=Singleton):
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, session=None, pathscript=None, calling_file='faceswap.py'):
+    def __init__(self, session=None, pathscript=None):
         self.session = session
+        self.pathscript = pathscript
         self.runningtask = False
-        self.pathexecscript = os.path.join(pathscript, calling_file)
         self.task = FaceswapControl(self)
         self.displaybook = None
         self.actionbtns = dict()
         self.command = None
 
-    def action_command(self, command, opts):
+    def action_command(self, category, command, opts):
         """ The action to perform when the action button is pressed """
         if self.runningtask:
             self.task.terminate()
             self.command = None
         else:
             self.command = command
-            args = self.prepare(opts)
+            args = self.prepare(category, opts)
             self.task.execute_script(command, args)
 
-    def generate_command(self, command, opts):
+    def generate_command(self, category, command, opts):
         """ Generate the command line arguments and output """
-        args = self.build_args(opts, command=command, generate=True)
+        args = self.build_args(category, opts, command=command, generate=True)
         ConsoleOut().clear()
         print(' '.join(args))
 
-    def prepare(self, opts):
+    def prepare(self, category, opts):
         """ Prepare the environment for execution """
         self.runningtask = True
 
@@ -58,14 +57,15 @@ class ProcessWrapper(object, metaclass=Singleton):
 
         self.set_display_panel(opts)
 
-        return self.build_args(opts)
+        return self.build_args(category, opts)
 
-    def build_args(self, opts, command=None, generate=False):
+    def build_args(self, category, opts, command=None, generate=False):
         """ Build the faceswap command and arguments list """
         command = self.command if not command else command
+        pathexecscript = os.path.join(self.pathscript, category, '.py')
 
         args = ['python'] if generate else ['python', '-u']
-        args.extend([self.pathexecscript, command])
+        args.extend([pathexecscript, command])
 
         for item in opts[command]:
             optval = str(item.get('value', '').get())
@@ -125,6 +125,7 @@ class ProcessWrapper(object, metaclass=Singleton):
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
+    __group_processes = ["effmpeg"]
 
     def __init__(self, wrapper):
 
@@ -142,6 +143,10 @@ class FaceswapControl(object):
                   'stderr': PIPE,
                   'bufsize': 1,
                   'universal_newlines': True}
+
+        if self.command in self.__group_processes:
+            kwargs['preexec_fn'] = os.setsid
+
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = Popen(args, **kwargs)
@@ -251,15 +256,27 @@ class FaceswapControl(object):
                 return
             except ValueError as err:
                 print(err)
-        print('Terminating Process...')
-        try:
-            self.process.terminate()
-            self.process.wait(timeout=10)
-            print('Terminated')
-        except TimeoutExpired:
-            print('Termination timed out. Killing Process...')
-            self.process.kill()
-            print('Killed')
+        elif self.command in self.__group_processes:
+            print('Terminating Process Group...')
+            pgid = os.getpgid(self.process.pid)
+            try:
+                os.killpg(pgid, signal.SIGINT)
+                self.process.wait(timeout=10)
+                print('Terminated')
+            except TimeoutExpired:
+                print('Termination timed out. Killing Process Group...')
+                os.killpg(pgid, signal.SIGKILL)
+                print('Killed')
+        else:
+            print('Terminating Process...')
+            try:
+                self.process.terminate()
+                self.process.wait(timeout=10)
+                print('Terminated')
+            except TimeoutExpired:
+                print('Termination timed out. Killing Process...')
+                self.process.kill()
+                print('Killed')
 
     def set_final_status(self, returncode):
         """ Set the status bar output based on subprocess return code """

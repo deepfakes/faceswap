@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments """
 import argparse
+from importlib import import_module
 import os
 import sys
 
@@ -19,19 +20,20 @@ class ScriptExecutor(object):
 
     def import_script(self):
         """ Only import a script's modules when running that script."""
-        if self.command == 'extract':
-            from scripts.extract import Extract as script
-        elif self.command == 'train':
-            from scripts.train import Train as script
-        elif self.command == 'convert':
-            from scripts.convert import Convert as script
-        elif self.command == 'gui':
-            self.test_tkinter()
-            self.check_display()
-            from scripts.gui import Gui as script
-        else:
-            script = None
+        self.test_for_gui()
+        cmd = sys.argv[0]
+        src = 'tools' if cmd == 'tools.py' else 'scripts'
+        mod = '.'.join((src, self.command.lower()))
+        module = import_module(mod)
+        script = getattr(module, self.command.title())
         return script
+
+    def test_for_gui(self):
+        """ If running the gui, check the prerequisites """
+        if self.command != 'gui':
+            return
+        self.test_tkinter()
+        self.check_display()
 
     @staticmethod
     def test_tkinter():
@@ -74,8 +76,7 @@ class ScriptExecutor(object):
     def execute_script(self, arguments):
         """ Run the script for called command """
         script = self.import_script()
-        args = (arguments, ) if self.command != 'gui' else (arguments, self.subparsers)
-        process = script(*args)
+        process = script(arguments)
         process.process()
 
 
@@ -83,7 +84,7 @@ class FullPaths(argparse.Action):
     """ Expand user- and relative-paths """
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
-                os.path.expanduser(values)))
+            os.path.expanduser(values)))
 
 
 class DirFullPaths(FullPaths):
@@ -113,10 +114,11 @@ class FileFullPaths(FullPaths):
 
     @staticmethod
     def prep_filetypes(filetypes):
+        """ Prepare the filetypes for required file """
         all_files = ("All Files", "*.*")
         filetypes_l = list()
-        for i in range(len(filetypes)):
-            filetypes_l.append(FileFullPaths._process_filetypes(filetypes[i]))
+        for filetype in filetypes:
+            filetypes_l.append(FileFullPaths._process_filetypes(filetype))
         filetypes_l.append(all_files)
         return tuple(filetypes_l)
 
@@ -128,18 +130,17 @@ class FileFullPaths(FullPaths):
 
         filetypes_name = filetypes[0]
         filetypes_l = filetypes[1]
-        if (type(filetypes_l) == list or type(filetypes_l) == tuple) \
-                and all("*." in i for i in filetypes_l):
+        if isinstance(filetypes_l, (list, tuple)) and all("*." in i for i in filetypes_l):
             return filetypes  # assume filetypes properly formatted
 
-        if type(filetypes_l) != list and type(filetypes_l) != tuple:
+        if not isinstance(filetypes_l, list) and not isinstance(filetypes_l, tuple):
             raise ValueError("The filetypes extensions list was "
                              "neither a list nor a tuple: "
                              "{}".format(filetypes_l))
 
         filetypes_list = list()
-        for i in range(len(filetypes_l)):
-            filetype = filetypes_l[i].strip("*.")
+        for filetype in filetypes_l:
+            filetype = filetype.strip("*.")
             filetype = filetype.strip(';')
             filetypes_list.append("*." + filetype)
         return filetypes_name, filetypes_list
@@ -165,7 +166,7 @@ class ComboFullPaths(FileFullPaths):
     Class that gui uses to determine if you need to open a file or a
     directory based on which action you are choosing
     """
-    def __init__(self,  option_strings, dest, nargs=None, filetypes=None,
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  actions_open_type=None, **kwargs):
         if nargs is not None:
             raise ValueError("nargs not allowed")
@@ -177,17 +178,18 @@ class ComboFullPaths(FileFullPaths):
 
     @staticmethod
     def prep_filetypes(filetypes):
+        """ Prepare the filetypes for required file """
         all_files = ("All Files", "*.*")
         filetypes_d = dict()
-        for k, v in filetypes.items():
-            filetypes_d[k] = ()
-            if v is None:
-                filetypes_d[k] = None
+        for key, val in filetypes.items():
+            filetypes_d[key] = ()
+            if val is None:
+                filetypes_d[key] = None
                 continue
             filetypes_l = list()
-            for i in range(len(v)):
-                filetypes_l.append(ComboFullPaths._process_filetypes(v[i]))
-            filetypes_d[k] = (tuple(filetypes_l), all_files)
+            for filetype in val:
+                filetypes_l.append(ComboFullPaths._process_filetypes(filetype))
+            filetypes_d[key] = (tuple(filetypes_l), all_files)
         return filetypes_d
 
     def _get_kwargs(self):
@@ -221,8 +223,12 @@ class FaceSwapArgs(object):
         to all commands. Should be the parent function of all
         subsequent argparsers """
     def __init__(self, subparser, command, description="default", subparsers=None):
+
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
+        if not subparser:
+            return
+
         self.parser = self.create_parser(subparser, command, description)
 
         self.add_arguments()
