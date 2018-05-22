@@ -1,6 +1,6 @@
-#!/usr/bin python3
-""" Holds the classes for the 3 main Faceswap 'media' objects for input (extract)
-    and output (convert) tasks. Those being:
+#!/usr/bin/env python3
+""" Holds the classes for the 3 main Faceswap 'media' objects for
+    input (extract) and output (convert) tasks. Those being:
             Images
             Faces
             Alignments"""
@@ -17,6 +17,7 @@ from lib.faces_detect import detect_faces, DetectedFace
 from lib.FaceFilter import FaceFilter
 from lib.utils import get_folder, get_image_paths, set_system_verbosity
 from plugins.PluginLoader import PluginLoader
+
 
 class Utils(object):
     """ Holds utility functions that are required by more than one media
@@ -75,6 +76,7 @@ class Utils(object):
         print("Done!")
         return images_found, num_faces_detected
 
+
 class Images(object):
     """ Holds the full frames/images """
     def __init__(self, arguments):
@@ -88,12 +90,12 @@ class Images(object):
         self.rotation_height = 0
 
     def get_rotation_angles(self):
-        """ Set the rotation angles. Includes backwards compatibility for the 'on'
-            and 'off' options:
+        """ Set the rotation angles. Includes backwards compatibility for the
+            'on' and 'off' options:
                 - 'on' - increment 90 degrees
                 - 'off' - disable
-                - 0 is prepended to the list, as whatever happens, we want to scan the image
-                  in it's upright state """
+                - 0 is prepended to the list, as whatever happens, we want to
+                  scan the image in it's upright state """
         rotation_angles = [0]
 
         if (not hasattr(self.args, 'rotate_images')
@@ -109,8 +111,8 @@ class Images(object):
             if len(passed_angles) == 1:
                 rotation_step_size = passed_angles[0]
                 rotation_angles.extend(range(rotation_step_size, 360, rotation_step_size))
-            elif len(rotation_angles) > 1:
-                rotation_angles.extend(rotation_angles)
+            elif len(passed_angles) > 1:
+                rotation_angles.extend(passed_angles)
 
         return rotation_angles
 
@@ -152,6 +154,7 @@ class Images(object):
                                                     rotated_height=self.rotation_height)
         return image
 
+
 class Faces(object):
     """ Holds the faces """
     def __init__(self, arguments):
@@ -166,10 +169,8 @@ class Faces(object):
         self.verify_output = False
 
     @staticmethod
-    def load_extractor():
+    def load_extractor(extractor_name="Align"):
         """ Load the requested extractor for extraction """
-        # TODO Pass as argument
-        extractor_name = "Align"
         extractor = PluginLoader.get_extractor(extractor_name)()
 
         return extractor
@@ -237,7 +238,7 @@ class Faces(object):
             self.num_faces_detected += 1
             faces_count += 1
         if faces_count > 1 and self.args.verbose:
-            print("Note: Found more than one face in an image! File: %s" % filename)
+            print("Note: Found more than one face in an image! File: {}".format(filename))
             self.verify_output = True
 
     def draw_landmarks_on_face(self, face, image):
@@ -267,6 +268,7 @@ class Faces(object):
                 Path(filename).stem
         return blurry_file
 
+
 class Alignments(object):
     """ Holds processes pertaining to the alignments file """
     def __init__(self, arguments):
@@ -279,10 +281,10 @@ class Alignments(object):
         """ Set the serializer to be used for loading and saving alignments """
         if not self.args.serializer and self.args.alignments_path:
             ext = os.path.splitext(self.args.alignments_path)[-1]
-            serializer = Serializer.get_serializer_fromext(ext)
+            serializer = Serializer.get_serializer_from_ext(ext)
             print("Alignments Output: {}".format(self.args.alignments_path))
         else:
-            serializer = Serializer.get_serializer(self.args.serializer or "json")
+            serializer = Serializer.get_serializer(self.args.serializer)
         print("Using {} serializer".format(serializer.ext))
         return serializer
 
@@ -328,5 +330,5 @@ class Alignments(object):
                 if val:
                     faces_detected[key] = val
         else:
-            print("Existing alignments file '%s' not found." % alignfile)
+            print("Existing alignments file '{}' not found.".format(alignfile))
         return faces_detected

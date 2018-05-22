@@ -18,7 +18,6 @@ class Train(object):
     def __init__(self, arguments):
         self.args = arguments
         self.images = self.get_images()
-
         self.stop = False
         self.save_now = False
         self.preview_buffer = dict()
@@ -31,10 +30,8 @@ class Train(object):
     def process(self):
         """ Call the training process object """
         print("Training data directory: {}".format(self.args.model_dir))
-
         lvl = '0' if self.args.verbose else '2'
         set_system_verbosity(lvl)
-
         thread = self.start_thread()
 
         if self.args.preview:
@@ -45,7 +42,8 @@ class Train(object):
         self.end_thread(thread)
 
     def get_images(self):
-        """ Check the image dirs exist, contain images and return the image objects """
+        """ Check the image dirs exist, contain images and return the image
+        objects """
         images = []
         for image_dir in [self.args.input_A, self.args.input_B]:
             if not os.path.isdir(image_dir):
@@ -69,9 +67,10 @@ class Train(object):
 
     def end_thread(self, thread):
         """ On termination output message and join thread back to main """
-        print("Exit requested! The trainer will complete its current cycle, save "
-              "the models and quit (it can take up a couple of seconds depending "
-              "on your training speed). If you want to kill it now, press Ctrl + c")
+        print("Exit requested! The trainer will complete its current cycle, "
+              "save the models and quit (it can take up a couple of seconds "
+              "depending on your training speed). If you want to kill it now, "
+              "press Ctrl + c")
         self.stop = True
         thread.join()
         sys.stdout.flush()
@@ -106,7 +105,7 @@ class Train(object):
         return model
 
     def load_trainer(self, model):
-        """ Load the trainer requested for traning """
+        """ Load the trainer requested for training """
         images_a, images_b = self.images
 
         trainer = PluginLoader.get_trainer(self.trainer_name)
@@ -137,7 +136,8 @@ class Train(object):
         """ Generate the preview window and wait for keyboard input """
         print("Using live preview.\n"
               "Press 'ENTER' on the preview window to save and quit.\n"
-              "Press 'S' on the preview window to save model weights immediately")
+              "Press 'S' on the preview window to save model weights "
+              "immediately")
         while True:
             try:
                 with self.lock:
@@ -158,11 +158,12 @@ class Train(object):
     def monitor_console():
         """ Monitor the console for any input followed by enter or ctrl+c """
         # TODO: how to catch a specific key instead of Enter?
-        # there isnt a good multiplatform solution:
+        # there isn't a good multiplatform solution:
         # https://stackoverflow.com/questions/3523174
         # TODO: Find a way to interrupt input() if the target iterations are reached.
-        # At the moment, setting a target iteration and using the -p flag is the only guaranteed
-        # way to exit the training loop on hitting target iterations. """
+        # At the moment, setting a target iteration and using the -p flag is
+        # the only guaranteed way to exit the training loop on hitting target
+        # iterations.
         print("Starting. Press 'ENTER' to stop training and save model")
         try:
             input()

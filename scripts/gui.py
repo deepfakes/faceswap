@@ -110,7 +110,6 @@ class Gui(object):
     def __init__(self, arguments, subparsers):
         cmd = sys.argv[0]
         self.pathscript = os.path.realpath(os.path.dirname(cmd))
-
         self.args = arguments
         self.opts = self.extract_options(subparsers)
         self.root = FaceswapGui(self.opts, self.pathscript, calling_file=cmd)
@@ -123,11 +122,13 @@ class Gui(object):
             for opt in command:
                 if opt.get("help", "") == SUPPRESS:
                     command.remove(opt)
-                ctl, sysbrowser = self.set_control(opt)
-                opt["control_title"] = self.set_control_title(
-                    opt.get("opts", ""))
-                opt["control"] = ctl
-                opt["filesystem_browser"] = sysbrowser
+                ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
+                opt['control_title'] = self.set_control_title(
+                    opt.get('opts', ''))
+                opt['control'] = ctl
+                opt['filesystem_browser'] = sysbrowser
+                opt['filetypes'] = filetypes
+                opt['actions_open_types'] = actions_open_types
         return opts
 
     @staticmethod
@@ -141,16 +142,25 @@ class Gui(object):
     def set_control(option):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
+        filetypes = None
+        actions_open_type = None
         ctl = ttk.Entry
-        if option.get("dest", "") == "alignments_path":
-            sysbrowser = "load"
-        elif option.get("action", "") == cli.FullPaths:
-            sysbrowser = "folder"
-        elif option.get("choices", "") != "":
+        if option.get('action', '') == cli.FullPaths:
+            sysbrowser = 'folder'
+        elif option.get('action', '') == cli.DirFullPaths:
+            sysbrowser = 'folder'
+        elif option.get('action', '') == cli.FileFullPaths:
+            sysbrowser = 'load'
+            filetypes = option.get('filetypes', None)
+        elif option.get('action', '') == cli.ComboFullPaths:
+            sysbrowser = 'combo'
+            actions_open_type = option['actions_open_type']
+            filetypes = option.get('filetypes', None)
+        elif option.get('choices', '') != '':
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":
             ctl = ttk.Checkbutton
-        return ctl, sysbrowser
+        return ctl, sysbrowser, filetypes, actions_open_type
 
     def process(self):
         """ Builds the GUI """
