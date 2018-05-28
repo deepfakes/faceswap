@@ -1027,7 +1027,12 @@ class FaceswapControl(object):
                 else:
                     self.args.append(opt)
             else:
-                self.args.extend((opt, optval))
+                if item.get('nargs', None):
+                    optval = optval.split(' ')
+                    opt = [opt] + optval
+                else:
+                    opt = (opt, optval)
+                self.args.extend(opt)
 
     def execute_script(self):
         """ Execute the requested Faceswap Script """
