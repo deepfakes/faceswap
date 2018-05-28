@@ -143,6 +143,7 @@ class Convert(object):
         image = self.images.rotate_image(image, face.r, reverse=True)
         return image
 
+
 class OptionalActions(object):
     """ Process the optional actions for convert """
 
@@ -153,9 +154,9 @@ class OptionalActions(object):
         self.faces_to_swap = self.get_aligned_directory()
 
         self.frame_ranges = self.get_frame_ranges()
-        self.imageidxre = re.compile(r"(\d+)(?!.*\d)")
+        self.imageidxre = re.compile(r"[^(mp4)](\d+)(?!.*\d)")
 
-    ### SKIP FACES ###
+    # SKIP FACES #
     def get_aligned_directory(self):
         """ Check for the existence of an aligned directory for identifying
             which faces in the target frames should be swapped """
@@ -178,7 +179,7 @@ class OptionalActions(object):
                       "directory?")
         return faces_to_swap
 
-    ### SKIP FRAME RANGES ###
+    # SKIP FRAME RANGES #
     def get_frame_ranges(self):
         """ split out the frame ranges and parse out 'min' and 'max' values """
         if not self.args.frame_ranges:
