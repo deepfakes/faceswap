@@ -240,16 +240,15 @@ class Model():
             for model in hdf.values():            
                 backup_file(model_dir, model)
         except NameError:
-            print('backup functionality not available')   
-            pass
+            print('backup functionality not available\n')                                      
         
-        #thought maybe I/O bound, sometimes saving in parallel is faster
+        # thought maybe I/O bound, sometimes saving in parallel is faster
         threads = []
-        t = Thread(target=self.encoder.save_weights, args=(os.path.join(model_dir, hdf['encoderH5']),))
+        t = Thread(target=self.encoder.save_weights, args=(str(self.model_dir / hdf['encoderH5']),))
         threads.append(t)         
-        t = Thread(target=self.decoder_A.save_weights, args=(os.path.join(model_dir, hdf['decoder_AH5']),))
+        t = Thread(target=self.decoder_A.save_weights, args=(str(self.model_dir / hdf['decoder_AH5']),))
         threads.append(t)
-        t = Thread(target=self.decoder_B.save_weights, args=(os.path.join(model_dir, hdf['decoder_BH5']),))
+        t = Thread(target=self.decoder_B.save_weights, args=(str(self.model_dir / hdf['decoder_BH5']),))
         threads.append(t)
         
         for thread in threads:
@@ -260,8 +259,7 @@ class Model():
             
         print('saved model weights')              
     
-        
-                
+                           
     @property
     def gpus(self):
         return self._gpus
