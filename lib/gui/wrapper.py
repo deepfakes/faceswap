@@ -6,122 +6,123 @@ import signal
 import subprocess
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
+import tkinter as tk
 from threading import Thread
 from time import time
 
 from .statusbar import StatusBar
-from .tooltip import Tooltip
-from .utils import ConsoleOut, Images, Singleton
+from .utils import ConsoleOut, Images
 
-class ProcessWrapper(object, metaclass=Singleton):
+class ProcessWrapper(object):
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, session=None, pathscript=None):
+    def __init__(self, session=None, pathscript=None, cliopts=None):
+        self.tk_vars = self.set_tk_vars()
         self.session = session
         self.pathscript = pathscript
-        self.runningtask = False
+        self.cliopts = cliopts
         self.task = FaceswapControl(self)
-        self.displaybook = None
-        self.actionbtns = dict()
         self.command = None
 
-    def action_command(self, category, command, opts):
+    def set_tk_vars(self):
+        """ TK Variables to be triggered by ProcessWrapper to indicate
+            what state various parts of the GUI should be in """
+        display = tk.StringVar()
+        display.set(None)
+
+        runningtask = tk.BooleanVar()
+        runningtask.set(False)
+
+        actioncommand = tk.StringVar()
+        actioncommand.set(None)
+        actioncommand.trace("w", self.action_command)
+
+        generatecommand = tk.StringVar()
+        generatecommand.set(None)
+        generatecommand.trace("w", self.generate_command)
+
+        return {'display': display,
+                'runningtask': runningtask,
+                'action': actioncommand,
+                'generate': generatecommand}
+
+    def action_command(self, *args):
         """ The action to perform when the action button is pressed """
-        if self.runningtask:
+        if not self.tk_vars['action'].get():
+            return
+        category, command = self.tk_vars['action'].get().split(',')
+
+        if self.tk_vars['runningtask'].get():
             self.task.terminate()
-            self.command = None
         else:
             self.command = command
-            args = self.prepare(category, opts)
+            args = self.prepare(category)
             self.task.execute_script(command, args)
+        self.tk_vars['action'].set(None)
 
-    def generate_command(self, category, command, opts):
+    def generate_command(self, *args):
         """ Generate the command line arguments and output """
-        args = self.build_args(category, opts, command=command, generate=True)
+        if not self.tk_vars['generate'].get():
+            return
+        category, command = self.tk_vars['generate'].get().split(',')
+        args = self.build_args(category, command=command, generate=True)
         ConsoleOut().clear()
         print(' '.join(args))
+        self.tk_vars['generate'].set(None)
 
-    def prepare(self, category, opts):
+    def prepare(self, category):
         """ Prepare the environment for execution """
-        self.runningtask = True
+        self.tk_vars['runningtask'].set(True)
 
         ConsoleOut().clear()
         print('Loading...')
-
-        self.change_action_button()
 
         StatusBar().status_message.set('Executing - ' + self.command + '.py')
         mode = 'indeterminate' if self.command == 'train' else 'determinate'
         StatusBar().progress_start(mode)
 
-        self.set_display_panel(opts)
+        args = self.build_args(category)
+        self.tk_vars['display'].set(self.command)
 
-        return self.build_args(category, opts)
+        return args
 
-    def build_args(self, category, opts, command=None, generate=False):
+    def build_args(self, category, command=None, generate=False):
         """ Build the faceswap command and arguments list """
         command = self.command if not command else command
-        pathexecscript = os.path.join(self.pathscript, category, '.py')
+        script = '{}.{}'.format(category, 'py')
+        pathexecscript = os.path.join(self.pathscript, script)
 
         args = ['python'] if generate else ['python', '-u']
         args.extend([pathexecscript, command])
 
-        for item in opts[command]:
-            optval = str(item.get('value', '').get())
-            opt = item['opts'][0]
-            if optval == 'False' or optval == '':
-                continue
-            elif optval == 'True':
-                args.append(opt)
-            else:
-                args.extend((opt, optval))
+        for cliopt in self.cliopts.gen_cli_arguments(command):
+            args.extend(cliopt)
             if command == 'train' and not generate:
-                self.session.batchsize = int(optval) if opt == '-bs' else self.session.batchsize
-                self.session.modeldir = optval if opt == '-m' else self.session.modeldir
+                self.set_session_stats(cliopt)
         if command == 'train' and not generate:
             args.append('-gui')  # Embed the preview pane
         return args
 
+    def set_session_stats(self, cliopt):
+        """ Set the session stats for batchsize and modeldir """
+        if cliopt[0] == '-bs':
+            self.session.stats['batchsize'] = int(cliopt[1])
+        if cliopt[0] == '-m':
+            self.session.modeldir = cliopt[1]
+
     def terminate(self, message):
         """ Finalise wrapper when process has exited """
-        self.runningtask = False
+        self.tk_vars['runningtask'].set(False)
         StatusBar().progress_stop()
         StatusBar().status_message.set(message)
-        self.change_action_button()
-        self.clear_display_panel()
+        self.tk_vars['display'].set(None)
+        Images().delete_preview()
         if self.command == 'train':
             self.session.save_session()
         self.session.__init__()
+        self.command = None
         print('Process exited.')
-
-    def change_action_button(self):
-        """ Change the action button to relevant control """
-        for cmd in self.actionbtns.keys():
-            btnact = self.actionbtns[cmd]
-            if self.runningtask:
-                ttl = 'Terminate'
-                hlp = 'Exit the running process'
-            else:
-                ttl = cmd.title()
-                hlp = 'Run the {} script'.format(cmd.title())
-            btnact.config(text=ttl)
-            Tooltip(btnact, text=hlp, wraplength=200)
-
-    def set_display_panel(self, opts):
-        """ Set the display tabs based on executing task """
-        self.displaybook.remove_tabs()
-        if self.command not in ('extract', 'train', 'convert'):
-            return
-        if self.command in ('extract', 'convert'):
-            Images().pathoutput = next(item['value'].get()
-                                       for item in opts[self.command] if item['opts'][0] == '-o')
-        self.displaybook.command_display(self.command)
-
-    def clear_display_panel(self):
-        """ Clear the preview window and graph """
-        self.displaybook.remove_tabs()
-        Images().delete_preview()
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
@@ -213,7 +214,7 @@ class FaceswapControl(object):
             return False
 
         elapsed = self.wrapper.session.timestats['elapsed']
-        iterations = self.wrapper.session.iterations
+        iterations = self.wrapper.session.stats['iterations']
 
         message = 'Elapsed: {}  Iteration: {}  {}'.format(elapsed, iterations, message)
         StatusBar().progress_update(message, 0, False)

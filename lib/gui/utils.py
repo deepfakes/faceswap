@@ -1,18 +1,12 @@
 #!/usr/bin python3
 """ Utility functions for the GUI """
 
-import inspect
 import os
 import sys
 import tkinter as tk
 
 from tkinter import filedialog, ttk
-from argparse import SUPPRESS
 from PIL import Image, ImageTk
-
-import lib.cli as cli
-from lib.Serializer import JSONSerializer
-import tools.cli as ToolsCli
 
 
 class Singleton(type):
@@ -26,111 +20,6 @@ class Singleton(type):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
-
-class Options(object):
-    """ Class and methods for the command line options """
-    def __init__(self):
-        self.categories = ('faceswap', 'tools')
-        self.commands = dict()
-        self.opts = self.extract_options()
-
-    def extract_options(self):
-        """ Get the commands that belong to each category """
-        opts = dict()
-        for category in self.categories:
-            src = ToolsCli if category == 'tools' else cli
-            mod_classes = self.cli_classes(src)
-            self.commands[category] = self.commands_sorted(category, mod_classes)
-            opts[category] = self.extract_command_options(src, mod_classes)
-        return opts
-
-    @staticmethod
-    def cli_classes(cli_source):
-        """ Parse the cli scripts for the arg classes """
-        mod_classes = list()
-        for name, obj in inspect.getmembers(cli_source):
-            if inspect.isclass(obj) and name.lower().endswith('args') \
-                    and name.lower() not in (('faceswapargs',
-                                              'extractconvertargs',
-                                              'guiargs')):
-                mod_classes.append(name)
-        return mod_classes
-
-    def commands_sorted(self, category, classes):
-        """ Format classes into command names and sort:
-            Specific workflow order for faceswap.
-            Alphabetical for all others """
-        commands = sorted(self.format_command(command) for command in classes)
-        if category == 'faceswap':
-            ordered = ['extract', 'train', 'convert']
-            command = ordered + [command for command in commands if command not in ordered]
-        return commands
-
-    @staticmethod
-    def format_command(classname):
-        """ Format args class name to command """
-        return classname.lower()[:-4]
-
-    def extract_command_options(self, cli_source, mod_classes):
-        """ Extract the existing ArgParse Options into master options Dictionary """
-        subopts = dict()
-        for classname in mod_classes:
-            command = self.format_command(classname)
-            options = self.get_cli_arguments(cli_source, classname, command)
-            self.process_options(options)
-            subopts[command] = options
-        return subopts
-
-    @staticmethod
-    def get_cli_arguments(cli_source, classname, command):
-        """ Extract the options from the main and tools cli files """
-        meth = getattr(cli_source, classname)(None, command)
-        return meth.argument_list + meth.optional_arguments
-
-    def process_options(self, command_options):
-        """ Process the options for a single command """
-        for opt in command_options:
-            if opt.get("help", "") == SUPPRESS:
-                command_options.remove(opt)
-            ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
-            opt['control_title'] = self.set_control_title(
-                opt.get('opts', ''))
-            opt['control'] = ctl
-            opt['filesystem_browser'] = sysbrowser
-            opt['filetypes'] = filetypes
-            opt['actions_open_types'] = actions_open_types
-
-    @staticmethod
-    def set_control_title(opts):
-        """ Take the option switch and format it nicely """
-        ctltitle = opts[1] if len(opts) == 2 else opts[0]
-        ctltitle = ctltitle.replace("-", " ").replace("_", " ").strip().title()
-        return ctltitle
-
-    @staticmethod
-    def set_control(option):
-        """ Set the control and filesystem browser to use for each option """
-        sysbrowser = None
-        filetypes = None
-        actions_open_type = None
-        ctl = ttk.Entry
-        if option.get('action', '') == cli.FullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == cli.DirFullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == cli.FileFullPaths:
-            sysbrowser = 'load'
-            filetypes = option.get('filetypes', None)
-        elif option.get('action', '') == cli.ComboFullPaths:
-            sysbrowser = 'combo'
-            actions_open_type = option['actions_open_type']
-            filetypes = option.get('filetypes', None)
-        elif option.get('choices', '') != '':
-            ctl = ttk.Combobox
-        elif option.get("action", "") == "store_true":
-            ctl = ttk.Checkbutton
-        return ctl, sysbrowser, filetypes, actions_open_type
-
 
 class FileHandler(object):
     """ Raise a filedialog box and capture input """
@@ -334,87 +223,3 @@ class SysOutRouter(object):
     def flush():
         """ If flush is forced, send it to normal terminal """
         sys.__stdout__.flush()
-
-class Config(object):
-    """ Actions for controlling Faceswap GUI command configurations """
-
-    def __init__(self, opts):
-        self.opts = self.flatten_opts(opts)
-        self.serializer = JSONSerializer
-        self.filetypes = (('Faceswap files', '*.fsw'), ('All files', '*.*'))
-
-    @staticmethod
-    def flatten_opts(full_opts):
-        """ This is to maintain backwards compatibility.
-            when saving/loading full configs.
-            It is somewhat hacky, as it assumes that no
-            commands between tools and faceswap will ever
-            be named the same """
-        if not any(key in full_opts for key in ('tools', 'faceswap')):
-            return full_opts
-        flat_opts = {cmd: opts for value in full_opts.values() for cmd, opts in value.items()}
-        return flat_opts
-
-    def set_command_args(self, command, options):
-        """ Pass the saved config items back to the GUI """
-        for srcopt, srcval in options.items():
-            for dstopts in self.opts[command]:
-                if dstopts['control_title'] == srcopt:
-                    dstopts['value'].set(srcval)
-                    break
-
-    def load(self, command=None):
-        """ Load a saved config file """
-        cfgfile = FileHandler('open', 'config').retfile
-        if not cfgfile:
-            return
-        cfg = self.serializer.unmarshal(cfgfile.read())
-        if command is None:
-            for cmd, opts in cfg.items():
-                self.set_command_args(cmd, opts)
-        else:
-            opts = cfg.get(command, None)
-            if opts:
-                self.set_command_args(command, opts)
-            else:
-                ConsoleOut().clear()
-                print('No ' + command + ' section found in file')
-
-    def save(self, command=None):
-        """ Save the current GUI state to a config file in json format """
-        cfgfile = FileHandler('save', 'config').retfile
-        if not cfgfile:
-            return
-        if command is None:
-            cfg = {cmd: {opt['control_title']: opt['value'].get() for opt in opts}
-                   for cmd, opts in self.opts.items()}
-        else:
-            cfg = {command: {opt['control_title']: opt['value'].get()
-                             for opt in self.opts[command]}}
-        cfgfile.write(self.serializer.marshal(cfg))
-        cfgfile.close()
-
-    def reset(self, command=None):
-        """ Reset the GUI to the default values """
-        if command is None:
-            options = [opt for opts in self.opts.values() for opt in opts]
-        else:
-            options = [opt for opt in self.opts[command]]
-        for option in options:
-            default = option.get('default', '')
-            default = '' if default is None else default
-            option['value'].set(default)
-
-    def clear(self, command=None):
-        """ Clear all values from the GUI """
-        if command is None:
-            options = [opt for opts in self.opts.values() for opt in opts]
-        else:
-            options = [opt for opt in self.opts[command]]
-        for option in options:
-            if isinstance(option['value'].get(), bool):
-                option['value'].set(False)
-            elif isinstance(option['value'].get(), int):
-                option['value'].set(0)
-            else:
-                option['value'].set('')

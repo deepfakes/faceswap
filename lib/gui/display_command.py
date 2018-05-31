@@ -132,19 +132,19 @@ class GraphDisplay(DisplayOptionalPage):
 
     def display_item_set(self):
         """ Load the graph(s) if available """
-        self.display_item = self.session.lossdict
+        self.display_item = self.session.stats
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
-        losskeys = sorted([key for key in self.session.lossdict.keys()])
-        tabcount = int(len(self.session.lossdict) / 2)
+        losskeys = self.display_item['losskeys']
+        tabcount = int(len(losskeys) / 2)
         existing = self.subnotebook_get_titles_ids()
 
         for i in range(tabcount):
             selectedkeys = losskeys[i * 2:(i + 1) * 2]
             name = ' - '.join(selectedkeys).title().replace('_', ' ')
             if name not in existing.keys():
-                selectedloss = {key: self.session.lossdict[key] for key in selectedkeys}
+                selectedloss = self.display_item['loss'][i * 2:(i + 1) * 2]
                 self.add_child(name, selectedkeys, selectedloss)
 
     def add_child(self, name, keys, loss):

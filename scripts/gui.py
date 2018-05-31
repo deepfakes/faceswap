@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
 
+import ctypes
 import os
 import sys
 import tkinter as tk
@@ -8,21 +9,21 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from lib.gui import CurrentSession, CommandNotebook, Config, ConsoleOut
-from lib.gui import  DisplayNotebook, Images, Options, ProcessWrapper, StatusBar
+from lib.gui import  DisplayNotebook, Images, CliOptions, ProcessWrapper, StatusBar
+
 
 class FaceswapGui(tk.Tk):
     """ The Graphical User Interface """
 
-    def __init__(self, opts, pathscript):
+    def __init__(self, pathscript):
         tk.Tk.__init__(self)
         self.geometry('1200x640+80+80')
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        #TODO Remove DisplayNotebook from wrapper and handle internally
-        #TODO Saving session stats currently overwrites last session. Fix
+        #TODO Saving session bug when no face dir found
         self.images = Images(pathcache)
-        self.opts = opts
+        self.cliopts = CliOptions()
         self.session = CurrentSession()
-        self.wrapper = ProcessWrapper(self.session, pathscript)
+        self.wrapper = ProcessWrapper(self.session, pathscript, self.cliopts)
 
         StatusBar(self)
         self.images.delete_preview()
@@ -38,15 +39,16 @@ class FaceswapGui(tk.Tk):
         console = ConsoleOut(bottomcontainer, debug_console)
         console.build_console()
 
-        CommandNotebook(topcontainer, self.opts)
-        self.wrapper.displaybook = DisplayNotebook(topcontainer, self.session)
+        CommandNotebook(topcontainer, self.cliopts, self.wrapper.tk_vars)
+
+        DisplayNotebook(topcontainer, self.session, self.wrapper.tk_vars)
 
     def menu(self):
         """ Menu bar for loading and saving configs """
         menubar = tk.Menu(self)
         filemenu = tk.Menu(menubar, tearoff=0)
 
-        config = Config(self.opts)
+        config = Config(self.cliopts)
 
         filemenu.add_command(label="Load full config...",
                              underline=0,
@@ -57,10 +59,10 @@ class FaceswapGui(tk.Tk):
         filemenu.add_separator()
         filemenu.add_command(label="Reset all to default",
                              underline=0,
-                             command=config.reset)
+                             command=self.cliopts.reset)
         filemenu.add_command(label="Clear all",
                              underline=0,
-                             command=config.clear)
+                             command=self.cliopts.clear)
         filemenu.add_separator()
         filemenu.add_command(label="Quit",
                              underline=0,
@@ -92,9 +94,9 @@ class FaceswapGui(tk.Tk):
             tkinter has gone away """
         confirm = messagebox.askokcancel
         confirmtxt = "Processes are still running. Are you sure...?"
-        if self.wrapper.runningtask and not confirm("Close", confirmtxt):
+        if self.wrapper.tk_vars['runningtask'].get() and not confirm("Close", confirmtxt):
             return
-        if self.wrapper.runningtask:
+        if self.wrapper.tk_vars['runningtask'].get():
             self.wrapper.task.terminate()
         self.images.delete_preview()
         self.quit()
@@ -104,12 +106,20 @@ class Gui(object):
     """ The GUI process. """
     def __init__(self, arguments):
         cmd = sys.argv[0]
-        self.pathscript = os.path.realpath(os.path.dirname(cmd))
+        pathscript = os.path.realpath(os.path.dirname(cmd))
         self.args = arguments
-        self.opts = Options().opts
-        self.root = FaceswapGui(self.opts, self.pathscript)
+        self.root = FaceswapGui(pathscript)
+
+    @staticmethod
+    def set_windows_font_scaling():
+        """ Set process to be dpi aware for windows users
+            to fix blurry scaled fonts """
+        if os.name == 'nt':
+            user32 = ctypes.WinDLL('user32')
+            user32.SetProcessDPIAware(True)
 
     def process(self):
         """ Builds the GUI """
+        self.set_windows_font_scaling()
         self.root.build_gui(self.args.debug)
         self.root.mainloop()

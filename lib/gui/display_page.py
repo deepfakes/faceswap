@@ -7,7 +7,6 @@ from tkinter import ttk
 
 from .tooltip import Tooltip
 from .utils import Images
-from .wrapper import ProcessWrapper
 
 class DisplayPage(ttk.Frame):
     """ Parent frame holder for each tab.
@@ -17,6 +16,7 @@ class DisplayPage(ttk.Frame):
         self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
 
         self.session = parent.session
+        self.runningtask = parent.runningtask
         self.helptext = helptext
         self.tabname = tabname
 
@@ -51,12 +51,12 @@ class DisplayPage(ttk.Frame):
     def add_options_frame(self):
         """ Add the display tab options """
         optsframe = ttk.Frame(self)
-        optsframe.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X, expand=False)
+        optsframe.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
         return optsframe
 
     def add_options_info(self):
         """ Add the info bar """
-        lblinfo = ttk.Label(self.optsframe, textvariable=self.vars['info'], anchor=tk.W, width=75)
+        lblinfo = ttk.Label(self.optsframe, textvariable=self.vars['info'], anchor=tk.W, width=70)
         lblinfo.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.W)
 
     def add_frame_separator(self):
@@ -180,7 +180,7 @@ class DisplayOptionalPage(DisplayPage):
                                     variable=self.vars['enabled'],
                                     text="Enable {}".format(self.tabname),
                                     command=self.on_chkenable_change)
-        chkenable.pack(side=tk.RIGHT, padx=5, pady=5, anchor=tk.W)
+        chkenable.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
         Tooltip(chkenable,
                 text='Enable or disable {} display'.format(self.tabname),
                 wraplength=200)
@@ -199,13 +199,11 @@ class DisplayOptionalPage(DisplayPage):
 
     def update_page(self, waittime):
         """ Update the latest preview item """
-        if not ProcessWrapper().runningtask:
+        if not self.runningtask.get():
             return
-
         if self.vars['enabled'].get():
             self.display_item_set()
             self.load_display()
-
         self.after(waittime, lambda t=waittime: self.update_page(t))
 
     def display_item_set(self):

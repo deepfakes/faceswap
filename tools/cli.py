@@ -14,8 +14,7 @@ class EffmpegArgs(FaceSwapArgs):
         opts = ["(0, 90CounterClockwise&VerticalFlip)",
                 "(1, 90Clockwise)",
                 "(2, 90CounterClockwise)",
-                "(3, 90Clockwise&VerticalFlip)",
-                "None"]
+                "(3, 90Clockwise&VerticalFlip)"]
         if len(value) == 1:
             index = int(value)
         else:
@@ -107,7 +106,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-r', '--reference-video'),
                               "action": ComboFullPaths,
                               "dest": "ref_vid",
-                              "default": "None",
+                              "default": None,
                               "help": "Path to reference video if 'input' "
                                       "was not a video.",
                               "actions_open_type": {
@@ -201,11 +200,10 @@ class EffmpegArgs(FaceSwapArgs):
                               "choices": ("(0, 90CounterClockwise&VerticalFlip)",
                                           "(1, 90Clockwise)",
                                           "(2, 90CounterClockwise)",
-                                          "(3, 90Clockwise&VerticalFlip)",
-                                          "None"),
+                                          "(3, 90Clockwise&VerticalFlip)"),
                               "type": lambda v: self.__parse_transpose(v),
                               "dest": "transpose",
-                              "default": "None",
+                              "default": None,
                               "help": "Transpose the video. If transpose is "
                                       "set, then degrees will be ignored. For "
                                       "cli you can enter either the number "
@@ -216,7 +214,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-de', '--degrees'),
                               "type": str,
                               "dest": "degrees",
-                              "default": "None",
+                              "default": None,
                               "help": "Rotate the video clockwise by the "
                                       "given number of degrees."})
 

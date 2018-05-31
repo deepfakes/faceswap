@@ -6,52 +6,72 @@ from tkinter import TclError, ttk
 
 from lib.cli import FileFullPaths
 
+from .options import Config
 from .tooltip import Tooltip
-from .utils import Config, Images, FileHandler
-from .wrapper import ProcessWrapper
-
+from .utils import Images, FileHandler
 
 class CommandNotebook(ttk.Notebook):
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, opts):
+    def __init__(self, parent, cli_options, tk_vars):
         ttk.Notebook.__init__(self, parent, width=420, height=500)
         parent.add(self)
 
-        self.build_tabs(opts)
+        self.cli_opts = cli_options
+        self.tk_vars = tk_vars
+        self.actionbtns = dict()
 
-    def build_tabs(self, opts):
+        self.set_running_task_trace()
+        self.build_tabs()
+
+    def set_running_task_trace(self):
+        """ Set trigger action for the running task
+            to change the action buttons text and command """
+        self.tk_vars['runningtask'].trace("w", self.change_action_button)
+
+    def build_tabs(self):
         """ Build the tabs for the relevant command """
-        for category in sorted(key for key in opts.keys()):
-            if category == 'faceswap':
-                cmdlist = ("extract", "train", "convert")
-            else:
-                cmdlist = sorted(key for key in opts['tools'].keys())
-
+        for category in self.cli_opts.categories:
+            cmdlist = self.cli_opts.commands[category]
             for command in cmdlist:
                 title = command.title()
-                commandtab = CommandTab(self, category, opts[category], command)
+                commandtab = CommandTab(self, category, command)
                 self.add(commandtab, text=title)
+
+    def change_action_button(self, *args):
+        """ Change the action button to relevant control """
+        for cmd in self.actionbtns.keys():
+            btnact = self.actionbtns[cmd]
+            if self.tk_vars['runningtask'].get():
+                ttl = 'Terminate'
+                hlp = 'Exit the running process'
+            else:
+                ttl = cmd.title()
+                hlp = 'Run the {} script'.format(cmd.title())
+            btnact.config(text=ttl)
+            Tooltip(btnact, text=hlp, wraplength=200)
 
 class CommandTab(ttk.Frame):
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, category, opts, command):
+    def __init__(self, parent, category, command):
         ttk.Frame.__init__(self, parent)
 
         self.category = category
-        self.opts = opts
+        self.cli_opts = parent.cli_opts
+        self.actionbtns = parent.actionbtns
+        self.tk_vars = parent.tk_vars
         self.command = command
 
         self.build_tab()
 
     def build_tab(self):
         """ Build the tab """
-        OptionsFrame(self, self.opts, self.command)
+        OptionsFrame(self)
 
         self.add_frame_separator()
 
-        ActionFrame(self, self.category, self.opts, self.command)
+        ActionFrame(self)
 
     def add_frame_separator(self):
         """ Add a separator between top and bottom frames """
@@ -61,12 +81,12 @@ class CommandTab(ttk.Frame):
 class OptionsFrame(ttk.Frame):
     """ Options Frame - Holds the Options for each command """
 
-    def __init__(self, parent, opts, command):
+    def __init__(self, parent):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.opts = opts
-        self.command = command
+        self.opts = parent.cli_opts
+        self.command = parent.command
 
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -100,8 +120,8 @@ class OptionsFrame(ttk.Frame):
         self.add_scrollbar()
         self.canvas.bind('<Configure>', self.resize_frame)
 
-        for option in self.opts[self.command]:
-            optioncontrol = OptionControl(option, self.opts, self.optsframe, self.chkbtns[1])
+        for option in self.opts.gen_command_options(self.command):
+            optioncontrol = OptionControl(self.opts.opts, option, self.optsframe, self.chkbtns[1])
             optioncontrol.build_full_control()
 
         if self.chkbtns[1].winfo_children():
@@ -127,11 +147,11 @@ class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
     frame """
 
-    def __init__(self, option, opts, option_frame, checkbuttons_frame):
+    def __init__(self, opts, option, option_frame, checkbuttons_frame):
+        self.opts = opts
         self.option = option
         self.option_frame = option_frame
         self.chkbtns = checkbuttons_frame
-        self.opts = opts
 
     def build_full_control(self):
         """ Build the correct control type for the option passed through """
@@ -280,6 +300,8 @@ class OptionControl(object):
         """ Method to pop the correct dialog depending on context """
         actions_open_type = self.option['actions_open_type']
         task_name = actions_open_type['task_name']
+        #TODO find way to clean up way to get correct dialogue without having to pass whole dict
+        # through for this one task
         chosen_action = self.opts[task_name][0]['value'].get()
         action = getattr(self, "ask_" + actions_open_type[chosen_action])
         filetypes = filetypes[chosen_action]
@@ -288,47 +310,48 @@ class OptionControl(object):
 class ActionFrame(ttk.Frame):
     """Action Frame - Displays action controls for the command tab """
 
-    def __init__(self, parent, category, opts, command):
+    def __init__(self, parent):
         ttk.Frame.__init__(self, parent)
         self.pack(fill=tk.BOTH, padx=5, pady=5, side=tk.BOTTOM, anchor=tk.N)
 
-        self.config = Config(opts)
-        self.command = command
-        self.title = command.title()
+        self.command = parent.command
+        self.title = self.command.title()
 
-        self.add_action_button(category, opts)
-        self.add_util_buttons()
+        self.add_action_button(parent.category, parent.actionbtns, parent.tk_vars)
+        self.add_util_buttons(parent.cli_opts)
 
-    def add_action_button(self, category, opts):
+    def add_action_button(self, category, actionbtns, tk_vars):
         """ Add the action buttons for page """
         actframe = ttk.Frame(self)
         actframe.pack(fill=tk.X, side=tk.LEFT)
 
+        var_value = '{},{}'.format(category, self.command)
+
         btnact = ttk.Button(actframe,
                             text=self.title,
                             width=10,
-                            command=lambda: ProcessWrapper().action_command(
-                                category, self.command, opts))
+                            command=lambda: tk_vars['action'].set(var_value))
         btnact.pack(side=tk.LEFT)
         Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
-        ProcessWrapper().actionbtns[self.command] = btnact
+        actionbtns[self.command] = btnact
 
         btngen = ttk.Button(actframe,
                             text="Generate",
                             width=10,
-                            command=lambda: ProcessWrapper().generate_command(
-                                category, self.command, opts))
+                            command=lambda: tk_vars['generate'].set(var_value))
         btngen.pack(side=tk.RIGHT, padx=5)
         Tooltip(btngen, text='Output command line options to the console', wraplength=200)
 
-    def add_util_buttons(self):
+    def add_util_buttons(self, cli_options):
         """ Add the section utility buttons """
         utlframe = ttk.Frame(self)
         utlframe.pack(side=tk.RIGHT)
 
+        config = Config(cli_options)
         for utl in ('load', 'save', 'clear', 'reset'):
             img = Images().icons[utl]
-            action = getattr(self.config, utl)
+            action_cls = config if utl in (('save', 'load')) else cli_options
+            action = getattr(action_cls, utl)
             btnutl = ttk.Button(utlframe,
                                 image=img,
                                 command=lambda cmd=action: cmd(self.command))

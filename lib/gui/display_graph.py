@@ -15,7 +15,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 
 import numpy
 
-from .stats import PopUpData
 from .tooltip import Tooltip
 from .utils import Images
 
@@ -224,7 +223,7 @@ class TrainingGraph(GraphBase):
 
     def animate(self, i):
         """ Read loss data and apply to graph """
-        loss = [self.loss[1][key][:] for key in self.loss[0]]
+        loss = self.loss[1][:]
 
         xlim = self.recalculate_axes(loss)
 
@@ -306,11 +305,13 @@ class TrainingGraph(GraphBase):
 
 class SessionGraph(GraphBase):
     """ Session Graph for session pop-up """
-    def __init__(self, parent, tkvars, data, session_id):
+    def __init__(self, parent, display_data, iterations, ylabel, scale):
         GraphBase.__init__(self, parent)
-        self.compiled = PopUpData(data, tkvars, session_id)
-        self.display = tkvars['display']
-        self.scale = tkvars['scale']
+
+        self.display_data = display_data
+        self.iterations = iterations
+        self.ylabel = ylabel
+        self.scale = scale
 
     def build(self):
         """ Build the session graph """
@@ -321,29 +322,31 @@ class SessionGraph(GraphBase):
     def update_plot(self):
         """ Update the plot area """
         self.ax1.clear()
-        self.axes_labels_set(self.display.get())
+        self.axes_labels_set(self.ylabel)
 
-        fulldata = [item for item in self.compiled.data.values()]
-        self.axes_limits_set(self.compiled.iterations, fulldata)
+        fulldata = [item for item in self.display_data.values()]
+        self.axes_limits_set(self.iterations, fulldata)
 
-        xrng = [x for x in range(self.compiled.iterations)]
-        keys = list(self.compiled.data.keys())
+        xrng = [x for x in range(self.iterations)]
+        keys = list(self.display_data.keys())
         for item in self.lines_sort(keys):
             self.ax1.plot(xrng,
-                          self.compiled.data[item[0]],
+                          self.display_data[item[0]],
                           label=item[1],
                           linewidth=item[2],
                           color=item[3])
         self.legend_place()
 
-    def refresh(self):
+    def refresh(self, display_data, iterations, ylabel, scale):
         """ Refresh graph data """
-        self.compiled.refresh()
-        self.update_plot()
-        self.plotcanvas.draw()
+        self.display_data = display_data
+        self.iterations = iterations
+        self.ylabel = ylabel
+        self.set_yscale_type(scale)
 
-    def switch_yscale(self):
+    def set_yscale_type(self, scale):
         """ switch the y-scale and redraw """
+        self.scale = scale
         self.update_plot()
-        self.axes_set_yscale(self.scale.get())
+        self.axes_set_yscale(self.scale)
         self.plotcanvas.draw()

@@ -13,13 +13,22 @@ from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
 class DisplayNotebook(ttk.Notebook):
     """ The display tabs """
 
-    def __init__(self, parent, session):
+    def __init__(self, parent, session, tk_vars):
         ttk.Notebook.__init__(self, parent, width=780)
         parent.add(self)
 
+        self.wrapper_var = tk_vars['display']
+        self.runningtask = tk_vars['runningtask']
         self.session = session
+
+        self.set_wrapper_var_trace()
         self.add_static_tabs()
         self.static_tabs = [child for child in self.tabs()]
+
+    def set_wrapper_var_trace(self):
+        """ Set the trigger actions for the display vars
+            when they have been triggered in the Process Wrapper """
+        self.wrapper_var.trace("w", self.update_displaybook)
 
     def add_static_tabs(self):
         """ Add tabs that are permanently available """
@@ -69,3 +78,11 @@ class DisplayNotebook(ttk.Notebook):
         for child in self.tabs():
             if child not in self.static_tabs:
                 self.forget(child)
+
+    def update_displaybook(self, *args):
+        """ Set the display tabs based on executing task """
+        command = self.wrapper_var.get()
+        self.remove_tabs()
+        if not command or command not in ('extract', 'train', 'convert'):
+            return
+        self.command_display(command)

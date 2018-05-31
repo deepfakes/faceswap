@@ -7,7 +7,7 @@ from tkinter import ttk
 
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
-from .stats import SavedSessions, SessionsSummary, QuartersSummary
+from .stats import Calculations, SavedSessions, SessionsSummary, SessionsTotals
 from .tooltip import Tooltip
 from .utils import Images, FileHandler
 
@@ -25,7 +25,6 @@ class Analysis(DisplayPage):
     def set_vars(self):
         """ Analysis specific vars """
         selected_id = tk.StringVar()
-        selected_id.trace("w", self.update_session_summary)
         filename = tk.StringVar()
         return {'selected_id': selected_id,
                 'filename': filename}
@@ -37,7 +36,6 @@ class Analysis(DisplayPage):
                                self.vars['filename'],
                                self.vars['selected_id'],
                                self.helptext['stats'])
-        self.sessionsummary = SessionSummary(mainframe, self.helptext['session'])
 
     def add_options(self):
         """ Add the options bar """
@@ -59,7 +57,7 @@ class Analysis(DisplayPage):
         filename = filename.name
         self.loaded_data = SavedSessions(filename).sessions
         self.summary = SessionsSummary(self.loaded_data).summary
-        stattext = filename if len(filename) < 75 else '...{}'.format(filename[-75:])
+        stattext = filename if len(filename) < 70 else '...{}'.format(filename[-70:])
         self.vars['info'].set('Session: {}'.format(stattext))
         self.vars['filename'].set(filename)
         self.stats.loaded_data = self.loaded_data
@@ -67,14 +65,15 @@ class Analysis(DisplayPage):
 
     def reset_session(self):
         """ Load previously saved sessions """
-        if self.session.iterations == 0:
+        if self.session.stats['iterations'] == 0:
             print('Training not running')
             return
         self.clear_session()
-        self.loaded_data = {key: value for key, value in self.session.historical.sessions.items()}
-        self.loaded_data.update(self.session.compile_session())
+        self.loaded_data = self.session.historical.sessions
         self.summary = SessionsSummary(self.loaded_data).summary
         self.vars['info'].set('Session: Currently running training session')
+        self.vars['filename'].set('Currently running training session')
+        self.stats.loaded_data = self.loaded_data
         self.stats.tree_insert_data(self.summary)
 
     def clear_session(self):
@@ -101,13 +100,6 @@ class Analysis(DisplayPage):
             csvout.writeheader()
             for row in write_dicts:
                 csvout.writerow(row)
-
-    def update_session_summary(self, *args):
-        """ Update the session summary on receiving a value change
-            callback from stats box """
-        sessionid = self.vars['selected_id'].get()
-        sessiondata = QuartersSummary(self.loaded_data, sessionid).summary
-        self.sessionsummary.tree_insert_data(sessiondata)
 
 class Options(object):
     """ Options bar of Analysis tab """
@@ -197,11 +189,10 @@ class StatsData(ttk.Frame):
 
     def tree_insert_data(self, sessions):
         """ Insert the data into the totals treeview """
-        sessionids = sorted(key for key in sessions.keys())
-        self.tree.configure(height=len(sessionids))
+        self.tree.configure(height=len(sessions))
 
-        for idx in sessionids:
-            values = [sessions[idx][column] for column in self.columns]
+        for item in sessions:
+            values = [item[column] for column in self.columns]
             kwargs = {'values': values, 'image': Images().icons['graph']}
             if values[0] == 'Total':
                 kwargs['tags'] = 'total'
@@ -247,96 +238,36 @@ class StatsData(ttk.Frame):
             position += 20
         return position
 
-class SessionSummary(ttk.Frame):
-    """ Summary for selected session """
-    # TODO Totals rate/times don't make sense because they are across sessions
-    def __init__(self, parent, helptext):
-        ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.BOTTOM, padx=5, pady=5, expand=True, fill=tk.X, anchor=tk.S)
-
-        self.add_label()
-        self.tree = ttk.Treeview(self, height=4, selectmode=tk.BROWSE)
-        self.tree_configure(helptext)
-
-        self.columns = self.tree_columns()
-
-    def add_label(self):
-        """ Add Treeview Title """
-        lbl = ttk.Label(self, text="Individual Session Stats per Quarter", anchor=tk.CENTER)
-        lbl.pack(side=tk.TOP, expand=True, fill=tk.X, padx=5, pady=5)
-
-    def tree_configure(self, helptext):
-        """ Pack treeview widget and add helptext """
-        self.tree.pack(side=tk.TOP, expand=True, fill=tk.X)
-        Tooltip(self.tree, text=helptext, wraplength=200)
-
-    def tree_columns(self, loss_columns=None):
-        """ Add the columns to the totals treeview """
-        columns = [("quarter", 60, None),
-                   ("start", 130, None),
-                   ("end", 130, None),
-                   ("elapsed", 90, None),
-                   ("iterations", 90, None),
-                   ("rate", 60, 'EGs/sec')]
-        if loss_columns:
-            for loss in loss_columns:
-                columns.append((loss, 60, None))
-
-        self.tree["columns"] = [column[0] for column in columns]
-        self.tree['show'] = 'headings'
-
-        for column in columns:
-            text = column[2] if column[2] else column[0].title()
-            self.tree.heading(column[0], text=text)
-            self.tree.column(column[0], width=column[1], anchor=tk.E, minwidth=40, stretch=True)
-
-        return [column[0] for column in columns]
-
-    def tree_insert_data(self, selected_session):
-        """ Insert the data into the session summary treeview """
-        loss_columns = sorted([key for key in selected_session[1].keys()
-                               if key not in self.columns])
-
-        if loss_columns:
-            self.tree_refresh_columns(loss_columns)
-
-        self.tree_clear()
-        quarters = sorted(key for key in selected_session.keys())
-        for idx in quarters:
-            values = [selected_session[idx][column] for column in self.columns]
-            self.tree.insert('', 'end', values=values)
-
-    def tree_refresh_columns(self, loss_columns):
-        """ Refresh the treview with loss columns """
-        self.tree.destroy()
-        self.tree = ttk.Treeview(self, height=4, selectmode=tk.BROWSE)
-        self.tree.pack(side=tk.LEFT, expand=True, fill=tk.X)
-        self.columns = self.tree_columns(loss_columns)
-
-    def tree_clear(self):
-        """ Clear the totals tree """
-        self.tree.delete(* self.tree.get_children())
-
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed grap/stats for selected session """
     def __init__(self, data, session_id):
         tk.Toplevel.__init__(self)
 
+        self.is_totals = True if session_id == 'Total' else False
+        self.data = self.set_session_data(data, session_id)
+
         self.graph = None
+        self.display_data = None
 
         self.vars = dict()
         self.graph_initialised = False
-        self.build(data, session_id)
+        self.build()
 
-        for key, val in self.vars.items():
-            print('{} - {}'.format(key, val.get()))
+    def set_session_data(self, sessions, session_id):
+        """ Set the correct list index based on the passed in session is """
+        if self.is_totals:
+            data = SessionsTotals(sessions).stats
+        else:
+            data = sessions[int(session_id) - 1]
+        return data
 
-    def build(self, data, session_id):
+    def build(self):
         """ Build the popup window """
         optsframe, graphframe = self.layout_frames()
 
         self.opts_build(optsframe)
-        self.graph_build(graphframe, data, session_id)
+        self.compile_display_data()
+        self.graph_build(graphframe)
 
     def layout_frames(self):
         """ Top level container frames """
@@ -382,30 +313,52 @@ class SessionPopUp(tk.Toplevel):
 
             self.vars[item.lower().strip()] = var
 
+            hlp = self.set_help(item)
+            Tooltip(cmbframe, text=hlp, wraplength=200)
+
     def opts_checkbuttons(self, frame):
         """ Add the options check buttons """
-        for text in ('Raw', 'Trend', 'Rolling Average'):
+        for item in ('raw', 'trend', 'avg', 'outliers'):
+            if item == 'avg':
+                text = 'Show Rolling Average'
+            elif item == 'outliers':
+                text = 'Remove Outliers'
+            else:
+                text = 'Show {}'.format(item.title())
             var = tk.BooleanVar()
-            if text == 'Raw':
+
+            if item == 'raw':
                 var.set(True)
             var.trace("w", self.optbtn_reset)
-            self.vars[text.lower().replace(' ', '')] = var
+            self.vars[item] = var
 
-            ctl = ttk.Checkbutton(frame, variable=var, text="Show {}".format(text))
+            ctl = ttk.Checkbutton(frame, variable=var, text=text)
             ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
+
+            hlp = self.set_help(item)
+            Tooltip(ctl, text=hlp, wraplength=200)
+
 
     def opts_entry(self, frame):
         """ Add the options entry boxes """
-        entframe = ttk.Frame(frame)
-        entframe.pack(fill=tk.X, pady=5, padx=5, side=tk.TOP)
-        lblchk = ttk.Label(entframe, text="Iterations to Average:", anchor=tk.W)
-        lblchk.pack(padx=(0, 2), side=tk.LEFT)
+        for item in ('avgiterations', ):
+            if item == 'avgiterations':
+                text = "Iterations to Average:"
+                default = '10'
 
-        ctl = ttk.Entry(entframe, width=4, justify=tk.RIGHT)
-        ctl.pack(side=tk.RIGHT, anchor=tk.W)
-        ctl.insert(0, '10')
+            entframe = ttk.Frame(frame)
+            entframe.pack(fill=tk.X, pady=5, padx=5, side=tk.TOP)
+            lbl = ttk.Label(entframe, text=text, anchor=tk.W)
+            lbl.pack(padx=(0, 2), side=tk.LEFT)
 
-        self.vars['avgiterations'] = ctl
+            ctl = ttk.Entry(entframe, width=4, justify=tk.RIGHT)
+            ctl.pack(side=tk.RIGHT, anchor=tk.W)
+            ctl.insert(0, default)
+
+            hlp = self.set_help(item)
+            Tooltip(entframe, text=hlp, wraplength=200)
+
+            self.vars[item] = ctl
 
     def opts_buttons(self, frame):
         """ Add the option buttons """
@@ -422,34 +375,84 @@ class SessionPopUp(tk.Toplevel):
             Tooltip(btn, text=hlp, wraplength=200)
 
     def optbtn_save(self):
-        """ Action for clear button press """
-        pass
+        """ Action for save button press """
+        savefile = FileHandler('save', 'csv').retfile
+        if not savefile:
+            return
+
+        save_data = self.display_data.stats
+        fieldnames = sorted(key for key in save_data.keys())
+
+        with savefile as outfile:
+            csvout = csv.writer(outfile, delimiter=",")
+            csvout.writerow(fieldnames)
+            csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
 
     def optbtn_reset(self, *args):
         """ Action for reset button press and checkbox changes"""
         if not self.graph_initialised:
             return
-        self.graph.refresh()
+        self.compile_display_data()
+        self.graph.refresh(self.display_data.stats,
+                           self.display_data.iterations,
+                           self.vars['display'].get(),
+                           self.vars['scale'].get())
 
     def graph_scale(self, *args):
         """ Action for changing graph scale """
         if not self.graph_initialised:
             return
-        self.graph.switch_yscale()
+        self.graph.set_yscale_type(self.vars['scale'].get())
 
     @staticmethod
-    def set_help(btntype):
+    def set_help(control):
         """ Set the helptext for option buttons """
         hlp = ""
-        if btntype == 'reset':
+        if control == 'reset':
             hlp = 'Refresh graph'
-        elif btntype == 'save':
-            hlp = 'Save graph'
+        elif control == 'save':
+            hlp = 'Save display data to csv'
+        elif control == 'avgiterations':
+            hlp = 'Number of data points to sample for rolling average'
+        elif control == 'outliers':
+            hlp = 'Force data points that fall more than 1 standard ' \
+                  'deviation from the mean to the mean value'
+        elif control == 'avg':
+            hlp = 'Display rolling average of the data'
+        elif control == 'raw':
+            hlp = 'Display raw data'
+        elif control == 'trend':
+            hlp = 'Display polynormal data trend'
+        elif control == 'display':
+            hlp = 'Set the data to display'
+        elif control == 'scale':
+            hlp = 'Change y-axis scale'
         return hlp
 
-    def graph_build(self, frame, data, session_id):
+    def compile_display_data(self):
+        """ Compile the data to be displayed """
+        self.display_data = Calculations(self.data,
+                                         self.vars['display'].get(),
+                                         self.selections_to_list(),
+                                         self.vars['avgiterations'].get(),
+                                         self.vars['outliers'].get(),
+                                         self.is_totals)
+
+    def selections_to_list(self):
+        """ Compile checkbox selections to list """
+        selections = list()
+        for key, val in self.vars.items():
+            if isinstance(val, tk.BooleanVar) and key != 'outliers' and val.get():
+                selections.append(key)
+        return selections
+
+    def graph_build(self, frame):
         """ Build the graph in the top right paned window """
-        self.graph = SessionGraph(frame, self.vars, data, session_id)
+        self.graph = SessionGraph(frame,
+                                  self.display_data.stats,
+                                  self.display_data.iterations,
+                                  self.vars['display'].get(),
+                                  self.vars['scale'].get())
         self.graph.pack(expand=True, fill=tk.BOTH)
         self.graph.build()
         self.graph_initialised = True
