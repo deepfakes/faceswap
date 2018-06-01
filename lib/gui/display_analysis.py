@@ -16,9 +16,7 @@ class Analysis(DisplayPage):
     def __init__(self, parent, tabname, helptext):
         DisplayPage.__init__(self, parent, tabname, helptext)
 
-        self.loaded_data = None
         self.summary = None
-
         self.add_options()
         self.add_main_frame()
 
@@ -46,7 +44,7 @@ class Analysis(DisplayPage):
     def reset_session_info(self):
         """ Reset the session info status to default """
         self.vars['filename'].set(None)
-        self.vars['info'].set('No session data loaded')
+        self.set_info('No session data loaded')
 
     def load_session(self):
         """ Load previously saved sessions """
@@ -55,31 +53,33 @@ class Analysis(DisplayPage):
         if not filename:
             return
         filename = filename.name
-        self.loaded_data = SavedSessions(filename).sessions
-        self.summary = SessionsSummary(self.loaded_data).summary
-        stattext = filename if len(filename) < 70 else '...{}'.format(filename[-70:])
-        self.vars['info'].set('Session: {}'.format(stattext))
+        loaded_data = SavedSessions(filename).sessions
+        msg = filename if len(filename) < 70 else '...{}'.format(filename[-70:])
+        self.set_session_summary(loaded_data, msg)
         self.vars['filename'].set(filename)
-        self.stats.loaded_data = self.loaded_data
-        self.stats.tree_insert_data(self.summary)
 
     def reset_session(self):
         """ Load previously saved sessions """
+        self.clear_session()
         if self.session.stats['iterations'] == 0:
             print('Training not running')
             return
-        self.clear_session()
-        self.loaded_data = self.session.historical.sessions
-        self.summary = SessionsSummary(self.loaded_data).summary
-        self.vars['info'].set('Session: Currently running training session')
+        loaded_data = self.session.historical.sessions
+        msg = 'Currently running training session'
+        self.set_session_summary(loaded_data, msg)
         self.vars['filename'].set('Currently running training session')
-        self.stats.loaded_data = self.loaded_data
+
+    def set_session_summary(self, data, message):
+        """ Set the summary data and info message """
+        self.summary = SessionsSummary(data).summary
+        self.set_info('Session: {}'.format(message))
+        self.stats.loaded_data = data
         self.stats.tree_insert_data(self.summary)
 
     def clear_session(self):
         """ Clear sessions stats """
         self.summary = None
-        self.loaded_data = None
+        self.stats.loaded_data = None
         self.stats.tree_clear()
         self.reset_session_info()
 
@@ -393,8 +393,7 @@ class SessionPopUp(tk.Toplevel):
         if not self.graph_initialised:
             return
         self.compile_display_data()
-        self.graph.refresh(self.display_data.stats,
-                           self.display_data.iterations,
+        self.graph.refresh(self.display_data,
                            self.vars['display'].get(),
                            self.vars['scale'].get())
 
@@ -449,8 +448,7 @@ class SessionPopUp(tk.Toplevel):
     def graph_build(self, frame):
         """ Build the graph in the top right paned window """
         self.graph = SessionGraph(frame,
-                                  self.display_data.stats,
-                                  self.display_data.iterations,
+                                  self.display_data,
                                   self.vars['display'].get(),
                                   self.vars['scale'].get())
         self.graph.pack(expand=True, fill=tk.BOTH)

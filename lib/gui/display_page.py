@@ -59,6 +59,10 @@ class DisplayPage(ttk.Frame):
         lblinfo = ttk.Label(self.optsframe, textvariable=self.vars['info'], anchor=tk.W, width=70)
         lblinfo.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.W)
 
+    def set_info(self, msg):
+        """ Set the info message """
+        self.vars['info'].set(msg)
+
     def add_frame_separator(self):
         """ Add a separator between top and bottom frames """
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
@@ -152,11 +156,11 @@ class DisplayOptionalPage(DisplayPage):
     def set_info_text(self):
         """ Set waiting for display text """
         if not self.vars['enabled'].get():
-            self.vars['info'].set("{} disabled".format(self.tabname.title()))
+            self.set_info("{} disabled".format(self.tabname.title()))
         elif self.vars['enabled'].get() and not self.vars['ready'].get():
-            self.vars['info'].set("Waiting for {}...".format(self.tabname))
+            self.set_info("Waiting for {}...".format(self.tabname))
         else:
-            self.vars['info'].set("Displaying {}".format(self.tabname))
+            self.set_info("Displaying {}".format(self.tabname))
 
     # DISPLAY OPTIONS BAR
     def add_options(self):

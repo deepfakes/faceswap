@@ -3,6 +3,7 @@
 
 import time
 import os
+import warnings
 
 from math import ceil, sqrt
 
@@ -198,24 +199,36 @@ class Calculations(object):
                  remove_outliers=False,
                  is_totals=False):
 
-        display = session['losskeys'] if display.lower() == 'loss' else [display]
+        warnings.simplefilter('ignore', np.RankWarning)
+
+        self.session = session
+        display = self.session['losskeys'] if display.lower() == 'loss' else [display]
+        self.args = {'display': display,
+                     'selections': selections,
+                     'avg_samples': int(avg_samples),
+                     'remove_outliers': remove_outliers,
+                     'is_totals': is_totals}
         self.iterations = 0
-        self.avg_samples = int(avg_samples)
-        self.stats = self.get_raw(display, session, is_totals, remove_outliers)
+        self.stats = None
+        self.refresh()
 
-        self.get_calculations(display, selections)
-        self.remove_raw(selections)
+    def refresh(self):
+        """ Refresh the stats """
+        self.iterations = 0
+        self.stats = self.get_raw()
+        self.get_calculations()
+        self.remove_raw()
 
-    def get_raw(self, display, session, is_totals, remove_outliers):
+    def get_raw(self):
         """ Add raw data to stats dict """
         raw = dict()
-        for idx, item in enumerate(display):
+        for idx, item in enumerate(self.args['display']):
             if item.lower() == 'rate':
-                data = self.calc_rate(session, is_totals)
+                data = self.calc_rate(self.session)
             else:
-                data = session['loss'][idx]
+                data = self.session['loss'][idx][:]
 
-            if remove_outliers:
+            if self.args['remove_outliers']:
                 data = self.remove_outliers(data)
 
             if self.iterations == 0:
@@ -224,42 +237,42 @@ class Calculations(object):
             raw['raw_{}'.format(item)] = data
         return raw
 
-    def remove_raw(self, selections):
+    def remove_raw(self):
         """ Remove raw values from stats if not requested """
-        if 'raw' in selections:
+        if 'raw' in self.args['selections']:
             return
         for key in self.stats.keys():
             if key.startswith('raw'):
                 del self.stats[key]
 
-    def calc_rate(self, data, is_totals):
+    def calc_rate(self, data):
         """ Calculate rate per iteration
             NB: For totals, gaps between sessions can be large
             so time diffeence has to be reset for each session's
             rate calculation """
         timestamp = data['timestamps']
         batchsize = data['batchsize']
-        if is_totals:
+        if self.args['is_totals']:
             split = data['split']
         else:
             batchsize = [batchsize]
             split = [len(timestamp)]
 
-        total = 0
+        prev_split = 0
         rate = list()
 
         for idx, current_split in enumerate(split):
-            prev_time = timestamp[total]
-            timestamp_chunk = timestamp[total:total + current_split]
+            prev_time = timestamp[prev_split]
+            timestamp_chunk = timestamp[prev_split:current_split]
             for item in timestamp_chunk:
                 current_time = item
                 timediff = current_time - prev_time
                 iter_rate = 0 if timediff == 0 else batchsize[idx] / timediff
                 rate.append(iter_rate)
                 prev_time = current_time
-            total += current_split
+            prev_split = current_split
 
-        if self.remove_outliers != 0:
+        if self.args['remove_outliers']:
             rate = self.remove_outliers(rate)
         return rate
 
@@ -278,9 +291,9 @@ class Calculations(object):
                 retdata.append(mean)
         return retdata
 
-    def get_calculations(self, display, summaries):
+    def get_calculations(self):
         """ Perform the required calculations """
-        for selection in self.get_selections(display, summaries):
+        for selection in self.get_selections():
             if selection[0] == 'raw':
                 continue
             method = getattr(self, 'calc_{}'.format(selection[0]))
@@ -288,21 +301,20 @@ class Calculations(object):
             raw = self.stats['raw_{}'.format(selection[1])]
             self.stats[key] = method(raw)
 
-    @staticmethod
-    def get_selections(display, summaries):
+    def get_selections(self):
         """ Compile a list of data to be calculated """
-        for summary in summaries:
-            for item in display:
+        for summary in self.args['selections']:
+            for item in self.args['display']:
                 yield summary, item
 
     def calc_avg(self, data):
         """ Calculate rolling average """
         avgs = list()
-        presample = ceil(int(self.avg_samples) / 2)
-        postsample = int(self.avg_samples) - presample
+        presample = ceil(self.args['avg_samples'] / 2)
+        postsample = self.args['avg_samples'] - presample
         datapoints = len(data)
 
-        if datapoints <= (self.avg_samples * 2):
+        if datapoints <= (self.args['avg_samples'] * 2):
             print("Not enough data to compile rolling average")
             return avgs
 
@@ -311,7 +323,7 @@ class Calculations(object):
                 avgs.append(None)
                 continue
             else:
-                avg = sum(data[idx - presample:idx + postsample]) / self.avg_samples
+                avg = sum(data[idx - presample:idx + postsample]) / self.args['avg_samples']
                 avgs.append(avg)
         return avgs
 

@@ -34,8 +34,7 @@ class DisplayNotebook(ttk.Notebook):
         """ Add tabs that are permanently available """
         for tab in ('job queue', 'analysis'):
             if tab == 'analysis':
-                helptext = {'stats': 'Summary statistics for each training session',
-                            'session': 'Quarterly statistics for the selected training session'}
+                helptext = {'stats': 'Summary statistics for each training session'}
                 frame = Analysis(self, tab, helptext)
             else:
                 frame = self.add_frame()

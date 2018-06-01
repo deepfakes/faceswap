@@ -7,10 +7,12 @@ import tkinter as tk
 from tkinter import ttk
 
 
+from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
+from .stats import Calculations
 from .utils import Images, FileHandler
-from .display_graph import TrainingGraph
+
 
 class PreviewExtract(DisplayOptionalPage):
     """ Tab to display output preview images for extract and convert """
@@ -132,24 +134,32 @@ class GraphDisplay(DisplayOptionalPage):
 
     def display_item_set(self):
         """ Load the graph(s) if available """
-        self.display_item = self.session.stats
+        if self.session.stats['iterations'] == 0:
+            self.display_item = None
+        else:
+            self.display_item = self.session.stats
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
         losskeys = self.display_item['losskeys']
+        loss = self.display_item['loss']
         tabcount = int(len(losskeys) / 2)
         existing = self.subnotebook_get_titles_ids()
-
         for i in range(tabcount):
             selectedkeys = losskeys[i * 2:(i + 1) * 2]
             name = ' - '.join(selectedkeys).title().replace('_', ' ')
             if name not in existing.keys():
-                selectedloss = self.display_item['loss'][i * 2:(i + 1) * 2]
-                self.add_child(name, selectedkeys, selectedloss)
+                selectedloss = loss[i * 2:(i + 1) * 2]
+                selection = {'loss': selectedloss,
+                             'losskeys': selectedkeys}
+                data = Calculations(session=selection,
+                                    display='loss',
+                                    selections=['raw', 'trend'])
+                self.add_child(name, data)
 
-    def add_child(self, name, keys, loss):
+    def add_child(self, name, data):
         """ Add the graph for the selected keys """
-        graph = TrainingGraph(self.subnotebook, loss, keys)
+        graph = TrainingGraph(self.subnotebook, data, 'Loss')
         graph.build()
         graph = self.subnotebook_add_page(name, widget=graph)
         Tooltip(graph, text=self.helptext, wraplength=200)

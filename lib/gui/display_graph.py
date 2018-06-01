@@ -13,8 +13,6 @@ from matplotlib import pyplot as plt, style
 import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import numpy
-
 from .tooltip import Tooltip
 from .utils import Images
 
@@ -73,26 +71,59 @@ class NavigationToolbar(NavigationToolbar2Tk):
 
 class GraphBase(ttk.Frame):
     """ Base class for matplotlib line graphs """
-    def __init__(self, parent):
+    def __init__(self, parent, data, ylabel):
         ttk.Frame.__init__(self, parent)
         style.use('ggplot')
 
+        self.calcs = data
+        self.ylabel = ylabel
         self.colourmaps = ['Reds', 'Blues', 'Greens',
                            'Purples', 'Oranges', 'Greys',
                            'copper', 'summer', 'bone']
+        self.lines = list()
         self.toolbar = None
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
         self.ax1 = self.fig.add_subplot(1, 1, 1)
         self.plotcanvas = FigureCanvasTkAgg(self.fig, self)
 
+        self.initiate_graph()
+        self.update_plot(initiate=True)
+
+    def initiate_graph(self):
+        """ Place the graph canvas """
         self.plotcanvas.get_tk_widget().pack(side=tk.TOP, padx=5, fill=tk.BOTH, expand=True)
         plt.subplots_adjust(left=0.100, bottom=0.100, right=0.95, top=0.95,
                             wspace=0.2, hspace=0.2)
 
-    def axes_labels_set(self, ylabel):
+    def update_plot(self, initiate=True):
+        """ Update the plot with incoming data """
+        if initiate:
+            self.lines = list()
+            self.ax1.clear()
+            self.axes_labels_set()
+
+        fulldata = [item for item in self.calcs.stats.values()]
+        self.axes_limits_set(self.calcs.iterations, fulldata)
+
+        xrng = [x for x in range(self.calcs.iterations)]
+        keys = list(self.calcs.stats.keys())
+        for idx, item in enumerate(self.lines_sort(keys)):
+            if initiate:
+                self.lines.extend(self.ax1.plot(xrng,
+                                                self.calcs.stats[item[0]],
+                                                label=item[1],
+                                                linewidth=item[2],
+                                                color=item[3]))
+            else:
+                self.lines[idx].set_data(xrng, self.calcs.stats[item[0]])
+
+        if initiate:
+            self.legend_place()
+
+    def axes_labels_set(self):
         """ Set the axes label and range """
         self.ax1.set_xlabel('Iterations')
-        self.ax1.set_ylabel(ylabel)
+        self.ax1.set_ylabel(self.ylabel)
 
     def axes_limits_set_default(self):
         """ Set default axes limits """
@@ -187,63 +218,24 @@ class GraphBase(ttk.Frame):
         self.toolbar.pack(side=tk.BOTTOM)
         self.toolbar.update()
 
-
 class TrainingGraph(GraphBase):
     """ Live graph to be displayed during training. """
 
-    def __init__(self, parent, loss, losskeys):
-        GraphBase.__init__(self, parent)
+    def __init__(self, parent, data, ylabel):
+        GraphBase.__init__(self, parent, data, ylabel)
 
-        self.loss = (losskeys, loss)
         self.anim = None
-        self.lines = {'losslines': list(), 'trndlines': list()}
 
     def build(self):
         """ Update the plot area with loss values and cycle through to
         animate """
-        self.axes_labels_set("Loss")
-        self.axes_limits_set_default()
-
-        losslbls = [lbl.replace('_', ' ').title() for lbl in self.loss[0]]
-        for idx, linecol in enumerate(['blue', 'red']):
-            self.lines['losslines'].extend(self.ax1.plot(0, 0,
-                                                         color=linecol,
-                                                         linewidth=1,
-                                                         label=losslbls[idx]))
-        for idx, linecol in enumerate(['navy', 'firebrick']):
-            lbl = losslbls[idx]
-            lbl = 'Trend{}'.format(lbl[lbl.rfind(' '):])
-            self.lines['trndlines'].extend(self.ax1.plot(0, 0,
-                                                         color=linecol,
-                                                         linewidth=2,
-                                                         label=lbl))
-        self.legend_place()
         self.anim = animation.FuncAnimation(self.fig, self.animate, interval=200, blit=False)
         self.plotcanvas.draw()
 
     def animate(self, i):
         """ Read loss data and apply to graph """
-        loss = self.loss[1][:]
-
-        xlim = self.recalculate_axes(loss)
-
-        self.set_animation_rate(xlim)
-
-        xrng = [x for x in range(xlim)]
-
-        self.raw_plot(xrng, loss)
-
-        if xlim > 10:
-            self.trend_plot(xrng, loss)
-
-    def recalculate_axes(self, loss):
-        ''' Recalculate the latest x and y axes limits from latest data '''
-        xlim = len(loss[0])
-        xlim = 2 if xlim == 1 else xlim
-
-        self.axes_limits_set(xlim - 1, loss)
-
-        return xlim
+        self.calcs.refresh()
+        self.update_plot(initiate=False)
 
     def set_animation_rate(self, iterations):
         """ Change the animation update interval based on how
@@ -269,23 +261,11 @@ class TrainingGraph(GraphBase):
         if not self.anim.event_source.interval == speed:
             self.anim.event_source.interval = speed
 
-    def raw_plot(self, x_range, loss):
-        ''' Raw value plotting '''
-        for idx, lossvals in enumerate(loss):
-            self.lines['losslines'][idx].set_data(x_range, lossvals)
-
-    def trend_plot(self, x_range, loss):
-        #TODO Move trendplot to stats.
-        #TODO Standardise stats between live and session
-        ''' Trend value plotting '''
-        for idx, lossvals in enumerate(loss):
-            fit = numpy.polyfit(x_range, lossvals, 3)
-            poly = numpy.poly1d(fit)
-            self.lines['trndlines'][idx].set_data(x_range, poly(x_range))
-
     def save_fig(self, location):
         """ Save the figure to file """
-        filename = ' - '.join(self.loss[0])
+        keys = sorted([key.replace('raw_', '')
+                       for key in self.calcs.stats.keys() if key.startswith('raw_')])
+        filename = ' - '.join(keys)
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(location, '{}_{}.{}'.format(filename, now, 'png'))
         self.fig.set_size_inches(16, 9)
@@ -305,48 +285,24 @@ class TrainingGraph(GraphBase):
 
 class SessionGraph(GraphBase):
     """ Session Graph for session pop-up """
-    def __init__(self, parent, display_data, iterations, ylabel, scale):
-        GraphBase.__init__(self, parent)
-
-        self.display_data = display_data
-        self.iterations = iterations
-        self.ylabel = ylabel
+    def __init__(self, parent, data, ylabel, scale):
+        GraphBase.__init__(self, parent, data, ylabel)
         self.scale = scale
 
     def build(self):
         """ Build the session graph """
-        self.update_plot()
         self.toolbar_place(self)
         self.plotcanvas.draw()
 
-    def update_plot(self):
-        """ Update the plot area """
-        self.ax1.clear()
-        self.axes_labels_set(self.ylabel)
-
-        fulldata = [item for item in self.display_data.values()]
-        self.axes_limits_set(self.iterations, fulldata)
-
-        xrng = [x for x in range(self.iterations)]
-        keys = list(self.display_data.keys())
-        for item in self.lines_sort(keys):
-            self.ax1.plot(xrng,
-                          self.display_data[item[0]],
-                          label=item[1],
-                          linewidth=item[2],
-                          color=item[3])
-        self.legend_place()
-
-    def refresh(self, display_data, iterations, ylabel, scale):
+    def refresh(self, data, ylabel, scale):
         """ Refresh graph data """
-        self.display_data = display_data
-        self.iterations = iterations
+        self.calcs = data
         self.ylabel = ylabel
         self.set_yscale_type(scale)
 
     def set_yscale_type(self, scale):
         """ switch the y-scale and redraw """
         self.scale = scale
-        self.update_plot()
+        self.update_plot(initiate=True)
         self.axes_set_yscale(self.scale)
         self.plotcanvas.draw()
