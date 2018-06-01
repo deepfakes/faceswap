@@ -522,7 +522,7 @@ class Effmpeg(object):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input = {input_.path: _input_opts}
         _output_opts = '-y -vf fps="' + str(fps) + '"'
-        _output_path = output.path + "/" + input_.name + "%05d" + extract_ext
+        _output_path = output.path + "/" + input_.name + "_%05d" + extract_ext
         _output = {_output_path: _output_opts}
         ff = FFmpeg(inputs=_input, outputs=_output)
         os.makedirs(output.path, exist_ok=True)
