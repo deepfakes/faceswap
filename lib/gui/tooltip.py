@@ -1,6 +1,6 @@
 #!/usr/bin python3
 """ Tooltip. Pops up help messages for the GUI """
-
+import platform
 import tkinter as tk
 
 class Tooltip:
@@ -35,9 +35,9 @@ class Tooltip:
 
     def __init__(self, widget,
                  *,
-                 background='#FFFFEA',
+                 background="#FFFFEA",
                  pad=(5, 3, 5, 3),
-                 text='widget info',
+                 text="widget info",
                  waittime=400,
                  wraplength=250):
 
@@ -127,6 +127,11 @@ class Tooltip:
 
         # creates a toplevel window
         self.topwidget = tk.Toplevel(widget)
+        if platform.system() == "Darwin":
+            # For Mac OS
+            self.topwidget.tk.call("::tk::unsupported::MacWindowStyle",
+                                   "style", self.topwidget._w,
+                                   "help", "none")
 
         # Leaves only the label and removes the app window
         self.topwidget.wm_overrideredirect(True)

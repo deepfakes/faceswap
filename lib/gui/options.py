@@ -12,7 +12,7 @@ from .utils import ConsoleOut, FileHandler, Images
 class CliOptions(object):
     """ Class and methods for the command line options """
     def __init__(self):
-        self.categories = ('faceswap', 'tools')
+        self.categories = ("faceswap", "tools")
         self.commands = dict()
         self.opts = dict()
 
@@ -21,7 +21,7 @@ class CliOptions(object):
     def build_options(self):
         """ Get the commands that belong to each category """
         for category in self.categories:
-            src = ToolsCli if category == 'tools' else cli
+            src = ToolsCli if category == "tools" else cli
             mod_classes = self.get_cli_classes(src)
             self.commands[category] = self.sort_commands(category, mod_classes)
             self.opts.update(self.extract_options(src, mod_classes))
@@ -31,10 +31,10 @@ class CliOptions(object):
         """ Parse the cli scripts for the arg classes """
         mod_classes = list()
         for name, obj in inspect.getmembers(cli_source):
-            if inspect.isclass(obj) and name.lower().endswith('args') \
-                    and name.lower() not in (('faceswapargs',
-                                              'extractconvertargs',
-                                              'guiargs')):
+            if inspect.isclass(obj) and name.lower().endswith("args") \
+                    and name.lower() not in (("faceswapargs",
+                                              "extractconvertargs",
+                                              "guiargs")):
                 mod_classes.append(name)
         return mod_classes
 
@@ -43,8 +43,8 @@ class CliOptions(object):
             Specific workflow order for faceswap.
             Alphabetical for all others """
         commands = sorted(self.format_command_name(command) for command in classes)
-        if category == 'faceswap':
-            ordered = ['extract', 'train', 'convert']
+        if category == "faceswap":
+            ordered = ["extract", "train", "convert"]
             commands = ordered + [command for command in commands if command not in ordered]
         return commands
 
@@ -75,12 +75,12 @@ class CliOptions(object):
             if opt.get("help", "") == SUPPRESS:
                 command_options.remove(opt)
             ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
-            opt['control_title'] = self.set_control_title(
-                opt.get('opts', ''))
-            opt['control'] = ctl
-            opt['filesystem_browser'] = sysbrowser
-            opt['filetypes'] = filetypes
-            opt['actions_open_types'] = actions_open_types
+            opt["control_title"] = self.set_control_title(
+                opt.get("opts", ""))
+            opt["control"] = ctl
+            opt["filesystem_browser"] = sysbrowser
+            opt["filetypes"] = filetypes
+            opt["actions_open_types"] = actions_open_types
 
     @staticmethod
     def set_control_title(opts):
@@ -96,18 +96,18 @@ class CliOptions(object):
         filetypes = None
         actions_open_type = None
         ctl = ttk.Entry
-        if option.get('action', '') == cli.FullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == cli.DirFullPaths:
-            sysbrowser = 'folder'
-        elif option.get('action', '') == cli.FileFullPaths:
-            sysbrowser = 'load'
-            filetypes = option.get('filetypes', None)
-        elif option.get('action', '') == cli.ComboFullPaths:
-            sysbrowser = 'combo'
-            actions_open_type = option['actions_open_type']
-            filetypes = option.get('filetypes', None)
-        elif option.get('choices', '') != '':
+        if option.get("action", "") == cli.FullPaths:
+            sysbrowser = "folder"
+        elif option.get("action", "") == cli.DirFullPaths:
+            sysbrowser = "folder"
+        elif option.get("action", "") == cli.FileFullPaths:
+            sysbrowser = "load"
+            filetypes = option.get("filetypes", None)
+        elif option.get("action", "") == cli.ComboFullPaths:
+            sysbrowser = "combo"
+            actions_open_type = option["actions_open_type"]
+            filetypes = option.get("filetypes", None)
+        elif option.get("choices", "") != "":
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":
             ctl = ttk.Checkbutton
@@ -132,20 +132,20 @@ class CliOptions(object):
         """ Reset the options for all or passed command
             back to default value """
         for option in self.options_to_process(command):
-            default = option.get('default', '')
-            default = '' if default is None else default
-            option['value'].set(default)
+            default = option.get("default", "")
+            default = "" if default is None else default
+            option["value"].set(default)
 
     def clear(self, command=None):
         """ Clear the options values for all or passed
             commands """
         for option in self.options_to_process(command):
-            if isinstance(option['value'].get(), bool):
-                option['value'].set(False)
-            elif isinstance(option['value'].get(), int):
-                option['value'].set(0)
+            if isinstance(option["value"].get(), bool):
+                option["value"].set(False)
+            elif isinstance(option["value"].get(), int):
+                option["value"].set(0)
             else:
-                option['value'].set('')
+                option["value"].set("")
 
     def get_option_values(self, command=None):
         """ Return all or single command control titles
@@ -156,7 +156,7 @@ class CliOptions(object):
                 continue
             cmd_dict = dict()
             for opt in opts:
-                cmd_dict[opt['control_title']] = opt['value'].get()
+                cmd_dict[opt["control_title"]] = opt["value"].get()
             ctl_dict[cmd] = cmd_dict
         return ctl_dict
 
@@ -164,25 +164,25 @@ class CliOptions(object):
         """ Return a single tk_var for the specified
             command and control_title """
         for option in self.gen_command_options(command):
-            if option['control_title'] == title:
-                return option['value']
+            if option["control_title"] == title:
+                return option["value"]
         return None
 
     def gen_cli_arguments(self, command):
         """ Return the generated cli arguments for
             the selected command """
         for option in self.gen_command_options(command):
-            optval = str(option.get('value', '').get())
-            opt = option['opts'][0]
-            if command in ('extract', 'convert') and opt == '-o':
+            optval = str(option.get("value", "").get())
+            opt = option["opts"][0]
+            if command in ("extract", "convert") and opt == "-o":
                 Images().pathoutput = optval
-            if optval == 'False' or optval == '':
+            if optval == "False" or optval == "":
                 continue
-            elif optval == 'True':
+            elif optval == "True":
                 yield (opt, )
             else:
-                if option.get('nargs', None):
-                    optval = optval.split(' ')
+                if option.get("nargs", None):
+                    optval = optval.split(" ")
                     opt = [opt] + optval
                 else:
                     opt = (opt, optval)
@@ -194,11 +194,11 @@ class Config(object):
     def __init__(self, cli_opts):
         self.cli_opts = cli_opts
         self.serializer = JSONSerializer
-        self.filetypes = (('Faceswap files', '*.fsw'), ('All files', '*.*'))
+        self.filetypes = (("Faceswap files", "*.fsw"), ("All files", "*.*"))
 
     def load(self, command=None):
         """ Load a saved config file """
-        cfgfile = FileHandler('open', 'config').retfile
+        cfgfile = FileHandler("open", "config").retfile
         if not cfgfile:
             return
         cfg = self.serializer.unmarshal(cfgfile.read())
@@ -213,7 +213,7 @@ class Config(object):
         opts = cfg.get(command, None)
         if not opts:
             ConsoleOut().clear()
-            print('No ' + command + ' section found in file')
+            print("No " + command + " section found in file")
         return {command: opts}
 
     def set_command_args(self, command, options):
@@ -228,7 +228,7 @@ class Config(object):
 
     def save(self, command=None):
         """ Save the current GUI state to a config file in json format """
-        cfgfile = FileHandler('save', 'config').retfile
+        cfgfile = FileHandler("save", "config").retfile
         if not cfgfile:
             return
         cfg = self.cli_opts.get_option_values(command)

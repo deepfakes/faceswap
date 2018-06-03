@@ -3,6 +3,7 @@
 import argparse
 from importlib import import_module
 import os
+import platform
 import sys
 
 from plugins.PluginLoader import PluginLoader
@@ -22,15 +23,15 @@ class ScriptExecutor(object):
         """ Only import a script's modules when running that script."""
         self.test_for_gui()
         cmd = sys.argv[0]
-        src = 'tools' if cmd == 'tools.py' else 'scripts'
-        mod = '.'.join((src, self.command.lower()))
+        src = "tools" if cmd == "tools.py" else "scripts"
+        mod = ".".join((src, self.command.lower()))
         module = import_module(mod)
         script = getattr(module, self.command.title())
         return script
 
     def test_for_gui(self):
         """ If running the gui, check the prerequisites """
-        if self.command != 'gui':
+        if self.command != "gui":
             return
         self.test_tkinter()
         self.check_display()
@@ -46,7 +47,7 @@ class ScriptExecutor(object):
             traceback errors to console """
 
         try:
-            import tkinter as tk
+            import tkinter
         except ImportError:
             print(
                 "It looks like TkInter isn't installed for your OS, so "
@@ -68,7 +69,7 @@ class ScriptExecutor(object):
             Windows then assume not running in headless mode """
         if not os.environ.get("DISPLAY", None) and os.name != "nt":
             print("No display detected. GUI mode has been disabled.")
-            if os.name == "posix":
+            if platform.system() == "Darwin":
                 print("macOS users need to install XQuartz. "
                       "See https://support.apple.com/en-gb/HT201341")
             exit(1)
@@ -141,22 +142,22 @@ class FileFullPaths(FullPaths):
         filetypes_list = list()
         for filetype in filetypes_l:
             filetype = filetype.strip("*.")
-            filetype = filetype.strip(';')
+            filetype = filetype.strip(";")
             filetypes_list.append("*." + filetype)
         return filetypes_name, filetypes_list
 
     def _get_kwargs(self):
         names = [
-            'option_strings',
-            'dest',
-            'nargs',
-            'const',
-            'default',
-            'type',
-            'choices',
-            'help',
-            'metavar',
-            'filetypes'
+            "option_strings",
+            "dest",
+            "nargs",
+            "const",
+            "default",
+            "type",
+            "choices",
+            "help",
+            "metavar",
+            "filetypes"
         ]
         return [(name, getattr(self, name)) for name in names]
 
@@ -194,17 +195,17 @@ class ComboFullPaths(FileFullPaths):
 
     def _get_kwargs(self):
         names = [
-            'option_strings',
-            'dest',
-            'nargs',
-            'const',
-            'default',
-            'type',
-            'choices',
-            'help',
-            'metavar',
-            'filetypes',
-            'actions_open_type'
+            "option_strings",
+            "dest",
+            "nargs",
+            "const",
+            "default",
+            "type",
+            "choices",
+            "help",
+            "metavar",
+            "filetypes",
+            "actions_open_type"
         ]
         return [(name, getattr(self, name)) for name in names]
 
@@ -282,7 +283,7 @@ class ExtractConvertArgs(FaceSwapArgs):
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        alignments_filetypes = [["Serializers", ['json', 'p', 'yaml']],
+        alignments_filetypes = [["Serializers", ["json", "p", "yaml"]],
                                 ["JSON", ["json"]],
                                 ["Pickle", ["p"]],
                                 ["YAML", ["yaml"]]]

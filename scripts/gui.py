@@ -17,9 +17,8 @@ class FaceswapGui(tk.Tk):
 
     def __init__(self, pathscript):
         tk.Tk.__init__(self)
-        self.geometry('1200x640+80+80')
+        self.geometry("1200x640+80+80")
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        #TODO Saving session bug when no face dir found
         self.images = Images(pathcache)
         self.cliopts = CliOptions()
         self.session = CurrentSession()
@@ -31,7 +30,7 @@ class FaceswapGui(tk.Tk):
 
     def build_gui(self, debug_console):
         """ Build the GUI """
-        self.title('Faceswap.py')
+        self.title("Faceswap.py")
         self.menu()
 
         topcontainer, bottomcontainer = self.add_containers()
@@ -94,9 +93,9 @@ class FaceswapGui(tk.Tk):
             tkinter has gone away """
         confirm = messagebox.askokcancel
         confirmtxt = "Processes are still running. Are you sure...?"
-        if self.wrapper.tk_vars['runningtask'].get() and not confirm("Close", confirmtxt):
+        if self.wrapper.tk_vars["runningtask"].get() and not confirm("Close", confirmtxt):
             return
-        if self.wrapper.tk_vars['runningtask'].get():
+        if self.wrapper.tk_vars["runningtask"].get():
             self.wrapper.task.terminate()
         self.images.delete_preview()
         self.quit()
@@ -114,8 +113,8 @@ class Gui(object):
     def set_windows_font_scaling():
         """ Set process to be dpi aware for windows users
             to fix blurry scaled fonts """
-        if os.name == 'nt':
-            user32 = ctypes.WinDLL('user32')
+        if os.name == "nt":
+            user32 = ctypes.WinDLL("user32")
             user32.SetProcessDPIAware(True)
 
     def process(self):

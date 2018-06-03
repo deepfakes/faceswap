@@ -43,14 +43,14 @@ class PreviewExtract(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler('dir').retfile
+        location = FileHandler("dir").retfile
         if not location:
             return
-        filename = 'extract_convert_preview'
+        filename = "extract_convert_preview"
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, '{}_{}.{}'.format(filename, now, 'png'))
+        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
         Images().previewoutput[0].save(filename)
-        print('Saved preview to {}'.format(filename))
+        print("Saved preview to {}".format(filename))
 
 class PreviewTrain(DisplayOptionalPage):
     """ Training preview image(s) """
@@ -77,18 +77,18 @@ class PreviewTrain(DisplayOptionalPage):
         preview = PreviewTrainCanvas(self.subnotebook, name)
         preview = self.subnotebook_add_page(name, widget=preview)
         Tooltip(preview, text=self.helptext, wraplength=200)
-        self.vars['modified'].set(Images().previewtrain[name][2])
+        self.vars["modified"].set(Images().previewtrain[name][2])
 
     def update_child(self, tab_id, name):
         """ Update the preview canvas """
-        if self.vars['modified'].get() != Images().previewtrain[name][2]:
-            self.vars['modified'].set(Images().previewtrain[name][2])
+        if self.vars["modified"].get() != Images().previewtrain[name][2]:
+            self.vars["modified"].set(Images().previewtrain[name][2])
             widget = self.subnotebook_page_from_id(tab_id)
             widget.reload()
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler('dir').retfile
+        location = FileHandler("dir").retfile
         if not location:
             return
         for preview in self.subnotebook.children.values():
@@ -125,48 +125,48 @@ class PreviewTrainCanvas(ttk.Frame):
         """ Save the figure to file """
         filename = self.name
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, '{}_{}.{}'.format(filename, now, 'png'))
+        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
         Images().previewtrain[self.name][0].save(filename)
-        print('Saved preview to {}'.format(filename))
+        print("Saved preview to {}".format(filename))
 
 class GraphDisplay(DisplayOptionalPage):
     """ The Graph Tab of the Display section """
 
     def display_item_set(self):
         """ Load the graph(s) if available """
-        if self.session.stats['iterations'] == 0:
+        if self.session.stats["iterations"] == 0:
             self.display_item = None
         else:
             self.display_item = self.session.stats
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
-        losskeys = self.display_item['losskeys']
-        loss = self.display_item['loss']
+        losskeys = self.display_item["losskeys"]
+        loss = self.display_item["loss"]
         tabcount = int(len(losskeys) / 2)
         existing = self.subnotebook_get_titles_ids()
         for i in range(tabcount):
             selectedkeys = losskeys[i * 2:(i + 1) * 2]
-            name = ' - '.join(selectedkeys).title().replace('_', ' ')
+            name = " - ".join(selectedkeys).title().replace("_", " ")
             if name not in existing.keys():
                 selectedloss = loss[i * 2:(i + 1) * 2]
-                selection = {'loss': selectedloss,
-                             'losskeys': selectedkeys}
+                selection = {"loss": selectedloss,
+                             "losskeys": selectedkeys}
                 data = Calculations(session=selection,
-                                    display='loss',
-                                    selections=['raw', 'trend'])
+                                    display="loss",
+                                    selections=["raw", "trend"])
                 self.add_child(name, data)
 
     def add_child(self, name, data):
         """ Add the graph for the selected keys """
-        graph = TrainingGraph(self.subnotebook, data, 'Loss')
+        graph = TrainingGraph(self.subnotebook, data, "Loss")
         graph.build()
         graph = self.subnotebook_add_page(name, widget=graph)
         Tooltip(graph, text=self.helptext, wraplength=200)
 
     def save_items(self):
         """ Open save dialogue and save graphs """
-        graphlocation = FileHandler('dir').retfile
+        graphlocation = FileHandler("dir").retfile
         if not graphlocation:
             return
         for graph in self.subnotebook.children.values():

@@ -17,8 +17,8 @@ class DisplayNotebook(ttk.Notebook):
         ttk.Notebook.__init__(self, parent, width=780)
         parent.add(self)
 
-        self.wrapper_var = tk_vars['display']
-        self.runningtask = tk_vars['runningtask']
+        self.wrapper_var = tk_vars["display"]
+        self.runningtask = tk_vars["runningtask"]
         self.session = session
 
         self.set_wrapper_var_trace()
@@ -32,9 +32,11 @@ class DisplayNotebook(ttk.Notebook):
 
     def add_static_tabs(self):
         """ Add tabs that are permanently available """
-        for tab in ('job queue', 'analysis'):
-            if tab == 'analysis':
-                helptext = {'stats': 'Summary statistics for each training session'}
+        for tab in ("job queue", "analysis"):
+            if tab == "job queue":
+                continue    #Not yet implemented
+            if tab == "analysis":
+                helptext = {"stats": "Summary statistics for each training session"}
                 frame = Analysis(self, tab, helptext)
             else:
                 frame = self.add_frame()
@@ -49,7 +51,7 @@ class DisplayNotebook(ttk.Notebook):
     def command_display(self, command):
         """ Select what to display based on incoming
             command """
-        build_tabs = getattr(self, '{}_tabs'.format(command))
+        build_tabs = getattr(self, "{}_tabs".format(command))
         build_tabs()
 
     def extract_tabs(self):
@@ -60,10 +62,10 @@ class DisplayNotebook(ttk.Notebook):
     def train_tabs(self):
         """ Build the train tabs """
         for tab in ("graph", "preview"):
-            if tab == 'graph':
+            if tab == "graph":
                 helptext = "Graph showing Loss vs Iterations"
                 GraphDisplay(self, "graph", helptext, 5000)
-            elif tab == 'preview':
+            elif tab == "preview":
                 helptext = "Training preview. Updated on every save iteration"
                 PreviewTrain(self, "preview", helptext, 5000)
 
@@ -82,6 +84,6 @@ class DisplayNotebook(ttk.Notebook):
         """ Set the display tabs based on executing task """
         command = self.wrapper_var.get()
         self.remove_tabs()
-        if not command or command not in ('extract', 'train', 'convert'):
+        if not command or command not in ("extract", "train", "convert"):
             return
         self.command_display(command)

@@ -25,19 +25,19 @@ class FileHandler(object):
     """ Raise a filedialog box and capture input """
     def __init__(self, handletype, filetype=None):
 
-        self.filetypes = {'config': (('Faceswap config files', '*.fsw'), ('All files', '*.*')),
-                          'session': (('Faceswap session files', '*.fss'), ('All files', '*.*')),
-                          'csv':(('Comma separated values', '*.csv'), ('All files', '*.*'))}
+        self.filetypes = {"config": (("Faceswap config files", "*.fsw"), ("All files", "*.*")),
+                          "session": (("Faceswap session files", "*.fss"), ("All files", "*.*")),
+                          "csv":(("Comma separated values", "*.csv"), ("All files", "*.*"))}
         self.retfile = getattr(self, handletype.lower())(filetype)
 
     def open(self, filetype):
         """ Open a file """
-        return filedialog.askopenfile(mode='r', filetypes=self.filetypes[filetype])
+        return filedialog.askopenfile(mode="r", filetypes=self.filetypes[filetype])
 
     def save(self, filetype):
         """ Save a file """
-        default = self.filetypes[filetype][0][1].replace('*', '')
-        return filedialog.asksaveasfile(mode='w',
+        default = self.filetypes[filetype][0][1].replace("*", "")
+        return filedialog.asksaveasfile(mode="w",
                                         filetypes=self.filetypes[filetype],
                                         defaultextension=default)
 
@@ -92,7 +92,7 @@ class Images(object, metaclass=Singleton):
         if not os.path.isdir(imgpath):
             return None
         files = [os.path.join(imgpath, f)
-                 for f in os.listdir(imgpath) if f.endswith(('.png', '.jpg'))]
+                 for f in os.listdir(imgpath) if f.endswith((".png", ".jpg"))]
         return files
 
     def load_latest_preview(self):
@@ -131,7 +131,7 @@ class Images(object, metaclass=Singleton):
                 if self.errcount < 10:
                     self.errcount += 1
                 else:
-                    print('Error reading the preview file for {}'.format(name))
+                    print("Error reading the preview file for {}".format(name))
                     self.previewtrain[name] = None
 
     def get_current_size(self, name):
@@ -184,11 +184,11 @@ class ConsoleOut(ttk.Frame, metaclass=Singleton):
 
     def build_console(self):
         """ Build and place the console """
-        self.console.config(width=100, height=6, bg='gray90', fg='black')
+        self.console.config(width=100, height=6, bg="gray90", fg="black")
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self, command=self.console.yview)
-        scrollbar.pack(side=tk.LEFT, fill='y')
+        scrollbar.pack(side=tk.LEFT, fill="y")
         self.console.configure(yscrollcommand=scrollbar.set)
 
         self.redirect_console()
@@ -196,7 +196,7 @@ class ConsoleOut(ttk.Frame, metaclass=Singleton):
     def redirect_console(self):
         """ Redirect stdout/stderr to console frame """
         if self.debug:
-            print('Console debug activated. Outputting to main terminal')
+            print("Console debug activated. Outputting to main terminal")
         else:
             sys.stdout = SysOutRouter(console=self.console, out_type="stdout")
             sys.stderr = SysOutRouter(console=self.console, out_type="stderr")

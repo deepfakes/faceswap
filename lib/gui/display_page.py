@@ -20,7 +20,7 @@ class DisplayPage(ttk.Frame):
         self.helptext = helptext
         self.tabname = tabname
 
-        self.vars = {'info': tk.StringVar()}
+        self.vars = {"info": tk.StringVar()}
         self.add_optional_vars(self.set_vars())
 
         self.subnotebook = self.add_subnotebook()
@@ -56,12 +56,12 @@ class DisplayPage(ttk.Frame):
 
     def add_options_info(self):
         """ Add the info bar """
-        lblinfo = ttk.Label(self.optsframe, textvariable=self.vars['info'], anchor=tk.W, width=70)
+        lblinfo = ttk.Label(self.optsframe, textvariable=self.vars["info"], anchor=tk.W, width=70)
         lblinfo.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.W)
 
     def set_info(self, msg):
         """ Set the info message """
-        self.vars['info'].set(msg)
+        self.vars["info"].set(msg)
 
     def add_frame_separator(self):
         """ Add a separator between top and bottom frames """
@@ -72,8 +72,8 @@ class DisplayPage(ttk.Frame):
     def set_mainframe_single_tab_style():
         """ Configure ttk notebook style to represent a single frame """
         nbstyle = ttk.Style()
-        nbstyle.configure('single.TNotebook', borderwidth=0)
-        nbstyle.layout('single.TNotebook.Tab', [])
+        nbstyle.configure("single.TNotebook", borderwidth=0)
+        nbstyle.layout("single.TNotebook.Tab", [])
 
     def subnotebook_add_page(self, tabtitle, widget=None):
         """ Add a page to the sub notebook """
@@ -86,9 +86,9 @@ class DisplayPage(ttk.Frame):
     def subnotebook_configure(self):
         """ Configure notebook to display or hide tabs """
         if len(self.subnotebook.children) == 1:
-            self.subnotebook.configure(style='single.TNotebook')
+            self.subnotebook.configure(style="single.TNotebook")
         else:
-            self.subnotebook.configure(style='TNotebook')
+            self.subnotebook.configure(style="TNotebook")
 
     def subnotebook_hide(self):
         """ Hide the subnotebook. Used for hiding
@@ -118,7 +118,7 @@ class DisplayPage(ttk.Frame):
 
     def subnotebook_page_from_id(self, tab_id):
         """ Return subnotebook tab widget from it's ID """
-        tab_name = self.subnotebook.tabs()[tab_id].split('.')[-1]
+        tab_name = self.subnotebook.tabs()[tab_id].split(".")[-1]
         return self.subnotebook.children[tab_name]
 
 class DisplayOptionalPage(DisplayPage):
@@ -148,16 +148,16 @@ class DisplayOptionalPage(DisplayPage):
         modified = tk.DoubleVar()
         modified.set(None)
 
-        return {'enabled': enabled,
-                'ready': ready,
-                'modified': modified}
+        return {"enabled": enabled,
+                "ready": ready,
+                "modified": modified}
 
     # INFO LABEL
     def set_info_text(self):
         """ Set waiting for display text """
-        if not self.vars['enabled'].get():
+        if not self.vars["enabled"].get():
             self.set_info("{} disabled".format(self.tabname.title()))
-        elif self.vars['enabled'].get() and not self.vars['ready'].get():
+        elif self.vars["enabled"].get() and not self.vars["ready"].get():
             self.set_info("Waiting for {}...".format(self.tabname))
         else:
             self.set_info("Displaying {}".format(self.tabname))
@@ -175,18 +175,18 @@ class DisplayOptionalPage(DisplayPage):
                              command=self.save_items)
         btnsave.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnsave,
-                text='Save {}(s) to file'.format(self.tabname),
+                text="Save {}(s) to file".format(self.tabname),
                 wraplength=200)
 
     def add_option_enable(self):
         """ Add checkbutton to enable/disable page """
         chkenable = ttk.Checkbutton(self.optsframe,
-                                    variable=self.vars['enabled'],
+                                    variable=self.vars["enabled"],
                                     text="Enable {}".format(self.tabname),
                                     command=self.on_chkenable_change)
         chkenable.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
         Tooltip(chkenable,
-                text='Enable or disable {} display'.format(self.tabname),
+                text="Enable or disable {} display".format(self.tabname),
                 wraplength=200)
 
     def save_items(self):
@@ -195,7 +195,7 @@ class DisplayOptionalPage(DisplayPage):
 
     def on_chkenable_change(self):
         """ Update the display immediately on a checkbutton change """
-        if self.vars['enabled'].get():
+        if self.vars["enabled"].get():
             self.subnotebook_show()
         else:
             self.subnotebook_hide()
@@ -205,7 +205,7 @@ class DisplayOptionalPage(DisplayPage):
         """ Update the latest preview item """
         if not self.runningtask.get():
             return
-        if self.vars['enabled'].get():
+        if self.vars["enabled"].get():
             self.display_item_set()
             self.load_display()
         self.after(waittime, lambda t=waittime: self.update_page(t))
@@ -219,7 +219,7 @@ class DisplayOptionalPage(DisplayPage):
         if not self.display_item:
             return
         self.display_item_process()
-        self.vars['ready'].set(True)
+        self.vars["ready"].set(True)
         self.set_info_text()
 
     def display_item_process(self):

@@ -61,15 +61,15 @@ class StatusBar(ttk.Frame, metaclass=Singleton):
 
     def progress_stop(self):
         """ Reset progress bar and hide """
-        self.pbar_message.set('')
+        self.pbar_message.set("")
         self.pbar_position.set(0)
-        self.progress_set_mode('determinate')
+        self.progress_set_mode("determinate")
         self.pbar.pack_forget()
 
     def progress_set_mode(self, mode):
         """ Set the progress bar mode """
         self.pbar.config(mode=mode)
-        if mode == 'indeterminate':
+        if mode == "indeterminate":
             self.pbar.config(maximum=100)
             self.pbar.start()
         else:

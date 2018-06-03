@@ -27,7 +27,7 @@ class CommandNotebook(ttk.Notebook):
     def set_running_task_trace(self):
         """ Set trigger action for the running task
             to change the action buttons text and command """
-        self.tk_vars['runningtask'].trace("w", self.change_action_button)
+        self.tk_vars["runningtask"].trace("w", self.change_action_button)
 
     def build_tabs(self):
         """ Build the tabs for the relevant command """
@@ -42,12 +42,12 @@ class CommandNotebook(ttk.Notebook):
         """ Change the action button to relevant control """
         for cmd in self.actionbtns.keys():
             btnact = self.actionbtns[cmd]
-            if self.tk_vars['runningtask'].get():
-                ttl = 'Terminate'
-                hlp = 'Exit the running process'
+            if self.tk_vars["runningtask"].get():
+                ttl = "Terminate"
+                hlp = "Exit the running process"
             else:
                 ttl = cmd.title()
-                hlp = 'Run the {} script'.format(cmd.title())
+                hlp = "Run the {} script".format(cmd.title())
             btnact.config(text=ttl)
             Tooltip(btnact, text=hlp, wraplength=200)
 
@@ -118,7 +118,7 @@ class OptionsFrame(ttk.Frame):
     def build_frame(self):
         """ Build the options frame for this command """
         self.add_scrollbar()
-        self.canvas.bind('<Configure>', self.resize_frame)
+        self.canvas.bind("<Configure>", self.resize_frame)
 
         for option in self.opts.gen_command_options(self.command):
             optioncontrol = OptionControl(self.opts.opts, option, self.optsframe, self.chkbtns[1])
@@ -136,7 +136,7 @@ class OptionsFrame(ttk.Frame):
 
     def update_scrollbar(self, event):
         """ Update the options frame scrollbar """
-        self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def resize_frame(self, event):
         """ Resize the options frame to fit the canvas """
@@ -155,15 +155,15 @@ class OptionControl(object):
 
     def build_full_control(self):
         """ Build the correct control type for the option passed through """
-        ctl = self.option['control']
-        ctltitle = self.option['control_title']
-        sysbrowser = self.option['filesystem_browser']
-        ctlhelp = ' '.join(self.option.get('help', '').split())
-        ctlhelp = '. '.join(i.capitalize() for i in ctlhelp.split('. '))
-        ctlhelp = ctltitle + ' - ' + ctlhelp
-        dflt = self.option.get('default', '')
-        dflt = self.option.get('default', False) if ctl == ttk.Checkbutton else dflt
-        choices = self.option['choices'] if ctl == ttk.Combobox else None
+        ctl = self.option["control"]
+        ctltitle = self.option["control_title"]
+        sysbrowser = self.option["filesystem_browser"]
+        ctlhelp = " ".join(self.option.get("help", "").split())
+        ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
+        ctlhelp = ctltitle + " - " + ctlhelp
+        dflt = self.option.get("default", "")
+        dflt = self.option.get("default", False) if ctl == ttk.Checkbutton else dflt
+        choices = self.option["choices"] if ctl == ttk.Combobox else None
 
         ctlframe = self.build_one_control_frame()
 
@@ -171,7 +171,7 @@ class OptionControl(object):
             self.build_one_control_label(ctlframe, ctltitle)
 
         ctlvars = (ctl, ctltitle, dflt, ctlhelp)
-        self.option['value'] = self.build_one_control(ctlframe,
+        self.option["value"] = self.build_one_control(ctlframe,
                                                       ctlvars,
                                                       choices,
                                                       sysbrowser)
@@ -191,7 +191,7 @@ class OptionControl(object):
     def build_one_control(self, frame, controlvars, choices, sysbrowser):
         """ Build and place the option controls """
         control, control_title, default, helptext = controlvars
-        default = default if default is not None else ''
+        default = default if default is not None else ""
 
         var = tk.BooleanVar(
             frame) if control == ttk.Checkbutton else tk.StringVar(frame)
@@ -208,8 +208,8 @@ class OptionControl(object):
 
     def checkbutton_to_checkframe(self, control, control_title, var, helptext):
         """ Add checkbuttons to the checkbutton frame """
-        leftframe = self.chkbtns.children['leftFrame']
-        rightframe = self.chkbtns.children['rightFrame']
+        leftframe = self.chkbtns.children["leftFrame"]
+        rightframe = self.chkbtns.children["rightFrame"]
         chkbtn_count = len({**leftframe.children, **rightframe.children})
 
         frame = leftframe if chkbtn_count % 2 == 0 else rightframe
@@ -226,18 +226,18 @@ class OptionControl(object):
         ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
 
         if control == ttk.Combobox:
-            ctl['values'] = [choice for choice in choices]
+            ctl["values"] = [choice for choice in choices]
 
         Tooltip(ctl, text=helptext, wraplength=200)
     #TODO: Review all of the file handling changes brought in by merge Master
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
         if sysbrowser == "combo":
-            img = Images().icons['load']
+            img = Images().icons["load"]
         else:
             img = Images().icons[sysbrowser]
-        action = getattr(self, 'ask_' + sysbrowser)
-        filetypes = self.option['filetypes']
+        action = getattr(self, "ask_" + sysbrowser)
+        filetypes = self.option["filetypes"]
         fileopn = ttk.Button(frame, image=img,
                              command=lambda cmd=action: cmd(filepath,
                                                             filetypes))
@@ -250,7 +250,7 @@ class OptionControl(object):
             that will store the path to a directory.
             :param filetypes: Unused argument to allow
             filetypes to be given in ask_load(). """
-        dirname = FileHandler('dir').retfile
+        dirname = FileHandler("dir").retfile
         if dirname:
             filepath.set(dirname)
 
@@ -258,17 +258,17 @@ class OptionControl(object):
     def ask_load(filepath, filetypes=None):
         """ Pop-up to get path to a file """
         if filetypes is None:
-            filename = FileHandler('filename').retfile
+            filename = FileHandler("filename").retfile
         else:
             # In case filetypes were not configured properly in the
             # arguments_list
             try:
-                filename = FileHandler('filename', filetype=filetypes).retfile
-            except TclError as te1:
+                filename = FileHandler("filename", filetype=filetypes).retfile
+            except TclError:
                 filetypes = FileFullPaths.prep_filetypes(filetypes)
-                filename = FileHandler('filename', filetype=filetypes).retfile
-            except TclError as te2:
-                filename = FileHandler('filename').retfile
+                filename = FileHandler("filename", filetype=filetypes).retfile
+            except TclError:
+                filename = FileHandler("filename").retfile
         if filename:
             filepath.set(filename)
 
@@ -277,17 +277,17 @@ class OptionControl(object):
     def ask_save(filepath, filetypes=None):
         """ Pop-up to get path to save a new file """
         if filetypes is None:
-            filename = FileHandler('save').retfile
+            filename = FileHandler("save").retfile
         else:
             # In case filetypes were not configured properly in the
             # arguments_list
             try:
-                filename = FileHandler('save', filetype=filetypes).retfile
-            except TclError as te1:
+                filename = FileHandler("save", filetype=filetypes).retfile
+            except TclError:
                 filetypes = FileFullPaths.prep_filetypes(filetypes)
-                filename = FileHandler('save', filetype=filetypes).retfile
-            except TclError as te2:
-                filename = FileHandler('save').retfile
+                filename = FileHandler("save", filetype=filetypes).retfile
+            except TclError:
+                filename = FileHandler("save").retfile
         if filename:
             filepath.set(filename)
 
@@ -298,11 +298,11 @@ class OptionControl(object):
 
     def ask_combo(self, filepath, filetypes):
         """ Method to pop the correct dialog depending on context """
-        actions_open_type = self.option['actions_open_type']
-        task_name = actions_open_type['task_name']
+        actions_open_type = self.option["actions_open_type"]
+        task_name = actions_open_type["task_name"]
         #TODO find way to clean up way to get correct dialogue without having to pass whole dict
         # through for this one task
-        chosen_action = self.opts[task_name][0]['value'].get()
+        chosen_action = self.opts[task_name][0]["value"].get()
         action = getattr(self, "ask_" + actions_open_type[chosen_action])
         filetypes = filetypes[chosen_action]
         action(filepath, filetypes)
@@ -325,22 +325,22 @@ class ActionFrame(ttk.Frame):
         actframe = ttk.Frame(self)
         actframe.pack(fill=tk.X, side=tk.LEFT)
 
-        var_value = '{},{}'.format(category, self.command)
+        var_value = "{},{}".format(category, self.command)
 
         btnact = ttk.Button(actframe,
                             text=self.title,
                             width=10,
-                            command=lambda: tk_vars['action'].set(var_value))
+                            command=lambda: tk_vars["action"].set(var_value))
         btnact.pack(side=tk.LEFT)
-        Tooltip(btnact, text='Run the {} script'.format(self.title), wraplength=200)
+        Tooltip(btnact, text="Run the {} script".format(self.title), wraplength=200)
         actionbtns[self.command] = btnact
 
         btngen = ttk.Button(actframe,
                             text="Generate",
                             width=10,
-                            command=lambda: tk_vars['generate'].set(var_value))
+                            command=lambda: tk_vars["generate"].set(var_value))
         btngen.pack(side=tk.RIGHT, padx=5)
-        Tooltip(btngen, text='Output command line options to the console', wraplength=200)
+        Tooltip(btngen, text="Output command line options to the console", wraplength=200)
 
     def add_util_buttons(self, cli_options):
         """ Add the section utility buttons """
@@ -348,12 +348,12 @@ class ActionFrame(ttk.Frame):
         utlframe.pack(side=tk.RIGHT)
 
         config = Config(cli_options)
-        for utl in ('load', 'save', 'clear', 'reset'):
+        for utl in ("load", "save", "clear", "reset"):
             img = Images().icons[utl]
-            action_cls = config if utl in (('save', 'load')) else cli_options
+            action_cls = config if utl in (("save", "load")) else cli_options
             action = getattr(action_cls, utl)
             btnutl = ttk.Button(utlframe,
                                 image=img,
                                 command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, side=tk.LEFT)
-            Tooltip(btnutl, text=utl.capitalize() + ' ' + self.title + ' config', wraplength=200)
+            Tooltip(btnutl, text=utl.capitalize() + " " + self.title + " config", wraplength=200)

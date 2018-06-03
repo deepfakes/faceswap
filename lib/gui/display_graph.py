@@ -8,9 +8,9 @@ from tkinter import ttk
 from math import ceil, floor
 
 import matplotlib
-matplotlib.use('TkAgg')
-from matplotlib import pyplot as plt, style
+matplotlib.use("TkAgg")
 import matplotlib.animation as animation
+from matplotlib import pyplot as plt, style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 from .tooltip import Tooltip
@@ -22,18 +22,20 @@ class NavigationToolbar(NavigationToolbar2Tk):
         with custom icons and layout
         From: https://stackoverflow.com/questions/12695678 """
     toolitems = [t for t in NavigationToolbar2Tk.toolitems if
-                 t[0] in ('Home', 'Pan', 'Zoom', 'Save')]
+                 t[0] in ("Home", "Pan", "Zoom", "Save")]
 
     @staticmethod
-    def _Button(self, text, file, command, extension='.gif'):
-        """ Same as original byt Custom button icons,
-            ttk used and packed to right """
-        iconmapping = {'home': 'reset',
-                       'filesave': 'save',
-                       'zoom_to_rect': 'zoom'}
+    def _Button(frame, text, file, command, extension=".gif"):
+        """ Map Buttons to their own frame.
+            Use custom button icons,
+            Use ttk buttons
+            pack to the right """
+        iconmapping = {"home": "reset",
+                       "filesave": "save",
+                       "zoom_to_rect": "zoom"}
         icon = iconmapping[file] if iconmapping.get(file, None) else file
         img = Images().icons[icon]
-        btn = ttk.Button(self, text=text, image=img, command=command)
+        btn = ttk.Button(frame, text=text, image=img, command=command)
         btn.pack(side=tk.RIGHT, padx=2)
         return btn
 
@@ -73,13 +75,13 @@ class GraphBase(ttk.Frame):
     """ Base class for matplotlib line graphs """
     def __init__(self, parent, data, ylabel):
         ttk.Frame.__init__(self, parent)
-        style.use('ggplot')
+        style.use("ggplot")
 
         self.calcs = data
         self.ylabel = ylabel
-        self.colourmaps = ['Reds', 'Blues', 'Greens',
-                           'Purples', 'Oranges', 'Greys',
-                           'copper', 'summer', 'bone']
+        self.colourmaps = ["Reds", "Blues", "Greens",
+                           "Purples", "Oranges", "Greys",
+                           "copper", "summer", "bone"]
         self.lines = list()
         self.toolbar = None
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
@@ -103,7 +105,7 @@ class GraphBase(ttk.Frame):
             self.axes_labels_set()
 
         fulldata = [item for item in self.calcs.stats.values()]
-        self.axes_limits_set(self.calcs.iterations, fulldata)
+        self.axes_limits_set(fulldata)
 
         xrng = [x for x in range(self.calcs.iterations)]
         keys = list(self.calcs.stats.keys())
@@ -122,7 +124,7 @@ class GraphBase(ttk.Frame):
 
     def axes_labels_set(self):
         """ Set the axes label and range """
-        self.ax1.set_xlabel('Iterations')
+        self.ax1.set_xlabel("Iterations")
         self.ax1.set_ylabel(self.ylabel)
 
     def axes_limits_set_default(self):
@@ -130,8 +132,10 @@ class GraphBase(ttk.Frame):
         self.ax1.set_ylim(0.00, 100.0)
         self.ax1.set_xlim(0, 1)
 
-    def axes_limits_set(self, xmax, data):
+    def axes_limits_set(self, data):
         """ Set the axes limits """
+        xmax = self.calcs.iterations - 1 if self.calcs.iterations > 1 else 1
+
         if data:
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
@@ -161,8 +165,8 @@ class GraphBase(ttk.Frame):
         raw_lines = list()
         sorted_lines = list()
         for key in sorted(keys):
-            title = key.replace('_', ' ').title()
-            if key.startswith(('avg', 'trend')):
+            title = key.replace("_", " ").title()
+            if key.startswith(("avg", "trend")):
                 sorted_lines.append([key, title])
             else:
                 raw_lines.append([key, title])
@@ -183,7 +187,7 @@ class GraphBase(ttk.Frame):
         if raw_lines:
             groupsize = len(raw_lines)
         else:
-            for check in ('avg', 'trend'):
+            for check in ("avg", "trend"):
                 if any(item[0].startswith(check) for item in sorted_lines):
                     groupsize = len([item for item in sorted_lines if item[0].startswith(check)])
                     break
@@ -210,7 +214,7 @@ class GraphBase(ttk.Frame):
 
     def legend_place(self):
         """ Place and format legend """
-        self.ax1.legend(loc='upper right', ncol=2)
+        self.ax1.legend(loc="upper right", ncol=2)
 
     def toolbar_place(self, parent):
         """ Add Graph Navigation toolbar """
@@ -263,14 +267,14 @@ class TrainingGraph(GraphBase):
 
     def save_fig(self, location):
         """ Save the figure to file """
-        keys = sorted([key.replace('raw_', '')
-                       for key in self.calcs.stats.keys() if key.startswith('raw_')])
-        filename = ' - '.join(keys)
+        keys = sorted([key.replace("raw_", "")
+                       for key in self.calcs.stats.keys() if key.startswith("raw_")])
+        filename = " - ".join(keys)
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, '{}_{}.{}'.format(filename, now, 'png'))
+        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
         self.fig.set_size_inches(16, 9)
-        self.fig.savefig(filename, bbox_inches='tight', dpi=120)
-        print('Saved graph to {}'.format(filename))
+        self.fig.savefig(filename, bbox_inches="tight", dpi=120)
+        print("Saved graph to {}".format(filename))
         self.resize_fig()
 
     def resize_fig(self):
