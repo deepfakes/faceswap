@@ -186,12 +186,11 @@ class Train(object):
                 img = "_sample_{}.jpg".format(name)
                 imgfile = os.path.join(scriptpath, img)
                 cv2.imwrite(imgfile, image)
-
             if self.args.redirect_gui:
-                img = ".gui_preview.png"
-                imgfile = os.path.join(scriptpath, img)
+                img = ".gui_preview_{}.jpg".format(name)
+                imgfile = os.path.join(scriptpath, "lib", "gui", ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)
-            elif self.args.preview:
+            if self.args.preview:
                 with self.lock:
                     self.preview_buffer[name] = image
         except Exception as err:

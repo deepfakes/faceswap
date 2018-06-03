@@ -5,7 +5,6 @@ Created on 2018-03-16 15:14
 
 @author: Lev Velykoivanenko (velykoivanenko.lev@gmail.com)
 """
-import argparse
 import os
 import sys
 import subprocess
@@ -14,9 +13,9 @@ import datetime
 from ffmpy import FFprobe, FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.cli import FileFullPaths, ComboFullPaths
+from lib.cli import FileFullPaths, ComboFullPaths, FullHelpArgumentParser
 from lib.utils import _image_extensions, _video_extensions
-
+from . import cli
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.2")
@@ -132,10 +131,8 @@ class Effmpeg(object):
     # passed verbosity
     _common_ffmpeg_args = ''
 
-    def __init__(self, subparser, command, description='default'):
-        self.argument_list = self.get_argument_list()
-        self.optional_arguments = list()
-        self.args = None
+    def __init__(self, arguments):
+        self.args = arguments
         self.input = DataItem()
         self.output = DataItem()
         self.ref_vid = DataItem()
@@ -143,257 +140,8 @@ class Effmpeg(object):
         self.end = ""
         self.duration = ""
         self.print_ = False
-        self.parse_arguments(description, subparser, command)
 
-    @staticmethod
-    def get_argument_list():
-        vid_files = FileFullPaths.prep_filetypes([["Video Files",
-                                                  DataItem.vid_ext]])
-        arguments_list = list()
-        arguments_list.append({"opts": ('-a', '--action'),
-                               "dest": "action",
-                               "choices": ("extract", "gen-vid", "get-fps",
-                                           "get-info", "mux-audio", "rescale",
-                                           "rotate", "slice"),
-                               "default": "extract",
-                               "help": """Choose which action you want ffmpeg 
-                                          ffmpeg to do.
-                                          'slice' cuts a portion of the video
-                                          into a separate video file.
-                                          'get-fps' returns the chosen video's
-                                          fps."""})
-
-        arguments_list.append({"opts": ('-i', '--input'),
-                               "action": ComboFullPaths,
-                               "dest": "input",
-                               "default": "input",
-                               "help": "Input file.",
-                               "required": True,
-                               "actions_open_type": {
-                                   "task_name": "effmpeg",
-                                   "extract": "load",
-                                   "gen-vid": "folder",
-                                   "get-fps": "load",
-                                   "get-info": "load",
-                                   "mux-audio": "load",
-                                   "rescale": "load",
-                                   "rotate": "load",
-                                   "slice": "load",
-                               },
-                               "filetypes": {
-                                   "extract": vid_files,
-                                   "gen-vid": None,
-                                   "get-fps": vid_files,
-                                   "get-info": vid_files,
-                                   "mux-audio": vid_files,
-                                   "rescale": vid_files,
-                                   "rotate": vid_files,
-                                   "slice": vid_files
-                               }})
-
-        arguments_list.append({"opts": ('-o', '--output'),
-                               "action": ComboFullPaths,
-                               "dest": "output",
-                               "default": "",
-                               "help": """Output file. If no output is 
-                                          specified then: if the output is  
-                                          meant to be a video then a video 
-                                          called 'out.mkv' will be created in 
-                                          the input directory; if the output is
-                                          meant to be a directory then a 
-                                          directory called 'out' will be 
-                                          created inside the input 
-                                          directory.
-                                          Note: the chosen output file 
-                                          extension will determine the file
-                                          encoding.""",
-                               "actions_open_type": {
-                                   "task_name": "effmpeg",
-                                   "extract": "save",
-                                   "gen-vid": "save",
-                                   "get-fps": "nothing",
-                                   "get-info": "nothing",
-                                   "mux-audio": "save",
-                                   "rescale": "save",
-                                   "rotate": "save",
-                                   "slice": "save"
-                               },
-                               "filetypes": {
-                                   "extract": None,
-                                   "gen-vid": vid_files,
-                                   "get-fps": None,
-                                   "get-info": None,
-                                   "mux-audio": vid_files,
-                                   "rescale": vid_files,
-                                   "rotate": vid_files,
-                                   "slice": vid_files
-                               }})
-
-        arguments_list.append({"opts": ('-r', '--reference-video'),
-                               "action": ComboFullPaths,
-                               "dest": "ref_vid",
-                               "default": "None",
-                               "help": """Path to reference video if 'input' 
-                                          was not a video.""",
-                               "actions_open_type": {
-                                   "task_name": "effmpeg",
-                                   "extract": "nothing",
-                                   "gen-vid": "load",
-                                   "get-fps": "nothing",
-                                   "get-info": "nothing",
-                                   "mux-audio": "load",
-                                   "rescale": "nothing",
-                                   "rotate": "nothing",
-                                   "slice": "nothing"
-                               },
-                               "filetypes": {
-                                   "extract": None,
-                                   "gen-vid": vid_files,
-                                   "get-fps": None,
-                                   "get-info": None,
-                                   "mux-audio": vid_files,
-                                   "rescale": None,
-                                   "rotate": None,
-                                   "slice": None
-                               }})
-
-        arguments_list.append({"opts": ('-fps', '--fps'),
-                               "type": str,
-                               "dest": "fps",
-                               "default": "-1.0",
-                               "help": """Provide video fps. Can be an integer,
-                                          float or fraction. Negative values 
-                                          will make the program try to get the 
-                                          fps from the input or reference 
-                                          videos."""})
-
-        arguments_list.append({"opts": ("-ef", "--extract-filetype"),
-                               "choices": DataItem.img_ext,
-                               "dest": "extract_ext",
-                               "default": ".png",
-                               "help": """Image format that extracted images
-                                          should be saved as. '.bmp' will offer
-                                          the fastest extraction speed, but
-                                          will take the most storage space.
-                                          '.png' will be slower but will take
-                                          less storage."""})
-
-        arguments_list.append({"opts": ('-s', '--start'),
-                               "type": str,
-                               "dest": "start",
-                               "default": "00:00:00",
-                               "help": """Enter the start time from which an 
-                                          action is to be applied.
-                                          Default: 00:00:00, in HH:MM:SS 
-                                          format. You can also enter the time
-                                          with or without the colons, e.g. 
-                                          00:0000 or 026010."""})
-
-        arguments_list.append({"opts": ('-e', '--end'),
-                               "type": str,
-                               "dest": "end",
-                               "default": "00:00:00",
-                               "help": """Enter the end time to which an action
-                                          is to be applied. If both an end time
-                                          and duration are set, then the end 
-                                          time will be used and the duration 
-                                          will be ignored.
-                                          Default: 00:00:00, in HH:MM:SS."""})
-
-        arguments_list.append({"opts": ('-d', '--duration'),
-                               "type": str,
-                               "dest": "duration",
-                               "default": "00:00:00",
-                               "help": """Enter the duration of the chosen
-                                          action, for example if you enter
-                                          00:00:10 for slice, then the first 10 
-                                          seconds after and including the start
-                                          time will be cut out into a new
-                                          video.
-                                          Default: 00:00:00, in HH:MM:SS 
-                                          format. You can also enter the time
-                                          with or without the colons, e.g. 
-                                          00:0000 or 026010."""})
-
-        arguments_list.append({"opts": ('-m', '--mux-audio'),
-                               "action": "store_true",
-                               "dest": "mux_audio",
-                               "default": False,
-                               "help": """Mux the audio from the reference 
-                                          video into the input video. This
-                                          option is only used for the 'gen-vid'
-                                          action. 'mux-audio' action has this
-                                          turned on implicitly."""})
-
-        arguments_list.append({"opts": ('-tr', '--transpose'),
-                               "choices": ("(0, 90CounterClockwise&VerticalFlip)",
-                                           "(1, 90Clockwise)",
-                                           "(2, 90CounterClockwise)",
-                                           "(3, 90Clockwise&VerticalFlip)",
-                                           "None"),
-                               "type": lambda v: Effmpeg.__parse_transpose(v),
-                               "dest": "transpose",
-                               "default": "None",
-                               "help": """Transpose the video. If transpose is 
-                                          set, then degrees will be ignored. For
-                                          cli you can enter either the number
-                                          or the long command name, 
-                                          e.g. to use (1, 90Clockwise)
-                                          -tr 1 or -tr 90Clockwise"""})
-
-        arguments_list.append({"opts": ('-de', '--degrees'),
-                               "type": str,
-                               "dest": "degrees",
-                               "default": "None",
-                               "help": """Rotate the video clockwise by the 
-                                          given number of degrees."""})
-
-        arguments_list.append({"opts": ('-sc', '--scale'),
-                               "type": str,
-                               "dest": "scale",
-                               "default": "1920x1080",
-                               "help": """Set the new resolution scale if the
-                                          chosen action is 'rescale'."""})
-
-        arguments_list.append({"opts": ('-q', '--quiet'),
-                               "action": "store_true",
-                               "dest": "quiet",
-                               "default": False,
-                               "help": """Reduces output verbosity so that only
-                                          serious errors are printed. If both
-                                          quiet and verbose are set, verbose
-                                          will override quiet."""})
-
-        arguments_list.append({"opts": ('-v', '--verbose'),
-                               "action": "store_true",
-                               "dest": "verbose",
-                               "default": False,
-                               "help": """Increases output verbosity. If both
-                                          quiet and verbose are set, verbose
-                                          will override quiet."""})
-
-        return arguments_list
-
-    def parse_arguments(self, description, subparser, command):
-        parser = subparser.add_parser(
-                command,
-                help="This command lets you easily invoke"
-                     "common ffmpeg commands.",
-                description=description,
-                epilog="Questions and feedback: \
-                        https://github.com/deepfakes/faceswap-playground"
-        )
-
-        for option in self.argument_list:
-            args = option['opts']
-            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
-            parser.add_argument(*args, **kwargs)
-
-        parser.set_defaults(func=self.process_arguments)
-
-    def process_arguments(self, arguments):
-        self.args = arguments
-
+    def process(self):
         # Format action to match the method name
         self.args.action = self.args.action.replace('-', '_')
 
@@ -498,9 +246,9 @@ class Effmpeg(object):
         if self.args.action in self._actions_have_print_output:
             self.print_ = True
 
-        self.process()
+        self.effmpeg_process()
 
-    def process(self):
+    def effmpeg_process(self):
         kwargs = {"input_": self.input,
                   "output": self.output,
                   "ref_vid": self.ref_vid,
@@ -723,23 +471,6 @@ class Effmpeg(object):
         return '.'.join(filename_list)
 
     @staticmethod
-    def __parse_transpose(value):
-        index = 0
-        opts = ["(0, 90CounterClockwise&VerticalFlip)",
-                "(1, 90Clockwise)",
-                "(2, 90CounterClockwise)",
-                "(3, 90Clockwise&VerticalFlip)",
-                "None"]
-        if len(value) == 1:
-            index = int(value)
-        else:
-            for i in range(5):
-                if value in opts[i]:
-                    index = i
-                    break
-        return opts[index]
-
-    @staticmethod
     def __check_is_valid_time(value):
         val = value.replace(':', '')
         return val.isdigit()
@@ -760,18 +491,19 @@ class Effmpeg(object):
 
 
 def bad_args(args):
-    parser.print_help()
+    """ Print help on bad arguments """
+    PARSER.print_help()
     exit(0)
 
 
 if __name__ == "__main__":
     print('"Easy"-ffmpeg wrapper.\n')
 
-    parser = argparse.ArgumentParser()
-    subparser = parser.add_subparsers()
-    sort = Effmpeg(
-            subparser, "effmpeg", "Wrapper for various common ffmpeg commands.")
+    PARSER = FullHelpArgumentParser()
+    SUBPARSER = PARSER.add_subparsers()
+    EFFMPEG = cli.EffmpegArgs(
+        SUBPARSER, "effmpeg", "Wrapper for various common ffmpeg commands.")
+    PARSER.set_defaults(func=bad_args)
+    ARGUMENTS = PARSER.parse_args()
+    ARGUMENTS.func(ARGUMENTS)
 
-    parser.set_defaults(func=bad_args)
-    arguments = parser.parse_args()
-    arguments.func(arguments)

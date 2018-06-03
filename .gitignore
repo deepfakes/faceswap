@@ -1,11 +1,16 @@
 *
+!*.keep
 !*.py
 !*.md
 !*.txt
 !*.png
 !Dockerfile*
 !requirements*
-!icons
 !lib
+!lib/gui
+!lib/gui/.cache
+!lib/gui/.cache/preview
+!lib/gui/.cache/icons
 !scripts
 !plugins
+!tools

@@ -19,15 +19,18 @@ def bad_args(args):
 if __name__ == "__main__":
     PARSER = cli.FullHelpArgumentParser()
     SUBPARSER = PARSER.add_subparsers()
-    EXTRACT = cli.ExtractArgs(
-        SUBPARSER, "extract", "Extract the faces from pictures")
-    TRAIN = cli.TrainArgs(
-        SUBPARSER, "train", "This command trains the model for the two faces A and B")
-    CONVERT = cli.ConvertArgs(
-        SUBPARSER, "convert", "Convert a source image to a new one with the face swapped")
-    GUIPARSERS = {'extract': EXTRACT, 'train': TRAIN, 'convert': CONVERT}
-    GUI = cli.GuiArgs(
-        SUBPARSER, "gui", "Launch the Faceswap Graphical User Interface", GUIPARSERS)
+    EXTRACT = cli.ExtractArgs(SUBPARSER,
+                              "extract",
+                              "Extract the faces from pictures")
+    TRAIN = cli.TrainArgs(SUBPARSER,
+                          "train",
+                          "This command trains the model for the two faces A and B")
+    CONVERT = cli.ConvertArgs(SUBPARSER,
+                              "convert",
+                              "Convert a source image to a new one with the face swapped")
+    GUI = cli.GuiArgs(SUBPARSER,
+                      "gui",
+                      "Launch the Faceswap Graphical User Interface")
     PARSER.set_defaults(func=bad_args)
     ARGUMENTS = PARSER.parse_args()
     ARGUMENTS.func(ARGUMENTS)
