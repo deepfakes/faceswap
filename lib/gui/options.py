@@ -7,7 +7,7 @@ from tkinter import ttk
 import lib.cli as cli
 from lib.Serializer import JSONSerializer
 import tools.cli as ToolsCli
-from .utils import ConsoleOut, FileHandler, Images
+from .utils import FileHandler, Images
 
 class CliOptions(object):
     """ Class and methods for the command line options """
@@ -15,7 +15,6 @@ class CliOptions(object):
         self.categories = ("faceswap", "tools")
         self.commands = dict()
         self.opts = dict()
-
         self.build_options()
 
     def build_options(self):
@@ -191,10 +190,11 @@ class CliOptions(object):
 class Config(object):
     """ Actions for loading and saving Faceswap GUI command configurations """
 
-    def __init__(self, cli_opts):
+    def __init__(self, cli_opts, tk_vars):
         self.cli_opts = cli_opts
         self.serializer = JSONSerializer
         self.filetypes = (("Faceswap files", "*.fsw"), ("All files", "*.*"))
+        self.tk_vars = tk_vars
 
     def load(self, command=None):
         """ Load a saved config file """
@@ -206,13 +206,12 @@ class Config(object):
         for cmd, opts in opts.items():
             self.set_command_args(cmd, opts)
 
-    @staticmethod
-    def get_command_options(cfg, command):
+    def get_command_options(self, cfg, command):
         """ return the saved options for the requested
             command, if not loading global options """
         opts = cfg.get(command, None)
         if not opts:
-            ConsoleOut().clear()
+            self.tk_vars["consoleclear"].set(True)
             print("No " + command + " section found in file")
         return {command: opts}
 

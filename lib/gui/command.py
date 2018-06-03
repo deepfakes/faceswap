@@ -318,7 +318,7 @@ class ActionFrame(ttk.Frame):
         self.title = self.command.title()
 
         self.add_action_button(parent.category, parent.actionbtns, parent.tk_vars)
-        self.add_util_buttons(parent.cli_opts)
+        self.add_util_buttons(parent.cli_opts, parent.tk_vars)
 
     def add_action_button(self, category, actionbtns, tk_vars):
         """ Add the action buttons for page """
@@ -342,12 +342,12 @@ class ActionFrame(ttk.Frame):
         btngen.pack(side=tk.RIGHT, padx=5)
         Tooltip(btngen, text="Output command line options to the console", wraplength=200)
 
-    def add_util_buttons(self, cli_options):
+    def add_util_buttons(self, cli_options, tk_vars):
         """ Add the section utility buttons """
         utlframe = ttk.Frame(self)
         utlframe.pack(side=tk.RIGHT)
 
-        config = Config(cli_options)
+        config = Config(cli_options, tk_vars)
         for utl in ("load", "save", "clear", "reset"):
             img = Images().icons[utl]
             action_cls = config if utl in (("save", "load")) else cli_options

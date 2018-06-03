@@ -172,15 +172,23 @@ class Images(object, metaclass=Singleton):
 
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
-class ConsoleOut(ttk.Frame, metaclass=Singleton):
+class ConsoleOut(ttk.Frame):
     """ The Console out section of the GUI """
 
-    def __init__(self, parent=None, debug=None):
+    def __init__(self, parent, debug, tk_vars):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
                   fill=tk.BOTH, expand=True)
         self.console = tk.Text(self)
+        self.console_clear = tk_vars['consoleclear']
+        self.set_console_clear_var_trace()
         self.debug = debug
+        self.build_console()
+
+    def set_console_clear_var_trace(self):
+        """ Set the trigger actions for the clear console var
+            when it has been triggered from elsewhere """
+        self.console_clear.trace("w", self.clear)
 
     def build_console(self):
         """ Build and place the console """
@@ -201,9 +209,12 @@ class ConsoleOut(ttk.Frame, metaclass=Singleton):
             sys.stdout = SysOutRouter(console=self.console, out_type="stdout")
             sys.stderr = SysOutRouter(console=self.console, out_type="stderr")
 
-    def clear(self):
+    def clear(self, *args):
         """ Clear the console output screen """
+        if not self.console_clear.get():
+            return
         self.console.delete(1.0, tk.END)
+        self.console_clear.set(False)
 
 class SysOutRouter(object):
     """ Route stdout/stderr to the console window """
