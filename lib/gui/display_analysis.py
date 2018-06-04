@@ -217,8 +217,8 @@ class StatsData(ttk.Frame):
         """ Pop up a window and control it's position """
         toplevel = SessionPopUp(self.loaded_data, self.selected_id.get())
         toplevel.title(self.data_popup_title())
-        position = str(self.data_popup_get_position())
-        toplevel.geometry("720x400+{}+{}".format(position, position))
+        position = self.data_popup_get_position()
+        toplevel.geometry("720x400+{}+{}".format(str(position[0]), str(position[1])))
         toplevel.update()
 
     def data_popup_title(self):
@@ -229,14 +229,25 @@ class StatsData(ttk.Frame):
 
     def data_popup_get_position(self):
         """ Get the position of the next window """
-        # TODO Reset position when at edge of screen
-        position = 120
+        initial_position = [120, 120]
+        position = initial_position
         while True:
             if position not in self.popup_positions:
                 self.popup_positions.append(position)
                 break
-            position += 20
+            position = [item + 200 for item in position]
+            initial_position, position = self.data_popup_check_boundaries(initial_position,
+                                                                          position)
         return position
+
+    def data_popup_check_boundaries(self, initial_position, position):
+        """ Check that the popup remains within the screen boundaries """
+        boundary_x = self.winfo_screenwidth() - 120
+        boundary_y = self.winfo_screenheight() - 120
+        if position[0] >= boundary_x or position[1] >= boundary_y:
+            initial_position = [initial_position[0] + 50, initial_position[1]]
+            position = initial_position
+        return initial_position, position
 
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed grap/stats for selected session """
@@ -407,6 +418,7 @@ class SessionPopUp(tk.Toplevel):
     def set_help(control):
         """ Set the helptext for option buttons """
         hlp = ""
+        control = control.lower()
         if control == "reset":
             hlp = "Refresh graph"
         elif control == "save":
