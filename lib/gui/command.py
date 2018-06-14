@@ -2,9 +2,7 @@
 """ The command frame for Faceswap GUI """
 
 import tkinter as tk
-from tkinter import TclError, ttk
-
-from lib.cli import FileFullPaths
+from tkinter import ttk
 
 from .options import Config
 from .tooltip import Tooltip
@@ -96,6 +94,7 @@ class OptionsFrame(ttk.Frame):
         self.chkbtns = self.checkbuttons_frame()
 
         self.build_frame()
+        self.opts.set_context_option(self.command)
 
     def checkbuttons_frame(self):
         """ Build and format frame for holding the check buttons """
@@ -121,7 +120,7 @@ class OptionsFrame(ttk.Frame):
         self.canvas.bind("<Configure>", self.resize_frame)
 
         for option in self.opts.gen_command_options(self.command):
-            optioncontrol = OptionControl(self.opts.opts, option, self.optsframe, self.chkbtns[1])
+            optioncontrol = OptionControl(self.command, option, self.optsframe, self.chkbtns[1])
             optioncontrol.build_full_control()
 
         if self.chkbtns[1].winfo_children():
@@ -147,8 +146,8 @@ class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
     frame """
 
-    def __init__(self, opts, option, option_frame, checkbuttons_frame):
-        self.opts = opts
+    def __init__(self, command, option, option_frame, checkbuttons_frame):
+        self.command = command
         self.option = option
         self.option_frame = option_frame
         self.chkbtns = checkbuttons_frame
@@ -229,15 +228,12 @@ class OptionControl(object):
             ctl["values"] = [choice for choice in choices]
 
         Tooltip(ctl, text=helptext, wraplength=200)
-    #TODO: Review all of the file handling changes brought in by merge Master
+
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
-        if sysbrowser == "combo":
-            img = Images().icons["load"]
-        else:
-            img = Images().icons[sysbrowser]
+        img = Images().icons[sysbrowser]
         action = getattr(self, "ask_" + sysbrowser)
-        filetypes = self.option["filetypes"]
+        filetypes = self.option.get("filetypes", "default")
         fileopn = ttk.Button(frame, image=img,
                              command=lambda cmd=action: cmd(filepath,
                                                             filetypes))
@@ -250,44 +246,21 @@ class OptionControl(object):
             that will store the path to a directory.
             :param filetypes: Unused argument to allow
             filetypes to be given in ask_load(). """
-        dirname = FileHandler("dir").retfile
+        dirname = FileHandler("dir", filetypes).retfile
         if dirname:
             filepath.set(dirname)
 
     @staticmethod
-    def ask_load(filepath, filetypes=None):
+    def ask_load(filepath, filetypes):
         """ Pop-up to get path to a file """
-        if filetypes is None:
-            filename = FileHandler("filename").retfile
-        else:
-            # In case filetypes were not configured properly in the
-            # arguments_list
-            try:
-                filename = FileHandler("filename", filetype=filetypes).retfile
-            except TclError:
-                filetypes = FileFullPaths.prep_filetypes(filetypes)
-                filename = FileHandler("filename", filetype=filetypes).retfile
-            except TclError:
-                filename = FileHandler("filename").retfile
+        filename = FileHandler("filename", filetypes).retfile
         if filename:
             filepath.set(filename)
 
-    #TODO CHECK THIS WORKS. AB ORIGINALLY HAD IN AS ASKSAVEASFILENAME
     @staticmethod
     def ask_save(filepath, filetypes=None):
         """ Pop-up to get path to save a new file """
-        if filetypes is None:
-            filename = FileHandler("save").retfile
-        else:
-            # In case filetypes were not configured properly in the
-            # arguments_list
-            try:
-                filename = FileHandler("save", filetype=filetypes).retfile
-            except TclError:
-                filetypes = FileFullPaths.prep_filetypes(filetypes)
-                filename = FileHandler("save", filetype=filetypes).retfile
-            except TclError:
-                filename = FileHandler("save").retfile
+        filename = FileHandler("savefilename", filetypes).retfile
         if filename:
             filepath.set(filename)
 
@@ -296,16 +269,15 @@ class OptionControl(object):
         """ Method that does nothing, used for disabling open/save pop up """
         return
 
-    def ask_combo(self, filepath, filetypes):
+    def ask_context(self, filepath, filetypes):
         """ Method to pop the correct dialog depending on context """
-        actions_open_type = self.option["actions_open_type"]
-        task_name = actions_open_type["task_name"]
-        #TODO find way to clean up way to get correct dialogue without having to pass whole dict
-        # through for this one task
-        chosen_action = self.opts[task_name][0]["value"].get()
-        action = getattr(self, "ask_" + actions_open_type[chosen_action])
-        filetypes = filetypes[chosen_action]
-        action(filepath, filetypes)
+        selected_action = self.option['action_option'].get()
+        filename = FileHandler("context",
+                               filetypes,
+                               command=self.command,
+                               action=selected_action).retfile
+        if filename:
+            filepath.set(filename)
 
 class ActionFrame(ttk.Frame):
     """Action Frame - Displays action controls for the command tab """
@@ -318,7 +290,7 @@ class ActionFrame(ttk.Frame):
         self.title = self.command.title()
 
         self.add_action_button(parent.category, parent.actionbtns, parent.tk_vars)
-        self.add_util_buttons(parent.cli_opts)
+        self.add_util_buttons(parent.cli_opts, parent.tk_vars)
 
     def add_action_button(self, category, actionbtns, tk_vars):
         """ Add the action buttons for page """
@@ -342,12 +314,12 @@ class ActionFrame(ttk.Frame):
         btngen.pack(side=tk.RIGHT, padx=5)
         Tooltip(btngen, text="Output command line options to the console", wraplength=200)
 
-    def add_util_buttons(self, cli_options):
+    def add_util_buttons(self, cli_options, tk_vars):
         """ Add the section utility buttons """
         utlframe = ttk.Frame(self)
         utlframe.pack(side=tk.RIGHT)
 
-        config = Config(cli_options)
+        config = Config(cli_options, tk_vars)
         for utl in ("load", "save", "clear", "reset"):
             img = Images().icons[utl]
             action_cls = config if utl in (("save", "load")) else cli_options

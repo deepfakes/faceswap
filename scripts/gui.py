@@ -1,7 +1,6 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
 
-import ctypes
 import os
 import sys
 import tkinter as tk
@@ -22,9 +21,9 @@ class FaceswapGui(tk.Tk):
         self.images = Images(pathcache)
         self.cliopts = CliOptions()
         self.session = CurrentSession()
-        self.wrapper = ProcessWrapper(self.session, pathscript, self.cliopts)
+        statusbar = StatusBar(self)
+        self.wrapper = ProcessWrapper(statusbar, self.session, pathscript, self.cliopts)
 
-        StatusBar(self)
         self.images.delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
 
@@ -35,19 +34,16 @@ class FaceswapGui(tk.Tk):
 
         topcontainer, bottomcontainer = self.add_containers()
 
-        console = ConsoleOut(bottomcontainer, debug_console)
-        console.build_console()
-
         CommandNotebook(topcontainer, self.cliopts, self.wrapper.tk_vars)
-
         DisplayNotebook(topcontainer, self.session, self.wrapper.tk_vars)
+        ConsoleOut(bottomcontainer, debug_console, self.wrapper.tk_vars)
 
     def menu(self):
         """ Menu bar for loading and saving configs """
         menubar = tk.Menu(self)
         filemenu = tk.Menu(menubar, tearoff=0)
 
-        config = Config(self.cliopts)
+        config = Config(self.cliopts, self.wrapper.tk_vars)
 
         filemenu.add_command(label="Load full config...",
                              underline=0,
@@ -109,16 +105,7 @@ class Gui(object):
         self.args = arguments
         self.root = FaceswapGui(pathscript)
 
-    @staticmethod
-    def set_windows_font_scaling():
-        """ Set process to be dpi aware for windows users
-            to fix blurry scaled fonts """
-        if os.name == "nt":
-            user32 = ctypes.WinDLL("user32")
-            user32.SetProcessDPIAware(True)
-
     def process(self):
         """ Builds the GUI """
-        self.set_windows_font_scaling()
         self.root.build_gui(self.args.debug)
         self.root.mainloop()

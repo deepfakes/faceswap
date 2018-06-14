@@ -10,20 +10,20 @@ import tkinter as tk
 from threading import Thread
 from time import time
 
-from .statusbar import StatusBar
-from .utils import ConsoleOut, Images
+from .utils import Images
 
 class ProcessWrapper(object):
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, session=None, pathscript=None, cliopts=None):
+    def __init__(self, statusbar, session=None, pathscript=None, cliopts=None):
         self.tk_vars = self.set_tk_vars()
         self.session = session
         self.pathscript = pathscript
         self.cliopts = cliopts
-        self.task = FaceswapControl(self)
         self.command = None
+        self.statusbar = statusbar
+        self.task = FaceswapControl(self)
 
     def set_tk_vars(self):
         """ TK Variables to be triggered by ProcessWrapper to indicate
@@ -42,10 +42,14 @@ class ProcessWrapper(object):
         generatecommand.set(None)
         generatecommand.trace("w", self.generate_command)
 
+        consoleclear = tk.BooleanVar()
+        consoleclear.set(False)
+
         return {"display": display,
                 "runningtask": runningtask,
                 "action": actioncommand,
-                "generate": generatecommand}
+                "generate": generatecommand,
+                "consoleclear": consoleclear}
 
     def action_command(self, *args):
         """ The action to perform when the action button is pressed """
@@ -67,20 +71,19 @@ class ProcessWrapper(object):
             return
         category, command = self.tk_vars["generate"].get().split(",")
         args = self.build_args(category, command=command, generate=True)
-        ConsoleOut().clear()
+        self.tk_vars["consoleclear"].set(True)
         print(" ".join(args))
         self.tk_vars["generate"].set(None)
 
     def prepare(self, category):
         """ Prepare the environment for execution """
         self.tk_vars["runningtask"].set(True)
-
-        ConsoleOut().clear()
+        self.tk_vars["consoleclear"].set(True)
         print("Loading...")
 
-        StatusBar().status_message.set("Executing - " + self.command + ".py")
+        self.statusbar.status_message.set("Executing - " + self.command + ".py")
         mode = "indeterminate" if self.command == "train" else "determinate"
-        StatusBar().progress_start(mode)
+        self.statusbar.progress_start(mode)
 
         args = self.build_args(category)
         self.tk_vars["display"].set(self.command)
@@ -114,8 +117,8 @@ class ProcessWrapper(object):
     def terminate(self, message):
         """ Finalise wrapper when process has exited """
         self.tk_vars["runningtask"].set(False)
-        StatusBar().progress_stop()
-        StatusBar().status_message.set(message)
+        self.statusbar.progress_stop()
+        self.statusbar.status_message.set(message)
         self.tk_vars["display"].set(None)
         Images().delete_preview()
         if self.command == "train":
@@ -131,6 +134,7 @@ class FaceswapControl(object):
     def __init__(self, wrapper):
 
         self.wrapper = wrapper
+        self.statusbar = wrapper.statusbar
         self.command = None
         self.args = None
         self.process = None
@@ -217,7 +221,7 @@ class FaceswapControl(object):
         iterations = self.wrapper.session.stats["iterations"]
 
         message = "Elapsed: {}  Iteration: {}  {}".format(elapsed, iterations, message)
-        StatusBar().progress_update(message, 0, False)
+        self.statusbar.progress_update(message, 0, False)
         return True
 
     def capture_tqdm(self, string):
@@ -235,7 +239,7 @@ class FaceswapControl(object):
         current, total = processed.split("/")
         position = int((float(current) / float(total)) * 1000)
 
-        StatusBar().progress_update(message, position, True)
+        self.statusbar.progress_update(message, position, True)
         return True
 
     def terminate(self):

@@ -23,34 +23,87 @@ class Singleton(type):
 
 class FileHandler(object):
     """ Raise a filedialog box and capture input """
-    def __init__(self, handletype, filetype=None):
+    def __init__(self, handletype, filetype, command=None, action=None):
 
-        self.filetypes = {"config": (("Faceswap config files", "*.fsw"), ("All files", "*.*")),
+        self.filetypes = {"default": (("All files", "*.*"), ),
+                          "alignments":(("JSON", "*.json"), ("Pickle", "*.p"),
+                                        ("YAML", "*.yaml"), ("All files", "*.*")),
+                          "config": (("Faceswap config files", "*.fsw"), ("All files", "*.*")),
+                          "csv":(("Comma separated values", "*.csv"), ("All files", "*.*")),
+                          "image":(("Bitmap", "*.bmp"), ("JPG", "*.jpeg", "*.jpg"),
+                                   ("PNG", "*.png"), ("TIFF", "*.tif", "*.tiff"),
+                                   ("All files", "*.*")),
                           "session": (("Faceswap session files", "*.fss"), ("All files", "*.*")),
-                          "csv":(("Comma separated values", "*.csv"), ("All files", "*.*"))}
-        self.retfile = getattr(self, handletype.lower())(filetype)
+                          "video":(("Audio Video Interleave", "*.avi"), ("Flash Video", "*.flv"),
+                                   ("Matroska", "*.mkv"), ("MOV", "*.mov"),
+                                   ("MP4", "*.mp4"), ("MPEG", "*.mpeg"),
+                                   ("WebM", "*.webm"), ("All files", "*.*"))}
+        self.contexts = {"effmpeg": {"extract": "open",
+                                     "gen-vid": "dir",
+                                     "get-fps": "open",
+                                     "get-info": "open",
+                                     "mux-audio": "open",
+                                     "rescale": "open",
+                                     "rotate": "open",
+                                     "slice": "open"}}
+        self.defaults = self.set_defaults()
+        self.kwargs = self.set_kwargs(handletype, filetype, command, action)
+        self.retfile = getattr(self, handletype.lower())()
 
-    def open(self, filetype):
+    def set_defaults(self):
+        """ Set the default filetype to be first in list of filetypes,
+            or set a custom filetype if the first is not correct """
+        defaults = {key: val[0][1].replace("*", "") for key, val in self.filetypes.items()}
+        defaults["default"] = None
+        defaults["video"] = ".mp4"
+        defaults["image"] = ".png"
+        return defaults
+
+    def set_kwargs(self, handletype, filetype, command, action):
+        """ Generate the required kwargs for the requested browser """
+        kwargs = dict()
+        if handletype.lower() in ("open", "save", "filename", "savefilename"):
+            kwargs["filetypes"] = self.filetypes[filetype]
+            if self.defaults.get(filetype, None):
+                kwargs['defaultextension'] = self.defaults[filetype]
+        if handletype.lower() == "save":
+            kwargs["mode"] = "w"
+        if handletype.lower() == "open":
+            kwargs["mode"] = "r"
+        if handletype.lower() == "context":
+            kwargs["filetype"] = filetype
+            kwargs["command"] = command
+            kwargs["action"] = action
+        return kwargs
+
+    def open(self):
         """ Open a file """
-        return filedialog.askopenfile(mode="r", filetypes=self.filetypes[filetype])
+        return filedialog.askopenfile(**self.kwargs)
 
-    def save(self, filetype):
+    def save(self):
         """ Save a file """
-        default = self.filetypes[filetype][0][1].replace("*", "")
-        return filedialog.asksaveasfile(mode="w",
-                                        filetypes=self.filetypes[filetype],
-                                        defaultextension=default)
+        return filedialog.asksaveasfile(**self.kwargs)
 
-    @staticmethod
-    def dir(filetype):
+    def dir(self):
         """ Get a directory location """
-        return filedialog.askdirectory()
+        return filedialog.askdirectory(**self.kwargs)
 
-    @staticmethod
-    def filename(filetype):
+    def filename(self):
         """ Get an existing file location """
-        return filedialog.askopenfilename()
+        return filedialog.askopenfilename(**self.kwargs)
 
+    def savefilename(self):
+        """ Get a save filelocation """
+        return filedialog.asksaveasfilename(**self.kwargs)
+
+    def context(self):
+        """ Choose the correct file browser action based on context """
+        command = self.kwargs["command"]
+        action = self.kwargs["action"]
+        filetype = self.kwargs["filetype"]
+        handletype = self.contexts[command][action]
+        self.kwargs = self.set_kwargs(handletype, filetype, command, action)
+        self.retfile = getattr(self, handletype.lower())()
 
 class Images(object, metaclass=Singleton):
     """ Holds locations of images and actual images """
@@ -65,6 +118,7 @@ class Images(object, metaclass=Singleton):
         self.icons = dict()
         self.icons["folder"] = tk.PhotoImage(file=os.path.join(self.pathicons, "open_folder.png"))
         self.icons["load"] = tk.PhotoImage(file=os.path.join(self.pathicons, "open_file.png"))
+        self.icons["context"] = tk.PhotoImage(file=os.path.join(self.pathicons, "open_file.png"))
         self.icons["save"] = tk.PhotoImage(file=os.path.join(self.pathicons, "save.png"))
         self.icons["reset"] = tk.PhotoImage(file=os.path.join(self.pathicons, "reset.png"))
         self.icons["clear"] = tk.PhotoImage(file=os.path.join(self.pathicons, "clear.png"))
@@ -172,15 +226,23 @@ class Images(object, metaclass=Singleton):
 
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
-class ConsoleOut(ttk.Frame, metaclass=Singleton):
+class ConsoleOut(ttk.Frame):
     """ The Console out section of the GUI """
 
-    def __init__(self, parent=None, debug=None):
+    def __init__(self, parent, debug, tk_vars):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
                   fill=tk.BOTH, expand=True)
         self.console = tk.Text(self)
+        self.console_clear = tk_vars['consoleclear']
+        self.set_console_clear_var_trace()
         self.debug = debug
+        self.build_console()
+
+    def set_console_clear_var_trace(self):
+        """ Set the trigger actions for the clear console var
+            when it has been triggered from elsewhere """
+        self.console_clear.trace("w", self.clear)
 
     def build_console(self):
         """ Build and place the console """
@@ -201,9 +263,12 @@ class ConsoleOut(ttk.Frame, metaclass=Singleton):
             sys.stdout = SysOutRouter(console=self.console, out_type="stdout")
             sys.stderr = SysOutRouter(console=self.console, out_type="stderr")
 
-    def clear(self):
+    def clear(self, *args):
         """ Clear the console output screen """
+        if not self.console_clear.get():
+            return
         self.console.delete(1.0, tk.END)
+        self.console_clear.set(False)
 
 class SysOutRouter(object):
     """ Route stdout/stderr to the console window """

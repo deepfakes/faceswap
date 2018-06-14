@@ -4,13 +4,11 @@
 import tkinter as tk
 from tkinter import ttk
 
-from .utils import Singleton
-
-class StatusBar(ttk.Frame, metaclass=Singleton):
+class StatusBar(ttk.Frame):
     """ Status Bar for displaying the Status Message and
         Progress Bar """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=False)
 

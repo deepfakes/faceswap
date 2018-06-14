@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 from lib.cli import FaceSwapArgs
-from lib.cli import DirFullPaths, FileFullPaths, ComboFullPaths
-from lib.utils import _image_extensions, _video_extensions
+from lib.cli import ContextFullPaths, DirFullPaths, FileFullPaths, SaveFileFullPaths
+from lib.utils import _image_extensions
 
 
 class EffmpegArgs(FaceSwapArgs):
@@ -25,8 +25,6 @@ class EffmpegArgs(FaceSwapArgs):
         return opts[index]
 
     def get_argument_list(self):
-        vid_files = FileFullPaths.prep_filetypes([["Video Files",
-                                                   _video_extensions]])
         argument_list = list()
         argument_list.append({"opts": ('-a', '--action'),
                               "dest": "action",
@@ -42,33 +40,16 @@ class EffmpegArgs(FaceSwapArgs):
                                       "fps."})
 
         argument_list.append({"opts": ('-i', '--input'),
-                              "action": ComboFullPaths,
+                              "action": ContextFullPaths,
                               "dest": "input",
                               "default": "input",
                               "help": "Input file.",
                               "required": True,
-                              "actions_open_type": {
-                                  "task_name": "effmpeg",
-                                  "extract": "load",
-                                  "gen-vid": "folder",
-                                  "get-fps": "load",
-                                  "get-info": "load",
-                                  "mux-audio": "load",
-                                  "rescale": "load",
-                                  "rotate": "load",
-                                  "slice": "load",},
-                              "filetypes": {
-                                  "extract": vid_files,
-                                  "gen-vid": None,
-                                  "get-fps": vid_files,
-                                  "get-info": vid_files,
-                                  "mux-audio": vid_files,
-                                  "rescale": vid_files,
-                                  "rotate": vid_files,
-                                  "slice": vid_files}})
+                              "action_option": "-a",
+                              "filetypes": "video"})
 
         argument_list.append({"opts": ('-o', '--output'),
-                              "action": ComboFullPaths,
+                              "action": SaveFileFullPaths,
                               "dest": "output",
                               "default": "",
                               "help": "Output file. If no output is "
@@ -83,50 +64,15 @@ class EffmpegArgs(FaceSwapArgs):
                                       "Note: the chosen output file "
                                       "extension will determine the file "
                                       "encoding.",
-                              "actions_open_type": {
-                                  "task_name": "effmpeg",
-                                  "extract": "save",
-                                  "gen-vid": "save",
-                                  "get-fps": "nothing",
-                                  "get-info": "nothing",
-                                  "mux-audio": "save",
-                                  "rescale": "save",
-                                  "rotate": "save",
-                                  "slice": "save"},
-                              "filetypes": {
-                                  "extract": None,
-                                  "gen-vid": vid_files,
-                                  "get-fps": None,
-                                  "get-info": None,
-                                  "mux-audio": vid_files,
-                                  "rescale": vid_files,
-                                  "rotate": vid_files,
-                                  "slice": vid_files}})
+                              "filetypes": "video"})
 
         argument_list.append({"opts": ('-r', '--reference-video'),
-                              "action": ComboFullPaths,
+                              "action": FileFullPaths,
                               "dest": "ref_vid",
                               "default": None,
                               "help": "Path to reference video if 'input' "
                                       "was not a video.",
-                              "actions_open_type": {
-                                  "task_name": "effmpeg",
-                                  "extract": "nothing",
-                                  "gen-vid": "load",
-                                  "get-fps": "nothing",
-                                  "get-info": "nothing",
-                                  "mux-audio": "load",
-                                  "rescale": "nothing",
-                                  "rotate": "nothing",
-                                  "slice": "nothing"},
-                              "filetypes": {
-                                  "extract": None,
-                                  "gen-vid": vid_files,
-                                  "get-fps": None,
-                                  "get-info": None,
-                                  "mux-audio": vid_files,
-                                  "rescale": None,
-                                  "rotate": None,}})
+                              "filetypes": "video"})
 
         argument_list.append({"opts": ('-fps', '--fps'),
                               "type": str,
@@ -251,13 +197,7 @@ class SortArgs(FaceSwapArgs):
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        log_filetypes = [["Serializers", ['json', 'yaml']],
-                         ["JSON", ["json"]],
-                         ["YAML", ["yaml"]]]
-        log_filetypes = FileFullPaths.prep_filetypes(log_filetypes)
-
         argument_list = list()
-
         argument_list.append({"opts": ('-i', '--input'),
                               "action": DirFullPaths,
                               "dest": "input_dir",
@@ -381,8 +321,8 @@ class SortArgs(FaceSwapArgs):
                                       "in the input directory."})
 
         argument_list.append({"opts": ('-lf', '--log-file'),
-                              "action": FileFullPaths,
-                              "filetypes": log_filetypes,
+                              "action": SaveFileFullPaths,
+                              "filetypes": "alignments",
                               "dest": 'log_file_path',
                               "default": 'sort_log.json',
                               "help": "Specify a log file to use for saving "

@@ -7,7 +7,7 @@ from tkinter import ttk
 import lib.cli as cli
 from lib.Serializer import JSONSerializer
 import tools.cli as ToolsCli
-from .utils import ConsoleOut, FileHandler, Images
+from .utils import FileHandler, Images
 
 class CliOptions(object):
     """ Class and methods for the command line options """
@@ -15,7 +15,6 @@ class CliOptions(object):
         self.categories = ("faceswap", "tools")
         self.commands = dict()
         self.opts = dict()
-
         self.build_options()
 
     def build_options(self):
@@ -74,13 +73,13 @@ class CliOptions(object):
         for opt in command_options:
             if opt.get("help", "") == SUPPRESS:
                 command_options.remove(opt)
-            ctl, sysbrowser, filetypes, actions_open_types = self.set_control(opt)
+            ctl, sysbrowser, filetypes, action_option = self.set_control(opt)
             opt["control_title"] = self.set_control_title(
                 opt.get("opts", ""))
             opt["control"] = ctl
             opt["filesystem_browser"] = sysbrowser
             opt["filetypes"] = filetypes
-            opt["actions_open_types"] = actions_open_types
+            opt["action_option"] = action_option
 
     @staticmethod
     def set_control_title(opts):
@@ -89,29 +88,49 @@ class CliOptions(object):
         ctltitle = ctltitle.replace("-", " ").replace("_", " ").strip().title()
         return ctltitle
 
-    @staticmethod
-    def set_control(option):
+    def set_control(self, option):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
-        filetypes = None
-        actions_open_type = None
+        action = option.get("action", None)
+        action_option = option.get("action_option", None)
+        filetypes = option.get("filetypes", None)
         ctl = ttk.Entry
-        if option.get("action", "") == cli.FullPaths:
-            sysbrowser = "folder"
-        elif option.get("action", "") == cli.DirFullPaths:
-            sysbrowser = "folder"
-        elif option.get("action", "") == cli.FileFullPaths:
-            sysbrowser = "load"
-            filetypes = option.get("filetypes", None)
-        elif option.get("action", "") == cli.ComboFullPaths:
-            sysbrowser = "combo"
-            actions_open_type = option["actions_open_type"]
-            filetypes = option.get("filetypes", None)
+        if action in (cli.FullPaths,
+                      cli.DirFullPaths,
+                      cli.FileFullPaths,
+                      cli.SaveFileFullPaths,
+                      cli.ContextFullPaths):
+            sysbrowser, filetypes = self.set_sysbrowser(action,
+                                                        filetypes,
+                                                        action_option)
         elif option.get("choices", "") != "":
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":
             ctl = ttk.Checkbutton
-        return ctl, sysbrowser, filetypes, actions_open_type
+        return ctl, sysbrowser, filetypes, action_option
+
+    @staticmethod
+    def set_sysbrowser(action, filetypes, action_option):
+        """ Set the correct file system browser and filetypes
+            for the passed in action """
+        sysbrowser = "folder"
+        filetypes = "default" if not filetypes else filetypes
+        if action == cli.FileFullPaths:
+            sysbrowser = "load"
+        elif action == cli.SaveFileFullPaths:
+            sysbrowser = "save"
+        elif action == cli.ContextFullPaths and action_option:
+            sysbrowser = "context"
+        return sysbrowser, filetypes
+
+    def set_context_option(self, command):
+        """ Set the tk_var for the source action option
+            that dictates the context sensitive file browser. """
+        actions = {item["opts"][0]: item["value"] for item in self.gen_command_options(command)}
+        for opt in self.gen_command_options(command):
+            if opt["filesystem_browser"] == "context":
+                opt["action_option"] = actions[opt['action_option']]
+                break
 
     def gen_command_options(self, command):
         """ Yield each option for specified command """
@@ -191,10 +210,10 @@ class CliOptions(object):
 class Config(object):
     """ Actions for loading and saving Faceswap GUI command configurations """
 
-    def __init__(self, cli_opts):
+    def __init__(self, cli_opts, tk_vars):
         self.cli_opts = cli_opts
         self.serializer = JSONSerializer
-        self.filetypes = (("Faceswap files", "*.fsw"), ("All files", "*.*"))
+        self.tk_vars = tk_vars
 
     def load(self, command=None):
         """ Load a saved config file """
@@ -206,13 +225,12 @@ class Config(object):
         for cmd, opts in opts.items():
             self.set_command_args(cmd, opts)
 
-    @staticmethod
-    def get_command_options(cfg, command):
+    def get_command_options(self, cfg, command):
         """ return the saved options for the requested
             command, if not loading global options """
         opts = cfg.get(command, None)
         if not opts:
-            ConsoleOut().clear()
+            self.tk_vars["consoleclear"].set(True)
             print("No " + command + " section found in file")
         return {command: opts}
 
