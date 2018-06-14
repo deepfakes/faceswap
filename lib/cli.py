@@ -97,14 +97,7 @@ class FileFullPaths(FullPaths):
     """
     Class that gui uses to determine if you need to open a file.
 
-    Filetypes added as an argparse argument must be an iterable, i.e. a
-    list of lists, tuple of tuples, list of tuples etc... formatted like so:
-        [("File Type", ["*.ext", "*.extension"])]
-    A more realistic example:
-        [("Video File", ["*.mkv", "mp4", "webm"])]
-
-    If the file extensions are not prepended with '*.', use the
-    prep_filetypes() method to format them in the arguments_list.
+    see lib/gui/utils.py FileHandler for current GUI filetypes
     """
     def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  **kwargs):
@@ -112,39 +105,6 @@ class FileFullPaths(FullPaths):
         if nargs is not None:
             raise ValueError("nargs not allowed")
         self.filetypes = filetypes
-
-    @staticmethod
-    def prep_filetypes(filetypes):
-        """ Prepare the filetypes for required file """
-        all_files = ("All Files", "*.*")
-        filetypes_l = list()
-        for filetype in filetypes:
-            filetypes_l.append(FileFullPaths._process_filetypes(filetype))
-        filetypes_l.append(all_files)
-        return tuple(filetypes_l)
-
-    @staticmethod
-    def _process_filetypes(filetypes):
-        """        """
-        if filetypes is None:
-            return None
-
-        filetypes_name = filetypes[0]
-        filetypes_l = filetypes[1]
-        if isinstance(filetypes_l, (list, tuple)) and all("*." in i for i in filetypes_l):
-            return filetypes  # assume filetypes properly formatted
-
-        if not isinstance(filetypes_l, list) and not isinstance(filetypes_l, tuple):
-            raise ValueError("The filetypes extensions list was "
-                             "neither a list nor a tuple: "
-                             "{}".format(filetypes_l))
-
-        filetypes_list = list()
-        for filetype in filetypes_l:
-            filetype = filetype.strip("*.")
-            filetype = filetype.strip(";")
-            filetypes_list.append("*." + filetype)
-        return filetypes_name, filetypes_list
 
     def _get_kwargs(self):
         names = [
@@ -161,37 +121,30 @@ class FileFullPaths(FullPaths):
         ]
         return [(name, getattr(self, name)) for name in names]
 
+class SaveFileFullPaths(FileFullPaths):
+    """
+    Class that gui uses to determine if you need to save a file.
 
-class ComboFullPaths(FileFullPaths):
+    see lib/gui/utils.py FileHandler for current GUI filetypes
+    """
+    pass
+
+class ContextFullPaths(FileFullPaths):
     """
     Class that gui uses to determine if you need to open a file or a
     directory based on which action you are choosing
+
+    To use ContextFullPaths the action_option item should indicate which
+    cli option dictates the context of the filesystem dialogue
+
+    Bespoke actions are then set in lib/gui/utils.py FileHandler
     """
-    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
-                 actions_open_type=None, **kwargs):
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None, **kwargs):
         if nargs is not None:
             raise ValueError("nargs not allowed")
-        super(ComboFullPaths, self).__init__(option_strings, dest,
-                                             filetypes=None, **kwargs)
-
-        self.actions_open_type = actions_open_type
+        super(ContextFullPaths, self).__init__(option_strings, dest,
+                                               filetypes=None, **kwargs)
         self.filetypes = filetypes
-
-    @staticmethod
-    def prep_filetypes(filetypes):
-        """ Prepare the filetypes for required file """
-        all_files = ("All Files", "*.*")
-        filetypes_d = dict()
-        for key, val in filetypes.items():
-            filetypes_d[key] = ()
-            if val is None:
-                filetypes_d[key] = None
-                continue
-            filetypes_l = list()
-            for filetype in val:
-                filetypes_l.append(ComboFullPaths._process_filetypes(filetype))
-            filetypes_d[key] = (tuple(filetypes_l), all_files)
-        return filetypes_d
 
     def _get_kwargs(self):
         names = [
@@ -205,7 +158,7 @@ class ComboFullPaths(FileFullPaths):
             "help",
             "metavar",
             "filetypes",
-            "actions_open_type"
+            "action_option"
         ]
         return [(name, getattr(self, name)) for name in names]
 
@@ -283,11 +236,6 @@ class ExtractConvertArgs(FaceSwapArgs):
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        alignments_filetypes = [["Serializers", ["json", "p", "yaml"]],
-                                ["JSON", ["json"]],
-                                ["Pickle", ["p"]],
-                                ["YAML", ["yaml"]]]
-        alignments_filetypes = FileFullPaths.prep_filetypes(alignments_filetypes)
         argument_list = list()
         argument_list.append({"opts": ("-i", "--input-dir"),
                               "action": DirFullPaths,
@@ -305,7 +253,7 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "Defaults to 'output'"})
         argument_list.append({"opts": ("--alignments", ),
                               "action": FileFullPaths,
-                              "filetypes": alignments_filetypes,
+                              "filetypes": 'alignments',
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})

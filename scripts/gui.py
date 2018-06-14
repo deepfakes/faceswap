@@ -1,7 +1,6 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
 
-import ctypes
 import os
 import sys
 import tkinter as tk
@@ -106,16 +105,7 @@ class Gui(object):
         self.args = arguments
         self.root = FaceswapGui(pathscript)
 
-    @staticmethod
-    def set_windows_font_scaling():
-        """ Set process to be dpi aware for windows users
-            to fix blurry scaled fonts """
-        if os.name == "nt":
-            user32 = ctypes.WinDLL("user32")
-            user32.SetProcessDPIAware(True)
-
     def process(self):
         """ Builds the GUI """
-        self.set_windows_font_scaling()
         self.root.build_gui(self.args.debug)
         self.root.mainloop()
