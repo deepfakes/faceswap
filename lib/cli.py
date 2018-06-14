@@ -22,7 +22,7 @@ class ScriptExecutor(object):
     def import_script(self):
         """ Only import a script's modules when running that script."""
         self.test_for_gui()
-        cmd = sys.argv[0]
+        cmd = os.path.basename(sys.argv[0])
         src = "tools" if cmd == "tools.py" else "scripts"
         mod = ".".join((src, self.command.lower()))
         module = import_module(mod)
@@ -139,11 +139,13 @@ class ContextFullPaths(FileFullPaths):
 
     Bespoke actions are then set in lib/gui/utils.py FileHandler
     """
-    def __init__(self, option_strings, dest, nargs=None, filetypes=None, **kwargs):
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
+                 action_option=None, **kwargs):
         if nargs is not None:
             raise ValueError("nargs not allowed")
         super(ContextFullPaths, self).__init__(option_strings, dest,
                                                filetypes=None, **kwargs)
+        self.action_option = action_option
         self.filetypes = filetypes
 
     def _get_kwargs(self):

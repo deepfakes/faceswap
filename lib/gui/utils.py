@@ -65,7 +65,6 @@ class FileHandler(object):
         if handletype.lower() in ("open", "save", "filename", "savefilename"):
             kwargs["filetypes"] = self.filetypes[filetype]
             if self.defaults.get(filetype, None):
-                print(self.defaults[filetype])
                 kwargs['defaultextension'] = self.defaults[filetype]
         if handletype.lower() == "save":
             kwargs["mode"] = "w"
