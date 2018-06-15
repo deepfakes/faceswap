@@ -7,7 +7,6 @@ from lib.training_data import TrainingDataGenerator, stack_images
 
 
 TRANSFORM_PRC = 115.
-#TRANSFORM_PRC = 150.
 
 
 class Trainer():
@@ -22,13 +21,15 @@ class Trainer():
     def __init__(self, model, fn_A, fn_B, batch_size, *args):
         self.batch_size = batch_size
         self.model = model
+        from timeit import default_timer as clock
+        self._clock = clock
+        
 
-        #generator = TrainingDataGenerator(self.random_transform_args, 160)
-                
+        #generator = TrainingDataGenerator(self.random_transform_args, 160)                
         # make sre to keep zoom=2 or you won't get 128x128 vectors as input
         #generator = TrainingDataGenerator(self.random_transform_args, 220, 5, zoom=2)
-        generator = TrainingDataGenerator(self.random_transform_args, 160, 6, zoom=2)
         #generator = TrainingDataGenerator(self.random_transform_args, 180, 7, zoom=2)
+        generator = TrainingDataGenerator(self.random_transform_args, 160, 5, zoom=2)        
         
         self.images_A = generator.minibatchAB(fn_A, self.batch_size)
         self.images_B = generator.minibatchAB(fn_B, self.batch_size)
@@ -37,19 +38,22 @@ class Trainer():
         
 
     def train_one_step(self, iter_no, viewer):
-  
+        when = self._clock()
         _, warped_A, target_A = next(self.images_A)
         _, warped_B, target_B = next(self.images_B)
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)        
-                        
-        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(
-            time.strftime("%H:%M:%S"), iter_no, loss_A, loss_B),
+        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
+        
+        self.model._epoch_no += 1        
+                    
+        print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
+            time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A, loss_B),
             end='\r')
+        
 
         if viewer is not None:
-            viewer(self.show_sample(target_A[0:24], target_B[0:24]), "training using {}, bs={}".format(self.model, self.batch_size))
+            viewer(self.show_sample(target_A[0:8], target_B[0:8]), "training using {}, bs={}".format(self.model, self.batch_size))
             
 
     def show_sample(self, test_A, test_B):
