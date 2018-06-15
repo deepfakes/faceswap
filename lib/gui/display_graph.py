@@ -149,6 +149,8 @@ class GraphBase(ttk.Frame):
         ymin, ymax = list(), list()
         for item in data:
             dataset = list(filter(lambda x: x is not None, item))
+            if not dataset:
+                continue
             ymin.append(min(dataset) * 1000)
             ymax.append(max(dataset) * 1000)
         ymin = floor(min(ymin)) / 1000
