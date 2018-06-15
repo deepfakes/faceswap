@@ -287,22 +287,17 @@ class Model():
         except IOError as e:
             pass                               
         
+        print('\nsaving model weights', end='', flush=True)        
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         # thought maybe I/O bound, sometimes saving in parallel is faster
-        threads = []
-        t = Thread(target=self.encoder.save_weights, args=(str(self.model_dir / hdf['encoderH5']),))
-        threads.append(t)         
-        t = Thread(target=self.decoder_A.save_weights, args=(str(self.model_dir / hdf['decoder_AH5']),))
-        threads.append(t)
-        t = Thread(target=self.decoder_B.save_weights, args=(str(self.model_dir / hdf['decoder_BH5']),))
-        threads.append(t)
-        
-        for thread in threads:
-            thread.start()            
-        
-        while any([t.is_alive() for t in threads]):
-            sleep(0.1)
-            
-        print('saved model weights')              
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
+            for future in as_completed(futures):
+                future.result()
+                print('.', end='', flush=True)  
+
+        print('done', flush=True)              
     
                            
     @property
@@ -319,7 +314,7 @@ class Model():
              
     
     def __str__(self):
-        return "<{}: ver={}, nn_dims={}, img_size={}>".format(self.model_name, 
+        return "<{}: ver={}, dense_dim={}, img_size={}>".format(self.model_name, 
                                                               version_str, 
                                                               self.ENCODER_DIM, 
                                                               "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))
