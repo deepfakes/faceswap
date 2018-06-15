@@ -166,7 +166,8 @@ class FaceswapControl(object):
             if output == "" and self.process.poll() is not None:
                 break
             if output:
-                if self.command == "train" and self.capture_loss(output):
+                if (self.command == "train" and self.capture_loss(output)) or (
+                        self.command != "train" and self.capture_tqdm(output)):
                     continue
                 print(output.strip())
         returncode = self.process.poll()

@@ -299,8 +299,10 @@ class Calculations(object):
             method = getattr(self, "calc_{}".format(selection[0]))
             key = "{}_{}".format(selection[0], selection[1])
             raw = self.stats["raw_{}".format(selection[1])]
+#            result = method(raw)
+#            if result:
+#                self.stats[key] = result
             self.stats[key] = method(raw)
-
     def get_selections(self):
         """ Compile a list of data to be calculated """
         for summary in self.args["selections"]:
@@ -330,7 +332,11 @@ class Calculations(object):
     @staticmethod
     def calc_trend(data):
         """ Compile trend data """
-        x_range = range(len(data))
+        points = len(data)
+        if points < 10:
+            dummy = [None for i in range(points)]
+            return dummy
+        x_range = range(points)
         fit = np.polyfit(x_range, data, 3)
         poly = np.poly1d(fit)
         trend = poly(x_range)
