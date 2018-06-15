@@ -51,7 +51,7 @@ class EncoderType(enum.Enum):
     ORIGINAL = "original"
     SHAOANLU = "shaoanlu"
     
-ENCODER = EncoderType.SHAOANLU 
+ENCODER = EncoderType.ORIGINAL 
 
 hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_AH5': 'decoder_A_{version_str}{ENCODER.value}.h5'.format(**vars()),
@@ -135,7 +135,14 @@ class Model():
             x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)         
             x = LeakyReLU(0.1)(x)
             return x
-        return block    
+        return block   
+
+    def conv_sep2(self, filters, kernel_size=5, strides=2, use_instance_norm=True, **kwargs):
+        def block(x):
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)
+            x = Activation("relu")(x)
+            return x    
+        return block 
         
     def conv_sep3(self, filters, kernel_size=3, strides=2, use_instance_norm=True, **kwargs):
         def block(x):
@@ -168,15 +175,16 @@ class Model():
         impt = Input(shape=self.IMAGE_SHAPE)
         
         in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
+
         x = self.conv(in_conv_filters)(impt)
-        x = self.conv(256)(x)
+        x = self.conv_sep2(256)(x)
         x = self.conv(512)(x)
-        x = self.conv(1024)(x)
+        x = self.conv_sep2(1024)(x)
         
         dense_shape = self.IMAGE_SHAPE[0] // 16         
         x = Dense(self.ENCODER_DIM)(Flatten()(x))
-        x = Dense(dense_shape * dense_shape * 768)(x)
-        x = Reshape((dense_shape, dense_shape, 768))(x)
+        x = Dense(dense_shape * dense_shape * 512)(x)
+        x = Reshape((dense_shape, dense_shape, 512))(x)
         x = self.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)    
@@ -206,8 +214,8 @@ class Model():
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
-        x = self.upscale(512, kernel_initializer=RandomNormal(0, 0.02))(inpt)
-        x = self.upscale(256, kernel_initializer=RandomNormal(0, 0.02))(x)
+        x = self.upscale(384, kernel_initializer=RandomNormal(0, 0.02))(inpt)
+        x = self.upscale(256-32, kernel_initializer=RandomNormal(0, 0.02))(x)
         x = self.upscale(self.IMAGE_SHAPE[0], kernel_initializer=RandomNormal(0, 0.02))(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
@@ -275,5 +283,4 @@ class Model():
         return "<{}: ver={}, nn_dims={}, img_size={}>".format(self.model_name, 
                                                               version_str, 
                                                               self.ENCODER_DIM, 
-                                                              "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))        
-        
+                                                              "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))                
