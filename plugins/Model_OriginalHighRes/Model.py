@@ -7,10 +7,15 @@
 
 
 import enum
+<<<<<<< HEAD
 import os
 import sys
 import warnings
 
+=======
+
+import warnings
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 from keras.initializers import RandomNormal
@@ -22,11 +27,19 @@ from keras.layers.core import Activation
 from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
-
 from lib.PixelShuffler import PixelShuffler
+<<<<<<< HEAD
 import lib.Serializer
 
 from . import __version__
+=======
+import os
+import sys
+
+from . import __version__
+from .instance_normalization import InstanceNormalization
+
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
 
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
@@ -42,6 +55,7 @@ except ImportError:
     pass
 
 
+<<<<<<< HEAD
 class EncoderType(enum.Enum):
     ORIGINAL = "original"
     SHAOANLU = "shaoanlu"
@@ -58,12 +72,33 @@ conv_init = RandomNormal(0, 0.02)
 def inst_norm():
     return InstanceNormalization()     
 
+=======
+conv_init = RandomNormal(0, 0.02)
+
+
+
+def inst_norm():
+    return InstanceNormalization()
+
+class EncoderType(enum.Enum):
+    ORIGINAL = "original"
+    SHAOANLU = "shaoanlu"
+    
+ENCODER = EncoderType.ORIGINAL 
+
+hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
+       'decoder_AH5': 'decoder_A_{version_str}{ENCODER.value}.h5'.format(**vars()),
+       'decoder_BH5': 'decoder_B_{version_str}{ENCODER.value}.h5'.format(**vars())}
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
 
 hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_AH5': 'decoder_A_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_BH5': 'decoder_B_{version_str}{ENCODER.value}.h5'.format(**vars())}
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
 class Model():
     
     ENCODER_DIM = 1024 # dense layer size        
@@ -224,8 +259,13 @@ class Model():
         x = self.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)    
+<<<<<<< HEAD
 
 
+=======
+
+
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
     def Decoder_original(self):       
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
@@ -233,12 +273,21 @@ class Model():
         x = self.upscale(384, kernel_initializer=RandomNormal(0, 0.02))(inpt)
         x = self.upscale(256-32, kernel_initializer=RandomNormal(0, 0.02))(x)
         x = self.upscale(self.IMAGE_SHAPE[0], kernel_initializer=RandomNormal(0, 0.02))(x)
+<<<<<<< HEAD
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         return KerasModel(inpt, x)
     
     
+=======
+        
+        x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        
+        return KerasModel(inpt, x)
+    
+    
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
     def Decoder_shaoanlu(self):       
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
@@ -310,4 +359,8 @@ class Model():
         return "<{}: ver={}, nn_dims={}, img_size={}>".format(self.model_name, 
                                                               version_str, 
                                                               self.ENCODER_DIM, 
+<<<<<<< HEAD
                                                               "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))                
+=======
+                                                              "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))                
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb

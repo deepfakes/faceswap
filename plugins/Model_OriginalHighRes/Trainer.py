@@ -1,6 +1,5 @@
 
 import time
-
 import numpy
 
 from lib.training_data import TrainingDataGenerator, stack_images
@@ -43,12 +42,19 @@ class Trainer():
         _, warped_B, target_B = next(self.images_B)
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
+<<<<<<< HEAD
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
         
         self.model._epoch_no += 1        
                     
         print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
             time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A, loss_B),
+=======
+        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)        
+                    
+        print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
+            time.strftime("%H:%M:%S"), iter_no, self._clock()-when, loss_A, loss_B),
+>>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
             end='\r')
         
 
