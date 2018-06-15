@@ -1,4 +1,3 @@
-
 import time
 import numpy
 
@@ -9,7 +8,7 @@ TRANSFORM_PRC = 115.
 
 
 class Trainer():
-#     
+    
     _random_transform_args = {
         'rotation_range': 10 * (TRANSFORM_PRC * .01),
         'zoom_range': 0.05 * (TRANSFORM_PRC * .01),
@@ -23,11 +22,6 @@ class Trainer():
         from timeit import default_timer as clock
         self._clock = clock
         
-
-        #generator = TrainingDataGenerator(self.random_transform_args, 160)                
-        # make sre to keep zoom=2 or you won't get 128x128 vectors as input
-        #generator = TrainingDataGenerator(self.random_transform_args, 220, 5, zoom=2)
-        #generator = TrainingDataGenerator(self.random_transform_args, 180, 7, zoom=2)
         generator = TrainingDataGenerator(self.random_transform_args, 160, 5, zoom=2)        
         
         self.images_A = generator.minibatchAB(fn_A, self.batch_size)
@@ -42,19 +36,12 @@ class Trainer():
         _, warped_B, target_B = next(self.images_B)
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-<<<<<<< HEAD
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
         
         self.model._epoch_no += 1        
                     
         print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
             time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A, loss_B),
-=======
-        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)        
-                    
-        print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
-            time.strftime("%H:%M:%S"), iter_no, self._clock()-when, loss_A, loss_B),
->>>>>>> 721e80dd773c850769ba6af82daa9f5ec95812bb
             end='\r')
         
 
