@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 # Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
 # Based on https://github.com/iperov/OpenDeepFaceSwap for Decoder multiple res block chain
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo
@@ -5,7 +7,8 @@
 
 
 import enum
-
+import os
+import sys
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -18,13 +21,11 @@ from keras.layers.core import Activation
 from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
+
 from lib.PixelShuffler import PixelShuffler
-import os
-import sys
+import lib.Serializer
 
 from . import __version__
-from .instance_normalization import InstanceNormalization
-
 
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
@@ -40,6 +41,22 @@ except ImportError:
     pass
 
 
+
+class EncoderType(enum.Enum):
+    ORIGINAL = "original"
+    SHAOANLU = "shaoanlu"
+    
+    
+ENCODER = EncoderType.ORIGINAL
+
+
+if ENCODER==EncoderType.SHAOANLU:
+    from .instance_normalization import InstanceNormalization
+
+    
+def inst_norm():
+    return InstanceNormalization()     
+
 conv_init = RandomNormal(0, 0.02)
 
 
@@ -51,12 +68,12 @@ class EncoderType(enum.Enum):
     ORIGINAL = "original"
     SHAOANLU = "shaoanlu"
     
-ENCODER = EncoderType.SHAOANLU 
+ENCODER = EncoderType.ORIGINAL 
+
 
 hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_AH5': 'decoder_A_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_BH5': 'decoder_B_{version_str}{ENCODER.value}.h5'.format(**vars())}
-
 
 class Model():
     
@@ -111,8 +128,18 @@ class Model():
         
         
     def load(self, swapped):
-        
+        from json import JSONDecodeError
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])
+        
+        state_dir = os.path.join(self.model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
+        ser = lib.Serializer.get_serializer('json')
+        try:
+            with open(state_dir, 'rb') as fp:
+                state = ser.unmarshal(fp.read())
+                self._epoch_no = state['epoch_no']
+        except (JSONDecodeError, IOError) as e:
+            print('Failed loading training state metadata', e)
+            self._epoch_no = 0        
 
         try:            
             self.encoder.load_weights(os.path.join(self.model_dir, hdf['encoderH5']))
@@ -135,7 +162,14 @@ class Model():
             x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)         
             x = LeakyReLU(0.1)(x)
             return x
-        return block    
+        return block   
+
+    def conv_sep2(self, filters, kernel_size=5, strides=2, use_instance_norm=True, **kwargs):
+        def block(x):
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)
+            x = Activation("relu")(x)
+            return x    
+        return block 
         
     def conv_sep3(self, filters, kernel_size=3, strides=2, use_instance_norm=True, **kwargs):
         def block(x):
@@ -168,15 +202,16 @@ class Model():
         impt = Input(shape=self.IMAGE_SHAPE)
         
         in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
+
         x = self.conv(in_conv_filters)(impt)
-        x = self.conv(256)(x)
+        x = self.conv_sep2(256)(x)
         x = self.conv(512)(x)
-        x = self.conv(1024)(x)
+        x = self.conv_sep2(1024)(x)
         
         dense_shape = self.IMAGE_SHAPE[0] // 16         
         x = Dense(self.ENCODER_DIM)(Flatten()(x))
-        x = Dense(dense_shape * dense_shape * 768)(x)
-        x = Reshape((dense_shape, dense_shape, 768))(x)
+        x = Dense(dense_shape * dense_shape * 512)(x)
+        x = Reshape((dense_shape, dense_shape, 512))(x)
         x = self.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)    
@@ -206,8 +241,8 @@ class Model():
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
-        x = self.upscale(512, kernel_initializer=RandomNormal(0, 0.02))(inpt)
-        x = self.upscale(256, kernel_initializer=RandomNormal(0, 0.02))(x)
+        x = self.upscale(384, kernel_initializer=RandomNormal(0, 0.02))(inpt)
+        x = self.upscale(256-32, kernel_initializer=RandomNormal(0, 0.02))(x)
         x = self.upscale(self.IMAGE_SHAPE[0], kernel_initializer=RandomNormal(0, 0.02))(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
@@ -238,24 +273,30 @@ class Model():
             for model in hdf.values():            
                 backup_file(model_dir, model)
         except NameError:
-            print('backup functionality not available\n')                                      
+            print('backup functionality not available\n')       
+            
+        state_dir = os.path.join(self.model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
+        ser = lib.Serializer.get_serializer('json')
+        try:
+            with open(state_dir, 'wb') as fp:
+                state_json = ser.marshal({
+                    'epoch_no' : self._epoch_no
+                     })
+                fp.write(state_json.encode('utf-8'))
+        except IOError as e:
+            pass                               
+        
+        print('\nsaving model weights', end='', flush=True)        
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
         # thought maybe I/O bound, sometimes saving in parallel is faster
-        threads = []
-        t = Thread(target=self.encoder.save_weights, args=(str(self.model_dir / hdf['encoderH5']),))
-        threads.append(t)         
-        t = Thread(target=self.decoder_A.save_weights, args=(str(self.model_dir / hdf['decoder_AH5']),))
-        threads.append(t)
-        t = Thread(target=self.decoder_B.save_weights, args=(str(self.model_dir / hdf['decoder_BH5']),))
-        threads.append(t)
-        
-        for thread in threads:
-            thread.start()            
-        
-        while any([t.is_alive() for t in threads]):
-            sleep(0.1)
-            
-        print('saved model weights')              
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
+            for future in as_completed(futures):
+                future.result()
+                print('.', end='', flush=True)  
+
+        print('done', flush=True)              
     
                            
     @property
@@ -272,8 +313,7 @@ class Model():
              
     
     def __str__(self):
-        return "<{}: ver={}, nn_dims={}, img_size={}>".format(self.model_name, 
+        return "<{}: ver={}, dense_dim={}, img_size={}>".format(self.model_name, 
                                                               version_str, 
                                                               self.ENCODER_DIM, 
-                                                              "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))        
-        
+                                                              "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))
