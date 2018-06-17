@@ -6,7 +6,7 @@ from lib.utils import _image_extensions
 
 
 class EffmpegArgs(FaceSwapArgs):
-    """ Class to parse the command line arguments for EFFMPEG Tool tool """
+    """ Class to parse the command line arguments for EFFMPEG tool """
 
     @staticmethod
     def __parse_transpose(value):
@@ -171,6 +171,15 @@ class EffmpegArgs(FaceSwapArgs):
                               "help": "Set the new resolution scale if the "
                                       "chosen action is 'rescale'."})
 
+        argument_list.append({"opts": ('-pr', '--preview'),
+                              "action": "store_true",
+                              "dest": "preview",
+                              "default": False,
+                              "help": "Uses ffplay to preview the effects of "
+                                      "the intended action. "
+                                      "This functionality is not yet fully "
+                                      "implemented."})
+
         argument_list.append({"opts": ('-q', '--quiet'),
                               "action": "store_true",
                               "dest": "quiet",
@@ -189,6 +198,7 @@ class EffmpegArgs(FaceSwapArgs):
                                       "will override quiet."})
 
         return argument_list
+
 
 class SortArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for sort tool """
