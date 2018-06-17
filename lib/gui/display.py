@@ -10,6 +10,7 @@ from tkinter import ttk
 from .display_analysis import Analysis
 from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
 
+
 class DisplayNotebook(ttk.Notebook):
     """ The display tabs """
 
@@ -34,9 +35,10 @@ class DisplayNotebook(ttk.Notebook):
         """ Add tabs that are permanently available """
         for tab in ("job queue", "analysis"):
             if tab == "job queue":
-                continue    #Not yet implemented
+                continue    # Not yet implemented
             if tab == "analysis":
-                helptext = {"stats": "Summary statistics for each training session"}
+                helptext = {"stats":
+                            "Summary statistics for each training session"}
                 frame = Analysis(self, tab, helptext)
             else:
                 frame = self.add_frame()
@@ -56,7 +58,8 @@ class DisplayNotebook(ttk.Notebook):
 
     def extract_tabs(self):
         """ Build the extract tabs """
-        helptext = "Updates preview from output every 5 seconds to limit disk contention"
+        helptext = ("Updates preview from output every 5 "
+                    "seconds to limit disk contention")
         PreviewExtract(self, "preview", helptext, 5000)
 
     def train_tabs(self):

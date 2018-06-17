@@ -8,6 +8,7 @@ from .options import Config
 from .tooltip import Tooltip
 from .utils import Images, FileHandler
 
+
 class CommandNotebook(ttk.Notebook):
     """ Frame to hold each individual tab of the command notebook """
 
@@ -49,6 +50,7 @@ class CommandNotebook(ttk.Notebook):
             btnact.config(text=ttl)
             Tooltip(btnact, text=hlp, wraplength=200)
 
+
 class CommandTab(ttk.Frame):
     """ Frame to hold each individual tab of the command notebook """
 
@@ -76,6 +78,7 @@ class CommandTab(ttk.Frame):
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
 
+
 class OptionsFrame(ttk.Frame):
     """ Options Frame - Holds the Options for each command """
 
@@ -90,7 +93,9 @@ class OptionsFrame(ttk.Frame):
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.optsframe = ttk.Frame(self.canvas)
-        self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
+        self.optscanvas = self.canvas.create_window((0, 0),
+                                                    window=self.optsframe,
+                                                    anchor=tk.NW)
         self.chkbtns = self.checkbuttons_frame()
 
         self.build_frame()
@@ -120,7 +125,10 @@ class OptionsFrame(ttk.Frame):
         self.canvas.bind("<Configure>", self.resize_frame)
 
         for option in self.opts.gen_command_options(self.command):
-            optioncontrol = OptionControl(self.command, option, self.optsframe, self.chkbtns[1])
+            optioncontrol = OptionControl(self.command,
+                                          option,
+                                          self.optsframe,
+                                          self.chkbtns[1])
             optioncontrol.build_full_control()
 
         if self.chkbtns[1].winfo_children():
@@ -142,6 +150,7 @@ class OptionsFrame(ttk.Frame):
         canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
 
+
 class OptionControl(object):
     """ Build the correct control for the option parsed and place it on the
     frame """
@@ -161,7 +170,8 @@ class OptionControl(object):
         ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
         ctlhelp = ctltitle + " - " + ctlhelp
         dflt = self.option.get("default", "")
-        dflt = self.option.get("default", False) if ctl == ttk.Checkbutton else dflt
+        if ctl == ttk.Checkbutton:
+            dflt = self.option.get("default", False)
         choices = self.option["choices"] if ctl == ttk.Combobox else None
 
         ctlframe = self.build_one_control_frame()
@@ -200,9 +210,16 @@ class OptionControl(object):
             self.add_browser_buttons(frame, sysbrowser, var)
 
         if control == ttk.Checkbutton:
-            self.checkbutton_to_checkframe(control, control_title, var, helptext)
+            self.checkbutton_to_checkframe(control,
+                                           control_title,
+                                           var,
+                                           helptext)
         else:
-            self.control_to_optionsframe(control, frame, var, choices, helptext)
+            self.control_to_optionsframe(control,
+                                         frame,
+                                         var,
+                                         choices,
+                                         helptext)
         return var
 
     def checkbutton_to_checkframe(self, control, control_title, var, helptext):
@@ -271,13 +288,14 @@ class OptionControl(object):
 
     def ask_context(self, filepath, filetypes):
         """ Method to pop the correct dialog depending on context """
-        selected_action = self.option['action_option'].get()
+        selected_action = self.option["action_option"].get()
         filename = FileHandler("context",
                                filetypes,
                                command=self.command,
                                action=selected_action).retfile
         if filename:
             filepath.set(filename)
+
 
 class ActionFrame(ttk.Frame):
     """Action Frame - Displays action controls for the command tab """
@@ -289,7 +307,9 @@ class ActionFrame(ttk.Frame):
         self.command = parent.command
         self.title = self.command.title()
 
-        self.add_action_button(parent.category, parent.actionbtns, parent.tk_vars)
+        self.add_action_button(parent.category,
+                               parent.actionbtns,
+                               parent.tk_vars)
         self.add_util_buttons(parent.cli_opts, parent.tk_vars)
 
     def add_action_button(self, category, actionbtns, tk_vars):
@@ -304,7 +324,9 @@ class ActionFrame(ttk.Frame):
                             width=10,
                             command=lambda: tk_vars["action"].set(var_value))
         btnact.pack(side=tk.LEFT)
-        Tooltip(btnact, text="Run the {} script".format(self.title), wraplength=200)
+        Tooltip(btnact,
+                text="Run the {} script".format(self.title),
+                wraplength=200)
         actionbtns[self.command] = btnact
 
         btngen = ttk.Button(actframe,
@@ -312,7 +334,9 @@ class ActionFrame(ttk.Frame):
                             width=10,
                             command=lambda: tk_vars["generate"].set(var_value))
         btngen.pack(side=tk.RIGHT, padx=5)
-        Tooltip(btngen, text="Output command line options to the console", wraplength=200)
+        Tooltip(btngen,
+                text="Output command line options to the console",
+                wraplength=200)
 
     def add_util_buttons(self, cli_options, tk_vars):
         """ Add the section utility buttons """
@@ -328,4 +352,6 @@ class ActionFrame(ttk.Frame):
                                 image=img,
                                 command=lambda cmd=action: cmd(self.command))
             btnutl.pack(padx=2, side=tk.LEFT)
-            Tooltip(btnutl, text=utl.capitalize() + " " + self.title + " config", wraplength=200)
+            Tooltip(btnutl,
+                    text=utl.capitalize() + " " + self.title + " config",
+                    wraplength=200)

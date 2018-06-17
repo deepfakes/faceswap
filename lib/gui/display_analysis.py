@@ -11,6 +11,7 @@ from .stats import Calculations, SavedSessions, SessionsSummary, SessionsTotals
 from .tooltip import Tooltip
 from .utils import Images, FileHandler
 
+
 class Analysis(DisplayPage):
     """ Session analysis tab """
     def __init__(self, parent, tabname, helptext):
@@ -28,7 +29,8 @@ class Analysis(DisplayPage):
                 "filename": filename}
 
     def add_main_frame(self):
-        """ Add the main frame to the subnotebook to hold stats and session data """
+        """ Add the main frame to the subnotebook
+            to hold stats and session data """
         mainframe = self.subnotebook_add_page("stats")
         self.stats = StatsData(mainframe,
                                self.vars["filename"],
@@ -54,7 +56,9 @@ class Analysis(DisplayPage):
             return
         filename = filename.name
         loaded_data = SavedSessions(filename).sessions
-        msg = filename if len(filename) < 70 else "...{}".format(filename[-70:])
+        msg = filename
+        if len(filename) > 70:
+            msg = "...{}".format(filename[-70:])
         self.set_session_summary(loaded_data, msg)
         self.vars["filename"].set(filename)
 
@@ -101,6 +105,7 @@ class Analysis(DisplayPage):
             for row in write_dicts:
                 csvout.writerow(row)
 
+
 class Options(object):
     """ Options bar of Analysis tab """
     def __init__(self, parent):
@@ -136,11 +141,17 @@ class Options(object):
             hlp = "Load saved session stats"
         return hlp
 
+
 class StatsData(ttk.Frame):
     """ Stats frame of analysis tab """
     def __init__(self, parent, filename, selected_id, helptext):
         ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.TOP, padx=5, pady=5, expand=True, fill=tk.X, anchor=tk.N)
+        self.pack(side=tk.TOP,
+                  padx=5,
+                  pady=5,
+                  expand=True,
+                  fill=tk.X,
+                  anchor=tk.N)
 
         self.filename = filename
         self.loaded_data = None
@@ -149,7 +160,9 @@ class StatsData(ttk.Frame):
 
         self.add_label()
         self.tree = ttk.Treeview(self, height=1, selectmode=tk.BROWSE)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
+        self.scrollbar = ttk.Scrollbar(self,
+                                       orient="vertical",
+                                       command=self.tree.yview)
         self.columns = self.tree_configure(helptext)
 
     def add_label(self):
@@ -160,7 +173,9 @@ class StatsData(ttk.Frame):
     def tree_configure(self, helptext):
         """ Build a treeview widget to hold the sessions stats """
         self.tree.configure(yscrollcommand=self.scrollbar.set)
-        self.tree.tag_configure("total", background="black", foreground="white")
+        self.tree.tag_configure("total",
+                                background="black",
+                                foreground="white")
         self.tree.pack(side=tk.LEFT, expand=True, fill=tk.X)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.bind("<ButtonRelease-1>", self.select_item)
@@ -181,7 +196,10 @@ class StatsData(ttk.Frame):
         for column in columns:
             text = column[2] if column[2] else column[0].title()
             self.tree.heading(column[0], text=text)
-            self.tree.column(column[0], width=column[1], anchor=tk.E, minwidth=40)
+            self.tree.column(column[0],
+                             width=column[1],
+                             anchor=tk.E,
+                             minwidth=40)
         self.tree.column("#0", width=40)
         self.tree.heading("#0", text="Graphs")
 
@@ -204,7 +222,8 @@ class StatsData(ttk.Frame):
         self.tree.configure(height=1)
 
     def select_item(self, event):
-        """ Update the session summary info with the selected item or launch graph """
+        """ Update the session summary info with
+            the selected item or launch graph """
         region = self.tree.identify("region", event.x, event.y)
         selection = self.tree.focus()
         values = self.tree.item(selection, "values")
@@ -218,27 +237,29 @@ class StatsData(ttk.Frame):
         toplevel = SessionPopUp(self.loaded_data, self.selected_id.get())
         toplevel.title(self.data_popup_title())
         position = self.data_popup_get_position()
-        toplevel.geometry("720x400+{}+{}".format(str(position[0]), str(position[1])))
+        toplevel.geometry("720x400+{}+{}".format(str(position[0]),
+                                                 str(position[1])))
         toplevel.update()
 
     def data_popup_title(self):
         """ Set the data popup title """
         selected_id = self.selected_id.get()
-        title = "All Sessions" if selected_id == "Total" else "Session #{}".format(selected_id)
+        title = "All Sessions"
+        if selected_id != "Total":
+            title = "Session #{}".format(selected_id)
         return "{} - {}".format(title, self.filename.get())
 
     def data_popup_get_position(self):
         """ Get the position of the next window """
-        initial_position = [120, 120]
-        position = initial_position
+        init_pos = [120, 120]
+        pos = init_pos
         while True:
-            if position not in self.popup_positions:
-                self.popup_positions.append(position)
+            if pos not in self.popup_positions:
+                self.popup_positions.append(pos)
                 break
-            position = [item + 200 for item in position]
-            initial_position, position = self.data_popup_check_boundaries(initial_position,
-                                                                          position)
-        return position
+            pos = [item + 200 for item in pos]
+            init_pos, pos = self.data_popup_check_boundaries(init_pos, pos)
+        return pos
 
     def data_popup_check_boundaries(self, initial_position, position):
         """ Check that the popup remains within the screen boundaries """
@@ -248,6 +269,7 @@ class StatsData(ttk.Frame):
             initial_position = [initial_position[0] + 50, initial_position[1]]
             position = initial_position
         return initial_position, position
+
 
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed grap/stats for selected session """
@@ -314,7 +336,10 @@ class SessionPopUp(tk.Toplevel):
 
             cmbframe = ttk.Frame(frame)
             cmbframe.pack(fill=tk.X, pady=5, padx=5, side=tk.TOP)
-            lblcmb = ttk.Label(cmbframe, text="{}:".format(item), width=7, anchor=tk.W)
+            lblcmb = ttk.Label(cmbframe,
+                               text="{}:".format(item),
+                               width=7,
+                               anchor=tk.W)
             lblcmb.pack(padx=(0, 2), side=tk.LEFT)
 
             cmb = ttk.Combobox(cmbframe, textvariable=var, width=10)
@@ -348,7 +373,6 @@ class SessionPopUp(tk.Toplevel):
 
             hlp = self.set_help(item)
             Tooltip(ctl, text=hlp, wraplength=200)
-
 
     def opts_entry(self, frame):
         """ Add the options entry boxes """
@@ -453,7 +477,9 @@ class SessionPopUp(tk.Toplevel):
         """ Compile checkbox selections to list """
         selections = list()
         for key, val in self.vars.items():
-            if isinstance(val, tk.BooleanVar) and key != "outliers" and val.get():
+            if (isinstance(val, tk.BooleanVar)
+                    and key != "outliers"
+                    and val.get()):
                 selections.append(key)
         return selections
 

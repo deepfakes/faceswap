@@ -11,6 +11,7 @@ import numpy as np
 
 from lib.Serializer import PickleSerializer
 
+
 class SavedSessions(object):
     """ Saved Training Session """
     def __init__(self, sessions_data):
@@ -30,6 +31,7 @@ class SavedSessions(object):
         with open(filename, self.serializer.woptions) as session:
             session.write(self.serializer.marshal(self.sessions))
         print("Saved session stats to: {}".format(filename))
+
 
 class CurrentSession(object):
     """ The current training session """
@@ -75,13 +77,15 @@ class CurrentSession(object):
         now = time.time()
         self.stats["timestamps"].append(now)
         elapsed_time = now - self.timestats["start"]
-        self.timestats["elapsed"] = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
+        self.timestats["elapsed"] = time.strftime("%H:%M:%S",
+                                                  time.gmtime(elapsed_time))
 
     def save_session(self):
         """ Save the session file to the modeldir """
-        if self.stats['iterations'] > 0:
+        if self.stats["iterations"] > 0:
             print("Saving session stats...")
             self.historical.save_sessions(self.filename)
+
 
 class SessionsTotals(object):
     """ The compiled totals of all saved sessions """
@@ -184,11 +188,15 @@ class SessionsSummary(object):
     def format_summaries(self, raw_summaries):
         """ Format the summaries nicely for display """
         for summary in raw_summaries:
-            summary["start"] = time.strftime("%x %X", time.gmtime(summary["start"]))
-            summary["end"] = time.strftime("%x %X", time.gmtime(summary["end"]))
-            summary["elapsed"] = time.strftime("%H:%M:%S", time.gmtime(summary["elapsed"]))
+            summary["start"] = time.strftime("%x %X",
+                                             time.gmtime(summary["start"]))
+            summary["end"] = time.strftime("%x %X",
+                                           time.gmtime(summary["end"]))
+            summary["elapsed"] = time.strftime("%H:%M:%S",
+                                               time.gmtime(summary["elapsed"]))
             summary["rate"] = "{0:.1f}".format(summary["rate"])
         self.summary = raw_summaries
+
 
 class Calculations(object):
     """ Class to hold calculations against raw session data """
@@ -203,7 +211,10 @@ class Calculations(object):
         warnings.simplefilter("ignore", np.RankWarning)
 
         self.session = session
-        display = self.session["losskeys"] if display.lower() == "loss" else [display]
+        if display.lower() == "loss":
+            display = self.session["losskeys"]
+        else:
+            display = [display]
         self.args = {"display": display,
                      "selections": selections,
                      "avg_samples": int(avg_samples),
@@ -299,10 +310,8 @@ class Calculations(object):
             method = getattr(self, "calc_{}".format(selection[0]))
             key = "{}_{}".format(selection[0], selection[1])
             raw = self.stats["raw_{}".format(selection[1])]
-#            result = method(raw)
-#            if result:
-#                self.stats[key] = result
             self.stats[key] = method(raw)
+
     def get_selections(self):
         """ Compile a list of data to be calculated """
         for summary in self.args["selections"]:
@@ -325,7 +334,8 @@ class Calculations(object):
                 avgs.append(None)
                 continue
             else:
-                avg = sum(data[idx - presample:idx + postsample]) / self.args["avg_samples"]
+                avg = sum(data[idx - presample:idx + postsample]) \
+                        / self.args["avg_samples"]
                 avgs.append(avg)
         return avgs
 

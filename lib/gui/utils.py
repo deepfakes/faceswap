@@ -11,33 +11,50 @@ from PIL import Image, ImageTk
 
 class Singleton(type):
     """ Instigate a singleton.
-    From: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
+    From: https://stackoverflow.com/questions/6760685
 
-    Singletons are often frowned upon. Feel free to instigate a better solution """
+    Singletons are often frowned upon.
+    Feel free to instigate a better solution """
 
     _instances = {}
+
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+            cls._instances[cls] = super(Singleton,
+                                        cls).__call__(*args,
+                                                      **kwargs)
         return cls._instances[cls]
+
 
 class FileHandler(object):
     """ Raise a filedialog box and capture input """
     def __init__(self, handletype, filetype, command=None, action=None):
 
-        self.filetypes = {"default": (("All files", "*.*"), ),
-                          "alignments":(("JSON", "*.json"), ("Pickle", "*.p"),
-                                        ("YAML", "*.yaml"), ("All files", "*.*")),
-                          "config": (("Faceswap config files", "*.fsw"), ("All files", "*.*")),
-                          "csv":(("Comma separated values", "*.csv"), ("All files", "*.*")),
-                          "image":(("Bitmap", "*.bmp"), ("JPG", "*.jpeg", "*.jpg"),
-                                   ("PNG", "*.png"), ("TIFF", "*.tif", "*.tiff"),
-                                   ("All files", "*.*")),
-                          "session": (("Faceswap session files", "*.fss"), ("All files", "*.*")),
-                          "video":(("Audio Video Interleave", "*.avi"), ("Flash Video", "*.flv"),
-                                   ("Matroska", "*.mkv"), ("MOV", "*.mov"),
-                                   ("MP4", "*.mp4"), ("MPEG", "*.mpeg"),
-                                   ("WebM", "*.webm"), ("All files", "*.*"))}
+        all_files = ("All files", "*.*")
+        self.filetypes = {"default": (all_files, ),
+                          "alignments": (("JSON", "*.json"),
+                                         ("Pickle", "*.p"),
+                                         ("YAML", "*.yaml"),
+                                         all_files),
+                          "config": (("Faceswap config files", "*.fsw"),
+                                     all_files),
+                          "csv": (("Comma separated values", "*.csv"),
+                                  all_files),
+                          "image": (("Bitmap", "*.bmp"),
+                                    ("JPG", "*.jpeg", "*.jpg"),
+                                    ("PNG", "*.png"),
+                                    ("TIFF", "*.tif", "*.tiff"),
+                                    all_files),
+                          "session": (("Faceswap session files", "*.fss"),
+                                      all_files),
+                          "video": (("Audio Video Interleave", "*.avi"),
+                                    ("Flash Video", "*.flv"),
+                                    ("Matroska", "*.mkv"),
+                                    ("MOV", "*.mov"),
+                                    ("MP4", "*.mp4"),
+                                    ("MPEG", "*.mpeg"),
+                                    ("WebM", "*.webm"),
+                                    all_files)}
         self.contexts = {"effmpeg": {"extract": "open",
                                      "gen-vid": "dir",
                                      "get-fps": "open",
@@ -53,7 +70,8 @@ class FileHandler(object):
     def set_defaults(self):
         """ Set the default filetype to be first in list of filetypes,
             or set a custom filetype if the first is not correct """
-        defaults = {key: val[0][1].replace("*", "") for key, val in self.filetypes.items()}
+        defaults = {key: val[0][1].replace("*", "")
+                    for key, val in self.filetypes.items()}
         defaults["default"] = None
         defaults["video"] = ".mp4"
         defaults["image"] = ".png"
@@ -105,6 +123,7 @@ class FileHandler(object):
         self.kwargs = self.set_kwargs(handletype, filetype, command, action)
         self.retfile = getattr(self, handletype.lower())()
 
+
 class Images(object, metaclass=Singleton):
     """ Holds locations of images and actual images """
     def __init__(self, pathcache=None):
@@ -116,15 +135,24 @@ class Images(object, metaclass=Singleton):
         self.errcount = 0
 
         self.icons = dict()
-        self.icons["folder"] = tk.PhotoImage(file=os.path.join(self.pathicons, "open_folder.png"))
-        self.icons["load"] = tk.PhotoImage(file=os.path.join(self.pathicons, "open_file.png"))
-        self.icons["context"] = tk.PhotoImage(file=os.path.join(self.pathicons, "open_file.png"))
-        self.icons["save"] = tk.PhotoImage(file=os.path.join(self.pathicons, "save.png"))
-        self.icons["reset"] = tk.PhotoImage(file=os.path.join(self.pathicons, "reset.png"))
-        self.icons["clear"] = tk.PhotoImage(file=os.path.join(self.pathicons, "clear.png"))
-        self.icons["graph"] = tk.PhotoImage(file=os.path.join(self.pathicons, "graph.png"))
-        self.icons["zoom"] = tk.PhotoImage(file=os.path.join(self.pathicons, "zoom.png"))
-        self.icons["move"] = tk.PhotoImage(file=os.path.join(self.pathicons, "move.png"))
+        self.icons["folder"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                               "open_folder.png"))
+        self.icons["load"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                             "open_file.png"))
+        self.icons["context"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                                "open_file.png"))
+        self.icons["save"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                             "save.png"))
+        self.icons["reset"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                              "reset.png"))
+        self.icons["clear"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                              "clear.png"))
+        self.icons["graph"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                              "graph.png"))
+        self.icons["zoom"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                             "zoom.png"))
+        self.icons["move"] = tk.PhotoImage(file=os.path.join(self.pathicons,
+                                                             "move.png"))
 
     def delete_preview(self):
         """ Delete the preview files """
@@ -155,7 +183,8 @@ class Images(object, metaclass=Singleton):
         if not imagefiles or len(imagefiles) == 1:
             self.previewoutput = None
             return
-        # Get penultimate file so we don't accidently load a file that is being saved
+        # Get penultimate file so we don't accidently
+        # load a file that is being saved
         show_file = sorted(imagefiles, key=os.path.getctime)[-2]
         img = Image.open(show_file)
         img.thumbnail((768, 432))
@@ -198,7 +227,8 @@ class Images(object, metaclass=Singleton):
         return img.width(), img.height()
 
     def resize_image(self, name, framesize):
-        """ Resize the training preview image based on the passed in frame size """
+        """ Resize the training preview image
+            based on the passed in frame size """
         displayimg = self.previewtrain[name][0]
         if framesize:
             frameratio = float(framesize[0]) / float(framesize[1])
@@ -225,6 +255,7 @@ class Images(object, metaclass=Singleton):
                 break
 
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
+
 
 class ConsoleOut(ttk.Frame):
     """ The Console out section of the GUI """
@@ -269,6 +300,7 @@ class ConsoleOut(ttk.Frame):
             return
         self.console.delete(1.0, tk.END)
         self.console_clear.set(False)
+
 
 class SysOutRouter(object):
     """ Route stdout/stderr to the console window """

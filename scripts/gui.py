@@ -7,8 +7,9 @@ import tkinter as tk
 
 from tkinter import messagebox, ttk
 
-from lib.gui import CurrentSession, CommandNotebook, Config, ConsoleOut
-from lib.gui import  DisplayNotebook, Images, CliOptions, ProcessWrapper, StatusBar
+from lib.gui import (CliOptions, CurrentSession, CommandNotebook, Config,
+                     ConsoleOut, DisplayNotebook, Images, ProcessWrapper,
+                     StatusBar)
 
 
 class FaceswapGui(tk.Tk):
@@ -22,7 +23,10 @@ class FaceswapGui(tk.Tk):
         self.cliopts = CliOptions()
         self.session = CurrentSession()
         statusbar = StatusBar(self)
-        self.wrapper = ProcessWrapper(statusbar, self.session, pathscript, self.cliopts)
+        self.wrapper = ProcessWrapper(statusbar,
+                                      self.session,
+                                      pathscript,
+                                      self.cliopts)
 
         self.images.delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
@@ -67,7 +71,8 @@ class FaceswapGui(tk.Tk):
         self.config(menu=menubar)
 
     def add_containers(self):
-        """ Add the paned window containers that hold each main area of the gui """
+        """ Add the paned window containers that
+            hold each main area of the gui """
         maincontainer = tk.PanedWindow(self,
                                        sashrelief=tk.RAISED,
                                        orient=tk.VERTICAL)
@@ -89,13 +94,15 @@ class FaceswapGui(tk.Tk):
             tkinter has gone away """
         confirm = messagebox.askokcancel
         confirmtxt = "Processes are still running. Are you sure...?"
-        if self.wrapper.tk_vars["runningtask"].get() and not confirm("Close", confirmtxt):
+        if (self.wrapper.tk_vars["runningtask"].get()
+                and not confirm("Close", confirmtxt)):
             return
         if self.wrapper.tk_vars["runningtask"].get():
             self.wrapper.task.terminate()
         self.images.delete_preview()
         self.quit()
         exit()
+
 
 class Gui(object):
     """ The GUI process. """
@@ -107,12 +114,12 @@ class Gui(object):
 
     def get_scaling(self):
         """ Get the display DPI """
-        dpi = self.root.winfo_fpixels('1i')
+        dpi = self.root.winfo_fpixels("1i")
         return dpi / 72.0
 
     def process(self):
         """ Builds the GUI """
         scaling_factor = self.get_scaling()
-        self.root.tk.call('tk', 'scaling', scaling_factor)
+        self.root.tk.call("tk", "scaling", scaling_factor)
         self.root.build_gui(self.args.debug)
         self.root.mainloop()
