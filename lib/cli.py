@@ -121,6 +121,7 @@ class FileFullPaths(FullPaths):
         ]
         return [(name, getattr(self, name)) for name in names]
 
+
 class SaveFileFullPaths(FileFullPaths):
     """
     Class that gui uses to determine if you need to save a file.
@@ -128,6 +129,7 @@ class SaveFileFullPaths(FileFullPaths):
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
     pass
+
 
 class ContextFullPaths(FileFullPaths):
     """

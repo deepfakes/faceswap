@@ -13,7 +13,7 @@ import datetime
 from ffmpy import FFprobe, FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.cli import FileFullPaths, ComboFullPaths, FullHelpArgumentParser
+from lib.cli import FullHelpArgumentParser
 from lib.utils import _image_extensions, _video_extensions
 from . import cli
 
@@ -112,6 +112,8 @@ class Effmpeg(object):
 
     _actions_req_fps = ["extract", "gen_vid"]
     _actions_req_ref_video = ["mux_audio"]
+    _actions_can_preview = ["gen_vid", "mux_audio", "rescale", "rotate",
+                            "slice"]
     _actions_can_use_ref_video = ["gen_vid"]
     _actions_have_dir_output = ["extract"]
     _actions_have_vid_output = ["gen_vid", "mux_audio", "rescale", "rotate",
@@ -120,6 +122,9 @@ class Effmpeg(object):
     _actions_have_dir_input = ["gen_vid"]
     _actions_have_vid_input = ["extract", "get_fps", "get_info", "rescale",
                                "rotate", "slice"]
+
+    # Class variable that stores the target executable (ffmpeg or ffplay)
+    _executable = 'ffmpeg'
 
     # Class variable that stores the common ffmpeg arguments based on verbosity
     __common_ffmpeg_args_dict = {"normal": "-hide_banner ",
@@ -158,7 +163,8 @@ class Effmpeg(object):
             else:
                 self.output = DataItem(path=self.__get_default_output())
 
-        if self.args.ref_vid.lower() == "none" or self.args.ref_vid == '':
+        if self.args.ref_vid is None \
+                or self.args.ref_vid == '':
             self.args.ref_vid = None
 
         # Instantiate ref_vid DataItem object
@@ -223,13 +229,16 @@ class Effmpeg(object):
                 self.args.fps = self.input.fps
 
         # Processing transpose
-        if self.args.transpose.lower() == "none":
+        if self.args.transpose is None or \
+                self.args.transpose.lower() == "none":
             self.args.transpose = None
         else:
             self.args.transpose = self.args.transpose[1]
 
         # Processing degrees
-        if self.args.degrees.lower() == "none" or self.args.degrees == '':
+        if self.args.degrees is None \
+                or self.args.degrees.lower() == "none" \
+                or self.args.degrees == '':
             self.args.degrees = None
         elif self.args.transpose is None:
             try:
@@ -238,6 +247,13 @@ class Effmpeg(object):
                 print("You have entered an invalid value for degrees: "
                       "{}".format(self.args.degrees), file=sys.stderr)
                 exit(1)
+
+        # Set executable based on whether previewing or not
+        """
+        if self.args.preview and self.args.action in self._actions_can_preview:
+            Effmpeg._executable = 'ffplay'
+            self.output = DataItem()
+        """
 
         # Set verbosity of output
         self.__set_verbosity(self.args.quiet, self.args.verbose)
@@ -260,7 +276,8 @@ class Effmpeg(object):
                   "degrees": self.args.degrees,
                   "transpose": self.args.transpose,
                   "scale": self.args.scale,
-                  "print_": self.print_}
+                  "print_": self.print_,
+                  "preview": self.args.preview}
         action = getattr(self, self.args.action)
         action(**kwargs)
 
@@ -272,13 +289,12 @@ class Effmpeg(object):
         _output_opts = '-y -vf fps="' + str(fps) + '"'
         _output_path = output.path + "/" + input_.name + "_%05d" + extract_ext
         _output = {_output_path: _output_opts}
-        ff = FFmpeg(inputs=_input, outputs=_output)
         os.makedirs(output.path, exist_ok=True)
-        Effmpeg.__run_ffmpeg(ff)
+        Effmpeg.__run_ffmpeg(inputs=_input, outputs=_output)
 
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
-                ref_vid=None, **kwargs):
+                ref_vid=None, preview=None, **kwargs):
         filename = Effmpeg.__get_extracted_filename(input_.path)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_path = os.path.join(input_.path, filename)
@@ -290,8 +306,7 @@ class Effmpeg(object):
         else:
             _inputs = {_input_path: _input_opts}
         _outputs = {output.path: _output_opts}
-        ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        Effmpeg.__run_ffmpeg(ff)
+        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def get_fps(input_=None, print_=False, **kwargs):
@@ -323,17 +338,16 @@ class Effmpeg(object):
             return out
 
     @staticmethod
-    def rescale(input_=None, output=None, scale=None, **kwargs):
+    def rescale(input_=None, output=None, scale=None, preview=None, **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _output_opts = '-y -vf scale="' + str(scale) + '"'
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
-        ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        Effmpeg.__run_ffmpeg(ff)
+        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def rotate(input_=None, output=None, degrees=None, transpose=None,
-               **kwargs):
+               preview=None, **kwargs):
         if transpose is None and degrees is None:
             raise ValueError("You have not supplied a valid transpose or "
                              "degrees value:\ntranspose: {}\ndegrees: "
@@ -352,29 +366,28 @@ class Effmpeg(object):
 
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
-        ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        Effmpeg.__run_ffmpeg(ff)
+        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def mux_audio(input_=None, output=None, ref_vid=None, **kwargs):
+    def mux_audio(input_=None, output=None, ref_vid=None, preview=None,
+                  **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _ref_vid_opts = None
         _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
         _inputs = {input_.path: _input_opts, ref_vid.path: _ref_vid_opts}
         _outputs = {output.path: _output_opts}
-        ff = FFmpeg(inputs=_inputs, outputs=_outputs)
-        Effmpeg.__run_ffmpeg(ff)
+        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def slice(input_=None, output=None, start=None, duration=None, **kwargs):
+    def slice(input_=None, output=None, start=None, duration=None,
+              preview=None,  **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
         _output_opts = "-y -t " + duration + " "
         _output_opts += "-vcodec copy -acodec copy"
         _inputs = {input_.path: _input_opts}
         _output = {output.path: _output_opts}
-        ff = FFmpeg(inputs=_inputs, outputs=_output)
-        Effmpeg.__run_ffmpeg(ff)
+        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_output)
 
     # Various helper methods
     @classmethod
@@ -415,8 +428,9 @@ class Effmpeg(object):
 
         return all(getattr(self, i).fps is None for i in items_to_check)
 
-    @staticmethod
-    def __run_ffmpeg(ff):
+    @classmethod
+    def __run_ffmpeg(cls, inputs=None, outputs=None):
+        ff = FFmpeg(executable=cls._executable, inputs=inputs, outputs=outputs)
         try:
             ff.run(stderr=subprocess.STDOUT)
         except FFRuntimeError as ffe:
@@ -460,14 +474,21 @@ class Effmpeg(object):
         name = '.'.join(filename[:-2])
 
         vid_ext = ''
+        underscore = ''
         for ve in [ve.replace('.', '') for ve in DataItem.vid_ext]:
             if ve in zero_pad:
                 vid_ext = ve
-                zero_pad = len(zero_pad.replace(ve, ''))
+                zero_pad = zero_pad.replace(ve, '')
+                if '_' in zero_pad:
+                    zero_pad = len(zero_pad.replace('_', ''))
+                    underscore = '_'
+                else:
+                    zero_pad = len(zero_pad)
                 break
 
         zero_pad = str(zero_pad).zfill(2)
-        filename_list = [name, vid_ext + '%0' + zero_pad + 'd', img_ext]
+        filename_list = [name, vid_ext + underscore + '%' + zero_pad + 'd',
+                         img_ext]
         return '.'.join(filename_list)
 
     @staticmethod
