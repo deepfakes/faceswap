@@ -105,7 +105,14 @@ class Gui(object):
         self.args = arguments
         self.root = FaceswapGui(pathscript)
 
+    def get_scaling(self):
+        """ Get the display DPI """
+        dpi = self.root.winfo_fpixels('1i')
+        return dpi / 72.0
+
     def process(self):
         """ Builds the GUI """
+        scaling_factor = self.get_scaling()
+        self.root.tk.call('tk', 'scaling', scaling_factor)
         self.root.build_gui(self.args.debug)
         self.root.mainloop()
