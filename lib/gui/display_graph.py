@@ -11,7 +11,8 @@ import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.animation as animation
 from matplotlib import pyplot as plt, style
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
+                                               NavigationToolbar2Tk)
 
 from .tooltip import Tooltip
 from .utils import Images
@@ -71,6 +72,7 @@ class NavigationToolbar(NavigationToolbar2Tk):
         self._message_label.pack(side=tk.LEFT, padx=5)
         self.pack(side=tk.BOTTOM, fill=tk.X)
 
+
 class GraphBase(ttk.Frame):
     """ Base class for matplotlib line graphs """
     def __init__(self, parent, data, ylabel):
@@ -93,9 +95,16 @@ class GraphBase(ttk.Frame):
 
     def initiate_graph(self):
         """ Place the graph canvas """
-        self.plotcanvas.get_tk_widget().pack(side=tk.TOP, padx=5, fill=tk.BOTH, expand=True)
-        plt.subplots_adjust(left=0.100, bottom=0.100, right=0.95, top=0.95,
-                            wspace=0.2, hspace=0.2)
+        self.plotcanvas.get_tk_widget().pack(side=tk.TOP,
+                                             padx=5,
+                                             fill=tk.BOTH,
+                                             expand=True)
+        plt.subplots_adjust(left=0.100,
+                            bottom=0.100,
+                            right=0.95,
+                            top=0.95,
+                            wspace=0.2,
+                            hspace=0.2)
 
     def update_plot(self, initiate=True):
         """ Update the plot with incoming data """
@@ -191,7 +200,8 @@ class GraphBase(ttk.Frame):
         else:
             for check in ("avg", "trend"):
                 if any(item[0].startswith(check) for item in sorted_lines):
-                    groupsize = len([item for item in sorted_lines if item[0].startswith(check)])
+                    groupsize = len([item for item in sorted_lines
+                                     if item[0].startswith(check)])
                     break
         return groupsize
 
@@ -224,6 +234,7 @@ class GraphBase(ttk.Frame):
         self.toolbar.pack(side=tk.BOTTOM)
         self.toolbar.update()
 
+
 class TrainingGraph(GraphBase):
     """ Live graph to be displayed during training. """
 
@@ -235,7 +246,10 @@ class TrainingGraph(GraphBase):
     def build(self):
         """ Update the plot area with loss values and cycle through to
         animate """
-        self.anim = animation.FuncAnimation(self.fig, self.animate, interval=200, blit=False)
+        self.anim = animation.FuncAnimation(self.fig,
+                                            self.animate,
+                                            interval=200,
+                                            blit=False)
         self.plotcanvas.draw()
 
     def animate(self, i):
@@ -249,31 +263,35 @@ class TrainingGraph(GraphBase):
             There's no point calculating a graph over thousands of
             points of data when the change will be miniscule """
         if iterations > 30000:
-            speed = 60000           #1 min updates
+            speed = 60000           # 1 min updates
         elif iterations > 20000:
-            speed = 30000           #30 sec updates
+            speed = 30000           # 30 sec updates
         elif iterations > 10000:
-            speed = 10000           #10 sec updates
+            speed = 10000           # 10 sec updates
         elif iterations > 5000:
-            speed = 5000            #5 sec updates
+            speed = 5000            # 5 sec updates
         elif iterations > 1000:
-            speed = 2000            #2 sec updates
+            speed = 2000            # 2 sec updates
         elif iterations > 500:
-            speed = 1000            #1 sec updates
+            speed = 1000            # 1 sec updates
         elif iterations > 100:
-            speed = 500             #0.5 sec updates
+            speed = 500             # 0.5 sec updates
         else:
-            speed = 200             #200ms updates
+            speed = 200             # 200ms updates
         if not self.anim.event_source.interval == speed:
             self.anim.event_source.interval = speed
 
     def save_fig(self, location):
         """ Save the figure to file """
         keys = sorted([key.replace("raw_", "")
-                       for key in self.calcs.stats.keys() if key.startswith("raw_")])
+                       for key in self.calcs.stats.keys()
+                       if key.startswith("raw_")])
         filename = " - ".join(keys)
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
+        filename = os.path.join(location,
+                                "{}_{}.{}".format(filename,
+                                                  now,
+                                                  "png"))
         self.fig.set_size_inches(16, 9)
         self.fig.savefig(filename, bbox_inches="tight", dpi=120)
         print("Saved graph to {}".format(filename))
@@ -288,6 +306,7 @@ class TrainingGraph(GraphBase):
         Event.width = self.winfo_width()
         Event.height = self.winfo_height()
         self.plotcanvas.resize(Event)
+
 
 class SessionGraph(GraphBase):
     """ Session Graph for session pop-up """

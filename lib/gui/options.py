@@ -9,6 +9,7 @@ from lib.Serializer import JSONSerializer
 import tools.cli as ToolsCli
 from .utils import FileHandler, Images
 
+
 class CliOptions(object):
     """ Class and methods for the command line options """
     def __init__(self):
@@ -41,10 +42,12 @@ class CliOptions(object):
         """ Format classes into command names and sort:
             Specific workflow order for faceswap.
             Alphabetical for all others """
-        commands = sorted(self.format_command_name(command) for command in classes)
+        commands = sorted(self.format_command_name(command)
+                          for command in classes)
         if category == "faceswap":
             ordered = ["extract", "train", "convert"]
-            commands = ordered + [command for command in commands if command not in ordered]
+            commands = ordered + [command for command in commands
+                                  if command not in ordered]
         return commands
 
     @staticmethod
@@ -53,7 +56,8 @@ class CliOptions(object):
         return classname.lower()[:-4]
 
     def extract_options(self, cli_source, mod_classes):
-        """ Extract the existing ArgParse Options into master options Dictionary """
+        """ Extract the existing ArgParse Options
+            into master options Dictionary """
         subopts = dict()
         for classname in mod_classes:
             command = self.format_command_name(classname)
@@ -126,10 +130,11 @@ class CliOptions(object):
     def set_context_option(self, command):
         """ Set the tk_var for the source action option
             that dictates the context sensitive file browser. """
-        actions = {item["opts"][0]: item["value"] for item in self.gen_command_options(command)}
+        actions = {item["opts"][0]: item["value"]
+                   for item in self.gen_command_options(command)}
         for opt in self.gen_command_options(command):
             if opt["filesystem_browser"] == "context":
-                opt["action_option"] = actions[opt['action_option']]
+                opt["action_option"] = actions[opt["action_option"]]
                 break
 
     def gen_command_options(self, command):
@@ -206,6 +211,7 @@ class CliOptions(object):
                 else:
                     opt = (opt, optval)
                 yield opt
+
 
 class Config(object):
     """ Actions for loading and saving Faceswap GUI command configurations """

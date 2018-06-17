@@ -4,6 +4,7 @@
 import tkinter as tk
 from tkinter import ttk
 
+
 class StatusBar(ttk.Frame):
     """ Status Bar for displaying the Status Message and
         Progress Bar """

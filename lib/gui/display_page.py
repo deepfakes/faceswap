@@ -1,4 +1,3 @@
-
 #!/usr/bin python3
 """ Display Page parent classes for display section of the Faceswap GUI """
 
@@ -7,6 +6,7 @@ from tkinter import ttk
 
 from .tooltip import Tooltip
 from .utils import Images
+
 
 class DisplayPage(ttk.Frame):
     """ Parent frame holder for each tab.
@@ -56,7 +56,10 @@ class DisplayPage(ttk.Frame):
 
     def add_options_info(self):
         """ Add the info bar """
-        lblinfo = ttk.Label(self.optsframe, textvariable=self.vars["info"], anchor=tk.W, width=70)
+        lblinfo = ttk.Label(self.optsframe,
+                            textvariable=self.vars["info"],
+                            anchor=tk.W,
+                            width=70)
         lblinfo.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.W)
 
     def set_info(self, msg):
@@ -100,7 +103,10 @@ class DisplayPage(ttk.Frame):
         """ Show subnotebook. Used for displaying
             Optional displays  """
         if not self.subnotebook.winfo_ismapped():
-            self.subnotebook.pack(side=tk.TOP, anchor=tk.NW, fill=tk.BOTH, expand=True)
+            self.subnotebook.pack(side=tk.TOP,
+                                  anchor=tk.NW,
+                                  fill=tk.BOTH,
+                                  expand=True)
 
     def subnotebook_get_widgets(self):
         """ Return each widget that sits within each
@@ -120,6 +126,7 @@ class DisplayPage(ttk.Frame):
         """ Return subnotebook tab widget from it's ID """
         tab_name = self.subnotebook.tabs()[tab_id].split(".")[-1]
         return self.subnotebook.children[tab_name]
+
 
 class DisplayOptionalPage(DisplayPage):
     """ Parent Context Sensitive Display Tab """

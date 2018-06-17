@@ -48,9 +48,13 @@ class PreviewExtract(DisplayOptionalPage):
             return
         filename = "extract_convert_preview"
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
+        filename = os.path.join(location,
+                                "{}_{}.{}".format(filename,
+                                                  now,
+                                                  "png"))
         Images().previewoutput[0].save(filename)
         print("Saved preview to {}".format(filename))
+
 
 class PreviewTrain(DisplayOptionalPage):
     """ Training preview image(s) """
@@ -94,6 +98,7 @@ class PreviewTrain(DisplayOptionalPage):
         for preview in self.subnotebook.children.values():
             preview.save_preview(location)
 
+
 class PreviewTrainCanvas(ttk.Frame):
     """ Canvas to hold a training preview image """
     def __init__(self, parent, previewname):
@@ -105,13 +110,16 @@ class PreviewTrainCanvas(ttk.Frame):
 
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.imgcanvas = self.canvas.create_image(0, 0, image=self.previewimage, anchor=tk.NW)
+        self.imgcanvas = self.canvas.create_image(0,
+                                                  0,
+                                                  image=self.previewimage,
+                                                  anchor=tk.NW)
         self.bind("<Configure>", self.resize)
 
     def resize(self, event):
         """  Resize the image to fit the frame, maintaining aspect ratio """
         framesize = (event.width, event.height)
-        # Sometimes it tries to resize the image before the frame has been drawn
+        # Sometimes image is resized before frame is drawn
         framesize = None if framesize == (1, 1) else framesize
         Images().resize_image(self.name, framesize)
         self.reload()
@@ -125,9 +133,13 @@ class PreviewTrainCanvas(ttk.Frame):
         """ Save the figure to file """
         filename = self.name
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
+        filename = os.path.join(location,
+                                "{}_{}.{}".format(filename,
+                                                  now,
+                                                  "png"))
         Images().previewtrain[self.name][0].save(filename)
         print("Saved preview to {}".format(filename))
+
 
 class GraphDisplay(DisplayOptionalPage):
     """ The Graph Tab of the Display section """

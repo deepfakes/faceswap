@@ -12,6 +12,7 @@ from time import time
 
 from .utils import Images
 
+
 class ProcessWrapper(object):
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
@@ -81,7 +82,8 @@ class ProcessWrapper(object):
         self.tk_vars["consoleclear"].set(True)
         print("Loading...")
 
-        self.statusbar.status_message.set("Executing - " + self.command + ".py")
+        self.statusbar.status_message.set("Executing - "
+                                          + self.command + ".py")
         mode = "indeterminate" if self.command == "train" else "determinate"
         self.statusbar.progress_start(mode)
 
@@ -126,6 +128,7 @@ class ProcessWrapper(object):
         self.session.__init__()
         self.command = None
         print("Process exited.")
+
 
 class FaceswapControl(object):
     """ Control the underlying Faceswap tasks """
@@ -221,7 +224,9 @@ class FaceswapControl(object):
         elapsed = self.wrapper.session.timestats["elapsed"]
         iterations = self.wrapper.session.stats["iterations"]
 
-        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed, iterations, message)
+        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed,
+                                                          iterations,
+                                                          message)
         self.statusbar.progress_update(message, 0, False)
         return True
 
@@ -235,7 +240,10 @@ class FaceswapControl(object):
         processed = tqdm[1]
         processtime = "Elapsed: {}  Remaining: {}".format(tqdm[2], tqdm[3])
         rate = tqdm[4]
-        message = "{}  |  {}  |  {}  |  {}".format(processtime, rate, processed, percent)
+        message = "{}  |  {}  |  {}  |  {}".format(processtime,
+                                                   rate,
+                                                   processed,
+                                                   percent)
 
         current, total = processed.split("/")
         position = int((float(current) / float(total)) * 1000)
@@ -295,5 +303,6 @@ class FaceswapControl(object):
         elif returncode == -6:
             status = "Aborted - {}.py".format(self.command)
         else:
-            status = "Failed - {}.py. Return Code: {}".format(self.command, returncode)
+            status = "Failed - {}.py. Return Code: {}".format(self.command,
+                                                              returncode)
         return status
