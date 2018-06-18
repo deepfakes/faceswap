@@ -10,6 +10,7 @@ import enum
 import os
 import sys
 import warnings
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 from keras.initializers import RandomNormal
@@ -24,8 +25,11 @@ from keras.utils import multi_gpu_model
 
 from lib.PixelShuffler import PixelShuffler
 import lib.Serializer
+from lib.utils import backup_file
 
 from . import __version__
+from .instance_normalization import InstanceNormalization
+
 
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
@@ -35,12 +39,6 @@ else:
 
 mswindows = sys.platform=="win32"
 
-try:
-    from lib.utils import backup_file
-except ImportError:
-    pass
-
-
 
 class EncoderType(enum.Enum):
     ORIGINAL = "original"
@@ -49,27 +47,14 @@ class EncoderType(enum.Enum):
     
 ENCODER = EncoderType.ORIGINAL
 
-
-if ENCODER==EncoderType.SHAOANLU:
-    from .instance_normalization import InstanceNormalization
-
-    
-def inst_norm():
-    return InstanceNormalization()     
-
+         
 conv_init = RandomNormal(0, 0.02)
-
-
 
 def inst_norm():
     return InstanceNormalization()
 
-class EncoderType(enum.Enum):
-    ORIGINAL = "original"
-    SHAOANLU = "shaoanlu"
     
 ENCODER = EncoderType.ORIGINAL 
-
 
 
 hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
