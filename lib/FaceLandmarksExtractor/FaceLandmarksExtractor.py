@@ -22,7 +22,7 @@ def onExit():
     for detector in dlib_detectors:
         del detector
         
-class TorchBatchNorm2D(keras.engine.topology.Layer):
+class TorchBatchNorm2D(keras.engine.base_layer.Layer):
     def __init__(self, axis=-1, momentum=0.99, epsilon=1e-3, **kwargs):
         super(TorchBatchNorm2D, self).__init__(**kwargs)
         self.supports_masking = True
