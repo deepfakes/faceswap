@@ -17,7 +17,9 @@ class FaceswapGui(tk.Tk):
 
     def __init__(self, pathscript):
         tk.Tk.__init__(self)
-        self.geometry("1200x640+80+80")
+        self.scaling_factor = self.get_scaling()
+        self.set_geometry()
+
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
         self.images = Images(pathcache)
         self.cliopts = CliOptions()
@@ -31,6 +33,18 @@ class FaceswapGui(tk.Tk):
         self.images.delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
 
+    def get_scaling(self):
+        """ Get the display DPI """
+        dpi = self.winfo_fpixels("1i")
+        return dpi / 72.0
+
+    def set_geometry(self):
+        """ Set GUI geometry """
+        self.tk.call("tk", "scaling", self.scaling_factor)
+        width = int(1200 * self.scaling_factor)
+        height = int(640 * self.scaling_factor)
+        self.geometry("{}x{}+80+80".format(str(width), str(height)))
+
     def build_gui(self, debug_console):
         """ Build the GUI """
         self.title("Faceswap.py")
@@ -38,8 +52,14 @@ class FaceswapGui(tk.Tk):
 
         topcontainer, bottomcontainer = self.add_containers()
 
-        CommandNotebook(topcontainer, self.cliopts, self.wrapper.tk_vars)
-        DisplayNotebook(topcontainer, self.session, self.wrapper.tk_vars)
+        CommandNotebook(topcontainer,
+                        self.cliopts,
+                        self.wrapper.tk_vars,
+                        self.scaling_factor)
+        DisplayNotebook(topcontainer,
+                        self.session,
+                        self.wrapper.tk_vars,
+                        self.scaling_factor)
         ConsoleOut(bottomcontainer, debug_console, self.wrapper.tk_vars)
 
     def menu(self):
@@ -112,14 +132,7 @@ class Gui(object):
         self.args = arguments
         self.root = FaceswapGui(pathscript)
 
-    def get_scaling(self):
-        """ Get the display DPI """
-        dpi = self.root.winfo_fpixels("1i")
-        return dpi / 72.0
-
     def process(self):
         """ Builds the GUI """
-        scaling_factor = self.get_scaling()
-        self.root.tk.call("tk", "scaling", scaling_factor)
         self.root.build_gui(self.args.debug)
         self.root.mainloop()
