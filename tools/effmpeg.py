@@ -5,6 +5,9 @@ Created on 2018-03-16 15:14
 
 @author: Lev Velykoivanenko (velykoivanenko.lev@gmail.com)
 """
+# TODO: fix file handlers for effmpeg in gui (changes what needs to be opened)
+# TODO: add basic cli preview to effmpeg
+# TODO: integrate preview into gui window
 import os
 import sys
 import subprocess
