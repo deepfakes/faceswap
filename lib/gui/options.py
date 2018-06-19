@@ -135,7 +135,6 @@ class CliOptions(object):
         for opt in self.gen_command_options(command):
             if opt["filesystem_browser"] == "context":
                 opt["action_option"] = actions[opt["action_option"]]
-                break
 
     def gen_command_options(self, command):
         """ Yield each option for specified command """

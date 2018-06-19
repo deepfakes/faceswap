@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
 """ Utility functions for the GUI """
-
-
-def tracefunc(frame, event, arg, indent=[0]):
-    if event == "call":
-        indent[0] += 2
-        print("-" * indent[0] + "> call function", frame.f_code.co_name)
-    elif event == "return":
-        print("<" + "-" * indent[0], "exit function", frame.f_code.co_name)
-        indent[0] -= 2
-    return tracefunc
-
-
-import sys
-
-#sys.setprofile(tracefunc)
-
 import os
 import sys
 import tkinter as tk
@@ -84,8 +68,8 @@ class FileHandler(object):
                           "slice": "open"},
                 "output": {"extract": "dir",
                            "gen-vid": "save",
-                           "get-fps": "open",
-                           "get-info": "open",
+                           "get-fps": "nothing",
+                           "get-info": "nothing",
                            "mux-audio": "save",
                            "rescale": "save",
                            "rotate": "save",
@@ -148,6 +132,10 @@ class FileHandler(object):
     def savefilename(self):
         """ Get a save file location """
         return filedialog.asksaveasfilename(**self.kwargs)
+
+    def nothing(self):
+        """ Method that does nothing, used for disabling open/save pop up  """
+        return
 
     def context(self):
         """ Choose the correct file browser action based on context """
