@@ -14,7 +14,7 @@ from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
 class DisplayNotebook(ttk.Notebook):
     """ The display tabs """
 
-    def __init__(self, parent, session, tk_vars):
+    def __init__(self, parent, session, tk_vars, scaling_factor):
         ttk.Notebook.__init__(self, parent, width=780)
         parent.add(self)
 
@@ -23,7 +23,7 @@ class DisplayNotebook(ttk.Notebook):
         self.session = session
 
         self.set_wrapper_var_trace()
-        self.add_static_tabs()
+        self.add_static_tabs(scaling_factor)
         self.static_tabs = [child for child in self.tabs()]
 
     def set_wrapper_var_trace(self):
@@ -31,7 +31,7 @@ class DisplayNotebook(ttk.Notebook):
             when they have been triggered in the Process Wrapper """
         self.wrapper_var.trace("w", self.update_displaybook)
 
-    def add_static_tabs(self):
+    def add_static_tabs(self, scaling_factor):
         """ Add tabs that are permanently available """
         for tab in ("job queue", "analysis"):
             if tab == "job queue":
@@ -39,7 +39,7 @@ class DisplayNotebook(ttk.Notebook):
             if tab == "analysis":
                 helptext = {"stats":
                             "Summary statistics for each training session"}
-                frame = Analysis(self, tab, helptext)
+                frame = Analysis(self, tab, helptext, scaling_factor)
             else:
                 frame = self.add_frame()
                 self.add(frame, text=tab.title())

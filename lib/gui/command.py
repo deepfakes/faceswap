@@ -12,8 +12,10 @@ from .utils import Images, FileHandler
 class CommandNotebook(ttk.Notebook):
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, cli_options, tk_vars):
-        ttk.Notebook.__init__(self, parent, width=420, height=500)
+    def __init__(self, parent, cli_options, tk_vars, scaling_factor):
+        width = int(420 * scaling_factor)
+        height = int(500 * scaling_factor)
+        ttk.Notebook.__init__(self, parent, width=width, height=height)
         parent.add(self)
 
         self.cli_opts = cli_options
