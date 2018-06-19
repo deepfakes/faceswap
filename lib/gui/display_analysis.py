@@ -14,12 +14,12 @@ from .utils import Images, FileHandler
 
 class Analysis(DisplayPage):
     """ Session analysis tab """
-    def __init__(self, parent, tabname, helptext):
+    def __init__(self, parent, tabname, helptext, scaling_factor):
         DisplayPage.__init__(self, parent, tabname, helptext)
 
         self.summary = None
         self.add_options()
-        self.add_main_frame()
+        self.add_main_frame(scaling_factor)
 
     def set_vars(self):
         """ Analysis specific vars """
@@ -28,14 +28,15 @@ class Analysis(DisplayPage):
         return {"selected_id": selected_id,
                 "filename": filename}
 
-    def add_main_frame(self):
+    def add_main_frame(self, scaling_factor):
         """ Add the main frame to the subnotebook
             to hold stats and session data """
         mainframe = self.subnotebook_add_page("stats")
         self.stats = StatsData(mainframe,
                                self.vars["filename"],
                                self.vars["selected_id"],
-                               self.helptext["stats"])
+                               self.helptext["stats"],
+                               scaling_factor)
 
     def add_options(self):
         """ Add the options bar """
@@ -144,7 +145,12 @@ class Options(object):
 
 class StatsData(ttk.Frame):
     """ Stats frame of analysis tab """
-    def __init__(self, parent, filename, selected_id, helptext):
+    def __init__(self,
+                 parent,
+                 filename,
+                 selected_id,
+                 helptext,
+                 scaling_factor):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP,
                   padx=5,
@@ -157,6 +163,7 @@ class StatsData(ttk.Frame):
         self.loaded_data = None
         self.selected_id = selected_id
         self.popup_positions = list()
+        self.scaling_factor = scaling_factor
 
         self.add_label()
         self.tree = ttk.Treeview(self, height=1, selectmode=tk.BROWSE)
@@ -237,8 +244,12 @@ class StatsData(ttk.Frame):
         toplevel = SessionPopUp(self.loaded_data, self.selected_id.get())
         toplevel.title(self.data_popup_title())
         position = self.data_popup_get_position()
-        toplevel.geometry("720x400+{}+{}".format(str(position[0]),
-                                                 str(position[1])))
+        height = int(720 * self.scaling_factor)
+        width = int(400 * self.scaling_factor)
+        toplevel.geometry("{}x{}+{}+{}".format(str(height),
+                                               str(width),
+                                               str(position[0]),
+                                               str(position[1])))
         toplevel.update()
 
     def data_popup_title(self):

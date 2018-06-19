@@ -18,8 +18,6 @@ class FaceswapGui(tk.Tk):
     def __init__(self, pathscript):
         tk.Tk.__init__(self)
         self.scaling_factor = self.get_scaling()
-        self.scaling_factor = 2.0
-
         self.set_geometry()
 
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
@@ -34,7 +32,6 @@ class FaceswapGui(tk.Tk):
 
         self.images.delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
-
 
     def get_scaling(self):
         """ Get the display DPI """
@@ -55,8 +52,14 @@ class FaceswapGui(tk.Tk):
 
         topcontainer, bottomcontainer = self.add_containers()
 
-        CommandNotebook(topcontainer, self.cliopts, self.wrapper.tk_vars, self.scaling_factor)
-        DisplayNotebook(topcontainer, self.session, self.wrapper.tk_vars)
+        CommandNotebook(topcontainer,
+                        self.cliopts,
+                        self.wrapper.tk_vars,
+                        self.scaling_factor)
+        DisplayNotebook(topcontainer,
+                        self.session,
+                        self.wrapper.tk_vars,
+                        self.scaling_factor)
         ConsoleOut(bottomcontainer, debug_console, self.wrapper.tk_vars)
 
     def menu(self):
