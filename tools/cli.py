@@ -177,9 +177,9 @@ class EffmpegArgs(FaceSwapArgs):
                               "dest": "preview",
                               "default": False,
                               "help": "Uses ffplay to preview the effects of "
-                                      "the intended action. "
-                                      "This functionality is not yet fully "
-                                      "implemented."})
+                                      "actions that have a video output. "
+                                      "Currently preview does not work when "
+                                      "muxing audio."})
 
         argument_list.append({"opts": ('-q', '--quiet'),
                               "action": "store_true",
