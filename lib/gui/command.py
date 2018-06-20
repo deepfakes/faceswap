@@ -291,10 +291,12 @@ class OptionControl(object):
     def ask_context(self, filepath, filetypes):
         """ Method to pop the correct dialog depending on context """
         selected_action = self.option["action_option"].get()
+        selected_variable = self.option["dest"]
         filename = FileHandler("context",
                                filetypes,
                                command=self.command,
-                               action=selected_action).retfile
+                               action=selected_action,
+                               variable=selected_variable).retfile
         if filename:
             filepath.set(filename)
 

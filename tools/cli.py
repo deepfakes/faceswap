@@ -49,7 +49,7 @@ class EffmpegArgs(FaceSwapArgs):
                               "filetypes": "video"})
 
         argument_list.append({"opts": ('-o', '--output'),
-                              "action": SaveFileFullPaths,
+                              "action": ContextFullPaths,
                               "dest": "output",
                               "default": "",
                               "help": "Output file. If no output is "
@@ -64,6 +64,7 @@ class EffmpegArgs(FaceSwapArgs):
                                       "Note: the chosen output file "
                                       "extension will determine the file "
                                       "encoding.",
+                              "action_option": "-a",
                               "filetypes": "video"})
 
         argument_list.append({"opts": ('-r', '--reference-video'),

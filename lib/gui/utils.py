@@ -1,6 +1,5 @@
-#!/usr/bin python3
+#!/usr/bin/env python3
 """ Utility functions for the GUI """
-
 import os
 import sys
 import tkinter as tk
@@ -28,10 +27,12 @@ class Singleton(type):
 
 class FileHandler(object):
     """ Raise a filedialog box and capture input """
-    def __init__(self, handletype, filetype, command=None, action=None):
+
+    def __init__(self, handletype, filetype, command=None, action=None,
+                 variable=None):
 
         all_files = ("All files", "*.*")
-        self.filetypes = {"default": (all_files, ),
+        self.filetypes = {"default": (all_files,),
                           "alignments": (("JSON", "*.json"),
                                          ("Pickle", "*.p"),
                                          ("YAML", "*.yaml"),
@@ -55,16 +56,29 @@ class FileHandler(object):
                                     ("MPEG", "*.mpeg"),
                                     ("WebM", "*.webm"),
                                     all_files)}
-        self.contexts = {"effmpeg": {"extract": "open",
-                                     "gen-vid": "dir",
-                                     "get-fps": "open",
-                                     "get-info": "open",
-                                     "mux-audio": "open",
-                                     "rescale": "open",
-                                     "rotate": "open",
-                                     "slice": "open"}}
+        self.contexts = {
+            "effmpeg": {
+                "input": {"extract": "open",
+                          "gen-vid": "dir",
+                          "get-fps": "open",
+                          "get-info": "open",
+                          "mux-audio": "open",
+                          "rescale": "open",
+                          "rotate": "open",
+                          "slice": "open"},
+                "output": {"extract": "dir",
+                           "gen-vid": "save",
+                           "get-fps": "nothing",
+                           "get-info": "nothing",
+                           "mux-audio": "save",
+                           "rescale": "save",
+                           "rotate": "save",
+                           "slice": "save"}
+            }
+        }
         self.defaults = self.set_defaults()
-        self.kwargs = self.set_kwargs(handletype, filetype, command, action)
+        self.kwargs = self.set_kwargs(handletype, filetype, command, action,
+                                      variable)
         self.retfile = getattr(self, handletype.lower())()
 
     def set_defaults(self):
@@ -77,7 +91,7 @@ class FileHandler(object):
         defaults["image"] = ".png"
         return defaults
 
-    def set_kwargs(self, handletype, filetype, command, action):
+    def set_kwargs(self, handletype, filetype, command, action, variable=None):
         """ Generate the required kwargs for the requested browser """
         kwargs = dict()
         if handletype.lower() in ("open", "save", "filename", "savefilename"):
@@ -92,6 +106,7 @@ class FileHandler(object):
             kwargs["filetype"] = filetype
             kwargs["command"] = command
             kwargs["action"] = action
+            kwargs["variable"] = variable
         return kwargs
 
     def open(self):
@@ -106,26 +121,40 @@ class FileHandler(object):
         """ Get a directory location """
         return filedialog.askdirectory(**self.kwargs)
 
+    def savedir(self):
+        """ Get a save dir location """
+        return filedialog.askdirectory(**self.kwargs)
+
     def filename(self):
         """ Get an existing file location """
         return filedialog.askopenfilename(**self.kwargs)
 
     def savefilename(self):
-        """ Get a save filelocation """
+        """ Get a save file location """
         return filedialog.asksaveasfilename(**self.kwargs)
+
+    def nothing(self):
+        """ Method that does nothing, used for disabling open/save pop up  """
+        return
 
     def context(self):
         """ Choose the correct file browser action based on context """
         command = self.kwargs["command"]
         action = self.kwargs["action"]
         filetype = self.kwargs["filetype"]
-        handletype = self.contexts[command][action]
-        self.kwargs = self.set_kwargs(handletype, filetype, command, action)
+        variable = self.kwargs["variable"]
+        if self.contexts[command].get(variable, None) is not None:
+            handletype = self.contexts[command][variable][action]
+        else:
+            handletype = self.contexts[command][action]
+        self.kwargs = self.set_kwargs(handletype, filetype, command, action,
+                                      variable)
         self.retfile = getattr(self, handletype.lower())()
 
 
 class Images(object, metaclass=Singleton):
     """ Holds locations of images and actual images """
+
     def __init__(self, pathcache=None):
         self.pathicons = os.path.join(pathcache, "icons")
         self.pathpreview = os.path.join(pathcache, "preview")
