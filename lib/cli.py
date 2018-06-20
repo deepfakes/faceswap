@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """ Command Line Arguments """
 import argparse
+from importlib import import_module
 import os
+import platform
 import sys
 
 from plugins.PluginLoader import PluginLoader
@@ -19,23 +21,63 @@ class ScriptExecutor(object):
 
     def import_script(self):
         """ Only import a script's modules when running that script."""
-        if self.command == 'extract':
-            from scripts.extract import Extract as script
-        elif self.command == 'train':
-            from scripts.train import Train as script
-        elif self.command == 'convert':
-            from scripts.convert import Convert as script
-        elif self.command == 'gui':
-            from scripts.gui import Gui as script
-        else:
-            script = None
+        self.test_for_gui()
+        cmd = os.path.basename(sys.argv[0])
+        src = "tools" if cmd == "tools.py" else "scripts"
+        mod = ".".join((src, self.command.lower()))
+        module = import_module(mod)
+        script = getattr(module, self.command.title())
         return script
+
+    def test_for_gui(self):
+        """ If running the gui, check the prerequisites """
+        if self.command != "gui":
+            return
+        self.test_tkinter()
+        self.check_display()
+
+    @staticmethod
+    def test_tkinter():
+        """ If the user is running the GUI, test whether the
+            tkinter app is available on their machine. If not
+            exit gracefully.
+
+            This avoids having to import every tk function
+            within the GUI in a wrapper and potentially spamming
+            traceback errors to console """
+
+        try:
+            import tkinter
+        except ImportError:
+            print(
+                "It looks like TkInter isn't installed for your OS, so "
+                "the GUI has been disabled. To enable the GUI please "
+                "install the TkInter application.\n\n"
+                "You can try:\n"
+                "  Windows/macOS:      Install ActiveTcl Community "
+                "Edition from "
+                "www.activestate.com\n"
+                "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
+                "  Arch:               sudo pacman -S tk\n"
+                "  CentOS/Redhat:      sudo yum install tkinter\n"
+                "  Fedora:             sudo dnf install python3-tkinter\n")
+            exit(1)
+
+    @staticmethod
+    def check_display():
+        """ Check whether there is a display to output the GUI. If running on
+            Windows then assume not running in headless mode """
+        if not os.environ.get("DISPLAY", None) and os.name != "nt":
+            print("No display detected. GUI mode has been disabled.")
+            if platform.system() == "Darwin":
+                print("macOS users need to install XQuartz. "
+                      "See https://support.apple.com/en-gb/HT201341")
+            exit(1)
 
     def execute_script(self, arguments):
         """ Run the script for called command """
         script = self.import_script()
-        args = (arguments, ) if self.command != 'gui' else (arguments, self.subparsers)
-        process = script(*args)
+        process = script(arguments)
         process.process()
 
 
@@ -43,7 +85,7 @@ class FullPaths(argparse.Action):
     """ Expand user- and relative-paths """
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
-                os.path.expanduser(values)))
+            os.path.expanduser(values)))
 
 
 class DirFullPaths(FullPaths):
@@ -55,14 +97,7 @@ class FileFullPaths(FullPaths):
     """
     Class that gui uses to determine if you need to open a file.
 
-    Filetypes added as an argparse argument must be an iterable, i.e. a
-    list of lists, tuple of tuples, list of tuples etc... formatted like so:
-        [("File Type", ["*.ext", "*.extension"])]
-    A more realistic example:
-        [("Video File", ["*.mkv", "mp4", "webm"])]
-
-    If the file extensions are not prepended with '*.', use the
-    prep_filetypes() method to format them in the arguments_list.
+    see lib/gui/utils.py FileHandler for current GUI filetypes
     """
     def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  **kwargs):
@@ -71,98 +106,63 @@ class FileFullPaths(FullPaths):
             raise ValueError("nargs not allowed")
         self.filetypes = filetypes
 
-    @staticmethod
-    def prep_filetypes(filetypes):
-        all_files = ("All Files", "*.*")
-        filetypes_l = list()
-        for i in range(len(filetypes)):
-            filetypes_l.append(FileFullPaths._process_filetypes(filetypes[i]))
-        filetypes_l.append(all_files)
-        return tuple(filetypes_l)
-
-    @staticmethod
-    def _process_filetypes(filetypes):
-        """        """
-        if filetypes is None:
-            return None
-
-        filetypes_name = filetypes[0]
-        filetypes_l = filetypes[1]
-        if (type(filetypes_l) == list or type(filetypes_l) == tuple) \
-                and all("*." in i for i in filetypes_l):
-            return filetypes  # assume filetypes properly formatted
-
-        if type(filetypes_l) != list and type(filetypes_l) != tuple:
-            raise ValueError("The filetypes extensions list was "
-                             "neither a list nor a tuple: "
-                             "{}".format(filetypes_l))
-
-        filetypes_list = list()
-        for i in range(len(filetypes_l)):
-            filetype = filetypes_l[i].strip("*.")
-            filetype = filetype.strip(';')
-            filetypes_list.append("*." + filetype)
-        return filetypes_name, filetypes_list
-
     def _get_kwargs(self):
         names = [
-            'option_strings',
-            'dest',
-            'nargs',
-            'const',
-            'default',
-            'type',
-            'choices',
-            'help',
-            'metavar',
-            'filetypes'
+            "option_strings",
+            "dest",
+            "nargs",
+            "const",
+            "default",
+            "type",
+            "choices",
+            "help",
+            "metavar",
+            "filetypes"
         ]
         return [(name, getattr(self, name)) for name in names]
 
 
-class ComboFullPaths(FileFullPaths):
+class SaveFileFullPaths(FileFullPaths):
+    """
+    Class that gui uses to determine if you need to save a file.
+
+    see lib/gui/utils.py FileHandler for current GUI filetypes
+    """
+    pass
+
+
+class ContextFullPaths(FileFullPaths):
     """
     Class that gui uses to determine if you need to open a file or a
     directory based on which action you are choosing
+
+    To use ContextFullPaths the action_option item should indicate which
+    cli option dictates the context of the filesystem dialogue
+
+    Bespoke actions are then set in lib/gui/utils.py FileHandler
     """
-    def __init__(self,  option_strings, dest, nargs=None, filetypes=None,
-                 actions_open_type=None, **kwargs):
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
+                 action_option=None, **kwargs):
         if nargs is not None:
             raise ValueError("nargs not allowed")
-        super(ComboFullPaths, self).__init__(option_strings, dest,
-                                             filetypes=None, **kwargs)
-
-        self.actions_open_type = actions_open_type
+        super(ContextFullPaths, self).__init__(option_strings, dest,
+                                               filetypes=None, **kwargs)
+        self.action_option = action_option
         self.filetypes = filetypes
-
-    @staticmethod
-    def prep_filetypes(filetypes):
-        all_files = ("All Files", "*.*")
-        filetypes_d = dict()
-        for k, v in filetypes.items():
-            filetypes_d[k] = ()
-            if v is None:
-                filetypes_d[k] = None
-                continue
-            filetypes_l = list()
-            for i in range(len(v)):
-                filetypes_l.append(ComboFullPaths._process_filetypes(v[i]))
-            filetypes_d[k] = (tuple(filetypes_l), all_files)
-        return filetypes_d
 
     def _get_kwargs(self):
         names = [
-            'option_strings',
-            'dest',
-            'nargs',
-            'const',
-            'default',
-            'type',
-            'choices',
-            'help',
-            'metavar',
-            'filetypes',
-            'actions_open_type'
+            "option_strings",
+            "dest",
+            "nargs",
+            "const",
+            "default",
+            "type",
+            "choices",
+            "help",
+            "metavar",
+            "filetypes",
+            "action_option"
         ]
         return [(name, getattr(self, name)) for name in names]
 
@@ -181,8 +181,12 @@ class FaceSwapArgs(object):
         to all commands. Should be the parent function of all
         subsequent argparsers """
     def __init__(self, subparser, command, description="default", subparsers=None):
+
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
+        if not subparser:
+            return
+
         self.parser = self.create_parser(subparser, command, description)
 
         self.add_arguments()
@@ -236,11 +240,6 @@ class ExtractConvertArgs(FaceSwapArgs):
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        alignments_filetypes = [["Serializers", ['json', 'p', 'yaml']],
-                                ["JSON", ["json"]],
-                                ["Pickle", ["p"]],
-                                ["YAML", ["yaml"]]]
-        alignments_filetypes = FileFullPaths.prep_filetypes(alignments_filetypes)
         argument_list = list()
         argument_list.append({"opts": ("-i", "--input-dir"),
                               "action": DirFullPaths,
@@ -258,7 +257,7 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "Defaults to 'output'"})
         argument_list.append({"opts": ("--alignments", ),
                               "action": FileFullPaths,
-                              "filetypes": alignments_filetypes,
+                              "filetypes": 'alignments',
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
@@ -532,10 +531,10 @@ class TrainArgs(FaceSwapArgs):
                               "type": int,
                               "default": 64,
                               "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
-        argument_list.append({"opts": ("-ep", "--epochs"),
+        argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
                               "default": 1000000,
-                              "help": "Length of training in epochs"})
+                              "help": "Length of training in iterations"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "default": 1,
