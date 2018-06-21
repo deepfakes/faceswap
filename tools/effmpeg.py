@@ -126,6 +126,9 @@ class Effmpeg(object):
     _actions_have_vid_input = ["extract", "get_fps", "get_info", "rescale",
                                "rotate", "slice"]
 
+    # Class variable that stores the target executable (ffmpeg or ffplay)
+    _executable = 'ffmpeg'
+
     # Class variable that stores the common ffmpeg arguments based on verbosity
     __common_ffmpeg_args_dict = {"normal": "-hide_banner ",
                                  "quiet": "-loglevel panic -hide_banner ",
@@ -385,8 +388,7 @@ class Effmpeg(object):
         _ref_vid_opts = None
         _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
         if preview:
-            raise ValueError("Preview for gen-vid with audio muxing is not "
-                             "supported.")
+            raise ValueError("Preview with audio muxing is not supported.")
         """
         if not preview:
             _output_opts = '-y ' + _output_opts

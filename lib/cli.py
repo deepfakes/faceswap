@@ -531,10 +531,10 @@ class TrainArgs(FaceSwapArgs):
                               "type": int,
                               "default": 64,
                               "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
-        argument_list.append({"opts": ("-ep", "--epochs"),
+        argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
                               "default": 1000000,
-                              "help": "Length of training in epochs"})
+                              "help": "Length of training in iterations"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "default": 1,

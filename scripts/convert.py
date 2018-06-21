@@ -70,6 +70,8 @@ class Convert(object):
         if not model.load(self.args.swap_model):
             print("Model Not Found! A valid model must be provided to continue!")
             exit(1)
+            
+        self._image_shape = model.IMAGE_SHAPE
 
         return model
 
@@ -87,7 +89,8 @@ class Convert(object):
                                                      erosion_kernel_size=args.erosion_kernel_size,
                                                      match_histogram=args.match_histogram,
                                                      smooth_mask=args.smooth_mask,
-                                                     avg_color_adjust=args.avg_color_adjust)
+                                                     avg_color_adjust=args.avg_color_adjust)        
+        
         return converter
 
     def prepare_images(self):
@@ -134,7 +137,10 @@ class Convert(object):
 
         image = self.images.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
-        # We should have a separate cli option for size        
+        # We should have a separate cli option for size    
+        
+        print('image_shape', self._image_shape)
+            
         size = 128 if (self.args.trainer.strip().lower() in ('gan128', 'originalhighres')) else 64        
         
         image = converter.patch_image(image,

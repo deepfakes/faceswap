@@ -118,10 +118,10 @@ class Train(object):
 
     def run_training_cycle(self, model, trainer):
         """ Perform the training cycle """
-        for epoch in range(0, self.args.epochs):
-            save_iteration = epoch % self.args.save_interval == 0
+        for iteration in range(0, self.args.iterations):
+            save_iteration = iteration % self.args.save_interval == 0
             viewer = self.show if save_iteration or self.save_now else None
-            trainer.train_one_step(epoch, viewer)
+            trainer.train_one_step(iteration, viewer)
             if self.stop:
                 break
             elif save_iteration:
