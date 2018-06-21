@@ -10,7 +10,6 @@ import enum
 import os
 import sys
 import warnings
-
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 from keras.initializers import RandomNormal
@@ -53,7 +52,6 @@ conv_init = RandomNormal(0, 0.02)
 def inst_norm():
     return InstanceNormalization()
 
-    
 ENCODER = EncoderType.ORIGINAL 
 
 

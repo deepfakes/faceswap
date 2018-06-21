@@ -2,7 +2,6 @@
 """
 A tool that allows for sorting and grouping images in different ways.
 """
-import argparse
 import os
 import sys
 import operator
@@ -12,21 +11,15 @@ from tqdm import tqdm
 from shutil import copyfile
 
 # faceswap imports
-from lib.cli import DirFullPaths, FileFullPaths
+import face_recognition
+
+from lib.cli import DirFullPaths, FileFullPaths, FullHelpArgumentParser
 import lib.Serializer as Serializer
+from . import cli
 
 # DLIB is a GPU Memory hog, so the following modules should only be imported
 # when required
-face_recognition = None
 FaceLandmarksExtractor = None
-
-
-def import_face_recognition():
-    """ Import the face_recognition module only when it is required """
-    global face_recognition
-    if face_recognition is None:
-        import face_recognition
-
 
 def import_FaceLandmarksExtractor():
     """ Import the FaceLandmarksExtractor module only when it is required """
@@ -36,197 +29,13 @@ def import_FaceLandmarksExtractor():
         FaceLandmarksExtractor = lib.FaceLandmarksExtractor
 
 
-class SortProcessor(object):
-    def __init__(self, subparser, command, description='default'):
-        self.argument_list = self.get_argument_list()
-        self.optional_arguments = self.get_optional_arguments()
-        self.args = None
+class Sort(object):
+    def __init__(self, arguments):
+        self.args = arguments
         self.changes = None
         self.serializer = None
-        self.parse_arguments(description, subparser, command)
 
-    @staticmethod
-    def get_argument_list():
-        log_filetypes = [["Serializers", ['json', 'yaml']],
-                         ["JSON", ["json"]],
-                         ["YAML", ["yaml"]]]
-        log_filetypes = FileFullPaths.prep_filetypes(log_filetypes)
-
-        arguments_list = list()
-        arguments_list.append({"opts": ('-i', '--input'),
-                               "action": DirFullPaths,
-                               "dest": "input_dir",
-                               "default": "input_dir",
-                               "help": "Input directory of aligned faces.",
-                               "required": True})
-
-        arguments_list.append({"opts": ('-o', '--output'),
-                               "action": DirFullPaths,
-                               "dest": "output_dir",
-                               "default": "_output_dir",
-                               "help": "Output directory for sorted aligned "
-                                       "faces."})
-
-        arguments_list.append({"opts": ('-fp', '--final-process'),
-                               "type": str,
-                               "choices": ("folders", "rename"),
-                               "dest": 'final_process',
-                               "default": "rename",
-                               "help": "'folders': files are sorted using the "
-                                       "-s/--sort-by method, then they are "
-                                       "organized into folders using the "
-                                       "-g/--group-by grouping method. "
-                                       "'rename': files are sorted using the "
-                                       "-s/--sort-by then they are renamed. "
-                                       "Default: rename"})
-
-        arguments_list.append({"opts": ('-k', '--keep'),
-                               "action": 'store_true',
-                               "dest": 'keep_original',
-                               "default": False,
-                               "help": "Keeps the original files in the input "
-                                       "directory. Be careful when using this "
-                                       "with rename grouping and no specified "
-                                       "output directory as this would keep "
-                                       "the original and renamed files in the "
-                                       "same directory."})
-
-        arguments_list.append({"opts": ('-s', '--sort-by'),
-                               "type": str,
-                               "choices": ("blur", "face", "face-cnn",
-                                           "face-cnn-dissim", "face-dissim",
-                                           "face-yaw", "hist",
-                                           "hist-dissim"),
-                               "dest": 'sort_method',
-                               "default": "hist",
-                               "help": "Sort by method. "
-                                       "Choose how images are sorted. "
-                                       "Default: hist"})
-
-        arguments_list.append({"opts": ('-g', '--group-by'),
-                               "type": str,
-                               "choices": ("blur", "face", "face-cnn",
-                                           "face-yaw", "hist"),
-                               "dest": 'group_method',
-                               "default": "hist",
-                               "help": "Group by method. "
-                                       "When -fp/--final-processing by "
-                                       "folders choose the how the images are "
-                                       "grouped after sorting. "
-                                       "Default: hist"})
-
-        arguments_list.append({"opts": ('-t', '--ref_threshold'),
-                               "type": float,
-                               "dest": 'min_threshold',
-                               "default": -1.0,
-                               "help": "Float value. "
-                                       "Minimum threshold to use for grouping "
-                                       "comparison with 'face' and 'hist' "
-                                       "methods. The lower the value the more "
-                                       "discriminating the grouping is. "
-                                       "Leaving -1.0 will make the program "
-                                       "set the default value automatically. "
-                                       "For face 0.6 should be enough, with "
-                                       "0.5 being very discriminating. "
-                                       "For face-cnn 7.2 should be enough, "
-                                       "with 4 being very discriminating. "
-                                       "For hist 0.3 should be enough, with "
-                                       "0.2 being very discriminating. "
-                                       "Be careful setting a value that's too "
-                                       "low in a directory with many images, "
-                                       "as this could result in a lot of "
-                                       "directories being created. "
-                                       "Defaults: face 0.6, face-cnn 7.2, "
-                                       "hist 0.3"})
-
-        arguments_list.append({"opts": ('-b', '--bins'),
-                               "type": int,
-                               "dest": 'num_bins',
-                               "default": 5,
-                               "help": "Integer value. "
-                                       "Number of folders that will be used "
-                                       "to group by blur and face-yaw. "
-                                       "For blur folder 0 will be the least "
-                                       "blurry, while the last folder will be "
-                                       "the blurriest. "
-                                       "For face-yaw the number of bins is by "
-                                       "how much 180 degrees is divided. So "
-                                       "if you use 18, then each folder will "
-                                       "be a 10 degree increment. Folder 0 "
-                                       "will contain faces looking the most "
-                                       "to the left whereas the last folder "
-                                       "will contain the faces looking the "
-                                       "most to the right. "
-                                       "If the number of images doesn't "
-                                       "divide evenly into the number of "
-                                       "bins, the remaining images get put in "
-                                       "the last bin."
-                                       "Default value: 5"})
-
-        arguments_list.append({"opts": ('-l', '--log-changes'),
-                               "action": 'store_true',
-                               "dest": 'log_changes',
-                               "default": False,
-                               "help": "Logs file renaming changes if "
-                                       "grouping by renaming, or it logs the "
-                                       "file copying/movement if grouping by "
-                                       "folders. If no log file is specified "
-                                       "with '--log-file', then a "
-                                       "'sort_log.json' file will be created "
-                                       "in the input directory."})
-
-        arguments_list.append({"opts": ('-lf', '--log-file'),
-                               "action": FileFullPaths,
-                               "filetypes": log_filetypes,
-                               "dest": 'log_file_path',
-                               "default": 'sort_log.json',
-                               "help": "Specify a log file to use for saving "
-                                       "the renaming or grouping information. "
-                                       "If specified extension isn't 'json' "
-                                       "or 'yaml', then json will be used as "
-                                       "the serializer, with the supplied "
-                                       "filename. "
-                                       "Default: sort_log.json"})
-
-        return arguments_list
-
-    @staticmethod
-    def get_optional_arguments():
-        """
-        Put the arguments in a list so that they are accessible from both
-        argparse and gui.
-        """
-        # Override this for custom arguments
-        argument_list = []
-        return argument_list
-
-    def parse_arguments(self, description, subparser, command):
-        parser = subparser.add_parser(
-                command,
-                help="This command lets you sort images using various "
-                     "methods.",
-                description=description,
-                epilog="Questions and feedback: \
-                        https://github.com/deepfakes/faceswap-playground"
-        )
-
-        for option in self.argument_list:
-            args = option['opts']
-            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
-            parser.add_argument(*args, **kwargs)
-
-        parser = self.add_optional_arguments(parser)
-        parser.set_defaults(func=self.process_arguments)
-
-    def add_optional_arguments(self, parser):
-        for option in self.optional_arguments:
-            args = option['opts']
-            kwargs = {key: option[key] for key in option.keys() if key != 'opts'}
-            parser.add_argument(*args, **kwargs)
-        return parser
-
-    def process_arguments(self, arguments):
-        self.args = arguments
+    def process(self):
 
         # Setting default argument values that cannot be set by argparse
 
@@ -266,9 +75,9 @@ class SortProcessor(object):
         self.args.group_method = _group.replace('-', '_')
         self.args.final_process = _final.replace('-', '_')
 
-        self.process()
+        self.sort_process()
 
-    def process(self):
+    def sort_process(self):
         """
         This method dynamically assigns the functions that will be used to run
         the core process of sorting, optionally grouping, renaming/moving into
@@ -306,8 +115,6 @@ class SortProcessor(object):
         return img_list
 
     def sort_face(self):
-        import_face_recognition()
-
         input_dir = self.args.input_dir
 
         print("Sorting by face similarity...")
@@ -337,8 +144,6 @@ class SortProcessor(object):
         return img_list
 
     def sort_face_dissim(self):
-        import_face_recognition()
-
         input_dir = self.args.input_dir
 
         print("Sorting by face dissimilarity...")
@@ -753,8 +558,6 @@ class SortProcessor(object):
         :return: img_list but with the comparative values that the chosen
         grouping method expects.
         """
-        import_face_recognition()
-
         input_dir = self.args.input_dir
         print("Preparing to group...")
         if group_method == 'group_blur':
@@ -920,7 +723,6 @@ class SortProcessor(object):
 
     @staticmethod
     def get_avg_score_faces(f1encs, references):
-        import_face_recognition()
         scores = []
         for f2encs in references:
             score = face_recognition.face_distance(f1encs, f2encs)[0]
@@ -937,7 +739,8 @@ class SortProcessor(object):
 
 
 def bad_args(args):
-    parser.print_help()
+    """ Print help on bad arguments """
+    PARSER.print_help()
     exit(0)
 
 
@@ -948,11 +751,11 @@ if __name__ == "__main__":
     print(__warning_string)
     print("Images sort tool.\n")
 
-    parser = argparse.ArgumentParser()
-    subparser = parser.add_subparsers()
-    sort = SortProcessor(
-            subparser, "sort", "Sort images using various methods.")
 
-    parser.set_defaults(func=bad_args)
-    arguments = parser.parse_args()
-    arguments.func(arguments)
+    PARSER = FullHelpArgumentParser()
+    SUBPARSER = PARSER.add_subparsers()
+    SORT = cli.SortArgs(
+        SUBPARSER, "sort", "Sort images using various methods.")
+    PARSER.set_defaults(func=bad_args)
+    ARGUMENTS = PARSER.parse_args()
+    ARGUMENTS.func(ARGUMENTS)
