@@ -27,6 +27,8 @@ import lib.Serializer
 from lib.utils import backup_file
 
 from . import __version__
+from .instance_normalization import InstanceNormalization
+
 
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
@@ -44,6 +46,7 @@ class EncoderType(enum.Enum):
     
 ENCODER = EncoderType.ORIGINAL
 
+         
 conv_init = RandomNormal(0, 0.02)
 
 def inst_norm():
