@@ -111,30 +111,38 @@ class Model():
         self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
         
         
-    def load(self, swapped):
+    def load(self, swapped):        
+        model_dir = str(self.model_dir)
+        
         from json import JSONDecodeError
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])
         
-        state_dir = os.path.join(self.model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
+        state_dir = os.path.join(model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
         ser = lib.Serializer.get_serializer('json')
+        
         try:
             with open(state_dir, 'rb') as fp:
                 state = ser.unmarshal(fp.read())
                 self._epoch_no = state['epoch_no']
-        except (JSONDecodeError, IOError) as e:
-            print('Failed loading training state metadata', e)
-            self._epoch_no = 0        
+        except IOError as e:
+            print('Error loading training info:', e.strerror)
+            self._epoch_no = 0
+        except JSONDecodeError as e:
+            print('Error loading training info:', e.msg)
+            self._epoch_no = 0                         
 
         try:            
-            self.encoder.load_weights(os.path.join(self.model_dir, hdf['encoderH5']))
-            self.decoder_A.load_weights(os.path.join(self.model_dir, face_A))
-            self.decoder_B.load_weights(os.path.join(self.model_dir, face_B))
+            self.encoder.load_weights(os.path.join(model_dir, hdf['encoderH5']))
+            self.decoder_A.load_weights(os.path.join(model_dir, face_A))
+            self.decoder_B.load_weights(os.path.join(model_dir, face_B))
             print('loaded model weights')
             return True
+        except IOError as e:
+            print('Failed loading training data:', e.strerror)            
         except Exception as e:
-            print('Failed loading existing training data.', e)
-            return False        
-
+            print('Failed loading training data:', str(e))            
+      
+        return False
 
     def converter(self, swap):
         autoencoder = self.autoencoder_B if not swap else self.autoencoder_A
@@ -259,7 +267,7 @@ class Model():
         except NameError:
             print('backup functionality not available\n')       
             
-        state_dir = os.path.join(self.model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
+        state_dir = os.path.join(model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
         ser = lib.Serializer.get_serializer('json')
         try:
             with open(state_dir, 'wb') as fp:
