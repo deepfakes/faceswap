@@ -122,7 +122,7 @@ class Model():
         
         try:
             with open(state_dir, 'rb') as fp:
-                state = ser.unmarshal(fp.read())
+                state = ser.unmarshal(fp.read().decode('utf-8'))
                 self._epoch_no = state['epoch_no']
         except IOError as e:
             print('Error loading training info:', e.strerror)
