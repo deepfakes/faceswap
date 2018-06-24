@@ -4,9 +4,13 @@
 !*.md
 !*.txt
 !*.png
+!*.h5
+!*.dat
 !Dockerfile*
 !requirements*
 !lib
+!lib/face_alignment
+!lib/face_alignment/.cache
 !lib/gui
 !lib/gui/.cache
 !lib/gui/.cache/preview

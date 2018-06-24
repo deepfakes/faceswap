@@ -246,7 +246,7 @@ class Faces(object):
         if not hasattr(self.args, 'debug_landmarks') or not self.args.debug_landmarks:
             return
 
-        for (pos_x, pos_y) in face.landmarksAsXY():
+        for (pos_x, pos_y) in face.landmarks_as_xy():
             cv2.circle(image, (pos_x, pos_y), 2, (0, 0, 255), -1)
 
     def detect_blurry_faces(self, face, t_mat, resized_image, filename):
@@ -255,7 +255,7 @@ class Faces(object):
             return None
 
         blurry_file = None
-        aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
+        aligned_landmarks = self.extractor.transform_points(face.landmarks_as_xy(), t_mat, 256, 48)
         feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
         feature_mask = cv2.blur(feature_mask, (10, 10))
         isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)

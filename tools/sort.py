@@ -25,8 +25,8 @@ def import_FaceLandmarksExtractor():
     """ Import the FaceLandmarksExtractor module only when it is required """
     global FaceLandmarksExtractor
     if FaceLandmarksExtractor is None:
-        import lib.FaceLandmarksExtractor
-        FaceLandmarksExtractor = lib.FaceLandmarksExtractor
+        import lib.extractor
+        FaceLandmarksExtractor = lib.extractor
 
 
 class Sort(object):

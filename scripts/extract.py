@@ -50,6 +50,9 @@ class Extract(object):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
+            # TODO Remove this to force processing just one image
+            # break
+
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
         for filename, faces in tqdm(pool_process(self.process_single_image,
@@ -86,6 +89,9 @@ class Extract(object):
         except Exception as err:
             if self.args.verbose:
                 print("Failed to extract from image: {}. Reason: {}".format(filename, err))
+
+                #TODO Remove raise
+                raise
         return retval
 
     def process_single_face(self, idx, face, filename, image):
@@ -111,4 +117,4 @@ class Extract(object):
                 "w": face.w,
                 "y": face.y,
                 "h": face.h,
-                "landmarksXY": face.landmarksAsXY()}
+                "landmarksXY": face.landmarks_as_xy()}
