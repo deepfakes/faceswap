@@ -90,16 +90,17 @@ class KerasModel(object):
         self.verbose = False
         self.model_path = self.set_model_path()
         self.model = None
+        self.session = None
 
         self.configure_tensorflow(vram_ratio)
 
-    @staticmethod
-    def configure_tensorflow(vram_ratio):
+    def configure_tensorflow(self, vram_ratio):
         """ Set VRAM limit for tensorflow """
         config = tf.ConfigProto()
         config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
         # config.gpu_options.visible_device_list = "0"
-        set_session(tf.Session(config=config))
+        self.session = tf.Session(config=config)
+        set_session(self.session)
 
     @staticmethod
     def set_model_path():
@@ -111,11 +112,12 @@ class KerasModel(object):
                             "reinstall the lib!".format(model_path))
         return model_path
 
-    def load_model(self):
+    def load_model(self, verbose):
         """ Load the Keras Model """
         if self.model:
             return
 
+        self.verbose = verbose
         if self.verbose:
             print("Initializing keras model...")
 

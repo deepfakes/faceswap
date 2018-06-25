@@ -6,8 +6,8 @@ import pynvml
 
 class GPUStats(object):
     """ Holds information about system GPU(s) """
-    def __init__(self, verbose=False):
-        self.verbose = verbose
+    def __init__(self):
+        self.verbose = False
 
         self.initialized = False
         self.device_count = 0
@@ -20,8 +20,6 @@ class GPUStats(object):
         self.vram = self.get_vram()
 
         self.shutdown()
-
-        self.print_info()
 
     def initialize(self):
         """ Initialize pynvml """
@@ -89,16 +87,11 @@ class GPUStats(object):
         vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).free / (1024 * 1024)
                 for handle in self.handles]
         self.shutdown()
-
-        if self.verbose:
-            print("GPU VRAM free:    {}".format(vram))
-
         return vram
 
     def print_info(self):
         """ Output GPU info in verbose mode """
-        if self.verbose:
-            print("GPU Driver:       {}".format(self.driver))
-            print("GPU Device count: {}".format(self.device_count))
-            print("GPU Devices:      {}".format(self.devices))
-            print("GPU VRAM:         {}".format(self.vram))
+        print("GPU Driver:       {}".format(self.driver))
+        print("GPU Device count: {}".format(self.device_count))
+        print("GPU Devices:      {}".format(self.devices))
+        print("GPU VRAM:         {}".format(self.vram))

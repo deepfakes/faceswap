@@ -6,10 +6,11 @@ import sys
 from pathlib import Path
 
 from tqdm import tqdm
-tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 
 from lib.multithreading import pool_process
 from scripts.fsmedia import Alignments, Faces, Images, Utils
+
+tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 
 
 class Extract(object):
@@ -78,19 +79,24 @@ class Extract(object):
                 faces = self.faces.get_faces(currentimage, angle)
                 process_faces = [(idx, face) for idx, face in faces]
                 if process_faces and angle != 0 and self.args.verbose:
-                    print("found face(s) by rotating image {} degrees".format(angle))
+                    print("found face(s) by rotating image "
+                          "{} degrees".format(angle))
                 if process_faces:
                     break
 
-            final_faces = [self.process_single_face(idx, face, filename, currentimage)
+            final_faces = [self.process_single_face(idx,
+                                                    face,
+                                                    filename,
+                                                    currentimage)
                            for idx, face in process_faces]
 
             retval = filename, final_faces
         except Exception as err:
             if self.args.verbose:
-                print("Failed to extract from image: {}. Reason: {}".format(filename, err))
+                print("Failed to extract from image: "
+                      "{}. Reason: {}".format(filename, err))
 
-                #TODO Remove raise
+                # TODO Remove raise
                 raise
         return retval
 
@@ -100,16 +106,22 @@ class Extract(object):
 
         self.faces.draw_landmarks_on_face(face, image)
 
-        resized_face, t_mat = self.faces.extractor.extract(image,
-                                                           face,
-                                                           256,
-                                                           self.faces.align_eyes)
+        resized_face, t_mat = self.faces.extractor.extract(
+            image,
+            face,
+            256,
+            self.faces.align_eyes)
 
-        blurry_file = self.faces.detect_blurry_faces(face, t_mat, resized_face, filename)
+        blurry_file = self.faces.detect_blurry_faces(face,
+                                                     t_mat,
+                                                     resized_face,
+                                                     filename)
         output_file = blurry_file if blurry_file else output_file
 
         if self.export_face:
-            filename = "{}_{}{}".format(str(output_file), str(idx), Path(filename).suffix)
+            filename = "{}_{}{}".format(str(output_file),
+                                        str(idx),
+                                        Path(filename).suffix)
             Utils.cv2_read_write('write', filename, resized_face)
 
         return {"r": face.r,

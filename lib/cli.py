@@ -180,7 +180,8 @@ class FaceSwapArgs(object):
     """ Faceswap argument parser functions that are universal
         to all commands. Should be the parent function of all
         subsequent argparsers """
-    def __init__(self, subparser, command, description="default", subparsers=None):
+    def __init__(self, subparser, command,
+                 description="default", subparsers=None):
 
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
@@ -224,7 +225,8 @@ class FaceSwapArgs(object):
         """ Parse the arguments passed in from argparse """
         for option in self.argument_list + self.optional_arguments:
             args = option["opts"]
-            kwargs = {key: option[key] for key in option.keys() if key != "opts"}
+            kwargs = {key: option[key]
+                      for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
 
 
@@ -274,7 +276,7 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "type": str,
                               # case sensitive because this is used to load a
                               # plugin.
-                              "choices": ("hog", "cnn", "all"),
+                              "choices": ("hog", "cnn", "all", "mtcnn"),
                               "default": "hog",
                               "help": "Detector to use. 'cnn' detects many "
                                       "more angles but will be much more "
@@ -284,7 +286,8 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "type": float,
                               "dest": "ref_threshold",
                               "default": 0.6,
-                              "help": "Threshold for positive face recognition"})
+                              "help": "Threshold for positive face "
+                                      "recognition"})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "type": str,
                               "dest": "nfilter",
@@ -353,12 +356,14 @@ class ExtractArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "skip_existing",
                               "default": False,
-                              "help": "Skips frames that have already been extracted"})
+                              "help": "Skips frames that have already been "
+                                      "extracted"})
         argument_list.append({"opts": ("-dl", "--debug-landmarks"),
                               "action": "store_true",
                               "dest": "debug_landmarks",
                               "default": False,
-                              "help": "Draw landmarks on the ouput faces for debug"})
+                              "help": "Draw landmarks on the ouput faces for "
+                                      "debug"})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
@@ -396,16 +401,20 @@ class ConvertArgs(ExtractConvertArgs):
                                       "files. If you delete faces from this "
                                       "folder, they'll be skipped during "
                                       "conversion. If no aligned dir is "
-                                      "specified, all faces will be converted"})
+                                      "specified, all faces will be "
+                                      "converted"})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "type": str,
-                              # case sensitive because this is used to load a plug-in.
+                              # case sensitive because this is used to
+                              # load a plug-in.
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
-                              "help": "Select the trainer that was used to create the model"})
+                              "help": "Select the trainer that was used to "
+                                      "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "type": str,
-                              # case sensitive because this is used to load a plugin.
+                              # case sensitive because this is used
+                              # to load a plugin.
                               "choices": ("Masked", "Adjust"),
                               "default": "Masked",
                               "help": "Converter to use"})
@@ -424,12 +433,16 @@ class ConvertArgs(ExtractConvertArgs):
                                       "swapped face to cover more space. "
                                       "(Masked converter only)"})
         argument_list.append({"opts": ("-M", "--mask-type"),
-                              # lowercase this, because it's just a string later on.
+                              # lowercase this, because it's just a
+                              # string later on.
                               "type": str.lower,
                               "dest": "mask_type",
-                              "choices": ["rect", "facehull", "facehullandrect"],
+                              "choices": ["rect",
+                                          "facehull",
+                                          "facehullandrect"],
                               "default": "facehullandrect",
-                              "help": "Mask to use to replace faces. (Masked converter only)"})
+                              "help": "Mask to use to replace faces. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
@@ -461,17 +474,20 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "swap_model",
                               "default": False,
-                              "help": "Swap the model. Instead of A -> B, swap B -> A"})
+                              "help": "Swap the model. Instead of A -> B, "
+                                      "swap B -> A"})
         argument_list.append({"opts": ("-S", "--seamless"),
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
-                              "help": "Use cv2's seamless clone. (Masked converter only)"})
+                              "help": "Use cv2's seamless clone. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
-                              "help": "Use histogram matching. (Masked converter only)"})
+                              "help": "Use histogram matching. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-sm", "--smooth-mask"),
                               "action": "store_true",
                               "dest": "smooth_mask",
@@ -481,7 +497,8 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "avg_color_adjust",
                               "default": True,
-                              "help": "Average color adjust. (Adjust converter only)"})
+                              "help": "Average color adjust. "
+                                      "(Adjust converter only)"})
         return argument_list
 
 
@@ -530,7 +547,8 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "default": 64,
-                              "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
+                              "help": "Batch size, as a power of 2 "
+                                      "(64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
                               "default": 1000000,
@@ -589,5 +607,6 @@ class GuiArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "debug",
                               "default": False,
-                              "help": "Output to Shell console instead of GUI console"})
+                              "help": "Output to Shell console instead of "
+                                      "GUI console"})
         return argument_list
