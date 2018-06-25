@@ -68,10 +68,9 @@ class Convert(object):
         model = PluginLoader.get_model(model_name)(model_dir, num_gpus)
 
         if not model.load(self.args.swap_model):
-            print("Model Not Found! A valid model must be provided to continue!")
+            print("Model Not Found! A valid model "
+                  "must be provided to continue!")
             exit(1)
-            
-        self._image_shape = model.IMAGE_SHAPE
 
         return model
 
@@ -80,17 +79,18 @@ class Convert(object):
         args = self.args
         conv = args.converter
 
-        converter = PluginLoader.get_converter(conv)(model.converter(False),
-                                                     trainer=args.trainer,
-                                                     blur_size=args.blur_size,
-                                                     seamless_clone=args.seamless_clone,
-                                                     sharpen_image=args.sharpen_image,
-                                                     mask_type=args.mask_type,
-                                                     erosion_kernel_size=args.erosion_kernel_size,
-                                                     match_histogram=args.match_histogram,
-                                                     smooth_mask=args.smooth_mask,
-                                                     avg_color_adjust=args.avg_color_adjust)        
-        
+        converter = PluginLoader.get_converter(conv)(
+            model.converter(False),
+            trainer=args.trainer,
+            blur_size=args.blur_size,
+            seamless_clone=args.seamless_clone,
+            sharpen_image=args.sharpen_image,
+            mask_type=args.mask_type,
+            erosion_kernel_size=args.erosion_kernel_size,
+            match_histogram=args.match_histogram,
+            smooth_mask=args.smooth_mask,
+            avg_color_adjust=args.avg_color_adjust)
+
         return converter
 
     def prepare_images(self):
@@ -110,7 +110,8 @@ class Convert(object):
         """ If we have no alignments for this image, skip it """
         have_alignments = self.faces.have_face(filename)
         if not have_alignments:
-            tqdm.write("No alignment found for {}, skipping".format(os.path.basename(filename)))
+            tqdm.write("No alignment found for {}, "
+                       "skipping".format(os.path.basename(filename)))
         return have_alignments
 
     def convert(self, converter, item):
@@ -121,12 +122,14 @@ class Convert(object):
 
             if not skip:
                 for idx, face in faces:
-                    image = self.convert_one_face(converter, (filename, image, idx, face))
+                    image = self.convert_one_face(converter,
+                                                  (filename, image, idx, face))
             if skip != "discard":
                 filename = str(self.output_dir / Path(filename).name)
                 Utils.cv2_read_write('write', filename, image)
         except Exception as err:
-            print("Failed to convert image: {}. Reason: {}".format(filename, err))
+            print("Failed to convert image: {}. "
+                  "Reason: {}".format(filename, err))
 
     def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """
@@ -137,12 +140,11 @@ class Convert(object):
 
         image = self.images.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
-        # We should have a separate cli option for size    
-        
-        print('image_shape', self._image_shape)
-            
-        size = 128 if (self.args.trainer.strip().lower() in ('gan128', 'originalhighres')) else 64        
-        
+        # We should have a separate cli option for size
+
+        size = 128 if (self.args.trainer.strip().lower()
+                       in ('gan128', 'originalhighres')) else 64
+
         image = converter.patch_image(image,
                                       face,
                                       size)
@@ -176,9 +178,11 @@ class OptionalActions(object):
             print("Aligned directory not found. All faces listed in the "
                   "alignments file will be converted")
         else:
-            faces_to_swap = [Path(path) for path in get_image_paths(input_aligned_dir)]
+            faces_to_swap = [Path(path)
+                             for path in get_image_paths(input_aligned_dir)]
             if not faces_to_swap:
-                print("Aligned directory is empty, no faces will be converted!")
+                print("Aligned directory is empty, "
+                      "no faces will be converted!")
             elif len(faces_to_swap) <= len(self.input_images) / 3:
                 print("Aligned directory contains an amount of images much "
                       "less than the input, are you sure this is the right "
@@ -191,9 +195,10 @@ class OptionalActions(object):
         if not self.args.frame_ranges:
             return None
 
-        minmax = {"min": 0, # never any frames less than 0
+        minmax = {"min": 0,  # never any frames less than 0
                   "max": float("inf")}
-        rng = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-")))
+        rng = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q),
+                         v.split("-")))
                for v in self.args.frame_ranges]
         return rng
 
@@ -202,7 +207,8 @@ class OptionalActions(object):
         if not self.frame_ranges:
             return None
         idx = int(self.imageidxre.findall(filename)[0])
-        skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
+        skipframe = not any(map(lambda b: b[0] <= idx <= b[1],
+                                self.frame_ranges))
         if skipframe and self.args.discard_frames:
             skipframe = "discard"
         return skipframe
@@ -211,7 +217,9 @@ class OptionalActions(object):
         """ Check whether face is to be skipped """
         if self.faces_to_swap is None:
             return False
-        face_name = "{}_{}{}".format(Path(filename).stem, face_idx, Path(filename).suffix)
+        face_name = "{}_{}{}".format(Path(filename).stem,
+                                     face_idx,
+                                     Path(filename).suffix)
         face_file = Path(self.args.input_aligned_dir) / Path(face_name)
         skip_face = face_file not in self.faces_to_swap
         if skip_face:
