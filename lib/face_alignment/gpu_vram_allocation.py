@@ -12,9 +12,28 @@ class GPUMem(object):
         self.verbose = False
         self.output_shown = False
         self.stats = gpu_stats.GPUStats()
-        self.gpu_memory = min(self.stats.get_free())
-        self.tensorflow_ratio = self.set_tensor_gpu_ratio()
+
+        # TF selects first device, so this is used for stats
+        # TODO select and use device with most available VRAM
+        self.device = 0
+        self.vram_free = None
+        self.vram_total = self.stats.vram[self.device]
         self.scale_to = None
+        self.get_available_vram()
+
+    def set_device_with_max_free_vram(self):
+        """ Set the device with the most available free vram """
+        # TODO Implement this to select the device with most available VRAM
+        free_mem = self.stats.get_free()
+        self.vram_free = max(free_mem)
+        self.device = free_mem.index(self.vram_free)
+
+    def get_available_vram(self):
+        """ Recalculate the available vram """
+        free_mem = self.stats.get_free()
+        self.vram_free = free_mem[self.device]
+        if self.verbose:
+            print("GPU VRAM free:    {}".format(self.vram_free))
 
     def output_stats(self):
         """ Output stats in verbose mode """
@@ -22,41 +41,66 @@ class GPUMem(object):
             return
         print("\n----- Initial GPU Stats -----")
         self.stats.print_info()
-        print("GPU VRAM free:    {}".format(self.gpu_memory))
+        print("GPU VRAM free:    {}".format(self.vram_free))
         print("-----------------------------\n")
         self.output_shown = True
 
-    def get_available_vram(self):
-        """ Update self.gpu_memory to current available """
-        # TODO don't go for smallest card
-        self.gpu_memory = min(self.stats.get_free())
-        if self.verbose:
-            print("GPU VRAM free:    {}".format(self.gpu_memory))
+    def get_tensor_gpu_ratio(self):
+        """ Set the ratio of GPU memory to use for tensorflow session for
+            keras points predictor.
 
-    def set_tensor_gpu_ratio(self):
-        """ Set the ratio of GPU memory to use
-            for tensorflow session
+            Ideally 2304MB is required, but will run with less
+            (with warnings).
 
-            Ideally at least 2304MB is required, but
-            will run with less (with warnings) """
-
-        if self.gpu_memory < 2030:
-            ratio = 1024.0 / self.gpu_memory
-        elif self.gpu_memory < 3045:
-            ratio = 1560.0 / self.gpu_memory
-        elif self.gpu_memory < 4060:
-            ratio = 2048.0 / self.gpu_memory
+            This is only required if running with DLIB. MTCNN will share
+            the tensorflow session. """
+        if self.vram_free < 2030:
+            ratio = 1024.0 / self.vram_total
+        elif self.vram_free < 3045:
+            ratio = 1560.0 / self.vram_total
+        elif self.vram_free < 4060:
+            ratio = 2048.0 / self.vram_total
         else:
-            ratio = 2304.0 / self.gpu_memory
+            ratio = 2304.0 / self.vram_total
+
         return ratio
 
-    def set_scale_to(self):
-        """ Set the size to scale images down to for specific
-            gfx cards.
-            DLIB VRAM allocation is linear to pixel count """
-        self.get_available_vram()
+    def set_scale_to(self, detector):
+        """ Set the size to scale images down to for specific detector
+            and available VRAM
+
+            DLIB VRAM allocation is linear to pixel count
+
+            MTCNN is weird. Not linear at low levels,
+            then fairly linear up to 3360x1890 then
+            requirements drop again.
+            As 3360x1890 is hi-res, just this scale is
+            used for calculating image scaling """
+
+        # MTCNN VRAM Usage Stats
+        # 480x270 = 267.56 MB
+        # 960x540 = 333.18 MB
+        # 1280x720 = 592.32 MB
+        # 1440x810 = 746.56 MB
+        # 1920x1080 = 1.30 GB
+        # 2400x1350 = 2.03 GB
+        # 2880x1620 = 2.93 GB
+        # 3360x1890 = 3.98 GB
+        # 3840x2160 = 2.62 GB
+        # 4280x2800 = 3.69 GB
+
+        detector = "dlib" if detector in ("cnn", "hog", "all") else detector
         buffer = 64  # 64MB overhead buffer
-        free_mem = self.gpu_memory - buffer
-        gradient = 213 / 524288
-        constant = 307
+        gradient = 3483.2 / 9651200  # MTCNN
+        constant = 1.007533156  # MTCNN
+        if detector == "dlib":
+            self.get_available_vram()
+            gradient = 213 / 524288
+            constant = 307
+
+        free_mem = self.vram_free - buffer
         self.scale_to = int((free_mem - constant) / gradient)
+
+        if self.scale_to < 4097:
+            raise ValueError("Images would be shrunk too much "
+                             "for successful extraction")

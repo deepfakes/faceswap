@@ -4,8 +4,6 @@
     https://github.com/1adrianb/face-alignment
 """
 
-import os
-
 import cv2
 import numpy as np
 
@@ -16,17 +14,18 @@ from .model import KerasModel
 DLIB_DETECTORS = DLibDetector()
 MTCNN_DETECTOR = MTCNNDetector()
 VRAM = GPUMem()
-KERAS_MODEL = KerasModel(VRAM.tensorflow_ratio)
+KERAS_MODEL = KerasModel()
 
 
 class Frame(object):
     """ The current frame for processing """
 
-    def __init__(self, input_image, verbose, input_is_predetected_face):
+    def __init__(self, detector, input_image,
+                 verbose, input_is_predetected_face):
         self.verbose = verbose
 
         if not VRAM.scale_to:
-            VRAM.set_scale_to()
+            VRAM.set_scale_to(detector)
         self.scale_to = VRAM.scale_to
 
         self.height, self.width = input_image.shape[:2]
@@ -66,6 +65,19 @@ class Frame(object):
         image_rgb = image_bgr[:, :, ::-1].copy()
         return (image_rgb, image_bgr)
 
+
+class Align(object):
+    """ Perform transformation to align and get landmarks """
+    def __init__(self, frame, detected_faces, keras_model, verbose):
+        self.verbose = verbose
+        self.frame = frame.images[0]
+        self.input_scale = frame.input_scale
+        self.detected_faces = detected_faces
+        self.keras = keras_model
+
+        self.bounding_box = None
+        self.landmarks = self.process_landmarks()
+
     @staticmethod
     def transform(point, center, scale, resolution):
         """ Transform Image """
@@ -81,27 +93,32 @@ class Frame(object):
 
     def crop(self, image, center, scale, resolution=256.0):
         """ Crop image around the center point """
-        ul = self.transform([1, 1], center, scale, resolution).astype(np.int)
-        br = self.transform([resolution, resolution],
-                            center,
-                            scale,
-                            resolution).astype(np.int)
+        v_ul = self.transform([1, 1], center, scale, resolution).astype(np.int)
+        v_br = self.transform([resolution, resolution],
+                              center,
+                              scale,
+                              resolution).astype(np.int)
         if image.ndim > 2:
-            new_dim = np.array([br[1] - ul[1], br[0] - ul[0], image.shape[2]],
+            new_dim = np.array([v_br[1] - v_ul[1],
+                                v_br[0] - v_ul[0],
+                                image.shape[2]],
                                dtype=np.int32)
             new_img = np.zeros(new_dim, dtype=np.uint8)
         else:
-            new_dim = np.array([br[1] - ul[1], br[0] - ul[0]], dtype=np.int)
+            new_dim = np.array([v_br[1] - v_ul[1],
+                                v_br[0] - v_ul[0]],
+                               dtype=np.int)
             new_img = np.zeros(new_dim, dtype=np.uint8)
         height = image.shape[0]
         width = image.shape[1]
-        new_x = np.array([max(1, -ul[0] + 1), min(br[0], width) - ul[0]],
+        new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
                          dtype=np.int32)
-        new_y = np.array([max(1, -ul[1] + 1), min(br[1], height) - ul[1]],
+        new_y = np.array([max(1, -v_ul[1] + 1),
+                          min(v_br[1], height) - v_ul[1]],
                          dtype=np.int32)
-        old_x = np.array([max(1, ul[0] + 1), min(br[0], width)],
+        old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
                          dtype=np.int32)
-        old_y = np.array([max(1, ul[1] + 1), min(br[1], height)],
+        old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
                          dtype=np.int32)
         new_img[new_y[0] - 1:new_y[1],
                 new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
@@ -111,7 +128,6 @@ class Frame(object):
                              interpolation=cv2.INTER_LINEAR)
         return new_img
 
-    # TODO Move This
     def get_pts_from_predict(self, var_a, center, scale):
         """ Get points from predictor """
         var_b = var_a.reshape((var_a.shape[0],
@@ -139,6 +155,76 @@ class Frame(object):
         return [self.transform(var_c[i], center, scale, var_a.shape[2])
                 for i in range(var_a.shape[0])]
 
+    def process_landmarks(self):
+        """ Align image and process landmarks """
+        if not self.detected_faces:
+            if self.verbose:
+                print("Warning: No faces were detected.")
+            return list()
+
+        for d_rect in self.detected_faces:
+            self.get_bounding_box(d_rect)
+            del d_rect
+
+            center, scale = self.get_center_scale()
+            image = self.align_image(center, scale)
+
+            landmarks_xy = self.predict_landmarks(image, center, scale)
+
+            landmarks = [(
+                (int(self.bounding_box['left'] / self.input_scale),
+                 int(self.bounding_box['top'] / self.input_scale),
+                 int(self.bounding_box['right'] / self.input_scale),
+                 int(self.bounding_box['bottom'] / self.input_scale)),
+                landmarks_xy)]
+
+        return landmarks
+
+    def get_bounding_box(self, d_rect):
+        """ Return the corner points of the bounding box """
+        self.bounding_box = {'left': d_rect.left(),
+                             'top': d_rect.top(),
+                             'right': d_rect.right(),
+                             'bottom': d_rect.bottom()}
+
+    def get_center_scale(self):
+        """ Get the center and set scale of bounding box """
+        center = np.array([(self.bounding_box['left']
+                            + self.bounding_box['right']) / 2.0,
+                           (self.bounding_box['top']
+                            + self.bounding_box['bottom']) / 2.0])
+
+        center[1] -= (self.bounding_box['bottom']
+                      - self.bounding_box['top']) * 0.12
+
+        scale = (self.bounding_box['right']
+                 - self.bounding_box['left']
+                 + self.bounding_box['bottom']
+                 - self.bounding_box['top']) / 195.0
+
+        return center, scale
+
+    def align_image(self, center, scale):
+        """ Crop and align image around center """
+        image = self.crop(
+            self.frame,
+            center,
+            scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
+
+        return np.expand_dims(image, 0)
+
+    def predict_landmarks(self, image, center, scale):
+        """ Predict the 68 point landmarks """
+        with self.keras.session.as_default():
+            pts_img = self.get_pts_from_predict(
+                self.keras.model.predict(image)[-1][0],
+                center,
+                scale)
+
+        return [(int(pt[0] / self.input_scale),
+                 int(pt[1] / self.input_scale))
+                for pt in pts_img]
+
 
 class Extract(object):
     """ Extracts faces from an image, crops and
@@ -146,28 +232,56 @@ class Extract(object):
 
     def __init__(self, input_image_bgr, detector, verbose,
                  input_is_predetected_face=False):
+        self.initialized = False
         self.verbose = verbose
         self.keras = KERAS_MODEL
         self.detector = None
 
-        self.initialise(detector)
+        self.initialize(detector)
 
-        self.frame = Frame(input_image_bgr, verbose, input_is_predetected_face)
+        self.frame = Frame(detector=detector,
+                           input_image=input_image_bgr,
+                           verbose=verbose,
+                           input_is_predetected_face=input_is_predetected_face)
 
         self.detect_faces(input_is_predetected_face)
-        self.landmarks = self.process_landmarks()
+        self.convert_to_dlib_rectangle()
 
-    def initialise(self, detector):
-        """ Initialise Keras and Dlib """
+        self.landmarks = Align(self.frame,
+                               self.detector.detected_faces,
+                               self.keras,
+                               self.verbose).landmarks
+
+    def initialize(self, detector):
+        """ initialize Keras and Dlib """
+        if self.initialized:
+            return
+        self.initialize_vram(detector)
+
+        self.initialize_keras(detector)
+        self.initialize_detector(detector)
+        self.initialized = True
+
+    def initialize_vram(self, detector):
+        """ Initialize vram based on detector """
         VRAM.verbose = self.verbose
+        VRAM.detector = detector
         VRAM.output_stats()
 
-        kwargs = {"verbose": self.verbose}
-        self.keras.load_model(**kwargs)
+    def initialize_keras(self, detector):
+        """ Initialize keras. Allocate vram to tensorflow
+            based on detector """
+        ratio = None if detector == "mtcnn" else VRAM.get_tensor_gpu_ratio()
+        placeholder = np.zeros((1, 3, 256, 256))
+        self.keras.load_model(verbose=self.verbose,
+                              ratio=ratio,
+                              dummy=placeholder)
 
+    def initialize_detector(self, detector):
+        """ Initialize face detector """
+        kwargs = {"verbose": self.verbose}
         if detector == "mtcnn":
             self.detector = MTCNN_DETECTOR
-            kwargs["vram_ratio"] = 1.0
         else:
             self.detector = DLIB_DETECTORS
             kwargs["detector"] = detector
@@ -186,59 +300,11 @@ class Extract(object):
         else:
             self.detector.detect_faces(self.frame.images)
 
-    def process_landmarks(self):
-        """ Process the 68 point facial landmarks """
+    def convert_to_dlib_rectangle(self):
+        """ Convert detected faces to dlib_rectangle """
+        detected = [d_rect.rect
+                    if self.detector.is_mmod_rectangle(d_rect)
+                    else d_rect
+                    for d_rect in self.detector.detected_faces]
 
-        landmarks = list()
-
-        if self.detector.detected_faces:
-            for d_rect in self.detector.detected_faces:
-
-                if self.detector.is_mmod_rectangle(d_rect):
-                    d_rect = d_rect.rect
-
-                left = d_rect.left()
-                top = d_rect.top()
-                right = d_rect.right()
-                bottom = d_rect.bottom()
-
-                del d_rect
-
-                center = np.array([(left + right) / 2.0, (top + bottom) / 2.0])
-                center[1] -= (bottom - top) * 0.12
-                scale = (right - left + bottom - top) / 195.0
-
-                image = self.frame.crop(
-                    self.frame.images[0],
-                    center,
-                    scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
-
-                image = np.expand_dims(image, 0)
-
-                pts_img = self.frame.get_pts_from_predict(
-                    self.keras.model.predict(image)[-1][0],
-                    center,
-                    scale)
-
-                pts_img = [(int(pt[0] / self.frame.input_scale),
-                            int(pt[1] / self.frame.input_scale))
-                           for pt in pts_img]
-
-                landmarks.append(((int(left / self.frame.input_scale),
-                                   int(top / self.frame.input_scale),
-                                   int(right / self.frame.input_scale),
-                                   int(bottom / self.frame.input_scale)),
-                                  pts_img))
-        elif self.verbose:
-            print("Warning: No faces were detected.")
-
-        return landmarks
-
-
-# TODO Remove This
-def write_image(image, imname):
-    """ TODO Remove this temporary file preview """
-    impath = "/home/matt/fake/test/extract"
-    img = "test_{}.jpg".format(imname)
-    imgfile = os.path.join(impath, img)
-    cv2.imwrite(imgfile, image)
+        self.detector.detected_faces = detected

@@ -4,8 +4,7 @@
     https://github.com/1adrianb/face-alignment """
 
 import os
-
-import tensorflow as tf
+from tensorflow import Graph, Session
 import dlib
 
 from .mtcnn import create_mtcnn, detect_face
@@ -99,7 +98,6 @@ class MTCNNDetector(Detector):
         self.kwargs = {"minsize": 20,                 # minimum size of face
                        "threshold": [0.6, 0.7, 0.7],  # three steps's threshold
                        "factor": 0.709}               # scale factor)
-        self.session = None
 
     @staticmethod
     def set_data_path():
@@ -111,15 +109,7 @@ class MTCNNDetector(Detector):
                                 "the lib!".format(model_path))
         return CACHE_PATH
 
-    @staticmethod
-    def set_tensorflow_session(vram_ratio):
-        """ Set up a tensorflow session for mtcnn """
-        # TODO variable vram
-        config = tf.ConfigProto()
-        config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
-        return tf.Session(config=config)
-
-    def create_detector(self, verbose, vram_ratio=1.0):
+    def create_detector(self, verbose):
         """ Create the mtcnn detector """
         if self.initialized:
             return
@@ -129,10 +119,12 @@ class MTCNNDetector(Detector):
         if self.verbose:
             print("Adding MTCNN detector")
 
-        with tf.Graph().as_default():
-            session = self.set_tensorflow_session(vram_ratio)
-            with session.as_default():
-                pnet, rnet, onet = create_mtcnn(session, self.data_path)
+        mtcnn_graph = Graph()
+        with mtcnn_graph.as_default():
+            mtcnn_session = Session()
+            with mtcnn_session.as_default():
+                pnet, rnet, onet = create_mtcnn(mtcnn_session, self.data_path)
+        mtcnn_graph.finalize()
 
         self.kwargs["pnet"] = pnet
         self.kwargs["rnet"] = rnet
@@ -143,7 +135,7 @@ class MTCNNDetector(Detector):
         """ Detect faces in images """
         self.detected_faces = None
         for current_image in images:
-            detected_faces, _ = detect_face(current_image, **self.kwargs)
+            detected_faces = detect_face(current_image, **self.kwargs)
             self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
                                                   int(face[2]), int(face[3]))
                                    for face in detected_faces]

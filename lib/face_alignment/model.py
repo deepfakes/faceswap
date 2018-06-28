@@ -7,8 +7,7 @@ import os
 
 import keras
 from keras import backend as K
-from keras.backend.tensorflow_backend import set_session
-import tensorflow as tf
+from tensorflow import ConfigProto, Graph, Session
 
 
 class TorchBatchNorm2D(keras.engine.base_layer.Layer):
@@ -54,7 +53,7 @@ class TorchBatchNorm2D(keras.engine.base_layer.Layer):
                                                trainable=False)
         self.built = True
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, **kwargs):
         input_shape = K.int_shape(inputs)
 
         broadcast_shape = [1] * len(input_shape)
@@ -86,21 +85,12 @@ class TorchBatchNorm2D(keras.engine.base_layer.Layer):
 
 class KerasModel(object):
     "Load the Keras Model"
-    def __init__(self, vram_ratio):
+    def __init__(self):
+        self.initialized = False
         self.verbose = False
         self.model_path = self.set_model_path()
         self.model = None
         self.session = None
-
-        self.configure_tensorflow(vram_ratio)
-
-    def configure_tensorflow(self, vram_ratio):
-        """ Set VRAM limit for tensorflow """
-        config = tf.ConfigProto()
-        config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
-        # config.gpu_options.visible_device_list = "0"
-        self.session = tf.Session(config=config)
-        set_session(self.session)
 
     @staticmethod
     def set_model_path():
@@ -112,16 +102,27 @@ class KerasModel(object):
                             "reinstall the lib!".format(model_path))
         return model_path
 
-    def load_model(self, verbose):
+    def load_model(self, verbose, dummy, ratio):
         """ Load the Keras Model """
-        if self.model:
+        if self.initialized:
             return
 
         self.verbose = verbose
         if self.verbose:
             print("Initializing keras model...")
 
-        self.model = keras.models.load_model(
-            self.model_path,
-            custom_objects={'TorchBatchNorm2D':
-                            TorchBatchNorm2D})
+        keras_graph = Graph()
+        with keras_graph.as_default():
+            config = ConfigProto()
+            if ratio:
+                config.gpu_options.per_process_gpu_memory_fraction = ratio
+            self.session = Session(config=config)
+            with self.session.as_default():
+                self.model = keras.models.load_model(
+                    self.model_path,
+                    custom_objects={'TorchBatchNorm2D':
+                                    TorchBatchNorm2D})
+                self.model.predict(dummy)
+        keras_graph.finalize()
+
+        self.initialized = True

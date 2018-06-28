@@ -52,7 +52,7 @@ class Extract(object):
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
             # TODO Remove this to force processing just one image
-            # break
+            break
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
