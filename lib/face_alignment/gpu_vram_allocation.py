@@ -12,16 +12,28 @@ class GPUMem(object):
         self.verbose = False
         self.output_shown = False
         self.stats = gpu_stats.GPUStats()
+        self.vram_free = None
+        self.vram_total = None
+        self.scale_to = None
 
+        self.device = self.set_device()
+
+        if self.device == -1:
+            return
+
+        self.vram_total = self.stats.vram[self.device]
+        self.get_available_vram()
+
+    def set_device(self):
+        """ Set the default device """
+        if self.stats.device_count == 0:
+            return -1
+        return 0
         # TF selects first device, so this is used for stats
         # TODO select and use device with most available VRAM
         # TODO create virtual devices/allow multiple GPUs for
         # parallel processing
-        self.device = 0
-        self.vram_free = None
-        self.vram_total = self.stats.vram[self.device]
-        self.scale_to = None
-        self.get_available_vram()
+
 
     def set_device_with_max_free_vram(self):
         """ Set the device with the most available free vram """

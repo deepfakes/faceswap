@@ -23,12 +23,16 @@ class Frame(object):
     def __init__(self, detector, input_image,
                  verbose, input_is_predetected_face):
         self.verbose = verbose
-
-        if not VRAM.scale_to:
-            VRAM.set_scale_to(detector)
-        self.scale_to = VRAM.scale_to
-
         self.height, self.width = input_image.shape[:2]
+
+        if not VRAM.scale_to and VRAM.device != -1:
+            VRAM.set_scale_to(detector)
+
+        if VRAM.device != -1:
+            self.scale_to = VRAM.scale_to
+        else:
+            self.scale_to = self.height * self.width
+
         self.input_scale = 1.0
         self.images = self.process_input(input_image,
                                          input_is_predetected_face)
@@ -271,7 +275,9 @@ class Extract(object):
     def initialize_keras(self, detector):
         """ Initialize keras. Allocate vram to tensorflow
             based on detector """
-        ratio = None if detector == "mtcnn" else VRAM.get_tensor_gpu_ratio()
+        ratio = None
+        if detector != "mtcnn" and VRAM.device != -1:
+            ratio = VRAM.get_tensor_gpu_ratio()
         placeholder = np.zeros((1, 3, 256, 256))
         self.keras.load_model(verbose=self.verbose,
                               ratio=ratio,
@@ -279,7 +285,6 @@ class Extract(object):
 
     def initialize_detector(self, detector, mtcnn_kwargs):
         """ Initialize face detector """
-        print(mtcnn_kwargs)
         kwargs = {"verbose": self.verbose}
         if detector == "mtcnn":
             self.detector = MTCNN_DETECTOR

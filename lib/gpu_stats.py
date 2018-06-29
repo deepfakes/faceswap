@@ -12,8 +12,14 @@ class GPUStats(object):
         self.initialized = False
         self.device_count = 0
         self.handles = None
+        self.driver = None
+        self.devices = None
+        self.vram = None
 
         self.initialize()
+
+        if self.device_count == 0:
+            return
 
         self.driver = self.get_driver()
         self.devices = self.get_devices()
@@ -24,7 +30,10 @@ class GPUStats(object):
     def initialize(self):
         """ Initialize pynvml """
         if not self.initialized:
-            pynvml.nvmlInit()
+            try:
+                pynvml.nvmlInit()
+            except pynvml.NVMLError_LibraryNotFound:
+                return
             self.initialized = True
             self.get_device_count()
             self.get_handles()
