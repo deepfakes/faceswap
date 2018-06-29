@@ -1,7 +1,7 @@
 #!/usr/bin python3
 """ GPU VRAM allocator calculations """
 
-from lib import gpu_stats
+from lib.gpu_stats import GPUStats
 
 
 class GPUMem(object):
@@ -11,7 +11,7 @@ class GPUMem(object):
     def __init__(self):
         self.verbose = False
         self.output_shown = False
-        self.stats = gpu_stats.GPUStats()
+        self.stats = GPUStats()
         self.vram_free = None
         self.vram_total = None
         self.scale_to = None
@@ -33,7 +33,6 @@ class GPUMem(object):
         # TODO select and use device with most available VRAM
         # TODO create virtual devices/allow multiple GPUs for
         # parallel processing
-
 
     def set_device_with_max_free_vram(self):
         """ Set the device with the most available free vram """

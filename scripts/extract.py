@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from lib.gpu_stats import GPUStats
 from lib.multithreading import pool_process
 from scripts.fsmedia import Alignments, Faces, Images, Utils
 
@@ -32,7 +33,11 @@ class Extract(object):
         print('Starting, this may take a while...')
         Utils.set_verbosity(self.args.verbose)
 
-        if hasattr(self.args, 'processes') and self.args.processes > 1:
+        if self.args.multiprocess and GPUStats().device_count == 0:
+            # TODO Checking that there is no available GPU is not
+            # necessarily an indicator of whether the user is actually
+            # using the CPU. Maybe look to implement further checks on
+            # dlib/tensorflow compilations
             self.extract_multi_process()
         else:
             self.extract_single_process()
@@ -50,17 +55,14 @@ class Extract(object):
         for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
-
-            # TODO Remove this to force processing just one image
-            # break
+            break
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
         for filename, faces in tqdm(
                 pool_process(
                     self.process_single_image,
-                    self.images.input_images,
-                    processes=self.args.processes),
+                    self.images.input_images),
                 total=self.images.images_found,
                 file=sys.stdout):
             self.faces.num_faces_detected += 1
@@ -97,9 +99,6 @@ class Extract(object):
             if self.args.verbose:
                 print("Failed to extract from image: "
                       "{}. Reason: {}".format(filename, err))
-
-                # TODO Remove raise
-                raise
         return retval
 
     def process_single_face(self, idx, face, filename, image):

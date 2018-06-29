@@ -385,14 +385,11 @@ class ExtractArgs(ExtractConvertArgs):
                                       "Discarded images are moved into a "
                                       "\"blurry\" sub-folder. Lower values "
                                       "allow more blur"})
-        argument_list.append({"opts": ("-j", "--processes"),
-                              "type": int,
-                              "default": 1,
-                              "help": "Number of CPU processes to use. "
-                                      "WARNING: ONLY USE THIS IF YOU ARE NOT "
-                                      "EXTRACTING ON A GPU. Anything above 1 "
-                                      "process on a GPU will run out of "
-                                      "memory and will crash"})
+        argument_list.append({"opts": ("-mp", "--multiprocess"),
+                              "action": "store_true",
+                              "default": False,
+                              "help": "Run extraction on all available "
+                                      "cores. (CPU only)"})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",

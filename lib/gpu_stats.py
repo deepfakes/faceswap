@@ -33,6 +33,7 @@ class GPUStats(object):
             try:
                 pynvml.nvmlInit()
             except pynvml.NVMLError_LibraryNotFound:
+                self.initialized = True
                 return
             self.initialized = True
             self.get_device_count()

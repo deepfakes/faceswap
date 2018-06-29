@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from .detectors import DLibDetector, MTCNNDetector
-from .gpu_vram_allocation import GPUMem
+from .vram_allocation import GPUMem
 from .model import KerasModel
 
 DLIB_DETECTORS = DLibDetector()
