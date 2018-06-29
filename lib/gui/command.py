@@ -172,6 +172,8 @@ class OptionControl(object):
         ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
         ctlhelp = ctltitle + " - " + ctlhelp
         dflt = self.option.get("default", "")
+        if self.option.get("nargs", None) and isinstance(dflt, (list, tuple)):
+            dflt = ' '.join(str(val) for val in dflt)
         if ctl == ttk.Checkbutton:
             dflt = self.option.get("default", False)
         choices = self.option["choices"] if ctl == ttk.Combobox else None
