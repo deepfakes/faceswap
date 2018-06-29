@@ -187,7 +187,7 @@ class Sort(object):
                       file=sys.stdout):
             d = face_alignment.Extract(
                 cv2.imread(x),
-                'cnn',
+                'dlib-cnn',
                 True,
                 input_is_predetected_face=True).landmarks
             img_list.append([x, np.array(d[0][1])
@@ -224,7 +224,7 @@ class Sort(object):
                       file=sys.stdout):
             d = face_alignment.Extract(
                 cv2.imread(x),
-                'cnn',
+                'dlib-cnn',
                 True,
                 input_is_predetected_face=True).landmarks
             img_list.append([x, np.array(d[0][1])
@@ -259,7 +259,7 @@ class Sort(object):
                       file=sys.stdout):
             d = face_alignment.Extract(
                 cv2.imread(x),
-                'cnn',
+                'dlib-cnn',
                 True,
                 input_is_predetected_face=True).landmarks
             img_list.append([x,
@@ -621,7 +621,7 @@ class Sort(object):
                           file=sys.stdout):
                 d = face_alignment.Extract(
                     cv2.imread(x),
-                    'cnn',
+                    'dlib-cnn',
                     True,
                     input_is_predetected_face=True).landmarks
                 temp_list.append([x, np.array(d[0][1])
@@ -634,7 +634,7 @@ class Sort(object):
                           file=sys.stdout):
                 d = face_alignment.Extract(
                     cv2.imread(x),
-                    'cnn',
+                    'dlib-cnn',
                     True,
                     input_is_predetected_face=True).landmarks
                 temp_list.append(

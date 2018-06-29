@@ -4,9 +4,12 @@
 from lib import face_alignment
 
 
-def detect_faces(frame, detector, verbose, rotation=0):
+def detect_faces(frame, detector, verbose, rotation=0, mtcnn_kwargs=None):
     """ Detect faces and draw landmarks in an image """
-    face_detect = face_alignment.Extract(frame, detector, verbose)
+    face_detect = face_alignment.Extract(frame,
+                                         detector,
+                                         mtcnn_kwargs,
+                                         verbose)
     for face in face_detect.landmarks:
         ax_x, ax_y = face[0][0], face[0][1]
         right, bottom = face[0][2], face[0][3]

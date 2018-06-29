@@ -230,14 +230,14 @@ class Extract(object):
     """ Extracts faces from an image, crops and
         calculates landmarks """
 
-    def __init__(self, input_image_bgr, detector, verbose,
-                 input_is_predetected_face=False):
+    def __init__(self, input_image_bgr, detector, mtcnn_kwargs,
+                 verbose, input_is_predetected_face=False):
         self.initialized = False
         self.verbose = verbose
         self.keras = KERAS_MODEL
         self.detector = None
 
-        self.initialize(detector)
+        self.initialize(detector, mtcnn_kwargs)
 
         self.frame = Frame(detector=detector,
                            input_image=input_image_bgr,
@@ -247,19 +247,19 @@ class Extract(object):
         self.detect_faces(input_is_predetected_face)
         self.convert_to_dlib_rectangle()
 
-        self.landmarks = Align(self.frame,
-                               self.detector.detected_faces,
-                               self.keras,
-                               self.verbose).landmarks
+        self.landmarks = Align(frame=self.frame,
+                               detected_faces=self.detector.detected_faces,
+                               keras_model=self.keras,
+                               verbose=self.verbose).landmarks
 
-    def initialize(self, detector):
+    def initialize(self, detector, mtcnn_kwargs):
         """ initialize Keras and Dlib """
         if self.initialized:
             return
         self.initialize_vram(detector)
 
         self.initialize_keras(detector)
-        self.initialize_detector(detector)
+        self.initialize_detector(detector, mtcnn_kwargs)
         self.initialized = True
 
     def initialize_vram(self, detector):
@@ -277,11 +277,14 @@ class Extract(object):
                               ratio=ratio,
                               dummy=placeholder)
 
-    def initialize_detector(self, detector):
+    def initialize_detector(self, detector, mtcnn_kwargs):
         """ Initialize face detector """
+        print(mtcnn_kwargs)
         kwargs = {"verbose": self.verbose}
         if detector == "mtcnn":
             self.detector = MTCNN_DETECTOR
+            mtcnn_kwargs = self.detector.validate_kwargs(mtcnn_kwargs)
+            kwargs["mtcnn_kwargs"] = mtcnn_kwargs
         else:
             self.detector = DLIB_DETECTORS
             kwargs["detector"] = detector

@@ -52,15 +52,17 @@ class Extract(object):
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
             # TODO Remove this to force processing just one image
-            break
+            # break
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
-        for filename, faces in tqdm(pool_process(self.process_single_image,
-                                                 self.images.input_images,
-                                                 processes=self.args.processes),
-                                    total=self.images.images_found,
-                                    file=sys.stdout):
+        for filename, faces in tqdm(
+                pool_process(
+                    self.process_single_image,
+                    self.images.input_images,
+                    processes=self.args.processes),
+                total=self.images.images_found,
+                file=sys.stdout):
             self.faces.num_faces_detected += 1
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
@@ -102,7 +104,8 @@ class Extract(object):
 
     def process_single_face(self, idx, face, filename, image):
         """ Perform processing on found faces """
-        output_file = self.output_dir / Path(filename).stem if self.export_face else None
+        output_file = self.output_dir / Path(
+            filename).stem if self.export_face else None
 
         self.faces.draw_landmarks_on_face(face, image)
 

@@ -15,6 +15,8 @@ class GPUMem(object):
 
         # TF selects first device, so this is used for stats
         # TODO select and use device with most available VRAM
+        # TODO create virtual devices/allow multiple GPUs for
+        # parallel processing
         self.device = 0
         self.vram_free = None
         self.vram_total = self.stats.vram[self.device]
@@ -78,6 +80,9 @@ class GPUMem(object):
             used for calculating image scaling """
 
         # MTCNN VRAM Usage Stats
+        # Crudely Calculated at default values
+        # The formula may need ammending, but it should
+        # work for most use cases
         # 480x270 = 267.56 MB
         # 960x540 = 333.18 MB
         # 1280x720 = 592.32 MB
@@ -86,10 +91,12 @@ class GPUMem(object):
         # 2400x1350 = 2.03 GB
         # 2880x1620 = 2.93 GB
         # 3360x1890 = 3.98 GB
-        # 3840x2160 = 2.62 GB
+        # 3840x2160 = 2.62 GB <--??
         # 4280x2800 = 3.69 GB
 
-        detector = "dlib" if detector in ("cnn", "hog", "all") else detector
+        detector = "dlib" if detector in ("dlib-cnn",
+                                          "dlib-hog",
+                                          "dlib-all") else detector
         buffer = 64  # 64MB overhead buffer
         gradient = 3483.2 / 9651200  # MTCNN
         constant = 1.007533156  # MTCNN

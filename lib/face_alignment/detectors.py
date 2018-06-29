@@ -65,13 +65,13 @@ class DLibDetector(Detector):
 
         self.verbose = verbose
 
-        if detector == "cnn" or detector == "all":
+        if detector == "dlib-cnn" or detector == "dlib-all":
             if self.verbose:
                 print("Adding DLib - CNN detector")
             self.detectors.append(dlib.cnn_face_detection_model_v1(
                 self.data_path))
 
-        if detector == "hog" or detector == "all":
+        if detector == "dlib-hog" or detector == "dlib-all":
             if self.verbose:
                 print("Adding DLib - HOG detector")
             self.detectors.append(dlib.get_frontal_face_detector())
@@ -95,9 +95,28 @@ class MTCNNDetector(Detector):
     """ MTCNN detector for face recognition """
     def __init__(self):
         Detector.__init__(self)
-        self.kwargs = {"minsize": 20,                 # minimum size of face
-                       "threshold": [0.6, 0.7, 0.7],  # three steps's threshold
-                       "factor": 0.709}               # scale factor)
+        self.kwargs = None
+
+    @staticmethod
+    def validate_kwargs(kwargs):
+        """ Validate that cli kwargs are correct. If not reset to default """
+        valid = True
+        if kwargs['minsize'] < 10:
+            valid = False
+        elif len(kwargs['threshold']) != 3:
+            valid = False
+        elif not all(0.0 < threshold < 1.0
+                     for threshold in kwargs['threshold']):
+            valid = False
+        elif not 0.0 < kwargs['factor'] < 1.0:
+            valid = False
+
+        if not valid:
+            print("Invalid MTCNN arguments received. Running with defaults")
+            return {"minsize": 20,                 # minimum size of face
+                    "threshold": [0.6, 0.7, 0.7],  # three steps threshold
+                    "factor": 0.709}               # scale factor
+        return kwargs
 
     @staticmethod
     def set_data_path():
@@ -109,7 +128,7 @@ class MTCNNDetector(Detector):
                                 "the lib!".format(model_path))
         return CACHE_PATH
 
-    def create_detector(self, verbose):
+    def create_detector(self, verbose, mtcnn_kwargs):
         """ Create the mtcnn detector """
         if self.initialized:
             return
@@ -118,6 +137,8 @@ class MTCNNDetector(Detector):
 
         if self.verbose:
             print("Adding MTCNN detector")
+
+        self.kwargs = mtcnn_kwargs
 
         mtcnn_graph = Graph()
         with mtcnn_graph.as_default():
