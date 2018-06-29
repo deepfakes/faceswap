@@ -6,6 +6,7 @@
 !*.png
 !*.h5
 !*.dat
+!*.npy
 !Dockerfile*
 !requirements*
 !lib
