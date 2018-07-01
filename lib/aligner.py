@@ -26,7 +26,7 @@ mean_face_y = numpy.array([
 landmarks_2D = numpy.stack( [ mean_face_x, mean_face_y ], axis=1 )
 
 def get_align_mat(face, size, should_align_eyes):
-    mat_umeyama = umeyama(numpy.array(face.landmarksAsXY()[17:]), landmarks_2D, True)[0:2]
+    mat_umeyama = umeyama(numpy.array(face.landmarks_as_xy()[17:]), landmarks_2D, True)[0:2]
 
     if should_align_eyes is False:
         return mat_umeyama
@@ -34,7 +34,7 @@ def get_align_mat(face, size, should_align_eyes):
     mat_umeyama = mat_umeyama * size
 
     # Convert to matrix
-    landmarks = numpy.matrix(face.landmarksAsXY())
+    landmarks = numpy.matrix(face.landmarks_as_xy())
 
     # cv2 expects points to be in the form np.array([ [[x1, y1]], [[x2, y2]], ... ]), we'll expand the dim
     landmarks = numpy.expand_dims(landmarks, axis=1)

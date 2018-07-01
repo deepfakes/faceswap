@@ -180,7 +180,8 @@ class FaceSwapArgs(object):
     """ Faceswap argument parser functions that are universal
         to all commands. Should be the parent function of all
         subsequent argparsers """
-    def __init__(self, subparser, command, description="default", subparsers=None):
+    def __init__(self, subparser, command,
+                 description="default", subparsers=None):
 
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
@@ -224,7 +225,8 @@ class FaceSwapArgs(object):
         """ Parse the arguments passed in from argparse """
         for option in self.argument_list + self.optional_arguments:
             args = option["opts"]
-            kwargs = {key: option[key] for key in option.keys() if key != "opts"}
+            kwargs = {key: option[key]
+                      for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
 
 
@@ -274,17 +276,59 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "type": str,
                               # case sensitive because this is used to load a
                               # plugin.
-                              "choices": ("hog", "cnn", "all"),
-                              "default": "hog",
-                              "help": "Detector to use. 'cnn' detects many "
-                                      "more angles but will be much more "
-                                      "resource intensive and may fail on "
-                                      "large files"})
+                              "choices": ("dlib-hog", "dlib-cnn",
+                                          "dlib-all", "mtcnn"),
+                              "default": "mtcnn",
+                              "help": "Detector to use. 'dlib-hog': uses "
+                                      "least resources, but is the least "
+                                      "reliable. 'dlib-cnn': faster than "
+                                      "mtcnn but detects fewer faces and "
+                                      "fewer false positives. 'dlib-all': "
+                                      "attempts to find faces using "
+                                      "dlib-cnn, if none are found, attempts "
+                                      "to find faces using dlib-hog. "
+                                      "'mtcnn': slower than dlib, but uses "
+                                      "fewer resources whilst detecting more "
+                                      "faces and more false positives. "
+                                      "Has superior alignment to dlib"})
+        argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
+                              "type": int,
+                              "dest": "mtcnn_minsize",
+                              "default": 20,
+                              "help": "The minimum size of a face to be "
+                                      "accepted. Lower values use "
+                                      "significantly more VRAM. Minimum "
+                                      "value is 10. Default is 20 "
+                                      "(MTCNN detector only)"})
+        argument_list.append({"opts": ("-mtth", "--mtcnn-threshold"),
+                              "nargs": "+",
+                              "type": str,
+                              "dest": "mtcnn_threshold",
+                              "default": ["0.6", "0.7", "0.7"],
+                              "help": "Three step threshold for face "
+                                      "detection. Should be three decimal "
+                                      "numbers each less than 1. Eg: "
+                                      "'--mtcnn-threshold 0.6 0.7 0.7'. "
+                                      "1st stage: obtains face candidates, "
+                                      "2nd stage: refinement of face "
+                                      "candidates, 3rd stage: further "
+                                      "refinement of face candidates. "
+                                      "Default is 0.6 0.7 0.7 "
+                                      "(MTCNN detector only)"})
+        argument_list.append({"opts": ("-mtsc", "--mtcnn-scalefactor"),
+                              "type": float,
+                              "dest": "mtcnn_scalefactor",
+                              "default": 0.709,
+                              "help": "The scale factor for the image "
+                                      "pyramid. Should be a decimal number "
+                                      "less than one. Default is 0.709 "
+                                      "(MTCNN detector only)"})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
                               "type": float,
                               "dest": "ref_threshold",
                               "default": 0.6,
-                              "help": "Threshold for positive face recognition"})
+                              "help": "Threshold for positive face "
+                                      "recognition"})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "type": str,
                               "dest": "nfilter",
@@ -341,24 +385,23 @@ class ExtractArgs(ExtractConvertArgs):
                                       "Discarded images are moved into a "
                                       "\"blurry\" sub-folder. Lower values "
                                       "allow more blur"})
-        argument_list.append({"opts": ("-j", "--processes"),
-                              "type": int,
-                              "default": 1,
-                              "help": "Number of CPU processes to use. "
-                                      "WARNING: ONLY USE THIS IF YOU ARE NOT "
-                                      "EXTRACTING ON A GPU. Anything above 1 "
-                                      "process on a GPU will run out of "
-                                      "memory and will crash"})
+        argument_list.append({"opts": ("-mp", "--multiprocess"),
+                              "action": "store_true",
+                              "default": False,
+                              "help": "Run extraction on all available "
+                                      "cores. (CPU only)"})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
                               "default": False,
-                              "help": "Skips frames that have already been extracted"})
+                              "help": "Skips frames that have already been "
+                                      "extracted"})
         argument_list.append({"opts": ("-dl", "--debug-landmarks"),
                               "action": "store_true",
                               "dest": "debug_landmarks",
                               "default": False,
-                              "help": "Draw landmarks on the ouput faces for debug"})
+                              "help": "Draw landmarks on the ouput faces for "
+                                      "debug"})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
@@ -396,16 +439,20 @@ class ConvertArgs(ExtractConvertArgs):
                                       "files. If you delete faces from this "
                                       "folder, they'll be skipped during "
                                       "conversion. If no aligned dir is "
-                                      "specified, all faces will be converted"})
+                                      "specified, all faces will be "
+                                      "converted"})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "type": str,
-                              # case sensitive because this is used to load a plug-in.
+                              # case sensitive because this is used to
+                              # load a plug-in.
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
-                              "help": "Select the trainer that was used to create the model"})
+                              "help": "Select the trainer that was used to "
+                                      "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "type": str,
-                              # case sensitive because this is used to load a plugin.
+                              # case sensitive because this is used
+                              # to load a plugin.
                               "choices": ("Masked", "Adjust"),
                               "default": "Masked",
                               "help": "Converter to use"})
@@ -424,12 +471,16 @@ class ConvertArgs(ExtractConvertArgs):
                                       "swapped face to cover more space. "
                                       "(Masked converter only)"})
         argument_list.append({"opts": ("-M", "--mask-type"),
-                              # lowercase this, because it's just a string later on.
+                              # lowercase this, because it's just a
+                              # string later on.
                               "type": str.lower,
                               "dest": "mask_type",
-                              "choices": ["rect", "facehull", "facehullandrect"],
+                              "choices": ["rect",
+                                          "facehull",
+                                          "facehullandrect"],
                               "default": "facehullandrect",
-                              "help": "Mask to use to replace faces. (Masked converter only)"})
+                              "help": "Mask to use to replace faces. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
@@ -461,17 +512,20 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "swap_model",
                               "default": False,
-                              "help": "Swap the model. Instead of A -> B, swap B -> A"})
+                              "help": "Swap the model. Instead of A -> B, "
+                                      "swap B -> A"})
         argument_list.append({"opts": ("-S", "--seamless"),
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
-                              "help": "Use cv2's seamless clone. (Masked converter only)"})
+                              "help": "Use cv2's seamless clone. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
-                              "help": "Use histogram matching. (Masked converter only)"})
+                              "help": "Use histogram matching. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-sm", "--smooth-mask"),
                               "action": "store_true",
                               "dest": "smooth_mask",
@@ -481,7 +535,8 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "avg_color_adjust",
                               "default": True,
-                              "help": "Average color adjust. (Adjust converter only)"})
+                              "help": "Average color adjust. "
+                                      "(Adjust converter only)"})
         return argument_list
 
 
@@ -530,7 +585,8 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "default": 64,
-                              "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
+                              "help": "Batch size, as a power of 2 "
+                                      "(64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
                               "default": 1000000,
@@ -589,5 +645,6 @@ class GuiArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "debug",
                               "default": False,
-                              "help": "Output to Shell console instead of GUI console"})
+                              "help": "Output to Shell console instead of "
+                                      "GUI console"})
         return argument_list

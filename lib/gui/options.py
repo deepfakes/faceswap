@@ -157,6 +157,9 @@ class CliOptions(object):
         for option in self.options_to_process(command):
             default = option.get("default", "")
             default = "" if default is None else default
+            if (option.get("nargs", None)
+                    and isinstance(default, (list, tuple))):
+                default = ' '.join(str(val) for val in default)
             option["value"].set(default)
 
     def clear(self, command=None):

@@ -10,6 +10,7 @@ dlib
 tqdm
 matplotlib==2.2.2
 ffmpy==0.2.2
+nvidia-ml-py3
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,
