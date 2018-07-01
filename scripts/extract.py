@@ -55,7 +55,6 @@ class Extract(object):
         for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
-            break
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
