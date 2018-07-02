@@ -41,19 +41,13 @@ mswindows = sys.platform=="win32"
 
 class EncoderType(enum.Enum):
     ORIGINAL = "original"
-    SHAOANLU = "shaoanlu"
-    
-    
-class LossFunction(enum.Enum):
-    MEAN_ABSOLUTE_ERROR = "mae"
-    DSSIM = "DSSIM"        
+    SHAOANLU = "shaoanlu"    
             
 
 def inst_norm():
     return InstanceNormalization()
 
 
-LOSS_FN = LossFunction.MEAN_ABSOLUTE_ERROR
 ENCODER = EncoderType.ORIGINAL
 
 
@@ -109,13 +103,9 @@ class Model():
             self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
             self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)
         
-        if LOSS_FN is LossFunction.MEAN_ABSOLUTE_ERROR:
-            self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
-            self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
-        elif LOSS_FN is LossFunction.DSSIM:
-            from keras_contrib.losses.dssim import DSSIMObjective
-            self.autoencoder_A.compile(optimizer=optimizer, loss=DSSIMObjective(), metrics=['mse'])
-            self.autoencoder_B.compile(optimizer=optimizer, loss=DSSIMObjective(), metrics=['mse'])
+        
+        self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
+        self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')                    
         
         
     def load(self, swapped):        
@@ -287,7 +277,7 @@ class Model():
         print('\nsaving model weights', end='', flush=True)        
         
         from concurrent.futures import ThreadPoolExecutor, as_completed        
-        # thought maybe I/O bound, sometimes saving in parallel is faster
+        
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
             for future in as_completed(futures):
