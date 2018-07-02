@@ -161,10 +161,11 @@ class Align(object):
 
     def process_landmarks(self):
         """ Align image and process landmarks """
+        landmarks = list()
         if not self.detected_faces:
             if self.verbose:
                 print("Warning: No faces were detected.")
-            return list()
+            return landmarks
 
         for d_rect in self.detected_faces:
             self.get_bounding_box(d_rect)
@@ -175,12 +176,12 @@ class Align(object):
 
             landmarks_xy = self.predict_landmarks(image, center, scale)
 
-            landmarks = [(
+            landmarks.append((
                 (int(self.bounding_box['left'] / self.input_scale),
                  int(self.bounding_box['top'] / self.input_scale),
                  int(self.bounding_box['right'] / self.input_scale),
                  int(self.bounding_box['bottom'] / self.input_scale)),
-                landmarks_xy)]
+                landmarks_xy))
 
         return landmarks
 
