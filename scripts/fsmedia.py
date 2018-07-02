@@ -30,10 +30,13 @@ class Utils(object):
         set_system_verbosity(lvl)
 
     @staticmethod
-    def rotate_image_by_angle(image, angle, rotated_width=None, rotated_height=None):
-        """ Rotate an image by a given angle. From:
-            https://stackoverflow.com/questions/22041699
-            This is required by both Faces and Images so placed here for now """
+    def rotate_image_by_angle(image, angle,
+                              rotated_width=None, rotated_height=None):
+        """ Rotate an image by a given angle.
+            From: https://stackoverflow.com/questions/22041699
+
+            This is required by both Faces and Images
+            so placed here for now """
         height, width = image.shape[:2]
         image_center = (width/2, height/2)
         rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
@@ -46,7 +49,9 @@ class Utils(object):
                 rotated_height = int(height*abs_cos + width*abs_sin)
         rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
         rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
-        return cv2.warpAffine(image, rotation_matrix, (rotated_width, rotated_height))
+        return cv2.warpAffine(image,
+                              rotation_matrix,
+                              (rotated_width, rotated_height))
 
     @staticmethod
     def cv2_read_write(action, filename, image=None):
@@ -110,7 +115,9 @@ class Images(object):
                              for angle in self.args.rotate_images.split(",")]
             if len(passed_angles) == 1:
                 rotation_step_size = passed_angles[0]
-                rotation_angles.extend(range(rotation_step_size, 360, rotation_step_size))
+                rotation_angles.extend(range(rotation_step_size,
+                                             360,
+                                             rotation_step_size))
             elif len(passed_angles) > 1:
                 rotation_angles.extend(passed_angles)
 
@@ -120,7 +127,8 @@ class Images(object):
         """ Return the images that already exist in the output directory """
         print("Output Directory: {}".format(self.args.output_dir))
 
-        if not hasattr(self.args, 'skip_existing') or not self.args.skip_existing:
+        if (not hasattr(self.args, 'skip_existing')
+                or not self.args.skip_existing):
             return None
 
         return get_image_paths(self.args.output_dir)
@@ -134,7 +142,8 @@ class Images(object):
         print("Input Directory: {}".format(self.args.input_dir))
 
         if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
-            input_images = get_image_paths(self.args.input_dir, self.already_processed)
+            input_images = get_image_paths(self.args.input_dir,
+                                           self.already_processed)
             print("Excluding %s files" % len(self.already_processed))
         else:
             input_images = get_image_paths(self.args.input_dir)
@@ -148,10 +157,11 @@ class Images(object):
                 self.rotation_height, self.rotation_width = image.shape[:2]
                 image = Utils.rotate_image_by_angle(image, rotation)
             else:
-                image = Utils.rotate_image_by_angle(image,
-                                                    rotation * -1,
-                                                    rotated_width=self.rotation_width,
-                                                    rotated_height=self.rotation_height)
+                image = Utils.rotate_image_by_angle(
+                    image,
+                    rotation * -1,
+                    rotated_width=self.rotation_width,
+                    rotated_height=self.rotation_height)
         return image
 
 
@@ -160,8 +170,10 @@ class Faces(object):
     def __init__(self, arguments):
         self.args = arguments
         self.extractor = self.load_extractor()
+        self.mtcnn_kwargs = self.get_mtcnn_kwargs()
         self.filter = self.load_face_filter()
-        self.align_eyes = self.args.align_eyes if hasattr(self.args, 'align_eyes') else False
+        self.align_eyes = self.args.align_eyes if hasattr(
+            self.args, 'align_eyes') else False
         self.output_dir = get_folder(self.args.output_dir)
 
         self.faces_detected = dict()
@@ -175,6 +187,14 @@ class Faces(object):
 
         return extractor
 
+    def get_mtcnn_kwargs(self):
+        """ Add the mtcnn arguments into a kwargs dictionary """
+        mtcnn_threshold = [float(thr.strip())
+                           for thr in self.args.mtcnn_threshold]
+        return {"minsize": self.args.mtcnn_minsize,
+                "threshold": mtcnn_threshold,
+                "factor": self.args.mtcnn_scalefactor}
+
     def load_face_filter(self):
         """ Load faces to filter out of images """
         facefilter = None
@@ -182,7 +202,9 @@ class Faces(object):
                         for filter_type in ('filter', 'nfilter')]
 
         if any(filters for filters in filter_files):
-            facefilter = FaceFilter(filter_files[0], filter_files[1], self.args.ref_threshold)
+            facefilter = FaceFilter(filter_files[0],
+                                    filter_files[1],
+                                    self.args.ref_threshold)
         return facefilter
 
     def set_face_filter(self, filter_list):
@@ -194,7 +216,8 @@ class Faces(object):
             filter_files = filter_args
             if not isinstance(filter_args, list):
                 filter_files = [filter_args]
-            filter_files = list(filter(lambda fnc: Path(fnc).exists(), filter_files))
+            filter_files = list(filter(lambda fnc: Path(fnc).exists(),
+                                       filter_files))
         return filter_files
 
     def have_face(self, filename):
@@ -204,7 +227,8 @@ class Faces(object):
     def get_faces(self, image, rotation=0):
         """ Extract the faces from an image """
         faces_count = 0
-        faces = detect_faces(image, self.args.detector, self.args.verbose, rotation)
+        faces = detect_faces(image, self.args.detector, self.args.verbose,
+                             rotation=rotation, mtcnn_kwargs=self.mtcnn_kwargs)
 
         for face in faces:
             if self.filter and not self.filter.check(face):
@@ -228,7 +252,8 @@ class Faces(object):
             # Rotate the image if necessary
             if face.r != 0:
                 image = Utils.rotate_image_by_angle(image, face.r)
-            face.image = image[face.y : face.y + face.h, face.x : face.x + face.w]
+            face.image = image[face.y: face.y + face.h,
+                               face.x: face.x + face.w]
             if self.filter and not self.filter.check(face):
                 if self.args.verbose:
                     print("Skipping not recognized face!")
@@ -238,15 +263,17 @@ class Faces(object):
             self.num_faces_detected += 1
             faces_count += 1
         if faces_count > 1 and self.args.verbose:
-            print("Note: Found more than one face in an image! File: {}".format(filename))
+            print("Note: Found more than one face in "
+                  "an image! File: {}".format(filename))
             self.verify_output = True
 
     def draw_landmarks_on_face(self, face, image):
         """ Draw debug landmarks on extracted face """
-        if not hasattr(self.args, 'debug_landmarks') or not self.args.debug_landmarks:
+        if (not hasattr(self.args, 'debug_landmarks')
+                or not self.args.debug_landmarks):
             return
 
-        for (pos_x, pos_y) in face.landmarksAsXY():
+        for (pos_x, pos_y) in face.landmarks_as_xy():
             cv2.circle(image, (pos_x, pos_y), 2, (0, 0, 255), -1)
 
     def detect_blurry_faces(self, face, t_mat, resized_image, filename):
@@ -255,17 +282,26 @@ class Faces(object):
             return None
 
         blurry_file = None
-        aligned_landmarks = self.extractor.transform_points(face.landmarksAsXY(), t_mat, 256, 48)
-        feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256, 256, 48)
+        aligned_landmarks = self.extractor.transform_points(
+            face.landmarks_as_xy(),
+            t_mat,
+            256,
+            48)
+        feature_mask = self.extractor.get_feature_mask(aligned_landmarks / 256,
+                                                       256,
+                                                       48)
         feature_mask = cv2.blur(feature_mask, (10, 10))
-        isolated_face = cv2.multiply(feature_mask, resized_image.astype(float)).astype(np.uint8)
+        isolated_face = cv2.multiply(
+            feature_mask,
+            resized_image.astype(float)).astype(np.uint8)
         blurry, focus_measure = is_blurry(isolated_face, self.args.blur_thresh)
 
         if blurry:
             print("{}'s focus measure of {} was below the blur threshold, "
-                  "moving to \"blurry\"".format(Path(filename).stem, focus_measure))
-            blurry_file = get_folder(Path(self.output_dir) / Path("blurry")) / \
-                Path(filename).stem
+                  "moving to \"blurry\"".format(Path(filename).stem,
+                                                focus_measure))
+            blurry_file = get_folder(Path(self.output_dir) /
+                                     Path("blurry")) / Path(filename).stem
         return blurry_file
 
 
@@ -293,8 +329,9 @@ class Alignments(object):
         if self.args.alignments_path:
             alignfile = self.args.alignments_path
         else:
-            alignfile = os.path.join(str(self.args.input_dir),
-                                     "alignments.{}".format(self.serializer.ext))
+            alignfile = os.path.join(
+                str(self.args.input_dir),
+                "alignments.{}".format(self.serializer.ext))
         print("Alignments filepath: %s" % alignfile)
         return alignfile
 
@@ -312,7 +349,8 @@ class Alignments(object):
     def write_alignments(self, faces_detected):
         """ Write the serialized alignments file """
         if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
-            faces_detected = self.load_skip_alignments(self.alignments_path, faces_detected)
+            faces_detected = self.load_skip_alignments(self.alignments_path,
+                                                       faces_detected)
 
         try:
             print("Writing alignments to: {}".format(self.alignments_path))
