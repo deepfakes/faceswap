@@ -6,10 +6,12 @@ import sys
 from pathlib import Path
 
 from tqdm import tqdm
-tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 
+from lib.gpu_stats import GPUStats
 from lib.multithreading import pool_process
 from scripts.fsmedia import Alignments, Faces, Images, Utils
+
+tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 
 
 class Extract(object):
@@ -31,7 +33,11 @@ class Extract(object):
         print('Starting, this may take a while...')
         Utils.set_verbosity(self.args.verbose)
 
-        if hasattr(self.args, 'processes') and self.args.processes > 1:
+        if self.args.multiprocess and GPUStats().device_count == 0:
+            # TODO Checking that there is no available GPU is not
+            # necessarily an indicator of whether the user is actually
+            # using the CPU. Maybe look to implement further checks on
+            # dlib/tensorflow compilations
             self.extract_multi_process()
         else:
             self.extract_single_process()
@@ -52,11 +58,12 @@ class Extract(object):
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
-        for filename, faces in tqdm(pool_process(self.process_single_image,
-                                                 self.images.input_images,
-                                                 processes=self.args.processes),
-                                    total=self.images.images_found,
-                                    file=sys.stdout):
+        for filename, faces in tqdm(
+                pool_process(
+                    self.process_single_image,
+                    self.images.input_images),
+                total=self.images.images_found,
+                file=sys.stdout):
             self.faces.num_faces_detected += 1
             self.faces.faces_detected[os.path.basename(filename)] = faces
 
@@ -75,35 +82,47 @@ class Extract(object):
                 faces = self.faces.get_faces(currentimage, angle)
                 process_faces = [(idx, face) for idx, face in faces]
                 if process_faces and angle != 0 and self.args.verbose:
-                    print("found face(s) by rotating image {} degrees".format(angle))
+                    print("found face(s) by rotating image "
+                          "{} degrees".format(angle))
                 if process_faces:
                     break
 
-            final_faces = [self.process_single_face(idx, face, filename, currentimage)
+            final_faces = [self.process_single_face(idx,
+                                                    face,
+                                                    filename,
+                                                    currentimage)
                            for idx, face in process_faces]
 
             retval = filename, final_faces
         except Exception as err:
             if self.args.verbose:
-                print("Failed to extract from image: {}. Reason: {}".format(filename, err))
+                print("Failed to extract from image: "
+                      "{}. Reason: {}".format(filename, err))
         return retval
 
     def process_single_face(self, idx, face, filename, image):
         """ Perform processing on found faces """
-        output_file = self.output_dir / Path(filename).stem if self.export_face else None
+        output_file = self.output_dir / Path(
+            filename).stem if self.export_face else None
 
         self.faces.draw_landmarks_on_face(face, image)
 
-        resized_face, t_mat = self.faces.extractor.extract(image,
-                                                           face,
-                                                           256,
-                                                           self.faces.align_eyes)
+        resized_face, t_mat = self.faces.extractor.extract(
+            image,
+            face,
+            256,
+            self.faces.align_eyes)
 
-        blurry_file = self.faces.detect_blurry_faces(face, t_mat, resized_face, filename)
+        blurry_file = self.faces.detect_blurry_faces(face,
+                                                     t_mat,
+                                                     resized_face,
+                                                     filename)
         output_file = blurry_file if blurry_file else output_file
 
         if self.export_face:
-            filename = "{}_{}{}".format(str(output_file), str(idx), Path(filename).suffix)
+            filename = "{}_{}{}".format(str(output_file),
+                                        str(idx),
+                                        Path(filename).suffix)
             Utils.cv2_read_write('write', filename, resized_face)
 
         return {"r": face.r,
@@ -111,4 +130,4 @@ class Extract(object):
                 "w": face.w,
                 "y": face.y,
                 "h": face.h,
-                "landmarksXY": face.landmarksAsXY()}
+                "landmarksXY": face.landmarks_as_xy()}

@@ -37,7 +37,7 @@ class Convert():
 
         new_face = self.get_new_face(image,mat,size)
 
-        image_mask = self.get_image_mask( image, new_face, face_detected.landmarksAsXY(), mat, image_size )
+        image_mask = self.get_image_mask( image, new_face, face_detected.landmarks_as_xy(), mat, image_size )
 
         return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
 

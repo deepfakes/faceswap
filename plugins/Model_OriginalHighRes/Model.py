@@ -26,7 +26,7 @@ from lib.PixelShuffler import PixelShuffler
 import lib.Serializer
 from lib.utils import backup_file
 
-from . import __version__
+from . import __version__    
 from .instance_normalization import InstanceNormalization
 
 
@@ -41,18 +41,14 @@ mswindows = sys.platform=="win32"
 
 class EncoderType(enum.Enum):
     ORIGINAL = "original"
-    SHAOANLU = "shaoanlu"
-    
-    
-ENCODER = EncoderType.ORIGINAL
-
-         
-conv_init = RandomNormal(0, 0.02)
+    SHAOANLU = "shaoanlu"    
+            
 
 def inst_norm():
     return InstanceNormalization()
 
-ENCODER = EncoderType.ORIGINAL 
+
+ENCODER = EncoderType.ORIGINAL
 
 
 hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
@@ -107,8 +103,9 @@ class Model():
             self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
             self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)
         
+        
         self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')
+        self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')                    
         
         
     def load(self, swapped):        
@@ -151,21 +148,21 @@ class Model():
     
     def conv(self, filters, kernel_size=5, strides=2, **kwargs):
         def block(x):
-            x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)         
+            x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)         
             x = LeakyReLU(0.1)(x)
             return x
         return block   
 
-    def conv_sep2(self, filters, kernel_size=5, strides=2, use_instance_norm=True, **kwargs):
+    def conv_sep(self, filters, kernel_size=5, strides=2, use_instance_norm=True, **kwargs):
         def block(x):
-            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)
             x = Activation("relu")(x)
             return x    
         return block 
         
     def conv_sep3(self, filters, kernel_size=3, strides=2, use_instance_norm=True, **kwargs):
         def block(x):
-            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=conv_init, padding='same', **kwargs)(x)        
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)        
             if use_instance_norm:
                 x = inst_norm()(x)
             x = Activation("relu")(x)
@@ -174,7 +171,8 @@ class Model():
     
     def upscale(self, filters, **kwargs):
         def block(x):
-            x = Conv2D(filters * 4, kernel_size=3, padding='same')(x)
+            x = Conv2D(filters * 4, kernel_size=3, padding='same',
+                       kernel_initializer=RandomNormal(0, 0.02))(x)
             x = LeakyReLU(0.1)(x)
             x = PixelShuffler()(x)
             return x
@@ -182,7 +180,8 @@ class Model():
     
     def upscale_sep3(self, filters, use_instance_norm=True, **kwargs):
         def block(x):
-            x = Conv2D(filters*4, kernel_size=3, use_bias=False, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)
+            x = Conv2D(filters*4, kernel_size=3, use_bias=False, 
+                       kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)
             if use_instance_norm:
                 x = inst_norm()(x)
             x = LeakyReLU(0.1)(x)
@@ -196,13 +195,13 @@ class Model():
         in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
 
         x = self.conv(in_conv_filters)(impt)
-        x = self.conv_sep2(256)(x)
+        x = self.conv_sep(256)(x)
         x = self.conv(512)(x)
-        x = self.conv_sep2(1024)(x)
+        x = self.conv_sep(1024)(x)
         
         dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM)(Flatten()(x))
-        x = Dense(dense_shape * dense_shape * 512)(x)
+        x = Dense(self.ENCODER_DIM, kernel_initializer=RandomNormal(0, 0.02))(Flatten()(x))
+        x = Dense(dense_shape * dense_shape * 512, kernel_initializer=RandomNormal(0, 0.02))(x)
         x = Reshape((dense_shape, dense_shape, 512))(x)
         x = self.upscale(512)(x)
         
@@ -214,7 +213,7 @@ class Model():
                 
         in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
         
-        x = Conv2D(in_conv_filters, kernel_size=5, kernel_initializer=conv_init, use_bias=False, padding="same")(impt)
+        x = Conv2D(in_conv_filters, kernel_size=5, use_bias=False, padding="same")(impt)
         x = self.conv_sep3(in_conv_filters+32, use_instance_norm=False)(x)
         x = self.conv_sep3(256)(x)        
         x = self.conv_sep3(512)(x)
@@ -233,9 +232,9 @@ class Model():
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
-        x = self.upscale(384, kernel_initializer=RandomNormal(0, 0.02))(inpt)
-        x = self.upscale(256-32, kernel_initializer=RandomNormal(0, 0.02))(x)
-        x = self.upscale(self.IMAGE_SHAPE[0], kernel_initializer=RandomNormal(0, 0.02))(x)
+        x = self.upscale(384)(inpt)
+        x = self.upscale(256-32)(x)
+        x = self.upscale(self.IMAGE_SHAPE[0])(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
@@ -255,10 +254,7 @@ class Model():
         return KerasModel(inpt, x)    
 
 
-    def save_weights(self):
-        from threading import Thread
-        from time import sleep
-        
+    def save_weights(self):        
         model_dir = str(self.model_dir)
         
         try:
@@ -276,12 +272,12 @@ class Model():
                      })
                 fp.write(state_json.encode('utf-8'))
         except IOError as e:
-            pass                               
+            print(e.strerror)                   
         
         print('\nsaving model weights', end='', flush=True)        
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        # thought maybe I/O bound, sometimes saving in parallel is faster
+        from concurrent.futures import ThreadPoolExecutor, as_completed        
+        
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
             for future in as_completed(futures):
@@ -300,7 +296,8 @@ class Model():
         try:
             return self._model_name
         except AttributeError:
-            self._model_name = os.path.split(os.path.dirname(__file__))[1].replace("Model_", "")            
+            import inspect
+            self._model_name = os.path.dirname(inspect.getmodule(self).__file__).rsplit("_", 1)[1]            
         return self._model_name
              
     

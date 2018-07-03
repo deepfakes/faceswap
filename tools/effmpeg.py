@@ -5,9 +5,9 @@ Created on 2018-03-16 15:14
 
 @author: Lev Velykoivanenko (velykoivanenko.lev@gmail.com)
 """
-# TODO: fix file handlers for effmpeg in gui (changes what needs to be opened)
-# TODO: add basic cli preview to effmpeg
 # TODO: integrate preview into gui window
+# TODO: add preview support when muxing audio
+#       -> figure out if ffmpeg | ffplay would work on windows and mac
 import os
 import sys
 import subprocess
@@ -141,6 +141,7 @@ class Effmpeg(object):
 
     def __init__(self, arguments):
         self.args = arguments
+        self.exe = "ffmpeg"
         self.input = DataItem()
         self.output = DataItem()
         self.ref_vid = DataItem()
@@ -252,11 +253,9 @@ class Effmpeg(object):
                 exit(1)
 
         # Set executable based on whether previewing or not
-        """
         if self.args.preview and self.args.action in self._actions_can_preview:
-            Effmpeg._executable = 'ffplay'
+            self.exe = 'ffplay'
             self.output = DataItem()
-        """
 
         # Set verbosity of output
         self.__set_verbosity(self.args.quiet, self.args.verbose)
@@ -280,7 +279,8 @@ class Effmpeg(object):
                   "transpose": self.args.transpose,
                   "scale": self.args.scale,
                   "print_": self.print_,
-                  "preview": self.args.preview}
+                  "preview": self.args.preview,
+                  "exe": self.exe}
         action = getattr(self, self.args.action)
         action(**kwargs)
 
@@ -297,19 +297,24 @@ class Effmpeg(object):
 
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
-                ref_vid=None, preview=None, **kwargs):
+                ref_vid=None, preview=False, exe=None, **kwargs):
         filename = Effmpeg.__get_extracted_filename(input_.path)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_path = os.path.join(input_.path, filename)
-        _output_opts = '-y -c:v libx264 -vf fps="' + str(fps) + '" '
+        _output_opts = '-vf fps="' + str(fps) + '" '
+        if not preview:
+            _output_opts = '-y ' + _output_opts + ' -c:v libx264'
         if mux_audio:
             _ref_vid_opts = '-c copy -map 0:0 -map 1:1'
+            if preview:
+                raise ValueError("Preview for gen-vid with audio muxing is "
+                                 "not supported.")
             _output_opts = _ref_vid_opts + ' ' + _output_opts
             _inputs = {_input_path: _input_opts, ref_vid.path: None}
         else:
             _inputs = {_input_path: _input_opts}
         _outputs = {output.path: _output_opts}
-        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
+        Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def get_fps(input_=None, print_=False, **kwargs):
@@ -341,23 +346,28 @@ class Effmpeg(object):
             return out
 
     @staticmethod
-    def rescale(input_=None, output=None, scale=None, preview=None, **kwargs):
+    def rescale(input_=None, output=None, scale=None, preview=False, exe=None,
+                **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts = '-y -vf scale="' + str(scale) + '"'
+        _output_opts = '-vf scale="' + str(scale) + '"'
+        if not preview:
+            _output_opts = '-y ' + _output_opts
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
-        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
+        Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def rotate(input_=None, output=None, degrees=None, transpose=None,
-               preview=None, **kwargs):
+               preview=None, exe=None, **kwargs):
         if transpose is None and degrees is None:
             raise ValueError("You have not supplied a valid transpose or "
                              "degrees value:\ntranspose: {}\ndegrees: "
                              "{}".format(transpose, degrees))
 
         _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts = '-y -c:a copy -vf '
+        _output_opts = '-vf '
+        if not preview:
+            _output_opts = '-y -c:a copy ' + _output_opts
         _bilinear = ''
         if transpose is not None:
             _output_opts += 'transpose="' + str(transpose) + '"'
@@ -369,28 +379,35 @@ class Effmpeg(object):
 
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
-        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
+        Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def mux_audio(input_=None, output=None, ref_vid=None, preview=None,
-                  **kwargs):
+                  exe=None, **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _ref_vid_opts = None
         _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
+        if preview:
+            raise ValueError("Preview with audio muxing is not supported.")
+        """
+        if not preview:
+            _output_opts = '-y ' + _output_opts
+        """
         _inputs = {input_.path: _input_opts, ref_vid.path: _ref_vid_opts}
         _outputs = {output.path: _output_opts}
-        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_outputs)
+        Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def slice(input_=None, output=None, start=None, duration=None,
-              preview=None,  **kwargs):
+              preview=None, exe=None,  **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
-        _output_opts = "-y -t " + duration + " "
-        _output_opts += "-vcodec copy -acodec copy"
+        _output_opts = "-t " + duration + " "
+        if not preview:
+            _output_opts = '-y ' + _output_opts + "-vcodec copy -acodec copy"
         _inputs = {input_.path: _input_opts}
         _output = {output.path: _output_opts}
-        Effmpeg.__run_ffmpeg(inputs=_inputs, outputs=_output)
+        Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_output)
 
     # Various helper methods
     @classmethod
@@ -431,9 +448,9 @@ class Effmpeg(object):
 
         return all(getattr(self, i).fps is None for i in items_to_check)
 
-    @classmethod
-    def __run_ffmpeg(cls, inputs=None, outputs=None):
-        ff = FFmpeg(executable=cls._executable, inputs=inputs, outputs=outputs)
+    @staticmethod
+    def __run_ffmpeg(exe="ffmpeg", inputs=None, outputs=None):
+        ff = FFmpeg(executable=exe, inputs=inputs, outputs=outputs)
         try:
             ff.run(stderr=subprocess.STDOUT)
         except FFRuntimeError as ffe:
