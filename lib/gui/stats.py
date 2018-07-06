@@ -148,6 +148,9 @@ class SessionsSummary(object):
         starttime = session["timestamps"][0]
         endtime = session["timestamps"][-1]
         elapsed = endtime - starttime
+        # Bump elapsed to 0.1s if no time is recorded
+        # to hack around div by zero error
+        elapsed = 0.1 if elapsed == 0 else elapsed
         rate = (session["batchsize"] * session["iterations"]) / elapsed
         return {"session": idx + 1,
                 "start": starttime,
