@@ -235,8 +235,8 @@ class Extract(object):
     """ Extracts faces from an image, crops and
         calculates landmarks """
 
-    def __init__(self, input_image_bgr, detector, mtcnn_kwargs,
-                 verbose, input_is_predetected_face=False):
+    def __init__(self, input_image_bgr, detector, mtcnn_kwargs=None,
+                 verbose=False, input_is_predetected_face=False):
         self.initialized = False
         self.verbose = verbose
         self.keras = KERAS_MODEL
