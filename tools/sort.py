@@ -186,9 +186,9 @@ class Sort(object):
                       desc="Loading",
                       file=sys.stdout):
             d = face_alignment.Extract(
-                cv2.imread(x),
-                'dlib-cnn',
-                True,
+                input_image_bgr=cv2.imread(x),
+                detector='dlib-cnn',
+                verbose=True,
                 input_is_predetected_face=True).landmarks
             img_list.append([x, np.array(d[0][1])
                              if len(d) > 0
@@ -223,9 +223,9 @@ class Sort(object):
                       desc="Loading",
                       file=sys.stdout):
             d = face_alignment.Extract(
-                cv2.imread(x),
-                'dlib-cnn',
-                True,
+                input_image_bgr=cv2.imread(x),
+                detector='dlib-cnn',
+                verbose=True,
                 input_is_predetected_face=True).landmarks
             img_list.append([x, np.array(d[0][1])
                              if len(d) > 0
@@ -258,9 +258,9 @@ class Sort(object):
                       desc="Loading",
                       file=sys.stdout):
             d = face_alignment.Extract(
-                cv2.imread(x),
-                'dlib-cnn',
-                True,
+                input_image_bgr=cv2.imread(x),
+                detector='dlib-cnn',
+                verbose=True,
                 input_is_predetected_face=True).landmarks
             img_list.append([x,
                              self.calc_landmarks_face_yaw(np.array(d[0][1]))])
@@ -620,9 +620,9 @@ class Sort(object):
                           desc="Reloading",
                           file=sys.stdout):
                 d = face_alignment.Extract(
-                    cv2.imread(x),
-                    'dlib-cnn',
-                    True,
+                    input_image_bgr=cv2.imread(x),
+                    detector='dlib-cnn',
+                    verbose=True,
                     input_is_predetected_face=True).landmarks
                 temp_list.append([x, np.array(d[0][1])
                                   if len(d) > 0
@@ -633,9 +633,9 @@ class Sort(object):
                           desc="Reloading",
                           file=sys.stdout):
                 d = face_alignment.Extract(
-                    cv2.imread(x),
-                    'dlib-cnn',
-                    True,
+                    input_image_bgr=cv2.imread(x),
+                    detector='dlib-cnn',
+                    verbose=True,
                     input_is_predetected_face=True).landmarks
                 temp_list.append(
                     [x, self.calc_landmarks_face_yaw(np.array(d[0][1]))])
