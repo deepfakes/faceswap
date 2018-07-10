@@ -116,7 +116,12 @@ class GPUMem(object):
             gradient = 213 / 524288
             constant = 307
 
-        free_mem = self.vram_free - buffer
+        if self.device != -1:
+            free_mem = self.vram_free - buffer
+        else:
+            # Limit to 2GB if using CPU
+            free_mem = 2048
+
         self.scale_to = int((free_mem - constant) / gradient)
 
         if self.scale_to < 4097:

@@ -58,7 +58,7 @@ class DLibDetector(Detector):
                             "the lib!".format(data_path))
         return data_path
 
-    def create_detector(self, verbose, detector):
+    def create_detector(self, verbose, detector, placeholder):
         """ Add the requested detectors """
         if self.initialized:
             return
@@ -75,6 +75,9 @@ class DLibDetector(Detector):
             if self.verbose:
                 print("Adding DLib - HOG detector")
             self.detectors.append(dlib.get_frontal_face_detector())
+
+        for current_detector in self.detectors:
+            current_detector(placeholder, 0)
 
         self.initialized = True
 

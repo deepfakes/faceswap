@@ -25,44 +25,66 @@ class Frame(object):
         self.verbose = verbose
         self.height, self.width = input_image.shape[:2]
 
-        self.scale_to = self.get_scale_to(detector)
         self.input_scale = 1.0
 
         self.image_bgr = input_image
         self.image_rgb = input_image[:, :, ::-1].copy()
-        self.image_detect = self.scale_image(input_is_predetected_face)
+        self.image_detect = self.scale_image(input_is_predetected_face,
+                                             detector)
 
-    def get_scale_to(self, detector):
-        """ Get the scale to based on available VRAM """
-        if not VRAM.scale_to and VRAM.device != -1:
-            VRAM.set_scale_to(detector)
-
-        if VRAM.device != -1:
-            return VRAM.scale_to
-
-        return self.height * self.width
-
-    def scale_image(self, input_is_predetected_face):
+    def scale_image(self, input_is_predetected_face, detector):
         """ Scale down large images based on vram amount """
         image = self.image_rgb
         if input_is_predetected_face:
             return image
 
-        pixel_count = self.width * self.height
+        if detector == "mtcnn":
+            self.scale_mtcnn()
+        else:
+            self.scale_dlib()
 
-        if pixel_count > self.scale_to:
-            self.input_scale = (self.scale_to / pixel_count)**0.5
-            dimensions = (int(self.width * self.input_scale),
-                          int(self.height * self.input_scale))
-            if self.verbose:
-                print("Resizing image from {}x{} "
-                      "to {}.".format(str(self.width), str(self.height),
-                                      "x".join(str(i) for i in dimensions)))
-            image = cv2.resize(image,
-                               dimensions,
-                               interpolation=cv2.INTER_AREA).copy()
+        if self.input_scale == 1.0:
+            return image
+
+        if self.input_scale > 1.0:
+            interpolation = cv2.INTER_LINEAR
+        else:
+            interpolation = cv2.INTER_AREA
+
+        dimensions = (int(self.width * self.input_scale),
+                      int(self.height * self.input_scale))
+        if self.verbose and self.input_scale < 1.0:
+            print("Resizing image from {}x{} "
+                  "to {}.".format(str(self.width), str(self.height),
+                                  "x".join(str(i) for i in dimensions)))
+        image = cv2.resize(image,
+                           dimensions,
+                           interpolation=interpolation).copy()
 
         return image
+
+    def scale_mtcnn(self):
+        """ Set scaling for mtcnn """
+        pixel_count = self.width * self.height
+        if pixel_count > VRAM.scale_to:
+            self.input_scale = (VRAM.scale_to / pixel_count)**0.5
+
+    def scale_dlib(self):
+        """ Set scaling for dlib
+
+        DLIB is finickity, and pure pixel count won't help as when an
+        initial portrait image goes in, rotating it to landscape sucks
+        up VRAM for no discernible reason. This does not happen when the
+        initial image is a landscape image.
+        To mitigate this we need to make sure that all images fit within
+        a square based on the pixel count
+        There is also no way to set the acceptable size for a positive
+        match, so all images should be scaled to the maximum possible
+        to detect all available faces """
+
+        max_length_scale = int(VRAM.scale_to ** 0.5)
+        max_length_image = max(self.height, self.width)
+        self.input_scale = max_length_scale / max_length_image
 
 
 class Align(object):
@@ -244,8 +266,10 @@ class Extract(object):
         if self.initialized:
             return
         self.initialize_vram(detector)
-
         self.initialize_keras(detector)
+        # VRAM Scaling factor must be set AFTER Keras has loaded
+        VRAM.set_scale_to(detector)
+
         self.initialize_detector(detector, mtcnn_kwargs)
         self.initialized = True
 
@@ -276,6 +300,15 @@ class Extract(object):
         else:
             self.detector = DLIB_DETECTORS
             kwargs["detector"] = detector
+
+            scale_to = int(VRAM.scale_to ** 0.5)
+
+            if self.verbose:
+                print("Initializing DLib for frame size {}x{}".format(
+                    str(scale_to), str(scale_to)))
+
+            placeholder = np.zeros((scale_to, scale_to, 3), dtype=np.uint8)
+            kwargs["placeholder"] = placeholder
 
         self.detector.create_detector(**kwargs)
 
