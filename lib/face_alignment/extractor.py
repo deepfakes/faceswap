@@ -25,61 +25,54 @@ class Frame(object):
         self.verbose = verbose
         self.height, self.width = input_image.shape[:2]
 
+        self.scale_to = self.get_scale_to(detector)
+        self.input_scale = 1.0
+
+        self.image_bgr = input_image
+        self.image_rgb = input_image[:, :, ::-1].copy()
+        self.image_detect = self.scale_image(input_is_predetected_face)
+
+    def get_scale_to(self, detector):
+        """ Get the scale to based on available VRAM """
         if not VRAM.scale_to and VRAM.device != -1:
             VRAM.set_scale_to(detector)
 
         if VRAM.device != -1:
-            self.scale_to = VRAM.scale_to
-        else:
-            self.scale_to = self.height * self.width
+            return VRAM.scale_to
 
-        self.input_scale = 1.0
-        self.images = self.process_input(input_image,
-                                         input_is_predetected_face)
+        return self.height * self.width
 
-    def process_input(self, input_image, input_is_predetected_face):
-        """ Process import image:
-            Size down if required
-            Duplicate into rgb colour space """
-        if not input_is_predetected_face:
-            input_image = self.scale_down(input_image)
-        return self.compile_color_space(input_image)
-
-    def scale_down(self, image):
+    def scale_image(self, input_is_predetected_face):
         """ Scale down large images based on vram amount """
+        image = self.image_rgb
+        if input_is_predetected_face:
+            return image
+
         pixel_count = self.width * self.height
 
         if pixel_count > self.scale_to:
-            self.input_scale = self.scale_to / pixel_count
+            self.input_scale = (self.scale_to / pixel_count)**0.5
             dimensions = (int(self.width * self.input_scale),
                           int(self.height * self.input_scale))
             if self.verbose:
                 print("Resizing image from {}x{} "
                       "to {}.".format(str(self.width), str(self.height),
                                       "x".join(str(i) for i in dimensions)))
-            image = cv2.resize(image, dimensions, interpolation=cv2.INTER_AREA)
+            image = cv2.resize(image,
+                               dimensions,
+                               interpolation=cv2.INTER_AREA).copy()
 
         return image
-
-    @staticmethod
-    def compile_color_space(image_bgr):
-        """ cv2 and numpy inputs differs in rgb-bgr order
-        this affects chance of dlib face detection so
-        pass both versions """
-        image_rgb = image_bgr[:, :, ::-1].copy()
-        return (image_rgb, image_bgr)
 
 
 class Align(object):
     """ Perform transformation to align and get landmarks """
-    def __init__(self, frame, detected_faces, keras_model, verbose):
+    def __init__(self, image, detected_faces, keras_model, verbose):
         self.verbose = verbose
-        self.frame = frame.images[0]
-        self.input_scale = frame.input_scale
+        self.image = image
         self.detected_faces = detected_faces
         self.keras = keras_model
 
-        self.bounding_box = None
         self.landmarks = self.process_landmarks()
 
     @staticmethod
@@ -167,52 +160,43 @@ class Align(object):
                 print("Warning: No faces were detected.")
             return landmarks
 
-        for d_rect in self.detected_faces:
-            self.get_bounding_box(d_rect)
-            del d_rect
+        for detected_face in self.detected_faces:
 
-            center, scale = self.get_center_scale()
+            center, scale = self.get_center_scale(detected_face)
             image = self.align_image(center, scale)
 
             landmarks_xy = self.predict_landmarks(image, center, scale)
 
-            landmarks.append((
-                (int(self.bounding_box['left'] / self.input_scale),
-                 int(self.bounding_box['top'] / self.input_scale),
-                 int(self.bounding_box['right'] / self.input_scale),
-                 int(self.bounding_box['bottom'] / self.input_scale)),
-                landmarks_xy))
+            landmarks.append(((detected_face['left'],
+                               detected_face['top'],
+                               detected_face['right'],
+                               detected_face['bottom']),
+                              landmarks_xy))
 
         return landmarks
 
-    def get_bounding_box(self, d_rect):
-        """ Return the corner points of the bounding box """
-        self.bounding_box = {'left': d_rect.left(),
-                             'top': d_rect.top(),
-                             'right': d_rect.right(),
-                             'bottom': d_rect.bottom()}
-
-    def get_center_scale(self):
+    @staticmethod
+    def get_center_scale(detected_face):
         """ Get the center and set scale of bounding box """
-        center = np.array([(self.bounding_box['left']
-                            + self.bounding_box['right']) / 2.0,
-                           (self.bounding_box['top']
-                            + self.bounding_box['bottom']) / 2.0])
+        center = np.array([(detected_face['left']
+                            + detected_face['right']) / 2.0,
+                           (detected_face['top']
+                            + detected_face['bottom']) / 2.0])
 
-        center[1] -= (self.bounding_box['bottom']
-                      - self.bounding_box['top']) * 0.12
+        center[1] -= (detected_face['bottom']
+                      - detected_face['top']) * 0.12
 
-        scale = (self.bounding_box['right']
-                 - self.bounding_box['left']
-                 + self.bounding_box['bottom']
-                 - self.bounding_box['top']) / 195.0
+        scale = (detected_face['right']
+                 - detected_face['left']
+                 + detected_face['bottom']
+                 - detected_face['top']) / 195.0
 
         return center, scale
 
     def align_image(self, center, scale):
         """ Crop and align image around center """
         image = self.crop(
-            self.frame,
+            self.image,
             center,
             scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
 
@@ -226,9 +210,7 @@ class Align(object):
                 center,
                 scale)
 
-        return [(int(pt[0] / self.input_scale),
-                 int(pt[1] / self.input_scale))
-                for pt in pts_img]
+        return [(int(pt[0]), int(pt[1])) for pt in pts_img]
 
 
 class Extract(object):
@@ -250,10 +232,10 @@ class Extract(object):
                            input_is_predetected_face=input_is_predetected_face)
 
         self.detect_faces(input_is_predetected_face)
-        self.convert_to_dlib_rectangle()
+        self.bounding_boxes = self.get_bounding_boxes()
 
-        self.landmarks = Align(frame=self.frame,
-                               detected_faces=self.detector.detected_faces,
+        self.landmarks = Align(image=self.frame.image_rgb,
+                               detected_faces=self.bounding_boxes,
                                keras_model=self.keras,
                                verbose=self.verbose).landmarks
 
@@ -307,13 +289,24 @@ class Extract(object):
         if input_is_predetected_face:
             self.detector.set_predetected(self.frame.width, self.frame.height)
         else:
-            self.detector.detect_faces(self.frame.images)
+            self.detector.detect_faces(self.frame.image_detect)
 
-    def convert_to_dlib_rectangle(self):
+    def get_bounding_boxes(self):
+        """ Return the corner points of the bounding box scaled
+            to original image """
+        bounding_boxes = list()
+        for d_rect in self.detector.detected_faces:
+            d_rect = self.convert_to_dlib_rectangle(d_rect)
+            bounding_box = {
+                'left': int(d_rect.left() / self.frame.input_scale),
+                'top': int(d_rect.top() / self.frame.input_scale),
+                'right': int(d_rect.right() / self.frame.input_scale),
+                'bottom': int(d_rect.bottom() / self.frame.input_scale)}
+            bounding_boxes.append(bounding_box)
+        return bounding_boxes
+
+    def convert_to_dlib_rectangle(self, d_rect):
         """ Convert detected faces to dlib_rectangle """
-        detected = [d_rect.rect
-                    if self.detector.is_mmod_rectangle(d_rect)
-                    else d_rect
-                    for d_rect in self.detector.detected_faces]
-
-        self.detector.detected_faces = detected
+        if self.detector.is_mmod_rectangle(d_rect):
+            return d_rect.rect
+        return d_rect
