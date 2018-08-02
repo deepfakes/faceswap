@@ -241,7 +241,6 @@ class Extract(object):
 
     def __init__(self, input_image_bgr, detector, mtcnn_kwargs=None,
                  verbose=False, input_is_predetected_face=False):
-        self.initialized = False
         self.verbose = verbose
         self.keras = KERAS_MODEL
         self.detector = None
@@ -263,20 +262,27 @@ class Extract(object):
 
     def initialize(self, detector, mtcnn_kwargs):
         """ initialize Keras and Dlib """
-        if self.initialized:
-            return
-        self.initialize_vram(detector)
-        self.initialize_keras(detector)
-        # VRAM Scaling factor must be set AFTER Keras has loaded
-        VRAM.set_scale_to(detector)
+        if not VRAM.initialized:
+            self.initialize_vram(detector)
 
-        self.initialize_detector(detector, mtcnn_kwargs)
-        self.initialized = True
+        if not self.keras.initialized:
+            self.initialize_keras(detector)
+            # VRAM Scaling factor must be set AFTER Keras has loaded
+            VRAM.set_scale_to(detector)
+
+        if detector == "mtcnn":
+            self.detector = MTCNN_DETECTOR
+        else:
+            self.detector = DLIB_DETECTORS
+
+        if not self.detector.initialized:
+            self.initialize_detector(detector, mtcnn_kwargs)
 
     def initialize_vram(self, detector):
         """ Initialize vram based on detector """
         VRAM.verbose = self.verbose
         VRAM.detector = detector
+        VRAM.initialized = True
         VRAM.output_stats()
 
     def initialize_keras(self, detector):
@@ -294,13 +300,10 @@ class Extract(object):
         """ Initialize face detector """
         kwargs = {"verbose": self.verbose}
         if detector == "mtcnn":
-            self.detector = MTCNN_DETECTOR
             mtcnn_kwargs = self.detector.validate_kwargs(mtcnn_kwargs)
             kwargs["mtcnn_kwargs"] = mtcnn_kwargs
         else:
-            self.detector = DLIB_DETECTORS
             kwargs["detector"] = detector
-
             scale_to = int(VRAM.scale_to ** 0.5)
 
             if self.verbose:

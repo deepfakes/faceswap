@@ -104,9 +104,6 @@ class KerasModel(object):
 
     def load_model(self, verbose, dummy, ratio):
         """ Load the Keras Model """
-        if self.initialized:
-            return
-
         self.verbose = verbose
         if self.verbose:
             print("Initializing keras model...")

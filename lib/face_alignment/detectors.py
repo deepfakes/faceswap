@@ -60,9 +60,6 @@ class DLibDetector(Detector):
 
     def create_detector(self, verbose, detector, placeholder):
         """ Add the requested detectors """
-        if self.initialized:
-            return
-
         self.verbose = verbose
 
         if detector == "dlib-cnn" or detector == "dlib-all":
@@ -130,9 +127,6 @@ class MTCNNDetector(Detector):
 
     def create_detector(self, verbose, mtcnn_kwargs):
         """ Create the mtcnn detector """
-        if self.initialized:
-            return
-
         self.verbose = verbose
 
         if self.verbose:
