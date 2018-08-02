@@ -44,6 +44,9 @@ class EncoderType(enum.Enum):
     SHAOANLU = "shaoanlu"    
             
 
+_kern_init = RandomNormal(0, 0.02)
+
+
 def inst_norm():
     return InstanceNormalization()
 
@@ -148,21 +151,21 @@ class Model():
     
     def conv(self, filters, kernel_size=5, strides=2, **kwargs):
         def block(x):
-            x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)         
+            x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=_kern_init, padding='same', **kwargs)(x)         
             x = LeakyReLU(0.1)(x)
             return x
         return block   
 
     def conv_sep(self, filters, kernel_size=5, strides=2, use_instance_norm=True, **kwargs):
         def block(x):
-            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=_kern_init, padding='same', **kwargs)(x)
             x = Activation("relu")(x)
             return x    
         return block 
         
-    def conv_sep3(self, filters, kernel_size=3, strides=2, use_instance_norm=True, **kwargs):
+    def conv_inst_norm(self, filters, kernel_size=3, strides=2, use_instance_norm=True, **kwargs):
         def block(x):
-            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)        
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=_kern_init, padding='same', **kwargs)(x)        
             if use_instance_norm:
                 x = inst_norm()(x)
             x = Activation("relu")(x)
@@ -172,16 +175,16 @@ class Model():
     def upscale(self, filters, **kwargs):
         def block(x):
             x = Conv2D(filters * 4, kernel_size=3, padding='same',
-                       kernel_initializer=RandomNormal(0, 0.02))(x)
+                       kernel_initializer=_kern_init)(x)
             x = LeakyReLU(0.1)(x)
             x = PixelShuffler()(x)
             return x
         return block  
     
-    def upscale_sep3(self, filters, use_instance_norm=True, **kwargs):
+    def upscale_inst_norm(self, filters, use_instance_norm=True, **kwargs):
         def block(x):
             x = Conv2D(filters*4, kernel_size=3, use_bias=False, 
-                       kernel_initializer=RandomNormal(0, 0.02), padding='same', **kwargs)(x)
+                       kernel_initializer=_kern_init, padding='same', **kwargs)(x)
             if use_instance_norm:
                 x = inst_norm()(x)
             x = LeakyReLU(0.1)(x)
@@ -200,8 +203,8 @@ class Model():
         x = self.conv_sep(1024)(x)
         
         dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM, kernel_initializer=RandomNormal(0, 0.02))(Flatten()(x))
-        x = Dense(dense_shape * dense_shape * 512, kernel_initializer=RandomNormal(0, 0.02))(x)
+        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
         x = Reshape((dense_shape, dense_shape, 512))(x)
         x = self.upscale(512)(x)
         
@@ -214,14 +217,14 @@ class Model():
         in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
         
         x = Conv2D(in_conv_filters, kernel_size=5, use_bias=False, padding="same")(impt)
-        x = self.conv_sep3(in_conv_filters+32, use_instance_norm=False)(x)
-        x = self.conv_sep3(256)(x)        
-        x = self.conv_sep3(512)(x)
-        x = self.conv_sep3(1024)(x)        
+        x = self.conv_inst_norm(in_conv_filters+32, use_instance_norm=False)(x)
+        x = self.conv_inst_norm(256)(x)        
+        x = self.conv_inst_norm(512)(x)
+        x = self.conv_inst_norm(1024)(x)        
         
         dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM)(Flatten()(x))
-        x = Dense(dense_shape * dense_shape * 768)(x)
+        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        x = Dense(dense_shape * dense_shape * 768, kernel_initializer=_kern_init)(x)
         x = Reshape((dense_shape, dense_shape, 768))(x)
         x = self.upscale(512)(x)
         
@@ -245,9 +248,9 @@ class Model():
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
-        x = self.upscale_sep3(512)(inpt)
-        x = self.upscale_sep3(256)(x)
-        x = self.upscale_sep3(self.IMAGE_SHAPE[0])(x)
+        x = self.upscale_inst_norm(512)(inpt)
+        x = self.upscale_inst_norm(256)(x)
+        x = self.upscale_inst_norm(self.IMAGE_SHAPE[0])(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
