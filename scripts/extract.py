@@ -33,7 +33,9 @@ class Extract(object):
         print('Starting, this may take a while...')
         Utils.set_verbosity(self.args.verbose)
 
-        if self.args.multiprocess and GPUStats().device_count == 0:
+        if (hasattr(self.args, 'multiprocess')
+                and self.args.multiprocess
+                and GPUStats().device_count == 0):
             # TODO Checking that there is no available GPU is not
             # necessarily an indicator of whether the user is actually
             # using the CPU. Maybe look to implement further checks on

@@ -9,8 +9,8 @@ class GPUMem(object):
         and the ratio of vram to use for tensorflow """
 
     def __init__(self):
+        self.initialized = False
         self.verbose = False
-        self.output_shown = False
         self.stats = GPUStats()
         self.vram_free = None
         self.vram_total = None
@@ -50,13 +50,12 @@ class GPUMem(object):
 
     def output_stats(self):
         """ Output stats in verbose mode """
-        if self.output_shown or not self.verbose:
+        if not self.verbose:
             return
         print("\n----- Initial GPU Stats -----")
         self.stats.print_info()
         print("GPU VRAM free:    {}".format(self.vram_free))
         print("-----------------------------\n")
-        self.output_shown = True
 
     def get_tensor_gpu_ratio(self):
         """ Set the ratio of GPU memory to use for tensorflow session for
@@ -116,7 +115,12 @@ class GPUMem(object):
             gradient = 213 / 524288
             constant = 307
 
-        free_mem = self.vram_free - buffer
+        if self.device != -1:
+            free_mem = self.vram_free - buffer
+        else:
+            # Limit to 2GB if using CPU
+            free_mem = 2048
+
         self.scale_to = int((free_mem - constant) / gradient)
 
         if self.scale_to < 4097:

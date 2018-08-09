@@ -58,11 +58,8 @@ class DLibDetector(Detector):
                             "the lib!".format(data_path))
         return data_path
 
-    def create_detector(self, verbose, detector):
+    def create_detector(self, verbose, detector, placeholder):
         """ Add the requested detectors """
-        if self.initialized:
-            return
-
         self.verbose = verbose
 
         if detector == "dlib-cnn" or detector == "dlib-all":
@@ -76,16 +73,16 @@ class DLibDetector(Detector):
                 print("Adding DLib - HOG detector")
             self.detectors.append(dlib.get_frontal_face_detector())
 
+        for current_detector in self.detectors:
+            current_detector(placeholder, 0)
+
         self.initialized = True
 
-    def detect_faces(self, images):
-        """ Detect faces in images """
+    def detect_faces(self, image):
+        """ Detect faces in rgb image """
         self.detected_faces = None
-        for current_detector, current_image in(
-                (current_detector, current_image)
-                for current_detector in self.detectors
-                for current_image in images):
-            self.detected_faces = current_detector(current_image, 0)
+        for current_detector in self.detectors:
+            self.detected_faces = current_detector(image, 0)
 
             if self.detected_faces:
                 break
@@ -130,9 +127,6 @@ class MTCNNDetector(Detector):
 
     def create_detector(self, verbose, mtcnn_kwargs):
         """ Create the mtcnn detector """
-        if self.initialized:
-            return
-
         self.verbose = verbose
 
         if self.verbose:
@@ -152,13 +146,10 @@ class MTCNNDetector(Detector):
         self.kwargs["onet"] = onet
         self.initialized = True
 
-    def detect_faces(self, images):
-        """ Detect faces in images """
+    def detect_faces(self, image):
+        """ Detect faces in rgb image """
         self.detected_faces = None
-        for current_image in images:
-            detected_faces = detect_face(current_image, **self.kwargs)
-            self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
-                                                  int(face[2]), int(face[3]))
-                                   for face in detected_faces]
-            if self.detected_faces:
-                break
+        detected_faces = detect_face(image, **self.kwargs)
+        self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
+                                              int(face[2]), int(face[3]))
+                               for face in detected_faces]
