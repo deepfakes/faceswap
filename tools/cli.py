@@ -1,8 +1,94 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 from lib.cli import FaceSwapArgs
-from lib.cli import ContextFullPaths, DirFullPaths, FileFullPaths, SaveFileFullPaths
+from lib.cli import (ContextFullPaths, DirFullPaths,
+                     FileFullPaths, SaveFileFullPaths)
 from lib.utils import _image_extensions
+
+
+class AlignmentsArgs(FaceSwapArgs):
+    """ Class to parse the command line arguments for Aligments tool """
+
+    def get_argument_list(self):
+        argument_list = list()
+        argument_list.append({"opts": ("-j", "--job"),
+                              "type": str,
+                              "choices": ("faces", "frames", "reformat",
+                                          "remove"),
+                              "required": True,
+                              "help": "Choose which action you want to "
+                                      "perform.\n"
+                                      "'faces': Check the contents of the "
+                                      "alignments file against the extracted "
+                                      "faces.\n"
+                                      "'frames': Check the contents of the "
+                                      "alignments file against the original "
+                                      "frames.\n"
+                                      "'reformat': Save a copy of alignments "
+                                      "file in a different format.\n"
+                                      "'remove': Remove deleted faces from "
+                                      "an alignments file."})
+        argument_list.append({"opts": ("-a", "--alignments_file"),
+                              "action": FileFullPaths,
+                              "dest": "alignments_file",
+                              "required": True,
+                              "filetypes": "alignments",
+                              "help": "Full path to the alignments "
+                                      "file to be processed."})
+        argument_list.append({"opts": ("-fc", "-faces_folder"),
+                              "action": DirFullPaths,
+                              "dest": "faces_dir",
+                              "help": "Directory containing extracted faces."})
+        argument_list.append({"opts": ("-fr", "-frames_folder"),
+                              "action": DirFullPaths,
+                              "dest": "frames_dir",
+                              "help": "Directory containing source frames "
+                                      "that faces were extracted from."})
+        argument_list.append({"opts": ("-fmt", "--alignment_format"),
+                              "type": str,
+                              "choices": ("json", "pickle", "yaml"),
+                              "help": "The file format to save the alignment "
+                                      "data in. Defaults to same as source."})
+        argument_list.append({"opts": ("-o", "--output"),
+                              "type": str,
+                              "choices": ("console", "file", "move"),
+                              "default": "console",
+                              "help": "How to output discovered items:\n"
+                                      "'console': Print the list of frames to "
+                                      "the screen. (DEFAULT)\n"
+                                      "'file': Output the list of frames to a "
+                                      "text file (stored within the source "
+                                      "directory).\n"
+                                      "'move': Move the discovered items to a "
+                                      "sub-folder within the source "
+                                      "directory.\n"
+                                      "'faces' and 'frames' only"})
+        argument_list.append({"opts": ("-t", "--type"),
+                              "type": str,
+                              "choices": ("missing-alignments",
+                                          "missing-frames",
+                                          "no-faces", "multi-faces"),
+                              "help": "'faces' or 'frames' only. The type of "
+                                      "testing to be performed:\n"
+                                      "'missing-alignments': Identify frames "
+                                      "that do not exist in the alignments "
+                                      "file. (frames only)\n"
+                                      "'missing-frames': Identify frames in "
+                                      "the alignments file that do not appear "
+                                      "within the frames directory. (frames "
+                                      "only)\n"
+                                      "'no-faces': Identify frames that exist "
+                                      "within the alignment file but no faces "
+                                      "were discovered. (frames only)\n"
+                                      "'multi-faces': Identify where multiple "
+                                      "faces exist within the alignments "
+                                      "file. (faces and frames only)"})
+        argument_list.append({"opts": ("-v", "--verbose"),
+                              "action": "store_true",
+                              "dest": "verbose",
+                              "default": False,
+                              "help": "Show verbose output"})
+        return argument_list
 
 
 class EffmpegArgs(FaceSwapArgs):
@@ -143,20 +229,21 @@ class EffmpegArgs(FaceSwapArgs):
                                       "action. 'mux-audio' action has this "
                                       "turned on implicitly."})
 
-        argument_list.append({"opts": ('-tr', '--transpose'),
-                              "choices": ("(0, 90CounterClockwise&VerticalFlip)",
-                                          "(1, 90Clockwise)",
-                                          "(2, 90CounterClockwise)",
-                                          "(3, 90Clockwise&VerticalFlip)"),
-                              "type": lambda v: self.__parse_transpose(v),
-                              "dest": "transpose",
-                              "default": None,
-                              "help": "Transpose the video. If transpose is "
-                                      "set, then degrees will be ignored. For "
-                                      "cli you can enter either the number "
-                                      "or the long command name, "
-                                      "e.g. to use (1, 90Clockwise) "
-                                      "-tr 1 or -tr 90Clockwise"})
+        argument_list.append(
+            {"opts": ('-tr', '--transpose'),
+             "choices": ("(0, 90CounterClockwise&VerticalFlip)",
+                         "(1, 90Clockwise)",
+                         "(2, 90CounterClockwise)",
+                         "(3, 90Clockwise&VerticalFlip)"),
+             "type": lambda v: self.__parse_transpose(v),
+             "dest": "transpose",
+             "default": None,
+             "help": "Transpose the video. If transpose is "
+                     "set, then degrees will be ignored. For "
+                     "cli you can enter either the number "
+                     "or the long command name, "
+                     "e.g. to use (1, 90Clockwise) "
+                     "-tr 1 or -tr 90Clockwise"})
 
         argument_list.append({"opts": ('-de', '--degrees'),
                               "type": str,
