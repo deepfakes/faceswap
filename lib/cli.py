@@ -176,6 +176,22 @@ class FullHelpArgumentParser(argparse.ArgumentParser):
         self.exit(2, "%(prog)s: error: %(message)s\n" % args)
 
 
+class SmartFormatter(argparse.HelpFormatter):
+    """ Smart formatter for allowing raw formatting in help
+        text.
+
+        To use prefix the help item with "R|" to overide
+        default formatting
+
+        from: https://stackoverflow.com/questions/3853722 """
+
+    def _split_lines(self, text, width):
+        if text.startswith("R|"):
+            return text[2:].splitlines()
+        # this is the RawTextHelpFormatter._split_lines
+        return argparse.HelpFormatter._split_lines(self, text, width)
+
+
 class FaceSwapArgs(object):
     """ Faceswap argument parser functions that are universal
         to all commands. Should be the parent function of all
@@ -218,7 +234,8 @@ class FaceSwapArgs(object):
             help=description,
             description=description,
             epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground")
+            https://github.com/deepfakes/faceswap-playground",
+            formatter_class=SmartFormatter)
         return parser
 
     def add_arguments(self):
@@ -279,18 +296,19 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "choices": ("dlib-hog", "dlib-cnn",
                                           "dlib-all", "mtcnn"),
                               "default": "mtcnn",
-                              "help": "Detector to use. 'dlib-hog': uses "
-                                      "least resources, but is the least "
-                                      "reliable. 'dlib-cnn': faster than "
-                                      "mtcnn but detects fewer faces and "
-                                      "fewer false positives. 'dlib-all': "
+                              "help": "R|Detector to use.\n'dlib-hog': uses "
+                                      "least resources, but is the least\n\t"
+                                      "reliable.\n'dlib-cnn': faster than "
+                                      "mtcnn but detects fewer faces\n\tand "
+                                      "fewer false positives.\n'dlib-all': "
                                       "attempts to find faces using "
-                                      "dlib-cnn, if none are found, attempts "
-                                      "to find faces using dlib-hog. "
-                                      "'mtcnn': slower than dlib, but uses "
-                                      "fewer resources whilst detecting more "
-                                      "faces and more false positives. "
-                                      "Has superior alignment to dlib"})
+                                      "dlib-cnn,\n\tif none are found, "
+                                      "attempts to find faces\n\tusing "
+                                      "dlib-hog.\n'mtcnn': slower than dlib, "
+                                      "but uses fewer resources\n\twhilst "
+                                      "detecting more faces and more false\n\t"
+                                      "positives. Has superior alignment to "
+                                      "dlib"})
         argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
                               "type": int,
                               "dest": "mtcnn_minsize",
@@ -305,14 +323,14 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "type": str,
                               "dest": "mtcnn_threshold",
                               "default": ["0.6", "0.7", "0.7"],
-                              "help": "Three step threshold for face "
-                                      "detection. Should be three decimal "
-                                      "numbers each less than 1. Eg: "
-                                      "'--mtcnn-threshold 0.6 0.7 0.7'. "
-                                      "1st stage: obtains face candidates, "
+                              "help": "R|Three step threshold for face "
+                                      "detection. Should be\nthree decimal "
+                                      "numbers each less than 1. Eg:\n"
+                                      "'--mtcnn-threshold 0.6 0.7 0.7'.\n"
+                                      "1st stage: obtains face candidates.\n"
                                       "2nd stage: refinement of face "
-                                      "candidates, 3rd stage: further "
-                                      "refinement of face candidates. "
+                                      "candidates.\n3rd stage: further "
+                                      "refinement of face candidates.\n"
                                       "Default is 0.6 0.7 0.7 "
                                       "(MTCNN detector only)"})
         argument_list.append({"opts": ("-mtsc", "--mtcnn-scalefactor"),

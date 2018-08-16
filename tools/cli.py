@@ -16,18 +16,18 @@ class AlignmentsArgs(FaceSwapArgs):
                               "choices": ("faces", "frames", "reformat",
                                           "remove"),
                               "required": True,
-                              "help": "Choose which action you want to "
+                              "help": "R|Choose which action you want to "
                                       "perform.\n"
                                       "'faces': Check the contents of the "
-                                      "alignments file against the extracted "
-                                      "faces.\n"
+                                      "alignments\n\tfile against the "
+                                      "extracted faces.\n"
                                       "'frames': Check the contents of the "
-                                      "alignments file against the original "
-                                      "frames.\n"
+                                      "alignments\n\tfile against the "
+                                      "original frames.\n"
                                       "'reformat': Save a copy of alignments "
-                                      "file in a different format.\n"
+                                      "file in a\n\tdifferent format.\n"
                                       "'remove': Remove deleted faces from "
-                                      "an alignments file."})
+                                      "an alignments\n\tfile."})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
                               "dest": "alignments_file",
@@ -53,36 +53,38 @@ class AlignmentsArgs(FaceSwapArgs):
                               "type": str,
                               "choices": ("console", "file", "move"),
                               "default": "console",
-                              "help": "How to output discovered items:\n"
+                              "help": "R|How to output discovered items "
+                                      "('faces'\nand 'frames' only):\n"
                                       "'console': Print the list of frames to "
-                                      "the screen. (DEFAULT)\n"
+                                      "the screen.\n\t(DEFAULT)\n"
                                       "'file': Output the list of frames to a "
-                                      "text file (stored within the source "
+                                      "text file\n\t(stored within the source "
                                       "directory).\n"
                                       "'move': Move the discovered items to a "
-                                      "sub-folder within the source "
-                                      "directory.\n"
-                                      "'faces' and 'frames' only"})
+                                      "sub-folder\n\twithin the source "
+                                      "directory."})
         argument_list.append({"opts": ("-t", "--type"),
                               "type": str,
                               "choices": ("missing-alignments",
                                           "missing-frames",
                                           "no-faces", "multi-faces"),
-                              "help": "'faces' or 'frames' only. The type of "
-                                      "testing to be performed:\n"
+                              "help": "R|.The type of "
+                                      "testing to be performed ('faces'\nor "
+                                      "'frames' only):\n"
                                       "'missing-alignments': Identify frames "
-                                      "that do not exist in the alignments "
+                                      "that do not\n\texist in the alignments "
                                       "file. (frames only)\n"
                                       "'missing-frames': Identify frames in "
-                                      "the alignments file that do not appear "
-                                      "within the frames directory. (frames "
-                                      "only)\n"
+                                      "the alignments\n\tfile that do not "
+                                      "appear within the frames\n\t"
+                                      "directory. (frames only)\n"
                                       "'no-faces': Identify frames that exist "
-                                      "within the alignment file but no faces "
-                                      "were discovered. (frames only)\n"
+                                      "within the\n\talignment file but no "
+                                      "faces were discovered.\n\t(frames "
+                                      "only)\n"
                                       "'multi-faces': Identify where multiple "
-                                      "faces exist within the alignments "
-                                      "file. (faces and frames only)"})
+                                      "faces exist\n\twithin the alignments "
+                                      "file. (faces or\n\tframes only)"})
         argument_list.append({"opts": ("-v", "--verbose"),
                               "action": "store_true",
                               "dest": "verbose",
@@ -315,13 +317,13 @@ class SortArgs(FaceSwapArgs):
                               "choices": ("folders", "rename"),
                               "dest": 'final_process',
                               "default": "rename",
-                              "help": "'folders': files are sorted using the "
-                                      "-s/--sort-by method, then they are "
-                                      "organized into folders using the "
-                                      "-g/--group-by grouping method. "
-                                      "'rename': files are sorted using the "
-                                      "-s/--sort-by then they are renamed. "
-                                      "Default: rename"})
+                              "help": "R|\n'folders': files are sorted using "
+                                      "the -s/--sort-by\n\tmethod, then they "
+                                      "are organized into\n\tfolders using "
+                                      "the -g/--group-by grouping\n\tmethod."
+                                      "\n'rename': files are sorted using "
+                                      "the -s/--sort-by\n\tthen they are "
+                                      "renamed.\nDefault: rename"})
 
         argument_list.append({"opts": ('-k', '--keep'),
                               "action": 'store_true',
