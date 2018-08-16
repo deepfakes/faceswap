@@ -13,11 +13,14 @@ class AlignmentsArgs(FaceSwapArgs):
         argument_list = list()
         argument_list.append({"opts": ("-j", "--job"),
                               "type": str,
-                              "choices": ("faces", "frames", "reformat",
-                                          "remove"),
+                              "choices": ("extract", "faces", "frames",
+                                          "reformat", "remove"),
                               "required": True,
                               "help": "R|Choose which action you want to "
                                       "perform.\n"
+                                      "'extract': Re-extract faces from the "
+                                      "source frames based on alignment "
+                                      "data.\n"
                                       "'faces': Check the contents of the "
                                       "alignments\n\tfile against the "
                                       "extracted faces.\n"
@@ -85,6 +88,13 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "'multi-faces': Identify where multiple "
                                       "faces exist\n\twithin the alignments "
                                       "file. (faces or\n\tframes only)"})
+        argument_list.append({"opts": ("-ae", "--align-eyes"),
+                              "action": "store_true",
+                              "dest": "align_eyes",
+                              "default": False,
+                              "help": "Perform extra alignment to ensure "
+                                      "left/right eyes are  at the same "
+                                      "height"})
         argument_list.append({"opts": ("-v", "--verbose"),
                               "action": "store_true",
                               "dest": "verbose",

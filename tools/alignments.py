@@ -5,16 +5,19 @@
 # TODO Identify possible false positives
 # TODO Remove whole frames from alignments file
 # TODO Add help text to tabs in gui
-# TODO Re-extract faces
+# TODO Identify faces outside of frame
+# TODO Identify faces below certain size
+# TODO Merge type into job
 # TODO Draw Alignments
-# TODO Change faces_dir/frames_dir to media dir? Do last incase both are needed for another task
 # TODO GUI - Analysis time roll past 24 hours
-import datetime
 import os
-import sys
+from datetime import datetime
+
+from cv2 import imread, imwrite
 from tqdm import tqdm
 
 from lib import Serializer
+from plugins.PluginLoader import PluginLoader
 
 
 class Alignments(object):
@@ -37,12 +40,12 @@ class Alignments(object):
 
     def process(self):
         """ Main processing function of the Align tool """
-        if self.args.job in("frames", "faces"):
-            job = Check(self.alignments,
-                        self.args)
+        if self.args.job == "extract":
+            job = Extract(self.alignments, self.args)
+        elif self.args.job in("frames", "faces"):
+            job = Check(self.alignments, self.args)
         elif self.args.job == "remove":
-            job = RemoveAlignments(self.alignments,
-                                   self.args)
+            job = RemoveAlignments(self.alignments, self.args)
         elif self.args.job == "reformat":
             job = self.alignments
 
@@ -84,7 +87,7 @@ class AlignmentData(object):
         if not os.path.isfile(self.alignments_file):
             print("ERROR: alignments file not "
                   "found at: {}".format(self.alignments_file))
-            sys.exit()
+            exit(0)
         if self.verbose:
             print("Alignments file exists at {}".format(self.alignments_file))
 
@@ -103,7 +106,7 @@ class AlignmentData(object):
         else:
             print("{} is not a supported serializer. "
                   "Exiting".format(self.alignments_format))
-            sys.exit()
+            exit(0)
 
         if self.verbose:
             print("Destination format set to {}".format(dst_fmt))
@@ -133,7 +136,7 @@ class AlignmentData(object):
 
     def backup_alignments(self):
         """ Backup copy of old alignments """
-        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
         src = self.alignments_file
         dst = src.split(".")
         dst[0] += "_" + now + "."
@@ -176,7 +179,7 @@ class MediaLoader(object):
         if not self.folder or not os.path.isdir(self.folder):
             print("ERROR: The folder {} could not "
                   "be found".format(self.folder))
-            sys.exit()
+            exit(0)
         if self.verbose:
             print("Folder exists at {}".format(self.folder))
 
@@ -227,15 +230,117 @@ class Frames(MediaLoader):
             yield filename
 
     def load_items(self):
-        """ Load the face names into dictionary """
-        return self.file_list_sorted
+        """ Load the frame info into dictionary """
+        frames = dict()
+        for frame in self.file_list_sorted:
+            frames[frame] = (frame[:frame.rfind(".")],
+                             frame[frame.rfind("."):])
+        return frames
+
+
+class Extract(object):
+    """ Re-extract faces from source frames based on
+        Alignment data """
+    def __init__(self, alignments, arguments):
+        self.verbose = arguments.verbose
+        self.alignment_data = alignments.alignments
+        self.faces_dir = arguments.faces_dir
+        self.align_eyes = arguments.align_eyes
+        self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.extractor = None
+
+    class DetectedFace(object):
+        """ Detected face and landmark information """
+        def __init__(self, image, r, x, w, y, h, landmarksXY):
+            self.image = image
+            self.r = r
+            self.x = x
+            self.w = w
+            self.y = y
+            self.h = h
+            self.landmarksXY = landmarksXY
+
+        def landmarks_as_xy(self):
+            """ Landmarks as XY """
+            return self.landmarksXY
+
+    def process(self):
+        """ Run extraction """
+        print("\n[EXTRACT FACES]")  # Tidy up cli output
+        self.check_folder()
+        self.extractor = PluginLoader.get_extractor("Align")()
+        self.export_faces()
+
+    def check_folder(self):
+        """ Check that the faces folder doesn't pre-exist
+            and create """
+        err = None
+        if not self.faces_dir:
+            err = "ERROR: Output faces folder not provided."
+        if os.path.isdir(self.faces_dir):
+            err = "ERROR: Folder already exists at {}".format(self.faces_dir)
+        if err:
+            print(err)
+            exit(0)
+        if self.verbose:
+            print("Creating output folder at {}".format(self.faces_dir))
+        os.makedirs(self.faces_dir)
+
+    def export_faces(self):
+        """ Export the faces """
+        for frame, frame_info, alignments in tqdm(self.get_frame_alignments(),
+                                                  desc="Extracting faces",
+                                                  total=self.frames.count):
+            if not self.has_alignments(frame, alignments):
+                continue
+            self.output_faces(frame, frame_info, alignments)
+
+    def get_frame_alignments(self):
+        """ Return the alignments for each frame """
+        for key, value in self.frames.items.items():
+            alignments = self.alignment_data.get(key, None)
+            yield key, value, alignments
+
+    def has_alignments(self, frame, alignments):
+        """ Check whether this frame has alignments """
+        if not alignments:
+            if self.verbose:
+                print("Skipping {} - Alignments not found".format(frame))
+            return False
+        return True
+
+    def output_faces(self, frame, frame_info, alignments):
+        """ Output the frame's faces to file """
+        image = self.load_frame(frame)
+        name, extension = frame_info
+        for idx, alignment in enumerate(alignments):
+            face = self.DetectedFace(image,
+                                     alignment["r"],
+                                     alignment["x"],
+                                     alignment["w"],
+                                     alignment["y"],
+                                     alignment["h"],
+                                     alignment["landmarksXY"])
+            resized_face, _ = self.extractor.extract(image,
+                                                     face,
+                                                     256,
+                                                     self.align_eyes)
+            output = "{}_{}{}".format(name, str(idx), extension)
+            dst = os.path.join(self.faces_dir, output)
+            imwrite(dst, resized_face)
+
+    def load_frame(self, frame):
+        """ Load the image """
+        src = os.path.join(self.frames.folder, frame)
+        image = imread(src)
+        return image
 
 
 class RemoveAlignments(object):
     """ Remove items from alignments file """
     def __init__(self, alignments, arguments):
-        self.alignment_data = alignments
         self.verbose = arguments.verbose
+        self.alignment_data = alignments
         self.faces = Faces(arguments.faces_dir, self.verbose)
         self.removed = set()
 
@@ -375,7 +480,7 @@ class Check(object):
         elif self.job == "faces" and self.type != "multi-faces":
             print("WARNING: The selected type is not valid. Only "
                   "'multi-faces' is supported for checking faces ")
-            sys.exit()
+            exit(0)
 
     def compile_output(self):
         """ Compile list of frames that meet criteria """
@@ -445,7 +550,7 @@ class Check(object):
 
     def output_file(self, output_message):
         """ Save the output to a text file in the frames directory """
-        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = self.output_message.replace(" ", "_").lower()
         filename += "_" + now + ".txt"
         output_file = os.path.join(self.source_dir, filename)
@@ -456,7 +561,7 @@ class Check(object):
 
     def move_file(self):
         """ Move the identified frames to a new subfolder """
-        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = self.output_message.replace(" ", "_").lower()
         folder_name += "_" + now
         output_folder = os.path.join(self.source_dir, folder_name)
