@@ -8,12 +8,11 @@
 # TODO Identify faces outside of frame
 # TODO Identify faces below certain size
 # TODO Merge type into job
-# TODO Draw Alignments
 # TODO GUI - Analysis time roll past 24 hours
 import os
 from datetime import datetime
 
-from cv2 import imread, imwrite
+from cv2 import circle, imread, imwrite, rectangle
 from tqdm import tqdm
 
 from lib import Serializer
@@ -40,7 +39,9 @@ class Alignments(object):
 
     def process(self):
         """ Main processing function of the Align tool """
-        if self.args.job == "extract":
+        if self.args.job == "draw":
+            job = Draw(self.alignments, self.args)
+        elif self.args.job == "extract":
             job = Extract(self.alignments, self.args)
         elif self.args.job in("frames", "faces"):
             job = Check(self.alignments, self.args)
@@ -159,6 +160,14 @@ class AlignmentData(object):
             original_idx = number_alignments - 1 - idx
             yield original_idx
 
+    def has_alignments(self, filename, alignments):
+        """ Check whether this frame has alignments """
+        if not alignments:
+            if self.verbose:
+                print("Skipping {} - Alignments not found".format(filename))
+            return False
+        return True
+
 
 class MediaLoader(object):
     """ Class to load filenames from folder """
@@ -192,6 +201,18 @@ class MediaLoader(object):
     def load_items():
         """ Override for specific item loading """
         return dict()
+
+    def load_image(self, filename):
+        """ Load an image """
+        src = os.path.join(self.folder, filename)
+        image = imread(src)
+        return image
+
+    @staticmethod
+    def save_image(output_folder, filename, image):
+        """ Save an image """
+        output_file = os.path.join(output_folder, filename)
+        imwrite(output_file, image)
 
 
 class Faces(MediaLoader):
@@ -238,12 +259,70 @@ class Frames(MediaLoader):
         return frames
 
 
+class Draw(object):
+    """ Draw Alignments on passed in images """
+    def __init__(self, alignments, arguments):
+        self.verbose = arguments.verbose
+        self.alignments = alignments
+        self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.output_folder = self.set_output()
+
+    def set_output(self):
+        """ Set the output folder path """
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = "drawn_landmarks_{}".format(now)
+        output_folder = os.path.join(self.frames.folder, folder_name)
+        os.makedirs(output_folder)
+        return output_folder
+
+    def process(self):
+        """ Run the draw alignments process """
+        print("\n[DRAW LANDMARKS]")  # Tidy up cli output
+        frames_drawn = 0
+        for frame, alignments in tqdm(self.get_frame_alignments(),
+                                      desc="Drawing landmarks",
+                                      total=self.frames.count):
+            if not self.alignments.has_alignments(frame, alignments):
+                continue
+            self.annotate_image(frame, alignments)
+            frames_drawn += 1
+        print("{} Frame(s) output".format(frames_drawn))
+
+    def get_frame_alignments(self):
+        """ Retrieve each frame and it's corresponding alignments """
+        for frame in self.frames.file_list_sorted:
+            alignments = self.alignments.alignments.get(frame, None)
+            yield frame, alignments
+
+    def annotate_image(self, frame, alignments):
+        """ Draw the alignments """
+        image = self.frames.load_image(frame)
+        for alignment in alignments:
+            self.draw_bounding_box(image, alignment)
+            self.draw_landmarks(image, alignment["landmarksXY"])
+        self.frames.save_image(self.output_folder, frame, image)
+
+    @staticmethod
+    def draw_bounding_box(image, alignment):
+        """ Draw the bounding box around face """
+        top_left = (alignment["x"], alignment["y"])
+        bottom_right = (alignment["x"] + alignment["w"],
+                        alignment["y"] + alignment["h"])
+        rectangle(image, top_left, bottom_right, (0, 0, 255), 1)
+
+    @staticmethod
+    def draw_landmarks(image, landmarks):
+        """ Draw the facial landmarks """
+        for (pos_x, pos_y) in landmarks:
+            circle(image, (pos_x, pos_y), 1, (0, 255, 0), -1)
+
+
 class Extract(object):
     """ Re-extract faces from source frames based on
         Alignment data """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
-        self.alignment_data = alignments.alignments
+        self.alignments = alignments
         self.faces_dir = arguments.faces_dir
         self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
@@ -288,30 +367,27 @@ class Extract(object):
 
     def export_faces(self):
         """ Export the faces """
+        extracted_faces = 0
         for frame, frame_info, alignments in tqdm(self.get_frame_alignments(),
                                                   desc="Extracting faces",
                                                   total=self.frames.count):
-            if not self.has_alignments(frame, alignments):
+            if not self.alignments.has_alignments(frame, alignments):
                 continue
-            self.output_faces(frame, frame_info, alignments)
+            extracted_faces += self.output_faces(frame,
+                                                 frame_info,
+                                                 alignments)
+        print("{} face(s) extracted".format(extracted_faces))
 
     def get_frame_alignments(self):
         """ Return the alignments for each frame """
         for key, value in self.frames.items.items():
-            alignments = self.alignment_data.get(key, None)
+            alignments = self.alignments.alignments.get(key, None)
             yield key, value, alignments
-
-    def has_alignments(self, frame, alignments):
-        """ Check whether this frame has alignments """
-        if not alignments:
-            if self.verbose:
-                print("Skipping {} - Alignments not found".format(frame))
-            return False
-        return True
 
     def output_faces(self, frame, frame_info, alignments):
         """ Output the frame's faces to file """
-        image = self.load_frame(frame)
+        face_count = 0
+        image = self.frames.load_image(frame)
         name, extension = frame_info
         for idx, alignment in enumerate(alignments):
             face = self.DetectedFace(image,
@@ -326,21 +402,16 @@ class Extract(object):
                                                      256,
                                                      self.align_eyes)
             output = "{}_{}{}".format(name, str(idx), extension)
-            dst = os.path.join(self.faces_dir, output)
-            imwrite(dst, resized_face)
-
-    def load_frame(self, frame):
-        """ Load the image """
-        src = os.path.join(self.frames.folder, frame)
-        image = imread(src)
-        return image
+            self.frames.save_image(self.faces_dir, output, resized_face)
+            face_count += 1
+        return face_count
 
 
 class RemoveAlignments(object):
     """ Remove items from alignments file """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
-        self.alignment_data = alignments
+        self.alignments = alignments
         self.faces = Faces(arguments.faces_dir, self.verbose)
         self.removed = set()
 
@@ -348,9 +419,9 @@ class RemoveAlignments(object):
         """ run removal """
         print("\n[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
         del_count = 0
-        for item in tqdm(self.alignment_data.get_alignments_one_image(),
+        for item in tqdm(self.alignments.get_alignments_one_image(),
                          desc="Processing alignments file",
-                         total=self.alignment_data.count):
+                         total=self.alignments.count):
             if self.faces_count_matches(item):
                 continue
             del_count += self.remove_alignment(item)
@@ -361,7 +432,7 @@ class RemoveAlignments(object):
 
         print("{} alignments(s) were removed from "
               "alignments file".format(del_count))
-        self.alignment_data.save_alignments()
+        self.alignments.save_alignments()
         self.rename_faces()
 
     def faces_count_matches(self, item):
@@ -375,7 +446,7 @@ class RemoveAlignments(object):
         """ Remove the alignment from the alignments file """
         del_count = 0
         image_name, alignments, number_alignments = item
-        processor = self.alignment_data.get_one_alignment_index_reverse
+        processor = self.alignments.get_one_alignment_index_reverse
         for idx in processor(alignments, number_alignments):
             face_indexes = self.faces.items.get(image_name, [-1])
             if idx not in face_indexes:

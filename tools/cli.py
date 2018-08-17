@@ -13,13 +13,18 @@ class AlignmentsArgs(FaceSwapArgs):
         argument_list = list()
         argument_list.append({"opts": ("-j", "--job"),
                               "type": str,
-                              "choices": ("extract", "faces", "frames",
-                                          "reformat", "remove"),
+                              "choices": ("draw", "extract", "faces",
+                                          "frames", "reformat", "remove"),
                               "required": True,
                               "help": "R|Choose which action you want to "
                                       "perform.\n"
+                                      "'draw': Draw landmarks on frames in "
+                                      "the selected\n\tfolder. A subfolder "
+                                      "will be created within\n\tthe source "
+                                      "folder to store the output. Must\n\t"
+                                      "pass in a frame (-fr) folder.\n"
                                       "'extract': Re-extract faces from the "
-                                      "source frames based on alignment "
+                                      "source frames\n\tbased on alignment "
                                       "data.\n"
                                       "'faces': Check the contents of the "
                                       "alignments\n\tfile against the "
