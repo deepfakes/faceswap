@@ -20,7 +20,7 @@ class Model(AutoEncoder):
         x = Input(shape=IMAGE_SHAPE)
 
         self.autoencoder_A = KerasModel(x, self.decoder_A(self.encoder(x)))
-        self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))
+        self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))        
 
         if self.gpus > 1:
             self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
