@@ -14,4 +14,5 @@ nvidia-ml-py3
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,
-# you may want to install tensorflow-gpu==1.4.0 for CUDA 8.0 or tensorflow-gpu>=1.5.0 for CUDA 9.0
+# you may want to install tensorflow-gpu==1.4.0 for CUDA 8.0 or tensorflow-gpu>=1.6.0 for CUDA 9.0
+# NB: MTCNN will not work with tensorflow releases prior to 1.6.0
