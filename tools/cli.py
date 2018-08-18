@@ -10,32 +10,61 @@ class AlignmentsArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Aligments tool """
 
     def get_argument_list(self):
+        frames_dir = "\n\tMust Pass in a frames folder (-fr)."
+        frames_or_faces_dir = ("\n\tMust Pass in either a frames folder \n\t"
+                               "OR a faces folder (-fr or -fc).")
+        output_opts = "\n\tUse the output option (-o) to process\n\tresults."
         argument_list = list()
         argument_list.append({"opts": ("-j", "--job"),
                               "type": str,
-                              "choices": ("draw", "extract", "faces",
-                                          "frames", "reformat", "remove"),
+                              "choices": ("draw", "extract",
+                                          "missing-alignments",
+                                          "missing-frames", "multi-faces",
+                                          "no-faces", "reformat", "remove"),
                               "required": True,
                               "help": "R|Choose which action you want to "
-                                      "perform.\n"
+                                      "perform.\nNB: All actions require an "
+                                      "alignments file (-a) to\nbe passed "
+                                      "in.\n"
                                       "'draw': Draw landmarks on frames in "
                                       "the selected\n\tfolder. A subfolder "
-                                      "will be created within\n\tthe source "
-                                      "folder to store the output. Must\n\t"
-                                      "pass in a frame (-fr) folder.\n"
+                                      "will be created within\n\tthe frames "
+                                      "folder to hold the output." +
+                                      frames_dir + "\n"
                                       "'extract': Re-extract faces from the "
                                       "source frames\n\tbased on alignment "
-                                      "data.\n"
-                                      "'faces': Check the contents of the "
-                                      "alignments\n\tfile against the "
-                                      "extracted faces.\n"
-                                      "'frames': Check the contents of the "
-                                      "alignments\n\tfile against the "
-                                      "original frames.\n"
+                                      "data. This is a\n\tlot quicker than "
+                                      "re-detecting faces. Can\n\toptionally "
+                                      "use the align-eyes switch (-ae)." +
+                                      frames_dir + "\n"
+                                      "'missing-alignments': Identify frames "
+                                      "that do not\n\texist in the "
+                                      "alignments file." + output_opts +
+                                      frames_dir + "\n"
+                                      "'missing-frames': Identify frames in "
+                                      "the alignments\n\tfile that do not "
+                                      "appear within the frames\n\t"
+                                      "folder." + output_opts +
+                                      frames_dir + "\n"
+                                      "'multi-faces': Identify where multiple "
+                                      "faces exist\n\twithin the alignments "
+                                      "file." + output_opts +
+                                      frames_or_faces_dir + "\n"
+                                      "'no-faces': Identify frames that exist "
+                                      "within the\n\talignment file but no "
+                                      "faces were detected." + output_opts +
+                                      frames_dir + "\n"
                                       "'reformat': Save a copy of alignments "
-                                      "file in a\n\tdifferent format.\n"
+                                      "file in a\n\tdifferent format. "
+                                      "Specify a format with\n\tthe -fmt "
+                                      "option.\n"
                                       "'remove': Remove deleted faces from "
-                                      "an alignments\n\tfile."})
+                                      "an alignments\n\tfile. The original "
+                                      "alignments file will be\n\tbacked up. "
+                                      "A different file format for the\n\t"
+                                      "alignments file can optionally be\n\t"
+                                      "specified (-fmt).\n\tMust pass in a "
+                                      "faces folder (-fc).\n"})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
                               "dest": "alignments_file",
@@ -71,35 +100,13 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "'move': Move the discovered items to a "
                                       "sub-folder\n\twithin the source "
                                       "directory."})
-        argument_list.append({"opts": ("-t", "--type"),
-                              "type": str,
-                              "choices": ("missing-alignments",
-                                          "missing-frames",
-                                          "no-faces", "multi-faces"),
-                              "help": "R|.The type of "
-                                      "testing to be performed ('faces'\nor "
-                                      "'frames' only):\n"
-                                      "'missing-alignments': Identify frames "
-                                      "that do not\n\texist in the alignments "
-                                      "file. (frames only)\n"
-                                      "'missing-frames': Identify frames in "
-                                      "the alignments\n\tfile that do not "
-                                      "appear within the frames\n\t"
-                                      "directory. (frames only)\n"
-                                      "'no-faces': Identify frames that exist "
-                                      "within the\n\talignment file but no "
-                                      "faces were discovered.\n\t(frames "
-                                      "only)\n"
-                                      "'multi-faces': Identify where multiple "
-                                      "faces exist\n\twithin the alignments "
-                                      "file. (faces or\n\tframes only)"})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
                               "default": False,
                               "help": "Perform extra alignment to ensure "
                                       "left/right eyes are  at the same "
-                                      "height"})
+                                      "height. (Extract only)"})
         argument_list.append({"opts": ("-v", "--verbose"),
                               "action": "store_true",
                               "dest": "verbose",

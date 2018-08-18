@@ -3,7 +3,6 @@
 
 # TODO merge alignments
 # TODO Remove whole frames from alignments file
-# TODO Merge type into job
 import os
 from datetime import datetime
 
@@ -38,7 +37,8 @@ class Alignments(object):
             job = Draw(self.alignments, self.args)
         elif self.args.job == "extract":
             job = Extract(self.alignments, self.args)
-        elif self.args.job in("frames", "faces"):
+        elif self.args.job in("missing-alignments", "missing-frames",
+                              "multi-faces", "no-faces"):
             job = Check(self.alignments, self.args)
         elif self.args.job == "remove":
             job = RemoveAlignments(self.alignments, self.args)
@@ -504,7 +504,7 @@ class Check(object):
     def __init__(self, alignments, arguments):
         self.alignments_data = alignments.count_per_frame
         self.job = arguments.job
-        self.type = arguments.type
+        self.type = None
         self.output = arguments.output
         self.source_dir = self.get_source_dir(arguments)
         self.items = self.get_items(arguments)
@@ -515,20 +515,27 @@ class Check(object):
 
     def get_source_dir(self, arguments):
         """ Set the correct source dir """
-        if self.job == "faces":
-            return arguments.faces_dir
-        return arguments.frames_dir
+        if hasattr(arguments, "faces_dir"):
+            self.type = "faces"
+            source_dir = arguments.faces_dir
+        elif hasattr(arguments, "frames_dir"):
+            self.type = "frames"
+            source_dir = arguments.frames_dir
+        else:
+            print("No source folder (-fr or -fc) was provided")
+            exit(0)
+        return source_dir
 
     def get_items(self, arguments):
         """ Set the correct items to process """
         items = Frames
-        if self.job == "faces":
+        if self.type == "faces":
             items = Faces
         return items(self.source_dir, arguments.verbose).file_list_sorted
 
     def process(self):
         """ Process the frames check against the alignments file """
-        print("\n[CHECK {}]".format(self.job.upper()))
+        print("\n[CHECK {}]".format(self.type.upper()))
         self.validate()
         self.compile_output()
         self.output_results()
@@ -536,21 +543,19 @@ class Check(object):
     def validate(self):
         """ Check that the selected type is valid for
             selected task and job """
-        if (self.job == "frames"
-                and self.type == "missing-frames"
-                and self.output == "move"):
+        if self.job == "missing-frames" and self.output == "move":
             print("WARNING: missing_frames was selected with move output, but "
                   "there will be nothing to move. "
                   "Defaulting to output: console")
             self.output = "console"
-        elif self.job == "faces" and self.type != "multi-faces":
-            print("WARNING: The selected type is not valid. Only "
-                  "'multi-faces' is supported for checking faces ")
+        elif self.type == "faces" and self.job != "multi-faces":
+            print("WARNING: The selected folder is not valid. Only folder set "
+                  "with '-fc' is supported for 'multi-faces'")
             exit(0)
 
     def compile_output(self):
         """ Compile list of frames that meet criteria """
-        action = self.type.replace("-", "_")
+        action = self.job.replace("-", "_")
         processor = getattr(self, "get_{}".format(action))
         self.items_output = [item for item in processor()]
 
@@ -566,12 +571,12 @@ class Check(object):
             matched in alignments file """
         self.output_message = "Frames with multiple faces"
         items = self.items
-        if self.job == "faces":
+        if self.type == "faces":
             self.output_message = "Multiple faces in frame"
         for item in items:
             check_item = item
             return_item = item
-            if self.job == "faces":
+            if self.type == "faces":
                 check_item = str(item[2]) + str(item[1])
                 return_item = str(item[0]) + str(item[1])
             if self.alignments_data.get(check_item, -1) > 1:
@@ -599,7 +604,7 @@ class Check(object):
         """ Output the results in the requested format """
         self.items_discovered = len(self.items_output)
         if self.items_discovered == 0:
-            print("No {} were found meeting the criteria".format(self.job))
+            print("No {} were found meeting the criteria".format(self.type))
             return
         if self.output == "move":
             self.move_file()
@@ -632,7 +637,7 @@ class Check(object):
         folder_name += "_" + now
         output_folder = os.path.join(self.source_dir, folder_name)
         os.makedirs(output_folder)
-        move = getattr(self, "move_{}".format(self.job))
+        move = getattr(self, "move_{}".format(self.type))
         move(output_folder)
 
     def move_frames(self, output_folder):
