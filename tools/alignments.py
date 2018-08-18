@@ -2,13 +2,8 @@
 """ Tools for manipulating the alignments seralized file """
 
 # TODO merge alignments
-# TODO Identify possible false positives
 # TODO Remove whole frames from alignments file
-# TODO Add help text to tabs in gui
-# TODO Identify faces outside of frame
-# TODO Identify faces below certain size
 # TODO Merge type into job
-# TODO GUI - Analysis time roll past 24 hours
 import os
 from datetime import datetime
 

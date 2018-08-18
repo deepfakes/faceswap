@@ -12,6 +12,16 @@ import numpy as np
 from lib.Serializer import PickleSerializer
 
 
+def convert_time(timestamp):
+    """ Convert time stamp to total hours, mins and second """
+    hrs = int(timestamp // 3600)
+    if hrs < 10:
+        hrs = "{0:02d}".format(hrs)
+    mins = "{0:02d}".format((int(timestamp % 3600) // 60))
+    secs = "{0:02d}".format((int(timestamp % 3600) % 60))
+    return hrs, mins, secs
+
+
 class SavedSessions(object):
     """ Saved Training Session """
     def __init__(self, sessions_data):
@@ -77,8 +87,8 @@ class CurrentSession(object):
         now = time.time()
         self.stats["timestamps"].append(now)
         elapsed_time = now - self.timestats["start"]
-        self.timestats["elapsed"] = time.strftime("%H:%M:%S",
-                                                  time.gmtime(elapsed_time))
+        hrs, mins, secs = convert_time(elapsed_time)
+        self.timestats["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
 
     def save_session(self):
         """ Save the session file to the modeldir """
@@ -195,8 +205,8 @@ class SessionsSummary(object):
                                              time.gmtime(summary["start"]))
             summary["end"] = time.strftime("%x %X",
                                            time.gmtime(summary["end"]))
-            summary["elapsed"] = time.strftime("%H:%M:%S",
-                                               time.gmtime(summary["elapsed"]))
+            hrs, mins, secs = convert_time(summary["elapsed"])
+            summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
             summary["rate"] = "{0:.1f}".format(summary["rate"])
         self.summary = raw_summaries
 
