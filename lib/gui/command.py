@@ -168,9 +168,7 @@ class OptionControl(object):
         ctl = self.option["control"]
         ctltitle = self.option["control_title"]
         sysbrowser = self.option["filesystem_browser"]
-        ctlhelp = " ".join(self.option.get("help", "").split())
-        ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
-        ctlhelp = ctltitle + " - " + ctlhelp
+        ctlhelp = self.format_help(ctltitle)
         dflt = self.option.get("default", "")
         if self.option.get("nargs", None) and isinstance(dflt, (list, tuple)):
             dflt = ' '.join(str(val) for val in dflt)
@@ -188,6 +186,17 @@ class OptionControl(object):
                                                       ctlvars,
                                                       choices,
                                                       sysbrowser)
+
+    def format_help(self, ctltitle):
+        """ Format the help text for tooltips """
+        ctlhelp = self.option.get("help", "")
+        if ctlhelp.startswith("R|"):
+            ctlhelp = ctlhelp[2:].replace("\n\t", " ").replace("\n'", "\n\n'")
+        else:
+            ctlhelp = " ".join(ctlhelp.split())
+        ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
+        ctlhelp = ctltitle + " - " + ctlhelp
+        return ctlhelp
 
     def build_one_control_frame(self):
         """ Build the frame to hold the control """
@@ -248,7 +257,7 @@ class OptionControl(object):
         if control == ttk.Combobox:
             ctl["values"] = [choice for choice in choices]
 
-        Tooltip(ctl, text=helptext, wraplength=200)
+        Tooltip(ctl, text=helptext, wraplength=400)
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
