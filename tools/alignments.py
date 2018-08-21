@@ -10,6 +10,7 @@ from cv2 import circle, imread, imwrite, rectangle
 from tqdm import tqdm
 
 from lib import Serializer
+from lib.utils import _image_extensions
 from plugins.PluginLoader import PluginLoader
 
 
@@ -188,6 +189,12 @@ class MediaLoader(object):
             print("Folder exists at {}".format(self.folder))
 
     @staticmethod
+    def valid_extension(filename):
+        """ Check whether passed in file has a valid extension """
+        extension = os.path.splitext(filename)[1]
+        return bool(extension in _image_extensions)
+
+    @staticmethod
     def process_folder():
         """ Override for specific folder processing """
         return list()
@@ -217,6 +224,8 @@ class Faces(MediaLoader):
         """ Iterate through the faces dir pulling out various information """
         print("Loading file list from {}".format(self.folder))
         for face in os.listdir(self.folder):
+            if not self.valid_extension(face):
+                continue
             filename = os.path.splitext(face)[0]
             file_extension = os.path.splitext(face)[1]
             index = int(filename[filename.rindex("_") + 1:])
@@ -242,6 +251,8 @@ class Frames(MediaLoader):
         """ Iterate through the frames dir pulling the base filename """
         print("Loading file list from {}".format(self.folder))
         for frame in os.listdir(self.folder):
+            if not self.valid_extension(frame):
+                continue
             filename = os.path.basename(frame)
             yield filename
 
