@@ -427,6 +427,16 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Perform extra alignment to ensure "
                                       "left/right eyes are  at the same "
                                       "height"})
+        argument_list.append({"opts": ("-si", "--save-interval"),
+                              "dest": "save_interval",
+                              "type": int,
+                              "default": None,
+                              "help": "Automatically save the alignments file "
+                                      "after a set amount of frames. Will only "
+                                      "save at the end of extracting by "
+                                      "default. WARNING: Don't interrupt the "
+                                      "script when writing the file because "
+                                      "it might get corrupted."})
         return argument_list
 
 
