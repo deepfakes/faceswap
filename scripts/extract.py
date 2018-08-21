@@ -58,16 +58,10 @@ class Extract(object):
 
     def extract_single_process(self):
         """ Run extraction in a single process """
-
-        alignments = self.alignments.read_alignments()
-        
         frame_no = 0
         for filename in tqdm(self.images.input_images, file=sys.stdout):
-            basename = os.path.basename(filename)
-            if basename in alignments:
-                continue
             filename, faces = self.process_single_image(filename)
-            self.faces.faces_detected[basename] = faces
+            self.faces.faces_detected[os.path.basename(filename)] = faces
             frame_no = frame_no + 1
             if frame_no == self.save_interval:
                 self.write_alignments()
