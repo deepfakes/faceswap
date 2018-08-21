@@ -27,7 +27,7 @@ class Extract(object):
         self.output_dir = self.faces.output_dir
 
         self.export_face = True
-        self.save_interval = self.args.save_interval
+        self.save_interval = self.args.save_interval if hasattr(self.args, "save_interval") else None
 
     def process(self):
         """ Perform the extraction process """
