@@ -62,13 +62,14 @@ class Extract(object):
         for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
-            frame_no = frame_no + 1
+            frame_no += 1
             if frame_no == self.save_interval:
                 self.write_alignments()
                 frame_no = 0
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
+        frame_no = 0
         for filename, faces in tqdm(
                 pool_process(
                     self.process_single_image,
@@ -77,6 +78,10 @@ class Extract(object):
                 file=sys.stdout):
             self.faces.num_faces_detected += 1
             self.faces.faces_detected[os.path.basename(filename)] = faces
+            frame_no += 1
+            if frame_no == self.save_interval:
+                self.write_alignments()
+                frame_no = 0
 
     def process_single_image(self, filename):
         """ Detect faces in an image. Rotate the image the specified amount
