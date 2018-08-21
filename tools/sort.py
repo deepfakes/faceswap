@@ -348,9 +348,11 @@ class Sort(object):
 
         print("Grouping by blur...")
         bins = [[] for _ in range(num_bins)]
+        idx = 0
         for i in range(num_bins):
-            for idx in range(num_per_bin):
+            for _ in range(num_per_bin):
                 bins[i].append(img_list[idx][0])
+                idx += 1
 
         # If remainder is 0, nothing gets added to the last bin.
         for i in range(1, remainder + 1):
@@ -469,9 +471,11 @@ class Sort(object):
 
         print("Grouping by face-yaw...")
         bins = [[] for _ in range(num_bins)]
+        idx = 0
         for i in range(num_bins):
-            for idx in range(num_per_bin):
+            for _ in range(num_per_bin):
                 bins[i].append(img_list[idx][0])
+                idx += 1
 
         # If remainder is 0, nothing gets added to the last bin.
         for i in range(1, remainder + 1):
