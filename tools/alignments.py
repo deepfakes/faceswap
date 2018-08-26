@@ -598,9 +598,9 @@ class Check(object):
         self.output_message = "Frames missing from alignments file"
         exclude_filetypes = ["yaml", "yml", "p", "json", "txt"]
         for item in self.items:
-            extension = item[item.rindex(".") + 1:]
+            extension = item[1]
             if (extension not in exclude_filetypes
-                    and self.alignments_data.get(item, -1)) == -1:
+                    and self.alignments_data.get(item[2] + item[1], -1)) == -1:
                 yield item
 
     def get_missing_frames(self):
