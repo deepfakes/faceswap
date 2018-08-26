@@ -21,6 +21,7 @@ class Extract(object):
         self.args = arguments
 
         self.images = Images(self.args)
+        self.input_images = self.images.input_images
         self.faces = Faces(self.args)
         self.alignments = Alignments(self.args)
 
@@ -33,6 +34,10 @@ class Extract(object):
         """ Perform the extraction process """
         print('Starting, this may take a while...')
         Utils.set_verbosity(self.args.verbose)
+
+        if hasattr(self.args, "skip_existing") and self.args.skip_existing:
+            self.skip_alignments = self.alignments.load_skip_alignments(self.alignments.alignments_path, self.faces.faces_detected).keys()
+            self.input_images = [v for v in self.input_images if v not in self.skip_alignments]
 
         if (hasattr(self.args, 'multiprocess')
                 and self.args.multiprocess
@@ -59,7 +64,7 @@ class Extract(object):
     def extract_single_process(self):
         """ Run extraction in a single process """
         frame_no = 0
-        for filename in tqdm(self.images.input_images, file=sys.stdout):
+        for filename in tqdm(self.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
             frame_no += 1
@@ -73,7 +78,7 @@ class Extract(object):
         for filename, faces in tqdm(
                 pool_process(
                     self.process_single_image,
-                    self.images.input_images),
+                    self.input_images),
                 total=self.images.images_found,
                 file=sys.stdout):
             self.faces.num_faces_detected += 1
