@@ -562,7 +562,6 @@ class Check(object):
         elif self.type == "faces" and self.job != "multi-faces":
             print("WARNING: The selected folder is not valid. Only folder set "
                   "with '-fc' is supported for 'multi-faces'")
-            exit(0)
 
     def compile_output(self):
         """ Compile list of frames that meet criteria """
