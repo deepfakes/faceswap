@@ -37,7 +37,7 @@ class Extract(object):
 
         if hasattr(self.args, "skip_existing") and self.args.skip_existing:
             self.skip_alignments = self.alignments.load_skip_alignments(self.alignments.alignments_path, self.faces.faces_detected).keys()
-            self.input_images = [v for v in self.input_images if v not in self.skip_alignments]
+            self.input_images = [v for v in self.input_images if os.path.basename(v) not in self.skip_alignments]
 
         if (hasattr(self.args, 'multiprocess')
                 and self.args.multiprocess
