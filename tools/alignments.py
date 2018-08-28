@@ -173,8 +173,7 @@ class MediaLoader(object):
         self.verbose = verbose
         self.folder = folder
         self.check_folder_exists()
-        self.file_list_sorted = sorted([item
-                                        for item in self.process_folder()])
+        self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
         self.count = len(self.file_list_sorted)
         if self.verbose:
@@ -194,6 +193,11 @@ class MediaLoader(object):
         """ Check whether passed in file has a valid extension """
         extension = os.path.splitext(filename)[1]
         return bool(extension in _image_extensions)
+
+    @staticmethod
+    def sorted_items():
+        """ Override for specific folder processing """
+        return list()
 
     @staticmethod
     def process_folder():
@@ -244,6 +248,11 @@ class Faces(MediaLoader):
                 faces[original_file].append(index)
         return faces
 
+    def sorted_items(self):
+        """ Return the items sorted by filename then index """
+        return sorted([item for item in self.process_folder()],
+                      key=lambda x: (x[2], x[3]))
+
 
 class Frames(MediaLoader):
     """ Object to hold the frames that are to be checked against """
@@ -264,6 +273,10 @@ class Frames(MediaLoader):
             frames[frame] = (frame[:frame.rfind(".")],
                              frame[frame.rfind("."):])
         return frames
+
+    def sorted_items(self):
+        """ Return the items sorted by filename """
+        return sorted([item for item in self.process_folder()])
 
 
 class Draw(object):
@@ -445,7 +458,7 @@ class RemoveAlignments(object):
     def faces_count_matches(self, item):
         """ Check the selected face exits """
         image_name, number_alignments = item[0], item[2]
-        number_faces = len(self.faces.items.get(image_name, []))
+        number_faces = len(self.faces.items.get(image_name, None))
         return bool(number_alignments == 0
                     or number_alignments == number_faces)
 
