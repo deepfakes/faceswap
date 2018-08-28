@@ -38,8 +38,9 @@ class Alignments(object):
             job = Draw(self.alignments, self.args)
         elif self.args.job == "extract":
             job = Extract(self.alignments, self.args)
-        elif self.args.job in("missing-alignments", "missing-frames", "leftover-faces",
-                              "multi-faces", "no-faces"):
+        elif self.args.job in("missing-alignments", "missing-frames",
+                              "multi-faces", "leftover-faces",
+                              "no-faces"):
             job = Check(self.alignments, self.args)
         elif self.args.job == "remove":
             job = RemoveAlignments(self.alignments, self.args)
@@ -526,10 +527,10 @@ class Check(object):
 
     def get_source_dir(self, arguments):
         """ Set the correct source dir """
-        if hasattr(arguments, "faces_dir"):
+        if hasattr(arguments, "faces_dir") and arguments.faces_dir:
             self.type = "faces"
             source_dir = arguments.faces_dir
-        elif hasattr(arguments, "frames_dir"):
+        elif hasattr(arguments, "frames_dir") and arguments.frames_dir:
             self.type = "frames"
             source_dir = arguments.frames_dir
         else:
@@ -559,9 +560,11 @@ class Check(object):
                   "there will be nothing to move. "
                   "Defaulting to output: console")
             self.output = "console"
-        elif self.type == "faces" and self.job != "multi-faces" and self.job != "leftover-faces":
-            print("WARNING: The selected folder is not valid. Only folder set "
-                  "with '-fc' is supported for 'multi-faces' and 'leftover-faces'")
+        elif self.type == "faces" and self.job not in ("multi-faces",
+                                                       "leftover-faces"):
+            print("WARNING: The selected folder is not valid. "
+                  "Only folder set with '-fc' is supported for "
+                  "'multi-faces' and 'leftover-faces'")
             exit(0)
 
     def compile_output(self):
@@ -617,10 +620,9 @@ class Check(object):
         for item in self.items:
             frame_id = item[2] + item[1]
 
-            if frame_id not in self.alignments_data or self.alignments_data[frame_id] <= item[3]:
+            if (frame_id not in self.alignments_data
+                    or self.alignments_data[frame_id] <= item[3]):
                 yield item[0] + item[1]
-            
-        print("Done")
 
     def output_results(self):
         """ Output the results in the requested format """

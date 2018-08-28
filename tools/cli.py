@@ -20,8 +20,9 @@ class AlignmentsArgs(FaceSwapArgs):
                               "type": str,
                               "choices": ("draw", "extract",
                                           "missing-alignments",
-                                          "missing-frames", "leftover-faces", "multi-faces",
-                                          "no-faces", "reformat", "remove"),
+                                          "missing-frames", "leftover-faces",
+                                          "multi-faces", "no-faces",
+                                          "reformat", "remove"),
                               "required": True,
                               "help": "R|Choose which action you want to "
                                       "perform.\nNB: All actions require an "
