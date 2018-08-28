@@ -27,6 +27,7 @@ class Extract(object):
         self.output_dir = self.faces.output_dir
 
         self.export_face = True
+        self.save_interval = self.args.save_interval if hasattr(self.args, "save_interval") else None
 
     def process(self):
         """ Perform the extraction process """
@@ -44,22 +45,31 @@ class Extract(object):
         else:
             self.extract_single_process()
 
-        self.alignments.write_alignments(self.faces.faces_detected)
-
+        self.write_alignments()
         images, faces = Utils.finalize(self.images.images_found,
                                        self.faces.num_faces_detected,
                                        self.faces.verify_output)
         self.images.images_found = images
         self.faces.num_faces_detected = faces
 
+    def write_alignments(self):
+        self.alignments.write_alignments(self.faces.faces_detected)
+
+
     def extract_single_process(self):
         """ Run extraction in a single process """
+        frame_no = 0
         for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
             self.faces.faces_detected[os.path.basename(filename)] = faces
+            frame_no += 1
+            if frame_no == self.save_interval:
+                self.write_alignments()
+                frame_no = 0
 
     def extract_multi_process(self):
         """ Run the extraction on the correct number of processes """
+        frame_no = 0
         for filename, faces in tqdm(
                 pool_process(
                     self.process_single_image,
@@ -68,6 +78,10 @@ class Extract(object):
                 file=sys.stdout):
             self.faces.num_faces_detected += 1
             self.faces.faces_detected[os.path.basename(filename)] = faces
+            frame_no += 1
+            if frame_no == self.save_interval:
+                self.write_alignments()
+                frame_no = 0
 
     def process_single_image(self, filename):
         """ Detect faces in an image. Rotate the image the specified amount
