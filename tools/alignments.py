@@ -38,7 +38,7 @@ class Alignments(object):
             job = Draw(self.alignments, self.args)
         elif self.args.job == "extract":
             job = Extract(self.alignments, self.args)
-        elif self.args.job in("missing-alignments", "missing-frames",
+        elif self.args.job in("missing-alignments", "missing-frames", "leftover-faces",
                               "multi-faces", "no-faces"):
             job = Check(self.alignments, self.args)
         elif self.args.job == "remove":
@@ -559,9 +559,9 @@ class Check(object):
                   "there will be nothing to move. "
                   "Defaulting to output: console")
             self.output = "console"
-        elif self.type == "faces" and self.job != "multi-faces":
+        elif self.type == "faces" and self.job != "multi-faces" and self.job != "leftover-faces":
             print("WARNING: The selected folder is not valid. Only folder set "
-                  "with '-fc' is supported for 'multi-faces'")
+                  "with '-fc' is supported for 'multi-faces' and 'leftover-faces'")
             exit(0)
 
     def compile_output(self):
@@ -610,6 +610,17 @@ class Check(object):
         for item in self.alignments_data.keys():
             if item not in self.items:
                 yield item
+
+    def get_leftover_faces(self):
+        """yield each face that isn't in the alignments file."""
+        self.output_message = "Faces missing from the alignments file"
+        for item in self.items:
+            frame_id = item[2] + item[1]
+
+            if frame_id not in self.alignments_data or self.alignments_data[frame_id] <= item[3]:
+                yield item[0] + item[1]
+            
+        print("Done")
 
     def output_results(self):
         """ Output the results in the requested format """

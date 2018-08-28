@@ -11,6 +11,7 @@ class AlignmentsArgs(FaceSwapArgs):
 
     def get_argument_list(self):
         frames_dir = "\n\tMust Pass in a frames folder (-fr)."
+        faces_dir = "\n\tMust Pass in a faces folder (-fc)."
         frames_or_faces_dir = ("\n\tMust Pass in either a frames folder \n\t"
                                "OR a faces folder (-fr or -fc).")
         output_opts = "\n\tUse the output option (-o) to process\n\tresults."
@@ -19,7 +20,7 @@ class AlignmentsArgs(FaceSwapArgs):
                               "type": str,
                               "choices": ("draw", "extract",
                                           "missing-alignments",
-                                          "missing-frames", "multi-faces",
+                                          "missing-frames", "leftover-faces", "multi-faces",
                                           "no-faces", "reformat", "remove"),
                               "required": True,
                               "help": "R|Choose which action you want to "
@@ -45,7 +46,11 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "the alignments\n\tfile that do not "
                                       "appear within the frames\n\t"
                                       "folder." + output_opts +
-                                      frames_dir + "\n"
+                                      frames_dir + "\n" +
+                                      "'leftover-faces': Identify faces in "
+                                      "the faces folder\n\tthat do not exist "
+                                      "in the alignments file." + output_opts +
+                                      faces_dir + "\n"
                                       "'multi-faces': Identify where multiple "
                                       "faces exist\n\twithin the alignments "
                                       "file." + output_opts +
