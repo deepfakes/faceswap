@@ -26,12 +26,18 @@ if __name__ == "__main__":
 
     PARSER = FullHelpArgumentParser()
     SUBPARSER = PARSER.add_subparsers()
+    ALIGN = cli.AlignmentsArgs(SUBPARSER,
+                               "alignments",
+                               "This command lets you perform various tasks "
+                               "pertaining to an alignments file.")
     EFFMPEG = cli.EffmpegArgs(SUBPARSER,
                               "effmpeg",
-                              "This command allows you to easily execute common ffmpeg tasks.")
+                              "This command allows you to easily execute "
+                              "common ffmpeg tasks.")
     SORT = cli.SortArgs(SUBPARSER,
                         "sort",
-                        "This command lets you sort images using various methods.")
+                        "This command lets you sort images using various "
+                        "methods.")
     GUI = GuiArgs(SUBPARSER,
                   "gui",
                   "Launch the Faceswap Tools Graphical User Interface.")

@@ -1,8 +1,118 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 from lib.cli import FaceSwapArgs
-from lib.cli import ContextFullPaths, DirFullPaths, FileFullPaths, SaveFileFullPaths
+from lib.cli import (ContextFullPaths, DirFullPaths,
+                     FileFullPaths, SaveFileFullPaths)
 from lib.utils import _image_extensions
+
+
+class AlignmentsArgs(FaceSwapArgs):
+    """ Class to parse the command line arguments for Aligments tool """
+
+    def get_argument_list(self):
+        frames_dir = "\n\tMust Pass in a frames folder (-fr)."
+        frames_or_faces_dir = ("\n\tMust Pass in either a frames folder \n\t"
+                               "OR a faces folder (-fr or -fc).")
+        output_opts = "\n\tUse the output option (-o) to process\n\tresults."
+        argument_list = list()
+        argument_list.append({"opts": ("-j", "--job"),
+                              "type": str,
+                              "choices": ("draw", "extract",
+                                          "missing-alignments",
+                                          "missing-frames", "multi-faces",
+                                          "no-faces", "reformat", "remove"),
+                              "required": True,
+                              "help": "R|Choose which action you want to "
+                                      "perform.\nNB: All actions require an "
+                                      "alignments file (-a) to\nbe passed "
+                                      "in.\n"
+                                      "'draw': Draw landmarks on frames in "
+                                      "the selected\n\tfolder. A subfolder "
+                                      "will be created within\n\tthe frames "
+                                      "folder to hold the output." +
+                                      frames_dir + "\n"
+                                      "'extract': Re-extract faces from the "
+                                      "source frames\n\tbased on alignment "
+                                      "data. This is a\n\tlot quicker than "
+                                      "re-detecting faces. Can\n\toptionally "
+                                      "use the align-eyes switch (-ae)." +
+                                      frames_dir + "\n"
+                                      "'missing-alignments': Identify frames "
+                                      "that do not\n\texist in the "
+                                      "alignments file." + output_opts +
+                                      frames_dir + "\n"
+                                      "'missing-frames': Identify frames in "
+                                      "the alignments\n\tfile that do not "
+                                      "appear within the frames\n\t"
+                                      "folder." + output_opts +
+                                      frames_dir + "\n"
+                                      "'multi-faces': Identify where multiple "
+                                      "faces exist\n\twithin the alignments "
+                                      "file." + output_opts +
+                                      frames_or_faces_dir + "\n"
+                                      "'no-faces': Identify frames that exist "
+                                      "within the\n\talignment file but no "
+                                      "faces were detected." + output_opts +
+                                      frames_dir + "\n"
+                                      "'reformat': Save a copy of alignments "
+                                      "file in a\n\tdifferent format. "
+                                      "Specify a format with\n\tthe -fmt "
+                                      "option.\n"
+                                      "'remove': Remove deleted faces from "
+                                      "an alignments\n\tfile. The original "
+                                      "alignments file will be\n\tbacked up. "
+                                      "A different file format for the\n\t"
+                                      "alignments file can optionally be\n\t"
+                                      "specified (-fmt).\n\tMust pass in a "
+                                      "faces folder (-fc).\n"})
+        argument_list.append({"opts": ("-a", "--alignments_file"),
+                              "action": FileFullPaths,
+                              "dest": "alignments_file",
+                              "required": True,
+                              "filetypes": "alignments",
+                              "help": "Full path to the alignments "
+                                      "file to be processed."})
+        argument_list.append({"opts": ("-fc", "-faces_folder"),
+                              "action": DirFullPaths,
+                              "dest": "faces_dir",
+                              "help": "Directory containing extracted faces."})
+        argument_list.append({"opts": ("-fr", "-frames_folder"),
+                              "action": DirFullPaths,
+                              "dest": "frames_dir",
+                              "help": "Directory containing source frames "
+                                      "that faces were extracted from."})
+        argument_list.append({"opts": ("-fmt", "--alignment_format"),
+                              "type": str,
+                              "choices": ("json", "pickle", "yaml"),
+                              "help": "The file format to save the alignment "
+                                      "data in. Defaults to same as source."})
+        argument_list.append({"opts": ("-o", "--output"),
+                              "type": str,
+                              "choices": ("console", "file", "move"),
+                              "default": "console",
+                              "help": "R|How to output discovered items "
+                                      "('faces'\nand 'frames' only):\n"
+                                      "'console': Print the list of frames to "
+                                      "the screen.\n\t(DEFAULT)\n"
+                                      "'file': Output the list of frames to a "
+                                      "text file\n\t(stored within the source "
+                                      "directory).\n"
+                                      "'move': Move the discovered items to a "
+                                      "sub-folder\n\twithin the source "
+                                      "directory."})
+        argument_list.append({"opts": ("-ae", "--align-eyes"),
+                              "action": "store_true",
+                              "dest": "align_eyes",
+                              "default": False,
+                              "help": "Perform extra alignment to ensure "
+                                      "left/right eyes are  at the same "
+                                      "height. (Extract only)"})
+        argument_list.append({"opts": ("-v", "--verbose"),
+                              "action": "store_true",
+                              "dest": "verbose",
+                              "default": False,
+                              "help": "Show verbose output"})
+        return argument_list
 
 
 class EffmpegArgs(FaceSwapArgs):
@@ -143,20 +253,21 @@ class EffmpegArgs(FaceSwapArgs):
                                       "action. 'mux-audio' action has this "
                                       "turned on implicitly."})
 
-        argument_list.append({"opts": ('-tr', '--transpose'),
-                              "choices": ("(0, 90CounterClockwise&VerticalFlip)",
-                                          "(1, 90Clockwise)",
-                                          "(2, 90CounterClockwise)",
-                                          "(3, 90Clockwise&VerticalFlip)"),
-                              "type": lambda v: self.__parse_transpose(v),
-                              "dest": "transpose",
-                              "default": None,
-                              "help": "Transpose the video. If transpose is "
-                                      "set, then degrees will be ignored. For "
-                                      "cli you can enter either the number "
-                                      "or the long command name, "
-                                      "e.g. to use (1, 90Clockwise) "
-                                      "-tr 1 or -tr 90Clockwise"})
+        argument_list.append(
+            {"opts": ('-tr', '--transpose'),
+             "choices": ("(0, 90CounterClockwise&VerticalFlip)",
+                         "(1, 90Clockwise)",
+                         "(2, 90CounterClockwise)",
+                         "(3, 90Clockwise&VerticalFlip)"),
+             "type": lambda v: self.__parse_transpose(v),
+             "dest": "transpose",
+             "default": None,
+             "help": "Transpose the video. If transpose is "
+                     "set, then degrees will be ignored. For "
+                     "cli you can enter either the number "
+                     "or the long command name, "
+                     "e.g. to use (1, 90Clockwise) "
+                     "-tr 1 or -tr 90Clockwise"})
 
         argument_list.append({"opts": ('-de', '--degrees'),
                               "type": str,
@@ -228,13 +339,13 @@ class SortArgs(FaceSwapArgs):
                               "choices": ("folders", "rename"),
                               "dest": 'final_process',
                               "default": "rename",
-                              "help": "'folders': files are sorted using the "
-                                      "-s/--sort-by method, then they are "
-                                      "organized into folders using the "
-                                      "-g/--group-by grouping method. "
-                                      "'rename': files are sorted using the "
-                                      "-s/--sort-by then they are renamed. "
-                                      "Default: rename"})
+                              "help": "R|\n'folders': files are sorted using "
+                                      "the -s/--sort-by\n\tmethod, then they "
+                                      "are organized into\n\tfolders using "
+                                      "the -g/--group-by grouping\n\tmethod."
+                                      "\n'rename': files are sorted using "
+                                      "the -s/--sort-by\n\tthen they are "
+                                      "renamed.\nDefault: rename"})
 
         argument_list.append({"opts": ('-k', '--keep'),
                               "action": 'store_true',
