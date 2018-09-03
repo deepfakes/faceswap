@@ -4,7 +4,7 @@
 from lib.gpu_stats import GPUStats
 
 
-class GPUMem(object):
+class GPUMem():
     """ Sets the scale to factor for dlib images
         and the ratio of vram to use for tensorflow """
 
@@ -19,11 +19,11 @@ class GPUMem(object):
         self.device = self.set_device()
 
         if self.device == -1:
-            # Limit ram usage to 3072 for CPU
-            self.vram_total = 3072
+            # Limit ram usage to 2048 for CPU
+            self.vram_total = 2048
         else:
             self.vram_total = self.stats.vram[self.device]
-        
+
         self.get_available_vram()
 
     def set_device(self):
@@ -46,13 +46,16 @@ class GPUMem(object):
     def get_available_vram(self):
         """ Recalculate the available vram """
         if self.device == -1:
-            # Limit ram usage to 3072 for CPU
-            self.vram_free = 3072
-        else:        
+            # Limit RAM to 2GB for non-gpu
+            self.vram_free = 2048
+        else:
             free_mem = self.stats.get_free()
             self.vram_free = free_mem[self.device]
 
         if self.verbose:
+            if self.device == -1:
+                print("No GPU. Limiting RAM useage to "
+                      "{}MB".format(self.vram_free)) 
             print("GPU VRAM free:    {}".format(self.vram_free))
 
     def output_stats(self):
@@ -60,6 +63,8 @@ class GPUMem(object):
         if not self.verbose:
             return
         print("\n----- Initial GPU Stats -----")
+        if self.device == -1:
+            print("No GPU. Limiting RAM useage to {}MB".format(self.vram_free))
         self.stats.print_info()
         print("GPU VRAM free:    {}".format(self.vram_free))
         print("-----------------------------\n")
@@ -123,7 +128,7 @@ class GPUMem(object):
             constant = 307
 
         free_mem = self.vram_free - buffer
-        
+
         self.scale_to = int((free_mem - constant) / gradient)
 
         if self.scale_to < 4097:
