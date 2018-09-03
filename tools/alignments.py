@@ -4,6 +4,8 @@
 # TODO merge alignments
 # TODO Remove whole frames from alignments file
 import os
+import pickle
+import struct
 from datetime import datetime
 
 from cv2 import circle, imread, imwrite, rectangle
@@ -14,7 +16,7 @@ from lib.utils import _image_extensions
 from plugins.PluginLoader import PluginLoader
 
 
-class Alignments(object):
+class Alignments():
     """ Perform tasks relating to alignments file """
     def __init__(self, arguments):
         self.args = arguments
@@ -45,28 +47,30 @@ class Alignments(object):
         elif self.args.job == "remove":
             job = RemoveAlignments(self.alignments, self.args)
         elif self.args.job == "reformat":
-            job = self.alignments
+            job = Reformat(self.alignments, self.args)
 
         job.process()
 
 
-class AlignmentData(object):
+class AlignmentData():
     """ Class to hold the alignment data """
 
     def __init__(self, alignments_file, destination_format, verbose):
         print("\n[ALIGNMENT DATA]")  # Tidy up cli output
-        self.alignments_file = alignments_file
+        self.file = alignments_file
         self.verbose = verbose
 
-        self.check_alignments_file_exists()
-        self.alignments_format = os.path.splitext(
-            self.alignments_file)[1].lower()
-        self.destination_format = self.get_destination_format(
-            destination_format)
+        self.check_file_exists()
+        self.src_format = self.get_source_format()
+        self.dst_format = self.get_destination_format(destination_format)
+
+        if self.src_format == "dfl":
+            self.set_destination_serializer()
+            return
 
         self.serializer = Serializer.get_serializer_from_ext(
-            self.alignments_format)
-        self.alignments = self.load_alignments()
+            self.src_format)
+        self.alignments = self.load()
         self.count = len(self.alignments)
         self.count_per_frame = {key: len(value)
                                 for key, value in self.alignments.items()}
@@ -75,19 +79,26 @@ class AlignmentData(object):
         if self.verbose:
             print("{} items loaded".format(self.count))
 
-    def process(self):
-        """ Commmand to run if calling the reformat command """
-        print("\n[REFORMAT ALIGNMENTS]")  # Tidy up cli output
-        self.save_alignments()
-
-    def check_alignments_file_exists(self):
+    def check_file_exists(self):
         """ Check the alignments file exists"""
-        if not os.path.isfile(self.alignments_file):
+        if os.path.split(self.file.lower())[1] == "dfl":
+            self.file = "dfl"
+        if self.file.lower() == "dfl":
+            print("Using extracted pngs for alignments")
+            return
+        if not os.path.isfile(self.file):
             print("ERROR: alignments file not "
-                  "found at: {}".format(self.alignments_file))
+                  "found at: {}".format(self.file))
             exit(0)
         if self.verbose:
-            print("Alignments file exists at {}".format(self.alignments_file))
+            print("Alignments file exists at {}".format(self.file))
+        return
+
+    def get_source_format(self):
+        """ Get the source alignments format """
+        if self.file.lower() == "dfl":
+            return "dfl"
+        return os.path.splitext(self.file)[1].lower()
 
     def get_destination_format(self, destination_format):
         """ Standardise the destination format to the correct extension """
@@ -99,11 +110,13 @@ class AlignmentData(object):
 
         if destination_format is not None:
             dst_fmt = destination_format
-        elif self.alignments_format in extensions.keys():
-            dst_fmt = extensions[self.alignments_format]
+        elif self.src_format == "dfl":
+            dst_fmt = "json"
+        elif self.src_format in extensions.keys():
+            dst_fmt = extensions[self.src_format]
         else:
             print("{} is not a supported serializer. "
-                  "Exiting".format(self.alignments_format))
+                  "Exiting".format(self.src_format))
             exit(0)
 
         if self.verbose:
@@ -113,18 +126,18 @@ class AlignmentData(object):
 
     def set_destination_serializer(self):
         """ set the destination serializer """
-        self.serializer = Serializer.get_serializer(self.destination_format)
+        self.serializer = Serializer.get_serializer(self.dst_format)
 
-    def load_alignments(self):
+    def load(self):
         """ Read the alignments data from the correct format """
-        print("Loading alignments from {}".format(self.alignments_file))
-        with open(self.alignments_file, self.serializer.roptions) as align:
+        print("Loading alignments from {}".format(self.file))
+        with open(self.file, self.serializer.roptions) as align:
             alignments = self.serializer.unmarshal(align.read())
         return alignments
 
     def save_alignments(self):
         """ Backup copy of old alignments and save new alignments """
-        dst = os.path.splitext(self.alignments_file)[0]
+        dst = os.path.splitext(self.file)[0]
         dst += ".{}".format(self.serializer.ext)
         self.backup_alignments()
 
@@ -134,8 +147,10 @@ class AlignmentData(object):
 
     def backup_alignments(self):
         """ Backup copy of old alignments """
+        if not os.path.isfile(self.file):
+            return
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        src = self.alignments_file
+        src = self.file
         dst = src.split(".")
         dst[0] += "_" + now + "."
         dst = dst[0] + dst[1]
@@ -166,7 +181,7 @@ class AlignmentData(object):
         return True
 
 
-class MediaLoader(object):
+class MediaLoader():
     """ Class to load filenames from folder """
     def __init__(self, folder, verbose):
         print("\n[{} DATA]".format(self.__class__.__name__.upper()))
@@ -181,10 +196,17 @@ class MediaLoader(object):
 
     def check_folder_exists(self):
         """ makes sure that the faces folder exists """
-        if not self.folder or not os.path.isdir(self.folder):
-            print("ERROR: The folder {} could not "
-                  "be found".format(self.folder))
+        err = None
+        loadtype = self.__class__.__name__
+        if not self.folder:
+            err = "ERROR: A {} folder must be specified".format(loadtype)
+        elif not os.path.isdir(self.folder):
+            err = ("ERROR: The {} folder {} could not be "
+                   "found".format(loadtype, self.folder))
+        if err:
+            print(err)
             exit(0)
+
         if self.verbose:
             print("Folder exists at {}".format(self.folder))
 
@@ -279,7 +301,7 @@ class Frames(MediaLoader):
         return sorted([item for item in self.process_folder()])
 
 
-class Draw(object):
+class Draw():
     """ Draw Alignments on passed in images """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
@@ -337,7 +359,100 @@ class Draw(object):
             circle(image, (pos_x, pos_y), 1, (0, 255, 0), -1)
 
 
-class Extract(object):
+class Reformat():
+    """ Reformat Alignment file """
+    def __init__(self, alignments, arguments):
+        self.verbose = arguments.verbose
+        self.alignments = alignments
+        self.frames_dir = arguments.frames_dir
+        if self.alignments.src_format == "dfl":
+            self.frames = Frames(self.frames_dir,
+                                 self.verbose).items
+            self.faces = Faces(arguments.faces_dir,
+                               self.verbose)
+
+    def process(self):
+        """ Run reformat """
+        print("\n[REFORMAT ALIGNMENTS]")  # Tidy up cli output
+        if self.alignments.src_format == "dfl":
+            self.alignments.alignments = self.load_dfl()
+            self.alignments.file = os.path.join(self.frames_dir,
+                                                "alignments.json")
+        self.alignments.save_alignments()
+
+    def load_dfl(self):
+        """ Load alignments from DeepFaceLab and format for Faceswap """
+        alignments = dict()
+        frames = {item[0]: item[1]
+                  for item in self.frames.values()}
+        for face in self.faces.file_list_sorted:
+            if not self.validate_dfl(face, frames):
+                continue
+
+            fullpath = os.path.join(self.faces.folder, face[0] + face[1])
+            dfl = self.get_dfl_alignment(fullpath)
+
+            if not dfl:
+                continue
+
+            sourcefile = face[2] + frames[face[2]]
+            self.convert_dfl_alignment(dfl, sourcefile, alignments)
+        return alignments
+
+    def validate_dfl(self, face, frames):
+        """ Validate that current file is good for dfl extraction """
+        if face[1] != ".png":
+            if self.verbose:
+                print("{} is not a png. Skipping".format(face[0] + face[1]))
+            return False
+        if face[2] not in frames.keys():
+            if self.verbose:
+                print("{} does not have a matching source frame for {} in "
+                      "frames directory. Skipping".format(face[0] + face[1],
+                                                          face[2]))
+            return False
+        return True
+
+    @staticmethod
+    def get_dfl_alignment(filename):
+        """ Process the alignment of one face """
+        with open(filename, "rb") as dfl:
+            header = dfl.read(8)
+            if header != b"\x89PNG\r\n\x1a\n":
+                print("ERROR: No Valid PNG header: {}".format(filename))
+                return
+            while True:
+                chunk_start = dfl.tell()
+                chunk_hdr = dfl.read(8)
+                if not chunk_hdr:
+                    break
+                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
+                dfl.seek(chunk_start, os.SEEK_SET)
+                if chunk_name == b"fcWp":
+                    chunk = dfl.read(chunk_length + 12)
+                    return pickle.loads(chunk[8:-4])
+                else:
+                    dfl.seek(chunk_length+12, os.SEEK_CUR)
+            print("ERROR: Couldn't find DFL alignments: {}".format(filename))
+
+    @staticmethod
+    def convert_dfl_alignment(dfl_alignments, sourcefile, alignments):
+        """ Add DFL Alignments to alignments in Faceswap format """
+        if not alignments.get(sourcefile, None):
+            alignments[sourcefile] = list()
+
+        left, top, right, bottom = dfl_alignments["source_rect"]
+        alignment = {"r": 0,
+                     "x": left,
+                     "w": right - left,
+                     "y": top,
+                     "h": bottom - top,
+                     "landmarksXY": dfl_alignments["source_landmarks"]}
+
+        alignments[sourcefile].append(alignment)
+
+
+class Extract():
     """ Re-extract faces from source frames based on
         Alignment data """
     def __init__(self, alignments, arguments):
@@ -348,7 +463,7 @@ class Extract(object):
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.extractor = None
 
-    class DetectedFace(object):
+    class DetectedFace():
         """ Detected face and landmark information """
         def __init__(self, image, r, x, w, y, h, landmarksXY):
             self.image = image
@@ -376,7 +491,7 @@ class Extract(object):
         err = None
         if not self.faces_dir:
             err = "ERROR: Output faces folder not provided."
-        if os.path.isdir(self.faces_dir):
+        elif os.path.isdir(self.faces_dir):
             err = "ERROR: Folder already exists at {}".format(self.faces_dir)
         if err:
             print(err)
@@ -427,7 +542,7 @@ class Extract(object):
         return face_count
 
 
-class RemoveAlignments(object):
+class RemoveAlignments():
     """ Remove items from alignments file """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
@@ -524,7 +639,7 @@ class RemoveAlignments(object):
         return 1
 
 
-class Check(object):
+class Check():
     """ Frames and faces checking tasks """
     def __init__(self, alignments, arguments):
         self.alignments_data = alignments.count_per_frame
