@@ -54,7 +54,7 @@ class GPUMem():
 
         if self.verbose:
             if self.device == -1:
-                print("No GPU. Limiting RAM useage to "
+                print("No GPU. Limiting RAM usage to "
                       "{}MB".format(self.vram_free)) 
             print("GPU VRAM free:    {}".format(self.vram_free))
 
@@ -64,7 +64,7 @@ class GPUMem():
             return
         print("\n----- Initial GPU Stats -----")
         if self.device == -1:
-            print("No GPU. Limiting RAM useage to {}MB".format(self.vram_free))
+            print("No GPU. Limiting RAM usage to {}MB".format(self.vram_free))
         self.stats.print_info()
         print("GPU VRAM free:    {}".format(self.vram_free))
         print("-----------------------------\n")
