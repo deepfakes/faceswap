@@ -19,9 +19,11 @@ class GPUMem(object):
         self.device = self.set_device()
 
         if self.device == -1:
-            return
-
-        self.vram_total = self.stats.vram[self.device]
+            # Limit ram usage to 3072 for CPU
+            self.vram_total = 3072
+        else:
+            self.vram_total = self.stats.vram[self.device]
+        
         self.get_available_vram()
 
     def set_device(self):
@@ -43,8 +45,13 @@ class GPUMem(object):
 
     def get_available_vram(self):
         """ Recalculate the available vram """
-        free_mem = self.stats.get_free()
-        self.vram_free = free_mem[self.device]
+        if self.device == -1:
+            # Limit ram usage to 3072 for CPU
+            self.vram_free = 3072
+        else:        
+            free_mem = self.stats.get_free()
+            self.vram_free = free_mem[self.device]
+
         if self.verbose:
             print("GPU VRAM free:    {}".format(self.vram_free))
 
@@ -115,12 +122,8 @@ class GPUMem(object):
             gradient = 213 / 524288
             constant = 307
 
-        if self.device != -1:
-            free_mem = self.vram_free - buffer
-        else:
-            # Limit to 2GB if using CPU
-            free_mem = 2048
-
+        free_mem = self.vram_free - buffer
+        
         self.scale_to = int((free_mem - constant) / gradient)
 
         if self.scale_to < 4097:
