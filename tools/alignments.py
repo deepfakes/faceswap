@@ -364,10 +364,7 @@ class Reformat():
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
         self.alignments = alignments
-        self.frames_dir = arguments.frames_dir
         if self.alignments.src_format == "dfl":
-            self.frames = Frames(self.frames_dir,
-                                 self.verbose).items
             self.faces = Faces(arguments.faces_dir,
                                self.verbose)
 
@@ -376,17 +373,18 @@ class Reformat():
         print("\n[REFORMAT ALIGNMENTS]")  # Tidy up cli output
         if self.alignments.src_format == "dfl":
             self.alignments.alignments = self.load_dfl()
-            self.alignments.file = os.path.join(self.frames_dir,
+            self.alignments.file = os.path.join(self.faces.folder,
                                                 "alignments.json")
         self.alignments.save_alignments()
 
     def load_dfl(self):
         """ Load alignments from DeepFaceLab and format for Faceswap """
         alignments = dict()
-        frames = {item[0]: item[1]
-                  for item in self.frames.values()}
         for face in self.faces.file_list_sorted:
-            if not self.validate_dfl(face, frames):
+            if face[1] != ".png":
+                if self.verbose:
+                    print("{} is not a png. "
+                          "Skipping".format(face[0] + face[1]))
                 continue
 
             fullpath = os.path.join(self.faces.folder, face[0] + face[1])
@@ -395,23 +393,8 @@ class Reformat():
             if not dfl:
                 continue
 
-            sourcefile = face[2] + frames[face[2]]
-            self.convert_dfl_alignment(dfl, sourcefile, alignments)
+            self.convert_dfl_alignment(dfl, alignments)
         return alignments
-
-    def validate_dfl(self, face, frames):
-        """ Validate that current file is good for dfl extraction """
-        if face[1] != ".png":
-            if self.verbose:
-                print("{} is not a png. Skipping".format(face[0] + face[1]))
-            return False
-        if face[2] not in frames.keys():
-            if self.verbose:
-                print("{} does not have a matching source frame for {} in "
-                      "frames directory. Skipping".format(face[0] + face[1],
-                                                          face[2]))
-            return False
-        return True
 
     @staticmethod
     def get_dfl_alignment(filename):
@@ -420,7 +403,7 @@ class Reformat():
             header = dfl.read(8)
             if header != b"\x89PNG\r\n\x1a\n":
                 print("ERROR: No Valid PNG header: {}".format(filename))
-                return
+                return None
             while True:
                 chunk_start = dfl.tell()
                 chunk_hdr = dfl.read(8)
@@ -436,8 +419,9 @@ class Reformat():
             print("ERROR: Couldn't find DFL alignments: {}".format(filename))
 
     @staticmethod
-    def convert_dfl_alignment(dfl_alignments, sourcefile, alignments):
+    def convert_dfl_alignment(dfl_alignments, alignments):
         """ Add DFL Alignments to alignments in Faceswap format """
+        sourcefile = dfl_alignments["source_filename"]
         if not alignments.get(sourcefile, None):
             alignments[sourcefile] = list()
 
