@@ -14,6 +14,8 @@ class AlignmentsArgs(FaceSwapArgs):
         faces_dir = "\n\tMust Pass in a faces folder (-fc)."
         frames_or_faces_dir = ("\n\tMust Pass in either a frames folder \n\t"
                                "OR a faces folder (-fr or -fc).")
+        frames_and_faces_dir = ("\n\tMust Pass in a frames folder AND a\n\t"
+                                "faces folder (-fr and -fc).")
         output_opts = "\n\tUse the output option (-o) to process\n\tresults."
         argument_list = list()
         argument_list.append({"opts": ("-j", "--job"),
@@ -38,7 +40,7 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "data. This is a\n\tlot quicker than "
                                       "re-detecting faces. Can\n\toptionally "
                                       "use the align-eyes switch (-ae)." +
-                                      frames_dir + "\n"
+                                      frames_and_faces_dir + "\n"
                                       "'missing-alignments': Identify frames "
                                       "that do not\n\texist in the "
                                       "alignments file." + output_opts +
@@ -63,7 +65,11 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "'reformat': Save a copy of alignments "
                                       "file in a\n\tdifferent format. "
                                       "Specify a format with\n\tthe -fmt "
-                                      "option.\n"
+                                      "option.\n\tAlignments can be "
+                                      "converted from\n\tDeepFaceLab by "
+                                      "specifing:\n\t    -a dfl\n\t    -fr "
+                                      "<source frame folder>\n\t    -fc "
+                                      "<source faces folder>\n"
                                       "'remove': Remove deleted faces from "
                                       "an alignments\n\tfile. The original "
                                       "alignments file will be\n\tbacked up. "
