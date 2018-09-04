@@ -307,6 +307,7 @@ class Extract(object):
             scale_to = int(VRAM.scale_to ** 0.5)
 
             if self.verbose:
+                print(self.detector.compiled_for_cuda())
                 print("Initializing DLib for frame size {}x{}".format(
                     str(scale_to), str(scale_to)))
 

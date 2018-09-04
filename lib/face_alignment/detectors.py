@@ -49,6 +49,15 @@ class DLibDetector(Detector):
         self.detectors = list()
 
     @staticmethod
+    def compiled_for_cuda():
+        """ Return a message on DLIB Cuda Compilation status """
+        msg = "DLib IS "
+        if not dlib.DLIB_USE_CUDA:
+            msg += "NOT "
+        msg += "compiled to use CUDA"
+        return msg
+
+    @staticmethod
     def set_data_path():
         """ Load the face detector data """
         data_path = os.path.join(CACHE_PATH,
