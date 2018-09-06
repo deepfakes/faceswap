@@ -557,7 +557,7 @@ class RemoveAlignments():
     def faces_count_matches(self, item):
         """ Check the selected face exits """
         image_name, number_alignments = item[0], item[2]
-        number_faces = len(self.faces.items.get(image_name, None))
+        number_faces = len(self.faces.items.get(image_name, list()))
         return bool(number_alignments == 0
                     or number_alignments == number_faces)
 

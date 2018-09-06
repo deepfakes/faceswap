@@ -9,7 +9,7 @@ import sys
 from plugins.PluginLoader import PluginLoader
 
 
-class ScriptExecutor(object):
+class ScriptExecutor():
     """ Loads the relevant script modules and executes the script.
         This class is initialised in each of the argparsers for the relevant
         command, then execute script is called within their set_default
@@ -192,7 +192,7 @@ class SmartFormatter(argparse.HelpFormatter):
         return argparse.HelpFormatter._split_lines(self, text, width)
 
 
-class FaceSwapArgs(object):
+class FaceSwapArgs():
     """ Faceswap argument parser functions that are universal
         to all commands. Should be the parent function of all
         subsequent argparsers """
@@ -341,6 +341,20 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "pyramid. Should be a decimal number "
                                       "less than one. Default is 0.709 "
                                       "(MTCNN detector only)"})
+        argument_list.append({"opts": ("-dbf", "--dlib-buffer"),
+                              "type": int,
+                              "dest": "dlib_buffer",
+                              "default": 64,
+                              "help": "This should only be increased if you "
+                                      "are having issues extracting with "
+                                      "DLib-cnn. The calculation of RAM "
+                                      "required is approximate, so some RAM "
+                                      " is held back in reserve (64MB by "
+                                      "default). If this is not enough "
+                                      "increase this figure by providing an "
+                                      "integer representing the amount of "
+                                      "megabytes to reserve. (DLIB-CNN "
+                                      "Only)"})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
                               "type": float,
                               "dest": "ref_threshold",
@@ -432,8 +446,8 @@ class ExtractArgs(ExtractConvertArgs):
                               "type": int,
                               "default": None,
                               "help": "Automatically save the alignments file "
-                                      "after a set amount of frames. Will only "
-                                      "save at the end of extracting by "
+                                      "after a set amount of frames. Will "
+                                      "only save at the end of extracting by "
                                       "default. WARNING: Don't interrupt the "
                                       "script when writing the file because "
                                       "it might get corrupted."})

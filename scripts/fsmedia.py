@@ -19,7 +19,7 @@ from lib.utils import get_folder, get_image_paths, set_system_verbosity
 from plugins.PluginLoader import PluginLoader
 
 
-class Utils(object):
+class Utils():
     """ Holds utility functions that are required by more than one media
         object """
 
@@ -82,7 +82,7 @@ class Utils(object):
         return images_found, num_faces_detected
 
 
-class Images(object):
+class Images():
     """ Holds the full frames/images """
     def __init__(self, arguments):
         self.args = arguments
@@ -165,7 +165,7 @@ class Images(object):
         return image
 
 
-class Faces(object):
+class Faces():
     """ Holds the faces """
     def __init__(self, arguments):
         self.args = arguments
@@ -227,8 +227,12 @@ class Faces(object):
     def get_faces(self, image, rotation=0):
         """ Extract the faces from an image """
         faces_count = 0
-        faces = detect_faces(image, self.args.detector, self.args.verbose,
-                             rotation=rotation, mtcnn_kwargs=self.mtcnn_kwargs)
+        faces = detect_faces(image,
+                             self.args.detector,
+                             self.args.verbose,
+                             rotation=rotation,
+                             dlib_buffer=self.args.dlib_buffer,
+                             mtcnn_kwargs=self.mtcnn_kwargs)
 
         for face in faces:
             if self.filter and not self.filter.check(face):
@@ -305,7 +309,7 @@ class Faces(object):
         return blurry_file
 
 
-class Alignments(object):
+class Alignments():
     """ Holds processes pertaining to the alignments file """
     def __init__(self, arguments):
         self.args = arguments
