@@ -2,7 +2,6 @@
 """ Tools for manipulating the alignments seralized file """
 
 # TODO merge alignments
-# TODO Remove whole frames from alignments file
 import os
 import pickle
 import struct
@@ -44,7 +43,7 @@ class Alignments():
                               "multi-faces", "leftover-faces",
                               "no-faces"):
             job = Check(self.alignments, self.args)
-        elif self.args.job == "remove":
+        elif self.args.job in ("remove-faces", "remove-frames"):
             job = RemoveAlignments(self.alignments, self.args)
         elif self.args.job == "reformat":
             job = Reformat(self.alignments, self.args)
@@ -531,33 +530,69 @@ class RemoveAlignments():
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
         self.alignments = alignments
-        self.faces = Faces(arguments.faces_dir, self.verbose)
+        self.type = arguments.job.replace("remove-", "")
+        self.items = self.get_items(arguments)
         self.removed = set()
+
+    def get_items(self, arguments):
+        """ Set the correct items to process """
+        retval = None
+        if self.type == "frames":
+            retval = list(Frames(arguments.frames_dir,
+                                 self.verbose).items.keys())
+        elif self.type == "faces":
+            retval = Faces(arguments.faces_dir, self.verbose)
+        return retval
 
     def process(self):
         """ run removal """
         print("\n[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
         del_count = 0
-        for item in tqdm(self.alignments.get_alignments_one_image(),
+        iterator, executor = self.processor()
+        for item in tqdm(iterator() if self.type == "faces" else iterator,
                          desc="Processing alignments file",
                          total=self.alignments.count):
-            if self.faces_count_matches(item):
-                continue
-            del_count += self.remove_alignment(item)
+            del_count += executor(item)
 
         if del_count == 0:
             print("No changes made to alignments file. Exiting")
             return
 
-        print("{} alignments(s) were removed from "
+        print("{} alignment(s) were removed from "
               "alignments file".format(del_count))
         self.alignments.save_alignments()
-        self.rename_faces()
+
+        if self.type == "faces":
+            self.rename_faces()
+
+    def processor(self):
+        """ Return the correct iterator and executor """
+        retval = list()
+        if self.type == "frames":
+            retval = (list(self.alignments.alignments.keys()),
+                      self.remove_frames)
+        if self.type == "faces":
+            retval = (self.alignments.get_alignments_one_image,
+                      self.remove_faces)
+        return retval
+
+    def remove_frames(self, item):
+        """ Process to remove frames from an alignments file """
+        if item in self.items:
+            return 0
+        del self.alignments.alignments[item]
+        return 1
+
+    def remove_faces(self, item):
+        """ Process to remove faces from an alignments file """
+        if self.faces_count_matches(item):
+            return 0
+        return self.remove_alignment(item)
 
     def faces_count_matches(self, item):
         """ Check the selected face exits """
         image_name, number_alignments = item[0], item[2]
-        number_faces = len(self.faces.items.get(image_name, list()))
+        number_faces = len(self.items.items.get(image_name, list()))
         return bool(number_alignments == 0
                     or number_alignments == number_faces)
 
@@ -567,7 +602,7 @@ class RemoveAlignments():
         image_name, alignments, number_alignments = item
         processor = self.alignments.get_one_alignment_index_reverse
         for idx in processor(alignments, number_alignments):
-            face_indexes = self.faces.items.get(image_name, [-1])
+            face_indexes = self.items.items.get(image_name, [-1])
             if idx not in face_indexes:
                 del alignments[idx]
                 self.removed.add(image_name)
@@ -583,9 +618,9 @@ class RemoveAlignments():
         current_image = ""
         current_index = 0
         rename_count = 0
-        for item in tqdm(self.faces.file_list_sorted,
+        for item in tqdm(self.items.file_list_sorted,
                          desc="Renaming aligned faces",
-                         total=self.faces.count):
+                         total=self.items.count):
             filename, extension, original_file, index = item
             if original_file not in self.removed:
                 continue
@@ -615,8 +650,8 @@ class RemoveAlignments():
         """ Rename the selected file """
         old_file = filename + extension
         new_file = "{}_{}{}".format(image, str(index), extension)
-        src = os.path.join(self.faces.folder, old_file)
-        dst = os.path.join(self.faces.folder, new_file)
+        src = os.path.join(self.items.folder, old_file)
+        dst = os.path.join(self.items.folder, new_file)
         os.rename(src, dst)
         if self.verbose:
             print("Renamed {} to {}".format(src, dst))
