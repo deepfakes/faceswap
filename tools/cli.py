@@ -12,70 +12,64 @@ class AlignmentsArgs(FaceSwapArgs):
     def get_argument_list(self):
         frames_dir = "\n\tMust Pass in a frames folder (-fr)."
         faces_dir = "\n\tMust Pass in a faces folder (-fc)."
-        frames_or_faces_dir = ("\n\tMust Pass in either a frames folder \n\t"
-                               "OR a faces folder (-fr or -fc).")
-        frames_and_faces_dir = ("\n\tMust Pass in a frames folder AND a\n\t"
-                                "faces folder (-fr and -fc).")
+        frames_or_faces_dir = ("\n\tMust Pass in either a frames folder"
+                               "\n\tOR a faces folder (-fr or -fc).")
+        frames_and_faces_dir = ("\n\tMust Pass in a frames folder AND a"
+                                "\n\tfaces folder (-fr and -fc).")
         output_opts = "\n\tUse the output option (-o) to process\n\tresults."
         argument_list = list()
-        argument_list.append({"opts": ("-j", "--job"),
-                              "type": str,
-                              "choices": ("draw", "extract",
-                                          "missing-alignments",
-                                          "missing-frames", "leftover-faces",
-                                          "multi-faces", "no-faces",
-                                          "reformat", "remove"),
-                              "required": True,
-                              "help": "R|Choose which action you want to "
-                                      "perform.\nNB: All actions require an "
-                                      "alignments file (-a) to\nbe passed "
-                                      "in.\n"
-                                      "'draw': Draw landmarks on frames in "
-                                      "the selected\n\tfolder. A subfolder "
-                                      "will be created within\n\tthe frames "
-                                      "folder to hold the output." +
-                                      frames_dir + "\n"
-                                      "'extract': Re-extract faces from the "
-                                      "source frames\n\tbased on alignment "
-                                      "data. This is a\n\tlot quicker than "
-                                      "re-detecting faces. Can\n\toptionally "
-                                      "use the align-eyes switch (-ae)." +
-                                      frames_and_faces_dir + "\n"
-                                      "'missing-alignments': Identify frames "
-                                      "that do not\n\texist in the "
-                                      "alignments file." + output_opts +
-                                      frames_dir + "\n"
-                                      "'missing-frames': Identify frames in "
-                                      "the alignments\n\tfile that do not "
-                                      "appear within the frames\n\t"
-                                      "folder." + output_opts +
-                                      frames_dir + "\n" +
-                                      "'leftover-faces': Identify faces in "
-                                      "the faces folder\n\tthat do not exist "
-                                      "in the alignments file." + output_opts +
-                                      faces_dir + "\n"
-                                      "'multi-faces': Identify where multiple "
-                                      "faces exist\n\twithin the alignments "
-                                      "file." + output_opts +
-                                      frames_or_faces_dir + "\n"
-                                      "'no-faces': Identify frames that exist "
-                                      "within the\n\talignment file but no "
-                                      "faces were detected." + output_opts +
-                                      frames_dir + "\n"
-                                      "'reformat': Save a copy of alignments "
-                                      "file in a\n\tdifferent format. "
-                                      "Specify a format with\n\tthe -fmt "
-                                      "option.\n\tAlignments can be "
-                                      "converted from\n\tDeepFaceLab by "
-                                      "specifing:\n\t    -a dfl\n\t    -fc "
-                                      "<source faces folder>\n"
-                                      "'remove': Remove deleted faces from "
-                                      "an alignments\n\tfile. The original "
-                                      "alignments file will be\n\tbacked up. "
-                                      "A different file format for the\n\t"
-                                      "alignments file can optionally be\n\t"
-                                      "specified (-fmt).\n\tMust pass in a "
-                                      "faces folder (-fc).\n"})
+        argument_list.append({
+                "opts": ("-j", "--job"),
+                "type": str,
+                "choices": ("draw", "extract",
+                            "missing-alignments", "missing-frames",
+                            "leftover-faces", "multi-faces", "no-faces",
+                            "reformat", "remove-faces", "remove-frames"),
+                "required": True,
+                "help": "R|Choose which action you want to perform.\n"
+                        "NB: All actions require an alignments file (-a) to"
+                        "\nbe passed in."
+                        "\n'draw': Draw landmarks on frames in the selected"
+                        "\n\tfolder. A subfolder will be created within"
+                        "\n\tthe frames folder to hold the output." +
+                        frames_dir +
+                        "\n'extract': Re-extract faces from the source frames"
+                        "\n\tbased on alignment data. This is a"
+                        "\n\tlot quicker than re-detecting faces. Can"
+                        "\n\toptionally use the align-eyes switch (-ae)." +
+                        frames_and_faces_dir +
+                        "\n'missing-alignments': Identify frames that do not"
+                        "\n\texist in the alignments file." + output_opts +
+                        frames_dir +
+                        "\n'missing-frames': Identify frames in the alignments"
+                        "\n\tfile that do not appear within the frames"
+                        "\n\tfolder." + output_opts + frames_dir +
+                        "\n'leftover-faces': Identify faces in the faces"
+                        "\n\tfolder that do not exist in the alignments file."
+                        + output_opts + faces_dir +
+                        "\n'multi-faces': Identify where multiple faces exist"
+                        "\n\twithin the alignments file." + output_opts +
+                        frames_or_faces_dir +
+                        "\n'no-faces': Identify frames that exist within the"
+                        "\n\talignment file but no faces were detected." +
+                        output_opts + frames_dir +
+                        "\n'reformat': Save a copy of alignments file in a"
+                        "\n\tdifferent format. Specify a format with"
+                        "\n\tthe -fmt option."
+                        "\n\tAlignments can be converted from"
+                        "\n\tDeepFaceLab by specifing:"
+                        "\n\t    -a dfl"
+                        "\n\t    -fc <source faces folder>"
+                        "\n'remove-faces': Remove deleted faces from an"
+                        "\n\talignments file. The original alignments file"
+                        "\n\t will be backed up. A different file format or"
+                        "\n\tthe alignments file can optionally be specified"
+                        "\n\t(-fmt)." + faces_dir +
+                        "\n'remove-frames': Remove deleted frames from an"
+                        "\n\talignments file. The original alignments file"
+                        "\n\twill be backed up. A different file format for"
+                        "\n\tthe alignments file can optionally be specified"
+                        "\n\t(-fmt)." + frames_dir})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
                               "dest": "alignments_file",
@@ -97,20 +91,19 @@ class AlignmentsArgs(FaceSwapArgs):
                               "choices": ("json", "pickle", "yaml"),
                               "help": "The file format to save the alignment "
                                       "data in. Defaults to same as source."})
-        argument_list.append({"opts": ("-o", "--output"),
-                              "type": str,
-                              "choices": ("console", "file", "move"),
-                              "default": "console",
-                              "help": "R|How to output discovered items "
-                                      "('faces'\nand 'frames' only):\n"
-                                      "'console': Print the list of frames to "
-                                      "the screen.\n\t(DEFAULT)\n"
-                                      "'file': Output the list of frames to a "
-                                      "text file\n\t(stored within the source "
-                                      "directory).\n"
-                                      "'move': Move the discovered items to a "
-                                      "sub-folder\n\twithin the source "
-                                      "directory."})
+        argument_list.append({
+                "opts": ("-o", "--output"),
+                "type": str,
+                "choices": ("console", "file", "move"),
+                "default": "console",
+                "help": "R|How to output discovered items ('faces' and"
+                        "\n'frames' only):"
+                        "\n'console': Print the list of frames to the screen."
+                        "\n\t(DEFAULT)"
+                        "\n'file': Output the list of frames to a text file"
+                        "\n\t(stored within the source directory)."
+                        "\n'move': Move the discovered items to a sub-folder"
+                        "\n\twithin the source directory."})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
