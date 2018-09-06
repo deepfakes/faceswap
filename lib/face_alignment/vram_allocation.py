@@ -129,7 +129,7 @@ class GPUMem():
 
         free_mem = self.vram_free - self.dlib_buffer  # overhead buffer
         if self.verbose:
-            print("Allocating for DLib: {}".format(free_mem))
+            print("Allocating for Detector: {}".format(free_mem))
 
         self.scale_to = int((free_mem - constant) / gradient)
 
