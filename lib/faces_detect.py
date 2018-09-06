@@ -4,10 +4,12 @@
 from lib import face_alignment
 
 
-def detect_faces(frame, detector, verbose, rotation=0, mtcnn_kwargs=None):
+def detect_faces(frame, detector, verbose, rotation=0,
+                 dlib_buffer=64, mtcnn_kwargs=None):
     """ Detect faces and draw landmarks in an image """
     face_detect = face_alignment.Extract(frame,
                                          detector,
+                                         dlib_buffer,
                                          mtcnn_kwargs,
                                          verbose)
     for face in face_detect.landmarks:
@@ -24,7 +26,7 @@ def detect_faces(frame, detector, verbose, rotation=0, mtcnn_kwargs=None):
                            landmarksXY=landmarks)
 
 
-class DetectedFace(object):
+class DetectedFace():
     """ Detected face and landmark information """
     def __init__(self, image=None, r=0, x=None,
                  w=None, y=None, h=None, landmarksXY=None):

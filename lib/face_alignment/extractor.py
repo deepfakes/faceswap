@@ -17,7 +17,7 @@ VRAM = GPUMem()
 KERAS_MODEL = KerasModel()
 
 
-class Frame(object):
+class Frame():
     """ The current frame for processing """
 
     def __init__(self, detector, input_image,
@@ -87,7 +87,7 @@ class Frame(object):
         self.input_scale = max_length_scale / max_length_image
 
 
-class Align(object):
+class Align():
     """ Perform transformation to align and get landmarks """
     def __init__(self, image, detected_faces, keras_model, verbose):
         self.verbose = verbose
@@ -235,17 +235,18 @@ class Align(object):
         return [(int(pt[0]), int(pt[1])) for pt in pts_img]
 
 
-class Extract(object):
+class Extract():
     """ Extracts faces from an image, crops and
         calculates landmarks """
 
-    def __init__(self, input_image_bgr, detector, mtcnn_kwargs=None,
-                 verbose=False, input_is_predetected_face=False):
+    def __init__(self, input_image_bgr, detector, dlib_buffer=64,
+                 mtcnn_kwargs=None, verbose=False,
+                 input_is_predetected_face=False):
         self.verbose = verbose
         self.keras = KERAS_MODEL
         self.detector = None
 
-        self.initialize(detector, mtcnn_kwargs)
+        self.initialize(detector, mtcnn_kwargs, dlib_buffer)
 
         self.frame = Frame(detector=detector,
                            input_image=input_image_bgr,
@@ -260,10 +261,10 @@ class Extract(object):
                                keras_model=self.keras,
                                verbose=self.verbose).landmarks
 
-    def initialize(self, detector, mtcnn_kwargs):
+    def initialize(self, detector, mtcnn_kwargs, dlib_buffer):
         """ initialize Keras and Dlib """
         if not VRAM.initialized:
-            self.initialize_vram(detector)
+            self.initialize_vram(detector, dlib_buffer)
 
         if not self.keras.initialized:
             self.initialize_keras(detector)
@@ -278,10 +279,12 @@ class Extract(object):
         if not self.detector.initialized:
             self.initialize_detector(detector, mtcnn_kwargs)
 
-    def initialize_vram(self, detector):
+    def initialize_vram(self, detector, dlib_buffer):
         """ Initialize vram based on detector """
         VRAM.verbose = self.verbose
         VRAM.detector = detector
+        if dlib_buffer > VRAM.dlib_buffer:
+            VRAM.dlib_buffer = dlib_buffer
         VRAM.initialized = True
         VRAM.output_stats()
 

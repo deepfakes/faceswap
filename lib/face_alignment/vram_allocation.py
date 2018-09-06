@@ -12,6 +12,7 @@ class GPUMem():
         self.initialized = False
         self.verbose = False
         self.stats = GPUStats()
+        self.dlib_buffer = 64
         self.vram_free = None
         self.vram_total = None
         self.scale_to = None
@@ -55,7 +56,7 @@ class GPUMem():
         if self.verbose:
             if self.device == -1:
                 print("No GPU. Limiting RAM usage to "
-                      "{}MB".format(self.vram_free)) 
+                      "{}MB".format(self.vram_free))
             print("GPU VRAM free:    {}".format(self.vram_free))
 
     def output_stats(self):
@@ -119,7 +120,6 @@ class GPUMem():
         detector = "dlib" if detector in ("dlib-cnn",
                                           "dlib-hog",
                                           "dlib-all") else detector
-        buffer = 64  # 64MB overhead buffer
         gradient = 3483.2 / 9651200  # MTCNN
         constant = 1.007533156  # MTCNN
         if detector == "dlib":
@@ -127,7 +127,9 @@ class GPUMem():
             gradient = 213 / 524288
             constant = 307
 
-        free_mem = self.vram_free - buffer
+        free_mem = self.vram_free - self.dlib_buffer  # overhead buffer
+        if self.verbose:
+            print("Allocating for DLib: {}".format(free_mem))
 
         self.scale_to = int((free_mem - constant) / gradient)
 
