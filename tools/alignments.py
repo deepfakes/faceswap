@@ -7,10 +7,18 @@ import pickle
 import struct
 from datetime import datetime
 
-from cv2 import circle, imread, imwrite, rectangle
+from cv2 import (circle, rectangle, polylines,
+                 invertAffineTransform, transform,
+                 imread, imwrite, imshow, waitKey,
+                 namedWindow, getWindowProperty, WND_PROP_VISIBLE,
+                 destroyWindow, destroyAllWindows)
+
+import numpy as np
+
 from tqdm import tqdm
 
 from lib import Serializer
+from lib.align_eyes import FACIAL_LANDMARKS_IDXS
 from lib.utils import _image_extensions
 from plugins.PluginLoader import PluginLoader
 
@@ -35,19 +43,15 @@ class Alignments():
 
     def process(self):
         """ Main processing function of the Align tool """
-        if self.args.job == "draw":
-            job = Draw(self.alignments, self.args)
-        elif self.args.job == "extract":
-            job = Extract(self.alignments, self.args)
+        if self.args.job.startswith("remove_"):
+            job = RemoveAlignments
         elif self.args.job in("missing-alignments", "missing-frames",
                               "multi-faces", "leftover-faces",
                               "no-faces"):
-            job = Check(self.alignments, self.args)
-        elif self.args.job in ("remove-faces", "remove-frames"):
-            job = RemoveAlignments(self.alignments, self.args)
-        elif self.args.job == "reformat":
-            job = Reformat(self.alignments, self.args)
-
+            job = Check
+        else:
+            job = globals()[self.args.job.title()]
+        job = job(self.alignments, self.args)
         job.process()
 
 
@@ -358,6 +362,258 @@ class Draw():
             circle(image, (pos_x, pos_y), 1, (0, 255, 0), -1)
 
 
+class Manual():
+    """ Manually adjust or create landmarks data """
+    def __init__(self, alignments, arguments):
+        self.verbose = arguments.verbose
+        self.alignments = alignments
+        self.faces = self.set_output(arguments.faces_dir)
+        self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.align_eyes = arguments.align_eyes
+        self.extractor = PluginLoader.get_extractor("Align")()
+        self.state = {"bounding_box": False,
+                      "bounding_box_color": 3,
+                      "bounding_box_size": 1,
+                      "extract_box": False,
+                      "extract_box_color": 4,
+                      "extract_box_size": 1,
+                      "landmarks": False,
+                      "landmarks_color": 2,
+                      "landmarks_size": 1,
+                      "landmarks_mesh": False,
+                      "landmarks_mesh_color": 1,
+                      "landmarks_mesh_size": 1,
+                      "image": True}
+        self.colors = {1: (255, 0, 0),
+                       2: (0, 255, 0),
+                       3: (0, 0, 255),
+                       4: (255, 255, 0),
+                       5: (255, 0, 255),
+                       6: (0, 255, 255)}
+
+    def set_output(self, faces_folder):
+        """ Set the output to be an existing or new folder """
+        if not os.path.isdir(faces_folder):
+            print("Creating output folder at {}".format(faces_folder))
+            os.makedirs(faces_folder)
+        return Faces(faces_folder, self.verbose)
+
+    def process(self):
+        """ Process manual extraction """
+        print("\n============ NAVIGATION ============\n"
+              "  - 'Z' and 'A': Cycle through frames\n"
+              "  - 'ESC': Quit")
+        print("\n============= DISPLAY =============\n"
+              "  - 'B': Toggle bounding box\n"
+              "  - 'E': Toggle extract box\n"
+              "  - 'L': Toggle landmarks\n"
+              "  - 'M': Toggle landmarks mesh\n"
+              "  - 'I': Toggle Image\n\n"
+              "  - '1': Cycle bounding box color\n"
+              "  - '2': Cycle extract box color\n"
+              "  - '3': Cycle landmarks color\n"
+              "  - '4': Cycle landmarks mesh color\n\n"
+              "  - '5': Cycle bounding box thickness\n"
+              "  - '6': Cycle extract box thicness\n"
+              "  - '7': Cycle landmarks point size\n"
+              "  - '8': Cycle landmarks mesh thickness\n\n")
+        self.display_frames()
+        pass
+
+    def toggle_state(self, item):
+        """ Toggle state of requested item """
+        self.state[item] = not self.state[item]
+
+    def iterate_state(self, item):
+        """ Cycle through options (6 possible) """
+        max_val = 6 if item.endswith("color") else 3
+        current_val = self.state[item]
+        new_val = current_val + 1 if current_val != max_val else 1
+        self.state[item] = new_val
+
+    def frame_selector(self, idx):
+        """ Return frame at given index """
+        frame = self.frames.file_list_sorted[idx]
+        fullpath = os.path.join(self.frames.folder, frame)
+        return frame, fullpath
+
+    def get_frame(self, idx, matrices):
+        """ Compile the frame """
+        frame, fullpath = self.frame_selector(idx)
+        alignments = self.alignments.alignments.get(frame, list())
+        img = imread(fullpath)
+        if not self.state["image"]:
+            img = self.black_image(img)
+        if self.state["bounding_box"]:
+            self.draw_bounding_box(img, alignments, matrices)
+        if self.state["extract_box"]:
+            self.draw_extract_box(img, matrices)
+        if self.state["landmarks"]:
+            self.draw_landmarks(img, alignments)
+        if self.state["landmarks_mesh"]:
+            self.draw_landmarks_mesh(img, alignments)
+        return frame, img, alignments
+
+    @staticmethod
+    def black_image(image):
+        """ Return black image to correct dimensions """
+        height, width = image.shape[:2]
+        image = np.zeros((height, width, 3), np.uint8)
+        return image
+
+    def draw_bounding_box(self, image, alignments, matrices):
+        """ Draw the bounding box around faces """
+        color = self.colors[self.state["bounding_box_color"]]
+        thickness = self.state["bounding_box_size"]
+        for alignment in alignments:
+            top_left = (alignment["x"], alignment["y"])
+            bottom_right = (alignment["x"] + alignment["w"],
+                            alignment["y"] + alignment["h"])
+            rectangle(image, top_left, bottom_right, color, thickness)
+
+    def draw_extract_box(self, image, matrices):
+        """ Draw the extracted face box """
+        if not matrices:
+            return
+        # Standard Faceswap size and padding
+        size = 256
+        padding = 48
+        points = np.array([[0, 0], [0, size - 1],
+                           [size - 1, size - 1], [size - 1, 0]],
+                          np.int32)
+        points = points.reshape((-1, 1, 2))
+        color = self.colors[self.state["extract_box_color"]]
+        thickness = self.state["extract_box_size"]
+
+        for matrix in matrices:
+            matrix = matrix * (size - 2 * padding)
+            matrix[:, 2] += padding
+            matrix = invertAffineTransform(matrix)
+            new_points = [transform(points, matrix)]
+            polylines(image, new_points, True, color, thickness)
+
+    def draw_landmarks(self, image, alignments):
+        """ Draw the facial landmarks """
+        color = self.colors[self.state["landmarks_color"]]
+        radius = self.state["landmarks_size"]
+
+        for alignment in alignments:
+            landmarks = alignment["landmarksXY"]
+            for (pos_x, pos_y) in landmarks:
+                circle(image, (pos_x, pos_y), radius, color, -1)
+
+    def draw_landmarks_mesh(self, image, alignments):
+        """ Draw the facial landmarks """
+        color = self.colors[self.state["landmarks_mesh_color"]]
+        thickness = self.state["landmarks_mesh_size"]
+
+        for alignment in alignments:
+            landmarks = alignment["landmarksXY"]
+            for key, val in FACIAL_LANDMARKS_IDXS.items():
+                points = np.array([landmarks[val[0]:val[1]]], np.int32)
+                if key in ("right_eye", "left_eye", "mouth"):
+                    fill_poly = True
+                else:
+                    fill_poly = False
+                polylines(image, points, fill_poly, color, thickness)
+
+    def display_frames(self):
+        """ Iterate through frames """
+        idx = 0
+        matrices = list()
+        max_idx = self.frames.count - 1
+        frame, img, alignments = self.get_frame(idx, matrices)
+        face_windows = list()
+
+        namedWindow("Frame")
+
+        while True:
+            if getWindowProperty('Frame', WND_PROP_VISIBLE) < 1:
+                break
+            face_windows, matrices = self.display_faces(img,
+                                                        frame,
+                                                        alignments,
+                                                        face_windows)
+            imshow("Frames", img)
+            key = waitKey(100)
+            if key == 27:
+                break
+            if key in (ord("z"), ord("Z")):
+                idx -= 1 if idx != 0 else 0
+            if key in (ord("x"), ord("X")):
+                idx += 1 if idx != max_idx else 0
+            if key in (ord("b"), ord("B")):
+                self.toggle_state("bounding_box")
+            if key in (ord("e"), ord("E")):
+                self.toggle_state("extract_box")
+            if key in (ord("l"), ord("L")):
+                self.toggle_state("landmarks")
+            if key in (ord("m"), ord("M")):
+                self.toggle_state("landmarks_mesh")
+            if key in (ord("i"), ord("I")):
+                self.toggle_state("image")
+            if key == ord("1"):
+                self.iterate_state("bounding_box_color")
+            if key == ord("2"):
+                self.iterate_state("extract_box_color")
+            if key == ord("3"):
+                self.iterate_state("landmarks_color")
+            if key == ord("4"):
+                self.iterate_state("landmarks_mesh_color")
+            if key == ord("5"):
+                self.iterate_state("bounding_box_size")
+            if key == ord("6"):
+                self.iterate_state("extract_box_size")
+            if key == ord("7"):
+                self.iterate_state("landmarks_size")
+            if key == ord("8"):
+                self.iterate_state("landmarks_mesh_size")
+
+            frame, img, alignments = self.get_frame(idx, matrices)
+
+        destroyAllWindows()
+
+    def display_faces(self, image, frame, frame_alignments, prev_windows):
+        """ Display associated face """
+        windows = list()
+        matrices = list()
+
+        for idx, alignment in enumerate(frame_alignments):
+            window_name = "Faces_{}".format(idx)
+            windows.append(window_name)
+            namedWindow(window_name)
+
+            face = DetectedFace(image,
+                                alignment["r"],
+                                alignment["x"],
+                                alignment["w"],
+                                alignment["y"],
+                                alignment["h"],
+                                alignment["landmarksXY"])
+
+            resized_face, f_align = self.extractor.extract(image,
+                                                           face,
+                                                           256,
+                                                           self.align_eyes)
+            matrices.append(f_align)
+            imshow(window_name, resized_face)
+
+        self.cleanup_windows(prev_windows, windows)
+        return windows, matrices
+
+    @staticmethod
+    def cleanup_windows(prev_windows, windows):
+        """ Remove any Face windows which are no longer required """
+        displayed = len(prev_windows)
+        display = len(windows)
+        while True:
+            if displayed <= display:
+                break
+            displayed -= 1
+            window = prev_windows[displayed]
+            destroyWindow(window)
+
+
 class Reformat():
     """ Reformat Alignment file """
     def __init__(self, alignments, arguments):
@@ -435,6 +691,22 @@ class Reformat():
         alignments[sourcefile].append(alignment)
 
 
+class DetectedFace():
+    """ Detected face and landmark information """
+    def __init__(self, image, r, x, w, y, h, landmarksXY):
+        self.image = image
+        self.r = r
+        self.x = x
+        self.w = w
+        self.y = y
+        self.h = h
+        self.landmarksXY = landmarksXY
+
+    def landmarks_as_xy(self):
+        """ Landmarks as XY """
+        return self.landmarksXY
+
+
 class Extract():
     """ Re-extract faces from source frames based on
         Alignment data """
@@ -445,21 +717,6 @@ class Extract():
         self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.extractor = None
-
-    class DetectedFace():
-        """ Detected face and landmark information """
-        def __init__(self, image, r, x, w, y, h, landmarksXY):
-            self.image = image
-            self.r = r
-            self.x = x
-            self.w = w
-            self.y = y
-            self.h = h
-            self.landmarksXY = landmarksXY
-
-        def landmarks_as_xy(self):
-            """ Landmarks as XY """
-            return self.landmarksXY
 
     def process(self):
         """ Run extraction """
@@ -508,13 +765,13 @@ class Extract():
         image = self.frames.load_image(frame)
         name, extension = frame_info
         for idx, alignment in enumerate(alignments):
-            face = self.DetectedFace(image,
-                                     alignment["r"],
-                                     alignment["x"],
-                                     alignment["w"],
-                                     alignment["y"],
-                                     alignment["h"],
-                                     alignment["landmarksXY"])
+            face = DetectedFace(image,
+                                alignment["r"],
+                                alignment["x"],
+                                alignment["w"],
+                                alignment["y"],
+                                alignment["h"],
+                                alignment["landmarksXY"])
             resized_face, _ = self.extractor.extract(image,
                                                      face,
                                                      256,
