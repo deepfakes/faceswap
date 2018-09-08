@@ -2,8 +2,10 @@
 """ Tools for manipulating the alignments seralized file """
 
 # TODO merge alignments
+# TODO Check rotate works
 from .lib_alignments import (AlignmentData, Check, Draw, Extract, Manual,
                              Reformat, RemoveAlignments)
+
 
 class Alignments():
     """ Perform tasks relating to alignments file """

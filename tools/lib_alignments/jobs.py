@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments seralized file """
 
-# TODO merge alignments
 import os
 import pickle
 import struct
 from datetime import datetime
-from cv2 import (circle, rectangle, polylines,
-                 invertAffineTransform, transform,
-                 imread, imshow, waitKey,
-                 namedWindow, getWindowProperty, WND_PROP_VISIBLE,
-                 destroyWindow, destroyAllWindows)
+import cv2
 
 import numpy as np
 from tqdm import tqdm
@@ -246,13 +241,13 @@ class Draw():
         top_left = (alignment["x"], alignment["y"])
         bottom_right = (alignment["x"] + alignment["w"],
                         alignment["y"] + alignment["h"])
-        rectangle(image, top_left, bottom_right, (0, 0, 255), 1)
+        cv2.rectangle(image, top_left, bottom_right, (0, 0, 255), 1)
 
     @staticmethod
     def draw_landmarks(image, landmarks):
         """ Draw the facial landmarks """
         for (pos_x, pos_y) in landmarks:
-            circle(image, (pos_x, pos_y), 1, (0, 255, 0), -1)
+            cv2.circle(image, (pos_x, pos_y), 1, (0, 255, 0), -1)
 
 
 class Extract():
@@ -339,19 +334,8 @@ class Manual():
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.align_eyes = arguments.align_eyes
         self.extractor = PluginLoader.get_extractor("Align")()
-        self.state = {"bounding_box": False,
-                      "bounding_box_color": 3,
-                      "bounding_box_size": 1,
-                      "extract_box": False,
-                      "extract_box_color": 4,
-                      "extract_box_size": 1,
-                      "landmarks": False,
-                      "landmarks_color": 2,
-                      "landmarks_size": 1,
-                      "landmarks_mesh": False,
-                      "landmarks_mesh_color": 1,
-                      "landmarks_mesh_size": 1,
-                      "image": True}
+        self.state = self.set_state()
+        self.controls = self.set_controls()
         self.colors = {1: (255, 0, 0),
                        2: (0, 255, 0),
                        3: (0, 0, 255),
@@ -366,37 +350,132 @@ class Manual():
             os.makedirs(faces_folder)
         return Faces(faces_folder, self.verbose)
 
+    def set_state(self):
+        """ Set the initial display state """
+        state = {"bounding_box": dict(),
+                 "extract_box": dict(),
+                 "landmarks": dict(),
+                 "landmarks_mesh": dict(),
+                 "image": dict(),
+                 "select": None}
+
+        color = 1
+        for key in sorted(state.keys()):
+            if key == "select":
+                continue
+            state[key]["display"] = bool(key == "image")
+            if key == "image":
+                continue
+            state[key]["size"] = 1
+            state[key]["color"] = color
+            color = color + 1 if color != 6 else 1
+
+        return state
+
+    def set_controls(self):
+        """ Set keyboard controls, destination and help text """
+        controls = {ord("z"): {"action": "prev",
+                               "args": (-1, "navigation"),
+                               "help": "Previous Frame"},
+                    ord("x"): {"action": "next",
+                               "args": (1, "navigation"),
+                               "help": "Next Frame"},
+                    27: {"action": "quit",
+                         "args": (None, "navigation"),
+                         "help": "Exit"},
+                    ord("y"): {"action": self.toggle_state,
+                               "args": ("image", "display"),
+                               "help": ("Toggle Image")},
+                    ord("u"): {"action": self.toggle_state,
+                               "args": ("bounding_box", "display"),
+                               "help": ("Toggle Bounding Box")},
+                    ord("i"): {"action": self.toggle_state,
+                               "args": ("extract_box", "display"),
+                               "help": ("Toggle Extract Box")},
+                    ord("o"): {"action": self.toggle_state,
+                               "args": ("landmarks", "display"),
+                               "help": ("Toggle Landmarks")},
+                    ord("p"): {"action": self.toggle_state,
+                               "args": ("landmarks_mesh", "display"),
+                               "help": ("Toggle Landmarks Mesh")},
+                    ord("h"): {"action": self.iterate_state,
+                               "args": ("bounding_box", "color"),
+                               "help": ("Cycle Bounding Box Color")},
+                    ord("j"): {"action": self.iterate_state,
+                               "args": ("extract_box", "color"),
+                               "help": ("Cycle Extract Box Color")},
+                    ord("k"): {"action": self.iterate_state,
+                               "args": ("landmarks", "color"),
+                               "help": ("Cycle Landmarks Color")},
+                    ord("l"): {"action": self.iterate_state,
+                               "args": ("landmarks_mesh", "color"),
+                               "help": ("Cycle Landmarks Mesh Color")},
+                    ord("v"): {"action": self.iterate_state,
+                               "args": ("bounding_box", "size"),
+                               "help": ("Cycle Bounding Box thickness")},
+                    ord("b"): {"action": self.iterate_state,
+                               "args": ("extract_box", "size"),
+                               "help": ("Cycle Extract Box thickness")},
+                    ord("n"): {"action": self.iterate_state,
+                               "args": ("landmarks", "size"),
+                               "help": ("Cycle Landmarks point size")},
+                    ord("m"): {"action": self.iterate_state,
+                               "args": ("landmarks_mesh", "size"),
+                               "help": ("Cycle Landmarks Mesh thickness")},
+                    (ord("0"), ord("9")): {
+                        "action": self.set_state_value,
+                        "args": ("select", "select"),
+                        "help": "Select/Deselect face at this index"}}
+
+        return controls
+
     def process(self):
         """ Process manual extraction """
-        print("\n============ NAVIGATION ============\n"
-              "  - 'Z' and 'A': Cycle through frames\n"
-              "  - 'ESC': Quit")
-        print("\n============= DISPLAY =============\n"
-              "  - 'B': Toggle bounding box\n"
-              "  - 'E': Toggle extract box\n"
-              "  - 'L': Toggle landmarks\n"
-              "  - 'M': Toggle landmarks mesh\n"
-              "  - 'I': Toggle Image\n\n"
-              "  - '1': Cycle bounding box color\n"
-              "  - '2': Cycle extract box color\n"
-              "  - '3': Cycle landmarks color\n"
-              "  - '4': Cycle landmarks mesh color\n\n"
-              "  - '5': Cycle bounding box thickness\n"
-              "  - '6': Cycle extract box thicness\n"
-              "  - '7': Cycle landmarks point size\n"
-              "  - '8': Cycle landmarks mesh thickness\n\n")
+        self.generate_help()
         self.display_frames()
 
-    def toggle_state(self, item):
-        """ Toggle state of requested item """
-        self.state[item] = not self.state[item]
+    def generate_help(self):
+        """ Generate help output """
+        sections = ("navigation", "select", "display", "color", "size")
+        helpout = {section: list() for section in sections}
+        for key, val in self.controls.items():
+            if isinstance(key, tuple):
+                helpout[val["args"][1]].append(
+                    (val["help"],
+                     "{} to {}".format(chr(key[0]), chr(key[1]))))
+                continue
+            helpout[val["args"][1]].append((val["help"], chr(key)))
 
-    def iterate_state(self, item):
+        for section in sections:
+            spacer = "=" * int((40 - len(section)) / 2)
+            display = "{} {} {}\n".format(spacer, section.upper(), spacer)
+            helpsection = sorted(helpout[section])
+            if section == "navigation":
+                helpsection = sorted(helpout[section], reverse=True)
+            for item in helpsection:
+                key = item[1] if item[0] != "Exit" else "ESC"
+                display += "  - '{}': {}\n".format(key, item[0])
+
+            print(display)
+
+    def toggle_state(self, item, category):
+        """ Toggle state of requested item """
+        self.state[item][category] = not self.state[item][category]
+
+    def iterate_state(self, item, category):
         """ Cycle through options (6 possible) """
-        max_val = 6 if item.endswith("color") else 3
-        current_val = self.state[item]
-        new_val = current_val + 1 if current_val != max_val else 1
-        self.state[item] = new_val
+        max_val = 6 if category == "color" else 3
+        val = self.state[item][category]
+        val = val + 1 if val != max_val else 1
+        self.state[item][category] = val
+
+    def set_state_value(self, item, value):
+        """ Set state of requested item or toggle off """
+        state = self.state[item]
+        if state == value:
+            self.state[item] = None
+        else:
+            self.state[item] = value
 
     def frame_selector(self, idx):
         """ Return frame at given index """
@@ -404,21 +483,24 @@ class Manual():
         fullpath = os.path.join(self.frames.folder, frame)
         return frame, fullpath
 
-    def get_frame(self, idx, matrices):
+    def get_frame(self, idx, rois):
         """ Compile the frame """
         frame, fullpath = self.frame_selector(idx)
         alignments = self.alignments.alignments.get(frame, list())
-        img = imread(fullpath)
-        if not self.state["image"]:
+        img = cv2.imread(fullpath)
+        if not self.state["image"]["display"]:
             img = self.black_image(img)
-        if self.state["bounding_box"]:
+        if self.state["bounding_box"]["display"]:
             self.draw_bounding_box(img, alignments)
-        if self.state["extract_box"]:
-            self.draw_extract_box(img, matrices)
-        if self.state["landmarks"]:
+        if self.state["extract_box"]["display"]:
+            self.draw_extract_box(img, rois)
+        if self.state["landmarks"]["display"]:
             self.draw_landmarks(img, alignments)
-        if self.state["landmarks_mesh"]:
+        if self.state["landmarks_mesh"]["display"]:
             self.draw_landmarks_mesh(img, alignments)
+        if (self.state["select"] and
+                int(self.state["select"]) < len(alignments)):
+            self.grey_out_faces(img, rois)
         return frame, img, alignments
 
     @staticmethod
@@ -430,122 +512,106 @@ class Manual():
 
     def draw_bounding_box(self, image, alignments):
         """ Draw the bounding box around faces """
-        color = self.colors[self.state["bounding_box_color"]]
-        thickness = self.state["bounding_box_size"]
+        color = self.colors[self.state["bounding_box"]["color"]]
+        thickness = self.state["bounding_box"]["size"]
         for alignment in alignments:
             top_left = (alignment["x"], alignment["y"])
             bottom_right = (alignment["x"] + alignment["w"],
                             alignment["y"] + alignment["h"])
-            rectangle(image, top_left, bottom_right, color, thickness)
+            cv2.rectangle(image, top_left, bottom_right, color, thickness)
 
-    def draw_extract_box(self, image, matrices):
+    def draw_extract_box(self, image, rois):
         """ Draw the extracted face box """
-        if not matrices:
+        if not rois:
             return
-        # Standard Faceswap size and padding
-        size = 256
-        padding = 48
-        points = np.array([[0, 0], [0, size - 1],
-                           [size - 1, size - 1], [size - 1, 0]],
-                          np.int32)
-        points = points.reshape((-1, 1, 2))
-        color = self.colors[self.state["extract_box_color"]]
-        thickness = self.state["extract_box_size"]
+        color = self.colors[self.state["extract_box"]["color"]]
+        thickness = self.state["extract_box"]["size"]
 
-        for matrix in matrices:
-            matrix = matrix * (size - 2 * padding)
-            matrix[:, 2] += padding
-            matrix = invertAffineTransform(matrix)
-            new_points = [transform(points, matrix)]
-            polylines(image, new_points, True, color, thickness)
+        for roi in rois:
+            cv2.polylines(image, roi, True, color, thickness)
 
     def draw_landmarks(self, image, alignments):
         """ Draw the facial landmarks """
-        color = self.colors[self.state["landmarks_color"]]
-        radius = self.state["landmarks_size"]
+        color = self.colors[self.state["landmarks"]["color"]]
+        radius = self.state["landmarks"]["size"]
 
         for alignment in alignments:
             landmarks = alignment["landmarksXY"]
             for (pos_x, pos_y) in landmarks:
-                circle(image, (pos_x, pos_y), radius, color, -1)
+                cv2.circle(image, (pos_x, pos_y), radius, color, -1)
 
     def draw_landmarks_mesh(self, image, alignments):
         """ Draw the facial landmarks """
-        color = self.colors[self.state["landmarks_mesh_color"]]
-        thickness = self.state["landmarks_mesh_size"]
+        color = self.colors[self.state["landmarks_mesh"]["color"]]
+        thickness = self.state["landmarks_mesh"]["size"]
 
         for alignment in alignments:
             landmarks = alignment["landmarksXY"]
             for key, val in FACIAL_LANDMARKS_IDXS.items():
                 points = np.array([landmarks[val[0]:val[1]]], np.int32)
                 fill_poly = bool(key in ("right_eye", "left_eye", "mouth"))
-                polylines(image, points, fill_poly, color, thickness)
+                cv2.polylines(image, points, fill_poly, color, thickness)
+
+    def grey_out_faces(self, image, rois):
+        """ Grey out all faces except target """
+        overlay = image.copy()
+        for idx, roi in enumerate(rois):
+            if idx != int(self.state["select"]):
+                cv2.fillPoly(overlay, roi, (0, 0, 0))
+        alpha = 0.6
+        cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
 
     def display_frames(self):
         """ Iterate through frames """
         idx = 0
-        matrices = list()
         max_idx = self.frames.count - 1
-        frame, img, alignments = self.get_frame(idx, matrices)
-        face_windows = list()
+        cv2.namedWindow("Frame")
 
-        namedWindow("Frame")
+        matrices = list()
+        range_keys = dict()
+
+        frame, img, alignments = self.get_frame(idx, matrices)
+
+        for keyrange, value in self.controls.items():
+            if not isinstance(keyrange, tuple):
+                continue
+            for key in range(keyrange[0], keyrange[1] + 1):
+                range_keys[key] = value
 
         while True:
-            if getWindowProperty('Frame', WND_PROP_VISIBLE) < 1:
+            if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
                 break
-            face_windows, matrices = self.display_faces(img,
-                                                        alignments,
-                                                        face_windows)
-            imshow("Frames", img)
-            key = waitKey(100)
-            if key == 27:
-                break
-            if key in (ord("z"), ord("Z")):
-                idx -= 1 if idx != 0 else 0
-            if key in (ord("x"), ord("X")):
-                idx += 1 if idx != max_idx else 0
-            if key in (ord("b"), ord("B")):
-                self.toggle_state("bounding_box")
-            if key in (ord("e"), ord("E")):
-                self.toggle_state("extract_box")
-            if key in (ord("l"), ord("L")):
-                self.toggle_state("landmarks")
-            if key in (ord("m"), ord("M")):
-                self.toggle_state("landmarks_mesh")
-            if key in (ord("i"), ord("I")):
-                self.toggle_state("image")
-            if key == ord("1"):
-                self.iterate_state("bounding_box_color")
-            if key == ord("2"):
-                self.iterate_state("extract_box_color")
-            if key == ord("3"):
-                self.iterate_state("landmarks_color")
-            if key == ord("4"):
-                self.iterate_state("landmarks_mesh_color")
-            if key == ord("5"):
-                self.iterate_state("bounding_box_size")
-            if key == ord("6"):
-                self.iterate_state("extract_box_size")
-            if key == ord("7"):
-                self.iterate_state("landmarks_size")
-            if key == ord("8"):
-                self.iterate_state("landmarks_mesh_size")
+            rois = self.get_faces(img, alignments)
+            cv2.imshow("Frames", img)
+            key = cv2.waitKey(100)
 
-            frame, img, alignments = self.get_frame(idx, matrices)
+            if key in self.controls.keys():
+                action = self.controls[key]["action"]
+                args = self.controls[key]["args"]
+                if action == "quit":
+                    break
+                elif action in ("prev", "next"):
+                    end = 0 if action == "prev" else max_idx
+                    idx += args[0] if idx != end else 0
+                else:
+                    action(*args)
+            elif key in range_keys.keys():
+                action = range_keys[key]["action"]
+                args = range_keys[key]["args"][0]
+                action(args, chr(key))
 
-        destroyAllWindows()
+            frame, img, alignments = self.get_frame(idx, rois)
 
-    def display_faces(self, image, frame_alignments, prev_windows):
+        cv2.destroyAllWindows()
+
+    def get_faces(self, image, frame_alignments):
         """ Display associated face """
-        windows = list()
-        matrices = list()
+        size = 256  # Standard Faceswap size
+        faces = list()
+        rois = list()
+        total_alignments = len(frame_alignments)
 
         for idx, alignment in enumerate(frame_alignments):
-            window_name = "Faces_{}".format(idx)
-            windows.append(window_name)
-            namedWindow(window_name)
-
             face = DetectedFace(image,
                                 alignment["r"],
                                 alignment["x"],
@@ -556,25 +622,63 @@ class Manual():
 
             resized_face, f_align = self.extractor.extract(image,
                                                            face,
-                                                           256,
+                                                           size,
                                                            self.align_eyes)
-            matrices.append(f_align)
-            imshow(window_name, resized_face)
+            rois.append(self.original_roi(f_align, size))
 
-        self.cleanup_windows(prev_windows, windows)
-        return windows, matrices
+            if idx % 4 == 0:
+                row = resized_face
+            else:
+                row = np.concatenate((row, resized_face), axis=1)
+
+            if (idx + 1) % 4 == 0 or idx + 1 == total_alignments:
+                faces.append(row)
+
+        image = self.compile_faces_image(faces, total_alignments, size)
+        self.show_hide_faces(bool(faces), image)
+        return rois
 
     @staticmethod
-    def cleanup_windows(prev_windows, windows):
-        """ Remove any Face windows which are no longer required """
-        displayed = len(prev_windows)
-        display = len(windows)
-        while True:
-            if displayed <= display:
-                break
-            displayed -= 1
-            window = prev_windows[displayed]
-            destroyWindow(window)
+    def original_roi(matrix, size):
+        """ Return the original ROI of an extracted face """
+        padding = 48    # Faceswap padding
+
+        points = np.array([[0, 0], [0, size - 1],
+                           [size - 1, size - 1], [size - 1, 0]],
+                          np.int32)
+        points = points.reshape((-1, 1, 2))
+
+        matrix = matrix * (size - 2 * padding)
+        matrix[:, 2] += padding
+        matrix = cv2.invertAffineTransform(matrix)
+
+        return [cv2.transform(points, matrix)]
+
+    @staticmethod
+    def compile_faces_image(faces, total_faces, size):
+        """ Compile the faces into tiled image """
+        image = None
+        blank_face = np.zeros((size, size, 3), np.uint8)
+        total_rows = len(faces)
+        remainder = 4 - (total_faces % 4)
+        for idx, row in enumerate(faces):
+            if idx + 1 == total_rows and remainder != 4:
+                for _ in range(remainder):
+                    row = np.concatenate((row, blank_face), axis=1)
+            if idx == 0:
+                image = row
+                continue
+            image = np.concatenate((image, row), axis=0)
+        return image
+
+    @staticmethod
+    def show_hide_faces(display, image):
+        """ Show or remove window if faces are available """
+        if display:
+            cv2.namedWindow("Faces")
+            cv2.imshow("Faces", image)
+        elif cv2.getWindowProperty("Faces", cv2.WND_PROP_VISIBLE) == 1.0:
+            cv2.destroyWindow("Faces")
 
 
 class Reformat():
