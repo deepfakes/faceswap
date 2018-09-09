@@ -31,8 +31,6 @@ class AlignmentData():
             self.src_format)
         self.alignments = self.load()
         self.count = len(self.alignments)
-        self.count_per_frame = {key: len(value)
-                                for key, value in self.alignments.items()}
 
         self.set_destination_serializer()
         if self.verbose:
@@ -118,10 +116,10 @@ class AlignmentData():
 
     def get_alignments_one_image(self):
         """ Return the face alignments for one image """
-        for image, alignments in self.alignments.items():
-            image_stripped = image[:image.rindex(".")]
+        for frame_fullname, alignments in self.alignments.items():
+            frame_name = frame_fullname[:frame_fullname.rindex(".")]
             number_alignments = len(alignments)
-            yield image_stripped, alignments, number_alignments
+            yield frame_name, alignments, number_alignments, frame_fullname
 
     @staticmethod
     def get_one_alignment_index_reverse(image_alignments, number_alignments):
@@ -131,13 +129,13 @@ class AlignmentData():
             original_idx = number_alignments - 1 - idx
             yield original_idx
 
-    def has_alignments(self, filename, alignments):
-        """ Check whether this frame has alignments """
-        if not alignments:
-            if self.verbose:
-                print("Skipping {} - Alignments not found".format(filename))
-            return False
-        return True
+    def get_alignments_for_frame(self, frame):
+        """ Return the alignments for the selected frame """
+        return self.alignments.get(frame, list())
+
+    def frame_in_alignments(self, frame):
+        """ Return true if frame exists in alignments file """
+        return bool(self.alignments.get(frame, -1) != -1)
 
     def frame_has_faces(self, frame):
         """ Return true if frame exists and has faces """
@@ -145,7 +143,19 @@ class AlignmentData():
 
     def frame_has_multiple_faces(self, frame):
         """ Return true if frame exists and has faces """
+        if not frame:
+            return False
         return bool(len(self.alignments.get(frame, list())) > 1)
+
+    def get_full_frame_name(self, frame):
+        """ Return a frame with extension for when the extension is
+            not known """
+        return next(key for key in self.alignments.keys()
+                    if key.startswith(frame))
+
+    def count_alignments_in_frame(self, frame):
+        """ Return number of alignments within frame """
+        return len(self.alignments.get(frame, list()))
 
 
 class MediaLoader():
@@ -224,23 +234,24 @@ class Faces(MediaLoader):
             file_extension = os.path.splitext(face)[1]
             index = int(filename[filename.rindex("_") + 1:])
             original_file = "{}".format(filename[:filename.rindex("_")])
-            yield (filename, file_extension, original_file, index)
+            yield {"face_fullname": face,
+                   "face_name": filename,
+                   "face_extension": file_extension,
+                   "frame_name": original_file,
+                   "face_index": index}
 
     def load_items(self):
         """ Load the face names into dictionary """
         faces = dict()
         for face in self.file_list_sorted:
-            original_file, index = face[2:4]
-            if faces.get(original_file, "") == "":
-                faces[original_file] = [index]
-            else:
-                faces[original_file].append(index)
+            faces.setdefault(face["frame_name"],
+                             list()).append(face["face_index"])
         return faces
 
     def sorted_items(self):
         """ Return the items sorted by filename then index """
         return sorted([item for item in self.process_folder()],
-                      key=lambda x: (x[2], x[3]))
+                      key=lambda x: (x["frame_name"], x["face_index"]))
 
 
 class Frames(MediaLoader):
@@ -252,20 +263,25 @@ class Frames(MediaLoader):
         for frame in os.listdir(self.folder):
             if not self.valid_extension(frame):
                 continue
-            filename = os.path.basename(frame)
-            yield filename
+            filename = os.path.splitext(frame)[0]
+            file_extension = os.path.splitext(frame)[1]
+
+            yield {"frame_fullname": frame,
+                   "frame_name": filename,
+                   "frame_extension": file_extension}
 
     def load_items(self):
         """ Load the frame info into dictionary """
         frames = dict()
         for frame in self.file_list_sorted:
-            frames[frame] = (frame[:frame.rfind(".")],
-                             frame[frame.rfind("."):])
+            frames[frame["frame_fullname"]] = (frame["frame_name"],
+                                               frame["frame_extension"])
         return frames
 
     def sorted_items(self):
         """ Return the items sorted by filename """
-        return sorted([item for item in self.process_folder()])
+        return sorted([item for item in self.process_folder()],
+                      key=lambda x: (x["frame_name"]))
 
 
 class DetectedFace():

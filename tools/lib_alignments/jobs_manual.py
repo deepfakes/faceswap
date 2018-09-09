@@ -6,9 +6,7 @@ import cv2
 
 import numpy as np
 
-from lib.align_eyes import FACIAL_LANDMARKS_IDXS
-from plugins.PluginLoader import PluginLoader
-from . import DetectedFace, Faces, Frames
+from . import Annotate, ExtractedFace, Faces, Frames
 
 
 class Interface():
@@ -16,12 +14,6 @@ class Interface():
     def __init__(self):
         self.controls = self.set_controls()
         self.state = self.set_state()
-        self.colors = {1: (255, 0, 0),
-                       2: (0, 255, 0),
-                       3: (0, 0, 255),
-                       4: (255, 255, 0),
-                       5: (255, 0, 255),
-                       6: (0, 255, 255)}
         self.skip_mode = {1: "Standard",
                           2: "No Faces",
                           3: "Multi-Faces"}
@@ -102,6 +94,7 @@ class Interface():
                                 "frame_name": None,
                                 "select": None}}
 
+        # See lib_alignments/annotate.py for color mapping
         color = 1
         for key in sorted(state.keys()):
             if key == "navigation":
@@ -125,7 +118,6 @@ class Interface():
             if help_section != "navigation":
                 help_section = val["args"][1]
             if isinstance(key, tuple):
-                print(key, val)
                 helpout[help_section].append(
                     (val["help"],
                      "{} to {}".format(chr(key[0]), chr(key[1]))))
@@ -152,7 +144,7 @@ class Interface():
         status = "=== STATUS\n"
         navigation = self.state["navigation"]
         skip_mode = navigation["skip-mode"]
-        status += "  {}\n".format(navigation["frame_name"])
+        status += "  File: {}\n".format(navigation["frame_name"])
         status += "  Frame: {} / {}\n".format(
             navigation["frame_idx"] + 1, navigation["max_frame"] + 1)
         status += "  Skip-Mode: {}\n".format(self.skip_mode[skip_mode])
@@ -203,7 +195,7 @@ class Interface():
 
     def get_color(self, item):
         """ Return color for selected item """
-        return self.colors[self.state[item]["color"]]
+        return self.state[item]["color"]
 
     def get_size(self, item):
         """ Return size for selected item """
@@ -215,10 +207,10 @@ class Manual():
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
         self.alignments = alignments
+        self.align_eyes = arguments.align_eyes
         self.faces = self.set_output(arguments.faces_dir)
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.align_eyes = arguments.align_eyes
-        self.extractor = PluginLoader.get_extractor("Align")()
         self.interface = Interface()
 
     def set_output(self, faces_folder):
@@ -239,8 +231,11 @@ class Manual():
         """ Return frame at given index """
         navigation = self.interface.state["navigation"]
         alignments = self.alignments
+        frame_list = self.frames.file_list_sorted
+
         skip_mode = navigation["skip-mode"]
-        frame = self.frames.file_list_sorted[navigation["frame_idx"]]
+        frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
+
         while True:
             if skip_mode == 1:
                 break
@@ -254,34 +249,64 @@ class Manual():
                 self.interface.iterate_frame("navigation", iteration)
                 if old_idx == navigation["frame_idx"]:
                     break
-                frame = self.frames.file_list_sorted[navigation["frame_idx"]]
+                frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
 
         fullpath = os.path.join(self.frames.folder, frame)
         navigation["last_request"] = 0
         navigation["frame_name"] = frame
         return fullpath
 
-    def get_frame(self, rois):
-        """ Compile the frame """
-        state = self.interface.state
+    def get_frame(self):
+        """ Compile the frame and get faces """
         fullpath = self.frame_selector()
+        img = cv2.imread(fullpath)
+
+        state = self.interface.state
+
+        selected_face = state["navigation"]["select"]
         alignments = self.alignments.alignments.get(
             state["navigation"]["frame_name"], list())
-        img = cv2.imread(fullpath)
+
+        faces = [ExtractedFace(img,
+                               alignment,
+                               size=256,
+                               padding=48,
+                               align_eyes=self.align_eyes)
+                 for alignment in alignments]
+
         if not state["image"]["display"]:
             img = self.black_image(img)
-        if state["bounding_box"]["display"]:
-            self.draw_bounding_box(img, alignments)
-        if state["extract_box"]["display"]:
-            self.draw_extract_box(img, rois)
-        if state["landmarks"]["display"]:
-            self.draw_landmarks(img, alignments)
-        if state["landmarks_mesh"]["display"]:
-            self.draw_landmarks_mesh(img, alignments)
-        if (state["navigation"]["select"] and
-                int(state["navigation"]["select"]) < len(alignments)):
-            self.grey_out_faces(img, rois)
-        return img, alignments
+            for face in faces:
+                face.face = self.black_image(face.face)
+
+        roi = [face.original_roi for face in faces]
+        annotate_frame = Annotate(img,
+                                  alignments,
+                                  align_eyes=self.align_eyes,
+                                  adjusted_roi=roi)
+        annotate_face = Annotate(faces,
+                                 None,
+                                 are_faces=True)
+
+        for item in ("bounding_box", "extract_box",
+                     "landmarks", "landmarks_mesh"):
+
+            if not state[item]["display"]:
+                continue
+
+            color = self.interface.get_color(item)
+            size = self.interface.get_size(item)
+            annotation = getattr(annotate_frame, "draw_{}".format(item))
+            annotation(color, size)
+            annotation = getattr(annotate_face, "draw_{}".format(item))
+            annotation(color, size)
+
+        if (selected_face and
+                int(selected_face) < len(alignments)):
+            annotate_frame.draw_grey_out_faces(selected_face)
+            annotate_face.draw_grey_out_faces(selected_face)
+
+        return annotate_frame.image, annotate_face.image
 
     @staticmethod
     def black_image(image):
@@ -290,71 +315,15 @@ class Manual():
         image = np.zeros((height, width, 3), np.uint8)
         return image
 
-    def draw_bounding_box(self, image, alignments):
-        """ Draw the bounding box around faces """
-        color = self.interface.get_color("bounding_box")
-        thickness = self.interface.get_size("bounding_box")
-        for alignment in alignments:
-            top_left = (alignment["x"], alignment["y"])
-            bottom_right = (alignment["x"] + alignment["w"],
-                            alignment["y"] + alignment["h"])
-            cv2.rectangle(image, top_left, bottom_right, color, thickness)
-
-    def draw_extract_box(self, image, rois):
-        """ Draw the extracted face box """
-        if not rois:
-            return
-        color = self.interface.get_color("extract_box")
-        thickness = self.interface.get_size("extract_box")
-
-        for idx, roi in enumerate(rois):
-            top_left = [point for point in roi[0].squeeze()[0]]
-            top_left = (top_left[0], top_left[1] - 10)
-
-            cv2.putText(image, str(idx), top_left,
-                        cv2.FONT_HERSHEY_DUPLEX, 1.0, color, thickness)
-            cv2.polylines(image, roi, True, color, thickness)
-
-    def draw_landmarks(self, image, alignments):
-        """ Draw the facial landmarks """
-        color = self.interface.get_color("landmarks")
-        radius = self.interface.get_size("landmarks")
-
-        for alignment in alignments:
-            landmarks = alignment["landmarksXY"]
-            for (pos_x, pos_y) in landmarks:
-                cv2.circle(image, (pos_x, pos_y), radius, color, -1)
-
-    def draw_landmarks_mesh(self, image, alignments):
-        """ Draw the facial landmarks """
-        color = self.interface.get_color("landmarks_mesh")
-        thickness = self.interface.get_size("landmarks_mesh")
-
-        for alignment in alignments:
-            landmarks = alignment["landmarksXY"]
-            for key, val in FACIAL_LANDMARKS_IDXS.items():
-                points = np.array([landmarks[val[0]:val[1]]], np.int32)
-                fill_poly = bool(key in ("right_eye", "left_eye", "mouth"))
-                cv2.polylines(image, points, fill_poly, color, thickness)
-
-    def grey_out_faces(self, image, rois):
-        """ Grey out all faces except target """
-        overlay = image.copy()
-        for idx, roi in enumerate(rois):
-            if idx != int(self.interface.state["navigation"]["select"]):
-                cv2.fillPoly(overlay, roi, (0, 0, 0))
-        alpha = 0.6
-        cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
-
     def display_frames(self):
         """ Iterate through frames """
         cv2.namedWindow("Frame")
+        cv2.namedWindow("Faces")
 
         controls = self.interface.controls
-        matrices = list()
         range_keys = dict()
 
-        img, alignments = self.get_frame(matrices)
+        frame, faces = self.get_frame()
 
         for keyrange, value in controls.items():
             if not isinstance(keyrange, tuple):
@@ -366,8 +335,8 @@ class Manual():
             if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
                 break
             self.interface.render_helptext()
-            rois = self.get_faces(img, alignments)
-            cv2.imshow("Frames", img)
+            self.show_faces(faces)
+            cv2.imshow("Frames", frame)
             key = cv2.waitKey(100)
 
             if key in controls.keys():
@@ -382,68 +351,40 @@ class Manual():
                 args = range_keys[key]["args"] + [chr(key)]
                 action(*args)
 
-            img, alignments = self.get_frame(rois)
+            frame, faces = self.get_frame()
 
         cv2.destroyAllWindows()
 
-    def get_faces(self, image, frame_alignments):
-        """ Display associated face """
-        size = 256  # Standard Faceswap size
-        faces = list()
-        rois = list()
-        total_alignments = len(frame_alignments)
-
-        for idx, alignment in enumerate(frame_alignments):
-            face = DetectedFace(image,
-                                alignment["r"],
-                                alignment["x"],
-                                alignment["w"],
-                                alignment["y"],
-                                alignment["h"],
-                                alignment["landmarksXY"])
-
-            resized_face, f_align = self.extractor.extract(image,
-                                                           face,
-                                                           size,
-                                                           self.align_eyes)
-            rois.append(self.original_roi(f_align, size))
+    def show_faces(self, faces):
+        """ Display associated faces """
+        display_rows = list()
+        total_faces = len(faces)
+        for idx, face in enumerate(faces):
+            cv2.rectangle(face, (0, 0), (255, 255),
+                          (255, 255, 255), 1)
 
             if idx % 4 == 0:
-                row = resized_face
+                row = face
             else:
-                row = np.concatenate((row, resized_face), axis=1)
+                row = np.concatenate((row, face), axis=1)
 
-            if (idx + 1) % 4 == 0 or idx + 1 == total_alignments:
-                faces.append(row)
+            if (idx + 1) % 4 == 0 or idx + 1 == total_faces:
+                display_rows.append(row)
 
-        image = self.compile_faces_image(faces, total_alignments, size)
-        self.show_hide_faces(bool(faces), image)
-        return rois
-
-    @staticmethod
-    def original_roi(matrix, size):
-        """ Return the original ROI of an extracted face """
-        padding = 48    # Faceswap padding
-
-        points = np.array([[0, 0], [0, size - 1],
-                           [size - 1, size - 1], [size - 1, 0]],
-                          np.int32)
-        points = points.reshape((-1, 1, 2))
-
-        matrix = matrix * (size - 2 * padding)
-        matrix[:, 2] += padding
-        matrix = cv2.invertAffineTransform(matrix)
-
-        return [cv2.transform(points, matrix)]
+        image = self.compile_faces_image(display_rows, total_faces)
+        cv2.imshow("Faces", image)
 
     @staticmethod
-    def compile_faces_image(faces, total_faces, size):
+    def compile_faces_image(display_rows, total_faces):
         """ Compile the faces into tiled image """
+        size = 256
+        if not display_rows:
+            return np.zeros((size, size * 4, 3), np.uint8)
         image = None
         blank_face = np.zeros((size, size, 3), np.uint8)
-        total_rows = len(faces)
+        total_rows = len(display_rows)
         remainder = 4 - (total_faces % 4)
-        for idx, row in enumerate(faces):
+        for idx, row in enumerate(display_rows):
             if idx + 1 == total_rows and remainder != 4:
                 for _ in range(remainder):
                     row = np.concatenate((row, blank_face), axis=1)
@@ -452,12 +393,3 @@ class Manual():
                 continue
             image = np.concatenate((image, row), axis=0)
         return image
-
-    @staticmethod
-    def show_hide_faces(display, image):
-        """ Show or remove window if faces are available """
-        if display:
-            cv2.namedWindow("Faces")
-            cv2.imshow("Faces", image)
-        elif cv2.getWindowProperty("Faces", cv2.WND_PROP_VISIBLE) == 1.0:
-            cv2.destroyWindow("Faces")

@@ -27,7 +27,7 @@ class Alignments():
 
     def process(self):
         """ Main processing function of the Align tool """
-        if self.args.job.startswith("remove_"):
+        if self.args.job.startswith("remove-"):
             job = RemoveAlignments
         elif self.args.job in("missing-alignments", "missing-frames",
                               "multi-faces", "leftover-faces",

@@ -14,9 +14,10 @@ class AlignmentsArgs(FaceSwapArgs):
         faces_dir = "\n\tMust Pass in a faces folder (-fc)."
         frames_or_faces_dir = ("\n\tMust Pass in either a frames folder"
                                "\n\tOR a faces folder (-fr or -fc).")
-        frames_and_faces_dir = ("\n\tMust Pass in a frames folder AND a"
-                                "\n\tfaces folder (-fr and -fc).")
+        frames_and_faces_dir = ("\n\tMust Pass in a frames folder AND a faces"
+                                "\n\tfolder (-fr and -fc).")
         output_opts = "\n\tUse the output option (-o) to process\n\tresults."
+        align_eyes = "\n\tCan optionally use the align-eyes switch (-ae)."
         argument_list = list()
         argument_list.append({
             "opts": ("-j", "--job"),
@@ -32,14 +33,13 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n'draw': Draw landmarks on frames in the selected"
                     "\n\tfolder. A subfolder will be created within"
                     "\n\tthe frames folder to hold the output." +
-                    frames_dir +
+                    frames_dir + align_eyes +
                     "\n'extract': Re-extract faces from the source frames"
                     "\n\tbased on alignment data. This is a"
-                    "\n\tlot quicker than re-detecting faces. Can"
-                    "\n\toptionally use the align-eyes switch (-ae)." +
-                    frames_and_faces_dir +
-                    "\n'manual': Manually select/adjust landmarks" +
-                    frames_and_faces_dir +
+                    "\n\tlot quicker than re-detecting faces." +
+                    frames_and_faces_dir + align_eyes +
+                    "\n'manual': Manually viewing and editing of landmarks" +
+                    frames_and_faces_dir + align_eyes +
                     "\n'missing-alignments': Identify frames that do not"
                     "\n\texist in the alignments file." + output_opts +
                     frames_dir +
@@ -112,7 +112,8 @@ class AlignmentsArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Perform extra alignment to ensure "
                                       "left/right eyes are  at the same "
-                                      "height. (Extract only)"})
+                                      "height. (Draw, Extract and manual "
+                                      "only)"})
         argument_list.append({"opts": ("-v", "--verbose"),
                               "action": "store_true",
                               "dest": "verbose",
