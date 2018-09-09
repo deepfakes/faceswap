@@ -139,6 +139,14 @@ class AlignmentData():
             return False
         return True
 
+    def frame_has_faces(self, frame):
+        """ Return true if frame exists and has faces """
+        return bool(self.alignments.get(frame, list()))
+
+    def frame_has_multiple_faces(self, frame):
+        """ Return true if frame exists and has faces """
+        return bool(len(self.alignments.get(frame, list())) > 1)
+
 
 class MediaLoader():
     """ Class to load filenames from folder """
