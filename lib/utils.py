@@ -9,6 +9,8 @@ import warnings
 
 from pathlib import Path
 
+from cv2 import getRotationMatrix2D, warpAffine
+
 
 # Global variables
 _image_extensions = ['.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
@@ -26,7 +28,7 @@ def get_image_paths(directory, exclude=list(), debug=False):
     """ Return a list of images that reside in a folder """
     image_extensions = _image_extensions
     exclude_names = [basename(Path(x).stem[:Path(x).stem.rfind('_')] +
-        Path(x).suffix) for x in exclude]
+                              Path(x).suffix) for x in exclude]
     dir_contents = list()
 
     if not exists(directory):
@@ -34,7 +36,8 @@ def get_image_paths(directory, exclude=list(), debug=False):
 
     dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
     for chkfile in dir_scanned:
-        if any([chkfile.name.lower().endswith(ext) for ext in image_extensions]):
+        if any([chkfile.name.lower().endswith(ext)
+                for ext in image_extensions]):
             if chkfile.name in exclude_names:
                 if debug:
                     print("Already processed %s" % chkfile.name)
@@ -73,10 +76,31 @@ def set_system_verbosity(loglevel):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
+def rotate_image_by_angle(image, angle,
+                          rotated_width=None, rotated_height=None):
+    """ Rotate an image by a given angle.
+        From: https://stackoverflow.com/questions/22041699 """
+
+    height, width = image.shape[:2]
+    image_center = (width/2, height/2)
+    rotation_matrix = getRotationMatrix2D(image_center, -1.*angle, 1.)
+    if rotated_width is None or rotated_height is None:
+        abs_cos = abs(rotation_matrix[0, 0])
+        abs_sin = abs(rotation_matrix[0, 1])
+        if rotated_width is None:
+            rotated_width = int(height*abs_sin + width*abs_cos)
+        if rotated_height is None:
+            rotated_height = int(height*abs_cos + width*abs_sin)
+    rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
+    rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
+    return warpAffine(image, rotation_matrix, (rotated_width, rotated_height))
+
+
 class BackgroundGenerator(threading.Thread):
     """ Run a queue in the background. From:
-        https://stackoverflow.com/questions/7323664/python-generator-pre-fetch """
-    def __init__(self, generator, prefetch=1):  # See below why prefetch count is flawed
+        https://stackoverflow.com/questions/7323664/ """
+    # See below why prefetch count is flawed
+    def __init__(self, generator, prefetch=1):
         threading.Thread.__init__(self)
         self.queue = Queue.Queue(prefetch)
         self.generator = generator
