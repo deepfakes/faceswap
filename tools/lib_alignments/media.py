@@ -5,10 +5,12 @@
 import os
 from datetime import datetime
 
-from cv2 import imread, imwrite
+from cv2 import imread, imwrite, invertAffineTransform, transform
+from numpy import array, int32
 
 from lib import Serializer
-from lib.utils import _image_extensions
+from lib.utils import _image_extensions, rotate_image_by_angle
+from plugins.PluginLoader import PluginLoader
 
 
 class AlignmentData():
@@ -298,3 +300,90 @@ class DetectedFace():
     def landmarks_as_xy(self):
         """ Landmarks as XY """
         return self.landmarksXY
+
+
+class ExtractedFaces():
+    """ Holds the extracted faces and matrix for
+        alignments """
+    def __init__(self, frames, alignments, size=256,
+                 padding=48, align_eyes=False):
+        self.size = size
+        self.padding = padding
+        self.align_eyes = align_eyes
+        self.extractor = PluginLoader.get_extractor("Align")()
+        self.alignments = alignments
+        self.frames = frames
+
+        self.current_frame = None
+        self.faces = list()
+        self.matrices = list()
+
+    def get_faces(self, frame):
+        """ Return faces and transformed face matrices
+            for each face in a given frame with it's alignments"""
+        self.current_frame = None
+        self.faces = list()
+        self.matrices = list()
+        alignments = self.alignments.get_alignments_for_frame(frame)
+        if not alignments:
+            return
+        image = self.frames.load_image(frame)
+        for alignment in alignments:
+            face, matrix = self.extract_one_face(alignment, image.copy())
+            self.faces.append(face)
+            self.matrices.append(matrix)
+        self.current_frame = frame
+
+    def extract_one_face(self, alignment, image):
+        """ Extract one face from image """
+        face = DetectedFace(image,
+                            alignment["r"],
+                            alignment["x"],
+                            alignment["w"],
+                            alignment["y"],
+                            alignment["h"],
+                            alignment["landmarksXY"])
+
+        if face.r:
+            image = rotate_image_by_angle(image, face.r)
+        return self.extractor.extract(image, face, self.size, self.align_eyes)
+
+    def original_roi(self, matrix):
+        """ Return the original ROI of an extracted face """
+        points = array([[0, 0], [0, self.size - 1],
+                        [self.size - 1, self.size - 1],
+                        [self.size - 1, 0]], int32)
+        points = points.reshape((-1, 1, 2))
+
+        mat = matrix * (self.size - 2 * self.padding)
+        mat[:, 2] += self.padding
+        mat = invertAffineTransform(mat)
+        return [transform(points, mat)]
+
+    def get_faces_for_frame(self, frame):
+        """ Return the faces for the selected frame """
+        if self.current_frame != frame:
+            self.get_faces(frame)
+        return self.faces
+
+    def get_roi_for_frame(self, frame):
+        """ Return the original rois for the selected frame """
+        if self.current_frame != frame:
+            self.get_faces(frame)
+        return [self.original_roi(matrix) for matrix in self.matrices]
+
+    def get_aligned_landmarks_for_frame(self, frame, landmarks_xy):
+        """ Return the original rois for the selected frame """
+        if self.current_frame != frame:
+            self.get_faces(frame)
+        aligned_landmarks = list()
+        if not self.matrices:
+            return aligned_landmarks
+        for idx, landmarks in enumerate(landmarks_xy):
+            matrix = self.matrices[idx]
+            aligned_landmarks.append(
+                self.extractor.transform_points(landmarks,
+                                                matrix,
+                                                self.size,
+                                                self.padding))
+        return aligned_landmarks

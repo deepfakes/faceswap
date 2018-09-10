@@ -8,7 +8,7 @@ from datetime import datetime
 
 from tqdm import tqdm
 
-from . import Annotate, ExtractedFace, Faces, Frames
+from . import Annotate, ExtractedFaces, Faces, Frames
 
 
 class Check():
@@ -197,7 +197,9 @@ class Draw():
         self.alignments = alignments
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.output_folder = self.set_output()
-        self.align_eyes = arguments.align_eyes
+        self.extracted_faces = ExtractedFaces(self.frames,
+                                              self.alignments,
+                                              align_eyes=arguments.align_eyes)
 
     def set_output(self):
         """ Set the output folder path """
@@ -230,8 +232,9 @@ class Draw():
         """ Draw the alignments """
         alignments = self.alignments.get_alignments_for_frame(frame)
         image = self.frames.load_image(frame)
+        original_roi = self.extracted_faces.get_roi_for_frame(frame)
 
-        annotate = Annotate(image, alignments, self.align_eyes)
+        annotate = Annotate(image, alignments, original_roi)
         annotate.draw_bounding_box(1, 1)
         annotate.draw_extract_box(2, 1)
         annotate.draw_landmarks(3, 1)
@@ -248,8 +251,10 @@ class Extract():
         self.verbose = arguments.verbose
         self.alignments = alignments
         self.faces_dir = arguments.faces_dir
-        self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.extracted_faces = ExtractedFaces(self.frames,
+                                              self.alignments,
+                                              align_eyes=arguments.align_eyes)
 
     def process(self):
         """ Run extraction """
@@ -277,7 +282,7 @@ class Extract():
         extracted_faces = 0
 
         for frame in tqdm(self.frames.file_list_sorted,
-                          desc="Extracting faces"):
+                          desc="Saving extracted faces"):
 
             frame_name = frame["frame_fullname"]
 
@@ -295,11 +300,8 @@ class Extract():
         face_count = 0
         frame_fullname = frame["frame_fullname"]
         frame_name = frame["frame_name"]
-        alignments = self.alignments.get_alignments_for_frame(frame_fullname)
-        image = self.frames.load_image(frame_fullname)
-        for idx, alignment in enumerate(alignments):
-            face = ExtractedFace(image, alignment,
-                                  align_eyes=self.align_eyes).face
+        faces = self.extracted_faces.get_faces_for_frame(frame_fullname)
+        for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), ".png")
             self.frames.save_image(self.faces_dir, output, face)
             face_count += 1
