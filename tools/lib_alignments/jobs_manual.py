@@ -16,7 +16,8 @@ class Interface():
         self.state = self.set_state()
         self.skip_mode = {1: "Standard",
                           2: "No Faces",
-                          3: "Multi-Faces"}
+                          3: "Multi-Faces",
+                          4: "Has Faces"}
         self.helptext = self.generate_help()
 
     def set_controls(self):
@@ -30,53 +31,44 @@ class Interface():
                     27: {"action": "quit",
                          "args": ("navigation", None),
                          "help": "Exit"},
+                    ord("#"): {"action": self.iterate_state,
+                               "args": ("navigation", "frame-size"),
+                               "help": "Cycle Frame Size"},
                     ord("c"): {"action": self.iterate_state,
                                "args": ("navigation", "skip-mode"),
-                               "help": ("Set Navigation mode (all, no "
-                                        "faces, missing faces)")},
+                               "help": ("Skip Mode (All, No Faces, Multi "
+                                        "Faces, Has Faces)")},
                     ord("y"): {"action": self.toggle_state,
                                "args": ("image", "display"),
                                "help": ("Toggle Image")},
-                    ord("u"): {"action": self.toggle_state,
-                               "args": ("bounding_box", "display"),
-                               "help": ("Toggle Bounding Box")},
-                    ord("i"): {"action": self.toggle_state,
-                               "args": ("extract_box", "display"),
-                               "help": ("Toggle Extract Box")},
-                    ord("o"): {"action": self.toggle_state,
-                               "args": ("landmarks", "display"),
-                               "help": ("Toggle Landmarks")},
-                    ord("p"): {"action": self.toggle_state,
-                               "args": ("landmarks_mesh", "display"),
-                               "help": ("Toggle Landmarks Mesh")},
-                    ord("h"): {"action": self.iterate_state,
+                    ord("u"): {"action": self.iterate_state,
                                "args": ("bounding_box", "color"),
                                "help": ("Cycle Bounding Box Color")},
-                    ord("j"): {"action": self.iterate_state,
+                    ord("i"): {"action": self.iterate_state,
                                "args": ("extract_box", "color"),
                                "help": ("Cycle Extract Box Color")},
-                    ord("k"): {"action": self.iterate_state,
+                    ord("o"): {"action": self.iterate_state,
                                "args": ("landmarks", "color"),
                                "help": ("Cycle Landmarks Color")},
-                    ord("l"): {"action": self.iterate_state,
+                    ord("p"): {"action": self.iterate_state,
                                "args": ("landmarks_mesh", "color"),
                                "help": ("Cycle Landmarks Mesh Color")},
-                    ord("v"): {"action": self.iterate_state,
+                    ord("h"): {"action": self.iterate_state,
                                "args": ("bounding_box", "size"),
                                "help": ("Cycle Bounding Box thickness")},
-                    ord("b"): {"action": self.iterate_state,
+                    ord("j"): {"action": self.iterate_state,
                                "args": ("extract_box", "size"),
                                "help": ("Cycle Extract Box thickness")},
-                    ord("n"): {"action": self.iterate_state,
+                    ord("k"): {"action": self.iterate_state,
                                "args": ("landmarks", "size"),
                                "help": ("Cycle Landmarks point size")},
-                    ord("m"): {"action": self.iterate_state,
+                    ord("l"): {"action": self.iterate_state,
                                "args": ("landmarks_mesh", "size"),
                                "help": ("Cycle Landmarks Mesh thickness")},
                     (ord("0"), ord("9")): {
                         "action": self.set_state_value,
                         "args": ["navigation", "select"],
-                        "help": "Select/Deselect face at this index"}}
+                        "help": "Select/Deselect Face at this Index"}}
 
         return controls
 
@@ -89,6 +81,7 @@ class Interface():
                  "landmarks_mesh": dict(),
                  "image": dict(),
                  "navigation": {"skip-mode": 1,
+                                "frame-size": 1,
                                 "frame_idx": 0,
                                 "max_frame": 0,
                                 "last_request": 0,
@@ -96,7 +89,6 @@ class Interface():
                                 "select": None}}
 
         # See lib_alignments/annotate.py for color mapping
-        color = 1
         for key in sorted(state.keys()):
             if key == "navigation":
                 continue
@@ -104,8 +96,7 @@ class Interface():
             if key == "image":
                 continue
             state[key]["size"] = 1
-            state[key]["color"] = color
-            color = color + 1 if color != 6 else 1
+            state[key]["color"] = 7
 
         return state
 
@@ -142,18 +133,8 @@ class Interface():
         """ Render help text to image window """
         image = np.zeros((640, 480, 3), np.uint8)
         pos_y = 10
-        status = "=== STATUS\n"
-        navigation = self.state["navigation"]
-        skip_mode = navigation["skip-mode"]
-        status += "  File: {}\n".format(navigation["frame_name"])
-        status += "  Frame: {} / {}\n".format(
-            navigation["frame_idx"] + 1, navigation["max_frame"] + 1)
-        status += "  Skip-Mode: {}\n".format(self.skip_mode[skip_mode])
-        if navigation["select"]:
-            status += "  Selected Face Index: {}\n".format(
-                navigation["select"])
-
-        display_text = self.helptext + status
+        display_text = self.helptext
+        display_text += self.compile_status_text()
         for line in display_text.split("\n"):
             if line.startswith("==="):
                 pos_y += 10
@@ -166,13 +147,36 @@ class Interface():
         cv2.namedWindow("Help")
         cv2.imshow("Help", image)
 
+    def compile_status_text(self):
+        """ Render the status text """
+        status = "=== STATUS\n"
+        navigation = self.state["navigation"]
+        skip_mode = self.skip_mode[navigation["skip-mode"]]
+        frame_scale = int(self.get_frame_scaling() * 100)
+        status += "  File: {}\n".format(navigation["frame_name"])
+        status += "  Frame: {} / {}\n".format(
+            navigation["frame_idx"] + 1, navigation["max_frame"] + 1)
+        status += "  Frame Size: {}%\n".format(frame_scale)
+        status += "  Skip-Mode: {}\n".format(skip_mode)
+        if navigation["select"]:
+            status += "  Selected Face Index: {}\n".format(
+                navigation["select"])
+        return status
+
     def toggle_state(self, item, category):
         """ Toggle state of requested item """
         self.state[item][category] = not self.state[item][category]
 
     def iterate_state(self, item, category):
         """ Cycle through options (6 possible or 3 currently supported) """
-        max_val = 6 if category == "color" else 3
+        if category == "color":
+            max_val = 7
+        elif category == "frame-size":
+            max_val = 6
+        elif category == "skip-mode":
+            max_val = 4
+        else:
+            max_val = 3
         val = self.state[item][category]
         val = val + 1 if val != max_val else 1
         self.state[item][category] = val
@@ -201,6 +205,12 @@ class Interface():
     def get_size(self, item):
         """ Return size for selected item """
         return self.state[item]["size"]
+
+    def get_frame_scaling(self):
+        """ Return frame scaling factor for requested item """
+        factors = (1, 1.25, 1.5, 2, 0.5, 0.75)
+        idx = self.state["navigation"]["frame-size"] - 1
+        return factors[idx]
 
 
 class Manual():
@@ -246,6 +256,8 @@ class Manual():
                 break
             elif skip_mode == 3 and alignments.frame_has_multiple_faces(frame):
                 break
+            elif skip_mode == 4 and alignments.frame_has_faces(frame):
+                break
             else:
                 iteration = navigation["last_request"]
                 old_idx = navigation["frame_idx"]
@@ -263,6 +275,7 @@ class Manual():
         """ Iterate through frames """
         cv2.namedWindow("Frame")
         cv2.namedWindow("Faces")
+
         controls = self.interface.controls
         range_keys = dict()
 
@@ -280,7 +293,7 @@ class Manual():
             if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
                 break
             self.interface.render_helptext()
-            cv2.imshow("Frames", frame)
+            cv2.imshow("Frame", frame)
             cv2.imshow("Faces", faces)
             key = cv2.waitKey(100)
 
@@ -350,11 +363,14 @@ class FrameDisplay():
         for item in ("bounding_box", "extract_box",
                      "landmarks", "landmarks_mesh"):
 
+            color = self.interface.get_color(item)
+            size = self.interface.get_size(item)
+
+            state[item]["display"] = False if color == 7 else True
+
             if not state[item]["display"]:
                 continue
 
-            color = self.interface.get_color(item)
-            size = self.interface.get_size(item)
             annotation = getattr(annotate, "draw_{}".format(item))
             annotation(color, size)
 
@@ -363,7 +379,13 @@ class FrameDisplay():
                 int(selected_face) < len(self.alignments)):
             annotate.draw_grey_out_faces(selected_face)
 
-        self.image = annotate.image
+        self.image = self.resize_frame(annotate.image)
+
+    def resize_frame(self, image):
+        """ Set the displayed frame size """
+        scaling = self.interface.get_frame_scaling()
+        image = cv2.resize(image, (0, 0), fx=scaling, fy=scaling)
+        return image
 
 
 class FacesDisplay():
