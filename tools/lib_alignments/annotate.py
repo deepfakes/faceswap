@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Tools for annotating an input image """
+# TODO Handle landmark rotation
 
 from cv2 import (rectangle, circle, polylines, putText,
                  FONT_HERSHEY_DUPLEX, fillPoly, addWeighted)

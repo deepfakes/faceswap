@@ -159,6 +159,14 @@ class AlignmentData():
         """ Return number of alignments within frame """
         return len(self.alignments.get(frame, list()))
 
+    def delete_alignment_at_index(self, frame, idx):
+        """ Delete the face alignment for given frame at given index """
+        idx = int(idx)
+        if idx + 1 > self.count_alignments_in_frame(frame):
+            return False
+        del self.alignments[frame][idx]
+        return True
+
 
 class MediaLoader():
     """ Class to load filenames from folder """
@@ -360,21 +368,22 @@ class ExtractedFaces():
         mat = invertAffineTransform(mat)
         return [transform(points, mat)]
 
-    def get_faces_for_frame(self, frame):
+    def get_faces_for_frame(self, frame, update=False):
         """ Return the faces for the selected frame """
-        if self.current_frame != frame:
+        if self.current_frame != frame or update:
             self.get_faces(frame)
         return self.faces
 
-    def get_roi_for_frame(self, frame):
+    def get_roi_for_frame(self, frame, update=False):
         """ Return the original rois for the selected frame """
-        if self.current_frame != frame:
+        if self.current_frame != frame or update:
             self.get_faces(frame)
         return [self.original_roi(matrix) for matrix in self.matrices]
 
-    def get_aligned_landmarks_for_frame(self, frame, landmarks_xy):
+    def get_aligned_landmarks_for_frame(self, frame, landmarks_xy,
+                                        update=False):
         """ Return the original rois for the selected frame """
-        if self.current_frame != frame:
+        if self.current_frame != frame or update:
             self.get_faces(frame)
         aligned_landmarks = list()
         if not self.matrices:
