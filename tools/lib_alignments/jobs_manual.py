@@ -54,6 +54,9 @@ class Interface():
                          "key_text": "SPACE",
                          "args": ("edit", None),
                          "help": "Save Alignments"},
+                    ord("r"): {"action": self.reload_alignments,
+                               "args": ("edit", None),
+                               "help": "Reload Alignments (Discard changes)"},
                     ord("d"): {"action": self.delete_alignment,
                                "args": ("edit", None),
                                "help": "Delete Selected Alignment"},
@@ -112,17 +115,21 @@ class Interface():
                  "edit": {"updated": False,
                           "update_faces": False,
                           "selected": None,
-                          "active": 0}}
+                          "active": 0,
+                          "redraw": False},
+                 "frame": {"image": None},
+                 "faces": {"image": None}}
 
         # See lib_alignments/annotate.py for color mapping
         color = 0
         for key in sorted(state.keys()):
-            color += 1
-            if key in ("navigation", "edit"):
+            if key not in ("bounding_box", "extract_box", "landmarks",
+                           "landmarks_mesh", "image"):
                 continue
-            state[key]["display"] = bool(key == "image")
+            state[key]["display"] = True
             if key == "image":
                 continue
+            color += 1
             state[key]["size"] = 1
             state[key]["color"] = color
 
@@ -135,21 +142,32 @@ class Interface():
         self.alignments.save_alignments()
         self.state["edit"]["updated"] = False
 
+    def reload_alignments(self, *args):
+        """ Reload alignments """
+        if not self.state["edit"]["updated"]:
+            return
+        self.alignments.reload()
+        self.state["edit"]["updated"] = False
+        self.state["edit"]["update_faces"] = True
+        self.set_redraw(True)
+
     def delete_alignment(self, *args):
         """ Save alignments """
         edit_mode = self.get_edit_mode().lower()
-        selected_face = self.get_selected_face()
+        selected_face = self.get_selected_face_id()
         if edit_mode == "view" or not selected_face:
             return
-        frame = self.get_current_frame()
+        frame = self.get_frame_name()
         if self.alignments.delete_alignment_at_index(frame, selected_face):
             self.state["edit"]["selected"] = None
             self.state["edit"]["updated"] = True
             self.state["edit"]["update_faces"] = True
+            self.set_redraw(True)
 
     def toggle_state(self, item, category):
         """ Toggle state of requested item """
         self.state[item][category] = not self.state[item][category]
+        self.set_redraw(True)
 
     def iterate_state(self, item, category):
         """ Cycle through options (6 possible or 3 currently supported) """
@@ -164,6 +182,7 @@ class Interface():
         val = self.state[item][category]
         val = val + 1 if val != max_val else 1
         self.state[item][category] = val
+        self.set_redraw(True)
 
     def set_state_value(self, item, category, value):
         """ Set state of requested item or toggle off """
@@ -172,6 +191,7 @@ class Interface():
             self.state[item][category] = None
         else:
             self.state[item][category] = value
+        self.set_redraw(True)
 
     def iterate_frame(self, *args):
         """ Iterate frame up or down, stopping at either end """
@@ -190,6 +210,7 @@ class Interface():
             next_frame = end
         self.state["navigation"]["frame_idx"] = next_frame
         self.state["navigation"]["last_request"] = iteration
+        self.set_redraw(True)
 
     def get_color(self, item):
         """ Return color for selected item """
@@ -227,13 +248,37 @@ class Interface():
             color = (0, 255, 255)
         return color
 
-    def get_selected_face(self):
+    def get_frame_name(self):
+        """ Return the current frame number """
+        return self.state["navigation"]["frame_name"]
+
+    def get_frame_image(self):
+        """ Return the current frame number """
+        return self.state["frame"]["image"]
+
+    def set_frame_image(self, image):
+        """ Return the current frame number """
+        self.state["frame"]["image"] = image
+
+    def get_selected_face_id(self):
         """ Return the index of the currently selected face """
         return self.state["edit"]["selected"]
 
-    def get_current_frame(self):
+    def get_faces_image(self):
         """ Return the current frame number """
-        return self.state["navigation"]["frame_name"]
+        return self.state["faces"]["image"]
+
+    def set_faces_image(self, image):
+        """ Return the current frame number """
+        self.state["faces"]["image"] = image
+
+    def redraw(self):
+        """ Return whether a redraw is required """
+        return self.state["edit"]["redraw"]
+
+    def set_redraw(self, request):
+        """ Turn redraw requirement on or off """
+        self.state["edit"]["redraw"] = request
 
 
 class Help():
@@ -290,15 +335,15 @@ class Help():
         status = "\n=== STATUS\n"
         navigation = self.interface.state["navigation"]
         frame_scale = int(self.interface.get_frame_scaling() * 100)
-        status += "  File: {}\n".format(self.interface.get_current_frame())
+        status += "  File: {}\n".format(self.interface.get_frame_name())
         status += "  Frame: {} / {}\n".format(
             navigation["frame_idx"] + 1, navigation["max_frame"] + 1)
         status += "  Frame Size: {}%\n".format(frame_scale)
         status += "  Skip-Mode: {}\n".format(self.interface.get_skip_mode())
         status += "  View-Mode: {}\n".format(self.interface.get_edit_mode())
-        if self.interface.get_selected_face():
+        if self.interface.get_selected_face_id():
             status += "  Selected Face Index: {}\n".format(
-                self.interface.get_selected_face())
+                self.interface.get_selected_face_id())
         if self.interface.state["edit"]["updated"]:
             status += "  Warning: There are unsaved changes\n"
 
@@ -330,6 +375,7 @@ class Manual():
                                               align_eyes=arguments.align_eyes)
         self.interface = Interface(self.alignments)
         self.help = Help(self.interface)
+#        self.mouse_handler = MouseHandler(self.interface, self.alignments)
 
     def process(self):
         """ Process manual extraction """
@@ -337,6 +383,68 @@ class Manual():
         max_idx = self.frames.count - 1
         self.interface.state["navigation"]["max_frame"] = max_idx
         self.display_frames()
+
+    def display_frames(self):
+        """ Iterate through frames """
+        cv2.namedWindow("Frame")
+        cv2.namedWindow("Faces")
+#        cv2.setMouseCallback('Frame', self.mouse_handler.on_event)
+
+        controls = self.interface.controls
+        range_keys = dict()
+
+        self.get_frame()
+
+        for keyrange, value in controls.items():
+            if not isinstance(keyrange, tuple):
+                continue
+            for key in range(keyrange[0], keyrange[1] + 1):
+                range_keys[key] = value
+
+        while True:
+            if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
+                break
+            self.help.render()
+            cv2.imshow("Frame", self.interface.get_frame_image())
+            cv2.imshow("Faces", self.interface.get_faces_image())
+            key = cv2.waitKey(100)
+
+            if key in controls.keys():
+                action = controls[key]["action"]
+                args = controls[key]["args"]
+                if action == "quit":
+                    break
+                else:
+                    action(*args)
+            elif key in range_keys.keys():
+                action = range_keys[key]["action"]
+                args = range_keys[key]["args"] + [chr(key)]
+                action(*args)
+            if not self.interface.redraw():
+                continue
+
+            self.get_frame()
+            self.interface.set_redraw(False)
+
+        cv2.destroyAllWindows()
+
+    def get_frame(self):
+        """ Compile the frame and get faces """
+        image = self.frame_selector()
+        frame_name = self.interface.get_frame_name()
+        alignments = self.alignments.get_alignments_for_frame(frame_name)
+        faces_updated = self.interface.state["edit"]["update_faces"]
+        roi = self.extracted_faces.get_roi_for_frame(frame_name,
+                                                     faces_updated)
+        if faces_updated:
+            self.interface.state["edit"]["update_faces"] = False
+
+        self.interface.set_frame_image(FrameDisplay(image,
+                                                    alignments,
+                                                    roi,
+                                                    self.interface).image)
+        self.interface.set_faces_image(self.set_faces(frame_name,
+                                                      alignments).image)
 
     def frame_selector(self):
         """ Return frame at given index """
@@ -369,66 +477,6 @@ class Manual():
         navigation["last_request"] = 0
         navigation["frame_name"] = frame
         return image
-
-    def display_frames(self):
-        """ Iterate through frames """
-        cv2.namedWindow("Frame")
-        cv2.namedWindow("Faces")
-
-        controls = self.interface.controls
-        range_keys = dict()
-
-        frame, faces = self.get_frame()
-        frame = frame.image
-        faces = faces.image
-
-        for keyrange, value in controls.items():
-            if not isinstance(keyrange, tuple):
-                continue
-            for key in range(keyrange[0], keyrange[1] + 1):
-                range_keys[key] = value
-
-        while True:
-            if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
-                break
-            self.help.render()
-            cv2.imshow("Frame", frame)
-            cv2.imshow("Faces", faces)
-            key = cv2.waitKey(100)
-
-            if key in controls.keys():
-                action = controls[key]["action"]
-                args = controls[key]["args"]
-                if action == "quit":
-                    break
-                else:
-                    action(*args)
-            elif key in range_keys.keys():
-                action = range_keys[key]["action"]
-                args = range_keys[key]["args"] + [chr(key)]
-                action(*args)
-
-            frame, faces = self.get_frame()
-            frame = frame.image
-            faces = faces.image
-
-        cv2.destroyAllWindows()
-
-    def get_frame(self):
-        """ Compile the frame and get faces """
-        image = self.frame_selector()
-        frame_name = self.interface.get_current_frame()
-        alignments = self.alignments.get_alignments_for_frame(frame_name)
-        faces_updated = self.interface.state["edit"]["update_faces"]
-        roi = self.extracted_faces.get_roi_for_frame(frame_name,
-                                                     faces_updated)
-        if faces_updated:
-            self.interface.state["edit"]["update_faces"] = False
-
-        frame_window = FrameDisplay(image, alignments, roi, self.interface)
-        faces_window = self.set_faces(frame_name, alignments)
-
-        return frame_window, faces_window
 
     def set_faces(self, frame, alignments):
         """ Pass the current frame faces to faces window """
@@ -476,7 +524,7 @@ class FrameDisplay():
             annotation = getattr(annotate, "draw_{}".format(item))
             annotation(color, size)
 
-        selected_face = self.interface.get_selected_face()
+        selected_face = self.interface.get_selected_face_id()
         if (selected_face and
                 int(selected_face) < len(self.alignments)):
             annotate.draw_grey_out_faces(selected_face)
@@ -522,7 +570,7 @@ class FacesDisplay():
     def annotate_faces(self):
         """ Annotate each of the faces """
         state = self.interface.state
-        selected_face = self.interface.get_selected_face()
+        selected_face = self.interface.get_selected_face_id()
         for idx, face in enumerate(self.faces):
             annotate = Annotate(face, [self.landmarks[idx]], self.roi)
             if not state["image"]["display"]:
@@ -575,3 +623,45 @@ class FacesDisplay():
             else:
                 row = np.concatenate((row, face), axis=1)
         return row
+
+
+class MouseHandler():
+    """ Manual Extraction """
+    def __init__(self, interface):
+        self.interface = interface
+        self.left_down = False
+        self.rect_drawn = False
+
+    def on_event(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.left_down = True
+        if event == cv2.EVENT_LBUTTONUP:
+            self.left_down = False
+            print("LB_UP")
+            print("x", x)
+            print("y", y)
+            print("flags", flags)
+            print("param", param)
+        if event == cv2.EVENT_MOUSEWHEEL:
+            print("MouseWheel")
+            print("x", x)
+            print("y", y)
+            print("flags", flags)
+            print("param", param)
+        if event == cv2.EVENT_MOUSEMOVE and self.left_down:
+            self.action_lbutton(x, y)
+
+    def action_lbutton(self, pt_x, pt_y):
+        """ Create or select existing bounding box """
+        if not self.left_down:
+            return
+        image = self.interface.get_frame_image()
+        if not self.rect_drawn:
+            top_left = (pt_x - 128, pt_y - 128)
+            bottom_right = (pt_x + 128, pt_y + 128)
+            print(top_left)
+            print(bottom_right)
+            print(self.rect_drawn)
+            cv2.rectangle(image, top_left, bottom_right, (0, 255, 0), 3)
+            self.rect_drawn = True
+            print(self.rect_drawn)

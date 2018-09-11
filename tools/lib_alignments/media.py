@@ -94,6 +94,12 @@ class AlignmentData():
             alignments = self.serializer.unmarshal(align.read())
         return alignments
 
+    def reload(self):
+        """ Read the alignments data from the correct format """
+        print("Reloading alignments from {}".format(self.file))
+        with open(self.file, self.serializer.roptions) as align:
+            self.alignments = self.serializer.unmarshal(align.read())
+
     def save_alignments(self):
         """ Backup copy of old alignments and save new alignments """
         dst = os.path.splitext(self.file)[0]
