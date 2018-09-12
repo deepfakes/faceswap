@@ -31,6 +31,9 @@ class Extract():
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
             self.save_interval = self.args.save_interval
+        self.delete_source
+        if hasattr(self.args, "delete_source"):
+            self.delete_source = self.delete_source
 
     def process(self):
         """ Perform the extraction process """
@@ -59,11 +62,24 @@ class Extract():
         """ Save the alignments file """
         self.alignments.write_alignments(self.faces.faces_detected)
 
+    def delete_source_file(self, filename, faces):
+        if not self.delete_source:
+            return
+        
+        if self.delete_source is "all" or (self.delete_source is "found" and len(faces) != 0):
+            try:
+                os.remove(filename)
+            except:
+                pass
+
     def extract_single_process(self):
         """ Run extraction in a single process """
         frame_no = 0
         for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
+
+            self.delete_source_file(filename, faces)
+
             self.faces.faces_detected[os.path.basename(filename)] = faces
             frame_no += 1
             if frame_no == self.save_interval:
@@ -80,6 +96,9 @@ class Extract():
                 total=self.images.images_found,
                 file=sys.stdout):
             self.faces.num_faces_detected += 1
+
+            self.delete_source_file(filename, faces)
+
             self.faces.faces_detected[os.path.basename(filename)] = faces
             frame_no += 1
             if frame_no == self.save_interval:

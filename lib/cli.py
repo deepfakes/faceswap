@@ -451,6 +451,17 @@ class ExtractArgs(ExtractConvertArgs):
                                       "default. WARNING: Don't interrupt the "
                                       "script when writing the file because "
                                       "it might get corrupted."})
+        argument_list.append({"opts": ("-dc", "--delete-source"),
+                              "dest": "delete_source",
+                              "type": str.lower,
+                              "choices": ["all", "found"],
+                              "default": None,
+                              "help": "Automatically delete source files when "
+                                      "it has been processed. Use \"found\" to "
+                                      "only remove images in which faces are "
+                                      "found. Use \"all\" to remove every processed "
+                                      "source image."
+        })
         return argument_list
 
 
