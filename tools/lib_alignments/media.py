@@ -173,6 +173,15 @@ class AlignmentData():
         del self.alignments[frame][idx]
         return True
 
+    def add_alignment(self, frame, alignment):
+        """ Add a new alignment for a frame and return it's index """
+        self.alignments[frame].append(alignment)
+        return self.count_alignments_in_frame(frame) - 1
+
+    def update_alignment(self, frame, idx, alignment):
+        """ Replace an alignment for given frame and index """
+        self.alignments[frame][idx] = alignment
+
 
 class MediaLoader():
     """ Class to load filenames from folder """

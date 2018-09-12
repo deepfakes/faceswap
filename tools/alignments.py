@@ -2,7 +2,8 @@
 """ Tools for manipulating the alignments seralized file """
 
 # TODO merge alignments
-# TODO Check rotate works
+# TODO Fix rotate landmarks
+from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Draw, Extract, Manual,
                              Reformat, RemoveAlignments)
 
@@ -11,11 +12,18 @@ class Alignments():
     """ Perform tasks relating to alignments file """
     def __init__(self, arguments):
         self.args = arguments
+        self.set_verbosity(arguments.verbose)
 
         dest_format = self.get_dest_format()
         self.alignments = AlignmentData(self.args.alignments_file,
                                         dest_format,
                                         self.args.verbose)
+
+    @staticmethod
+    def set_verbosity(verbose):
+        """ Set the system output verbosity """
+        lvl = '0' if verbose else '2'
+        set_system_verbosity(lvl)
 
     def get_dest_format(self):
         """ Set the destination format for Alignments """

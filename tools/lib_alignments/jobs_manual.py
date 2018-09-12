@@ -5,13 +5,15 @@ import cv2
 
 import numpy as np
 
+from lib.face_alignment import Extract
 from . import Annotate, ExtractedFaces, Frames
 
 
 class Interface():
     """ Key controls and interfacing options for OpenCV """
-    def __init__(self, alignments):
+    def __init__(self, alignments, frames):
         self.alignments = alignments
+        self.frames = frames
         self.controls = self.set_controls()
         self.state = self.set_state()
         self.skip_mode = {1: "Standard",
@@ -21,32 +23,32 @@ class Interface():
 
     def set_controls(self):
         """ Set keyboard controls, destination and help text """
-        controls = {ord("["): {"action": self.iterate_frame,
+        controls = {ord("z"): {"action": self.iterate_frame,
                                "args": ("navigation", - 1),
                                "help": "Previous Frame"},
-                    ord("]"): {"action": self.iterate_frame,
+                    ord("x"): {"action": self.iterate_frame,
                                "args": ("navigation", 1),
                                "help": "Next Frame"},
-                    ord("{"): {"action": self.iterate_frame,
+                    ord("["): {"action": self.iterate_frame,
                                "args": ("navigation", - 100),
                                "help": "100 Frames Back"},
-                    ord("}"): {"action": self.iterate_frame,
+                    ord("]"): {"action": self.iterate_frame,
                                "args": ("navigation", 100),
                                "help": "100 Frames Forward"},
-                    ord("<"): {"action": self.iterate_frame,
+                    ord("{"): {"action": self.iterate_frame,
                                "args": ("navigation", "first"),
                                "help": "Go to First Frame"},
-                    ord(">"): {"action": self.iterate_frame,
+                    ord("}"): {"action": self.iterate_frame,
                                "args": ("navigation", "last"),
                                "help": "Go to Last Frame"},
                     27: {"action": "quit",
                          "key_text": "ESC",
                          "args": ("navigation", None),
                          "help": "Exit"},
-                    ord("#"): {"action": self.iterate_state,
+                    ord("/"): {"action": self.iterate_state,
                                "args": ("navigation", "frame-size"),
                                "help": "Cycle Frame Size"},
-                    ord("c"): {"action": self.iterate_state,
+                    ord("s"): {"action": self.iterate_state,
                                "args": ("navigation", "skip-mode"),
                                "help": ("Skip Mode (All, No Faces, Multi "
                                         "Faces, Has Faces)")},
@@ -116,9 +118,7 @@ class Interface():
                           "update_faces": False,
                           "selected": None,
                           "active": 0,
-                          "redraw": False},
-                 "frame": {"image": None},
-                 "faces": {"image": None}}
+                          "redraw": False}}
 
         # See lib_alignments/annotate.py for color mapping
         color = 0
@@ -153,9 +153,8 @@ class Interface():
 
     def delete_alignment(self, *args):
         """ Save alignments """
-        edit_mode = self.get_edit_mode().lower()
         selected_face = self.get_selected_face_id()
-        if edit_mode == "view" or not selected_face:
+        if self.get_edit_mode() == "View" or selected_face is None:
             return
         frame = self.get_frame_name()
         if self.alignments.delete_alignment_at_index(frame, selected_face):
@@ -252,25 +251,12 @@ class Interface():
         """ Return the current frame number """
         return self.state["navigation"]["frame_name"]
 
-    def get_frame_image(self):
-        """ Return the current frame number """
-        return self.state["frame"]["image"]
-
-    def set_frame_image(self, image):
-        """ Return the current frame number """
-        self.state["frame"]["image"] = image
-
     def get_selected_face_id(self):
         """ Return the index of the currently selected face """
-        return self.state["edit"]["selected"]
-
-    def get_faces_image(self):
-        """ Return the current frame number """
-        return self.state["faces"]["image"]
-
-    def set_faces_image(self, image):
-        """ Return the current frame number """
-        self.state["faces"]["image"] = image
+        try:
+            return int(self.state["edit"]["selected"])
+        except TypeError:
+            return None
 
     def redraw(self):
         """ Return whether a redraw is required """
@@ -300,6 +286,9 @@ class Help():
             key_text = key_text if key_text else chr(key)
             helpout[help_section].append((val["help"], key_text))
 
+        helpout["edit"].append(("Bounding Box - Move", "Left Click"))
+        helpout["edit"].append(("Bounding Box - Resize", "Middle Click"))
+
         for section in sections:
             spacer = "=" * int((40 - len(section)) / 2)
             display = "\n{} {} {}\n".format(spacer, section.upper(), spacer)
@@ -322,7 +311,7 @@ class Help():
 
     def background(self):
         """ Create an image to hold help text """
-        height = 800
+        height = 850
         width = 480
         image = np.zeros((height, width, 3), np.uint8)
         color = self.interface.get_state_color()
@@ -339,9 +328,9 @@ class Help():
         status += "  Frame: {} / {}\n".format(
             navigation["frame_idx"] + 1, navigation["max_frame"] + 1)
         status += "  Frame Size: {}%\n".format(frame_scale)
-        status += "  Skip-Mode: {}\n".format(self.interface.get_skip_mode())
-        status += "  View-Mode: {}\n".format(self.interface.get_edit_mode())
-        if self.interface.get_selected_face_id():
+        status += "  Skip Mode: {}\n".format(self.interface.get_skip_mode())
+        status += "  View Mode: {}\n".format(self.interface.get_edit_mode())
+        if self.interface.get_selected_face_id() is not None:
             status += "  Selected Face Index: {}\n".format(
                 self.interface.get_selected_face_id())
         if self.interface.state["edit"]["updated"]:
@@ -370,12 +359,13 @@ class Manual():
         self.alignments = alignments
         self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
+        print("\n[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
                                               align_eyes=arguments.align_eyes)
-        self.interface = Interface(self.alignments)
+        self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
-#        self.mouse_handler = MouseHandler(self.interface, self.alignments)
+        self.mouse_handler = MouseHandler(self.interface, self.verbose)
 
     def process(self):
         """ Process manual extraction """
@@ -388,12 +378,12 @@ class Manual():
         """ Iterate through frames """
         cv2.namedWindow("Frame")
         cv2.namedWindow("Faces")
-#        cv2.setMouseCallback('Frame', self.mouse_handler.on_event)
+        cv2.setMouseCallback('Frame', self.mouse_handler.on_event)
 
         controls = self.interface.controls
         range_keys = dict()
 
-        self.get_frame()
+        frame, faces = self.get_frame()
 
         for keyrange, value in controls.items():
             if not isinstance(keyrange, tuple):
@@ -405,9 +395,9 @@ class Manual():
             if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
                 break
             self.help.render()
-            cv2.imshow("Frame", self.interface.get_frame_image())
-            cv2.imshow("Faces", self.interface.get_faces_image())
-            key = cv2.waitKey(100)
+            cv2.imshow("Frame", frame)
+            cv2.imshow("Faces", faces)
+            key = cv2.waitKey(1)
 
             if key in controls.keys():
                 action = controls[key]["action"]
@@ -423,7 +413,7 @@ class Manual():
             if not self.interface.redraw():
                 continue
 
-            self.get_frame()
+            frame, faces = self.get_frame()
             self.interface.set_redraw(False)
 
         cv2.destroyAllWindows()
@@ -439,12 +429,9 @@ class Manual():
         if faces_updated:
             self.interface.state["edit"]["update_faces"] = False
 
-        self.interface.set_frame_image(FrameDisplay(image,
-                                                    alignments,
-                                                    roi,
-                                                    self.interface).image)
-        self.interface.set_faces_image(self.set_faces(frame_name,
-                                                      alignments).image)
+        frame = FrameDisplay(image, alignments, roi, self.interface).image
+        faces = self.set_faces(frame_name, alignments).image
+        return frame, faces
 
     def frame_selector(self):
         """ Return frame at given index """
@@ -525,7 +512,7 @@ class FrameDisplay():
             annotation(color, size)
 
         selected_face = self.interface.get_selected_face_id()
-        if (selected_face and
+        if (selected_face is not None and
                 int(selected_face) < len(self.alignments)):
             annotate.draw_grey_out_faces(selected_face)
 
@@ -585,7 +572,7 @@ class FacesDisplay():
                 annotation = getattr(annotate, "draw_{}".format(item))
                 annotation(color, size)
 
-            if (selected_face
+            if (selected_face is not None
                     and int(selected_face) < len(self.faces)
                     and int(selected_face) != idx):
                 annotate.draw_grey_out_faces(1)
@@ -627,41 +614,156 @@ class FacesDisplay():
 
 class MouseHandler():
     """ Manual Extraction """
-    def __init__(self, interface):
+    def __init__(self, interface, verbose):
         self.interface = interface
-        self.left_down = False
-        self.rect_drawn = False
+        self.alignments = interface.alignments
+        self.frames = interface.frames
+        self.extract = Extract(None, "manual",
+                               initialize_only=True, verbose=verbose)
+        self.mouse_state = None
+        self.last_move = None
+        self.center = None
+        self.dims = None
+        self.media = {"frame_id": None,
+                      "image": None,
+                      "scaling": None,
+                      "face_id": None,
+                      "bounding_box": list(),
+                      "bounding_box_orig": list()}
 
     def on_event(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self.left_down = True
-        if event == cv2.EVENT_LBUTTONUP:
-            self.left_down = False
-            print("LB_UP")
-            print("x", x)
-            print("y", y)
-            print("flags", flags)
-            print("param", param)
-        if event == cv2.EVENT_MOUSEWHEEL:
-            print("MouseWheel")
-            print("x", x)
-            print("y", y)
-            print("flags", flags)
-            print("param", param)
-        if event == cv2.EVENT_MOUSEMOVE and self.left_down:
-            self.action_lbutton(x, y)
-
-    def action_lbutton(self, pt_x, pt_y):
-        """ Create or select existing bounding box """
-        if not self.left_down:
+        """ Handle the mouse events """
+        if self.interface.get_edit_mode() != "Edit":
             return
-        image = self.interface.get_frame_image()
-        if not self.rect_drawn:
-            top_left = (pt_x - 128, pt_y - 128)
-            bottom_right = (pt_x + 128, pt_y + 128)
-            print(top_left)
-            print(bottom_right)
-            print(self.rect_drawn)
-            cv2.rectangle(image, top_left, bottom_right, (0, 255, 0), 3)
-            self.rect_drawn = True
-            print(self.rect_drawn)
+        elif not self.mouse_state and event not in (cv2.EVENT_LBUTTONDOWN,
+                                                    cv2.EVENT_MBUTTONDOWN):
+            return
+
+        self.initialize()
+
+        if event in (cv2.EVENT_LBUTTONUP, cv2.EVENT_MBUTTONUP):
+            self.mouse_state = None
+            self.last_move = None
+        elif event == cv2.EVENT_LBUTTONDOWN:
+            self.mouse_state = "left"
+            self.set_bounding_box(x, y)
+        elif event == cv2.EVENT_MBUTTONDOWN:
+            self.mouse_state = "middle"
+        elif event == cv2.EVENT_MOUSEMOVE:
+            if self.mouse_state == "left":
+                self.move_bounding_box(x, y)
+            elif self.mouse_state == "middle":
+                self.resize_bounding_box(x, y)
+
+    def initialize(self):
+        """ Update changed parameters """
+        self.media["scaling"] = self.interface.get_frame_scaling()
+        frame = self.interface.get_frame_name()
+        if frame == self.media["frame_id"]:
+            return
+        self.media["frame_id"] = frame
+        self.media["image"] = self.frames.load_image(frame)
+
+    def set_bounding_box(self, pt_x, pt_y):
+        """ Select or create bounding box """
+        self.media["face_id"] = self.interface.get_selected_face_id()
+        if self.media["face_id"] is None:
+            self.check_click_location(pt_x, pt_y)
+
+        if self.media["face_id"] is not None:
+            self.dims_from_alignment()
+        else:
+            self.dims_from_image()
+
+        self.move_bounding_box(pt_x, pt_y)
+
+    def check_click_location(self, pt_x, pt_y):
+        """ Check whether the point clicked is within an existing
+            bounding box and set face_id """
+        frame = self.media["frame_id"]
+        alignments = self.alignments.get_alignments_for_frame(frame)
+
+        for idx, alignment in enumerate(alignments):
+            left = alignment["x"]
+            right = alignment["x"] + alignment["w"]
+            top = alignment["y"]
+            bottom = alignment["y"] + alignment["h"]
+
+            if left <= pt_x <= right and top <= pt_y <= bottom:
+                self.media["face_id"] = idx
+                break
+
+    def dims_from_alignment(self):
+        """ Set the height and width of bounding box from alignment """
+        frame = self.media["frame_id"]
+        face_id = self.media["face_id"]
+        alignment = self.alignments.get_alignments_for_frame(frame)[face_id]
+        self.dims = (alignment["w"], alignment["h"])
+
+    def dims_from_image(self):
+        """ Set the height and width of bounding
+            box at 15% of longest axis """
+        size = max(self.media["image"].shape[:2])
+        dim = int(size / 6.67)
+        self.dims = (dim, dim)
+
+    def bounding_from_center(self):
+        """ Get bounding X Y from center """
+        pt_x, pt_y = self.center
+        width, height = self.dims
+        scale = self.media["scaling"]
+        self.media["bounding_box"] = [int((pt_x / scale) - width / 2),
+                                      int((pt_y / scale) - height / 2),
+                                      int((pt_x / scale) + width / 2),
+                                      int((pt_y / scale) + height / 2)]
+
+    def move_bounding_box(self, pt_x, pt_y):
+        """ Move the bounding box """
+        self.center = (pt_x, pt_y)
+        self.bounding_from_center()
+        self.update_landmarks()
+
+    def resize_bounding_box(self, pt_x, pt_y):
+        """ Resize the bounding box """
+        if not self.dims:
+            return
+        if not self.last_move:
+            self.last_move = (pt_x, pt_y)
+            self.media["bounding_box_orig"] = self.media["bounding_box"]
+
+        move_x = int((pt_x - self.last_move[0]) / 2)
+        move_y = int((self.last_move[1] - pt_y) / 2)
+
+        original = self.media["bounding_box_orig"]
+        updated = self.media["bounding_box"]
+
+        updated[0] = min(self.center[0] - 10, original[0] - move_x)
+        updated[1] = min(self.center[1] - 10, original[1] - move_y)
+        updated[2] = max(self.center[0] + 10, original[2] + move_x)
+        updated[3] = max(self.center[1] + 10, original[3] + move_y)
+        self.update_landmarks()
+        self.last_move = (pt_x, pt_y)
+
+    def update_landmarks(self):
+        """ Update the landmarks """
+        self.extract.execute(self.media["image"],
+                             manual_face=self.media["bounding_box"])
+        landmarks = self.extract.landmarks[0][1]
+        left, top, right, bottom = self.media["bounding_box"]
+        alignment = {"r": 0,
+                     "x": left,
+                     "w": right - left,
+                     "y": top,
+                     "h": bottom - top,
+                     "landmarksXY": landmarks}
+        frame = self.media["frame_id"]
+        if self.media["face_id"] is None:
+            self.media["face_id"] = self.alignments.add_alignment(frame,
+                                                                  alignment)
+        else:
+            self.alignments.update_alignment(frame,
+                                             self.media["face_id"],
+                                             alignment)
+        self.interface.state["edit"]["updated"] = True
+        self.interface.state["edit"]["update_faces"] = True
+        self.interface.set_redraw(True)
