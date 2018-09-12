@@ -1,16 +1,15 @@
-#!/usr/bin/python3
-
 # Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
 # Based on https://github.com/iperov/OpenDeepFaceSwap for Decoder multiple res block chain
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import enum
 import os
 import sys
-import warnings
-warnings.filterwarnings("ignore", category=FutureWarning)
 
 from keras.initializers import RandomNormal
 from keras.layers import Input, Dense, Flatten, Reshape
@@ -21,6 +20,7 @@ from keras.layers.core import Activation
 from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
+from json import JSONDecodeError
 
 from lib.PixelShuffler import PixelShuffler
 import lib.Serializer
@@ -38,13 +38,13 @@ else:
 
 mswindows = sys.platform=="win32"
 
+_kern_init = RandomNormal(0, 0.02)
+
 
 class EncoderType(enum.Enum):
     ORIGINAL = "original"
-    SHAOANLU = "shaoanlu"    
+    HIGHRES = "highres"
             
-
-_kern_init = RandomNormal(0, 0.02)
 
 
 def inst_norm():
@@ -57,6 +57,7 @@ ENCODER = EncoderType.ORIGINAL
 hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_AH5': 'decoder_A_{version_str}{ENCODER.value}.h5'.format(**vars()),
        'decoder_BH5': 'decoder_B_{version_str}{ENCODER.value}.h5'.format(**vars())}
+
 
 class Model():
     
@@ -84,12 +85,13 @@ class Model():
         # can't chnage gpu's when the model is initialized no point in making it r/w
         self._gpus = gpus 
         
-        Encoder = getattr(self, "Encoder_{}".format(self._encoder_type.value))
-        Decoder = getattr(self, "Decoder_{}".format(self._encoder_type.value))
+        Encoder = getattr(self, "Encoder_{}".format(self.encoder_type))        
+        Decoder_A = getattr(self, "Decoder_{}_A".format(self.encoder_type))
+        Decoder_B = getattr(self, "Decoder_{}_B".format(self.encoder_type))
         
         self.encoder = Encoder()
-        self.decoder_A = Decoder()
-        self.decoder_B = Decoder()
+        self.decoder_A = Decoder_A()
+        self.decoder_B = Decoder_B()
         
         self.initModel()        
 
@@ -114,7 +116,7 @@ class Model():
     def load(self, swapped):        
         model_dir = str(self.model_dir)
         
-        from json import JSONDecodeError
+        
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])
         
         state_dir = os.path.join(model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
@@ -144,54 +146,46 @@ class Model():
       
         return False
 
+
     def converter(self, swap):
         autoencoder = self.autoencoder_B if not swap else self.autoencoder_A
-        return autoencoder.predict
+        return autoencoder.predict    
     
-    
-    def conv(self, filters, kernel_size=5, strides=2, **kwargs):
+    @staticmethod
+    def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
         def block(x):
-            x = Conv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=_kern_init, padding='same', **kwargs)(x)         
-            x = LeakyReLU(0.1)(x)
+            x = Conv2D(filters, kernel_size=kernel_size, strides=strides, 
+                       kernel_initializer=_kern_init, padding='same', **kwargs)(x)
+            if use_instance_norm:
+                x = inst_norm()(x)                                
+            x = LeakyReLU(0.1)(x)            
             return x
         return block   
-
-    def conv_sep(self, filters, kernel_size=5, strides=2, use_instance_norm=True, **kwargs):
-        def block(x):
-            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=_kern_init, padding='same', **kwargs)(x)
-            x = Activation("relu")(x)
-            return x    
-        return block 
-        
-    def conv_inst_norm(self, filters, kernel_size=3, strides=2, use_instance_norm=True, **kwargs):
-        def block(x):
-            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, kernel_initializer=_kern_init, padding='same', **kwargs)(x)        
-            if use_instance_norm:
-                x = inst_norm()(x)
-            x = Activation("relu")(x)
-            return x    
-        return block
     
-    def upscale(self, filters, **kwargs):
+    @staticmethod
+    def conv_sep(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
         def block(x):
-            x = Conv2D(filters * 4, kernel_size=3, padding='same',
-                       kernel_initializer=_kern_init)(x)
+            x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, 
+                       kernel_initializer=_kern_init, padding='same', **kwargs)(x)
+            if use_instance_norm:
+                x = inst_norm()(x)                                
+            x = LeakyReLU(0.1)(x)            
+            return x
+        return block   
+              
+    @staticmethod
+    def upscale(filters, kernel_size=3, use_instance_norm=False, **kwargs):
+        def block(x):
+            x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same',
+                       kernel_initializer=_kern_init, **kwargs)(x)
+            if use_instance_norm:
+                x = inst_norm()(x)                       
             x = LeakyReLU(0.1)(x)
             x = PixelShuffler()(x)
             return x
         return block  
     
-    def upscale_inst_norm(self, filters, use_instance_norm=True, **kwargs):
-        def block(x):
-            x = Conv2D(filters*4, kernel_size=3, use_bias=False, 
-                       kernel_initializer=_kern_init, padding='same', **kwargs)(x)
-            if use_instance_norm:
-                x = inst_norm()(x)
-            x = LeakyReLU(0.1)(x)
-            x = PixelShuffler()(x)
-            return x
-        return block    
-    
+                      
     def Encoder_original(self, **kwargs):
         impt = Input(shape=self.IMAGE_SHAPE)
         
@@ -209,29 +203,9 @@ class Model():
         x = self.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)    
-          
-    
-    def Encoder_shaoanlu(self, **kwargs):
-        impt = Input(shape=self.IMAGE_SHAPE)
-                
-        in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
-        
-        x = Conv2D(in_conv_filters, kernel_size=5, use_bias=False, padding="same")(impt)
-        x = self.conv_inst_norm(in_conv_filters+32, use_instance_norm=False)(x)
-        x = self.conv_inst_norm(256)(x)        
-        x = self.conv_inst_norm(512)(x)
-        x = self.conv_inst_norm(1024)(x)        
-        
-        dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
-        x = Dense(dense_shape * dense_shape * 768, kernel_initializer=_kern_init)(x)
-        x = Reshape((dense_shape, dense_shape, 768))(x)
-        x = self.upscale(512)(x)
-        
-        return KerasModel(impt, x, **kwargs)    
+            
 
-
-    def Decoder_original(self):       
+    def Decoder_original_A(self):       
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
@@ -241,21 +215,10 @@ class Model():
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
-        return KerasModel(inpt, x)
-    
-    
-    def Decoder_shaoanlu(self):       
-        decoder_shape = self.IMAGE_SHAPE[0]//8        
-        inpt = Input(shape=(decoder_shape, decoder_shape, 512))
-        
-        x = self.upscale_inst_norm(512)(inpt)
-        x = self.upscale_inst_norm(256)(x)
-        x = self.upscale_inst_norm(self.IMAGE_SHAPE[0])(x)
-        
-        x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
-        
         return KerasModel(inpt, x)    
 
+    Decoder_original_B = Decoder_original_A
+    
 
     def save_weights(self):        
         model_dir = str(self.model_dir)
@@ -268,10 +231,12 @@ class Model():
             
         state_dir = os.path.join(model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
         ser = lib.Serializer.get_serializer('json')
+        
         try:
             with open(state_dir, 'wb') as fp:
                 state_json = ser.marshal({
-                    'epoch_no' : self._epoch_no
+                    'epoch_no' : self._epoch_no,
+                    'encoder_type' : self.encoder_type
                      })
                 fp.write(state_json.encode('utf-8'))
         except IOError as e:
@@ -293,6 +258,10 @@ class Model():
     @property
     def gpus(self):
         return self._gpus
+    
+    @property
+    def encoder_type(self): 
+        return self._encoder_type.value
     
     @property
     def model_name(self):
