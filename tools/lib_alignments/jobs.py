@@ -196,10 +196,22 @@ class Draw():
         self.verbose = arguments.verbose
         self.alignments = alignments
         self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.fix_rotation()
         self.output_folder = self.set_output()
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
                                               align_eyes=arguments.align_eyes)
+
+    def fix_rotation(self):
+        """ Backwards compatibility fix to to transform landmarks from rotated
+            frames """
+        rotated = self.alignments.get_rotated()
+        for frame in self.frames.file_list_sorted:
+            filename = frame["frame_fullname"]
+            if filename not in rotated:
+                continue
+            dims = self.frames.load_image(filename).shape[:2]
+            self.alignments.rotate_landmarks(filename, dims)
 
     def set_output(self):
         """ Set the output folder path """

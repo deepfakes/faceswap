@@ -359,6 +359,7 @@ class Manual():
         self.alignments = alignments
         self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.fix_rotation()
         print("\n[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
@@ -366,6 +367,17 @@ class Manual():
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
         self.mouse_handler = MouseHandler(self.interface, self.verbose)
+
+    def fix_rotation(self):
+        """ Backwards compatibility fix to to transform landmarks from rotated
+            frames """
+        rotated = self.alignments.get_rotated()
+        for frame in self.frames.file_list_sorted:
+            filename = frame["frame_fullname"]
+            if filename not in rotated:
+                continue
+            dims = self.frames.load_image(filename).shape[:2]
+            self.alignments.rotate_landmarks(filename, dims)
 
     def process(self):
         """ Process manual extraction """
