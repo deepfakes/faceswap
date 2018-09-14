@@ -45,8 +45,8 @@ class EncoderType(enum.Enum):
     ORIGINAL = "original" # basic encoder for this model type
     STANDARD = "standard" # new, balanced encoder they way I meant it to be; more memory consuming
     HIGHRES = "highres"   # high resolution tensors optimized encoder: 176x and on 
-            
-
+        
+        
 def inst_norm():
     return InstanceNormalization()
 
@@ -134,7 +134,7 @@ class Model():
 
     def load(self, swapped):        
         model_dir = str(self.model_dir)
-                
+
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])
         
         state_dir = os.path.join(model_dir, 'state_{version_str}_original.json'.format(**globals()))
@@ -200,9 +200,8 @@ class Model():
                 x = inst_norm()(x)                       
             x = LeakyReLU(0.1)(x)
             x = SubPixelUpscaling()(x)
-            print('subpixeldsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsds')
             return x
-        return block         
+        return block
               
     @staticmethod
     def upscale(filters, kernel_size=3, use_instance_norm=False, **kwargs):
@@ -216,6 +215,7 @@ class Model():
             return x
         return block  
     
+
     def Encoder_highres(self, **kwargs):
         impt = Input(shape=self.IMAGE_SHAPE)
                 
@@ -243,11 +243,9 @@ class Model():
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
-        return KerasModel(inpt, x)    
+        return KerasModel(inpt, x)        
     
-    
-    def Decoder_highres_B(self):
-               
+    def Decoder_highres_B(self):               
         decoder_shape = self.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 320))
         # 320 160 80
@@ -276,7 +274,6 @@ class Model():
         x = self.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)             
-
     
     def Decoder_standard_A(self):       
         decoder_shape = self.IMAGE_SHAPE[0]//8        
@@ -301,8 +298,7 @@ class Model():
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         return KerasModel(inpt, x)        
-    
-    
+        
                       
     def Encoder_original(self, **kwargs):
         impt = Input(shape=self.IMAGE_SHAPE)
@@ -320,8 +316,7 @@ class Model():
         x = Reshape((dense_shape, dense_shape, 512))(x)
         x = self.upscale(512)(x)
         
-        return KerasModel(impt, x, **kwargs)    
-            
+        return KerasModel(impt, x, **kwargs)                
 
     def Decoder_original_A(self):       
         decoder_shape = self.IMAGE_SHAPE[0]//8        
@@ -332,7 +327,7 @@ class Model():
         x = self.upscale(self.IMAGE_SHAPE[0])(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
-        
+
         return KerasModel(inpt, x)    
 
     Decoder_original_B = Decoder_original_A
