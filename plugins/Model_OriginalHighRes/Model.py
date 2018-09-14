@@ -68,8 +68,8 @@ hdf = {'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format(**vars()),
 
 class Model():
     
-    ENCODER_DIM = 512 # dense layer size        
-    IMAGE_SHAPE = 256, 256 # image shape
+    ENCODER_DIM = 1024 # dense layer size        
+    IMAGE_SHAPE = 128, 128 # image shape
     
     assert [n for n in IMAGE_SHAPE if n>=16]
     
