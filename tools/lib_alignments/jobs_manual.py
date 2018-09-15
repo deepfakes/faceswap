@@ -2,8 +2,9 @@
 """ Manual processing of alignments """
 
 import cv2
-
 import numpy as np
+
+from tqdm import tqdm
 
 from lib.face_alignment import Extract
 from . import Annotate, ExtractedFaces, Frames
@@ -47,7 +48,7 @@ class Interface():
                          "help": "Exit"},
                     ord("/"): {"action": self.iterate_state,
                                "args": ("navigation", "frame-size"),
-                               "help": "Cycle Frame Size"},
+                               "help": "Cycle Frame Zoom"},
                     ord("s"): {"action": self.iterate_state,
                                "args": ("navigation", "skip-mode"),
                                "help": ("Skip Mode (All, No Faces, Multi "
@@ -200,12 +201,15 @@ class Interface():
             next_frame = 0 if iteration == "first" else max_frame
             self.state["navigation"]["frame_idx"] = next_frame
             self.state["navigation"]["last_request"] = 0
+            self.set_redraw(True)
             return
 
         current_frame = self.state["navigation"]["frame_idx"]
         next_frame = current_frame + iteration
         end = 0 if iteration < 0 else max_frame
-        if (end > 0 and next_frame >= end) or (end == 0 and next_frame <= end):
+        if (max_frame == 0 or
+                (end > 0 and next_frame >= end) or
+                (end == 0 and next_frame <= end)):
             next_frame = end
         self.state["navigation"]["frame_idx"] = next_frame
         self.state["navigation"]["last_request"] = iteration
@@ -372,12 +376,15 @@ class Manual():
         """ Backwards compatibility fix to to transform landmarks from rotated
             frames """
         rotated = self.alignments.get_rotated()
-        for frame in self.frames.file_list_sorted:
-            filename = frame["frame_fullname"]
-            if filename not in rotated:
+        if not rotated:
+            return
+        print("Legacy rotated frames found. Rotating landmarks")
+        for rotate_item in tqdm(rotated,
+                                desc="Rotating Landmarks"):
+            if rotate_item not in self.frames.items.keys():
                 continue
-            dims = self.frames.load_image(filename).shape[:2]
-            self.alignments.rotate_existing_landmarks(filename, dims)
+            dims = self.frames.load_image(rotate_item).shape[:2]
+            self.alignments.rotate_existing_landmarks(rotate_item, dims)
 
     def process(self):
         """ Process manual extraction """

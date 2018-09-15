@@ -206,12 +206,15 @@ class Draw():
         """ Backwards compatibility fix to to transform landmarks from rotated
             frames """
         rotated = self.alignments.get_rotated()
-        for frame in self.frames.file_list_sorted:
-            filename = frame["frame_fullname"]
-            if filename not in rotated:
+        if not rotated:
+            return
+        print("Legacy rotated frames found. Rotating landmarks")
+        for rotate_item in tqdm(rotated,
+                                desc="Rotating Landmarks"):
+            if rotate_item not in self.frames.items.keys():
                 continue
-            dims = self.frames.load_image(filename).shape[:2]
-            self.alignments.rotate_existing_landmarks(filename, dims)
+            dims = self.frames.load_image(rotate_item).shape[:2]
+            self.alignments.rotate_existing_landmarks(rotate_item, dims)
 
     def set_output(self):
         """ Set the output folder path """
