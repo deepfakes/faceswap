@@ -42,15 +42,22 @@ _kern_init = RandomNormal(0, 0.02)
 
 
 class EncoderType(enum.Enum):
-    ORIGINAL = "original"
-    HIGHRES = "highres"
-            
-
-
+    ORIGINAL = "original" # basic encoder for this model type
+    STANDARD = "standard" # new, balanced encoder they way I meant it to be; more memory consuming
+    HIGHRES = "highres"   # high resolution tensors optimized encoder: 176x and on 
+        
+        
 def inst_norm():
     return InstanceNormalization()
 
 
+# might increase overall quality at cost of training speed
+USE_DSSIM = False
+
+# might increase upscaling quality at cost of video memory
+USE_SUBPIXEL = False
+
+# autoencoder type
 ENCODER = EncoderType.ORIGINAL
 
 
@@ -68,9 +75,10 @@ class Model():
     
     IMAGE_WIDTH = max(IMAGE_SHAPE)
     IMAGE_WIDTH = (IMAGE_WIDTH//16 + (1 if (IMAGE_WIDTH%16)>=8 else 0))*16
+    IMAGE_WIDTH = min(IMAGE_WIDTH, 256)
     IMAGE_SHAPE = IMAGE_WIDTH, IMAGE_WIDTH, len('BRG') # good to let ppl know what these are...
     
-    
+        
     def __init__(self, model_dir, gpus, encoder_type=ENCODER):
                 
         if mswindows:  
@@ -108,18 +116,28 @@ class Model():
             self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
             self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)
         
-        
-        self.autoencoder_A.compile(optimizer=optimizer, loss='mean_absolute_error')
-        self.autoencoder_B.compile(optimizer=optimizer, loss='mean_absolute_error')                    
-        
-        
+        if USE_DSSIM:
+            from .dssim import DSSIMObjective
+            loss = DSSIMObjective()
+            print('Using DSSIM loss ..', flush=True)
+        else:
+            loss = 'mean_absolute_error'
+            
+        if USE_SUBPIXEL:
+            from .subpixel import SubPixelUpscaling
+            self.upscale = self.upscale_sub
+            print('Using subpixel upscaling ..', flush=True)
+            
+        self.autoencoder_A.compile(optimizer=optimizer, loss=loss)
+        self.autoencoder_B.compile(optimizer=optimizer, loss=loss)
+
+
     def load(self, swapped):        
         model_dir = str(self.model_dir)
-        
-        
+
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])
         
-        state_dir = os.path.join(model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
+        state_dir = os.path.join(model_dir, 'state_{version_str}_original.json'.format(**globals()))
         ser = lib.Serializer.get_serializer('json')
         
         try:
@@ -171,7 +189,19 @@ class Model():
                 x = inst_norm()(x)                                
             x = LeakyReLU(0.1)(x)            
             return x
-        return block   
+        return block
+
+    @staticmethod
+    def upscale_sub(filters, kernel_size=3, use_instance_norm=False, **kwargs):
+        def block(x):
+            x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same',
+                       kernel_initializer=_kern_init, **kwargs)(x)
+            if use_instance_norm:
+                x = inst_norm()(x)                       
+            x = LeakyReLU(0.1)(x)
+            x = SubPixelUpscaling()(x)
+            return x
+        return block
               
     @staticmethod
     def upscale(filters, kernel_size=3, use_instance_norm=False, **kwargs):
@@ -185,6 +215,90 @@ class Model():
             return x
         return block  
     
+
+    def Encoder_highres(self, **kwargs):
+        impt = Input(shape=self.IMAGE_SHAPE)
+                
+        x = self.conv(128)(impt)
+        x = self.conv(256)(x)
+        x = self.conv(512)(x)
+        x = self.conv(768)(x)
+        x = self.conv(1024)(x)
+        
+        dense_shape = self.IMAGE_SHAPE[0] // 16         
+        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
+        x = Reshape((dense_shape, dense_shape, 512))(x)
+        x = self.upscale(320)(x)
+        
+        return KerasModel(impt, x, **kwargs)
+    
+    def Decoder_highres_A(self):       
+        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        inpt = Input(shape=(decoder_shape, decoder_shape, 320))
+
+        x = self.upscale(256)(inpt)
+        x = self.upscale(128)(x)
+        x = self.upscale(64)(x)
+        
+        x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        
+        return KerasModel(inpt, x)        
+    
+    def Decoder_highres_B(self):               
+        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        inpt = Input(shape=(decoder_shape, decoder_shape, 320))
+        # 320 160 80
+        x = self.upscale(384)(inpt)
+        x = self.upscale(192)(x)
+        x = self.upscale(96)(x)
+        
+        x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        
+        return KerasModel(inpt, x)     
+             
+                              
+    def Encoder_standard(self, **kwargs):
+        impt = Input(shape=self.IMAGE_SHAPE)
+                
+        x = self.conv(128)(impt)
+        x = self.conv(256)(x)
+        x = self.conv(512)(x)
+        x = self.conv(768)(x)
+        x = self.conv(1024)(x)
+        
+        dense_shape = self.IMAGE_SHAPE[0] // 16         
+        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
+        x = Reshape((dense_shape, dense_shape, 512))(x)
+        x = self.upscale(512)(x)
+        
+        return KerasModel(impt, x, **kwargs)             
+    
+    def Decoder_standard_A(self):       
+        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        inpt = Input(shape=(decoder_shape, decoder_shape, 512))
+        
+        x = self.upscale(384)(inpt)
+        x = self.upscale(192)(x)
+        x = self.upscale(96)(x)
+        
+        x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        
+        return KerasModel(inpt, x)    
+    
+    def Decoder_standard_B(self):       
+        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        inpt = Input(shape=(decoder_shape, decoder_shape, 512))
+        
+        x = self.upscale(512)(inpt)
+        x = self.upscale(256)(x)
+        x = self.upscale(128)(x)
+        
+        x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+        
+        return KerasModel(inpt, x)        
+        
                       
     def Encoder_original(self, **kwargs):
         impt = Input(shape=self.IMAGE_SHAPE)
@@ -202,8 +316,7 @@ class Model():
         x = Reshape((dense_shape, dense_shape, 512))(x)
         x = self.upscale(512)(x)
         
-        return KerasModel(impt, x, **kwargs)    
-            
+        return KerasModel(impt, x, **kwargs)                
 
     def Decoder_original_A(self):       
         decoder_shape = self.IMAGE_SHAPE[0]//8        
@@ -214,7 +327,7 @@ class Model():
         x = self.upscale(self.IMAGE_SHAPE[0])(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
-        
+
         return KerasModel(inpt, x)    
 
     Decoder_original_B = Decoder_original_A
@@ -229,7 +342,7 @@ class Model():
         except NameError:
             print('backup functionality not available\n')       
             
-        state_dir = os.path.join(model_dir, 'state_{version_str}_{ENCODER.value}.json'.format(**globals()))
+        state_dir = os.path.join(model_dir, 'state_{version_str}_original.json'.format(**globals()))
         ser = lib.Serializer.get_serializer('json')
         
         try:
@@ -278,3 +391,5 @@ class Model():
                                                               version_str, 
                                                               self.ENCODER_DIM, 
                                                               "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))
+    
+        
