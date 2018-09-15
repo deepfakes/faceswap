@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from lib import Serializer
-from lib.utils import _image_extensions, rotate_image_by_angle
+from lib.utils import _image_extensions
 from plugins.PluginLoader import PluginLoader
 
 
@@ -187,13 +187,14 @@ class AlignmentData():
             rotated frames """
         keys = list()
         for key, val in self.alignments.items():
-            if any(alignment["r"] for alignment in val):
+            if any(alignment.get("r", None) for alignment in val):
                 keys.append(key)
         return keys
 
-    def rotate_landmarks(self, frame, dimensions):
+    def rotate_existing_landmarks(self, frame, dimensions):
         """ Backwards compatability fix. Rotates the landmarks to
             their correct position and sets r to 0 """
+        # TODO import utils version
         for alignment in self.alignments.get(frame, list()):
             angle = alignment.get("r", 0)
             if not angle:
@@ -228,7 +229,7 @@ class AlignmentData():
                 else:
                     alignment["landmarksXY"] = transformed.tolist()
 
-            alignment["r"] = 0
+            del alignment["r"]
 
     @staticmethod
     def invert_rotation_matrix(dimensions, angle):
@@ -375,9 +376,8 @@ class Frames(MediaLoader):
 
 class DetectedFace():
     """ Detected face and landmark information """
-    def __init__(self, image, r, x, w, y, h, landmarksXY):
+    def __init__(self, image, x, w, y, h, landmarksXY):
         self.image = image
-        self.r = r
         self.x = x
         self.w = w
         self.y = y
@@ -424,15 +424,12 @@ class ExtractedFaces():
     def extract_one_face(self, alignment, image):
         """ Extract one face from image """
         face = DetectedFace(image,
-                            alignment["r"],
                             alignment["x"],
                             alignment["w"],
                             alignment["y"],
                             alignment["h"],
                             alignment["landmarksXY"])
 
-        if face.r:
-            image = rotate_image_by_angle(image, face.r)
         return self.extractor.extract(image, face, self.size, self.align_eyes)
 
     def original_roi(self, matrix):

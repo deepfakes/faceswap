@@ -211,7 +211,7 @@ class Draw():
             if filename not in rotated:
                 continue
             dims = self.frames.load_image(filename).shape[:2]
-            self.alignments.rotate_landmarks(filename, dims)
+            self.alignments.rotate_existing_landmarks(filename, dims)
 
     def set_output(self):
         """ Set the output folder path """
@@ -387,8 +387,7 @@ class Reformat():
             alignments[sourcefile] = list()
 
         left, top, right, bottom = dfl_alignments["source_rect"]
-        alignment = {"r": 0,
-                     "x": left,
+        alignment = {"x": left,
                      "w": right - left,
                      "y": top,
                      "h": bottom - top,

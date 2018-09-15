@@ -129,16 +129,17 @@ class Images():
 
     def rotate_image(self, image, rotation, reverse=False):
         """ Rotate the image forwards or backwards """
-        if rotation != 0:
-            if not reverse:
-                self.rotation_height, self.rotation_width = image.shape[:2]
-                image = rotate_image_by_angle(image, rotation)
-            else:
-                image = rotate_image_by_angle(
-                    image,
-                    rotation * -1,
-                    rotated_width=self.rotation_width,
-                    rotated_height=self.rotation_height)
+        if rotation == 0:
+            return image
+        if not reverse:
+            self.rotation_height, self.rotation_width = image.shape[:2]
+            image, _ = rotate_image_by_angle(image, rotation)
+        else:
+            image, _ = rotate_image_by_angle(
+                image,
+                rotation * -1,
+                rotated_width=self.rotation_width,
+                rotated_height=self.rotation_height)
         return image
 
 
@@ -231,8 +232,10 @@ class Faces():
         for rawface in faces:
             face = DetectedFace(**rawface)
             # Rotate the image if necessary
+            # NB: Rotation of landmarks now occurs at extract stage
+            # This is here for legacy alignments
             if face.r != 0:
-                image = rotate_image_by_angle(image, face.r)
+                image, _ = rotate_image_by_angle(image, face.r)
             face.image = image[face.y: face.y + face.h,
                                face.x: face.x + face.w]
             if self.filter and not self.filter.check(face):

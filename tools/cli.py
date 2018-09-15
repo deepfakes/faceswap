@@ -38,7 +38,7 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tbased on alignment data. This is a"
                     "\n\tlot quicker than re-detecting faces." +
                     frames_and_faces_dir + align_eyes +
-                    "\n'manual': Manually viewing and editing of landmarks" +
+                    "\n'manual': Manually view and edit landmarks." +
                     frames_dir + align_eyes +
                     "\n'missing-alignments': Identify frames that do not"
                     "\n\texist in the alignments file." + output_opts +

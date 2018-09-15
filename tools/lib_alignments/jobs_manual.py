@@ -377,7 +377,7 @@ class Manual():
             if filename not in rotated:
                 continue
             dims = self.frames.load_image(filename).shape[:2]
-            self.alignments.rotate_landmarks(filename, dims)
+            self.alignments.rotate_existing_landmarks(filename, dims)
 
     def process(self):
         """ Process manual extraction """
@@ -762,8 +762,7 @@ class MouseHandler():
                              manual_face=self.media["bounding_box"])
         landmarks = self.extract.landmarks[0][1]
         left, top, right, bottom = self.media["bounding_box"]
-        alignment = {"r": 0,
-                     "x": left,
+        alignment = {"x": left,
                      "w": right - left,
                      "y": top,
                      "h": bottom - top,
