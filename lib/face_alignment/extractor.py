@@ -7,12 +7,13 @@
 import cv2
 import numpy as np
 
-from .detectors import DLibDetector, MTCNNDetector
+from .detectors import DLibDetector, MTCNNDetector, ManualDetector
 from .vram_allocation import GPUMem
 from .model import KerasModel
 
 DLIB_DETECTORS = DLibDetector()
 MTCNN_DETECTOR = MTCNNDetector()
+MANUAL_DETECTOR = ManualDetector()
 VRAM = GPUMem()
 KERAS_MODEL = KerasModel()
 
@@ -40,6 +41,8 @@ class Frame():
 
         if detector == "mtcnn":
             self.scale_mtcnn()
+        elif detector == "manual":
+            self.input_scale = 1.0
         else:
             self.scale_dlib()
 
@@ -241,72 +244,69 @@ class Extract():
 
     def __init__(self, input_image_bgr, detector, dlib_buffer=64,
                  mtcnn_kwargs=None, verbose=False,
-                 input_is_predetected_face=False):
+                 input_is_predetected_face=False,
+                 initialize_only=False):
         self.verbose = verbose
         self.keras = KERAS_MODEL
+        self.detector_name = detector
         self.detector = None
+        self.frame = None
+        self.bounding_boxes = None
+        self.landmarks = None
 
-        self.initialize(detector, mtcnn_kwargs, dlib_buffer)
+        self.initialize(mtcnn_kwargs, dlib_buffer)
 
-        self.frame = Frame(detector=detector,
-                           input_image=input_image_bgr,
-                           verbose=verbose,
-                           input_is_predetected_face=input_is_predetected_face)
+        if not initialize_only:
+            self.execute(input_image_bgr, input_is_predetected_face)
 
-        self.detect_faces(input_is_predetected_face)
-        self.bounding_boxes = self.get_bounding_boxes()
-
-        self.landmarks = Align(image=self.frame.image_rgb,
-                               detected_faces=self.bounding_boxes,
-                               keras_model=self.keras,
-                               verbose=self.verbose).landmarks
-
-    def initialize(self, detector, mtcnn_kwargs, dlib_buffer):
+    def initialize(self, mtcnn_kwargs, dlib_buffer):
         """ initialize Keras and Dlib """
         if not VRAM.initialized:
-            self.initialize_vram(detector, dlib_buffer)
+            self.initialize_vram(dlib_buffer)
 
         if not self.keras.initialized:
-            self.initialize_keras(detector)
+            self.initialize_keras()
             # VRAM Scaling factor must be set AFTER Keras has loaded
-            VRAM.set_scale_to(detector)
+            VRAM.set_scale_to(self.detector_name)
 
-        if detector == "mtcnn":
+        if self.detector_name == "mtcnn":
             self.detector = MTCNN_DETECTOR
+        elif self.detector_name == "manual":
+            self.detector = MANUAL_DETECTOR
         else:
             self.detector = DLIB_DETECTORS
 
         if not self.detector.initialized:
-            self.initialize_detector(detector, mtcnn_kwargs)
+            self.initialize_detector(mtcnn_kwargs)
 
-    def initialize_vram(self, detector, dlib_buffer):
+    def initialize_vram(self, dlib_buffer):
         """ Initialize vram based on detector """
         VRAM.verbose = self.verbose
-        VRAM.detector = detector
+        VRAM.detector = self.detector_name
         if dlib_buffer > VRAM.dlib_buffer:
             VRAM.dlib_buffer = dlib_buffer
         VRAM.initialized = True
         VRAM.output_stats()
 
-    def initialize_keras(self, detector):
+    def initialize_keras(self):
         """ Initialize keras. Allocate vram to tensorflow
             based on detector """
         ratio = None
-        if detector != "mtcnn" and VRAM.device != -1:
+        if self.detector_name != "mtcnn" and VRAM.device != -1:
             ratio = VRAM.get_tensor_gpu_ratio()
         placeholder = np.zeros((1, 3, 256, 256))
         self.keras.load_model(verbose=self.verbose,
                               ratio=ratio,
                               dummy=placeholder)
 
-    def initialize_detector(self, detector, mtcnn_kwargs):
+    def initialize_detector(self, mtcnn_kwargs):
         """ Initialize face detector """
         kwargs = {"verbose": self.verbose}
-        if detector == "mtcnn":
+        if self.detector_name == "mtcnn":
             mtcnn_kwargs = self.detector.validate_kwargs(mtcnn_kwargs)
             kwargs["mtcnn_kwargs"] = mtcnn_kwargs
-        else:
-            kwargs["detector"] = detector
+        elif self.detector_name != "manual":
+            kwargs["detector"] = self.detector_name
             scale_to = int(VRAM.scale_to ** 0.5)
 
             if self.verbose:
@@ -319,7 +319,23 @@ class Extract():
 
         self.detector.create_detector(**kwargs)
 
-    def detect_faces(self, input_is_predetected_face):
+    def execute(self, input_image_bgr,
+                input_is_predetected_face=False, manual_face=None):
+        """ Execute extract """
+        self.frame = Frame(detector=self.detector_name,
+                           input_image=input_image_bgr,
+                           verbose=self.verbose,
+                           input_is_predetected_face=input_is_predetected_face)
+
+        self.detect_faces(input_is_predetected_face, manual_face)
+        self.bounding_boxes = self.get_bounding_boxes()
+
+        self.landmarks = Align(image=self.frame.image_rgb,
+                               detected_faces=self.bounding_boxes,
+                               keras_model=self.keras,
+                               verbose=self.verbose).landmarks
+
+    def detect_faces(self, input_is_predetected_face, manual_face):
         """ Detect faces """
         # Predetected_face is used for sort tool.
         # Landmarks should not be extracted again from predetected faces,
@@ -328,6 +344,8 @@ class Extract():
 
         if input_is_predetected_face:
             self.detector.set_predetected(self.frame.width, self.frame.height)
+        elif manual_face:
+            self.detector.detect_faces(manual_face)
         else:
             self.detector.detect_faces(self.frame.image_detect)
 
