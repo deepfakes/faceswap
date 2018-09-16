@@ -4,6 +4,8 @@
 import cv2
 import numpy as np
 
+from tqdm import tqdm
+
 from lib.face_alignment import Extract
 from . import Annotate, ExtractedFaces, Frames, Rotate
 
