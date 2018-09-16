@@ -25,7 +25,8 @@ class AlignmentsArgs(FaceSwapArgs):
             "choices": ("draw", "extract", "manual",
                         "missing-alignments", "missing-frames",
                         "leftover-faces", "multi-faces", "no-faces",
-                        "reformat", "remove-faces", "remove-frames"),
+                        "reformat", "remove-faces", "remove-frames",
+                        "rotate", "sort-x", "sort-y"),
             "required": True,
             "help": "R|Choose which action you want to perform.\n"
                     "NB: All actions require an alignments file (-a) to"
@@ -71,7 +72,25 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\talignments file. The original alignments file"
                     "\n\twill be backed up. A different file format for"
                     "\n\tthe alignments file can optionally be specified"
-                    "\n\t(-fmt)." + frames_dir})
+                    "\n\t(-fmt)." + frames_dir +
+                    "\n'rotate' - Rotate landmarks and bounding boxes. Legacy"
+                    "\n\talignments files hold an 'r' parameter indicating"
+                    "\n\tthat the image needs to be rotated for convert. This"
+                    "\n\tmeans that the stored landarks and bounding box do"
+                    "\n\tnot correspond to the actual frame. This command"
+                    "\n\tupdates the alignments file with the correct"
+                    "\n\tlandmarks and bounding boxes and removes the 'r'"
+                    "\n\tparameter." + frames_dir +
+                    "\n'sort-x' - Re-index the alignments from left to"
+                    "\n\tright. For alignments with multiple faces this will"
+                    "\n\tensure that the left-most face is at index 0"
+                    "\n\tOptionally pass in a faces folder (-fc) to also"
+                    "\n\trename extracted faces."
+                    "\n'sort-y' - Re-index the alignments from top to"
+                    "\n\tbottom. For alignments with multiple faces this will"
+                    "\n\tensure that the top-most face is at index 0"
+                    "\n\tOptionally pass in a faces folder (-fc) to also"
+                    "\n\trename extracted faces."})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
                               "dest": "alignments_file",
