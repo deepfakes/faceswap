@@ -204,6 +204,7 @@ class AlignmentData():
             face.alignment_to_face(None, alignment)
             face = rotate_landmarks(face, rotation_matrix)
             alignment = face.face_to_alignment(alignment)
+            del alignment["r"]
 
     @staticmethod
     def get_original_rotation_matrix(dimensions, angle):

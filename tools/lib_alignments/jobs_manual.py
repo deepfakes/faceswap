@@ -4,10 +4,8 @@
 import cv2
 import numpy as np
 
-from tqdm import tqdm
-
 from lib.face_alignment import Extract
-from . import Annotate, ExtractedFaces, Frames
+from . import Annotate, ExtractedFaces, Frames, Rotate
 
 
 class Interface():
@@ -359,35 +357,30 @@ class Help():
 class Manual():
     """ Manually adjust or create landmarks data """
     def __init__(self, alignments, arguments):
+        self.arguments = arguments
         self.verbose = arguments.verbose
         self.alignments = alignments
         self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
-        self.fix_rotation()
+        self.extracted_faces = None
+        self.interface = None
+        self.help = None
+        self.mouse_handler = None
+
+    def process(self):
+        """ Process manual extraction """
+        rotate = Rotate(self.alignments, self.arguments,
+                        frames=self.frames, child_process=True)
+        rotate.process()
+
         print("\n[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
-                                              align_eyes=arguments.align_eyes)
+                                              align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
         self.mouse_handler = MouseHandler(self.interface, self.verbose)
 
-    def fix_rotation(self):
-        """ Backwards compatibility fix to to transform landmarks from rotated
-            frames """
-        rotated = self.alignments.get_rotated()
-        if not rotated:
-            return
-        print("Legacy rotated frames found. Rotating landmarks")
-        for rotate_item in tqdm(rotated,
-                                desc="Rotating Landmarks"):
-            if rotate_item not in self.frames.items.keys():
-                continue
-            dims = self.frames.load_image(rotate_item).shape[:2]
-            self.alignments.rotate_existing_landmarks(rotate_item, dims)
-
-    def process(self):
-        """ Process manual extraction """
         print(self.help.helptext)
         max_idx = self.frames.count - 1
         self.interface.state["navigation"]["max_frame"] = max_idx
