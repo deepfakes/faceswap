@@ -2,10 +2,9 @@
 """ Tools for manipulating the alignments seralized file """
 
 # TODO merge alignments
-# TODO Fix rotate landmarks
 from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Draw, Extract, Manual,
-                             Reformat, RemoveAlignments)
+                             Reformat, RemoveAlignments, Rotate, Sort)
 
 
 class Alignments():
@@ -37,6 +36,8 @@ class Alignments():
         """ Main processing function of the Align tool """
         if self.args.job.startswith("remove-"):
             job = RemoveAlignments
+        elif self.args.job.startswith("sort-"):
+            job = Sort
         elif self.args.job in("missing-alignments", "missing-frames",
                               "multi-faces", "leftover-faces",
                               "no-faces"):

@@ -193,25 +193,12 @@ class Check():
 class Draw():
     """ Draw Alignments on passed in images """
     def __init__(self, alignments, arguments):
+        self.arguments = arguments
         self.verbose = arguments.verbose
         self.alignments = alignments
         self.frames = Frames(arguments.frames_dir, self.verbose)
-        self.fix_rotation()
         self.output_folder = self.set_output()
-        self.extracted_faces = ExtractedFaces(self.frames,
-                                              self.alignments,
-                                              align_eyes=arguments.align_eyes)
-
-    def fix_rotation(self):
-        """ Backwards compatibility fix to to transform landmarks from rotated
-            frames """
-        rotated = self.alignments.get_rotated()
-        for frame in self.frames.file_list_sorted:
-            filename = frame["frame_fullname"]
-            if filename not in rotated:
-                continue
-            dims = self.frames.load_image(filename).shape[:2]
-            self.alignments.rotate_landmarks(filename, dims)
+        self.extracted_faces = None
 
     def set_output(self):
         """ Set the output folder path """
@@ -223,7 +210,15 @@ class Draw():
 
     def process(self):
         """ Run the draw alignments process """
+        rotate = Rotate(self.alignments, self.arguments,
+                        frames=self.frames, child_process=True)
+        rotate.process()
+
         print("\n[DRAW LANDMARKS]")  # Tidy up cli output
+        self.extracted_faces = ExtractedFaces(
+            self.frames,
+            self.alignments,
+            align_eyes=self.arguments.align_eyes)
         frames_drawn = 0
         for frame in tqdm(self.frames.file_list_sorted,
                           desc="Drawing landmarks"):
@@ -387,8 +382,7 @@ class Reformat():
             alignments[sourcefile] = list()
 
         left, top, right, bottom = dfl_alignments["source_rect"]
-        alignment = {"r": 0,
-                     "x": left,
+        alignment = {"x": left,
                      "w": right - left,
                      "y": top,
                      "h": bottom - top,
@@ -524,3 +518,134 @@ class RemoveAlignments():
         if self.verbose:
             print("Renamed {} to {}".format(src, dst))
         return 1
+
+
+class Rotate():
+    """ Rotating landmarks and bounding boxes on legacy alignments
+        and remove the 'r' parameter """
+    def __init__(self, alignments, arguments,
+                 frames=None, child_process=False):
+        self.verbose = arguments.verbose
+        self.alignments = alignments
+        self.child_process = child_process
+        self.frames = frames
+        if not frames:
+            self.frames = Frames(arguments.frames_dir, self.verbose)
+
+    def process(self):
+        """ Run the rotate alignments process """
+        rotated = self.alignments.get_rotated()
+        if not rotated and self.child_process:
+            return
+        print("\n[ROTATE LANDMARKS]")  # Tidy up cli output
+        if self.child_process:
+            print("Legacy rotated frames found. Rotating landmarks")
+        self.rotate_landmarks(rotated)
+        if not self.child_process:
+            self.alignments.save_alignments()
+
+    def rotate_landmarks(self, rotated):
+        """ Rotate the landmarks """
+        for rotate_item in tqdm(rotated,
+                                desc="Rotating Landmarks"):
+            if rotate_item not in self.frames.items.keys():
+                continue
+            dims = self.frames.load_image(rotate_item).shape[:2]
+            self.alignments.rotate_existing_landmarks(rotate_item, dims)
+
+
+class Sort():
+    """ Sort alignments' index by the order they appear in
+        an image """
+    def __init__(self, alignments, arguments):
+        self.verbose = arguments.verbose
+        self.alignments = alignments
+        self.axis = arguments.job.replace("sort-", "")
+        self.faces = self.get_faces(arguments)
+
+    def get_faces(self, arguments):
+        """ If faces argument is specified, load faces_dir
+            otherwise return None """
+        if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
+            return None
+        return Faces(arguments.faces_dir, self.verbose)
+
+    def process(self):
+        """ Execute the sort process """
+        print("\n[SORT INDEXES]")  # Tidy up cli output
+        self.check_rotated()
+        self.reindex_faces()
+        self.alignments.save_alignments()
+
+    def check_rotated(self):
+        """ Legacy rotated alignments will not have the correct x, y
+            positions, so generate a warning and exit """
+        if any(alignment.get("r", None)
+               for val in self.alignments.alignments.values()
+               for alignment in val):
+            print("WARNING: There are rotated frames in the alignments "
+                  "file.\n\t Position of faces will not be correctly "
+                  "calculated for these frames.\n\t You should run rotation "
+                  "tool to update the file prior to running sort:\n\t "
+                  "'python tools.py alignments -j rotate -a "
+                  "<alignments_file> -fr <frames_folder>'")
+            exit(0)
+
+    def reindex_faces(self):
+        """ Re-Index the faces """
+        reindexed = 0
+        for alignment in tqdm(self.alignments.get_alignments_one_image(),
+                              desc="Sort alignment indexes",
+                              total=self.alignments.count):
+            frame, alignments, count, key = alignment
+            if count <= 1:
+                continue
+            sorted_alignments = sorted([item for item in alignments],
+                                       key=lambda x: (x[self.axis]))
+            if sorted_alignments == alignments:
+                continue
+            map_faces = self.map_face_names(alignments,
+                                            sorted_alignments,
+                                            frame)
+            self.rename_faces(map_faces)
+            self.alignments.alignments[key] = sorted_alignments
+            reindexed += 1
+        print("{} Frames had their faces reindexed".format(reindexed))
+
+    def map_face_names(self, alignments, sorted_alignments, frame):
+        """ Map the old and new indexes for face renaming """
+        map_faces = list()
+        if not self.faces:
+            return map_faces
+        for idx, alignment in enumerate(alignments):
+            idx_new = sorted_alignments.index(alignment)
+            mapping = [{"old_name": face["face_fullname"],
+                        "new_name": "{}_{}{}".format(frame,
+                                                     idx_new,
+                                                     face["face_extension"])}
+                       for face in self.faces.file_list_sorted
+                       if face["frame_name"] == frame
+                       and face["face_index"] == idx]
+            if not mapping:
+                print("WARNING: No face image found "
+                      "for frame '{}' at index '{}'".format(frame, idx))
+            map_faces.extend(mapping)
+        return map_faces
+
+    def rename_faces(self, map_faces):
+        """ Rename faces
+            Done in 2 iterations as two files cannot share the same name """
+        temp_ext = ".temp_move"
+        for action in ("temp", "final"):
+            for face in map_faces:
+                old = face["old_name"]
+                new = face["new_name"]
+                if old == new:
+                    continue
+                old_file = old if action == "temp" else old + temp_ext
+                new_file = old + temp_ext if action == "temp" else new
+                src = os.path.join(self.faces.folder, old_file)
+                dst = os.path.join(self.faces.folder, new_file)
+                os.rename(src, dst)
+                if self.verbose and action == "final":
+                    print("Renamed {} to {}".format(old, new))

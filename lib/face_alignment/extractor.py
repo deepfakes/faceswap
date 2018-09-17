@@ -257,7 +257,7 @@ class Extract():
         self.initialize(mtcnn_kwargs, dlib_buffer)
 
         if not initialize_only:
-            self.execute(detector, input_image_bgr, input_is_predetected_face)
+            self.execute(input_image_bgr, input_is_predetected_face)
 
     def initialize(self, mtcnn_kwargs, dlib_buffer):
         """ initialize Keras and Dlib """

@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from lib.gpu_stats import GPUStats
 from lib.multithreading import pool_process
-from lib.utils import rotate_image_by_angle
+from lib.utils import rotate_image_by_angle, rotate_landmarks
 from scripts.fsmedia import Alignments, Faces, Images, Utils
 
 tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
@@ -97,19 +97,28 @@ class Extract():
             image = Utils.cv2_read_write('read', filename)
 
             for angle in self.images.rotation_angles:
-                currentimage = rotate_image_by_angle(image, angle)
+                currentimage, rotation_matrix = rotate_image_by_angle(image,
+                                                                      angle)
                 faces = self.faces.get_faces(currentimage, angle)
-                process_faces = [(idx, face) for idx, face in faces]
-                if process_faces and angle != 0 and self.args.verbose:
+                process_faces = [[idx, face] for idx, face in faces]
+                if not process_faces:
+                    continue
+
+                if angle != 0 and self.args.verbose:
                     print("found face(s) by rotating image "
                           "{} degrees".format(angle))
+                if angle != 0:
+                    process_faces = [[idx,
+                                      rotate_landmarks(face, rotation_matrix)]
+                                     for idx, face in process_faces]
+
                 if process_faces:
                     break
 
             final_faces = [self.process_single_face(idx,
                                                     face,
                                                     filename,
-                                                    currentimage)
+                                                    image)
                            for idx, face in process_faces]
 
             retval = filename, final_faces
@@ -117,6 +126,7 @@ class Extract():
             if self.args.verbose:
                 print("Failed to extract from image: "
                       "{}. Reason: {}".format(filename, err))
+            raise
         return retval
 
     def process_single_face(self, idx, face, filename, image):
@@ -144,8 +154,7 @@ class Extract():
                                         Path(filename).suffix)
             Utils.cv2_read_write('write', filename, resized_face)
 
-        return {"r": face.r,
-                "x": face.x,
+        return {"x": face.x,
                 "w": face.w,
                 "y": face.y,
                 "h": face.h,

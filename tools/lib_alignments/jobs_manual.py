@@ -2,11 +2,10 @@
 """ Manual processing of alignments """
 
 import cv2
-
 import numpy as np
 
 from lib.face_alignment import Extract
-from . import Annotate, ExtractedFaces, Frames
+from . import Annotate, ExtractedFaces, Frames, Rotate
 
 
 class Interface():
@@ -23,80 +22,81 @@ class Interface():
 
     def set_controls(self):
         """ Set keyboard controls, destination and help text """
-        controls = {ord("z"): {"action": self.iterate_frame,
-                               "args": ("navigation", - 1),
-                               "help": "Previous Frame"},
-                    ord("x"): {"action": self.iterate_frame,
-                               "args": ("navigation", 1),
-                               "help": "Next Frame"},
-                    ord("["): {"action": self.iterate_frame,
-                               "args": ("navigation", - 100),
-                               "help": "100 Frames Back"},
-                    ord("]"): {"action": self.iterate_frame,
-                               "args": ("navigation", 100),
-                               "help": "100 Frames Forward"},
-                    ord("{"): {"action": self.iterate_frame,
-                               "args": ("navigation", "first"),
-                               "help": "Go to First Frame"},
-                    ord("}"): {"action": self.iterate_frame,
-                               "args": ("navigation", "last"),
-                               "help": "Go to Last Frame"},
+        controls = {"z": {"action": self.iterate_frame,
+                          "args": ("navigation", - 1),
+                          "help": "Previous Frame"},
+                    "x": {"action": self.iterate_frame,
+                          "args": ("navigation", 1),
+                          "help": "Next Frame"},
+                    "[": {"action": self.iterate_frame,
+                          "args": ("navigation", - 100),
+                          "help": "100 Frames Back"},
+                    "]": {"action": self.iterate_frame,
+                          "args": ("navigation", 100),
+                          "help": "100 Frames Forward"},
+                    "{": {"action": self.iterate_frame,
+                          "args": ("navigation", "first"),
+                          "help": "Go to First Frame"},
+                    "}": {"action": self.iterate_frame,
+                          "args": ("navigation", "last"),
+                          "help": "Go to Last Frame"},
                     27: {"action": "quit",
                          "key_text": "ESC",
                          "args": ("navigation", None),
-                         "help": "Exit"},
-                    ord("/"): {"action": self.iterate_state,
-                               "args": ("navigation", "frame-size"),
-                               "help": "Cycle Frame Size"},
-                    ord("s"): {"action": self.iterate_state,
-                               "args": ("navigation", "skip-mode"),
-                               "help": ("Skip Mode (All, No Faces, Multi "
-                                        "Faces, Has Faces)")},
-                    32: {"action": self.save_alignments,
-                         "key_text": "SPACE",
-                         "args": ("edit", None),
-                         "help": "Save Alignments"},
-                    ord("r"): {"action": self.reload_alignments,
-                               "args": ("edit", None),
-                               "help": "Reload Alignments (Discard changes)"},
-                    ord("d"): {"action": self.delete_alignment,
-                               "args": ("edit", None),
-                               "help": "Delete Selected Alignment"},
-                    ord("m"): {"action": self.toggle_state,
-                               "args": ("edit", "active"),
-                               "help": "Change Mode (View, Edit)"},
-                    (ord("0"), ord("9")): {
-                        "action": self.set_state_value,
-                        "key_text": "0 to 9",
-                        "args": ["edit", "selected"],
-                        "help": "Select/Deselect Face at this Index"},
-                    ord("y"): {"action": self.toggle_state,
-                               "args": ("image", "display"),
-                               "help": "Toggle Image"},
-                    ord("u"): {"action": self.iterate_state,
-                               "args": ("bounding_box", "color"),
-                               "help": "Cycle Bounding Box Color"},
-                    ord("i"): {"action": self.iterate_state,
-                               "args": ("extract_box", "color"),
-                               "help": "Cycle Extract Box Color"},
-                    ord("o"): {"action": self.iterate_state,
-                               "args": ("landmarks", "color"),
-                               "help": "Cycle Landmarks Color"},
-                    ord("p"): {"action": self.iterate_state,
-                               "args": ("landmarks_mesh", "color"),
-                               "help": "Cycle Landmarks Mesh Color"},
-                    ord("h"): {"action": self.iterate_state,
-                               "args": ("bounding_box", "size"),
-                               "help": "Cycle Bounding Box thickness"},
-                    ord("j"): {"action": self.iterate_state,
-                               "args": ("extract_box", "size"),
-                               "help": "Cycle Extract Box thickness"},
-                    ord("k"): {"action": self.iterate_state,
-                               "args": ("landmarks", "size"),
-                               "help": "Cycle Landmarks - point size"},
-                    ord("l"): {"action": self.iterate_state,
-                               "args": ("landmarks_mesh", "size"),
-                               "help": "Cycle Landmarks Mesh - thickness"}}
+                         "help": "Exit",
+                         "key_type": ord},
+                    "/": {"action": self.iterate_state,
+                          "args": ("navigation", "frame-size"),
+                          "help": "Cycle Frame Zoom"},
+                    "s": {"action": self.iterate_state,
+                          "args": ("navigation", "skip-mode"),
+                          "help": ("Skip Mode (All, No Faces, Multi Faces, "
+                                   "Has Faces)")},
+                    " ": {"action": self.save_alignments,
+                          "key_text": "SPACE",
+                          "args": ("edit", None),
+                          "help": "Save Alignments"},
+                    "r": {"action": self.reload_alignments,
+                          "args": ("edit", None),
+                          "help": "Reload Alignments (Discard all changes)"},
+                    "d": {"action": self.delete_alignment,
+                          "args": ("edit", None),
+                          "help": "Delete Selected Alignment"},
+                    "m": {"action": self.toggle_state,
+                          "args": ("edit", "active"),
+                          "help": "Change Mode (View, Edit)"},
+                    range(10): {"action": self.set_state_value,
+                                "key_text": "0 to 9",
+                                "args": ["edit", "selected"],
+                                "help": "Select/Deselect Face at this Index",
+                                "key_type": range},
+                    "y": {"action": self.toggle_state,
+                          "args": ("image", "display"),
+                          "help": "Toggle Image"},
+                    "u": {"action": self.iterate_state,
+                          "args": ("bounding_box", "color"),
+                          "help": "Cycle Bounding Box Color"},
+                    "i": {"action": self.iterate_state,
+                          "args": ("extract_box", "color"),
+                          "help": "Cycle Extract Box Color"},
+                    "o": {"action": self.iterate_state,
+                          "args": ("landmarks", "color"),
+                          "help": "Cycle Landmarks Color"},
+                    "p": {"action": self.iterate_state,
+                          "args": ("landmarks_mesh", "color"),
+                          "help": "Cycle Landmarks Mesh Color"},
+                    "h": {"action": self.iterate_state,
+                          "args": ("bounding_box", "size"),
+                          "help": "Cycle Bounding Box thickness"},
+                    "j": {"action": self.iterate_state,
+                          "args": ("extract_box", "size"),
+                          "help": "Cycle Extract Box thickness"},
+                    "k": {"action": self.iterate_state,
+                          "args": ("landmarks", "size"),
+                          "help": "Cycle Landmarks - point size"},
+                    "l": {"action": self.iterate_state,
+                          "args": ("landmarks_mesh", "size"),
+                          "help": "Cycle Landmarks Mesh - thickness"}}
 
         return controls
 
@@ -141,6 +141,7 @@ class Interface():
             return
         self.alignments.save_alignments()
         self.state["edit"]["updated"] = False
+        self.set_redraw(True)
 
     def reload_alignments(self, *args):
         """ Reload alignments """
@@ -186,6 +187,7 @@ class Interface():
     def set_state_value(self, item, category, value):
         """ Set state of requested item or toggle off """
         state = self.state[item][category]
+        value = str(value) if value is not None else value
         if state == value:
             self.state[item][category] = None
         else:
@@ -200,16 +202,19 @@ class Interface():
             next_frame = 0 if iteration == "first" else max_frame
             self.state["navigation"]["frame_idx"] = next_frame
             self.state["navigation"]["last_request"] = 0
+            self.set_redraw(True)
             return
 
         current_frame = self.state["navigation"]["frame_idx"]
         next_frame = current_frame + iteration
         end = 0 if iteration < 0 else max_frame
-        if (end > 0 and next_frame >= end) or (end == 0 and next_frame <= end):
+        if (max_frame == 0 or
+                (end > 0 and next_frame >= end) or
+                (end == 0 and next_frame <= end)):
             next_frame = end
         self.state["navigation"]["frame_idx"] = next_frame
         self.state["navigation"]["last_request"] = iteration
-        self.set_redraw(True)
+        self.set_state_value("edit", "selected", None)
 
     def get_color(self, item):
         """ Return color for selected item """
@@ -283,7 +288,7 @@ class Help():
             if help_section not in ("navigation", "edit"):
                 help_section = val["args"][1]
             key_text = val.get("key_text", None)
-            key_text = key_text if key_text else chr(key)
+            key_text = key_text if key_text else key
             helpout[help_section].append((val["help"], key_text))
 
         helpout["edit"].append(("Bounding Box - Move", "Left Click"))
@@ -355,32 +360,30 @@ class Help():
 class Manual():
     """ Manually adjust or create landmarks data """
     def __init__(self, alignments, arguments):
+        self.arguments = arguments
         self.verbose = arguments.verbose
         self.alignments = alignments
         self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir, self.verbose)
-        self.fix_rotation()
+        self.extracted_faces = None
+        self.interface = None
+        self.help = None
+        self.mouse_handler = None
+
+    def process(self):
+        """ Process manual extraction """
+        rotate = Rotate(self.alignments, self.arguments,
+                        frames=self.frames, child_process=True)
+        rotate.process()
+
         print("\n[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
-                                              align_eyes=arguments.align_eyes)
+                                              align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
         self.mouse_handler = MouseHandler(self.interface, self.verbose)
 
-    def fix_rotation(self):
-        """ Backwards compatibility fix to to transform landmarks from rotated
-            frames """
-        rotated = self.alignments.get_rotated()
-        for frame in self.frames.file_list_sorted:
-            filename = frame["frame_fullname"]
-            if filename not in rotated:
-                continue
-            dims = self.frames.load_image(filename).shape[:2]
-            self.alignments.rotate_landmarks(filename, dims)
-
-    def process(self):
-        """ Process manual extraction """
         print(self.help.helptext)
         max_idx = self.frames.count - 1
         self.interface.state["navigation"]["max_frame"] = max_idx
@@ -392,16 +395,8 @@ class Manual():
         cv2.namedWindow("Faces")
         cv2.setMouseCallback('Frame', self.mouse_handler.on_event)
 
-        controls = self.interface.controls
-        range_keys = dict()
-
         frame, faces = self.get_frame()
-
-        for keyrange, value in controls.items():
-            if not isinstance(keyrange, tuple):
-                continue
-            for key in range(keyrange[0], keyrange[1] + 1):
-                range_keys[key] = value
+        press = self.get_keys()
 
         while True:
             if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
@@ -411,17 +406,17 @@ class Manual():
             cv2.imshow("Faces", faces)
             key = cv2.waitKey(1)
 
-            if key in controls.keys():
-                action = controls[key]["action"]
-                args = controls[key]["args"]
+            if key in press.keys():
+                action = press[key]["action"]
                 if action == "quit":
                     break
+
+                if press[key].get("key_type") == range:
+                    args = press[key]["args"] + [chr(key)]
                 else:
-                    action(*args)
-            elif key in range_keys.keys():
-                action = range_keys[key]["action"]
-                args = range_keys[key]["args"] + [chr(key)]
+                    args = press[key]["args"]
                 action(*args)
+
             if not self.interface.redraw():
                 continue
 
@@ -429,6 +424,21 @@ class Manual():
             self.interface.set_redraw(False)
 
         cv2.destroyAllWindows()
+
+    def get_keys(self):
+        """ Convert keys dict into something useful
+            for OpenCV """
+        keys = dict()
+        for key, val in self.interface.controls.items():
+            if val.get("key_type", str) == range:
+                for range_key in key:
+                    keys[ord(str(range_key))] = val
+            elif val.get("key_type", str) == ord:
+                keys[key] = val
+            else:
+                keys[ord(key)] = val
+
+        return keys
 
     def get_frame(self):
         """ Compile the frame and get faces """
@@ -638,8 +648,6 @@ class MouseHandler():
         self.dims = None
         self.media = {"frame_id": None,
                       "image": None,
-                      "scaling": None,
-                      "face_id": None,
                       "bounding_box": list(),
                       "bounding_box_orig": list()}
 
@@ -669,7 +677,6 @@ class MouseHandler():
 
     def initialize(self):
         """ Update changed parameters """
-        self.media["scaling"] = self.interface.get_frame_scaling()
         frame = self.interface.get_frame_name()
         if frame == self.media["frame_id"]:
             return
@@ -678,11 +685,10 @@ class MouseHandler():
 
     def set_bounding_box(self, pt_x, pt_y):
         """ Select or create bounding box """
-        self.media["face_id"] = self.interface.get_selected_face_id()
-        if self.media["face_id"] is None:
+        if self.interface.get_selected_face_id() is None:
             self.check_click_location(pt_x, pt_y)
 
-        if self.media["face_id"] is not None:
+        if self.interface.get_selected_face_id() is not None:
             self.dims_from_alignment()
         else:
             self.dims_from_image()
@@ -702,28 +708,28 @@ class MouseHandler():
             bottom = alignment["y"] + alignment["h"]
 
             if left <= pt_x <= right and top <= pt_y <= bottom:
-                self.media["face_id"] = idx
+                self.interface.set_state_value("edit", "selected", idx)
                 break
 
     def dims_from_alignment(self):
         """ Set the height and width of bounding box from alignment """
         frame = self.media["frame_id"]
-        face_id = self.media["face_id"]
+        face_id = self.interface.get_selected_face_id()
         alignment = self.alignments.get_alignments_for_frame(frame)[face_id]
         self.dims = (alignment["w"], alignment["h"])
 
     def dims_from_image(self):
         """ Set the height and width of bounding
-            box at 15% of longest axis """
+            box at 10% of longest axis """
         size = max(self.media["image"].shape[:2])
-        dim = int(size / 6.67)
+        dim = int(size / 10.00)
         self.dims = (dim, dim)
 
     def bounding_from_center(self):
         """ Get bounding X Y from center """
         pt_x, pt_y = self.center
         width, height = self.dims
-        scale = self.media["scaling"]
+        scale = self.interface.get_frame_scaling()
         self.media["bounding_box"] = [int((pt_x / scale) - width / 2),
                                       int((pt_y / scale) - height / 2),
                                       int((pt_x / scale) + width / 2),
@@ -743,8 +749,8 @@ class MouseHandler():
             self.last_move = (pt_x, pt_y)
             self.media["bounding_box_orig"] = self.media["bounding_box"]
 
-        move_x = int((pt_x - self.last_move[0]) / 2)
-        move_y = int((self.last_move[1] - pt_y) / 2)
+        move_x = int(pt_x - self.last_move[0])
+        move_y = int(self.last_move[1] - pt_y)
 
         original = self.media["bounding_box_orig"]
         updated = self.media["bounding_box"]
@@ -762,20 +768,22 @@ class MouseHandler():
                              manual_face=self.media["bounding_box"])
         landmarks = self.extract.landmarks[0][1]
         left, top, right, bottom = self.media["bounding_box"]
-        alignment = {"r": 0,
-                     "x": left,
+        alignment = {"x": left,
                      "w": right - left,
                      "y": top,
                      "h": bottom - top,
                      "landmarksXY": landmarks}
         frame = self.media["frame_id"]
-        if self.media["face_id"] is None:
-            self.media["face_id"] = self.alignments.add_alignment(frame,
-                                                                  alignment)
+
+        if self.interface.get_selected_face_id() is None:
+            idx = self.alignments.add_alignment(frame, alignment)
+            self.interface.set_state_value("edit", "selected", idx)
         else:
-            self.alignments.update_alignment(frame,
-                                             self.media["face_id"],
-                                             alignment)
+            self.alignments.update_alignment(
+                frame,
+                self.interface.get_selected_face_id(),
+                alignment)
+            self.interface.set_redraw(True)
+
         self.interface.state["edit"]["updated"] = True
         self.interface.state["edit"]["update_faces"] = True
-        self.interface.set_redraw(True)
