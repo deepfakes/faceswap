@@ -15,7 +15,8 @@ from lib.detect_blur import is_blurry
 from lib import Serializer
 from lib.faces_detect import detect_faces, DetectedFace
 from lib.FaceFilter import FaceFilter
-from lib.utils import get_folder, get_image_paths, set_system_verbosity
+from lib.utils import (get_folder, get_image_paths, rotate_image_by_angle,
+                       set_system_verbosity)
 from plugins.PluginLoader import PluginLoader
 
 
@@ -28,30 +29,6 @@ class Utils():
         """ Set the system output verbosity """
         lvl = '0' if verbose else '2'
         set_system_verbosity(lvl)
-
-    @staticmethod
-    def rotate_image_by_angle(image, angle,
-                              rotated_width=None, rotated_height=None):
-        """ Rotate an image by a given angle.
-            From: https://stackoverflow.com/questions/22041699
-
-            This is required by both Faces and Images
-            so placed here for now """
-        height, width = image.shape[:2]
-        image_center = (width/2, height/2)
-        rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
-        if rotated_width is None or rotated_height is None:
-            abs_cos = abs(rotation_matrix[0, 0])
-            abs_sin = abs(rotation_matrix[0, 1])
-            if rotated_width is None:
-                rotated_width = int(height*abs_sin + width*abs_cos)
-            if rotated_height is None:
-                rotated_height = int(height*abs_cos + width*abs_sin)
-        rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
-        rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
-        return cv2.warpAffine(image,
-                              rotation_matrix,
-                              (rotated_width, rotated_height))
 
     @staticmethod
     def cv2_read_write(action, filename, image=None):
@@ -152,16 +129,17 @@ class Images():
 
     def rotate_image(self, image, rotation, reverse=False):
         """ Rotate the image forwards or backwards """
-        if rotation != 0:
-            if not reverse:
-                self.rotation_height, self.rotation_width = image.shape[:2]
-                image = Utils.rotate_image_by_angle(image, rotation)
-            else:
-                image = Utils.rotate_image_by_angle(
-                    image,
-                    rotation * -1,
-                    rotated_width=self.rotation_width,
-                    rotated_height=self.rotation_height)
+        if rotation == 0:
+            return image
+        if not reverse:
+            self.rotation_height, self.rotation_width = image.shape[:2]
+            image, _ = rotate_image_by_angle(image, rotation)
+        else:
+            image, _ = rotate_image_by_angle(
+                image,
+                rotation * -1,
+                rotated_width=self.rotation_width,
+                rotated_height=self.rotation_height)
         return image
 
 
@@ -254,8 +232,10 @@ class Faces():
         for rawface in faces:
             face = DetectedFace(**rawface)
             # Rotate the image if necessary
+            # NB: Rotation of landmarks now occurs at extract stage
+            # This is here for legacy alignments
             if face.r != 0:
-                image = Utils.rotate_image_by_angle(image, face.r)
+                image, _ = rotate_image_by_angle(image, face.r)
             face.image = image[face.y: face.y + face.h,
                                face.x: face.x + face.w]
             if self.filter and not self.filter.check(face):
