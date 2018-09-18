@@ -649,6 +649,7 @@ class MouseHandler():
         self.media = {"frame_id": None,
                       "image": None,
                       "bounding_box": list(),
+                      "bounding_last": list(),
                       "bounding_box_orig": list()}
 
     def on_event(self, event, x, y, flags, param):
@@ -669,6 +670,7 @@ class MouseHandler():
             self.set_bounding_box(x, y)
         elif event == cv2.EVENT_MBUTTONDOWN:
             self.mouse_state = "middle"
+            self.set_bounding_box(x, y)
         elif event == cv2.EVENT_MOUSEMOVE:
             if self.mouse_state == "left":
                 self.move_bounding_box(x, y)
@@ -682,6 +684,12 @@ class MouseHandler():
             return
         self.media["frame_id"] = frame
         self.media["image"] = self.frames.load_image(frame)
+        self.dims = None
+        self.center = None
+        self.last_move = None
+        self.mouse_state = None
+        self.media["bounding_box"] = list()
+        self.media["bounding_box_orig"] = list()
 
     def set_bounding_box(self, pt_x, pt_y):
         """ Select or create bounding box """
@@ -743,8 +751,6 @@ class MouseHandler():
 
     def resize_bounding_box(self, pt_x, pt_y):
         """ Resize the bounding box """
-        if not self.dims:
-            return
         if not self.last_move:
             self.last_move = (pt_x, pt_y)
             self.media["bounding_box_orig"] = self.media["bounding_box"]
