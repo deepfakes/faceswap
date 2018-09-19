@@ -402,7 +402,7 @@ class Manual():
             self.help.render()
             cv2.imshow("Frame", frame)
             cv2.imshow("Faces", faces)
-            key = cv2.waitKey(0)
+            key = cv2.waitKey(1)
 
             if key == -1:
                 break
