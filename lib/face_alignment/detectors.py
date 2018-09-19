@@ -4,7 +4,10 @@
     https://github.com/1adrianb/face-alignment """
 
 import os
+import numpy as np
+
 from tensorflow import Graph, Session
+
 import dlib
 
 from .mtcnn import create_mtcnn, detect_face
@@ -177,7 +180,41 @@ class MTCNNDetector(Detector):
     def detect_faces(self, image):
         """ Detect faces in rgb image """
         self.detected_faces = None
-        detected_faces = detect_face(image, **self.kwargs)
+        detected_faces, points = detect_face(image, **self.kwargs)
+        detected_faces = self.tighten_bounding_box(detected_faces, points)
         self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
                                               int(face[2]), int(face[3]))
                                for face in detected_faces]
+
+    @staticmethod
+    def tighten_bounding_box(faces, landmarks):
+        """ Tighten the bounding box for Face Alignment.
+
+            Face Alignment was built to expect a DLIB bounding
+            box and sometimes can't calculate landmarks on edge
+            cases. Tightening up the bounding box along the
+            longest edge improves it's chances and helps remove
+            'jitter' """
+        retval = list()
+        if len(faces) == 0:
+            return retval
+        face_landmarks = np.hsplit(landmarks, len(faces))
+        for idx, face in enumerate(faces):
+            pts = np.vsplit(face_landmarks[idx], 2)
+            boundary = (np.amin(pts[0]), np.amin(pts[1]),
+                        np.amax(pts[0]), np.amax(pts[1]))
+
+            len_x, len_y = face[2] - face[0], face[3] - face[1]
+            raw = 1 if len_x > len_y else 0 if len_x < len_y else -1
+            bounding = list()
+
+            for i in range(4):
+                if i % 2 == raw:
+                    bounding.append(int(face[i]))
+                else:
+                    # Reduce bounding box by 75% around landmarks
+                    remove = (boundary[i] - face[i]) / 4
+                    bounding.append(int(boundary[i] - remove))
+
+            retval.append(bounding)
+        return retval
