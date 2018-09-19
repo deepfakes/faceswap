@@ -399,12 +399,13 @@ class Manual():
         press = self.get_keys()
 
         while True:
-            if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
-                break
             self.help.render()
             cv2.imshow("Frame", frame)
             cv2.imshow("Faces", faces)
-            key = cv2.waitKey(1)
+            key = cv2.waitKey(0)
+
+            if key == -1:
+                break
 
             if key in press.keys():
                 action = press[key]["action"]
