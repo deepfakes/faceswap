@@ -469,7 +469,7 @@ class Manual():
         skip_mode = self.interface.get_skip_mode().lower()
 
         while True:
-            if skip_mode == "standard":
+            if skip_mode == "standard" or navigation["last_request"] == 0:
                 break
             elif (skip_mode == "no faces"
                   and not self.alignments.frame_has_faces(frame)):
@@ -481,11 +481,8 @@ class Manual():
                   and self.alignments.frame_has_faces(frame)):
                 break
             else:
-                iteration = navigation["last_request"]
-                old_idx = navigation["frame_idx"]
-                self.interface.iterate_frame("navigation", iteration)
-                if old_idx == navigation["frame_idx"]:
-                    break
+                self.interface.iterate_frame("navigation",
+                                             navigation["last_request"])
                 frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
 
         image = self.frames.load_image(frame)
