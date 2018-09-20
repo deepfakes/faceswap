@@ -21,4 +21,4 @@
 !tools
 !tools/lib*
 
-tools/lib_alignments/__pycache__/
+__pycache__/
