@@ -38,15 +38,15 @@ class Trainer():
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
         
-        self.model._epoch_no += 1        
+        self.model.epoch_no += 1        
                  
         if isinstance(loss_A, (list, tuple)):
             print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
-                time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A[1], loss_B[1]),
+                time.strftime("%H:%M:%S"), self.model.epoch_no, self._clock()-when, loss_A[1], loss_B[1]),
                 end='\r')
         else:
             print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
-                time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A, loss_B),
+                time.strftime("%H:%M:%S"), self.model.epoch_no, self._clock()-when, loss_A, loss_B),
                 end='\r')         
 
         if viewer is not None:
@@ -67,10 +67,11 @@ class Trainer():
         ], axis=1)
 
         if (test_A.shape[0] % 2)!=0:
-            figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0],0) ])
-            figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0],0) ])
+            figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0], 0) ])
+            figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0], 0) ])
 
         figure = numpy.concatenate([figure_A, figure_B], axis=0)
+        
         w = 4
         h = int( figure.shape[0] / w)
         figure = figure.reshape((w, h) + figure.shape[1:])
