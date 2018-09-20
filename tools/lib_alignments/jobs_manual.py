@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ Manual processing of alignments """
 
+import platform
+
 import cv2
 import numpy as np
 
@@ -404,7 +406,10 @@ class Manual():
             cv2.imshow("Faces", faces)
             key = cv2.waitKey(1)
 
-            if key == -1:
+            if platform.system() == "Windows" and key == -1:
+                break
+            elif (platform.system() != "Windows" and
+                  cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1):
                 break
 
             if key in press.keys():
