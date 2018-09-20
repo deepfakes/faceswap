@@ -469,7 +469,11 @@ class Manual():
         skip_mode = self.interface.get_skip_mode().lower()
 
         while True:
-            if skip_mode == "standard" or navigation["last_request"] == 0:
+            if navigation["last_request"] == 0:
+                break
+            elif navigation["frame_idx"] in (0, navigation["max_frame"]):
+                break
+            elif skip_mode == "standard":
                 break
             elif (skip_mode == "no faces"
                   and not self.alignments.frame_has_faces(frame)):
