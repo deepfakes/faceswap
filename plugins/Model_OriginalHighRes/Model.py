@@ -254,9 +254,9 @@ class Model():
     def Encoder_standard(self, **kwargs):
         impt = Input(shape=self.IMAGE_SHAPE)
                 
-        x = self.conv(128)(impt)
+        x = self.conv(128, use_instance_norm=True)(impt)
         x = self.conv(256, use_instance_norm=True)(x)
-        x = self.conv(512, use_instance_norm=True)(x)
+        x = self.conv(512)(x)
         x = self.conv(768)(x)
         x = self.conv(1024)(x)
         
@@ -285,13 +285,12 @@ class Model():
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
         x = self.upscale(512)(inpt)
-#        x = self.res_block(x, 512)
-        
+        x = self.res_block(x, 512)
+                
         x = self.upscale(256)(x)
         x = self.res_block(x, 256)
         
         x = self.upscale(128)(x)
-        x = self.res_block(x, 128)
         x = self.res_block(x, 128)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
@@ -383,14 +382,13 @@ class Model():
             state = serializer.unmarshal(fp.read().decode('utf-8'))
             try:
                 state[self.encoder_type]['epoch_no']
-            except KeyError:                    
-                if 'epoch_no' in state:                        
+            except KeyError:       
+                if 'epoch_no' in state:
                     if not EncoderType.ORIGINAL.value in state:
                         state[EncoderType.ORIGINAL.value] = {}                        
                     state[EncoderType.ORIGINAL.value]['epoch_no'] = state['epoch_no']
-                        
-                    if not self.encoder_type in state:
-                        state[self.encoder_type] = { 'epoch_no' : 0 }                                            
+                if not self.encoder_type in state:
+                    state[self.encoder_type] = self._new_state()                                            
         return state   
     
     @property
@@ -412,7 +410,11 @@ class Model():
             print('Loading training info ..')
             self._state = self._load_state()
         except IOError as e:
-            print('Error loading training info:', e.strerror)
+            import errno
+            if e.errno==errno.ENOENT:
+                print('No training info found.')
+            else:
+                print('Error loading training info:', e.strerror)
             self._state = { self.encoder_type : self._new_state() }            
         except JSONDecodeError as e:
             print('Error loading training info:', e.msg)
