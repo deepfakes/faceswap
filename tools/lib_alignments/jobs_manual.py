@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ Manual processing of alignments """
 
+import platform
+
 import cv2
 import numpy as np
 
@@ -70,6 +72,12 @@ class Interface():
                                 "args": ["edit", "selected"],
                                 "help": "Select/Deselect Face at this Index",
                                 "key_type": range},
+                    "c": {"action": self.copy_alignments,
+                          "args": ("edit", -1),
+                          "help": "Copy Previous Frame's Alignments"},
+                    "v": {"action": self.copy_alignments,
+                          "args": ("edit", 1),
+                          "help": "Copy Next Frame's Alignments"},
                     "y": {"action": self.toggle_state,
                           "args": ("image", "display"),
                           "help": "Toggle Image"},
@@ -163,6 +171,23 @@ class Interface():
             self.state["edit"]["updated"] = True
             self.state["edit"]["update_faces"] = True
             self.set_redraw(True)
+
+    def copy_alignments(self, *args):
+        """ Copy the alignments from the previous or next frame
+            to the current frame """
+        if self.get_edit_mode() != "Edit":
+            return
+        frame_id = self.state["navigation"]["frame_idx"] + args[1]
+        if not 0 <= frame_id <= self.state["navigation"]["max_frame"]:
+            return
+        current_frame = self.get_frame_name()
+        get_frame = self.frames.file_list_sorted[frame_id]["frame_fullname"]
+        alignments = self.alignments.get_alignments_for_frame(get_frame)
+        for alignment in alignments:
+            self.alignments. add_alignment(current_frame, alignment)
+        self.state["edit"]["updated"] = True
+        self.state["edit"]["update_faces"] = True
+        self.set_redraw(True)
 
     def toggle_state(self, item, category):
         """ Toggle state of requested item """
@@ -316,7 +341,7 @@ class Help():
 
     def background(self):
         """ Create an image to hold help text """
-        height = 850
+        height = 880
         width = 480
         image = np.zeros((height, width, 3), np.uint8)
         color = self.interface.get_state_color()
@@ -399,12 +424,16 @@ class Manual():
         press = self.get_keys()
 
         while True:
-            if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
-                break
             self.help.render()
             cv2.imshow("Frame", frame)
             cv2.imshow("Faces", faces)
             key = cv2.waitKey(1)
+
+            if platform.system() == "Windows" and key == -1:
+                break
+            elif (platform.system() != "Windows" and
+                  cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1):
+                break
 
             if key in press.keys():
                 action = press[key]["action"]
@@ -463,7 +492,11 @@ class Manual():
         skip_mode = self.interface.get_skip_mode().lower()
 
         while True:
-            if skip_mode == "standard":
+            if navigation["last_request"] == 0:
+                break
+            elif navigation["frame_idx"] in (0, navigation["max_frame"]):
+                break
+            elif skip_mode == "standard":
                 break
             elif (skip_mode == "no faces"
                   and not self.alignments.frame_has_faces(frame)):
@@ -475,11 +508,8 @@ class Manual():
                   and self.alignments.frame_has_faces(frame)):
                 break
             else:
-                iteration = navigation["last_request"]
-                old_idx = navigation["frame_idx"]
-                self.interface.iterate_frame("navigation", iteration)
-                if old_idx == navigation["frame_idx"]:
-                    break
+                self.interface.iterate_frame("navigation",
+                                             navigation["last_request"])
                 frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
 
         image = self.frames.load_image(frame)
