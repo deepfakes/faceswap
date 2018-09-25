@@ -444,6 +444,25 @@ class ExtractedFaces():
             self.get_faces(frame)
         return [self.original_roi(matrix) for matrix in self.matrices]
 
+    def get_roi_size_for_frame(self, frame):
+        """ Return the size of the original extract box for
+            the selected frame """
+        if self.current_frame != frame:
+            self.get_faces(frame)
+        sizes = list()
+        for matrix in self.matrices:
+            original_roi = self.original_roi(matrix)[0].squeeze()
+            top_left, top_right  = original_roi[0], original_roi[3]
+            len_x = top_right[0] - top_left[0]
+            len_y = top_right[1] - top_left[1]
+            if top_left[1] == top_right[1]:
+                length = len_y
+            else:
+                length = int(((len_x ** 2) + (len_y ** 2)) ** 0.5)
+            sizes.append(length)
+        return sizes
+
+
     def get_aligned_landmarks_for_frame(self, frame, landmarks_xy,
                                         update=False):
         """ Return the original rois for the selected frame """

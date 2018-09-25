@@ -72,7 +72,7 @@ class Check():
     def get_no_faces(self):
         """ yield each frame that has no face match in alignments file """
         self.output_message = "Frames with no faces"
-        for frame in self.items:
+        for frame in tqdm(self.items, total=len(self.items)):
             frame_name = frame["frame_fullname"]
             if not self.alignments.frame_has_faces(frame_name):
                 yield frame_name
@@ -89,7 +89,7 @@ class Check():
             frame_key = "frame_fullname"
             retval_key = "frame_fullname"
 
-        for item in self.items:
+        for item in tqdm(self.items, total=len(self.items)):
             frame = item[frame_key]
             if self.type == "faces":
                 frame = self.alignments.get_full_frame_name(frame)
@@ -102,7 +102,7 @@ class Check():
         """ yield each frame that does not exist in alignments file """
         self.output_message = "Frames missing from alignments file"
         exclude_filetypes = ["yaml", "yml", "p", "json", "txt"]
-        for frame in self.items:
+        for frame in tqdm(self.items, total=len(self.items)):
             frame_name = frame["frame_fullname"]
             if (frame["frame_extension"] not in exclude_filetypes
                     and not self.alignments.frame_in_alignments(frame_name)):
@@ -113,14 +113,15 @@ class Check():
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
         frames = [item["frame_fullname"] for item in self.items]
-        for frame in self.alignments.alignments.keys():
+        for frame in tqdm(self.alignments.alignments.keys(),
+                          total=len(self.alignments.count)):
             if frame not in frames:
                 yield frame
 
     def get_leftover_faces(self):
         """yield each face that isn't in the alignments file."""
         self.output_message = "Faces missing from the alignments file"
-        for face in self.items:
+        for face in tqdm(self.items, total=len(self.items)):
             frame = self.alignments.get_full_frame_name(face["frame_name"])
             alignment_faces = self.alignments.count_alignments_in_frame(frame)
 
@@ -252,11 +253,12 @@ class Draw():
 
 
 class Extract():
-    """ Re-extract faces from source frames based on
+    """ Re-extract faces from source frames based on 
         Alignment data """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
         self.alignments = alignments
+        self.type = arguments.job.replace("extract-", "")
         self.faces_dir = arguments.faces_dir
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.extracted_faces = ExtractedFaces(self.frames,
@@ -307,13 +309,25 @@ class Extract():
         face_count = 0
         frame_fullname = frame["frame_fullname"]
         frame_name = frame["frame_name"]
-        faces = self.extracted_faces.get_faces_for_frame(frame_fullname)
+        faces = self.select_valid_faces(frame_fullname)
+
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), ".png")
             self.frames.save_image(self.faces_dir, output, face)
             face_count += 1
         return face_count
 
+    def select_valid_faces(self, frame):
+        """ Return valid faces for extraction """
+        faces = self.extracted_faces.get_faces_for_frame(frame)
+        if self.type != "large":
+            return faces
+        valid_faces = list()
+        sizes = self.extracted_faces.get_roi_size_for_frame(frame)
+        for idx, size in enumerate(sizes):
+            if size >= self.extracted_faces.size:
+                valid_faces.append(faces[idx])
+        return valid_faces
 
 class Reformat():
     """ Reformat Alignment file """
