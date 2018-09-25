@@ -22,7 +22,7 @@ class AlignmentsArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-j", "--job"),
             "type": str,
-            "choices": ("draw", "extract", "manual",
+            "choices": ("draw", "extract", "extract-large", "manual",
                         "missing-alignments", "missing-frames",
                         "leftover-faces", "multi-faces", "no-faces",
                         "reformat", "remove-faces", "remove-frames",
@@ -39,6 +39,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tbased on alignment data. This is a"
                     "\n\tlot quicker than re-detecting faces." +
                     frames_and_faces_dir + align_eyes +
+                    "\n'extract-large' - Extract all faces that have not been"
+                    "\n\tupscaled. Useful for excluding low-res images from a"
+                    "\n\ttraining set" + frames_and_faces_dir + align_eyes +
                     "\n'manual': Manually view and edit landmarks." +
                     frames_dir + align_eyes +
                     "\n'missing-alignments': Identify frames that do not"

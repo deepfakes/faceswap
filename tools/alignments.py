@@ -34,7 +34,9 @@ class Alignments():
 
     def process(self):
         """ Main processing function of the Align tool """
-        if self.args.job.startswith("remove-"):
+        if self.args.job.startswith("extract"):
+            job = Extract
+        elif self.args.job.startswith("remove-"):
             job = RemoveAlignments
         elif self.args.job.startswith("sort-"):
             job = Sort

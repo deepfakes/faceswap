@@ -253,11 +253,12 @@ class Draw():
 
 
 class Extract():
-    """ Re-extract faces from source frames based on
+    """ Re-extract faces from source frames based on 
         Alignment data """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
         self.alignments = alignments
+        self.type = arguments.job.replace("extract-", "")
         self.faces_dir = arguments.faces_dir
         self.frames = Frames(arguments.frames_dir, self.verbose)
         self.extracted_faces = ExtractedFaces(self.frames,
@@ -308,13 +309,25 @@ class Extract():
         face_count = 0
         frame_fullname = frame["frame_fullname"]
         frame_name = frame["frame_name"]
-        faces = self.extracted_faces.get_faces_for_frame(frame_fullname)
+        faces = self.select_valid_faces(frame_fullname)
+
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), ".png")
             self.frames.save_image(self.faces_dir, output, face)
             face_count += 1
         return face_count
 
+    def select_valid_faces(self, frame):
+        """ Return valid faces for extraction """
+        faces = self.extracted_faces.get_faces_for_frame(frame)
+        if self.type != "large":
+            return faces
+        valid_faces = list()
+        sizes = self.extracted_faces.get_roi_size_for_frame(frame)
+        for idx, size in enumerate(sizes):
+            if size >= self.extracted_faces.size:
+                valid_faces.append(faces[idx])
+        return valid_faces
 
 class Reformat():
     """ Reformat Alignment file """
