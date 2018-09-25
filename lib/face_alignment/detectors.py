@@ -181,40 +181,36 @@ class MTCNNDetector(Detector):
         """ Detect faces in rgb image """
         self.detected_faces = None
         detected_faces, points = detect_face(image, **self.kwargs)
-        detected_faces = self.tighten_bounding_box(detected_faces, points)
+        detected_faces = self.recalculate_bounding_box(detected_faces, points)
         self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
                                               int(face[2]), int(face[3]))
                                for face in detected_faces]
 
     @staticmethod
-    def tighten_bounding_box(faces, landmarks):
-        """ Tighten the bounding box for Face Alignment.
+    def recalculate_bounding_box(faces, landmarks):
+        """ Recalculate the bounding box for Face Alignment.
 
             Face Alignment was built to expect a DLIB bounding
-            box and sometimes can't calculate landmarks on edge
-            cases. Tightening up the bounding box along the
-            longest edge improves it's chances and helps remove
-            'jitter' """
+            box and calculates center and scale based on that.
+            Resize the bounding box around features to present
+            a better box to Face Alignment. Helps its chances
+            on edge cases and helps remove 'jitter' """
         retval = list()
-        if len(faces) == 0:
+        no_faces = len(faces)
+        if no_faces == 0:
             return retval
-        face_landmarks = np.hsplit(landmarks, len(faces))
-        for idx, face in enumerate(faces):
+        face_landmarks = np.hsplit(landmarks, no_faces)
+        for idx in range(no_faces):
             pts = np.vsplit(face_landmarks[idx], 2)
-            boundary = (np.amin(pts[0]), np.amin(pts[1]),
-                        np.amax(pts[0]), np.amax(pts[1]))
+            boundary = [np.amin(pts[0]), np.amin(pts[1]),
+                        np.amax(pts[0]), np.amax(pts[1])]
 
-            len_x, len_y = face[2] - face[0], face[3] - face[1]
-            raw = 1 if len_x > len_y else 0 if len_x < len_y else -1
-            bounding = list()
+            pad_x = (boundary[2] - boundary[0]) * 0.5
+            pad_y = (boundary[3] - boundary[1]) * 0.5
 
-            for i in range(4):
-                if i % 2 == raw:
-                    bounding.append(int(face[i]))
-                else:
-                    # Reduce bounding box by 75% around landmarks
-                    remove = (boundary[i] - face[i]) / 4
-                    bounding.append(int(boundary[i] - remove))
-
+            bounding = [boundary[0] - pad_x, boundary[1] - pad_y,
+                        boundary[2] + pad_x, boundary[3] + pad_y]
+            
             retval.append(bounding)
         return retval
+
