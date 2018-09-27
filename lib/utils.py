@@ -166,22 +166,21 @@ class BackgroundGenerator(threading.Thread):
 
 class Timelapse:
     @classmethod
-    def CreateTimelapse(test, input_dir, output_dir, trainer):
+    def CreateTimelapse(test, input_dir_A, input_dir_B, output_dir, trainer):
         #self.input_dir = input
         #self.output_dir = output
         #self.trainer = trainer
 
-        if input_dir is None and output_dir is None:
+        if input_dir_A is None and input_dir_B is None and output_dir is None:
             return None
 
-        if input_dir is None or output_dir is None:
-            raise Exception("To enable the timelapse, you have to supply both parameters "
-                            "(--timelapse-input and --timelapse-ouput).")
+        if input_dir_A is None or input_dir_B is Nonne or output_dir is None:
+            raise Exception("To enable the timelapse, you have to supply all the parameters "
+                            "(--timelapse-input-A and --timelapse-input-B and --timelapse-ouput).")
 
-        return Timelapse(input_dir, output_dir, trainer)
+        return Timelapse(input_dir_A, input_dir_B, output_dir, trainer)
 
-    def __init__(self, input, output, trainer):
-        self.input_dir = input
+    def __init__(self, input_dir_A, input_dir_B, output, trainer):
         self.output_dir = output
         self.trainer = trainer
 
@@ -189,8 +188,8 @@ class Timelapse:
             print('Error: {} does not exist'.format(self.output_dir))
             exit(1)
 
-        self.files_A = self.read_input_images(os.path.join(self.input_dir, "A"))
-        self.files_B = self.read_input_images(os.path.join(self.input_dir, "B"))
+        self.files_A = self.read_input_images(input_dir_A)
+        self.files_B = self.read_input_images(input_dir_B)
 
         bs = min(len(self.files_A), len(self.files_B)) 
 
@@ -216,7 +215,7 @@ class Timelapse:
             'random_flip': 0
         }
 
-        zoom is self.trainer.model.IMAGE_SHAPE[0]//64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 64
+        zoom = self.trainer.model.IMAGE_SHAPE[0]//64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 64
 
         generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom)
         batch = generator.minibatchAB(input_images, batch_size)
