@@ -216,7 +216,9 @@ class Timelapse:
             'random_flip': 0
         }
 
-        generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom = self.trainer.model.IMAGE_SHAPE[0]//64)
+        zoom is self.trainer.model.IMAGE_SHAPE[0]//64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 64
+
+        generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom)
         batch = generator.minibatchAB(input_images, batch_size)
 
         return next(batch)[2]
