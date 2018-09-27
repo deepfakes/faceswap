@@ -672,6 +672,23 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "redirect_gui",
                               "default": False,
                               "help": argparse.SUPPRESS})
+        argument_list.append({"opts": ("-ti", "--timelapse-input"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_input",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain a folder "
+                                      "called A and a folder called B with "
+                                      "pictures in it that will be converted "
+                                      "for the timelapse. You must supply a "
+                                      "--timelapse-output parameter."})
+        argument_list.append({"opts": ("-to", "--timelapse-output"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_output",
+                              "default": None,
+                              "help": "The output folder for the timelapse"})
+
         return argument_list
 
 
