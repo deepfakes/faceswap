@@ -12,6 +12,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from lib.training_data import TrainingDataGenerator
+from time import time
+
 
 # Global variables
 _image_extensions = ['.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
@@ -161,9 +164,6 @@ class BackgroundGenerator(threading.Thread):
                 break
             yield next_item
 
-from lib.training_data import TrainingDataGenerator
-from time import time
-
 class Timelapse:
     @classmethod
     def CreateTimelapse(test, input_dir, output_dir, trainer):
@@ -189,8 +189,13 @@ class Timelapse:
             print('Error: {} does not exist'.format(self.output_dir))
             exit(1)
 
-        self.images_A = self.read_input_images(os.path.join(self.input_dir, "A"))
-        self.images_B = self.read_input_images(os.path.join(self.input_dir, "B"))
+        self.files_A = self.read_input_images(os.path.join(self.input_dir, "A"))
+        self.files_B = self.read_input_images(os.path.join(self.input_dir, "B"))
+
+        bs = min(len(self.files_A), len(self.files_B)) 
+
+        self.images_A = self.get_image_data(self.files_A, bs)
+        self.images_B = self.get_image_data(self.files_B, bs)
 
     def read_input_images(self, input_dir):
         if not os.path.isdir(input_dir):
@@ -201,8 +206,9 @@ class Timelapse:
             print('Error: {} contains no images'.format(input_dir))
             exit(1)
 
-        input_images = get_image_paths(input_dir)
+        return get_image_paths(input_dir)
 
+    def get_image_data(self, input_images, batch_size):
         random_transform_args = {
             'rotation_range': 0,
             'zoom_range': 0,
@@ -211,7 +217,7 @@ class Timelapse:
         }
 
         generator = TrainingDataGenerator(random_transform_args, 160)
-        batch = generator.minibatchAB(input_images, 6)
+        batch = generator.minibatchAB(input_images, batch_size)
 
         return next(batch)[2]
 
