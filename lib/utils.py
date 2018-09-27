@@ -160,3 +160,61 @@ class BackgroundGenerator(threading.Thread):
             if next_item is None:
                 break
             yield next_item
+
+from lib.training_data import TrainingDataGenerator
+from time import time
+
+class Timelapse:
+    @classmethod
+    def CreateTimelapse(test, input_dir, output_dir, trainer):
+        #self.input_dir = input
+        #self.output_dir = output
+        #self.trainer = trainer
+
+        if input_dir is None and output_dir is None:
+            return None
+
+        if input_dir is None or output_dir is None:
+            raise Exception("To enable the timelapse, you have to supply both parameters "
+                            "(--timelapse-input and --timelapse-ouput).")
+
+        return Timelapse(input_dir, output_dir, trainer)
+
+    def __init__(self, input, output, trainer):
+        self.input_dir = input
+        self.output_dir = output
+        self.trainer = trainer
+
+        if not os.path.isdir(self.output_dir):
+            print('Error: {} does not exist'.format(self.output_dir))
+            exit(1)
+
+        self.images_A = self.read_input_images(os.path.join(self.input_dir, "A"))
+        self.images_B = self.read_input_images(os.path.join(self.input_dir, "B"))
+
+    def read_input_images(self, input_dir):
+        if not os.path.isdir(input_dir):
+            print('Error: {} does not exist'.format(input_dir))
+            exit(1)
+
+        if not os.listdir(input_dir):
+            print('Error: {} contains no images'.format(input_dir))
+            exit(1)
+
+        input_images = get_image_paths(input_dir)
+
+        random_transform_args = {
+            'rotation_range': 0,
+            'zoom_range': 0,
+            'shift_range': 0,
+            'random_flip': 0
+        }
+
+        generator = TrainingDataGenerator(random_transform_args, 160)
+        batch = generator.minibatchAB(input_images, 6)
+
+        return next(batch)[2]
+
+    def work(self):
+        image = self.trainer.show_sample(self.images_A, self.images_B)
+        cv2.imwrite(os.path.join(self.output_dir, str(time()) + ".png"), image)
