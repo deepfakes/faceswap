@@ -683,7 +683,7 @@ class TrainArgs(FaceSwapArgs):
                                       "timelapse. You must supply a "
                                       "--timelapse-output and a "
                                       "--timelapse-input-B parameter."})
-        argument_list.append({"opts": ("-tia", "--timelapse-input-B"),
+        argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
                               "action": DirFullPaths,
                               "dest": "timelapse_input_B",
                               "default": None,

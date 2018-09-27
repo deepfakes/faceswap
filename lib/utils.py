@@ -174,7 +174,7 @@ class Timelapse:
         if input_dir_A is None and input_dir_B is None and output_dir is None:
             return None
 
-        if input_dir_A is None or input_dir_B is Nonne or output_dir is None:
+        if input_dir_A is None or input_dir_B is None or output_dir is None:
             raise Exception("To enable the timelapse, you have to supply all the parameters "
                             "(--timelapse-input-A and --timelapse-input-B and --timelapse-ouput).")
 
@@ -215,7 +215,7 @@ class Timelapse:
             'random_flip': 0
         }
 
-        zoom = self.trainer.model.IMAGE_SHAPE[0]//64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 64
+        zoom = self.trainer.model.IMAGE_SHAPE[0] // 64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 1
 
         generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom)
         batch = generator.minibatchAB(input_images, batch_size)
@@ -224,4 +224,4 @@ class Timelapse:
 
     def work(self):
         image = self.trainer.show_sample(self.images_A, self.images_B)
-        cv2.imwrite(os.path.join(self.output_dir, str(time()) + ".png"), image)
+        cv2.imwrite(os.path.join(self.output_dir, str(int(time())) + ".png"), image)

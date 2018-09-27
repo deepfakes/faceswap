@@ -88,7 +88,7 @@ class Train(object):
             trainer = self.load_trainer(model)
 
             self.timelapse = Timelapse.CreateTimelapse(self.args.timelapse_input_A,
-                                                       self.args.timelapse_input_B
+                                                       self.args.timelapse_input_B,
                                                        self.args.timelapse_output,
                                                        trainer)
 
