@@ -688,7 +688,6 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "timelapse_output",
                               "default": None,
                               "help": "The output folder for the timelapse"})
-
         return argument_list
 
 

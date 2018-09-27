@@ -12,7 +12,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from lib.training_data import TrainingDataGenerator
+import lib.training_data
 from time import time
 
 
@@ -216,7 +216,7 @@ class Timelapse:
             'random_flip': 0
         }
 
-        generator = TrainingDataGenerator(random_transform_args, 160)
+        generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom = self.trainer.model.IMAGE_SHAPE[0]//64)
         batch = generator.minibatchAB(input_images, batch_size)
 
         return next(batch)[2]
