@@ -201,16 +201,21 @@ class MTCNNDetector(Detector):
             return retval
         face_landmarks = np.hsplit(landmarks, no_faces)
         for idx in range(no_faces):
-            pts = np.vsplit(face_landmarks[idx], 2)
-            boundary = [np.amin(pts[0]), np.amin(pts[1]),
-                        np.amax(pts[0]), np.amax(pts[1])]
+            pts = np.reshape(face_landmarks[idx], (5, 2), order="F")
+            nose = pts[2]
 
-            pad_x = (boundary[2] - boundary[0]) * 0.5
-            pad_y = (boundary[3] - boundary[1]) * 0.5
+            amin, amax = np.amin(pts, axis=0), np.amax(pts, axis=0)
+            pad_x, pad_y = (amax[0] - amin[0]) / 2, (amax[1] - amin[1]) / 2
 
-            bounding = [boundary[0] - pad_x, boundary[1] - pad_y,
-                        boundary[2] + pad_x, boundary[3] + pad_y]
-            
+            center = (amax[0] - pad_x, amax[1] - pad_y)
+            offset = (center[0] - nose[0], nose[1] - center[1])
+            center = (center[0] + offset[0], center[1] + offset[1])
+
+            pad_x += pad_x
+            pad_y += pad_y
+
+            bounding = [center[0] - pad_x, center[1] - pad_y,
+                        center[0] + pad_x, center[1] + pad_y]
+
             retval.append(bounding)
         return retval
-
