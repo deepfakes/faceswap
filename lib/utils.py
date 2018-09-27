@@ -218,7 +218,7 @@ class Timelapse:
         zoom = self.trainer.model.IMAGE_SHAPE[0] // 64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 1
 
         generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom)
-        batch = generator.minibatchAB(input_images, batch_size)
+        batch = generator.minibatchAB(input_images, batch_size, doShuffle=False)
 
         return next(batch)[2]
 
