@@ -171,12 +171,15 @@ class Timelapse:
         #self.output_dir = output
         #self.trainer = trainer
 
-        if input_dir_A is None and input_dir_B is None and output_dir is None:
+        if input_dir_A is None and input_dir_B is None:
             return None
 
-        if input_dir_A is None or input_dir_B is None or output_dir is None:
+        if input_dir_A is None or input_dir_B is None:
             raise Exception("To enable the timelapse, you have to supply all the parameters "
-                            "(--timelapse-input-A and --timelapse-input-B and --timelapse-ouput).")
+                            "(--timelapse-input-A and --timelapse-input-B).")
+
+        if output_dir is None:
+            output_dir = get_folder(os.path.join(trainer.model.model_dir, "timelapse"))
 
         return Timelapse(input_dir_A, input_dir_B, output_dir, trainer)
 

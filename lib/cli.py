@@ -698,7 +698,10 @@ class TrainArgs(FaceSwapArgs):
                               "action": DirFullPaths,
                               "dest": "timelapse_output",
                               "default": None,
-                              "help": "The output folder for the timelapse"})
+                              "help": "The output folder for the timelapse. "
+                                      "If the input folders are supplied but "
+                                      "no output folder, it will default to "
+                                      "your model folder /timelapse/"})
         return argument_list
 
 
