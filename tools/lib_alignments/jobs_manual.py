@@ -781,6 +781,8 @@ class MouseHandler():
 
     def resize_bounding_box(self, pt_x, pt_y):
         """ Resize the bounding box """
+        scale = self.interface.get_frame_scaling()
+
         if not self.last_move:
             self.last_move = (pt_x, pt_y)
             self.media["bounding_box_orig"] = self.media["bounding_box"]
@@ -791,10 +793,12 @@ class MouseHandler():
         original = self.media["bounding_box_orig"]
         updated = self.media["bounding_box"]
 
-        updated[0] = min(self.center[0] - 10, original[0] - move_x)
-        updated[1] = min(self.center[1] - 10, original[1] - move_y)
-        updated[2] = max(self.center[0] + 10, original[2] + move_x)
-        updated[3] = max(self.center[1] + 10, original[3] + move_y)
+        minsize = int(10 / scale)
+        center = (int(self.center[0] / scale), int(self.center[1] / scale))
+        updated[0] = min(center[0] - minsize, original[0] - move_x)
+        updated[1] = min(center[1] - minsize, original[1] - move_y)
+        updated[2] = max(center[0] + minsize, original[2] + move_x)
+        updated[3] = max(center[1] + minsize, original[3] + move_y)
         self.update_landmarks()
         self.last_move = (pt_x, pt_y)
 
