@@ -310,7 +310,7 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor):
     """
     factor_count=0
     total_boxes=np.empty((0,9))
-    # points=np.empty(0)
+    points=np.empty(0)
     h=img.shape[0]
     w=img.shape[1]
     minl=np.amin([h, w])
@@ -417,25 +417,24 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor):
         out1 = np.transpose(out[1])
         out2 = np.transpose(out[2])
         score = out2[1,:]
-        # points = out1
+        points = out1
         ipass = np.where(score>threshold[2])
-        # points = points[:,ipass[0]]
+        points = points[:,ipass[0]]
         total_boxes = np.hstack([total_boxes[ipass[0],0:4].copy(), np.expand_dims(score[ipass].copy(),1)])
         mv = out0[:,ipass[0]]
 
         w = total_boxes[:,2]-total_boxes[:,0]+1
         h = total_boxes[:,3]-total_boxes[:,1]+1
-        # points[0:5,:] = np.tile(w,(5, 1))*points[0:5,:] + np.tile(total_boxes[:,0],(5, 1))-1
-        # points[5:10,:] = np.tile(h,(5, 1))*points[5:10,:] + np.tile(total_boxes[:,1],(5, 1))-1
+        points[0:5,:] = np.tile(w,(5, 1))*points[0:5,:] + np.tile(total_boxes[:,0],(5, 1))-1
+        points[5:10,:] = np.tile(h,(5, 1))*points[5:10,:] + np.tile(total_boxes[:,1],(5, 1))-1
         if total_boxes.shape[0]>0:
             total_boxes = bbreg(total_boxes.copy(), np.transpose(mv))
             pick = nms(total_boxes.copy(), 0.7, 'Min')
             total_boxes = total_boxes[pick,:]
-            # points = points[:,pick]
+            points = points[:,pick]
 
-    # return total_boxes, points
-    return total_boxes
-
+    return total_boxes, points
+    
 # function [boundingbox] = bbreg(boundingbox,reg)
 def bbreg(boundingbox,reg):
     """Calibrate bounding boxes"""
