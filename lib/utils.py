@@ -171,7 +171,7 @@ class Timelapse:
         #self.output_dir = output
         #self.trainer = trainer
 
-        if input_dir_A is None and input_dir_B is None:
+        if input_dir_A is None and input_dir_B is None and output_dir is None:
             return None
 
         if input_dir_A is None or input_dir_B is None:
