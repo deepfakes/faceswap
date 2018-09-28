@@ -4,7 +4,10 @@
     https://github.com/1adrianb/face-alignment """
 
 import os
+import numpy as np
+
 from tensorflow import Graph, Session
+
 import dlib
 
 from .mtcnn import create_mtcnn, detect_face
@@ -40,6 +43,25 @@ class Detector(object):
         """ Return whether the passed in object is
             a dlib.mmod_rectangle """
         return isinstance(d_rectangle, dlib.mmod_rectangle)
+
+
+class ManualDetector(Detector):
+    """ Manual Detector """
+    def set_data_path(self):
+        return None
+
+    def create_detector(self, verbose):
+        """ Create the mtcnn detector """
+        self.verbose = verbose
+
+        if self.verbose:
+            print("Adding Manual detector")
+
+    def detect_faces(self, bounding_box):
+        """ Return the given bounding box in a dlib rectangle """
+        face = bounding_box
+        self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
+                                              int(face[2]), int(face[3]))]
 
 
 class DLibDetector(Detector):
@@ -158,7 +180,42 @@ class MTCNNDetector(Detector):
     def detect_faces(self, image):
         """ Detect faces in rgb image """
         self.detected_faces = None
-        detected_faces = detect_face(image, **self.kwargs)
+        detected_faces, points = detect_face(image, **self.kwargs)
+        detected_faces = self.recalculate_bounding_box(detected_faces, points)
         self.detected_faces = [dlib.rectangle(int(face[0]), int(face[1]),
                                               int(face[2]), int(face[3]))
                                for face in detected_faces]
+
+    @staticmethod
+    def recalculate_bounding_box(faces, landmarks):
+        """ Recalculate the bounding box for Face Alignment.
+
+            Face Alignment was built to expect a DLIB bounding
+            box and calculates center and scale based on that.
+            Resize the bounding box around features to present
+            a better box to Face Alignment. Helps its chances
+            on edge cases and helps remove 'jitter' """
+        retval = list()
+        no_faces = len(faces)
+        if no_faces == 0:
+            return retval
+        face_landmarks = np.hsplit(landmarks, no_faces)
+        for idx in range(no_faces):
+            pts = np.reshape(face_landmarks[idx], (5, 2), order="F")
+            nose = pts[2]
+
+            amin, amax = np.amin(pts, axis=0), np.amax(pts, axis=0)
+            pad_x, pad_y = (amax[0] - amin[0]) / 2, (amax[1] - amin[1]) / 2
+
+            center = (amax[0] - pad_x, amax[1] - pad_y)
+            offset = (center[0] - nose[0], nose[1] - center[1])
+            center = (center[0] + offset[0], center[1] + offset[1])
+
+            pad_x += pad_x
+            pad_y += pad_y
+
+            bounding = [center[0] - pad_x, center[1] - pad_y,
+                        center[0] + pad_x, center[1] + pad_y]
+
+            retval.append(bounding)
+        return retval
