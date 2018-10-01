@@ -6,6 +6,7 @@ import sys
 import platform
 OS_Version = (platform.system(), platform.release())
 Py_Version = (platform.python_version(), platform.architecture()[0])
+Is_MacOS = (platform.system() == 'Darwin')
 LD_LIBRARY_PATH = os.environ.get("LD_LIBRARY_PATH", None)
 IS_ADMIN = False
 IS_VIRTUALENV = False
@@ -15,6 +16,9 @@ ENABLE_CUDA = True
 COMPILE_DLIB_WITH_AVX_CUDA = True
 Required_Packages = [
 "tensorflow"
+]
+MacOS_Required_Packages = [
+"pynvx==0.0.4"
 ]
 Installed_Packages = {}
 Missing_Packages = []
@@ -180,7 +184,9 @@ def Continue():
         ERROR('Please install system dependencies to continue')
 
 def Check_Missing_Dep():
-    global Missing_Packages, Installed_Packages
+    global Missing_Packages, Installed_Packages, ENABLE_CUDA, Is_MacOS
+    if ENABLE_CUDA and Is_MacOS:
+        Required_Packages.extend(MacOS_Required_Packages)
     Missing_Packages = []
     for pkg in Required_Packages:
         key = pkg.split("==")[0]

@@ -20,6 +20,7 @@ class AlignmentsArgs(FaceSwapArgs):
         align_eyes = "\n\tCan optionally use the align-eyes switch (-ae)."
         argument_list = list()
         argument_list.append({
+
             "opts": ("-j", "--job"),
             "type": str,
             "choices": ("draw", "extract", "extract-large", "manual",
