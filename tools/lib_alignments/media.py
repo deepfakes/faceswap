@@ -10,7 +10,7 @@ import numpy as np
 
 from lib import Serializer
 from lib.utils import _image_extensions, rotate_landmarks
-from plugins.PluginLoader import PluginLoader
+from plugins.plugin_loader import PluginLoader
 
 
 class AlignmentData():

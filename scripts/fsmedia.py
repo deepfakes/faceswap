@@ -17,7 +17,7 @@ from lib.faces_detect import detect_faces, DetectedFace
 from lib.FaceFilter import FaceFilter
 from lib.utils import (get_folder, get_image_paths, rotate_image_by_angle,
                        set_system_verbosity)
-from plugins.PluginLoader import PluginLoader
+from plugins.plugin_loader import PluginLoader
 
 
 class Utils():

@@ -17,6 +17,8 @@
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons
 !scripts
-!plugins
+!plugins/
+!plugins/*
+!plugins/model/*
 !tools
 !tools/lib*

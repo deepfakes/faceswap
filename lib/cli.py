@@ -6,7 +6,7 @@ import os
 import platform
 import sys
 
-from plugins.PluginLoader import PluginLoader
+from plugins.plugin_loader import PluginLoader
 
 
 class ScriptExecutor():
