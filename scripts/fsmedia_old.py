@@ -13,7 +13,7 @@ import numpy as np
 
 from lib.detect_blur import is_blurry
 from lib import Serializer
-#from lib.faces_detect import detect_faces, DetectedFace
+from lib.faces_detect import detect_faces, DetectedFace
 from lib.FaceFilter import FaceFilter
 from lib.utils import (get_folder, get_image_paths, rotate_image_by_angle,
                        set_system_verbosity)
@@ -147,7 +147,7 @@ class Faces():
     """ Holds the faces """
     def __init__(self, arguments):
         self.args = arguments
-        self.extractors = self.load_extractor()
+        self.extractor = self.load_extractor()
         self.mtcnn_kwargs = self.get_mtcnn_kwargs()
         self.filter = self.load_face_filter()
         self.align_eyes = self.args.align_eyes if hasattr(
@@ -158,13 +158,12 @@ class Faces():
         self.num_faces_detected = 0
         self.verify_output = False
 
-    def load_extractor(self, extractor_name="align"):
+    @staticmethod
+    def load_extractor(extractor_name="Align"):
         """ Load the requested extractor for extraction """
-        detector = PluginLoader.get_detector(self.args.detector)()
-        # Add a cli option if other aligner plugins are added
-        aligner = PluginLoader.get_aligner("face_alignment")()
         extractor = PluginLoader.get_extractor(extractor_name)()
-        return detector, aligner, extractor
+
+        return extractor
 
     def get_mtcnn_kwargs(self):
         """ Add the mtcnn arguments into a kwargs dictionary """

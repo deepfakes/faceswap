@@ -11,7 +11,6 @@
 !requirements*
 !lib
 !lib/face_alignment
-!lib/face_alignment/.cache
 !lib/gui
 !lib/gui/.cache
 !lib/gui/.cache/preview
@@ -19,6 +18,7 @@
 !scripts
 !plugins/
 !plugins/*
+!plugins/extract/*
 !plugins/model/*
 !tools
 !tools/lib*

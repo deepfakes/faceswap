@@ -8,9 +8,21 @@ from importlib import import_module
 class PluginLoader():
     """ Plugin loader for extract, training and model tasks """
     @staticmethod
+    def get_detector(name):
+        """ Return requested detector plugin """
+        if name.lower().startswith("dlib"):
+            name = "dlib"
+        return PluginLoader._import("extract.detect", name)
+
+    @staticmethod
+    def get_aligner(name):
+        """ Return requested detector plugin """
+        return PluginLoader._import("extract.alignments", name)
+
+    @staticmethod
     def get_extractor(name):
         """ Return requested extractor plugin """
-        return PluginLoader._import("Extract", "Extract_{0}".format(name))
+        return PluginLoader._import("extract", name)
 
     @staticmethod
     def get_converter(name):
@@ -30,10 +42,11 @@ class PluginLoader():
     @staticmethod
     def _import(attr, name):
         """ Import the plugin's module """
-        print("Loading {} from {} plugin...".format(attr, name))
+        ttl = attr.split(".")[-1].title()
+        print("Loading {} from {} plugin...".format(ttl, name.title()))
         mod = ".".join(("plugins", attr.lower(), name))
         module = import_module(mod)
-        return getattr(module, attr)
+        return getattr(module, ttl)
 
     @staticmethod
     def get_available_models():

@@ -61,8 +61,6 @@ class Extract():
 
     def extract_single_process(self):
         """ Run extraction in a single process """
-        print("here")
-        exit(0)
         frame_no = 0
         for filename in tqdm(self.images.input_images, file=sys.stdout):
             filename, faces = self.process_single_image(filename)
