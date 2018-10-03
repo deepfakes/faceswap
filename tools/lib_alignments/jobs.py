@@ -6,6 +6,9 @@ import pickle
 import struct
 from datetime import datetime
 
+import numpy as np
+from scipy import signal
+from sklearn import decomposition
 from tqdm import tqdm
 
 from . import Annotate, ExtractedFaces, Faces, Frames
@@ -253,7 +256,7 @@ class Draw():
 
 
 class Extract():
-    """ Re-extract faces from source frames based on 
+    """ Re-extract faces from source frames based on
         Alignment data """
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
@@ -328,6 +331,7 @@ class Extract():
             if size >= self.extracted_faces.size:
                 valid_faces.append(faces[idx])
         return valid_faces
+
 
 class Reformat():
     """ Reformat Alignment file """
@@ -663,3 +667,154 @@ class Sort():
                 os.rename(src, dst)
                 if self.verbose and action == "final":
                     print("Renamed {} to {}".format(old, new))
+
+
+class Spatial():
+    """ Apply spatial temporal filtering to landmarks
+        Adapted from:
+        https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook """
+
+    def __init__(self, alignments, arguments):
+        self.verbose = arguments.verbose
+        self.arguments = arguments
+        self.alignments = alignments
+        self.mappings = dict()
+        self.normalized = dict()
+        self.shapes_model = None
+
+    def process(self):
+        """ Perform spatial filtering """
+        print("\n[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
+        print("NB: The process only processes the alignments for the first "
+              "face it finds for any given frame\n"
+              "    For best results only run this when:\n"
+              "      - there is only a single face in the alignments file\n"
+              "      - all false positives have been removed\n")
+
+        self.normalize()
+        self.shape_model()
+        landmarks = self.spatially_filter()
+        landmarks = self.temporally_smooth(landmarks)
+        self.update_alignments(landmarks)
+        self.alignments.save_alignments()
+
+        print("\nDone! To re-extract faces run:\n    python tools.py "
+              "alignments -j extract -a {} -fr <path_to_frames_dir> -fc "
+              "<output_folder>\n".format(self.arguments.alignments_file))
+
+    # define shape normalization utility functions
+    @staticmethod
+    def normalize_shapes(shapes_im_coords):
+        """ Normalize a 2D or 3D shape """
+        (num_pts, num_dims, _) = shapes_im_coords.shape
+
+        # calc mean coords and subtract from shapes
+        mean_coords = shapes_im_coords.mean(axis=0)
+        shapes_centered = np.zeros(shapes_im_coords.shape)
+        shapes_centered = shapes_im_coords - np.tile(mean_coords,
+                                                     [num_pts, 1, 1])
+
+        # calc scale factors and divide shapes
+        scale_factors = np.sqrt((shapes_centered**2).sum(axis=1)).mean(axis=0)
+        shapes_normalized = np.zeros(shapes_centered.shape)
+        shapes_normalized = shapes_centered / np.tile(scale_factors,
+                                                      [num_pts, num_dims, 1])
+
+        return shapes_normalized, scale_factors, mean_coords
+
+    @staticmethod
+    def normalized_to_original(shapes_normalized, scale_factors, mean_coords):
+        """ Transform a normalized shape back to original image coordinates """
+        (num_pts, num_dims, _) = shapes_normalized.shape
+
+        # move back to the correct scale
+        shapes_centered = shapes_normalized * np.tile(scale_factors,
+                                                      [num_pts, num_dims, 1])
+        # move back to the correct location
+        shapes_im_coords = shapes_centered + np.tile(mean_coords,
+                                                     [num_pts, 1, 1])
+
+        return shapes_im_coords
+
+    def normalize(self):
+        """ Compile all original and normalized alignments """
+        count = sum(1 for val in self.alignments.alignments.values() if val)
+        landmarks_all = np.zeros((68, 2, int(count)))
+
+        end = 0
+        for key in tqdm(sorted(self.alignments.alignments.keys()),
+                        desc="Compiling"):
+            val = self.alignments.alignments[key]
+            if not val:
+                continue
+            # We should only be normalizing a single face, so just take
+            # the first landmarks found
+            landmarks = np.array(val[0]["landmarksXY"]).reshape(68, 2, 1)
+            start = end
+            end = start + landmarks.shape[2]
+            # store in one big array
+            landmarks_all[:, :, start:end] = landmarks
+            # make sure we keep track of the mapping to the original frame
+            self.mappings[start] = key
+
+        # normalize shapes
+        normalized_shape = self.normalize_shapes(landmarks_all)
+        self.normalized["landmarks"] = normalized_shape[0]
+        self.normalized["scale_factors"] = normalized_shape[1]
+        self.normalized["mean_coords"] = normalized_shape[2]
+
+    def shape_model(self):
+        """ build 2D shape model """
+        landmarks_norm = self.normalized["landmarks"]
+        num_components = 20
+        normalized_shapes_tbl = np.reshape(landmarks_norm,
+                                           [68*2, landmarks_norm.shape[2]]).T
+        self.shapes_model = decomposition.PCA(
+            n_components=num_components,
+            whiten=True,
+            random_state=1).fit(normalized_shapes_tbl)
+        explained = self.shapes_model.explained_variance_ratio_.sum()
+        print("\nTotal explained percent by PCA model with {} components is "
+              "{}%\n".format(num_components, round(100 * explained, 1)))
+
+    def spatially_filter(self):
+        """ interpret the shapes using our shape model
+            (project and reconstruct) """
+        landmarks_norm = self.normalized["landmarks"]
+        # convert to matrix form
+        landmarks_norm_table = np.reshape(landmarks_norm,
+                                          [68 * 2, landmarks_norm.shape[2]]).T
+        # project onto shapes model and reconstruct
+        landmarks_norm_table_rec = self.shapes_model.inverse_transform(
+            self.shapes_model.transform(landmarks_norm_table))
+        # convert back to shapes (numKeypoint, num_dims, numFrames)
+        landmarks_norm_rec = np.reshape(landmarks_norm_table_rec.T,
+                                        [68, 2, landmarks_norm.shape[2]])
+        # transform back to image coords
+        return self.normalized_to_original(landmarks_norm_rec,
+                                           self.normalized["scale_factors"],
+                                           self.normalized["mean_coords"])
+
+    @staticmethod
+    def temporally_smooth(landmarks):
+        """ apply temporal filtering on the 2D points """
+        filter_half_length = 2
+        temporal_filter = np.ones((1, 1, 2*filter_half_length+1))
+        temporal_filter = temporal_filter / temporal_filter.sum()
+
+        start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis],
+                                  [1, 1, filter_half_length])
+        end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis],
+                                [1, 1, filter_half_length])
+        landmarks_padded = np.dstack((start_tileblock,
+                                      landmarks,
+                                      end_tileblock))
+        return signal.convolve(landmarks_padded, temporal_filter,
+                               mode='valid', method='fft')
+
+    def update_alignments(self, landmarks):
+        """ Update smoothed landmarks back to alignments """
+        for idx, frame in tqdm(self.mappings.items(), desc="Updating"):
+            landmarks_update = landmarks[:, :, idx].astype(int)
+            landmarks_xy = landmarks_update.reshape(68, 2).tolist()
+            self.alignments.alignments[frame][0]["landmarksXY"] = landmarks_xy

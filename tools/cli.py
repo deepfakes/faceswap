@@ -27,7 +27,7 @@ class AlignmentsArgs(FaceSwapArgs):
                         "missing-alignments", "missing-frames",
                         "leftover-faces", "multi-faces", "no-faces",
                         "reformat", "remove-faces", "remove-frames",
-                        "rotate", "sort-x", "sort-y"),
+                        "rotate", "sort-x", "sort-y", "spatial"),
             "required": True,
             "help": "R|Choose which action you want to perform.\n"
                     "NB: All actions require an alignments file (-a) to"
@@ -94,7 +94,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tbottom. For alignments with multiple faces this will"
                     "\n\tensure that the top-most face is at index 0"
                     "\n\tOptionally pass in a faces folder (-fc) to also"
-                    "\n\trename extracted faces."})
+                    "\n\trename extracted faces."
+                    "\n'spatial' - Perform spatial and temporal filtering to "
+                    "\n\tsmooth alignments (EXPERIMENTAL!)"})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
                               "dest": "alignments_file",

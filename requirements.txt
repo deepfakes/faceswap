@@ -4,6 +4,7 @@ h5py==2.8.0
 Keras==2.2.0
 opencv-python==3.4.1.15
 scikit-image
+scikit-learn==0.20.0
 face_recognition
 cmake
 dlib
