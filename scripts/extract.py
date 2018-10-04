@@ -31,7 +31,7 @@ class Extract():
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
             self.save_interval = self.args.save_interval
-        self.delete_source
+        self.delete_source = None
         if hasattr(self.args, "delete_source"):
             self.delete_source = self.delete_source
 
