@@ -2,6 +2,7 @@
 """ Manual processing of alignments """
 
 import platform
+import sys
 
 import cv2
 import numpy as np
@@ -416,6 +417,8 @@ class Manual():
 
     def display_frames(self):
         """ Iterate through frames """
+        is_windows = True if platform.system() == "Windows" else False
+        is_conda = True if "conda" in sys.version.lower() else False
         cv2.namedWindow("Frame")
         cv2.namedWindow("Faces")
         cv2.setMouseCallback('Frame', self.mouse_handler.on_event)
@@ -429,10 +432,7 @@ class Manual():
             cv2.imshow("Faces", faces)
             key = cv2.waitKey(1)
 
-            if platform.system() == "Windows" and key == -1:
-                break
-            elif (platform.system() != "Windows" and
-                  cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1):
+            if self.window_closed(is_windows, is_conda, key):
                 break
 
             if key in press.keys():
@@ -453,6 +453,28 @@ class Manual():
             self.interface.set_redraw(False)
 
         cv2.destroyAllWindows()
+
+    @staticmethod
+    def window_closed(is_windows, is_conda, key):
+        """ Check whether the window has been closed
+
+        MS Windows doesn't appear to read the window state property
+        properly, so we check for a negative key press.
+
+        Conda (tested on Windows) doesn't sppear to read the window
+        state property or negative key press properly, so we arbitarily
+        use another property """
+
+        closed = False
+        prop_autosize = cv2.getWindowProperty('Frame', cv2.WND_PROP_AUTOSIZE)
+        prop_visible = cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE)
+        if is_conda and prop_autosize < 1:
+            closed = True
+        elif is_windows and not is_conda and key == -1:
+            closed = True
+        elif not is_windows and not is_conda and prop_visible < 1:
+            closed = True
+        return closed
 
     def get_keys(self):
         """ Convert keys dict into something useful
