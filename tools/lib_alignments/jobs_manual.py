@@ -72,6 +72,12 @@ class Interface():
                                 "args": ["edit", "selected"],
                                 "help": "Select/Deselect Face at this Index",
                                 "key_type": range},
+                    "c": {"action": self.copy_alignments,
+                          "args": ("edit", -1),
+                          "help": "Copy Previous Frame's Alignments"},
+                    "v": {"action": self.copy_alignments,
+                          "args": ("edit", 1),
+                          "help": "Copy Next Frame's Alignments"},
                     "y": {"action": self.toggle_state,
                           "args": ("image", "display"),
                           "help": "Toggle Image"},
@@ -165,6 +171,23 @@ class Interface():
             self.state["edit"]["updated"] = True
             self.state["edit"]["update_faces"] = True
             self.set_redraw(True)
+
+    def copy_alignments(self, *args):
+        """ Copy the alignments from the previous or next frame
+            to the current frame """
+        if self.get_edit_mode() != "Edit":
+            return
+        frame_id = self.state["navigation"]["frame_idx"] + args[1]
+        if not 0 <= frame_id <= self.state["navigation"]["max_frame"]:
+            return
+        current_frame = self.get_frame_name()
+        get_frame = self.frames.file_list_sorted[frame_id]["frame_fullname"]
+        alignments = self.alignments.get_alignments_for_frame(get_frame)
+        for alignment in alignments:
+            self.alignments. add_alignment(current_frame, alignment)
+        self.state["edit"]["updated"] = True
+        self.state["edit"]["update_faces"] = True
+        self.set_redraw(True)
 
     def toggle_state(self, item, category):
         """ Toggle state of requested item """
@@ -318,7 +341,7 @@ class Help():
 
     def background(self):
         """ Create an image to hold help text """
-        height = 850
+        height = 880
         width = 480
         image = np.zeros((height, width, 3), np.uint8)
         color = self.interface.get_state_color()
@@ -758,6 +781,8 @@ class MouseHandler():
 
     def resize_bounding_box(self, pt_x, pt_y):
         """ Resize the bounding box """
+        scale = self.interface.get_frame_scaling()
+
         if not self.last_move:
             self.last_move = (pt_x, pt_y)
             self.media["bounding_box_orig"] = self.media["bounding_box"]
@@ -768,10 +793,12 @@ class MouseHandler():
         original = self.media["bounding_box_orig"]
         updated = self.media["bounding_box"]
 
-        updated[0] = min(self.center[0] - 10, original[0] - move_x)
-        updated[1] = min(self.center[1] - 10, original[1] - move_y)
-        updated[2] = max(self.center[0] + 10, original[2] + move_x)
-        updated[3] = max(self.center[1] + 10, original[3] + move_y)
+        minsize = int(10 / scale)
+        center = (int(self.center[0] / scale), int(self.center[1] / scale))
+        updated[0] = min(center[0] - minsize, original[0] - move_x)
+        updated[1] = min(center[1] - minsize, original[1] - move_y)
+        updated[2] = max(center[0] + minsize, original[2] + move_x)
+        updated[3] = max(center[1] + minsize, original[3] + move_y)
         self.update_landmarks()
         self.last_move = (pt_x, pt_y)
 
