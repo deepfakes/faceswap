@@ -186,8 +186,12 @@ class Model():
 
 
     def converter(self, swap):
-        autoencoder = self.autoencoder_B if not swap else self.autoencoder_A
-        return autoencoder.predict    
+        if not self.USE_K_FUNCTION:
+            autoencoder = self.autoencoder_B if not swap else self.autoencoder_A
+            return autoencoder.predict
+        else:
+            view = self.B_view if not swap else self.A_view
+            return lambda x: view( [x] )[0]
     
     @staticmethod
     def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
