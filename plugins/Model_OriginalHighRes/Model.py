@@ -7,7 +7,6 @@ import enum
 from json import JSONDecodeError
 import os
 import sys
-
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -50,7 +49,7 @@ def inst_norm():
 
 
 # autoencoder type
-ENCODER = EncoderType.STANDARD
+ENCODER = EncoderType.ORIGINAL
 
 # might increase overall quality at cost of training speed
 USE_DSSIM = False
@@ -69,9 +68,11 @@ class Model():
     ENCODER_DIM = 1024 # dense layer size        
     IMAGE_SHAPE = 128, 128 # image shape
     
-    ENCODER_COMPLEXITY = 128
+    ENCODER_COMPLEXITY = 128 # use cauton, sensible ranges 128 - 160; the bigger the more details can be learned
     DECODER_A_COMPLEXITY = 384 # only applicable for STANDARD encoder
     DECODER_B_COMPLEXITY = 512 # only applicable for STANDARD encoder
+    
+    USE_EXTRA_DOWNSCALING = True # to save video RAM
     
     assert [n for n in IMAGE_SHAPE if n>=16]
     
@@ -96,10 +97,12 @@ class Model():
         
         if not self.is_new_training:
             global USE_DSSIM, USE_SUBPIXEL
+                        
             self.__class__.ENCODER_DIM = self.current_state['ENCODER_DIM']
             self.__class__.IMAGE_SHAPE = self.current_state['IMAGE_SHAPE']
+            self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['USE_EXTRA_DOWNSCALING'] 
             USE_DSSIM = self.current_state['IMAGE_SHAPE']
-            USE_SUBPIXEL = self.current_state['USE_SUBPIXEL']
+            USE_SUBPIXEL = self.current_state['USE_SUBPIXEL']            
         
         Encoder = getattr(self, "Encoder_{}".format(self.encoder_type))        
         Decoder_A = getattr(self, "Decoder_{}_A".format(self.encoder_type))
@@ -226,10 +229,8 @@ class Model():
         x = cls.conv(cls.ENCODER_COMPLEXITY)(impt)
         x = cls.conv(cls.ENCODER_COMPLEXITY * 2)(x)
         x = cls.conv(cls.ENCODER_COMPLEXITY * 4)(x)
-        
-        # extra reduction layer
-        x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)
-        
+        if cls.USE_EXTRA_DOWNSCALING: 
+            x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)        
         x = cls.conv(cls.ENCODER_COMPLEXITY * 8)(x)
         
         dense_shape = cls.IMAGE_SHAPE[0] // 16         
@@ -275,7 +276,8 @@ class Model():
         x = cls.conv(cls.ENCODER_COMPLEXITY, use_instance_norm=True)(impt)
         x = cls.conv(cls.ENCODER_COMPLEXITY * 2, use_instance_norm=True)(x)
         x = cls.conv(cls.ENCODER_COMPLEXITY * 4)(x)
-        x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)
+        if cls.USE_EXTRA_DOWNSCALING:
+            x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)
         x = cls.conv(cls.ENCODER_COMPLEXITY * 8)(x)
         
         dense_shape = cls.IMAGE_SHAPE[0] // 16         
@@ -351,11 +353,12 @@ class Model():
     def save_weights(self):        
         model_dir = str(self.model_dir)
         
+        from multiprocessing import cpu_count        
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
         print('\nbacking up the data', end='', flush=True)                            
         
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
             futures = [executor.submit(backup_file, model_dir, model) for model in hdf.values()]
             for future in as_completed(futures):
                 future.result()
@@ -375,7 +378,7 @@ class Model():
         
         print('\nsaving model weights', end='', flush=True)                
         
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
             futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
             for future in as_completed(futures):
                 future.result()
@@ -390,6 +393,7 @@ class Model():
          'USE_SUBPIXEL' : USE_SUBPIXEL,
          'ENCODER_DIM' :  self.ENCODER_DIM,      
          'IMAGE_SHAPE' : self.IMAGE_SHAPE,
+         'USE_EXTRA_DOWNSCALING' : self.USE_EXTRA_DOWNSCALING
          }
         
     def _load_state(self):
@@ -402,9 +406,10 @@ class Model():
                 
         with open(state_fn, 'rb') as fp:
             state = serializer.unmarshal(fp.read().decode('utf-8'))
-            try:
-                state[self.encoder_type]['epoch_no']
-            except KeyError:       
+            if self.encoder_type in state:
+                if not 'USE_EXTRA_DOWNSCALING' in state[self.encoder_type]:
+                    state[self.encoder_type]['USE_EXTRA_DOWNSCALING'] = self.USE_EXTRA_DOWNSCALING                    
+            else:       
                 if 'epoch_no' in state:
                     if not EncoderType.ORIGINAL.value in state:
                         state[EncoderType.ORIGINAL.value] = {}                        
