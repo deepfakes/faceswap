@@ -35,8 +35,11 @@ class Trainer():
         _, warped_A, target_A, *_ = next(self.images_A)
         _, warped_B, target_B, *_ = next(self.images_B)
 
-        loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
+        if not self.model.USE_K_FUNCTION:
+            loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
+            loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)    
+        else:
+            total, loss_B, loss_A  = self.model.autoencoder.train_on_batch( [warped_B, warped_A], [target_B, target_A] )        
         
         self.model.epoch_no += 1        
                  
@@ -54,16 +57,33 @@ class Trainer():
             
 
     def show_sample(self, test_A, test_B):
+
+        if self.model.USE_K_FUNCTION:
+            AA, *_ = self.model.A_view([test_A])
+            BA, *_ = self.model.B_view([test_A])     
+            BB, *_ = self.model.B_view([test_B])
+            AB, *_ = self.model.A_view([test_B])        
+        else:
+            AA = self.model.autoencoder_A.predict(test_A)
+            BA = self.model.autoencoder_B.predict(test_A)     
+            BB = self.model.autoencoder_B.predict(test_B)
+            AB = self.model.autoencoder_A.predict(test_B)            
+        
         figure_A = numpy.stack([
             test_A,
-            self.model.autoencoder_A.predict(test_A),
-            self.model.autoencoder_B.predict(test_A),
+            #self.model.autoencoder_A.predict(test_A),
+            AA,
+            #self.model.autoencoder_B.predict(test_A),
+            BA,
         ], axis=1)
         
         figure_B = numpy.stack([
             test_B,
-            self.model.autoencoder_B.predict(test_B),
-            self.model.autoencoder_A.predict(test_B),
+            #self.model.autoencoder_B.predict(test_B),
+            BB,            
+            #self.model.autoencoder_A.predict(test_B),
+            AB,
+            
         ], axis=1)
 
         if (test_A.shape[0] % 2)!=0:

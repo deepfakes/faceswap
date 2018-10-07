@@ -74,6 +74,8 @@ class Model():
     
     USE_EXTRA_DOWNSCALING = True # to save video RAM
     
+    USE_K_FUNCTION = True
+    
     assert [n for n in IMAGE_SHAPE if n>=16]
     
     IMAGE_WIDTH = max(IMAGE_SHAPE)
@@ -100,7 +102,9 @@ class Model():
                         
             self.__class__.ENCODER_DIM = self.current_state['ENCODER_DIM']
             self.__class__.IMAGE_SHAPE = self.current_state['IMAGE_SHAPE']
-            self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['USE_EXTRA_DOWNSCALING'] 
+            self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['USE_EXTRA_DOWNSCALING']
+            self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['ENCODER_COMPLEXITY'] 
+            
             USE_DSSIM = self.current_state['IMAGE_SHAPE']
             USE_SUBPIXEL = self.current_state['USE_SUBPIXEL']            
         
@@ -117,31 +121,50 @@ class Model():
     
     def initModel(self):
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+                        
+        input_A_bgr = Input(shape=self.IMAGE_SHAPE)
+        input_B_bgr = Input(shape=self.IMAGE_SHAPE)        
         
-        x = Input(shape=self.IMAGE_SHAPE)
-        
-        self.autoencoder_A = KerasModel(x, self.decoder_A(self.encoder(x)))
-        self.autoencoder_B = KerasModel(x, self.decoder_B(self.encoder(x)))
-        
-        if self.gpus > 1:
-            self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
-            self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)            
+        rec_A_bgr = self.decoder_A(self.encoder(input_A_bgr))
+        rec_B_bgr = self.decoder_B(self.encoder(input_B_bgr))                   
         
         if USE_DSSIM:
             from .dssim import DSSIMObjective
-            loss = DSSIMObjective()
+            loss_func = DSSIMObjective()
             print('Using DSSIM loss ..', flush=True)
         else:
-            loss = 'mean_absolute_error'
+            loss_func = 'mean_absolute_error'
             
         if USE_SUBPIXEL:
             from .subpixel import SubPixelUpscaling
             self.upscale = self.upscale_sub
-            print('Using subpixel upscaling ..', flush=True)
-            
-        self.autoencoder_A.compile(optimizer=optimizer, loss=loss)
-        self.autoencoder_B.compile(optimizer=optimizer, loss=loss)
+            print('Using subpixel upscaling ..', flush=True)            
         
+        if self.USE_K_FUNCTION:        
+            print('Using K.function ..', flush=True)
+            
+            self.autoencoder = KerasModel([input_B_bgr, input_A_bgr], [rec_B_bgr, rec_A_bgr] )
+            
+            if self.gpus > 1:
+                self.autoencoder = multi_gpu_model( self.autoencoder, self.gpus)            
+
+            self.autoencoder.compile(optimizer=optimizer, loss=[ loss_func, loss_func ] )
+            
+            import keras.backend as K
+      
+            self.B_view = K.function([input_B_bgr], [rec_B_bgr])
+            self.A_view = K.function([input_A_bgr], [rec_A_bgr])
+                                    
+        else:        
+            self.autoencoder_A = KerasModel(input_A_bgr, rec_A_bgr)
+            self.autoencoder_B = KerasModel(input_B_bgr, rec_B_bgr)   
+                                         
+            if self.gpus > 1:
+                self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
+                self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)         
+                    
+            self.autoencoder_A.compile(optimizer=optimizer, loss=loss_func)
+            self.autoencoder_B.compile(optimizer=optimizer, loss=loss_func)
 
     def load(self, swapped):                
         model_dir = str(self.model_dir)
@@ -393,7 +416,8 @@ class Model():
          'USE_SUBPIXEL' : USE_SUBPIXEL,
          'ENCODER_DIM' :  self.ENCODER_DIM,      
          'IMAGE_SHAPE' : self.IMAGE_SHAPE,
-         'USE_EXTRA_DOWNSCALING' : self.USE_EXTRA_DOWNSCALING
+         'USE_EXTRA_DOWNSCALING' : self.USE_EXTRA_DOWNSCALING,
+         'ENCODER_COMPLEXITY' : self.ENCODER_COMPLEXITY
          }
         
     def _load_state(self):
@@ -408,7 +432,9 @@ class Model():
             state = serializer.unmarshal(fp.read().decode('utf-8'))
             if self.encoder_type in state:
                 if not 'USE_EXTRA_DOWNSCALING' in state[self.encoder_type]:
-                    state[self.encoder_type]['USE_EXTRA_DOWNSCALING'] = self.USE_EXTRA_DOWNSCALING                    
+                    state[self.encoder_type]['USE_EXTRA_DOWNSCALING'] = self.USE_EXTRA_DOWNSCALING          
+                if not 'ENCODER_COMPLEXITY' in state[self.encoder_type]:
+                    state[self.encoder_type]['ENCODER_COMPLEXITY'] = self.ENCODER_COMPLEXITY   
             else:       
                 if 'epoch_no' in state:
                     if not EncoderType.ORIGINAL.value in state:
