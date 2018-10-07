@@ -32,8 +32,8 @@ class Trainer():
 
     def train_one_step(self, iter_no, viewer):
         when = self._clock()
-        _, warped_A, target_A = next(self.images_A)
-        _, warped_B, target_B = next(self.images_B)
+        _, warped_A, target_A, *_ = next(self.images_A)
+        _, warped_B, target_B, *_ = next(self.images_B)
 
         loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
         loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)

@@ -1,6 +1,6 @@
 # Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
-# Based on https://github.com/iperov/OpenDeepFaceSwap for Decoder multiple res block chain
-# Based on the https://github.com/shaoanlu/faceswap-GAN repo
+# Based on https://github.com/iperov/DeepFaceLab a better 128x Decoder idea
+# Based on the https://github.com/shaoanlu/faceswap-GAN repo res_block chain and IN
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
 import enum
@@ -50,13 +50,13 @@ def inst_norm():
 
 
 # autoencoder type
-ENCODER = EncoderType.ORIGINAL
+ENCODER = EncoderType.HIGHRES
 
 # might increase overall quality at cost of training speed
-USE_DSSIM = False
+USE_DSSIM = True
 
 # might increase upscaling quality at cost of video memory
-USE_SUBPIXEL = False
+USE_SUBPIXEL = True
 
 
 hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() ),
@@ -66,8 +66,8 @@ hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() 
 
 class Model():
     
-    ENCODER_DIM = 1024 # dense layer size        
-    IMAGE_SHAPE = 128, 128 # image shape
+    ENCODER_DIM = 512 # dense layer size        
+    IMAGE_SHAPE = 256, 256 # image shape
     
     assert [n for n in IMAGE_SHAPE if n>=16]
     
@@ -111,7 +111,7 @@ class Model():
         
         if self.gpus > 1:
             self.autoencoder_A = multi_gpu_model( self.autoencoder_A , self.gpus)
-            self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)
+            self.autoencoder_B = multi_gpu_model( self.autoencoder_B , self.gpus)            
         
         if USE_DSSIM:
             from .dssim import DSSIMObjective
@@ -127,7 +127,7 @@ class Model():
             
         self.autoencoder_A.compile(optimizer=optimizer, loss=loss)
         self.autoencoder_B.compile(optimizer=optimizer, loss=loss)
-
+        
 
     def load(self, swapped):        
         model_dir = str(self.model_dir)
@@ -285,11 +285,9 @@ class Model():
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
         x = self.upscale(512)(inpt)
-        x = self.res_block(x, 512)
-                
+        x = self.res_block(x, 512)                
         x = self.upscale(256)(x)
-        x = self.res_block(x, 256)
-        
+        x = self.res_block(x, 256)        
         x = self.upscale(128)(x)
         x = self.res_block(x, 128)
         
@@ -334,8 +332,15 @@ class Model():
     def save_weights(self):        
         model_dir = str(self.model_dir)
         
-        for model in hdf.values():            
-            backup_file(model_dir, model)
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        print('\nbacking up the data', end='', flush=True)                            
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(backup_file, model_dir, model) for model in hdf.values()]
+            for future in as_completed(futures):
+                future.result()
+                print('.', end='', flush=True)  
                            
         state_dir = os.path.join(model_dir, 'state_{version_str}.json'.format(**globals()))
         ser = lib.Serializer.get_serializer('json')

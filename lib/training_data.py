@@ -14,8 +14,8 @@ class TrainingDataGenerator():
 
     def minibatchAB(self, images, batchsize):
         batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
-        for ep1, warped_img, target_img in batch.iterator():
-            yield ep1, warped_img, target_img
+        for ep1, warped_img, target_img, file_names, in batch.iterator():
+            yield ep1, warped_img, target_img, file_names
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
     def minibatch(self, data, batchsize):
@@ -29,9 +29,11 @@ class TrainingDataGenerator():
                 shuffle(data)
                 i = 0
                 epoch+=1
-            rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])
-            i+=size
-            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
+            img_filenames = data[i:i+size]
+            rtn = numpy.float32([self.read_image(img_fn) for img_fn in img_filenames])
+            i += size
+            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:],  img_filenames
+                        
 
     def color_adjust(self, img):
         return img / 255.0
@@ -42,7 +44,7 @@ class TrainingDataGenerator():
         except TypeError:
             raise Exception("Error while reading image", fn)
         
-        image = cv2.resize(image, (256,256))
+        image = cv2.resize(image, (256, 256))
         image = self.random_transform( image, **self.random_transform_args )
         warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
         

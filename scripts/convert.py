@@ -144,9 +144,13 @@ class Convert(object):
         image = self.images.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
-        
-        size = 128 if (self.args.trainer.strip().lower()
-                       in ('gan128', 'originalhighres')) else 64
+        trainer_s = self.args.trainer.strip().lower()
+        if trainer_s=='gan128':
+            size = 128
+        elif trainer_s=='originalhighres':
+            size = 192 # change according to your model size
+        else:
+            size = 64
 
         image = converter.patch_image(image,
                                       face,
