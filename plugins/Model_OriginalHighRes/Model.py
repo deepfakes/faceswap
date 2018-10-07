@@ -50,13 +50,13 @@ def inst_norm():
 
 
 # autoencoder type
-ENCODER = EncoderType.HIGHRES
+ENCODER = EncoderType.STANDARD
 
 # might increase overall quality at cost of training speed
-USE_DSSIM = True
+USE_DSSIM = False
 
 # might increase upscaling quality at cost of video memory
-USE_SUBPIXEL = True
+USE_SUBPIXEL = False
 
 
 hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() ),
@@ -66,8 +66,12 @@ hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() 
 
 class Model():
     
-    ENCODER_DIM = 512 # dense layer size        
-    IMAGE_SHAPE = 256, 256 # image shape
+    ENCODER_DIM = 1024 # dense layer size        
+    IMAGE_SHAPE = 128, 128 # image shape
+    
+    ENCODER_COMPLEXITY = 128
+    DECODER_A_COMPLEXITY = 384 # only applicable for STANDARD encoder
+    DECODER_B_COMPLEXITY = 512 # only applicable for STANDARD encoder
     
     assert [n for n in IMAGE_SHAPE if n>=16]
     
@@ -89,6 +93,13 @@ class Model():
         
         # can't chnage gpu's when the model is initialized no point in making it r/w
         self._gpus = gpus 
+        
+        if not self.is_new_training:
+            global USE_DSSIM, USE_SUBPIXEL
+            self.__class__.ENCODER_DIM = self.current_state['ENCODER_DIM']
+            self.__class__.IMAGE_SHAPE = self.current_state['IMAGE_SHAPE']
+            USE_DSSIM = self.current_state['IMAGE_SHAPE']
+            USE_SUBPIXEL = self.current_state['USE_SUBPIXEL']
         
         Encoder = getattr(self, "Encoder_{}".format(self.encoder_type))        
         Decoder_A = getattr(self, "Decoder_{}_A".format(self.encoder_type))
@@ -129,7 +140,7 @@ class Model():
         self.autoencoder_B.compile(optimizer=optimizer, loss=loss)
         
 
-    def load(self, swapped):        
+    def load(self, swapped):                
         model_dir = str(self.model_dir)
 
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])                            
@@ -208,119 +219,127 @@ class Model():
             return x
         return block  
     
-
-    def Encoder_highres(self, **kwargs):
-        impt = Input(shape=self.IMAGE_SHAPE)
+    @classmethod
+    def Encoder_highres(cls, **kwargs):
+        impt = Input(shape=cls.IMAGE_SHAPE)
                 
-        x = self.conv(128)(impt)
-        x = self.conv(256)(x)
-        x = self.conv(512)(x)
-        x = self.conv(768)(x)
-        x = self.conv(1024)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY)(impt)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 2)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 4)(x)
         
-        dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        # extra reduction layer
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)
+        
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 8)(x)
+        
+        dense_shape = cls.IMAGE_SHAPE[0] // 16         
+        x = Dense(cls.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
         x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
         x = Reshape((dense_shape, dense_shape, 512))(x)
-        x = self.upscale(320)(x)
+        x = cls.upscale(320)(x)
         
         return KerasModel(impt, x, **kwargs)
     
     def Decoder_highres_A(self):       
-        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        decoder_shape = self.IMAGE_SHAPE[0] // 8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 320))
-
-        x = self.upscale(256)(inpt)
-        x = self.upscale(128)(x)
-        x = self.upscale(64)(x)
+        
+        complexity = 256
+        
+        x = self.upscale(complexity // 2)(inpt)
+        x = self.upscale(complexity // 4)(x)
+        x = self.upscale(complexity // 8)(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         return KerasModel(inpt, x)        
     
     def Decoder_highres_B(self):               
-        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        decoder_shape = self.IMAGE_SHAPE[0] // 8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 320))
         # 384 192 96
-        x = self.upscale(320)(inpt)
-        x = self.upscale(160)(x)
-        x = self.upscale(80)(x)
+        complexity = 320
+        x = self.upscale(complexity)(inpt)
+        x = self.upscale(complexity // 2)(x)
+        x = self.upscale(complexity // 4)(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         return KerasModel(inpt, x)     
              
-                              
-    def Encoder_standard(self, **kwargs):
-        impt = Input(shape=self.IMAGE_SHAPE)
+
+    @classmethod                              
+    def Encoder_standard(cls, **kwargs):
+        impt = Input(shape=cls.IMAGE_SHAPE)
                 
-        x = self.conv(128, use_instance_norm=True)(impt)
-        x = self.conv(256, use_instance_norm=True)(x)
-        x = self.conv(512)(x)
-        x = self.conv(768)(x)
-        x = self.conv(1024)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY, use_instance_norm=True)(impt)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 2, use_instance_norm=True)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 4)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 8)(x)
         
-        dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        dense_shape = cls.IMAGE_SHAPE[0] // 16         
+        x = Dense(cls.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
         x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
         x = Reshape((dense_shape, dense_shape, 512))(x)
-        x = self.upscale(512)(x)
+        
+        x = cls.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)             
     
-    def Decoder_standard_A(self):       
-        decoder_shape = self.IMAGE_SHAPE[0]//8        
+    @classmethod
+    def Decoder_standard_A(cls):       
+        decoder_shape = cls.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
-        x = self.upscale(384)(inpt)
-        x = self.upscale(192)(x)
-        x = self.upscale(96)(x)
+        x = cls.upscale(cls.DECODER_A_COMPLEXITY)(inpt)
+        x = cls.upscale(cls.DECODER_A_COMPLEXITY // 2)(x)
+        x = cls.upscale(cls.DECODER_A_COMPLEXITY // 4)(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         return KerasModel(inpt, x)    
     
-    def Decoder_standard_B(self):       
-        decoder_shape = self.IMAGE_SHAPE[0]//8        
-        inpt = Input(shape=(decoder_shape, decoder_shape, 512))
+    @classmethod
+    def Decoder_standard_B(cls):       
+        decoder_shape = cls.IMAGE_SHAPE[0] // 8        
+        inpt = Input(shape=(decoder_shape, decoder_shape, cls.DECODER_B_COMPLEXITY))
         
-        x = self.upscale(512)(inpt)
-        x = self.res_block(x, 512)                
-        x = self.upscale(256)(x)
-        x = self.res_block(x, 256)        
-        x = self.upscale(128)(x)
-        x = self.res_block(x, 128)
+        x = cls.upscale(cls.DECODER_B_COMPLEXITY)(inpt)
+        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY)                
+        x = cls.upscale(cls.DECODER_B_COMPLEXITY // 2)(x)
+        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY // 2)        
+        x = cls.upscale(cls.DECODER_B_COMPLEXITY // 4)(x)
+        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY // 4)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
         return KerasModel(inpt, x)        
         
-                      
-    def Encoder_original(self, **kwargs):
-        impt = Input(shape=self.IMAGE_SHAPE)
+    @classmethod                      
+    def Encoder_original(cls, **kwargs):
+        impt = Input(shape=cls.IMAGE_SHAPE)        
         
-        in_conv_filters = self.IMAGE_SHAPE[0] if self.IMAGE_SHAPE[0] <= 128 else 128 + (self.IMAGE_SHAPE[0]-128)//4
-
-        x = self.conv(in_conv_filters)(impt)
-        x = self.conv_sep(256)(x)
-        x = self.conv(512)(x)
-        x = self.conv_sep(1024)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY)(impt)
+        x = cls.conv_sep(cls.ENCODER_COMPLEXITY * 2)(x)
+        x = cls.conv(cls.ENCODER_COMPLEXITY * 4)(x)
+        x = cls.conv_sep(cls.ENCODER_COMPLEXITY * 8)(x)
         
-        dense_shape = self.IMAGE_SHAPE[0] // 16         
-        x = Dense(self.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+        dense_shape = cls.IMAGE_SHAPE[0] // 16         
+        x = Dense(cls.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
         x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
         x = Reshape((dense_shape, dense_shape, 512))(x)
-        x = self.upscale(512)(x)
+        x = cls.upscale(512)(x)
         
         return KerasModel(impt, x, **kwargs)                
 
     def Decoder_original_A(self):       
-        decoder_shape = self.IMAGE_SHAPE[0]//8        
+        decoder_shape = self.IMAGE_SHAPE[0] // 8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
         x = self.upscale(384)(inpt)
-        x = self.upscale(256-32)(x)
-        x = self.upscale(self.IMAGE_SHAPE[0])(x)
+        x = self.upscale(224)(x)
+        x = self.upscale(128)(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
 
@@ -354,9 +373,7 @@ class Model():
         except IOError as e:
             print(e.strerror)                   
         
-        print('\nsaving model weights', end='', flush=True)        
-        
-        from concurrent.futures import ThreadPoolExecutor, as_completed        
+        print('\nsaving model weights', end='', flush=True)                
         
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
@@ -404,6 +421,10 @@ class Model():
     def epoch_no(self, value):
         self.state[self.encoder_type]['epoch_no'] = value    
     
+    @property    
+    def current_state(self):
+        return self.state[self.encoder_type]
+    
     @property
     def state(self):        
         try:
@@ -430,6 +451,10 @@ class Model():
     @property
     def gpus(self):
         return self._gpus
+    
+    @property
+    def is_new_training(self):
+        return self.epoch_no <= 1
     
     @property
     def encoder_type(self): 
