@@ -454,8 +454,7 @@ class Manual():
 
         cv2.destroyAllWindows()
 
-    @staticmethod
-    def window_closed(is_windows, is_conda, key):
+    def window_closed(self, is_windows, is_conda, key):
         """ Check whether the window has been closed
 
         MS Windows doesn't appear to read the window state property
@@ -468,7 +467,9 @@ class Manual():
         closed = False
         prop_autosize = cv2.getWindowProperty('Frame', cv2.WND_PROP_AUTOSIZE)
         prop_visible = cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE)
-        if is_conda and prop_autosize < 1:
+        if self.arguments.disable_monitor:
+            closed = False
+        elif is_conda and prop_autosize < 1:
             closed = True
         elif is_windows and not is_conda and key == -1:
             closed = True
