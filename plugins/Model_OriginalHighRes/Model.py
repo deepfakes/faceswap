@@ -262,9 +262,9 @@ class Model():
         
         complexity = 256
         
-        x = self.upscale(complexity // 2)(inpt)
+        x = self.upscale(complexity)(inpt)
+        x = self.upscale(complexity // 2)(x)
         x = self.upscale(complexity // 4)(x)
-        x = self.upscale(complexity // 8)(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
         
