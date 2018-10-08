@@ -103,7 +103,7 @@ class Model():
             self.__class__.ENCODER_DIM = self.current_state['ENCODER_DIM']
             self.__class__.IMAGE_SHAPE = self.current_state['IMAGE_SHAPE']
             self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['USE_EXTRA_DOWNSCALING']
-            self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['ENCODER_COMPLEXITY'] 
+            self.__class__.ENCODER_COMPLEXITY = self.current_state['ENCODER_COMPLEXITY'] 
             
             USE_DSSIM = self.current_state['IMAGE_SHAPE']
             USE_SUBPIXEL = self.current_state['USE_SUBPIXEL']            
