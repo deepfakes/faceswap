@@ -4,7 +4,7 @@
 # TODO merge alignments
 from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Draw, Extract, Manual,
-                             Reformat, RemoveAlignments, Rotate, Sort)
+                             Reformat, RemoveAlignments, Rotate, Sort, Spatial)
 
 
 class Alignments():
