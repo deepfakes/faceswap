@@ -3,6 +3,7 @@
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo res_block chain and IN
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import enum
 from json import JSONDecodeError
 import os
@@ -26,11 +27,11 @@ from lib.utils import backup_file
 from . import __version__
 from .instance_normalization import InstanceNormalization
 
+
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
 else: 
     version_str = __version__
-
 
 mswindows = sys.platform=="win32"
 
@@ -42,15 +43,16 @@ class EncoderType(enum.Enum):
     STANDARD = "standard" # new, balanced encoder they way I meant it to be; more memory consuming
     HIGHRES = "highres"   # high resolution tensors optimized encoder: 176x and on 
                     
-# autoencoder type
+# autoencoder type *
 ENCODER = EncoderType.ORIGINAL
 
-# might increase overall quality at cost of training speed
+# use DSSIM objective loss; might increase overall quality
 USE_DSSIM = False
 
 # might increase upscaling quality at cost of video memory
 USE_SUBPIXEL = False
 
+# * - requires re-training of the model
 
 hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() ),
         'decoder_AH5': 'decoder_A_{version_str}{ENCODER.value}.h5'.format( **vars() ),
@@ -58,25 +60,20 @@ hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() 
 
 
 class Model():
-    
-    ENCODER_DIM = 1024 # dense layer size        
-    IMAGE_SHAPE = 128, 128 # image shape
-    
-    ENCODER_COMPLEXITY = 128 # use cauton, sensible ranges 128 - 160; the bigger the more details can be learned
-    DECODER_A_COMPLEXITY = 384 # only applicable for STANDARD encoder
-    DECODER_B_COMPLEXITY = 512 # only applicable for STANDARD encoder
-    
-    USE_EXTRA_DOWNSCALING = True # used to save video RAM    
-    USE_K_FUNCTION = True 
         
-    assert [n for n in IMAGE_SHAPE if n>=16]    
-    IMAGE_WIDTH = max(IMAGE_SHAPE)
-    IMAGE_WIDTH = (IMAGE_WIDTH//16 + (1 if (IMAGE_WIDTH%16)>=8 else 0))*16
-    IMAGE_WIDTH = min(IMAGE_WIDTH, 256)
-    IMAGE_SHAPE = IMAGE_WIDTH, IMAGE_WIDTH, len('BRG') # good to let ppl know what these are...
-        
-    SAVE_FIELDS = 'ENCODER_DIM', 'IMAGE_SHAPE', 'USE_EXTRA_DOWNSCALING', 'ENCODER_COMPLEXITY', 'DECODER_A_COMPLEXITY', 'DECODER_B_COMPLEXITY'
+    ENCODER_DIM = 1024     # dense layer size *        
+    IMAGE_SHAPE = 128, 128 # produced image size *
     
+    ENCODER_COMPLEXITY = 128  # conv layers complexity, sensible ranges 128 - 160 *    
+    DECODER_B_COMPLEXITY = 512 # only applicable for STANDARD and ORIGINAL encoder *
+    DECODER_A_COMPLEXITY = 384 # only applicable for STANDARD encoder *    
+    
+    USE_K_FUNCTION = True # slightly increases speed of training; disable if causes issues
+        
+    USE_EXTRA_DOWNSCALING = True # add extra conv layer to save video RAM *
+        
+    # * - requires re-training of the model
+
     def __init__(self, model_dir, gpus, encoder_type=ENCODER):                
         if mswindows:  
             from ctypes import cdll    
@@ -353,95 +350,52 @@ class Model():
         
         return KerasModel(impt, x, **kwargs)                
 
-    def Decoder_original_A(self):       
-        decoder_shape = self.IMAGE_SHAPE[0] // 8        
+    @classmethod
+    def Decoder_original_B(cls):       
+        decoder_shape = cls.IMAGE_SHAPE[0] // 8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
         
-        x = self.upscale(384)(inpt)
-        x = self.upscale(224)(x)
-        x = self.upscale(128)(x)
+        x = cls.upscale(cls.DECODER_B_COMPLEXITY - 128)(inpt)
+        x = cls.upscale((cls.DECODER_B_COMPLEXITY // 2 ) - 32)(x)
+        x = cls.upscale(cls.DECODER_B_COMPLEXITY // 4)(x)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
 
         return KerasModel(inpt, x)    
 
-    Decoder_original_B = Decoder_original_A
-    
+    Decoder_original_A = Decoder_original_B
+        
+    assert [n for n in IMAGE_SHAPE if n>=16]    
+    IMAGE_WIDTH = max(IMAGE_SHAPE)
+    IMAGE_WIDTH = (IMAGE_WIDTH//16 + (1 if (IMAGE_WIDTH%16)>=8 else 0))*16
+    IMAGE_WIDTH = min(IMAGE_WIDTH, 256)
+    IMAGE_SHAPE = IMAGE_WIDTH, IMAGE_WIDTH, len('BRG') # good to let ppl know what these are...    
+    SAVE_FIELDS = 'ENCODER_DIM', 'IMAGE_SHAPE', 'USE_EXTRA_DOWNSCALING', 'ENCODER_COMPLEXITY', 'DECODER_A_COMPLEXITY', 'DECODER_B_COMPLEXITY'    
 
     def save_weights(self):        
         model_dir = str(self.model_dir)
         
-        from multiprocessing import cpu_count        
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        state_dir = os.path.join(model_dir, 'state_{version_str}.json'.format(**globals()))
+        ser = lib.Serializer.get_serializer('json')            
+        try:
+            with open(state_dir, 'wb') as fp:                
+                state_json = ser.marshal(self._state)
+                fp.write(state_json.encode('utf-8'))            
+        except IOError as e:
+            print(e.strerror)                     
         
-        print('\nbacking up the data', end='', flush=True)                            
-        
-        with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
+        print('\nsaving model weights', end='', flush=True)                                    
+        with ThreadPoolExecutor(max_workers=len(hdf)) as executor:
             futures = [executor.submit(backup_file, model_dir, model) for model in hdf.values()]
             for future in as_completed(futures):
                 future.result()
-                print('.', end='', flush=True)  
-                           
-        state_dir = os.path.join(model_dir, 'state_{version_str}.json'.format(**globals()))
-        ser = lib.Serializer.get_serializer('json')
-        
-        try:
-            with open(state_dir, 'wb') as fp:                
-                state = self.state                
-                state_json = ser.marshal(state)
-                fp.write(state_json.encode('utf-8'))
-                
-        except IOError as e:
-            print(e.strerror)                   
-        
-        print('\nsaving model weights', end='', flush=True)                
-        
-        with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
+                print('.', end='', flush=True)
             futures = [executor.submit(getattr(self, mdl_name.rstrip('H5')).save_weights, str(self.model_dir / mdl_H5_fn)) for mdl_name, mdl_H5_fn in hdf.items()]
             for future in as_completed(futures):
                 future.result()
-                print('.', end='', flush=True)  
-
-        print('done', flush=True)
+                print('.', end='', flush=True)
+        print('done', flush=True)  
         
-        
-    def _new_state(self):       
-        res = {'epoch_no' : 0,
-               'USE_DSSIM' : USE_DSSIM,
-               'USE_SUBPIXEL' : USE_SUBPIXEL
-               }
-        res.update({fname : self.__class__.__dict__[fname] for fname in self.SAVE_FIELDS})
-
-        return res
-        
-    def _load_state(self):
-        serializer = lib.Serializer.get_serializer('json')
-        model_dir = str(self.model_dir)
-        state_fn = os.path.join(model_dir, 'state_{}.json'.format(version_str))
-                                
-        if os.path.exists(os.path.join(model_dir, 'state_{}_original.json'.format( version_str ))):
-            os.rename(os.path.join(model_dir, 'state_{}_original.json'.format( version_str )), state_fn)
-                
-        with open(state_fn, 'rb') as fp:
-            state = serializer.unmarshal(fp.read().decode('utf-8'))
-            if self.encoder_type in state:
-                for fname in self.SAVE_FIELDS:
-                    if not fname in state[self.encoder_type]:
-                        state[self.encoder_type][fname] = self.__class__.__dict__[fname]
-#                         
-#                 if not 'USE_EXTRA_DOWNSCALING' in state[self.encoder_type]:
-#                     state[self.encoder_type]['USE_EXTRA_DOWNSCALING'] = self.USE_EXTRA_DOWNSCALING          
-#                 if not 'ENCODER_COMPLEXITY' in state[self.encoder_type]:
-#                     state[self.encoder_type]['ENCODER_COMPLEXITY'] = self.ENCODER_COMPLEXITY   
-            else:       
-                if 'epoch_no' in state:
-                    if not EncoderType.ORIGINAL.value in state:
-                        state[EncoderType.ORIGINAL.value] = {}                        
-                    state[EncoderType.ORIGINAL.value]['epoch_no'] = state['epoch_no']
-                if not self.encoder_type in state:
-                    state[self.encoder_type] = self._new_state()                                            
-        return state   
-    
     @property
     def epoch_no(self):
         return self.state[self.encoder_type]['epoch_no']
@@ -496,8 +450,7 @@ class Model():
         except AttributeError:
             import inspect
             self._model_name = os.path.dirname(inspect.getmodule(self).__file__).rsplit("_", 1)[1]            
-        return self._model_name
-             
+        return self._model_name             
     
     def __str__(self):
         return "<{}: v={}, enc={}, encoder_dim={}, img_shape={}>".format(self.model_name, 
@@ -505,5 +458,36 @@ class Model():
                                                               self._encoder_type.name,
                                                               self.ENCODER_DIM, 
                                                               "x".join([str(n) for n in self.IMAGE_SHAPE[:2]]))
-    
+
+    def _new_state(self):       
+        res = {'epoch_no' : 0,
+               'USE_DSSIM' : USE_DSSIM,
+               'USE_SUBPIXEL' : USE_SUBPIXEL
+               }
+        res.update({fname : self.__class__.__dict__[fname] for fname in self.SAVE_FIELDS})
+
+        return res
         
+    def _load_state(self):
+        serializer = lib.Serializer.get_serializer('json')
+        model_dir = str(self.model_dir)
+        state_fn = os.path.join(model_dir, 'state_{}.json'.format(version_str))
+                                
+        if os.path.exists(os.path.join(model_dir, 'state_{}_original.json'.format( version_str ))):
+            os.rename(os.path.join(model_dir, 'state_{}_original.json'.format( version_str )), state_fn)
+                
+        with open(state_fn, 'rb') as fp:
+            state = serializer.unmarshal(fp.read().decode('utf-8'))
+            if self.encoder_type in state:
+                for fname in self.SAVE_FIELDS:
+                    if not fname in state[self.encoder_type]:
+                        state[self.encoder_type][fname] = self.__class__.__dict__[fname]
+            else:       
+                if 'epoch_no' in state:
+                    if not EncoderType.ORIGINAL.value in state:
+                        state[EncoderType.ORIGINAL.value] = {}                        
+                    state[EncoderType.ORIGINAL.value]['epoch_no'] = state['epoch_no']
+                if not self.encoder_type in state:
+                    state[self.encoder_type] = self._new_state()                                            
+        return state           
+    
