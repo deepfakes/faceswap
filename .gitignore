@@ -20,3 +20,5 @@
 !plugins
 !tools
 !tools/lib*
+
+__pycache__/
