@@ -1,5 +1,5 @@
 # Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
-# Based on https://github.com/iperov/DeepFaceLab a better 128x Decoder idea
+# Based on https://github.com/iperov/DeepFaceLab a better 128x Decoder idea, K.function impl
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo res_block chain and IN
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
@@ -26,7 +26,6 @@ from lib.utils import backup_file
 from . import __version__
 from .instance_normalization import InstanceNormalization
 
-
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
 else: 
@@ -42,12 +41,7 @@ class EncoderType(enum.Enum):
     ORIGINAL = "original" # basic encoder for this model type
     STANDARD = "standard" # new, balanced encoder they way I meant it to be; more memory consuming
     HIGHRES = "highres"   # high resolution tensors optimized encoder: 176x and on 
-                
-        
-def inst_norm():
-    return InstanceNormalization()
-
-
+                    
 # autoencoder type
 ENCODER = EncoderType.ORIGINAL
 
@@ -72,20 +66,18 @@ class Model():
     DECODER_A_COMPLEXITY = 384 # only applicable for STANDARD encoder
     DECODER_B_COMPLEXITY = 512 # only applicable for STANDARD encoder
     
-    USE_EXTRA_DOWNSCALING = True # to save video RAM
-    
-    USE_K_FUNCTION = True
-    
-    assert [n for n in IMAGE_SHAPE if n>=16]
-    
+    USE_EXTRA_DOWNSCALING = True # used to save video RAM    
+    USE_K_FUNCTION = True 
+        
+    assert [n for n in IMAGE_SHAPE if n>=16]    
     IMAGE_WIDTH = max(IMAGE_SHAPE)
     IMAGE_WIDTH = (IMAGE_WIDTH//16 + (1 if (IMAGE_WIDTH%16)>=8 else 0))*16
     IMAGE_WIDTH = min(IMAGE_WIDTH, 256)
     IMAGE_SHAPE = IMAGE_WIDTH, IMAGE_WIDTH, len('BRG') # good to let ppl know what these are...
-    
         
-    def __init__(self, model_dir, gpus, encoder_type=ENCODER):
-                
+    SAVE_FIELDS = 'ENCODER_DIM', 'IMAGE_SHAPE', 'USE_EXTRA_DOWNSCALING', 'ENCODER_COMPLEXITY', 'DECODER_A_COMPLEXITY', 'DECODER_B_COMPLEXITY'
+    
+    def __init__(self, model_dir, gpus, encoder_type=ENCODER):                
         if mswindows:  
             from ctypes import cdll    
             mydll = cdll.LoadLibrary("user32.dll")
@@ -97,14 +89,11 @@ class Model():
         # can't chnage gpu's when the model is initialized no point in making it r/w
         self._gpus = gpus 
         
-        if not self.is_new_training:
+        if not self.is_new_training:            
+            for fname in self.SAVE_FIELDS:
+                setattr(self.__class__, fname, self.current_state[fname])
+                             
             global USE_DSSIM, USE_SUBPIXEL
-                        
-            self.__class__.ENCODER_DIM = self.current_state['ENCODER_DIM']
-            self.__class__.IMAGE_SHAPE = self.current_state['IMAGE_SHAPE']
-            self.__class__.USE_EXTRA_DOWNSCALING = self.current_state['USE_EXTRA_DOWNSCALING']
-            self.__class__.ENCODER_COMPLEXITY = self.current_state['ENCODER_COMPLEXITY'] 
-            
             USE_DSSIM = self.current_state['IMAGE_SHAPE']
             USE_SUBPIXEL = self.current_state['USE_SUBPIXEL']            
         
@@ -117,7 +106,6 @@ class Model():
         self.decoder_B = Decoder_B()
         
         self.initModel()        
-
     
     def initModel(self):
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
@@ -184,7 +172,6 @@ class Model():
       
         return False
 
-
     def converter(self, swap):
         if not self.USE_K_FUNCTION:
             autoencoder = self.autoencoder_B if not swap else self.autoencoder_A
@@ -194,12 +181,16 @@ class Model():
             return lambda x: view( [x] )[0]
     
     @staticmethod
-    def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
+    def inst_norm(): 
+        return InstanceNormalization()
+    
+    @classmethod
+    def conv(cls, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
         def block(x):
             x = Conv2D(filters, kernel_size=kernel_size, strides=strides, 
                        kernel_initializer=_kern_init, padding='same', **kwargs)(x)
             if use_instance_norm:
-                x = inst_norm()(x)                                
+                x = cls.inst_norm()(x)                                
             x = LeakyReLU(0.1)(x)            
             return x
         return block   
@@ -214,36 +205,36 @@ class Model():
         x = LeakyReLU(alpha=0.2)(x)
         return x        
     
-    @staticmethod
-    def conv_sep(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
+    @classmethod
+    def conv_sep(cls, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
         def block(x):
             x = SeparableConv2D(filters, kernel_size=kernel_size, strides=strides, 
                        kernel_initializer=_kern_init, padding='same', **kwargs)(x)
             if use_instance_norm:
-                x = inst_norm()(x)                                
+                x = cls.inst_norm()(x)                                
             x = LeakyReLU(0.1)(x)            
             return x
         return block
 
-    @staticmethod
-    def upscale_sub(filters, kernel_size=3, use_instance_norm=False, **kwargs):
+    @classmethod
+    def upscale_sub(cls, filters, kernel_size=3, use_instance_norm=False, **kwargs):
         def block(x):
             x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same',
                        kernel_initializer=_kern_init, **kwargs)(x)
             if use_instance_norm:
-                x = inst_norm()(x)                       
+                x = cls.inst_norm()(x)                       
             x = LeakyReLU(0.1)(x)
             x = SubPixelUpscaling()(x)
             return x
         return block
               
-    @staticmethod
-    def upscale(filters, kernel_size=3, use_instance_norm=False, **kwargs):
+    @classmethod
+    def upscale(cls, filters, kernel_size=3, use_instance_norm=False, **kwargs):
         def block(x):
             x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same',
                        kernel_initializer=_kern_init, **kwargs)(x)
             if use_instance_norm:
-                x = inst_norm()(x)                       
+                x = cls.inst_norm()(x)                       
             x = LeakyReLU(0.1)(x)
             x = PixelShuffler()(x)
             return x
@@ -415,14 +406,13 @@ class Model():
         
         
     def _new_state(self):       
-        return { 'epoch_no' : 0,
-         'USE_DSSIM' : USE_DSSIM,
-         'USE_SUBPIXEL' : USE_SUBPIXEL,
-         'ENCODER_DIM' :  self.ENCODER_DIM,      
-         'IMAGE_SHAPE' : self.IMAGE_SHAPE,
-         'USE_EXTRA_DOWNSCALING' : self.USE_EXTRA_DOWNSCALING,
-         'ENCODER_COMPLEXITY' : self.ENCODER_COMPLEXITY
-         }
+        res = {'epoch_no' : 0,
+               'USE_DSSIM' : USE_DSSIM,
+               'USE_SUBPIXEL' : USE_SUBPIXEL
+               }
+        res.update({fname : self.__class__.__dict__[fname] for fname in self.SAVE_FIELDS})
+
+        return res
         
     def _load_state(self):
         serializer = lib.Serializer.get_serializer('json')
@@ -435,10 +425,14 @@ class Model():
         with open(state_fn, 'rb') as fp:
             state = serializer.unmarshal(fp.read().decode('utf-8'))
             if self.encoder_type in state:
-                if not 'USE_EXTRA_DOWNSCALING' in state[self.encoder_type]:
-                    state[self.encoder_type]['USE_EXTRA_DOWNSCALING'] = self.USE_EXTRA_DOWNSCALING          
-                if not 'ENCODER_COMPLEXITY' in state[self.encoder_type]:
-                    state[self.encoder_type]['ENCODER_COMPLEXITY'] = self.ENCODER_COMPLEXITY   
+                for fname in self.SAVE_FIELDS:
+                    if not fname in state[self.encoder_type]:
+                        state[self.encoder_type][fname] = self.__class__.__dict__[fname]
+#                         
+#                 if not 'USE_EXTRA_DOWNSCALING' in state[self.encoder_type]:
+#                     state[self.encoder_type]['USE_EXTRA_DOWNSCALING'] = self.USE_EXTRA_DOWNSCALING          
+#                 if not 'ENCODER_COMPLEXITY' in state[self.encoder_type]:
+#                     state[self.encoder_type]['ENCODER_COMPLEXITY'] = self.ENCODER_COMPLEXITY   
             else:       
                 if 'epoch_no' in state:
                     if not EncoderType.ORIGINAL.value in state:
