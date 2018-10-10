@@ -11,14 +11,16 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
+from lib.multithreading import MultiThread
 from .base import Detector, dlib
 
 
 class Detect(Detector):
     """ MTCNN detector for face recognition """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.kwargs = None
+        self.name = "mtcnn"
         self.target = 2073600  # Uses approx 1.30 GB of VRAM
         self.vram = 1408
 
@@ -43,7 +45,7 @@ class Detect(Detector):
                     "factor": 0.709}               # scale factor
         return kwargs
 
-    def set_data_path(self):
+    def set_model_path(self):
         """ Load the mtcnn models """
         for model in ("det1.npy", "det2.npy", "det3.npy"):
             model_path = os.path.join(self.cachepath, model)
@@ -52,39 +54,83 @@ class Detect(Detector):
                                 "the lib!".format(model_path))
         return self.cachepath
 
-    def create_detector(self, verbose, mtcnn_kwargs):
+    def initialize(self, **kwargs):
         """ Create the mtcnn detector """
-        self.verbose = verbose
-
-        if self.verbose:
-            print("Adding MTCNN detector")
-
-        self.kwargs = mtcnn_kwargs
+        self.kwargs = kwargs["mtcnn_kwargs"]
 
         mtcnn_graph = tf.Graph()
         with mtcnn_graph.as_default():
-            mtcnn_session = tf.Session()
-            with mtcnn_session.as_default():
-                pnet, rnet, onet = create_mtcnn(mtcnn_session, self.data_path)
+            sess = tf.Session()
+            with sess.as_default():
+                pnet, rnet, onet = create_mtcnn(sess, self.model_path)
+            alloc = int(sess.run(tf.contrib.memory_stats.BytesLimit()) /
+                        (1024 * 1024))
         mtcnn_graph.finalize()
+
+        self.batch_size = int(alloc / self.vram)
+        if self.verbose:
+            print("Processing in {} threads".format(self.batch_size))
 
         self.kwargs["pnet"] = pnet
         self.kwargs["rnet"] = rnet
         self.kwargs["onet"] = onet
-        self.initialized = True
 
-    def detect_faces(self, image):
+    def detect_faces(self, image_queue):
+        """ Detect faces in Multiple Threads """
+        parallel = MultiThread(thread_count=self.batch_size, queue_size=0)
+        out_queue = parallel.queue
+        parallel.in_thread(target=self.detect_thread,
+                           args=(image_queue, out_queue))
+
+        end_count = 0
+        while True:
+            if end_count == self.batch_size:
+                break
+            item = out_queue.get()
+            if item == "EOF":
+                end_count += 1
+                continue
+            yield item
+
+        parallel.join_threads()
+
+    def detect_thread(self, image_queue, out_queue):
         """ Detect faces in rgb image """
-        self.set_scale(image, is_square=False, scale_up=False)
-        image = self.set_detect_image(image)
-        self.detected_faces = None
-        detected_faces, points = detect_face(image, **self.kwargs)
-        detected_faces = self.recalculate_bounding_box(detected_faces, points)
-        self.detected_faces = [dlib.rectangle(int(face[0] / self.scale),
-                                              int(face[1] / self.scale),
-                                              int(face[2] / self.scale),
-                                              int(face[3] / self.scale))
-                               for face in detected_faces]
+        while not self.feed_empty:
+            try:
+                filename, image = next(self.feed_queue(image_queue))
+            except StopIteration:
+                break
+
+            detect_image = self.compile_detection_image(image, False, False)
+
+            for angle in self.rotation:
+                current_image, rotmat = self.rotate_image(detect_image, angle)
+                faces, points = detect_face(current_image, **self.kwargs)
+                if self.verbose and angle != 0 and faces:
+                    print("found face(s) by rotating image {} degrees".format(
+                        angle))
+                if faces.any():
+                    break
+
+            detected_faces = self.process_output(faces, points, rotmat)
+            out_queue.put((filename, image, detected_faces))
+        out_queue.put("EOF")
+
+    def process_output(self, faces, points, rotation_matrix):
+        """ Compile found faces for output """
+        faces = self.recalculate_bounding_box(faces, points)
+        faces = [dlib.rectangle(int(face[0]), int(face[1]),
+                                int(face[2]), int(face[3]))
+                 for face in faces]
+        if isinstance(rotation_matrix, np.ndarray):
+            faces = [self.rotate_rect(face, rotation_matrix)
+                     for face in faces]
+        return [dlib.rectangle(int(face.left() / self.scale),
+                               int(face.top() / self.scale),
+                               int(face.right() / self.scale),
+                               int(face.bottom() / self.scale))
+                for face in faces]
 
     @staticmethod
     def recalculate_bounding_box(faces, landmarks):
@@ -194,15 +240,15 @@ class Network(object):
         """Construct the network. """
         raise NotImplementedError('Must be implemented by the subclass.')
 
-    def load(self, data_path, session, ignore_missing=False):
+    def load(self, model_path, session, ignore_missing=False):
         """Load network weights.
-        data_path: The path to the numpy-serialized network weights
+        model_path: The path to the numpy-serialized network weights
         session: The current TensorFlow session
         ignore_missing: If true, serialized weights for missing layers are
                         ignored.
         """
         # pylint: disable=no-member
-        data_dict = np.load(data_path, encoding='latin1').item()
+        data_dict = np.load(model_path, encoding='latin1').item()
 
         for op_name in data_dict:
             with tf.variable_scope(op_name, reuse=True):

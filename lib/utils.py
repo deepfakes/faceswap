@@ -3,8 +3,6 @@
 
 import os
 from os.path import basename, exists, join
-import queue as Queue
-import threading
 import warnings
 
 from pathlib import Path
@@ -69,7 +67,6 @@ def set_system_verbosity(loglevel):
         1 - filter out INFO logs
         2 - filter out WARNING logs
         3 - filter out ERROR logs  """
-    # TODO suppress tensorflow deprecation warnings """
 
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
@@ -131,32 +128,3 @@ def rotate_landmarks(face, rotation_matrix):
     face.r = 0
     face.landmarksXY = [tuple(point) for point in rotated[1].tolist()]
     return face
-
-
-class BackgroundGenerator(threading.Thread):
-    """ Run a queue in the background. From:
-        https://stackoverflow.com/questions/7323664/ """
-    # See below why prefetch count is flawed
-    def __init__(self, generator, prefetch=1):
-        threading.Thread.__init__(self)
-        self.queue = Queue.Queue(prefetch)
-        self.generator = generator
-        self.daemon = True
-        self.start()
-
-    def run(self):
-        """ Put until queue size is reached.
-            Note: put blocks only if put is called while queue has already
-            reached max size => this makes 2 prefetched items! One in the
-            queue, one waiting for insertion! """
-        for item in self.generator:
-            self.queue.put(item)
-        self.queue.put(None)
-
-    def iterator(self):
-        """ Iterate items out of the queue """
-        while True:
-            next_item = self.queue.get()
-            if next_item is None:
-                break
-            yield next_item

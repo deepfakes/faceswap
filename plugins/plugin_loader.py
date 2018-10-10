@@ -10,8 +10,6 @@ class PluginLoader():
     @staticmethod
     def get_detector(name):
         """ Return requested detector plugin """
-        if name.lower().startswith("dlib"):
-            name = "dlib"
         return PluginLoader._import("extract.detect", name)
 
     @staticmethod

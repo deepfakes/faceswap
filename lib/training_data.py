@@ -2,7 +2,7 @@ import cv2
 import numpy
 from random import shuffle
 
-from .utils import BackgroundGenerator
+from .multithreading import BackgroundGenerator
 from .umeyama import umeyama
 
 class TrainingDataGenerator():

@@ -13,7 +13,7 @@ import numpy as np
 
 from lib.detect_blur import is_blurry
 from lib import Serializer
-#from lib.faces_detect import detect_faces, DetectedFace
+from lib.faces_detect import detect_faces, DetectedFace
 from lib.FaceFilter import FaceFilter
 from lib.utils import (get_folder, get_image_paths, rotate_image_by_angle,
                        set_system_verbosity)
@@ -63,42 +63,12 @@ class Images():
     """ Holds the full frames/images """
     def __init__(self, arguments):
         self.args = arguments
-        self.rotation_angles = self.get_rotation_angles()
         self.already_processed = self.get_already_processed()
         self.input_images = self.get_input_images()
         self.images_found = len(self.input_images)
 
         self.rotation_width = 0
         self.rotation_height = 0
-
-    def get_rotation_angles(self):
-        """ Set the rotation angles. Includes backwards compatibility for the
-            'on' and 'off' options:
-                - 'on' - increment 90 degrees
-                - 'off' - disable
-                - 0 is prepended to the list, as whatever happens, we want to
-                  scan the image in it's upright state """
-        rotation_angles = [0]
-
-        if (not hasattr(self.args, 'rotate_images')
-                or not self.args.rotate_images
-                or self.args.rotate_images == "off"):
-            return rotation_angles
-
-        if self.args.rotate_images == "on":
-            rotation_angles.extend(range(90, 360, 90))
-        else:
-            passed_angles = [int(angle)
-                             for angle in self.args.rotate_images.split(",")]
-            if len(passed_angles) == 1:
-                rotation_step_size = passed_angles[0]
-                rotation_angles.extend(range(rotation_step_size,
-                                             360,
-                                             rotation_step_size))
-            elif len(passed_angles) > 1:
-                rotation_angles.extend(passed_angles)
-
-        return rotation_angles
 
     def get_already_processed(self):
         """ Return the images that already exist in the output directory """
@@ -148,7 +118,6 @@ class Faces():
     def __init__(self, arguments):
         self.args = arguments
         self.extractors = self.load_extractor()
-        self.mtcnn_kwargs = self.get_mtcnn_kwargs()
         self.filter = self.load_face_filter()
         self.align_eyes = self.args.align_eyes if hasattr(
             self.args, 'align_eyes') else False
@@ -160,7 +129,16 @@ class Faces():
 
     def load_extractor(self, extractor_name="align"):
         """ Load the requested extractor for extraction """
-        detector = PluginLoader.get_detector(self.args.detector)()
+        if not hasattr(self.args, "rotate_images"):
+            rotation = None
+        else:
+            rotation = self.args.rotate_images
+
+        detector_name = self.args.detector.replace("-", "_").lower()
+        detector = PluginLoader.get_detector(detector_name)(
+            rotation=rotation,
+            verbose=self.args.verbose)
+
         # Add a cli option if other aligner plugins are added
         aligner = PluginLoader.get_aligner("face_alignment")()
         extractor = PluginLoader.get_extractor(extractor_name)()
@@ -203,28 +181,41 @@ class Faces():
         """ return path of images that have faces """
         return os.path.basename(filename) in self.faces_detected
 
-    def get_faces(self, image, rotation=0):
-        """ Extract the faces from an image """
-        faces_count = 0
-        faces = detect_faces(image,
-                             self.args.detector,
-                             self.args.verbose,
-                             rotation=rotation,
-                             dlib_buffer=self.args.dlib_buffer,
-                             mtcnn_kwargs=self.mtcnn_kwargs)
+    def initialize_detector(self):
+        """ Inititalize the detector """
+        detector = self.extractors[0]
+        detector_name = self.args.detector
+        kwargs = dict()
+        if detector_name == "mtcnn":
+            mtcnn_kwargs = detector.validate_kwargs(self.get_mtcnn_kwargs())
+            kwargs["mtcnn_kwargs"] = mtcnn_kwargs
 
-        for face in faces:
-            if self.filter and not self.filter.check(face):
-                if self.args.verbose:
-                    print("Skipping not recognized face!")
-                continue
-            yield faces_count, face
+        try:
+            detector.initialize(**kwargs)
+        except ValueError as err:
+            print("ERROR: {}".format(err))
+            exit(1)
 
-            self.num_faces_detected += 1
-            faces_count += 1
+    def detect_faces(self, image_queue, rotation=0):
+        """ Detect faces from in an image """
+        detector = self.extractors[0].detect_faces(image_queue)
+        for filename, image, faces in detector:
+            faces_count = 0
+            ret_faces = list()
 
-        if faces_count > 1 and self.args.verbose:
-            self.verify_output = True
+            for face in faces:
+                if self.filter and not self.filter.check(face):
+                    if self.args.verbose:
+                        print("Skipping not recognized face!")
+                    continue
+                ret_faces.append([faces_count, face])
+                self.num_faces_detected += 1
+                faces_count += 1
+
+            yield filename, image, ret_faces
+
+            if faces_count > 1 and self.args.verbose:
+                self.verify_output = True
 
     def get_faces_alignments(self, filename, image):
         """ Retrieve the face alignments from an image """

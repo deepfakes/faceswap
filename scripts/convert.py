@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, Faces, Utils
 from scripts.extract import Extract
-from lib.utils import BackgroundGenerator, get_folder, get_image_paths
+from lib.multithreading import BackgroundGenerator
+from lib.utils import get_folder, get_image_paths
 
 from plugins.plugin_loader import PluginLoader
 
@@ -138,13 +139,14 @@ class Convert(object):
         if self.opts.check_skipface(filename, idx):
             return image
 
+        # TODO Sort out rotation for convert
         # Rotating an image is legacy code. Landmarks are now
         # rotated at extract stage. For newer extracts face.r
         # will always be zero.
         image = self.images.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
-        
+
         size = 128 if (self.args.trainer.strip().lower()
                        in ('gan128', 'originalhighres')) else 64
 

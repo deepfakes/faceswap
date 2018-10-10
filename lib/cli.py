@@ -289,26 +289,20 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "yaml is chosen and not available, then "
                                       "json will be used as the default "
                                       "fallback."})
-        argument_list.append({"opts": ("-D", "--detector"),
-                              "type": str,
-                              # case sensitive because this is used to load a
-                              # plugin.
-                              "choices": ("dlib-hog", "dlib-cnn",
-                                          "dlib-all", "mtcnn"),
-                              "default": "mtcnn",
-                              "help": "R|Detector to use.\n'dlib-hog': uses "
-                                      "least resources, but is the least\n\t"
-                                      "reliable.\n'dlib-cnn': faster than "
-                                      "mtcnn but detects fewer faces\n\tand "
-                                      "fewer false positives.\n'dlib-all': "
-                                      "attempts to find faces using "
-                                      "dlib-cnn,\n\tif none are found, "
-                                      "attempts to find faces\n\tusing "
-                                      "dlib-hog.\n'mtcnn': slower than dlib, "
-                                      "but uses fewer resources\n\twhilst "
-                                      "detecting more faces and more false\n\t"
-                                      "positives. Has superior alignment to "
-                                      "dlib"})
+        argument_list.append({
+            "opts": ("-D", "--detector"),
+                     "type": str,
+                     "choices": ("dlib-hog", "dlib-cnn", "mtcnn"),
+                     "default": "mtcnn",
+                     "help": "R|Detector to use."
+                             "\n'dlib-hog': uses least resources, but is the"
+                             "\n\tleast reliable."
+                             "\n'dlib-cnn': faster than mtcnn but detects"
+                             "\n\tfewer faces and fewer false positives."
+                             "\n'mtcnn': slower than dlib, but uses fewer"
+                             "\n\tresources whilst detecting more faces and"
+                             "\n\tmore false positives. Has superior"
+                             "\n\talignment to dlib"})
         argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
                               "type": int,
                               "dest": "mtcnn_minsize",
@@ -341,20 +335,6 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "pyramid. Should be a decimal number "
                                       "less than one. Default is 0.709 "
                                       "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-dbf", "--dlib-buffer"),
-                              "type": int,
-                              "dest": "dlib_buffer",
-                              "default": 64,
-                              "help": "This should only be increased if you "
-                                      "are having issues extracting with "
-                                      "DLib-cnn. The calculation of RAM "
-                                      "required is approximate, so some RAM "
-                                      " is held back in reserve (64MB by "
-                                      "default). If this is not enough "
-                                      "increase this figure by providing an "
-                                      "integer representing the amount of "
-                                      "megabytes to reserve. (DLIB-CNN "
-                                      "Only)"})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
                               "type": float,
                               "dest": "ref_threshold",
