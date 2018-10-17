@@ -5,14 +5,15 @@
 !*.txt
 !*.png
 !*.h5
+!*.pb
 !*.dat
 !*.npy
 !Dockerfile*
 !requirements*
+!.cache
 !lib
 !lib/face_alignment
 !lib/gui
-!lib/gui/.cache
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons
 !scripts

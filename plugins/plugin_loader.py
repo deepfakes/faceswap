@@ -15,12 +15,7 @@ class PluginLoader():
     @staticmethod
     def get_aligner(name):
         """ Return requested detector plugin """
-        return PluginLoader._import("extract.alignments", name)
-
-    @staticmethod
-    def get_extractor(name):
-        """ Return requested extractor plugin """
-        return PluginLoader._import("extract", name)
+        return PluginLoader._import("extract.align", name)
 
     @staticmethod
     def get_converter(name):
@@ -55,6 +50,19 @@ class PluginLoader():
             if modeldir[0:6].lower() == 'model_':
                 models += (modeldir[6:],)
         return models
+
+    @staticmethod
+    def get_available_extractors(extractor_type):
+        """ Return a list of available models """
+        extractpath = os.path.join(os.path.dirname(__file__),
+                                   "extract",
+                                   extractor_type)
+        extractors = sorted(item.name.replace(".py", "").replace("_", "-")
+                            for item in os.scandir(extractpath)
+                            if not item.name.startswith("_")
+                            and item.name.endswith(".py")
+                            and item.name != "manual.py")
+        return extractors
 
     @staticmethod
     def get_default_model():

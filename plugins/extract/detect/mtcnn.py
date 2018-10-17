@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from lib.multithreading import MultiThread
-from .base import Detector, dlib
+from ._base import Detector, dlib
 
 
 class Detect(Detector):
@@ -54,8 +54,10 @@ class Detect(Detector):
                                 "the lib!".format(model_path))
         return self.cachepath
 
-    def initialize(self, **kwargs):
+    def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
+        super().initialize(*args, **kwargs)
+        is_gpu = False
         self.kwargs = kwargs["mtcnn_kwargs"]
 
         mtcnn_graph = tf.Graph()
@@ -63,11 +65,25 @@ class Detect(Detector):
             sess = tf.Session()
             with sess.as_default():
                 pnet, rnet, onet = create_mtcnn(sess, self.model_path)
-            alloc = int(sess.run(tf.contrib.memory_stats.BytesLimit()) /
-                        (1024 * 1024))
+
+            if any("gpu" in str(device).lower()
+                   for device in sess.list_devices()):
+                is_gpu = True
+                alloc = int(sess.run(tf.contrib.memory_stats.BytesLimit()) /
+                            (1024 * 1024))
         mtcnn_graph.finalize()
 
+        if not is_gpu:
+            alloc = 2048
+            if self.verbose:
+                print("Using CPU. Limiting RAM useage to {}MB".format(alloc))
+
         self.batch_size = int(alloc / self.vram)
+
+        if self.batch_size < 1:
+            raise ValueError("Insufficient VRAM available to continue "
+                             "({}MB)".format(int(alloc)))
+
         if self.verbose:
             print("Processing in {} threads".format(self.batch_size))
 
@@ -75,33 +91,23 @@ class Detect(Detector):
         self.kwargs["rnet"] = rnet
         self.kwargs["onet"] = onet
 
-    def detect_faces(self, image_queue):
+    def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """
-        parallel = MultiThread(thread_count=self.batch_size, queue_size=0)
-        out_queue = parallel.queue
-        parallel.in_thread(target=self.detect_thread,
-                           args=(image_queue, out_queue))
+        super().detect_faces(*args, **kwargs)
+        workers = MultiThread(thread_count=self.batch_size)
+        workers.in_thread(target=self.detect_thread)
+        workers.join_threads()
+        self.queues["out"].put("EOF")
 
-        end_count = 0
-        while True:
-            if end_count == self.batch_size:
-                break
-            item = out_queue.get()
-            if item == "EOF":
-                end_count += 1
-                continue
-            yield item
-
-        parallel.join_threads()
-
-    def detect_thread(self, image_queue, out_queue):
+    def detect_thread(self):
         """ Detect faces in rgb image """
-        while not self.feed_empty:
-            try:
-                filename, image = next(self.feed_queue(image_queue))
-            except StopIteration:
+        while True:
+            item = self.queues["in"].get()
+            if item == "EOF":
+                self.queues["in"].put(item)
                 break
 
+            filename, image = item
             detect_image = self.compile_detection_image(image, False, False)
 
             for angle in self.rotation:
@@ -114,8 +120,11 @@ class Detect(Detector):
                     break
 
             detected_faces = self.process_output(faces, points, rotmat)
-            out_queue.put((filename, image, detected_faces))
-        out_queue.put("EOF")
+            retval = {
+                "filename": filename,
+                "image": image,
+                "detected_faces": detected_faces}
+            self.finalize(retval)
 
     def process_output(self, faces, points, rotation_matrix):
         """ Compile found faces for output """
@@ -126,11 +135,12 @@ class Detect(Detector):
         if isinstance(rotation_matrix, np.ndarray):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
-        return [dlib.rectangle(int(face.left() / self.scale),
-                               int(face.top() / self.scale),
-                               int(face.right() / self.scale),
-                               int(face.bottom() / self.scale))
-                for face in faces]
+        detected = [dlib.rectangle(int(face.left() / self.scale),
+                                   int(face.top() / self.scale),
+                                   int(face.right() / self.scale),
+                                   int(face.bottom() / self.scale))
+                    for face in faces]
+        return detected
 
     @staticmethod
     def recalculate_bounding_box(faces, landmarks):

@@ -452,7 +452,7 @@ class ExtractedFaces():
         sizes = list()
         for matrix in self.matrices:
             original_roi = self.original_roi(matrix)[0].squeeze()
-            top_left, top_right  = original_roi[0], original_roi[3]
+            top_left, top_right = original_roi[0], original_roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
             if top_left[1] == top_right[1]:
@@ -462,10 +462,9 @@ class ExtractedFaces():
             sizes.append(length)
         return sizes
 
-
     def get_aligned_landmarks_for_frame(self, frame, landmarks_xy,
                                         update=False):
-        """ Return the original rois for the selected frame """
+        """ Return the transposed landmarks for the selected face """
         if self.current_frame != frame or update:
             self.get_faces(frame)
         aligned_landmarks = list()

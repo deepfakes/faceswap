@@ -1,29 +1,7 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 
-from lib import face_alignment
-
-
-def detect_faces(frame, detector, verbose, rotation=0,
-                 dlib_buffer=64, mtcnn_kwargs=None):
-    """ Detect faces and draw landmarks in an image """
-    face_detect = face_alignment.Extract(frame,
-                                         detector,
-                                         dlib_buffer,
-                                         mtcnn_kwargs,
-                                         verbose)
-    for face in face_detect.landmarks:
-        ax_x, ax_y = face[0][0], face[0][1]
-        right, bottom = face[0][2], face[0][3]
-        landmarks = face[1]
-
-        yield DetectedFace(frame[ax_y: bottom, ax_x: right],
-                           rotation,
-                           ax_x,
-                           right - ax_x,
-                           ax_y,
-                           bottom - ax_y,
-                           landmarksXY=landmarks)
+from dlib import rectangle as d_rectangle
 
 
 class DetectedFace():
@@ -31,7 +9,7 @@ class DetectedFace():
     def __init__(self, image=None, r=0, x=None,
                  w=None, y=None, h=None, landmarksXY=None):
         self.image = image
-        self.r = r
+        self.r = r  # Deprecated. Kept for backwards compatibility
         self.x = x
         self.w = w
         self.y = y
@@ -41,3 +19,25 @@ class DetectedFace():
     def landmarks_as_xy(self):
         """ Landmarks as XY """
         return self.landmarksXY
+
+    def to_dlib_rect(self):
+        """ Return Bounding Box as Dlib Rectangle """
+        left = self.x
+        top = self.y
+        right = self.x + self.w
+        bottom = self.y + self.h
+        return d_rectangle(left, top, right, bottom)
+
+    def from_dlib_rect(self, d_rect):
+        """ Set Bounding Box from a Dlib Rectangle """
+        if not isinstance(d_rect, d_rectangle):
+            raise ValueError("Supplied Bounding Box is not a dlib.rectangle.")
+        self.x = d_rect.left()
+        self.w = d_rect.right() - d_rect.left()
+        self.y = d_rect.top()
+        self.h = d_rect.bottom() - d_rect.top()
+
+    def image_to_face(self, image):
+        """ Crop an image around bounding box to the face """
+        self.image = image[self.y: self.y + self.h,
+                           self.x: self.x + self.w]

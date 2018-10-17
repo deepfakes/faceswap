@@ -291,18 +291,30 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "fallback."})
         argument_list.append({
             "opts": ("-D", "--detector"),
-                     "type": str,
-                     "choices": ("dlib-hog", "dlib-cnn", "mtcnn"),
-                     "default": "mtcnn",
-                     "help": "R|Detector to use."
-                             "\n'dlib-hog': uses least resources, but is the"
-                             "\n\tleast reliable."
-                             "\n'dlib-cnn': faster than mtcnn but detects"
-                             "\n\tfewer faces and fewer false positives."
-                             "\n'mtcnn': slower than dlib, but uses fewer"
-                             "\n\tresources whilst detecting more faces and"
-                             "\n\tmore false positives. Has superior"
-                             "\n\talignment to dlib"})
+            "type": str,
+            "choices":  PluginLoader.get_available_extractors(
+                "detect"),
+            "default": "mtcnn",
+            "help": "R|Detector to use."
+                    "\n'dlib-hog': uses least resources, but is the"
+                    "\n\tleast reliable."
+                    "\n'dlib-cnn': faster than mtcnn but detects"
+                    "\n\tfewer faces and fewer false positives."
+                    "\n'mtcnn': slower than dlib, but uses fewer"
+                    "\n\tresources whilst detecting more faces and"
+                    "\n\tmore false positives. Has superior"
+                    "\n\talignment to dlib"})
+        argument_list.append({
+            "opts": ("-A", "--aligner"),
+            "type": str,
+            "choices": PluginLoader.get_available_extractors(
+                "align"),
+            "default": "fan",
+            "help": "R|Aligner to use."
+                    "\n'dlib': Dlib Pose Predictor. Faster, less "
+                    "\n\tresource intensive, but less accurate."
+                    "\n'fan': Face Alignment Network. Best aligner."
+                    "\n\tGPU heavy."})
         argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
                               "type": int,
                               "dest": "mtcnn_minsize",
@@ -400,8 +412,12 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-mp", "--multiprocess"),
                               "action": "store_true",
                               "default": False,
-                              "help": "Run extraction on all available "
-                                      "cores. (CPU only)"})
+                              "help": "Run extraction in parallel. Offers "
+                                      "speed up for some extractor/detector "
+                                      "combinations, less so for others. "
+                                      "Only has an effect if both the "
+                                      "aligner and detector use the GPU, "
+                                      "otherwise this is automatic."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",

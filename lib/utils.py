@@ -3,6 +3,7 @@
 
 import os
 from os.path import basename, exists, join
+from re import finditer
 import warnings
 
 from pathlib import Path
@@ -128,3 +129,12 @@ def rotate_landmarks(face, rotation_matrix):
     face.r = 0
     face.landmarksXY = [tuple(point) for point in rotated[1].tolist()]
     return face
+
+
+def camel_case_split(identifier):
+    """ Split a camel case name
+        from: https://stackoverflow.com/questions/29916065 """
+    matches = finditer(
+        ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)",
+        identifier)
+    return [m.group(0) for m in matches]

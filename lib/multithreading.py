@@ -3,41 +3,108 @@
 
 import multiprocessing as mp
 import queue as Queue
+from queue import Empty as QueueEmpty
 import threading
+from time import sleep
+
+
+class QueueManager():
+    """ Manage queues for availabilty across processes
+        Don't import this class directly, instead
+        import the variable: queue_manager """
+    def __init__(self):
+        self.manager = mp.Manager()
+        self.queues = dict()
+
+    def add_queue(self, name, maxsize=0):
+        """ Add a queue to the manager """
+        if name in self.queues.keys():
+            raise ValueError("Queue '{}' already exists.".format(name))
+        queue = self.manager.Queue(maxsize=maxsize)
+        self.queues[name] = queue
+
+    def del_queue(self, name):
+        """ remove a queue from the manager """
+        del self.queues[name]
+
+    def get_queue(self, name, maxsize=0):
+        """ Return a queue from the manager
+            If it doesn't exist, create it """
+        queue = self.queues.get(name, None)
+        if queue:
+            return queue
+        self.add_queue(name, maxsize)
+        return self.queues[name]
+
+    def debug_monitor(self, update_secs=2):
+        """ Debug tool for monitoring queues """
+        thread = MultiThread(thread_count=update_secs)
+        thread.in_thread(self.debug_queue_sizes)
+
+    def debug_queue_sizes(self):
+        """ Output the queue sizes """
+        while True:
+            print("=== QUEUE SIZES ===")
+            for name in sorted(self.queues.keys()):
+                print(name, self.queues[name].qsize())
+            print("====================\n")
+            sleep(2)
+
+
+queue_manager = QueueManager()
 
 
 class PoolProcess():
     """ Pool multiple processes """
-    def __init__(self, method,
-                 initializer=None, processes=None, verbose=False):
+    def __init__(self, method, processes=None, verbose=False):
         self.verbose = verbose
-        self.initializer = initializer
         self.method = method
         self.procs = self.set_procs(processes)
 
     def set_procs(self, processes):
         """ Set the number of processes to use """
         if processes is None:
-            processes = mp.cpu_count()
+            running_processes = len(mp.active_children())
+            processes = max(mp.cpu_count() - running_processes, 1)
         if self.verbose:
             print("Processing in {} processes".format(processes))
         return processes
 
-    def process(self, data):
+    def in_process(self, *args, **kwargs):
         """ Run the processing pool """
-        pool = mp.Pool(processes=self.procs, initializer=self.initializer)
-        for item in pool.imap_unordered(self.method, data):
-            yield item if item is not None else 0
+        pool = mp.Pool(processes=self.procs)
+        for _ in range(self.procs):
+            pool.apply_async(self.method, args=args, kwds=kwargs)
+
+
+class SpawnProcess():
+    """ Process in spawnable context
+        Must be spawnable to share CUDA across processes """
+    def __init__(self):
+        self.context = mp.get_context("spawn")
+        self.daemonize = True
+        self.process = None
+
+    def in_process(self, target, *args, **kwargs):
+        """ Start a process in the spawn context """
+        self.process = self.context.Process(target=target,
+                                            args=args,
+                                            kwargs=kwargs)
+        self.process.daemon = self.daemonize
+        self.process.start()
+
+    def join(self):
+        """ Join the process """
+        self.process.join()
 
 
 class MultiThread():
     """ Threading for IO heavy ops """
-    def __init__(self, thread_count=1, queue_size=100):
+    def __init__(self, thread_count=1):
         self.thread_count = thread_count
-        self.queue = mp.Queue(maxsize=queue_size)
         self.threads = list()
 
-    def in_thread(self, target=None, args=(), kwargs=None):
+    def in_thread(self, target, *args, **kwargs):
         """ Start a thread with the given method and args """
         for _ in range(self.thread_count):
             thread = threading.Thread(target=target, args=args, kwargs=kwargs)
@@ -57,7 +124,7 @@ class BackgroundGenerator(threading.Thread):
     # See below why prefetch count is flawed
     def __init__(self, generator, prefetch=1):
         threading.Thread.__init__(self)
-        self.queue = Queue.Queue(prefetch)
+        self.queue = Queue.Queue(maxsize=prefetch)
         self.generator = generator
         self.daemon = True
         self.start()
