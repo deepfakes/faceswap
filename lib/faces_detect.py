@@ -6,10 +6,9 @@ from dlib import rectangle as d_rectangle
 
 class DetectedFace():
     """ Detected face and landmark information """
-    def __init__(self, image=None, r=0, x=None,
-                 w=None, y=None, h=None, landmarksXY=None):
+    def __init__(self, image=None, x=None, w=None, y=None, h=None,
+                 landmarksXY=None):
         self.image = image
-        self.r = r  # Deprecated. Kept for backwards compatibility
         self.x = x
         self.w = w
         self.y = y
@@ -41,3 +40,24 @@ class DetectedFace():
         """ Crop an image around bounding box to the face """
         self.image = image[self.y: self.y + self.h,
                            self.x: self.x + self.w]
+
+    def to_alignment(self):
+        """ Convert a detected face to alignment dict """
+        alignment = dict()
+        alignment["x"] = self.x
+        alignment["w"] = self.w
+        alignment["y"] = self.y
+        alignment["h"] = self.h
+        alignment["landmarksXY"] = self.landmarksXY
+        return alignment
+
+    def from_alignment(self, alignment, image=None):
+        """ Convert a face alignment to detected face object """
+        self.x = alignment["x"]
+        self.w = alignment["w"]
+        self.y = alignment["y"]
+        self.h = alignment["h"]
+        self.landmarksXY = alignment["landmarksXY"]
+        if image.any():
+            self.image = self.image_to_face(image)
+

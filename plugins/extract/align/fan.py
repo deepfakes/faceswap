@@ -19,6 +19,7 @@ class Align(Aligner):
         self.vram = 2240
         self.reference_scale = 195.0
         self.model = None
+        self.test = None
 
     def set_model_path(self):
         """ Load the mtcnn models """
@@ -30,30 +31,39 @@ class Align(Aligner):
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
-        super().initialize(*args, **kwargs)
         print("Initializing Face Alignment Network...")
+        super().initialize(*args, **kwargs)
 
         _, vram_total = self.get_vram_free()
-        tf_ratio = self.vram / vram_total
+        if vram_total <= self.vram:
+            tf_ratio = 1.0
+        else:
+            tf_ratio = self.vram / vram_total
         if self.verbose:
             print("Reserving {}MB for face alignments".format(self.vram))
 
         self.model = FAN(self.model_path,
                          verbose=self.verbose, ratio=tf_ratio)
-        self.queues["out"].put("init")
-        print("Face Alignment Network Initialized.")
+
+        self.init.set()
+        print("Initialized Face Alignment Network.")
 
     def align(self, *args, **kwargs):
         """ Perform alignments on detected faces """
         super().align(*args, **kwargs)
-        while True:
-            item = self.queues["in"].get()
-            if item == "EOF":
-                break
-            image = item["image"][:, :, ::-1].copy()
-            self.process_landmarks(image, item["detected_faces"])
-            self.finalize(item)
-        self.finalize("EOF")
+        try:
+            while True:
+                item = self.queues["in"].get()
+                if item == "EOF":
+                    break
+                image = item["image"][:, :, ::-1].copy()
+                self.process_landmarks(image, item["detected_faces"])
+                self.finalize(item)
+            self.finalize("EOF")
+        except:
+            item["exception"] = True
+            self.queues["out"].put(item)
+            raise
 
     def process_landmarks(self, image, detected_faces):
         """ Align image and process landmarks """
@@ -123,11 +133,13 @@ class Align(Aligner):
                                 v_br[0] - v_ul[0],
                                 image.shape[2]],
                                dtype=np.int32)
+            self.test = new_dim
             new_img = np.zeros(new_dim, dtype=np.uint8)
         else:
             new_dim = np.array([v_br[1] - v_ul[1],
                                 v_br[0] - v_ul[0]],
                                dtype=np.int)
+            self.test = new_dim
             new_img = np.zeros(new_dim, dtype=np.uint8)
         height = image.shape[0]
         width = image.shape[1]

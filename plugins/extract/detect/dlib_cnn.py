@@ -13,7 +13,7 @@ class Detect(Detector):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.target = (2048, 2048)  # Uses approx 1805MB of VRAM
-        self.vram = 1100  # Lower as batch size of 2 gives wiggle room
+        self.vram = 1600  # Lower as batch size of 2 gives wiggle room
         self.detector = None
 
     def compiled_for_cuda(self):
@@ -33,6 +33,7 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Calculate batch size """
+        print("Initializing Dlib-CNN Detector...")
         super().initialize(*args, **kwargs)
         self.detector = dlib.cnn_face_detection_model_v1(self.model_path)
         is_cuda = self.compiled_for_cuda()
@@ -46,8 +47,6 @@ class Detect(Detector):
 
         # Batch size of 2 actually uses about 338MB less than a single image??
         # From there batches increase at ~680MB per item in the batch
-        # Assume that batch size doesn't decrease between 1 and 2 to give
-        # us some overhead
 
         self.batch_size = int(((vram_free - self.vram) / 680) + 2)
 
@@ -58,28 +57,41 @@ class Detect(Detector):
         if self.verbose:
             print("Processing in batches of {}".format(self.batch_size))
 
+        self.init.set()
+        print("Initialized Dlib-CNN Detector...")
+
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image """
-        self.initialize(*args, **kwargs)
-        while True:
-            exhausted, batch = self.get_batch()
-            filenames, images = map(list, zip(*batch))
-            detect_images = self.compile_detection_images(images)
-            batch_detected = self.detector(detect_images, 0)
-            processed = self.process_output(batch_detected,
-                                            indexes=None,
-                                            rotation_matrix=None,
-                                            output=None)
-            if not all(faces for faces in processed) and self.rotation != [0]:
-                processed = self.process_rotations(detect_images, processed)
-            for idx, faces in enumerate(processed):
-                retval = {"filename": filenames[idx],
-                          "image": images[idx],
-                          "detected_faces": faces}
-                self.finalize(retval)
-            if exhausted:
-                self.queues["out"].put("EOF")
-                break
+        super().detect_faces(*args, **kwargs)
+        try:
+            while True:
+                exhausted, batch = self.get_batch()
+                filenames, images = map(list, zip(*batch))
+                detect_images = self.compile_detection_images(images)
+                batch_detected = self.detector(detect_images, 0)
+                processed = self.process_output(batch_detected,
+                                                indexes=None,
+                                                rotation_matrix=None,
+                                                output=None)
+                if not all(faces
+                           for faces in processed) and self.rotation != [0]:
+                    processed = self.process_rotations(detect_images,
+                                                       processed)
+                for idx, faces in enumerate(processed):
+                    retval = {"filename": filenames[idx],
+                              "image": images[idx],
+                              "detected_faces": faces}
+                    self.finalize(retval)
+                if exhausted:
+                    self.queues["out"].put("EOF")
+                    break
+        except:
+            retval = {"exception": True}
+            self.queues["out"].put(retval)
+            # Free up VRAM
+            del self.detector
+            raise
+
         # Free up VRAM
         del self.detector
 
@@ -129,7 +141,7 @@ class Detect(Detector):
                 angle)
 
             batch_detected = self.detector(reprocess, 0)
-            if self.verbose and any(item for item in batch_detected):
+            if self.verbose and any(item.any() for item in batch_detected):
                 print("found face(s) by rotating image {} degrees".format(
                     angle))
             processed = self.process_output(batch_detected,

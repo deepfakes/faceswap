@@ -280,6 +280,48 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
+        argument_list.append({"opts": ("-l", "--ref_threshold"),
+                              "type": float,
+                              "dest": "ref_threshold",
+                              "default": 0.6,
+                              "help": "Threshold for positive face "
+                                      "recognition"})
+        argument_list.append({"opts": ("-n", "--nfilter"),
+                              "type": str,
+                              "dest": "nfilter",
+                              "nargs": "+",
+                              "default": None,
+                              "help": "Reference image for the persons you do "
+                                      "not want to process. Should be a front "
+                                      "portrait. Multiple images can be added "
+                                      "space separated"})
+        argument_list.append({"opts": ("-f", "--filter"),
+                              "type": str,
+                              "dest": "filter",
+                              "nargs": "+",
+                              "default": None,
+                              "help": "Reference images for the person you "
+                                      "want to process. Should be a front "
+                                      "portrait. Multiple images can be added "
+                                      "space separated"})
+        argument_list.append({"opts": ("-v", "--verbose"),
+                              "action": "store_true",
+                              "dest": "verbose",
+                              "default": False,
+                              "help": "Show verbose output"})
+        return argument_list
+
+
+class ExtractArgs(ExtractConvertArgs):
+    """ Class to parse the command line arguments for extraction.
+        Inherits base options from ExtractConvertArgs where arguments
+        that are used for both extract and convert should be placed """
+
+    @staticmethod
+    def get_optional_arguments():
+        """ Put the arguments in a list so that they are accessible from both
+        argparse and gui """
+        argument_list = []
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
                               "dest": "serializer",
@@ -347,48 +389,6 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "pyramid. Should be a decimal number "
                                       "less than one. Default is 0.709 "
                                       "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-l", "--ref_threshold"),
-                              "type": float,
-                              "dest": "ref_threshold",
-                              "default": 0.6,
-                              "help": "Threshold for positive face "
-                                      "recognition"})
-        argument_list.append({"opts": ("-n", "--nfilter"),
-                              "type": str,
-                              "dest": "nfilter",
-                              "nargs": "+",
-                              "default": None,
-                              "help": "Reference image for the persons you do "
-                                      "not want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
-        argument_list.append({"opts": ("-f", "--filter"),
-                              "type": str,
-                              "dest": "filter",
-                              "nargs": "+",
-                              "default": None,
-                              "help": "Reference images for the person you "
-                                      "want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
-        return argument_list
-
-
-class ExtractArgs(ExtractConvertArgs):
-    """ Class to parse the command line arguments for extraction.
-        Inherits base options from ExtractConvertArgs where arguments
-        that are used for both extract and convert should be placed """
-
-    @staticmethod
-    def get_optional_arguments():
-        """ Put the arguments in a list so that they are accessible from both
-        argparse and gui """
-        argument_list = []
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -423,7 +423,8 @@ class ExtractArgs(ExtractConvertArgs):
                               "dest": "skip_existing",
                               "default": False,
                               "help": "Skips frames that have already been "
-                                      "extracted"})
+                                      "extracted and exist in the alignments "
+                                      "file"})
         argument_list.append({"opts": ("-dl", "--debug-landmarks"),
                               "action": "store_true",
                               "dest": "debug_landmarks",

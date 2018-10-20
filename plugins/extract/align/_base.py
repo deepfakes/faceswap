@@ -34,6 +34,7 @@ class Aligner():
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
         self.align_eyes = align_eyes
         self.extract = Extract()
+        self.init = None
 
         # The input and output queues for the plugin.
         # See lib.multithreading.QueueManager for getting queues
@@ -59,6 +60,7 @@ class Aligner():
         """ Inititalize the aligner
             Tasks to be run before any alignments are performed.
             Override for specific detector """
+        self.init = kwargs["event"]
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 

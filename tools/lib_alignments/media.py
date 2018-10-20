@@ -10,7 +10,7 @@ import numpy as np
 
 from lib import Serializer
 from lib.utils import _image_extensions, rotate_landmarks
-from plugins.plugin_loader import PluginLoader
+from plugins.extract.align._base import Extract as AlignerExtract
 
 
 class AlignmentData():
@@ -200,10 +200,7 @@ class AlignmentData():
                 return
             rotation_matrix = self.get_original_rotation_matrix(dimensions,
                                                                 angle)
-            face = DetectedFace()
-            face.alignment_to_face(None, alignment)
-            face = rotate_landmarks(face, rotation_matrix)
-            alignment = face.face_to_alignment(alignment)
+            rotate_landmarks(alignment, rotation_matrix)
             del alignment["r"]
 
     @staticmethod
@@ -390,7 +387,7 @@ class ExtractedFaces():
         self.size = size
         self.padding = padding
         self.align_eyes = align_eyes
-        self.extractor = PluginLoader.get_extractor("Align")()
+        self.extractor = AlignerExtract()
         self.alignments = alignments
         self.frames = frames
 

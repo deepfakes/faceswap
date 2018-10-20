@@ -6,15 +6,18 @@
             Alignments"""
 
 import os
+from pathlib import Path
+
 import cv2
+import numpy as np
 
 from lib import Serializer
+from lib.detect_blur import is_blurry
 from lib.faces_detect import DetectedFace
-from lib.multithreading import (PoolProcess, SpawnProcess,
-                                QueueEmpty, queue_manager)
-from lib.utils import (get_folder, get_image_paths, rotate_image_by_angle,
+from lib.FaceFilter import FaceFilter as FilterFunc
+from lib.utils import (camel_case_split, get_image_paths, rotate_landmarks,
                        set_system_verbosity)
-from plugins.plugin_loader import PluginLoader
+from plugins.extract.align._base import Extract as AlignerExtract
 
 
 class Utils():
@@ -26,15 +29,6 @@ class Utils():
         """ Set the system output verbosity """
         lvl = '0' if verbose else '2'
         set_system_verbosity(lvl)
-
-    @staticmethod
-    def cv2_read_write(action, filename, image=None):
-        """ Read or write an image using cv2 """
-        if action == 'read':
-            image = cv2.imread(filename)
-        if action == 'write':
-            cv2.imwrite(filename, image)
-        return image
 
     @staticmethod
     def finalize(images_found, num_faces_detected, verify_output):
@@ -50,239 +44,39 @@ class Utils():
             print("Double check your results.")
             print("-------------------------")
 
-        images_found = 0
-        num_faces_detected = 0
         print("Done!")
-        return images_found, num_faces_detected
-
-
-class Images():
-    """ Holds the full frames/images """
-    def __init__(self, arguments):
-        self.args = arguments
-        self.already_processed = self.get_already_processed()
-        self.input_images = self.get_input_images()
-        self.images_found = len(self.input_images)
-
-        self.rotation_width = 0
-        self.rotation_height = 0
-
-    def get_already_processed(self):
-        """ Return the images that already exist in the output directory """
-        print("Output Directory: {}".format(self.args.output_dir))
-
-        if (not hasattr(self.args, 'skip_existing')
-                or not self.args.skip_existing):
-            return None
-
-        return get_image_paths(self.args.output_dir)
-
-    def get_input_images(self):
-        """ Return the list of images that are to be processed """
-        if not os.path.exists(self.args.input_dir):
-            print("Input directory {} not found.".format(self.args.input_dir))
-            exit(1)
-
-        print("Input Directory: {}".format(self.args.input_dir))
-
-        if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
-            input_images = get_image_paths(self.args.input_dir,
-                                           self.already_processed)
-            print("Excluding %s files" % len(self.already_processed))
-        else:
-            input_images = get_image_paths(self.args.input_dir)
-
-        return input_images
-
-    def rotate_image(self, image, rotation, reverse=False):
-        """ Rotate the image forwards or backwards """
-        if rotation == 0:
-            return image
-        if not reverse:
-            self.rotation_height, self.rotation_width = image.shape[:2]
-            image, _ = rotate_image_by_angle(image, rotation)
-        else:
-            image, _ = rotate_image_by_angle(
-                image,
-                rotation * -1,
-                rotated_width=self.rotation_width,
-                rotated_height=self.rotation_height)
-        return image
-
-
-class Faces():
-    """ Holds the faces """
-    def __init__(self, arguments):
-        self.args = arguments
-        self.output_dir = get_folder(self.args.output_dir)
-        self.plugins = self.load_plugins()
-
-        self.faces_detected = dict()
-        self.num_faces_detected = 0
-        self.verify_output = False
-
-    def load_plugins(self):
-        """ Load the requested extractor for extraction """
-        detector = self.load_detector()
-        aligner = self.load_aligner()
-        return {"detector": detector,
-                "aligner": aligner}
-
-    def load_detector(self):
-        """ Set global arguments and load detector plugin """
-        detector_name = self.args.detector.replace("-", "_").lower()
-
-        # Rotation
-        rotation = None
-        if hasattr(self.args, "rotate_images"):
-            rotation = self.args.rotate_images
-
-        detector = PluginLoader.get_detector(detector_name)(
-            verbose=self.args.verbose,
-            rotation=rotation)
-
-        return detector
-
-    def load_aligner(self):
-        """ Set global arguments and load aligner plugin """
-        # Add a cli option if other aligner plugins are added
-        aligner_name = self.args.aligner.replace("-", "_").lower()
-
-        # Align Eyes
-        align_eyes = False
-        if hasattr(self.args, 'align_eyes'):
-            align_eyes = self.args.align_eyes
-
-        aligner = PluginLoader.get_aligner(aligner_name)(
-            verbose=self.args.verbose,
-            align_eyes=align_eyes)
-
-        return aligner
-
-    def have_face(self, filename):
-        """ return path of images that have faces """
-        return os.path.basename(filename) in self.faces_detected
-
-    def detect_faces(self):
-        """ Detect faces from in an image """
-        self.launch_aligner()
-        self.launch_detector()
-        out_queue = queue_manager.get_queue("align")
-
-        while True:
-            try:
-                faces = out_queue.get(True, 1)
-                if faces == "EOF":
-                    break
-            except QueueEmpty:
-                continue
-
-            faces_count = len(faces["detected_faces"])
-            if self.args.verbose and faces_count == 0:
-                print("Warning: No faces were detected in "
-                      "image: {}".format(os.path.basename(faces["filename"])))
-            self.num_faces_detected += faces_count
-
-            if (self.args.verbose and
-                    not self.verify_output and
-                    faces_count > 1):
-                self.verify_output = True
-            yield faces
-
-    def launch_aligner(self):
-        """ Launch the face aligner """
-        aligner = self.plugins["aligner"]
-
-        out_queue = queue_manager.get_queue("align")
-        kwargs = {"in_queue": queue_manager.get_queue("detect"),
-                  "out_queue": out_queue}
-
-        align_process = SpawnProcess()
-        align_process.in_process(aligner.align, **kwargs)
-
-        while True:
-            # Wait for Aligner to take it's VRAM
-            try:
-                init = out_queue.get(True, 60)
-            except QueueEmpty:
-                raise ValueError("Error inititalizing Aligner")
-            if init != "init":
-                raise ValueError("Error inititalizing Aligner")
-            break
-
-    def launch_detector(self):
-        """ Launch the face detector """
-        detector = self.plugins["detector"]
-
-        kwargs = {"in_queue": queue_manager.get_queue("load"),
-                  "out_queue": queue_manager.get_queue("detect")}
-        if self.args.detector == "mtcnn":
-            mtcnn_kwargs = detector.validate_kwargs(self.get_mtcnn_kwargs())
-            kwargs["mtcnn_kwargs"] = mtcnn_kwargs
-
-        if detector.parent_is_pool:
-            detect_process = PoolProcess(detector.detect_faces,
-                                         verbose=self.args.verbose)
-        else:
-            detect_process = SpawnProcess()
-
-        detect_process.in_process(detector.detect_faces, **kwargs)
-
-    def get_mtcnn_kwargs(self):
-        """ Add the mtcnn arguments into a kwargs dictionary """
-        mtcnn_threshold = [float(thr.strip())
-                           for thr in self.args.mtcnn_threshold]
-        return {"minsize": self.args.mtcnn_minsize,
-                "threshold": mtcnn_threshold,
-                "factor": self.args.mtcnn_scalefactor}
-
-    def get_faces_alignments(self, filename, image):
-        """ Retrieve the face alignments from an image """
-        faces_count = 0
-        faces = self.faces_detected[os.path.basename(filename)]
-        for rawface in faces:
-            face = DetectedFace(**rawface)
-            # Rotate the image if necessary
-            # NB: Rotation of landmarks now occurs at extract stage
-            # This is here for legacy alignments
-            if face.r != 0:
-                image, _ = rotate_image_by_angle(image, face.r)
-            face.image = image[face.y: face.y + face.h,
-                               face.x: face.x + face.w]
-            if self.filter and not self.filter.check(face):
-                if self.args.verbose:
-                    print("Skipping not recognized face!")
-                continue
-
-            yield faces_count, face
-            self.num_faces_detected += 1
-            faces_count += 1
-        if faces_count > 1 and self.args.verbose:
-            print("Note: Found more than one face in "
-                  "an image! File: {}".format(filename))
-            self.verify_output = True
 
 
 class Alignments():
     """ Holds processes pertaining to the alignments file """
-    def __init__(self, arguments):
+    def __init__(self, arguments, is_extract):
+        self.is_extract = is_extract
         self.args = arguments
         self.serializer = self.get_serializer()
-        self.alignments_path = self.get_alignments_path()
-        self.have_alignments_file = os.path.exists(self.alignments_path)
+        self.location = self.get_location()
+        self.have_alignments_file = os.path.exists(self.location)
+        self.data = self.load()
+
+    def frames_count(self):
+        """ Return current frames count """
+        return len(self.data)
+
+    def faces_count(self):
+        """ Return current faces count """
+        return sum(len(faces) for faces in self.data.values())
 
     def get_serializer(self):
         """ Set the serializer to be used for loading and saving alignments """
-        if not self.args.serializer and self.args.alignments_path:
+        if ((not hasattr(self.args, "serializer") or not self.args, "serializer")
+                and self.args.alignments_path):
             ext = os.path.splitext(self.args.alignments_path)[-1]
             serializer = Serializer.get_serializer_from_ext(ext)
-            print("Alignments Output: {}".format(self.args.alignments_path))
         else:
             serializer = Serializer.get_serializer(self.args.serializer)
         print("Using {} serializer".format(serializer.ext))
         return serializer
 
-    def get_alignments_path(self):
+    def get_location(self):
         """ Return the path to alignments file """
         if self.args.alignments_path:
             alignfile = self.args.alignments_path
@@ -293,38 +87,297 @@ class Alignments():
         print("Alignments filepath: %s" % alignfile)
         return alignfile
 
-    def read_alignments(self):
-        """ Read the serialized alignments file """
-        try:
-            with open(self.alignments_path, self.serializer.roptions) as align:
-                faces_detected = self.serializer.unmarshal(align.read())
-        except Exception as err:
-            print("{} not read!".format(self.alignments_path))
-            print(str(err))
-            faces_detected = dict()
-        return faces_detected
+    def load(self):
+        """ Load the alignments data if it exists or create empty dict """
+        data = dict()
+        if self.is_extract:
+            skip_existing = bool(hasattr(self.args, 'skip_existing')
+                                 and self.args.skip_existing)
 
-    def write_alignments(self, faces_detected):
+            if not self.have_alignments_file:
+                if skip_existing:
+                    print("Skip Existing selected, but no alignments file found!")
+                return data
+            elif not skip_existing:
+                return data
+        
+        try:
+            with open(self.location, self.serializer.roptions) as align:
+                data = self.serializer.unmarshal(align.read())
+
+        except Exception as err:
+            print("{} not read!".format(self.location))
+            print(str(err))
+            data = dict()
+
+        return data
+
+    def save(self):
         """ Write the serialized alignments file """
-        if hasattr(self.args, 'skip_existing') and self.args.skip_existing:
-            faces_detected = self.load_skip_alignments(self.alignments_path,
-                                                       faces_detected)
-
         try:
-            print("Writing alignments to: {}".format(self.alignments_path))
-            with open(self.alignments_path, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(faces_detected))
+            print("Writing alignments to: {}".format(self.location))
+            with open(self.location, self.serializer.woptions) as align:
+                align.write(self.serializer.marshal(self.data))
         except Exception as err:
-            print("{} not written!".format(self.alignments_path))
+            print("{} not written!".format(self.location))
             print(str(err))
 
-    def load_skip_alignments(self, alignfile, faces_detected):
-        """ Load existing alignments if skipping existing images """
-        if self.have_alignments_file:
-            existing_alignments = self.read_alignments()
-            for key, val in existing_alignments.items():
-                if val:
-                    faces_detected[key] = val
-        else:
-            print("Existing alignments file '{}' not found.".format(alignfile))
-        return faces_detected
+    def frame_exists(self, frame):
+        """ return path of images that have faces """
+        return frame in self.data.keys()
+
+    def get_alignments_for_frame(self, frame):
+        """ Return the alignments for the selected frame """
+        return self.data.get(frame, list())
+
+    def get_legacy_frames(self):
+        """ Return a list of frames with legacy rotations """
+        keys = list()
+        for key, val in self.data.items():
+            if any(alignment.get("r", None) for alignment in val):
+                keys.append(key)
+        return keys
+
+    def rotate_existing_landmarks(self, frame, dimensions):
+        """ Backwards compatability fix. Rotates the landmarks to
+            their correct position and deletes r """
+        for face in self.get_alignments_for_frame(frame):
+            angle = face.get("r", 0)
+            if not angle:
+                return
+            rotation_matrix = self.get_original_rotation_matrix(dimensions,
+                                                                angle)
+            rotate_landmarks(face, rotation_matrix)
+            del face["r"]
+
+    @staticmethod
+    def get_original_rotation_matrix(dimensions, angle):
+        """ Calculate original rotation matrix and invert """
+        height, width = dimensions
+        center = (width/2, height/2)
+        rotation_matrix = cv2.getRotationMatrix2D(center, -1.0*angle, 1.)
+
+        abs_cos = abs(rotation_matrix[0, 0])
+        abs_sin = abs(rotation_matrix[0, 1])
+        rotated_width = int(height*abs_sin + width*abs_cos)
+        rotated_height = int(height*abs_cos + width*abs_sin)
+        rotation_matrix[0, 2] += rotated_width/2 - center[0]
+        rotation_matrix[1, 2] += rotated_height/2 - center[1]
+
+        return rotation_matrix
+
+
+class Images():
+    """ Holds the full frames/images """
+    def __init__(self, arguments):
+        self.args = arguments
+        self.input_images = self.get_input_images()
+        self.images_found = len(self.input_images)
+
+    def get_input_images(self):
+        """ Return the list of images that are to be processed """
+        if not os.path.exists(self.args.input_dir):
+            print("Input directory {} not found.".format(self.args.input_dir))
+            exit(1)
+
+        print("Input Directory: {}".format(self.args.input_dir))
+        input_images = get_image_paths(self.args.input_dir)
+
+        return input_images
+
+    def load(self):
+        """ Load an image and yield it with it's filename """
+        for filename in self.input_images:
+            yield filename, cv2.imread(filename)
+
+    def load_one_image(self, filename):
+        """ load requested image """
+        return cv2.imread(filename)
+
+
+class PostProcess():
+    """ Optional post processing tasks """
+    def __init__(self, arguments):
+        self.args = arguments
+        self.verbose = self.args.verbose
+        self.actions = self.set_actions()
+
+    def get_items(self):
+        """ Set the post processing actions """
+        postprocess_items = dict()
+        # Debug Landmarks
+        if (hasattr(self.args, 'debug_landmarks')
+                and self.args.debug_landmarks):
+            postprocess_items["DebugLandmarks"] = None
+
+        # Blurry Face
+        if hasattr(self.args, 'blur_thresh') and self.args.blur_thresh:
+            kwargs = {"blur_thresh": self.args.blur_thresh}
+            postprocess_items["BlurryFaceFilter"] = {"kwargs": kwargs}
+
+        # Face Filter post processing
+        if ((hasattr(self.args, "filter") and self.args.filter is not None) or
+                (hasattr(self.args, "nfilter") and
+                 self.args.nfilter is not None)):
+            face_filter = dict()
+            filter_lists = dict()
+            if hasattr(self.args, "ref_threshold"):
+                face_filter["ref_threshold"] = self.args.ref_threshold
+            for filter_type in ('filter', 'nfilter'):
+                filter_args = getattr(self.args, filter_type, None)
+                filter_args = None if not filter_args else filter_args
+                filter_lists[filter_type] = filter_args
+            face_filter["filter_lists"] = filter_lists
+            postprocess_items["FaceFilter"] = {"kwargs": face_filter}
+
+        return postprocess_items
+
+    def set_actions(self):
+        """ Compile the actions to be performed into a list """
+        postprocess_items = self.get_items()
+        actions = list()
+        for action, options in postprocess_items.items():
+            options = dict() if options is None else options
+            args = options.get("args", tuple())
+            kwargs = options.get("kwargs", dict())
+            args = args if isinstance(args, tuple) else tuple()
+            kwargs = kwargs if isinstance(kwargs, dict) else dict()
+            kwargs["verbose"] = self.verbose
+            task = globals()[action](*args, **kwargs)
+            actions.append(task)
+
+        for action in actions:
+            action_name = camel_case_split(action.__class__.__name__)
+            print("Adding post processing item: "
+                  "{}".format(" ".join(action_name)))
+
+        return actions
+
+    def do_actions(self, output_item):
+        """ Perform the requested post-processing actions """
+        for action in self.actions:
+            action.process(output_item)
+
+
+class PostProcessAction():
+    """ Parent class for Post Processing Actions
+        Usuable in Extract or Convert or both
+        depending on context """
+    def __init__(self, *args, **kwargs):
+        self.verbose = kwargs["verbose"]
+
+    def process(self, output_item):
+        """ Override for specific post processing action """
+        raise NotImplementedError
+
+
+class BlurryFaceFilter(PostProcessAction):
+    """ Move blurry faces to a different folder
+        Extract Only """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.blur_thresh = kwargs["blur_thresh"]
+
+    def process(self, output_item):
+        """ Detect and move blurry face """
+        blurry_file = None
+        filename = output_item["filename"]
+        output_file = output_item["output_file"]
+        extractor = AlignerExtract()
+
+        for idx, face in enumerate(output_item["detected_faces"]):
+            resized_face = output_item["resized_faces"][idx]
+            dims = resized_face.shape[:2]
+            size = dims[0]
+            t_mat = output_item["t_mats"][idx]
+
+            aligned_landmarks = extractor.transform_points(
+                face.landmarksXY(),
+                t_mat, size, 48)
+            feature_mask = extractor.get_feature_mask(
+                aligned_landmarks / size,
+                size, 48)
+            feature_mask = cv2.blur(feature_mask, (10, 10))
+            isolated_face = cv2.multiply(
+                feature_mask,
+                resized_face.astype(float)).astype(np.uint8)
+            blurry, focus_measure = is_blurry(isolated_face, self.blur_thresh)
+
+            if blurry:
+                print("{}'s focus measure of {} was below the blur threshold, "
+                      "moving to \"blurry\"".format(Path(filename).stem,
+                                                    focus_measure))
+                blurry_file = os.path.join(os.path.dirname(output_file),
+                                           "blurry") / Path(filename).stem
+                output_item["output_file"] = blurry_file
+
+
+class DebugLandmarks(PostProcessAction):
+    """ Draw debug landmarks on face
+        Extract Only """
+
+    def process(self, output_item):
+        """ Draw landmarks on image """
+        transform_points = AlignerExtract().transform_points
+        for idx, face in enumerate(output_item["detected_faces"]):
+            dims = output_item["resized_faces"][idx].shape[:2]
+            size = dims[0]
+            landmarks = transform_points(face.landmarksXY,
+                                         output_item["t_mats"][idx],
+                                         size,
+                                         48)
+            for (pos_x, pos_y) in landmarks:
+                cv2.circle(output_item["resized_faces"][idx],
+                           (pos_x, pos_y), 2, (0, 0, 255), -1)
+
+
+class FaceFilter(PostProcessAction):
+    """ Filter in or out faces based on input image(s)
+        Extract or Convert """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        filter_lists = kwargs["filter_lists"]
+        ref_threshold = kwargs.get("ref_threshold", 0.6)
+        self.filter = self.load_face_filter(filter_lists, ref_threshold)
+
+    def load_face_filter(self, filter_lists, ref_threshold):
+        """ Load faces to filter out of images """
+        if not any(val for val in filter_lists.values()):
+            return None
+
+        filter_files = [self.set_face_filter(key, val)
+                        for key, val in filter_lists.items()]
+
+        if any(filters for filters in filter_files):
+            facefilter = FilterFunc(filter_files[0],
+                                    filter_files[1],
+                                    ref_threshold)
+        return facefilter
+
+    @staticmethod
+    def set_face_filter(f_type, f_args):
+        """ Set the required filters """
+        if not f_args:
+            return list()
+
+        print("{}: {}".format(f_type.title(), f_args))
+        filter_files = f_args if isinstance(f_args, list) else [f_args]
+        filter_files = list(filter(lambda fnc: Path(fnc).exists(),
+                                   filter_files))
+        return filter_files
+
+    def process(self, output_item):
+        """ Filter in/out wanted/unwanted faces """
+        if not self.filter:
+            return
+
+        detected_faces = output_item["detected_faces"]
+        ret_faces = list()
+        for face in detected_faces:
+            if not self.filter.check(face):
+                if self.verbose:
+                    print("Skipping not recognized face!")
+                continue
+            ret_faces.append(face)
+        output_item["detected_faces"] = ret_faces

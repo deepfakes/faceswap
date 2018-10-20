@@ -56,6 +56,7 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
+        print("Initializing MTCNN Detector...")
         super().initialize(*args, **kwargs)
         is_gpu = False
         self.kwargs = kwargs["mtcnn_kwargs"]
@@ -91,6 +92,9 @@ class Detect(Detector):
         self.kwargs["rnet"] = rnet
         self.kwargs["onet"] = onet
 
+        self.init.set()
+        print("Initialized MTCNN Detector.")
+
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """
         super().detect_faces(*args, **kwargs)
@@ -101,30 +105,35 @@ class Detect(Detector):
 
     def detect_thread(self):
         """ Detect faces in rgb image """
-        while True:
-            item = self.queues["in"].get()
-            if item == "EOF":
-                self.queues["in"].put(item)
-                break
-
-            filename, image = item
-            detect_image = self.compile_detection_image(image, False, False)
-
-            for angle in self.rotation:
-                current_image, rotmat = self.rotate_image(detect_image, angle)
-                faces, points = detect_face(current_image, **self.kwargs)
-                if self.verbose and angle != 0 and faces:
-                    print("found face(s) by rotating image {} degrees".format(
-                        angle))
-                if faces.any():
+        try:
+            while True:
+                item = self.queues["in"].get()
+                if item == "EOF":
+                    self.queues["in"].put(item)
                     break
 
-            detected_faces = self.process_output(faces, points, rotmat)
-            retval = {
-                "filename": filename,
-                "image": image,
-                "detected_faces": detected_faces}
-            self.finalize(retval)
+                filename, image = item
+                detect_image = self.compile_detection_image(image, False, False)
+
+                for angle in self.rotation:
+                    current_image, rotmat = self.rotate_image(detect_image, angle)
+                    faces, points = detect_face(current_image, **self.kwargs)
+                    if self.verbose and angle != 0 and faces.any():
+                        print("found face(s) by rotating image {} degrees".format(
+                            angle))
+                    if faces.any():
+                        break
+
+                detected_faces = self.process_output(faces, points, rotmat)
+                retval = {
+                    "filename": filename,
+                    "image": image,
+                    "detected_faces": detected_faces}
+                self.finalize(retval)
+        except:
+            retval = {"exception": True}
+            self.queues["out"].put(retval)
+            raise
 
     def process_output(self, faces, points, rotation_matrix):
         """ Compile found faces for output """

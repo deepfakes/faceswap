@@ -23,39 +23,49 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Calculate batch size """
+        print("Initializing Dlib-HOG Detector...")
         super().initialize(*args, **kwargs)
         if self.verbose:
             print("Using CPU for detection")
+        self.init.set()
+        print("Initialized Dlib-HOG Detector...")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image """
         super().detect_faces(*args, **kwargs)
-        while True:
-            item = self.queues["in"].get()
-            if item in ("EOF", "END"):
-                self.queues["in"].put("END")
-                break
-
-            filename, image = item
-            detect_image = self.compile_detection_image(image, True, True)
-
-            for angle in self.rotation:
-                current_image, rotmat = self.rotate_image(detect_image, angle)
-
-                faces = self.detector(current_image, 0)
-
-                if self.verbose and angle != 0 and faces:
-                    print("found face(s) by rotating image {} degrees".format(
-                        angle))
-
-                if faces:
+        try:
+            while True:
+                item = self.queues["in"].get()
+                if item in ("EOF", "END"):
+                    self.queues["in"].put("END")
                     break
 
-            detected_faces = self.process_output(faces, rotmat)
-            retval = {"filename": filename,
-                      "image": image,
-                      "detected_faces": detected_faces}
-            self.finalize(retval)
+                filename, image = item
+                detect_image = self.compile_detection_image(image, True, True)
+
+                for angle in self.rotation:
+                    current_image, rotmat = self.rotate_image(detect_image,
+                                                              angle)
+
+                    faces = self.detector(current_image, 0)
+
+                    if self.verbose and angle != 0 and faces.any():
+                        print("found face(s) by rotating image {} "
+                              "degrees".format(angle))
+
+                    if faces:
+                        break
+
+                detected_faces = self.process_output(faces, rotmat)
+                retval = {"filename": filename,
+                          "image": image,
+                          "detected_faces": detected_faces}
+                self.finalize(retval)
+        except:
+            retval = {"exception": True}
+            self.queues["out"].put(retval)
+            raise
+
         if item == "EOF":
             sleep(3)  # Wait for all processes to finish before EOF (hacky!)
             self.queues["out"].put("EOF")

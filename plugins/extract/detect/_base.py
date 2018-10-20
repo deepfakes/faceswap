@@ -19,7 +19,7 @@ import dlib
 
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
-from lib.utils import rotate_image_by_angle
+from lib.utils import rotate_image_by_angle, rotate_landmarks
 
 
 class Detector():
@@ -29,6 +29,7 @@ class Detector():
         self.verbose = verbose
         self.rotation = self.get_rotation_angles(rotation)
         self.parent_is_pool = False
+        self.init = None
 
         # The input and output queues for the plugin.
         # See lib.multithreading.QueueManager for getting queues
@@ -67,6 +68,7 @@ class Detector():
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
             Override for specific detector """
+        self.init = kwargs["event"]
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
@@ -188,19 +190,8 @@ class Detector():
     @staticmethod
     def rotate_rect(d_rect, rotation_matrix):
         """ Rotate a dlib rect based on the rotation_matrix"""
-        rotation_matrix = cv2.invertAffineTransform(rotation_matrix)
-
-        corners = [[d_rect.left(), d_rect.top()],
-                   [d_rect.right(), d_rect.bottom()]]
-
-        points = np.array(corners, np.int32)
-        points = np.expand_dims(points, axis=0)
-        transformed = cv2.transform(points,
-                                    rotation_matrix).astype(np.int32)
-        transformed = transformed.squeeze().ravel()
-
-        d_rect = dlib.rectangle(*transformed)
-        return d_rect
+        d_rect = rotate_landmarks(d_rect, rotation_matrix)
+        return(d_rect)
 
     # << QUEUE METHODS >> #
     def get_batch(self):

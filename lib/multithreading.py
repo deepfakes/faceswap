@@ -3,7 +3,7 @@
 
 import multiprocessing as mp
 import queue as Queue
-from queue import Empty as QueueEmpty
+from queue import Empty as QueueEmpty  # Used for imports
 import threading
 from time import sleep
 
@@ -36,6 +36,14 @@ class QueueManager():
         self.add_queue(name, maxsize)
         return self.queues[name]
 
+    def terminate_queues(self):
+        """ Clear all queues and send EOF
+            To be called if there is an error """
+        for queue in self.queues.values():
+            while not queue.empty():
+                queue.get()
+            queue.put("EOF")
+
     def debug_monitor(self, update_secs=2):
         """ Debug tool for monitoring queues """
         thread = MultiThread(thread_count=update_secs)
@@ -59,6 +67,7 @@ class PoolProcess():
     def __init__(self, method, processes=None, verbose=False):
         self.verbose = verbose
         self.method = method
+        self.event = mp.Event()
         self.procs = self.set_procs(processes)
 
     def set_procs(self, processes):
@@ -72,6 +81,7 @@ class PoolProcess():
 
     def in_process(self, *args, **kwargs):
         """ Run the processing pool """
+        kwargs["event"] = self.event
         pool = mp.Pool(processes=self.procs)
         for _ in range(self.procs):
             pool.apply_async(self.method, args=args, kwds=kwargs)
@@ -84,9 +94,11 @@ class SpawnProcess():
         self.context = mp.get_context("spawn")
         self.daemonize = True
         self.process = None
+        self.event = self.context.Event()
 
     def in_process(self, target, *args, **kwargs):
         """ Start a process in the spawn context """
+        kwargs["event"] = self.event
         self.process = self.context.Process(target=target,
                                             args=args,
                                             kwargs=kwargs)
