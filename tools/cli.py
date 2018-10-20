@@ -139,6 +139,13 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "left/right eyes are  at the same "
                                       "height. (Draw, Extract and manual "
                                       "only)"})
+        argument_list.append({"opts": ("-dm", "--disable-monitor"),
+                              "action": "store_true",
+                              "dest": "disable_monitor",
+                              "default": False,
+                              "help": "Enable this option if manual "
+                                      "alignments window is closing "
+                                      "instantly. (Manual only)"})
         argument_list.append({"opts": ("-v", "--verbose"),
                               "action": "store_true",
                               "dest": "verbose",
