@@ -9,6 +9,7 @@ from json import JSONDecodeError
 import os
 import sys
 import warnings
+from keras.layers.core import SpatialDropout2D
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 from keras.initializers import RandomNormal
@@ -47,10 +48,10 @@ class EncoderType(enum.Enum):
 ENCODER = EncoderType.ORIGINAL
 
 # use DSSIM objective loss; might increase overall quality
-USE_DSSIM = False
+USE_DSSIM = True
 
 # might increase upscaling quality at cost of video memory
-USE_SUBPIXEL = False
+USE_SUBPIXEL = True
 
 # * - requires re-training of the model
 
@@ -61,7 +62,7 @@ hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() 
 
 class Model():
         
-    ENCODER_DIM = 1024     # dense layer size *        
+    ENCODER_DIM = 1024*2     # dense layer size *        
     IMAGE_SHAPE = 128, 128 # produced image size *
     
     ENCODER_COMPLEXITY = 128  # conv layers complexity, sensible ranges 128 - 160 *    
@@ -301,6 +302,7 @@ class Model():
         x = Reshape((dense_shape, dense_shape, 512))(x)
         
         x = cls.upscale(512)(x)
+        x = SpatialDropout2D(0.4)(x)        
         
         return KerasModel(impt, x, **kwargs)             
     
@@ -308,8 +310,9 @@ class Model():
     def Decoder_standard_A(cls):       
         decoder_shape = cls.IMAGE_SHAPE[0]//8        
         inpt = Input(shape=(decoder_shape, decoder_shape, 512))
-        
+                
         x = cls.upscale(cls.DECODER_A_COMPLEXITY)(inpt)
+        x = SpatialDropout2D(0.25)(x)
         x = cls.upscale(cls.DECODER_A_COMPLEXITY // 2)(x)
         x = cls.upscale(cls.DECODER_A_COMPLEXITY // 4)(x)
         
@@ -323,10 +326,13 @@ class Model():
         inpt = Input(shape=(decoder_shape, decoder_shape, cls.DECODER_B_COMPLEXITY))
         
         x = cls.upscale(cls.DECODER_B_COMPLEXITY)(inpt)
-        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY)                
-        x = cls.upscale(cls.DECODER_B_COMPLEXITY // 2)(x)
-        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY // 2)        
+                
+        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY)                     
+        x = cls.upscale(cls.DECODER_B_COMPLEXITY // 2)(x)  
+              
+        x = cls.res_block(x, cls.DECODER_B_COMPLEXITY // 2)            
         x = cls.upscale(cls.DECODER_B_COMPLEXITY // 4)(x)
+        
         x = cls.res_block(x, cls.DECODER_B_COMPLEXITY // 4)
         
         x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
