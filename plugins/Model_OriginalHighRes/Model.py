@@ -48,10 +48,10 @@ class EncoderType(enum.Enum):
 ENCODER = EncoderType.ORIGINAL
 
 # use DSSIM objective loss; might increase overall quality
-USE_DSSIM = True
+USE_DSSIM = False
 
 # might increase upscaling quality at cost of video memory
-USE_SUBPIXEL = True
+USE_SUBPIXEL = False
 
 # * - requires re-training of the model
 
@@ -62,7 +62,7 @@ hdf = { 'encoderH5': 'encoder_{version_str}{ENCODER.value}.h5'.format( **vars() 
 
 class Model():
         
-    ENCODER_DIM = 1024*2     # dense layer size *        
+    ENCODER_DIM = 1024     # dense layer size *        
     IMAGE_SHAPE = 128, 128 # produced image size *
     
     ENCODER_COMPLEXITY = 128  # conv layers complexity, sensible ranges 128 - 160 *    
@@ -302,7 +302,7 @@ class Model():
         x = Reshape((dense_shape, dense_shape, 512))(x)
         
         x = cls.upscale(512)(x)
-        x = SpatialDropout2D(0.4)(x)        
+        x = SpatialDropout2D(0.5)(x)        
         
         return KerasModel(impt, x, **kwargs)             
     
