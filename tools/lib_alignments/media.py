@@ -9,8 +9,9 @@ import cv2
 import numpy as np
 
 from lib import Serializer
+from lib.faces_detect import DetectedFace
 from lib.utils import _image_extensions, rotate_landmarks
-from plugins.PluginLoader import PluginLoader
+from plugins.extract.align._base import Extract as AlignerExtract
 
 
 class AlignmentData():
@@ -200,10 +201,7 @@ class AlignmentData():
                 return
             rotation_matrix = self.get_original_rotation_matrix(dimensions,
                                                                 angle)
-            face = DetectedFace()
-            face.alignment_to_face(None, alignment)
-            face = rotate_landmarks(face, rotation_matrix)
-            alignment = face.face_to_alignment(alignment)
+            rotate_landmarks(alignment, rotation_matrix)
             del alignment["r"]
 
     @staticmethod
@@ -349,39 +347,6 @@ class Frames(MediaLoader):
                       key=lambda x: (x["frame_name"]))
 
 
-class DetectedFace():
-    """ Detected face and landmark information """
-    def __init__(self):
-        self.image = None
-        self.x = None
-        self.w = None
-        self.y = None
-        self.h = None
-        self.landmarksXY = None
-
-    def alignment_to_face(self, image, alignment):
-        """ Convert a face alignment to detected face object """
-        self.image = image
-        self.x = alignment["x"]
-        self.w = alignment["w"]
-        self.y = alignment["y"]
-        self.h = alignment["h"]
-        self.landmarksXY = alignment["landmarksXY"]
-
-    def face_to_alignment(self, alignment):
-        """ Convert a face alignment to detected face object """
-        alignment["x"] = self.x
-        alignment["w"] = self.w
-        alignment["y"] = self.y
-        alignment["h"] = self.h
-        alignment["landmarksXY"] = self.landmarksXY
-        return alignment
-
-    def landmarks_as_xy(self):
-        """ Landmarks as XY """
-        return self.landmarksXY
-
-
 class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
@@ -390,7 +355,7 @@ class ExtractedFaces():
         self.size = size
         self.padding = padding
         self.align_eyes = align_eyes
-        self.extractor = PluginLoader.get_extractor("Align")()
+        self.extractor = AlignerExtract()
         self.alignments = alignments
         self.frames = frames
 
@@ -417,7 +382,7 @@ class ExtractedFaces():
     def extract_one_face(self, alignment, image):
         """ Extract one face from image """
         face = DetectedFace()
-        face.alignment_to_face(image, alignment)
+        face.from_alignment(alignment, image=image)
         return self.extractor.extract(image, face, self.size, self.align_eyes)
 
     def original_roi(self, matrix):
@@ -452,7 +417,7 @@ class ExtractedFaces():
         sizes = list()
         for matrix in self.matrices:
             original_roi = self.original_roi(matrix)[0].squeeze()
-            top_left, top_right  = original_roi[0], original_roi[3]
+            top_left, top_right = original_roi[0], original_roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
             if top_left[1] == top_right[1]:
@@ -462,10 +427,9 @@ class ExtractedFaces():
             sizes.append(length)
         return sizes
 
-
     def get_aligned_landmarks_for_frame(self, frame, landmarks_xy,
                                         update=False):
-        """ Return the original rois for the selected frame """
+        """ Return the transposed landmarks for the selected face """
         if self.current_frame != frame or update:
             self.get_faces(frame)
         aligned_landmarks = list()

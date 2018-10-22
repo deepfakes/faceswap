@@ -141,6 +141,18 @@ class GPUStats(object):
         self.shutdown()
         return vram
 
+    def get_card_most_free(self):
+        """ Return the card and available VRAM for card with
+            most VRAM free """
+        free_vram = self.get_free()
+        vram_free = max(free_vram)
+        card_id = free_vram.index(vram_free)
+        return {"card_id": card_id,
+                "device": self.devices[card_id],
+                "free": vram_free,
+                "total": self.vram[card_id]}
+
+    
     def print_info(self):
         """ Output GPU info in verbose mode """
         print("GPU Driver:       {}".format(self.driver))

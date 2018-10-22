@@ -3,11 +3,11 @@
 
 import platform
 import sys
-
 import cv2
 import numpy as np
 
-from lib.face_alignment import Extract
+from lib.multithreading import SpawnProcess, queue_manager
+from plugins.plugin_loader import PluginLoader
 from . import Annotate, ExtractedFaces, Frames, Rotate
 
 
@@ -433,6 +433,7 @@ class Manual():
             key = cv2.waitKey(1)
 
             if self.window_closed(is_windows, is_conda, key):
+                queue_manager.terminate_queues()
                 break
 
             if key in press.keys():
@@ -693,8 +694,12 @@ class MouseHandler():
         self.interface = interface
         self.alignments = interface.alignments
         self.frames = interface.frames
-        self.extract = Extract(None, "manual",
-                               initialize_only=True, verbose=verbose)
+
+        self.extractor = {
+            "detect": PluginLoader.get_detector("manual")(verbose=verbose),
+            "align": PluginLoader.get_aligner("fan")(verbose=verbose)}
+        self.init_extractor()
+
         self.mouse_state = None
         self.last_move = None
         self.center = None
@@ -704,6 +709,38 @@ class MouseHandler():
                       "bounding_box": list(),
                       "bounding_last": list(),
                       "bounding_box_orig": list()}
+
+    def init_extractor(self):
+        """ Initialize FAN """
+        aligner = self.extractor["align"]
+        detector = self.extractor["detect"]
+
+        in_queue = queue_manager.get_queue("in")
+        align_queue = queue_manager.get_queue("align")
+        out_queue = queue_manager.get_queue("out")
+
+        d_kwargs = {"in_queue": in_queue,
+                    "out_queue": align_queue}
+        a_kwargs = {"in_queue": align_queue,
+                    "out_queue": out_queue}
+
+        detect_process = SpawnProcess()
+        align_process = SpawnProcess()
+
+        d_event = detect_process.event
+        a_event = align_process.event
+
+        detect_process.in_process(detector.detect_faces, **d_kwargs)
+        align_process.in_process(aligner.align, **a_kwargs)
+
+        # Wait for Aligner to take init
+        a_event.wait(60)
+        if not a_event.is_set():
+            raise ValueError("Error inititalizing Aligner")
+
+        d_event.wait(10)
+        if not d_event.is_set():
+            raise ValueError("Error inititalizing Detector")
 
     def on_event(self, event, x, y, flags, param):
         """ Handle the mouse events """
@@ -827,15 +864,17 @@ class MouseHandler():
 
     def update_landmarks(self):
         """ Update the landmarks """
-        self.extract.execute(self.media["image"],
-                             manual_face=self.media["bounding_box"])
-        landmarks = self.extract.landmarks[0][1]
-        left, top, right, bottom = self.media["bounding_box"]
-        alignment = {"x": left,
-                     "w": right - left,
-                     "y": top,
-                     "h": bottom - top,
-                     "landmarksXY": landmarks}
+        queue_manager.get_queue("in").put((self.media["image"],
+                                           self.media["bounding_box"]))
+        landmarks = queue_manager.get_queue("out").get()
+        if landmarks == "EOF":
+            exit(0)
+        face = landmarks["detected_faces"][0]
+        alignment = {"x": face.x,
+                     "w": face.w,
+                     "y": face.y,
+                     "h": face.h,
+                     "landmarksXY": face.landmarksXY}
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:

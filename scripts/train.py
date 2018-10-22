@@ -10,7 +10,7 @@ import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
 from lib.utils import get_folder, get_image_paths, set_system_verbosity
-from plugins.PluginLoader import PluginLoader
+from plugins.plugin_loader import PluginLoader
 
 
 class Train(object):
