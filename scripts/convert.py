@@ -1,6 +1,5 @@
 #!/usr/bin python3
 """ The script to run the convert process of faceswap """
-# TODO HOG/DLIB Extraction on the fly
 
 import re
 import os
@@ -11,26 +10,27 @@ import cv2
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
-from scripts.extract import Extract
 from lib.faces_detect import DetectedFace
-from lib.multithreading import BackgroundGenerator
+from lib.multithreading import BackgroundGenerator, SpawnProcess, queue_manager
 from lib.utils import get_folder, get_image_paths
 
 from plugins.plugin_loader import PluginLoader
 
 
-class Convert(object):
+class Convert():
     """ The convert process. """
     def __init__(self, arguments):
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
+        self.extract_faces = False
+        self.faces_count = 0
 
         self.images = Images(self.args)
         self.alignments = Alignments(self.args, False)
-        
+
         # Legacy rotation conversion
         Rotate(self.alignments, self.args.verbose, self.images.input_images)
-        
+
         self.post_process = PostProcess(arguments)
         self.verify_output = False
 
@@ -44,7 +44,7 @@ class Convert(object):
         Utils.set_verbosity(self.args.verbose)
 
         if not self.alignments.have_alignments_file:
-            self.generate_alignments()
+            self.load_extractor()
 
         model = self.load_model()
         converter = self.load_converter(model)
@@ -54,17 +54,46 @@ class Convert(object):
         for item in batch.iterator():
             self.convert(converter, item)
 
-        Utils.finalize(self.images.images_found,
-                       self.alignments.faces_count(),
-                       False)
+        if self.extract_faces:
+            queue_manager.terminate_queues()
 
-    def generate_alignments(self):
-        """ Generate an alignments file if one does not already
-        exist. Does not save extracted faces """
-        print('Alignments file not found. Generating at default values...')
-        extract = Extract(self.args)
-        extract.export_face = False
-        extract.process()
+        Utils.finalize(self.images.images_found,
+                       self.faces_count,
+                       self.verify_output)
+
+    def load_extractor(self):
+        """ Set on the fly extraction """
+        print("\nNo Alignments file found. Extracting on the fly.\n"
+              "NB: This will use the inferior dlib-hog for extraction "
+              "and dlib pose predictor for landmarks.\nIt is recommended "
+              "to perfom Extract first for superior results\n")
+        for task in ("load", "detect", "align"):
+            queue_manager.add_queue(task, maxsize=0)
+
+        detector = PluginLoader.get_detector("dlib_hog")(
+            verbose=self.args.verbose)
+        aligner = PluginLoader.get_aligner("dlib")(verbose=self.args.verbose)
+
+        d_kwargs = {"in_queue": queue_manager.get_queue("load"),
+                    "out_queue": queue_manager.get_queue("detect")}
+        a_kwargs = {"in_queue": queue_manager.get_queue("detect"),
+                    "out_queue": queue_manager.get_queue("align")}
+
+        d_process = SpawnProcess()
+        d_event = d_process.event
+        a_process = SpawnProcess()
+        a_event = a_process.event
+
+        d_process.in_process(detector.detect_faces, **d_kwargs)
+        a_process.in_process(aligner.align, **a_kwargs)
+        d_event.wait(10)
+        if not d_event.is_set():
+            raise ValueError("Error inititalizing Detector")
+        a_event.wait(10)
+        if not a_event.is_set():
+            raise ValueError("Error inititalizing Aligner")
+
+        self.extract_faces = True
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -107,30 +136,25 @@ class Convert(object):
                              total=self.images.images_found,
                              file=sys.stdout):
 
-            if (self.args.discard_frames and 
+            if (self.args.discard_frames and
                     self.opts.check_skipframe(filename) == "discard"):
                 continue
-            
+
             frame = os.path.basename(filename)
-            if not self.check_alignments(frame):
+            if self.extract_faces:
+                convert_item = self.detect_faces(filename)
+            else:
+                convert_item = self.alignments_faces(filename, frame)
+
+            if not convert_item:
                 continue
-
-            faces = self.alignments.get_alignments_for_frame(frame)
-            if not faces:
-                continue
-
-            image = self.images.load_one_image(filename)
-            detected_faces = list()
-
-            for rawface in faces:
-                face = DetectedFace()
-                face.from_alignment(rawface, image=image)
-                detected_faces.append(face)
+            image, detected_faces = convert_item
 
             # Post processing requires a dict with "detected_faces" key
             self.post_process.do_actions({"detected_faces": detected_faces})
 
             faces_count = len(detected_faces)
+            self.faces_count += faces_count
             if faces_count == 0:
                 continue
 
@@ -141,6 +165,32 @@ class Convert(object):
                           "an image! {}".format(frame))
 
             yield filename, image, detected_faces
+
+    def detect_faces(self, filename):
+        """ Extract the face from a frame (If not alignments file found) """
+        image = self.images.load_one_image(filename)
+        queue_manager.get_queue("load").put((filename, image))
+        item = queue_manager.get_queue("align").get()
+        detected_faces = item["detected_faces"]
+        return image, detected_faces
+
+    def alignments_faces(self, filename, frame):
+        """ Get the face from alignments file """
+        if not self.check_alignments(frame):
+            return None
+
+        faces = self.alignments.get_alignments_for_frame(frame)
+        if not faces:
+            return None
+
+        image = self.images.load_one_image(filename)
+        detected_faces = list()
+
+        for rawface in faces:
+            face = DetectedFace()
+            face.from_alignment(rawface, image=image)
+            detected_faces.append(face)
+        return image, detected_faces
 
     def check_alignments(self, frame):
         """ If we have no alignments for this image, skip it """
@@ -184,7 +234,7 @@ class Convert(object):
         return image
 
 
-class OptionalActions(object):
+class OptionalActions():
     """ Process the optional actions for convert """
 
     def __init__(self, args, input_images):
@@ -258,6 +308,7 @@ class OptionalActions(object):
             print("face {} for frame {} was deleted, skipping".format(
                 face_idx, os.path.basename(filename)))
         return skip_face
+
 
 class Rotate():
     """ Rotate landmarks and bounding boxes on legacy alignments
