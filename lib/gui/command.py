@@ -257,7 +257,7 @@ class OptionControl(object):
         if control == ttk.Combobox:
             ctl["values"] = [choice for choice in choices]
 
-        Tooltip(ctl, text=helptext, wraplength=400)
+        Tooltip(ctl, text=helptext, wraplength=720)
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
         """ Add correct file browser button for control """
