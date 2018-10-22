@@ -1,8 +1,7 @@
 #!/usr/bin python3
 """ The script to run the extract process of faceswap """
-# TODO Sort out Sort Tool
-# TODO Merge alignment tool and base DetectedFace
-# S3FD Detector
+# TODO S3FD Detector
+
 import os
 import sys
 from pathlib import Path
@@ -151,8 +150,12 @@ class Extract():
         """ Return the number of items to be processedd """
         processed = sum(os.path.basename(frame) in self.alignments.data.keys()
                         for frame in self.images.input_images)
-        if processed != 0:
+
+        if processed != 0 and self.args.skip_existing:
             print("Skipping {} previously extracted frames".format(processed))
+        if processed != 0 and self.args.skip_faces:
+            print("Skipping {} frames with detected faces".format(processed))
+
         to_process = self.images.images_found - processed
         if to_process == 0:
             print("No frames to process. Exiting")

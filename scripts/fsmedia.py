@@ -96,13 +96,15 @@ class Alignments():
         if self.is_extract:
             skip_existing = bool(hasattr(self.args, 'skip_existing')
                                  and self.args.skip_existing)
+            skip_faces = bool(hasattr(self.args, 'skip_faces')
+                              and self.args.skip_faces)
 
             if not self.have_alignments_file:
-                if skip_existing:
-                    print("Skip Existing selected, but no alignments "
-                          "file found!")
+                if skip_existing or skip_faces:
+                    print("Skip Existing/Skip Faces selected, but no "
+                          "alignments file found!")
                 return data
-            if not skip_existing:
+            if not skip_existing and not skip_faces:
                 return data
 
         try:
@@ -113,6 +115,14 @@ class Alignments():
             print("{} not read!".format(self.location))
             print(str(err))
             data = dict()
+
+        if skip_faces:
+            # Remove items from algnments that have no faces so they will
+            # be re-detected
+            del_keys = [key for key, val in data.items() if not val]
+            for key in del_keys:
+                if key in data:
+                    del data[key]
 
         return data
 

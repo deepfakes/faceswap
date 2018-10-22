@@ -433,6 +433,13 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Skips frames that have already been "
                                       "extracted and exist in the alignments "
                                       "file"})
+        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
+                              "action": "store_true",
+                              "dest": "skip_faces",
+                              "default": False,
+                              "help": "Skip frames that already have "
+                                      "detected faces in the alignments "
+                                      "file"})
         argument_list.append({"opts": ("-dl", "--debug-landmarks"),
                               "action": "store_true",
                               "dest": "debug_landmarks",
