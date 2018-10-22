@@ -59,5 +59,4 @@ class DetectedFace():
         self.h = alignment["h"]
         self.landmarksXY = alignment["landmarksXY"]
         if image.any():
-            self.image = self.image_to_face(image)
-
+            self.image_to_face(image)

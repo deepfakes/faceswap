@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from lib import Serializer
+from lib.faces_detect import DetectedFace
 from lib.utils import _image_extensions, rotate_landmarks
 from plugins.extract.align._base import Extract as AlignerExtract
 
@@ -346,39 +347,6 @@ class Frames(MediaLoader):
                       key=lambda x: (x["frame_name"]))
 
 
-class DetectedFace():
-    """ Detected face and landmark information """
-    def __init__(self):
-        self.image = None
-        self.x = None
-        self.w = None
-        self.y = None
-        self.h = None
-        self.landmarksXY = None
-
-    def alignment_to_face(self, image, alignment):
-        """ Convert a face alignment to detected face object """
-        self.image = image
-        self.x = alignment["x"]
-        self.w = alignment["w"]
-        self.y = alignment["y"]
-        self.h = alignment["h"]
-        self.landmarksXY = alignment["landmarksXY"]
-
-    def face_to_alignment(self, alignment):
-        """ Convert a face alignment to detected face object """
-        alignment["x"] = self.x
-        alignment["w"] = self.w
-        alignment["y"] = self.y
-        alignment["h"] = self.h
-        alignment["landmarksXY"] = self.landmarksXY
-        return alignment
-
-    def landmarks_as_xy(self):
-        """ Landmarks as XY """
-        return self.landmarksXY
-
-
 class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
@@ -414,7 +382,7 @@ class ExtractedFaces():
     def extract_one_face(self, alignment, image):
         """ Extract one face from image """
         face = DetectedFace()
-        face.alignment_to_face(image, alignment)
+        face.from_alignment(alignment, image=image)
         return self.extractor.extract(image, face, self.size, self.align_eyes)
 
     def original_roi(self, matrix):
