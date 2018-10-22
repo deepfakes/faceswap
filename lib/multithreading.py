@@ -67,7 +67,6 @@ class PoolProcess():
     def __init__(self, method, processes=None, verbose=False):
         self.verbose = verbose
         self.method = method
-        self.event = mp.Event()
         self.procs = self.set_procs(processes)
 
     def set_procs(self, processes):
@@ -81,7 +80,6 @@ class PoolProcess():
 
     def in_process(self, *args, **kwargs):
         """ Run the processing pool """
-        kwargs["event"] = self.event
         pool = mp.Pool(processes=self.procs)
         for _ in range(self.procs):
             pool.apply_async(self.method, args=args, kwds=kwargs)

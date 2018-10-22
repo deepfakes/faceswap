@@ -23,8 +23,8 @@ class Align(Aligner):
         super().initialize(*args, **kwargs)
         print("Initializing Dlib Pose Predictor...")
         self.model = dlib.shape_predictor(self.model_path)
-        self.queues["out"].put("init")
-        print("Dlib Pose Predictor Initialized.")
+        self.init.set()
+        print("Initialized Dlib Pose Predictor.")
 
     def align(self, *args, **kwargs):
         """ Perform alignments on detected faces """

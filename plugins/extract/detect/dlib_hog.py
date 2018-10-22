@@ -27,7 +27,7 @@ class Detect(Detector):
         super().initialize(*args, **kwargs)
         if self.verbose:
             print("Using CPU for detection")
-        self.init.set()
+        self.init = True
         print("Initialized Dlib-HOG Detector...")
 
     def detect_faces(self, *args, **kwargs):

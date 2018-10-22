@@ -69,7 +69,8 @@ class Aligner():
             Override for specific detector
             Must return a list of dlib rects"""
         try:
-            self.initialize(*args, **kwargs)
+            if not self.init:
+                self.initialize(*args, **kwargs)
         except ValueError as err:
             print("ERROR: {}".format(err))
             exit(1)
@@ -116,7 +117,7 @@ class Aligner():
         return int(vram["free"]), int(vram["total"])
 
 
-class Extract(object):
+class Extract():
     """ Based on the original https://www.reddit.com/r/deepfakes/
         code sample + contribs """
 

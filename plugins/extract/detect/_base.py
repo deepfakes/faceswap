@@ -14,7 +14,6 @@
 import os
 
 import cv2
-import numpy as np
 import dlib
 
 from lib.faces_detect import DetectedFace
@@ -68,7 +67,8 @@ class Detector():
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
             Override for specific detector """
-        self.init = kwargs["event"]
+        init = kwargs.get("event", False)
+        self.init = init
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
@@ -77,7 +77,8 @@ class Detector():
             Override for specific detector
             Must return a list of dlib rects"""
         try:
-            self.initialize(*args, **kwargs)
+            if not self.init:
+                self.initialize(*args, **kwargs)
         except ValueError as err:
             print("ERROR: {}".format(err))
             exit(1)
@@ -191,7 +192,7 @@ class Detector():
     def rotate_rect(d_rect, rotation_matrix):
         """ Rotate a dlib rect based on the rotation_matrix"""
         d_rect = rotate_landmarks(d_rect, rotation_matrix)
-        return(d_rect)
+        return d_rect
 
     # << QUEUE METHODS >> #
     def get_batch(self):

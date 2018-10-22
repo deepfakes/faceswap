@@ -13,7 +13,6 @@ import numpy as np
 
 from lib import Serializer
 from lib.detect_blur import is_blurry
-from lib.faces_detect import DetectedFace
 from lib.FaceFilter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_image_paths, rotate_landmarks,
                        set_system_verbosity)
@@ -66,10 +65,14 @@ class Alignments():
         return sum(len(faces) for faces in self.data.values())
 
     def get_serializer(self):
-        """ Set the serializer to be used for loading and saving alignments """
-        if ((not hasattr(self.args, "serializer") or not self.args, "serializer")
-                and self.args.alignments_path):
-            ext = os.path.splitext(self.args.alignments_path)[-1]
+        """ Set the serializer to be used for loading and
+            saving alignments """
+        if (not hasattr(self.args, "serializer")
+                or not self.args.serializer):
+            if self.args.alignments_path:
+                ext = os.path.splitext(self.args.alignments_path)[-1]
+            else:
+                ext = "json"
             serializer = Serializer.get_serializer_from_ext(ext)
         else:
             serializer = Serializer.get_serializer(self.args.serializer)
@@ -96,11 +99,12 @@ class Alignments():
 
             if not self.have_alignments_file:
                 if skip_existing:
-                    print("Skip Existing selected, but no alignments file found!")
+                    print("Skip Existing selected, but no alignments "
+                          "file found!")
                 return data
-            elif not skip_existing:
+            if not skip_existing:
                 return data
-        
+
         try:
             with open(self.location, self.serializer.roptions) as align:
                 data = self.serializer.unmarshal(align.read())
@@ -190,7 +194,8 @@ class Images():
         for filename in self.input_images:
             yield filename, cv2.imread(filename)
 
-    def load_one_image(self, filename):
+    @staticmethod
+    def load_one_image(filename):
         """ load requested image """
         return cv2.imread(filename)
 
