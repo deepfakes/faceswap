@@ -418,6 +418,14 @@ class ExtractArgs(ExtractConvertArgs):
                                       "Only has an effect if both the "
                                       "aligner and detector use the GPU, "
                                       "otherwise this is automatic."})
+        argument_list.append({"opts": ("-sz", "--size"),
+                              "type": int,
+                              "default": 256,
+                              "help": "The output size of extracted faces. "
+                                      "Make sure that the model you intend "
+                                      "to train supports your required "
+                                      "size. This will only need to be "
+                                      "changed for hi-res models."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",

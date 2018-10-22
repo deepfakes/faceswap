@@ -236,8 +236,7 @@ class Plugins():
                 print("Not enough free VRAM for parallel processing. "
                       "Switching to serial")
             return False
-        else:
-            return True
+        return True
 
     def add_queues(self):
         """ Add the required processing queues to Queue Manager """
@@ -271,9 +270,15 @@ class Plugins():
         if hasattr(self.args, 'align_eyes'):
             align_eyes = self.args.align_eyes
 
+        # Extracted Face Size
+        size = 256
+        if hasattr(self.args, 'size'):
+            size = self.args.size
+
         aligner = PluginLoader.get_aligner(aligner_name)(
             verbose=self.args.verbose,
-            align_eyes=align_eyes)
+            align_eyes=align_eyes,
+            size=size)
 
         return aligner
 
@@ -304,13 +309,19 @@ class Plugins():
             kwargs["mtcnn_kwargs"] = mtcnn_kwargs
 
         if self.detector.parent_is_pool:
-            detect_process = PoolProcess(self.detector.detect_faces,
-                                         verbose=self.args.verbose)
+            detect_process = PoolProcess(self.detector.detect_faces)
         else:
             detect_process = SpawnProcess()
 
-        event = detect_process.event
+        event = None
+        if hasattr(detect_process, "event"):
+            event = detect_process.event
+
         detect_process.in_process(self.detector.detect_faces, **kwargs)
+
+        if not event:
+            return
+
         event.wait(60)
         if not event.is_set():
             raise ValueError("Error inititalizing Detector")
