@@ -23,3 +23,5 @@
 !plugins/model/*
 !tools
 !tools/lib*
+
+__pycache__/
