@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import cv2
+import numpy as np
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
@@ -125,7 +126,8 @@ class Convert():
             erosion_kernel_size=args.erosion_kernel_size,
             match_histogram=args.match_histogram,
             smooth_mask=args.smooth_mask,
-            avg_color_adjust=args.avg_color_adjust)
+            avg_color_adjust=args.avg_color_adjust,
+            draw_transparent=args.draw_transparent)
 
         return converter
 
@@ -150,13 +152,11 @@ class Convert():
                 continue
             image, detected_faces = convert_item
 
-            # Post processing requires a dict with "detected_faces" key
-            self.post_process.do_actions({"detected_faces": detected_faces})
-
             faces_count = len(detected_faces)
-            self.faces_count += faces_count
-            if faces_count == 0:
-                continue
+            if faces_count != 0:
+                # Post processing requires a dict with "detected_faces" key
+                self.post_process.do_actions({"detected_faces": detected_faces})
+                self.faces_count += faces_count
 
             if faces_count > 1:
                 self.verify_output = True
@@ -180,9 +180,6 @@ class Convert():
             return None
 
         faces = self.alignments.get_alignments_for_frame(frame)
-        if not faces:
-            return None
-
         image = self.images.load_one_image(filename)
         detected_faces = list()
 
@@ -215,6 +212,7 @@ class Convert():
         except Exception as err:
             print("Failed to convert image: {}. "
                   "Reason: {}".format(filename, err))
+            raise
 
     def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """
