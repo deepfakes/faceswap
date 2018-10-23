@@ -98,7 +98,7 @@ class ProcessWrapper(object):
         script = "{}.{}".format(category, "py")
         pathexecscript = os.path.join(self.pathscript, script)
 
-        args = ["python"] if generate else ["python", "-u"]
+        args = [sys.executable] if generate else [sys.executable, "-u"]
         args.extend([pathexecscript, command])
 
         for cliopt in self.cliopts.gen_cli_arguments(command):
