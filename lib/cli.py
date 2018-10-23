@@ -591,6 +591,13 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": True,
                               "help": "Average color adjust. "
                                       "(Adjust converter only)"})
+        argument_list.append({"opts": ("-dt", "--draw-transparent"),
+                              "action": "store_true",
+                              "dest": "draw_transparent",
+                              "default": False,
+                              "help": "Place the swapped face on a "
+                                      "transparent layer rather than the "
+                                      "original frame."})
         return argument_list
 
 

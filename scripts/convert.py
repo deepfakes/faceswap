@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import cv2
+import numpy as np
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
@@ -125,7 +126,8 @@ class Convert():
             erosion_kernel_size=args.erosion_kernel_size,
             match_histogram=args.match_histogram,
             smooth_mask=args.smooth_mask,
-            avg_color_adjust=args.avg_color_adjust)
+            avg_color_adjust=args.avg_color_adjust,
+            draw_transparent=args.draw_transparent)
 
         return converter
 
@@ -210,6 +212,7 @@ class Convert():
         except Exception as err:
             print("Failed to convert image: {}. "
                   "Reason: {}".format(filename, err))
+            raise
 
     def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """

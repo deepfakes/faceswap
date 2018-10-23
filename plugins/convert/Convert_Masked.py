@@ -6,7 +6,7 @@ import numpy
 from lib.aligner import get_align_mat
 
 class Convert():
-    def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, sharpen_image=None, **kwargs):
+    def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, sharpen_image=None, draw_transparent=False, **kwargs):
         self.encoder = encoder
         self.trainer = trainer
         self.erosion_kernel = None
@@ -21,6 +21,7 @@ class Convert():
         self.sharpen_image = sharpen_image
         self.match_histogram = match_histogram
         self.mask_type = mask_type.lower() # Choose in 'FaceHullAndRect','FaceHull','Rect'
+        self.draw_transparent = draw_transparent
 
     def patch_image( self, image, face_detected, size ):
 
@@ -41,7 +42,30 @@ class Convert():
 
         return self.apply_new_face(image, new_face, image_mask, mat, image_size, size)
 
+    @staticmethod
+    def convert_transparent(image, new_face, image_mask, image_size):
+        """ Add alpha channels to images and change to 
+            transparent background """
+        image = numpy.zeros((image_size[1], image_size[0], 4),
+                            dtype=numpy.uint8)
+        
+        mask_b, mask_g, mask_r = cv2.split(image_mask)
+        face_b, face_g, face_r = cv2.split(new_face)
+
+        alpha_mask = numpy.ones(mask_b.shape, dtype=mask_b.dtype) * 50
+        alpha_face = numpy.ones(face_b.shape, dtype=face_b.dtype) * 50
+
+        image_mask = cv2.merge((mask_b, mask_g, mask_r, alpha_mask))
+        new_face = cv2.merge((face_b, face_g, face_r, alpha_face))
+        return image, new_face, image_mask
+    
     def apply_new_face(self, image, new_face, image_mask, mat, image_size, size):
+    
+        if self.draw_transparent:
+            image, new_face, image_mask = self.convert_transparent(image,
+                                                                   new_face,
+                                                                   image_mask,
+                                                                   image_size)
         base_image = numpy.copy( image )
         new_image = numpy.copy( image )
 
