@@ -93,6 +93,7 @@ class Alignments():
     def load(self):
         """ Load the alignments data if it exists or create empty dict """
         data = dict()
+        skip_faces = None
         if self.is_extract:
             skip_existing = bool(hasattr(self.args, 'skip_existing')
                                  and self.args.skip_existing)
