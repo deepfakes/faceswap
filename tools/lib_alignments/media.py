@@ -288,6 +288,9 @@ class MediaLoader():
 
 class Faces(MediaLoader):
     """ Object to hold the faces that are to be swapped out """
+    def __init__(self, folder, verbose, dfl=False):
+        self.dfl = dfl
+        super().__init__(folder, verbose)
 
     def process_folder(self):
         """ Iterate through the faces dir pulling out various information """
@@ -297,8 +300,11 @@ class Faces(MediaLoader):
                 continue
             filename = os.path.splitext(face)[0]
             file_extension = os.path.splitext(face)[1]
-            index = int(filename[filename.rindex("_") + 1:])
-            original_file = "{}".format(filename[:filename.rindex("_")])
+            index = 0
+            original_file = ""
+            if not self.dfl:
+                index = int(filename[filename.rindex("_") + 1:])
+                original_file = "{}".format(filename[:filename.rindex("_")])
             yield {"face_fullname": face,
                    "face_name": filename,
                    "face_extension": file_extension,
@@ -452,7 +458,7 @@ class ExtractedFaces():
         sizes = list()
         for matrix in self.matrices:
             original_roi = self.original_roi(matrix)[0].squeeze()
-            top_left, top_right  = original_roi[0], original_roi[3]
+            top_left, top_right = original_roi[0], original_roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
             if top_left[1] == top_right[1]:
@@ -461,7 +467,6 @@ class ExtractedFaces():
                 length = int(((len_x ** 2) + (len_y ** 2)) ** 0.5)
             sizes.append(length)
         return sizes
-
 
     def get_aligned_landmarks_for_frame(self, frame, landmarks_xy,
                                         update=False):
