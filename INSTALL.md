@@ -78,18 +78,15 @@ INFO    CUDA Enabled
 INFO    1. Install Docker
         https://www.docker.com/community-edition
         
-        2. Install latest CUDA
-        CUDA: https://developer.nvidia.com/cuda-downloads
-        
-        3. Install Nvidia-Docker & Restart Docker Service
+        2. Install Nvidia-Docker & Restart Docker Service
         https://github.com/NVIDIA/nvidia-docker
         
-        4. Build Docker Image For Faceswap
+        3. Build Docker Image For Faceswap
         docker build -t deepfakes-gpu -f Dockerfile.gpu .
         
-        5. Mount faceswap volume and Run it
+        4. Mount faceswap volume and Run it
         # without gui. tools.py gui not working.
-        docker run -p 8888:8888 \
+        nvidia-docker run --rm -it -p 8888:8888 \
             --hostname faceswap-gpu --name faceswap-gpu \
             -v /opt/faceswap:/srv \
             faceswap-gpu
@@ -111,7 +108,7 @@ INFO    1. Install Docker
             -e UID=`id -u` \
             faceswap-gpu
         
-        6. Open a new terminal to interact with the project
+        5. Open a new terminal to interact with the project
         docker exec faceswap-gpu python /srv/tools.py gui
 ```
 
