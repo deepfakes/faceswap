@@ -150,13 +150,11 @@ class Convert():
                 continue
             image, detected_faces = convert_item
 
-            # Post processing requires a dict with "detected_faces" key
-            self.post_process.do_actions({"detected_faces": detected_faces})
-
             faces_count = len(detected_faces)
-            self.faces_count += faces_count
-            if faces_count == 0:
-                continue
+            if faces_count != 0:
+                # Post processing requires a dict with "detected_faces" key
+                self.post_process.do_actions({"detected_faces": detected_faces})
+                self.faces_count += faces_count
 
             if faces_count > 1:
                 self.verify_output = True
@@ -180,9 +178,6 @@ class Convert():
             return None
 
         faces = self.alignments.get_alignments_for_frame(frame)
-        if not faces:
-            return None
-
         image = self.images.load_one_image(filename)
         detected_faces = list()
 
