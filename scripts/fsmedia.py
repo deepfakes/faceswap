@@ -14,8 +14,8 @@ import numpy as np
 from lib import Serializer
 from lib.detect_blur import is_blurry
 from lib.FaceFilter import FaceFilter as FilterFunc
-from lib.utils import (camel_case_split, get_image_paths, rotate_landmarks,
-                       set_system_verbosity)
+from lib.utils import (camel_case_split, get_folder, get_image_paths,
+                       rotate_landmarks, set_system_verbosity)
 from plugins.extract.align._base import Extract as AlignerExtract
 
 
@@ -93,7 +93,6 @@ class Alignments():
     def load(self):
         """ Load the alignments data if it exists or create empty dict """
         data = dict()
-        skip_faces = None
         if self.is_extract:
             skip_existing = bool(hasattr(self.args, 'skip_existing')
                                  and self.args.skip_existing)
@@ -296,9 +295,6 @@ class BlurryFaceFilter(PostProcessAction):
 
     def process(self, output_item):
         """ Detect and move blurry face """
-        blurry_file = None
-        filename = output_item["filename"]
-        output_file = output_item["output_file"]
         extractor = AlignerExtract()
 
         for idx, face in enumerate(output_item["detected_faces"]):
@@ -308,7 +304,7 @@ class BlurryFaceFilter(PostProcessAction):
             t_mat = output_item["t_mats"][idx]
 
             aligned_landmarks = extractor.transform_points(
-                face.landmarksXY(),
+                face.landmarksXY,
                 t_mat, size, 48)
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
@@ -320,12 +316,14 @@ class BlurryFaceFilter(PostProcessAction):
             blurry, focus_measure = is_blurry(isolated_face, self.blur_thresh)
 
             if blurry:
-                print("{}'s focus measure of {} was below the blur threshold, "
-                      "moving to \"blurry\"".format(Path(filename).stem,
-                                                    focus_measure))
-                blurry_file = os.path.join(os.path.dirname(output_file),
-                                           "blurry") / Path(filename).stem
-                output_item["output_file"] = blurry_file
+                blur_folder = output_item["output_file"].parts[:-1]
+                blur_folder = get_folder(Path(*blur_folder) / Path("blurry"))
+                frame_name = output_item["output_file"].parts[-1]
+                output_item["output_file"] = blur_folder / Path(frame_name)
+                if self.verbose:
+                    print("{}'s focus measure of {} was below the blur "
+                          "threshold, moving to \"blurry\"".format(
+                              frame_name, focus_measure))
 
 
 class DebugLandmarks(PostProcessAction):
