@@ -2,8 +2,8 @@ import cv2
 import numpy
 from random import shuffle
 
-from .utils import BackgroundGenerator
-from .umeyama import umeyama
+import lib.utils
+from lib.umeyama import umeyama
 
 class TrainingDataGenerator():
     def __init__(self, random_transform_args, coverage, scale=5, zoom=1): #TODO thos default should stay in the warp function
@@ -12,21 +12,23 @@ class TrainingDataGenerator():
         self.scale = scale
         self.zoom = zoom
 
-    def minibatchAB(self, images, batchsize):
-        batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
+    def minibatchAB(self, images, batchsize, doShuffle=True):
+        batch = lib.utils.BackgroundGenerator(self.minibatch(images, batchsize, doShuffle), 1)
         for ep1, warped_img, target_img in batch.iterator():
             yield ep1, warped_img, target_img
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
-    def minibatch(self, data, batchsize):
+    def minibatch(self, data, batchsize, doShuffle=True):
         length = len(data)
         assert length >= batchsize, "Number of images is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length, batchsize)
         epoch = i = 0
-        shuffle(data)
+        if doShuffle:
+            shuffle(data)
         while True:
             size = batchsize
             if i+size > length:
-                shuffle(data)
+                if doShuffle:
+                    shuffle(data)
                 i = 0
                 epoch+=1
             rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])

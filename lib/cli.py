@@ -672,6 +672,36 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "redirect_gui",
                               "default": False,
                               "help": argparse.SUPPRESS})
+        argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_input_A",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain faces of A "
+                                      "which will be converted for the "
+                                      "timelapse. You must supply a "
+                                      "--timelapse-output and a "
+                                      "--timelapse-input-B parameter."})
+        argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_input_B",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain faces of B "
+                                      "which will be converted for the "
+                                      "timelapse. You must supply a "
+                                      "--timelapse-output and a "
+                                      "--timelapse-input-A parameter."})
+        argument_list.append({"opts": ("-to", "--timelapse-output"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_output",
+                              "default": None,
+                              "help": "The output folder for the timelapse. "
+                                      "If the input folders are supplied but "
+                                      "no output folder, it will default to "
+                                      "your model folder /timelapse/"})
         return argument_list
 
 

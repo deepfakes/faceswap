@@ -9,7 +9,7 @@ import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
-from lib.utils import get_folder, get_image_paths, set_system_verbosity
+from lib.utils import get_folder, get_image_paths, set_system_verbosity, Timelapse
 from plugins.PluginLoader import PluginLoader
 
 
@@ -26,6 +26,7 @@ class Train(object):
         # this is so that you can enter case insensitive values for trainer
         trainer_name = self.args.trainer
         self.trainer_name = "LowMem" if trainer_name.lower() == "lowmem" else trainer_name
+        self.timelapse = None
 
     def process(self):
         """ Call the training process object """
@@ -86,6 +87,11 @@ class Train(object):
             model = self.load_model()
             trainer = self.load_trainer(model)
 
+            self.timelapse = Timelapse.CreateTimelapse(self.args.timelapse_input_A,
+                                                       self.args.timelapse_input_B,
+                                                       self.args.timelapse_output,
+                                                       trainer)
+
             self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
@@ -121,6 +127,8 @@ class Train(object):
         for iteration in range(0, self.args.iterations):
             save_iteration = iteration % self.args.save_interval == 0
             viewer = self.show if save_iteration or self.save_now else None
+            if save_iteration and self.timelapse is not None:
+                self.timelapse.work()
             trainer.train_one_step(iteration, viewer)
             if self.stop:
                 break

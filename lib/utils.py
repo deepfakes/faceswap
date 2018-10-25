@@ -12,6 +12,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import lib.training_data
+from time import time
+
 
 # Global variables
 _image_extensions = ['.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
@@ -160,3 +163,68 @@ class BackgroundGenerator(threading.Thread):
             if next_item is None:
                 break
             yield next_item
+
+class Timelapse:
+    @classmethod
+    def CreateTimelapse(test, input_dir_A, input_dir_B, output_dir, trainer):
+        #self.input_dir = input
+        #self.output_dir = output
+        #self.trainer = trainer
+
+        if input_dir_A is None and input_dir_B is None and output_dir is None:
+            return None
+
+        if input_dir_A is None or input_dir_B is None:
+            raise Exception("To enable the timelapse, you have to supply all the parameters "
+                            "(--timelapse-input-A and --timelapse-input-B).")
+
+        if output_dir is None:
+            output_dir = get_folder(os.path.join(trainer.model.model_dir, "timelapse"))
+
+        return Timelapse(input_dir_A, input_dir_B, output_dir, trainer)
+
+    def __init__(self, input_dir_A, input_dir_B, output, trainer):
+        self.output_dir = output
+        self.trainer = trainer
+
+        if not os.path.isdir(self.output_dir):
+            print('Error: {} does not exist'.format(self.output_dir))
+            exit(1)
+
+        self.files_A = self.read_input_images(input_dir_A)
+        self.files_B = self.read_input_images(input_dir_B)
+
+        bs = min(len(self.files_A), len(self.files_B)) 
+
+        self.images_A = self.get_image_data(self.files_A, bs)
+        self.images_B = self.get_image_data(self.files_B, bs)
+
+    def read_input_images(self, input_dir):
+        if not os.path.isdir(input_dir):
+            print('Error: {} does not exist'.format(input_dir))
+            exit(1)
+
+        if not os.listdir(input_dir):
+            print('Error: {} contains no images'.format(input_dir))
+            exit(1)
+
+        return get_image_paths(input_dir)
+
+    def get_image_data(self, input_images, batch_size):
+        random_transform_args = {
+            'rotation_range': 0,
+            'zoom_range': 0,
+            'shift_range': 0,
+            'random_flip': 0
+        }
+
+        zoom = self.trainer.model.IMAGE_SHAPE[0] // 64 if hasattr(self.trainer.model, 'IMAGE_SHAPE') else 1
+
+        generator = lib.training_data.TrainingDataGenerator(random_transform_args, 160, zoom)
+        batch = generator.minibatchAB(input_images, batch_size, doShuffle=False)
+
+        return next(batch)[2]
+
+    def work(self):
+        image = self.trainer.show_sample(self.images_A, self.images_B)
+        cv2.imwrite(os.path.join(self.output_dir, str(int(time())) + ".png"), image)
