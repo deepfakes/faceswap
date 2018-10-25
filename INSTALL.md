@@ -89,7 +89,7 @@ INFO    1. Install Docker
         nvidia-docker run --rm -it -p 8888:8888 \
             --hostname faceswap-gpu --name faceswap-gpu \
             -v /opt/faceswap:/srv \
-            faceswap-gpu
+            deepfakes-gpu
         
         # with gui. tools.py gui working.
         ## enable local access to X11 server
@@ -106,7 +106,7 @@ INFO    1. Install Docker
             -e VIDEO_GID=`getent group video | cut -d: -f3` \
             -e GID=`id -g` \
             -e UID=`id -u` \
-            faceswap-gpu
+            deepfakes-gpu
         
         5. Open a new terminal to interact with the project
         docker exec faceswap-gpu python /srv/tools.py gui
