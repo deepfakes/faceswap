@@ -23,8 +23,8 @@ class Trainer():
         epoch, warped_A, target_A = next(self.images_A)
         epoch, warped_B, target_B = next(self.images_B)
 
-        loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
+        loss_A = self.model.autoencoder_a.train_on_batch(warped_A, target_A)
+        loss_B = self.model.autoencoder_b.train_on_batch(warped_B, target_B)
         
         self.model._epoch_no += 1
         
@@ -37,13 +37,13 @@ class Trainer():
     def show_sample(self, test_A, test_B):
         figure_A = numpy.stack([
             test_A,
-            self.model.autoencoder_A.predict(test_A),
-            self.model.autoencoder_B.predict(test_A),
+            self.model.autoencoder_a.predict(test_A),
+            self.model.autoencoder_b.predict(test_A),
         ], axis=1)
         figure_B = numpy.stack([
             test_B,
-            self.model.autoencoder_B.predict(test_B),
-            self.model.autoencoder_A.predict(test_B),
+            self.model.autoencoder_b.predict(test_B),
+            self.model.autoencoder_a.predict(test_B),
         ], axis=1)
 
         if test_A.shape[0] % 2 == 1:

@@ -112,7 +112,7 @@ class Train():
         model = PluginLoader.get_model(self.trainer_name)(model_dir,
                                                           self.args.gpus)
 
-        model.load(swapped=False)
+        model.load_weights(swapped=False)
         return model
 
     def load_trainer(self, model):

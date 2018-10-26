@@ -20,7 +20,7 @@
 !plugins/
 !plugins/*
 !plugins/extract/*
-!plugins/model/*
+!plugins/train/*
 !tools
 !tools/lib*
 *.pyc
