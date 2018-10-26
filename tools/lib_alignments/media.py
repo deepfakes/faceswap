@@ -286,6 +286,9 @@ class MediaLoader():
 
 class Faces(MediaLoader):
     """ Object to hold the faces that are to be swapped out """
+    def __init__(self, folder, verbose, dfl=False):
+        self.dfl = dfl
+        super().__init__(folder, verbose)
 
     def process_folder(self):
         """ Iterate through the faces dir pulling out various information """
@@ -295,8 +298,11 @@ class Faces(MediaLoader):
                 continue
             filename = os.path.splitext(face)[0]
             file_extension = os.path.splitext(face)[1]
-            index = int(filename[filename.rindex("_") + 1:])
-            original_file = "{}".format(filename[:filename.rindex("_")])
+            index = 0
+            original_file = ""
+            if not self.dfl:
+                index = int(filename[filename.rindex("_") + 1:])
+                original_file = "{}".format(filename[:filename.rindex("_")])
             yield {"face_fullname": face,
                    "face_name": filename,
                    "face_extension": file_extension,

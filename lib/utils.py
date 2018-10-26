@@ -2,17 +2,18 @@
 """ Utilities available across all scripts """
 
 import os
-from os.path import basename, exists, join
-from re import finditer
 import warnings
 
 from pathlib import Path
+from re import finditer
+from time import time
 
 import cv2
-import dlib
 import numpy as np
 
+import dlib
 from lib.faces_detect import DetectedFace
+from lib.training_data import TrainingDataGenerator
 
 # Global variables
 _image_extensions = ['.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
@@ -29,11 +30,11 @@ def get_folder(path):
 def get_image_paths(directory, exclude=list(), debug=False):
     """ Return a list of images that reside in a folder """
     image_extensions = _image_extensions
-    exclude_names = [basename(Path(x).stem[:Path(x).stem.rfind('_')] +
-                              Path(x).suffix) for x in exclude]
+    exclude_names = [os.path.basename(Path(x).stem[:Path(x).stem.rfind('_')] +
+                                      Path(x).suffix) for x in exclude]
     dir_contents = list()
 
-    if not exists(directory):
+    if not os.path.exists(directory):
         directory = get_folder(directory)
 
     dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
@@ -119,7 +120,7 @@ def rotate_landmarks(face, rotation_matrix):
         landmarks = list()
     else:
         raise ValueError("Unsupported face type")
-    
+
     rotation_matrix = cv2.invertAffineTransform(rotation_matrix)
     rotated = list()
     for item in (bounding_box, landmarks):
@@ -137,7 +138,7 @@ def rotate_landmarks(face, rotation_matrix):
     pt_y = min([pnt[1] for pnt in rotated[0]])
     pt_x1 = max([pnt[0] for pnt in rotated[0]])
     pt_y1 = max([pnt[1] for pnt in rotated[0]])
-    
+
     if isinstance(face, DetectedFace):
         face.x = int(pt_x)
         face.y = int(pt_y)
@@ -153,10 +154,11 @@ def rotate_landmarks(face, rotation_matrix):
         face["h"] = int(pt_y1 - pt_y)
         face["r"] = 0
         if len(rotated) > 1:
-            face["landmarksXY"] = [tuple(point) for point in rotated[1].tolist()]
+            face["landmarksXY"] = [tuple(point)
+                                   for point in rotated[1].tolist()]
     else:
         face = dlib.rectangle(int(pt_x), int(pt_y), int(pt_x1), int(pt_y1))
-   
+
     return face
 
 
@@ -167,3 +169,77 @@ def camel_case_split(identifier):
         ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)",
         identifier)
     return [m.group(0) for m in matches]
+
+
+class Timelapse:
+    """ Time lapse function for training """
+    @classmethod
+    def create_timelapse(cls, input_dir_a, input_dir_b, output_dir, trainer):
+        """ Create the time lapse """
+        if input_dir_a is None and input_dir_b is None and output_dir is None:
+            return None
+
+        if input_dir_a is None or input_dir_b is None:
+            raise ValueError("To enable the timelapse, you have to supply "
+                             "all the parameters (--timelapse-input-A and "
+                             "--timelapse-input-B).")
+
+        if output_dir is None:
+            output_dir = get_folder(os.path.join(trainer.model.model_dir,
+                                                 "timelapse"))
+
+        return Timelapse(input_dir_a, input_dir_b, output_dir, trainer)
+
+    def __init__(self, input_dir_a, input_dir_b, output, trainer):
+        self.output_dir = output
+        self.trainer = trainer
+
+        if not os.path.isdir(self.output_dir):
+            print('Error: {} does not exist'.format(self.output_dir))
+            exit(1)
+
+        self.files_a = self.read_input_images(input_dir_a)
+        self.files_b = self.read_input_images(input_dir_b)
+
+        btchsz = min(len(self.files_a), len(self.files_b))
+
+        self.images_a = self.get_image_data(self.files_a, btchsz)
+        self.images_b = self.get_image_data(self.files_b, btchsz)
+
+    @staticmethod
+    def read_input_images(input_dir):
+        """ Get the image paths """
+        if not os.path.isdir(input_dir):
+            print('Error: {} does not exist'.format(input_dir))
+            exit(1)
+
+        if not os.listdir(input_dir):
+            print('Error: {} contains no images'.format(input_dir))
+            exit(1)
+
+        return get_image_paths(input_dir)
+
+    def get_image_data(self, input_images, batch_size):
+        """ Get training images """
+        random_transform_args = {
+            'rotation_range': 0,
+            'zoom_range': 0,
+            'shift_range': 0,
+            'random_flip': 0
+        }
+
+        zoom = 1
+        if hasattr(self.trainer.model, 'IMAGE_SHAPE'):
+            zoom = self.trainer.model.IMAGE_SHAPE[0] // 64
+
+        generator = TrainingDataGenerator(random_transform_args, 160, zoom)
+        batch = generator.minibatchAB(input_images, batch_size,
+                                      doShuffle=False)
+
+        return next(batch)[2]
+
+    def work(self):
+        """ Write out timelapse image """
+        image = self.trainer.show_sample(self.images_a, self.images_b)
+        cv2.imwrite(os.path.join(self.output_dir,
+                                 str(int(time())) + ".png"), image)
