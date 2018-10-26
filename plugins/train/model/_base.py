@@ -54,6 +54,9 @@ class ModelBase():
 
     def load_state(self):
         """ Load epoch number from state file """
+        # TODO Prefix model name to state, so models reading from
+        # the same folder don't conflict
+
         epoch_no = 0
         state_fn = ".".join(["state", self.serializer.ext])
         try:
@@ -142,19 +145,10 @@ class NNMeta():
     """
 
     def __init__(self, model_dir, filename, network_type, side, network):
-        self.filename = self.set_fullpath(model_dir, filename)
+        self.filename = str(model_dir / filename)
         self.type = network_type
         self.side = side
         self.network = network
-
-    @staticmethod
-    def set_fullpath(model_dir, filename):
-        """ Set the full path to the weights file """
-        fullpath = str(model_dir / filename)
-        if not os.path.exists(fullpath):
-            raise ValueError("Model data does not exist "
-                             "at {}".format(fullpath))
-        return fullpath
 
     def load_weights(self, fullpath=None):
         """ Load model weights """

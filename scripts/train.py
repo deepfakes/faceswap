@@ -27,8 +27,6 @@ class Train():
         # this is so that you can enter case insensitive values for trainer
         trainer_name = self.args.trainer
         self.trainer_name = trainer_name
-        if trainer_name.lower() == "lowmem":
-            self.trainer_name = "LowMem"
         self.timelapse = None
 
     def process(self):

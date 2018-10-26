@@ -333,7 +333,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "fallback."})
         argument_list.append({
             "opts": ("-D", "--detector"),
-            "type": str,
+            "type": str.lower,
             "choices":  PluginLoader.get_available_extractors(
                 "detect"),
             "default": "mtcnn",
@@ -348,7 +348,7 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n\talignment to dlib"})
         argument_list.append({
             "opts": ("-A", "--aligner"),
-            "type": str,
+            "type": str.lower,
             "choices": PluginLoader.get_available_extractors(
                 "align"),
             "default": "fan",
@@ -496,17 +496,13 @@ class ConvertArgs(ExtractConvertArgs):
                                       "specified, all faces will be "
                                       "converted"})
         argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str,
-                              # case sensitive because this is used to
-                              # load a plug-in.
+                              "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "help": "Select the trainer that was used to "
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
-                              "type": str,
-                              # case sensitive because this is used
-                              # to load a plugin.
+                              "type": str.lower,
                               "choices": ("Masked", "Adjust"),
                               "default": "Masked",
                               "help": "Converter to use"})
@@ -525,8 +521,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       "swapped face to cover more space. "
                                       "(Masked converter only)"})
         argument_list.append({"opts": ("-M", "--mask-type"),
-                              # lowercase this, because it's just a
-                              # string later on.
                               "type": str.lower,
                               "dest": "mask_type",
                               "choices": ["rect",
@@ -637,7 +631,7 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Sets the number of iterations before "
                                       "saving the model"})
         argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str,
+                              "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "help": "Select which trainer to use, Use "

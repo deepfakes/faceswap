@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-""" Based on the original https://www.reddit.com/r/deepfakes/
+""" Original Model
+    Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contribs """
 
-from keras.models import Model as KerasModel
-from keras.layers import Input, Dense, Flatten, Reshape
+from keras.layers import Dense, Flatten, Input, Reshape
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
+from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 
@@ -17,13 +18,15 @@ from ._base import ModelBase
 class Model(ModelBase):
     """ Original Faceswap Model """
     def __init__(self, *args, **kwargs):
-        image_shape = (64, 64, 3)
-        encoder_dim = 1024
         self.autoencoder_a = None
         self.autoencoder_b = None
-        super().__init__(*args, **kwargs,
-                         image_shape=image_shape,
-                         encoder_dim=encoder_dim)
+
+        if "image_shape" not in kwargs:
+            kwargs["image_shape"] = (64, 64, 3)
+        if "encoder_dim" not in kwargs:
+            kwargs["encoder_dim"] = 1024
+
+        super().__init__(*args, **kwargs)
 
     def add_networks(self):
         """ Add the original model weights """
@@ -55,11 +58,6 @@ class Model(ModelBase):
                                    loss='mean_absolute_error')
         self.autoencoder_b.compile(optimizer=optimizer,
                                    loss='mean_absolute_error')
-
-    def converter(self, swap):
-        """ Return converter or swapped converter """
-        autoencoder = self.autoencoder_b if not swap else self.autoencoder_a
-        return lambda img: autoencoder.predict(img)
 
     @staticmethod
     def conv(filters):

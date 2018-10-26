@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
+""" Original Trainer """
 
 import time
 import numpy
 from lib.training_data import TrainingDataGenerator, stack_images
+
 
 class Trainer():
     random_transform_args = {
@@ -11,48 +14,55 @@ class Trainer():
         'random_flip': 0.4,
     }
 
-    def __init__(self, model, fn_A, fn_B, batch_size, *args):
+    def __init__(self, model, fn_a, fn_b, batch_size, *args):
         self.batch_size = batch_size
         self.model = model
 
         generator = TrainingDataGenerator(self.random_transform_args, 160)
-        self.images_A = generator.minibatchAB(fn_A, self.batch_size)
-        self.images_B = generator.minibatchAB(fn_B, self.batch_size)
+        self.images_a = generator.minibatchAB(fn_a, self.batch_size)
+        self.images_b = generator.minibatchAB(fn_b, self.batch_size)
 
     def train_one_step(self, iter, viewer):
-        epoch, warped_A, target_A = next(self.images_A)
-        epoch, warped_B, target_B = next(self.images_B)
+        epoch, warped_a, target_a = next(self.images_a)
+        epoch, warped_b, target_b = next(self.images_b)
 
-        loss_A = self.model.autoencoder_a.train_on_batch(warped_A, target_A)
-        loss_B = self.model.autoencoder_b.train_on_batch(warped_B, target_B)
-        
+        loss_a = self.model.autoencoder_a.train_on_batch(warped_a, target_a)
+        loss_b = self.model.autoencoder_b.train_on_batch(warped_b, target_b)
+
         self.model._epoch_no += 1
-        
-        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(time.strftime("%H:%M:%S"), self.model.epoch_no, loss_A, loss_B),
-            end='\r')
+
+        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, "
+              "loss_B: {3:.5f}".format(time.strftime("%H:%M:%S"),
+                                       self.model.epoch_no,
+                                       loss_a,
+                                       loss_b),
+              end='\r')
 
         if viewer is not None:
-            viewer(self.show_sample(target_A[0:14], target_B[0:14]), "training")
+            viewer(self.show_sample(target_a[0:14], target_b[0:14]),
+                   "training")
 
-    def show_sample(self, test_A, test_B):
-        figure_A = numpy.stack([
-            test_A,
-            self.model.autoencoder_a.predict(test_A),
-            self.model.autoencoder_b.predict(test_A),
+    def show_sample(self, test_a, test_b):
+        figure_a = numpy.stack([
+            test_a,
+            self.model.autoencoder_a.predict(test_a),
+            self.model.autoencoder_b.predict(test_a),
         ], axis=1)
-        figure_B = numpy.stack([
-            test_B,
-            self.model.autoencoder_b.predict(test_B),
-            self.model.autoencoder_a.predict(test_B),
+        figure_b = numpy.stack([
+            test_b,
+            self.model.autoencoder_b.predict(test_b),
+            self.model.autoencoder_a.predict(test_b),
         ], axis=1)
 
-        if test_A.shape[0] % 2 == 1:
-            figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0],0) ])
-            figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0],0) ])
+        if test_a.shape[0] % 2 == 1:
+            figure_a = numpy.concatenate([figure_a,
+                                          numpy.expand_dims(figure_a[0], 0)])
+            figure_b = numpy.concatenate([figure_b,
+                                          numpy.expand_dims(figure_b[0], 0)])
 
-        figure = numpy.concatenate([figure_A, figure_B], axis=0)
+        figure = numpy.concatenate([figure_a, figure_b], axis=0)
         w = 4
-        h = int( figure.shape[0] / w)
+        h = int(figure.shape[0] / w)
         figure = figure.reshape((w, h) + figure.shape[1:])
         figure = stack_images(figure)
 
