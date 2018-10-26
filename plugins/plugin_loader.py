@@ -35,6 +35,7 @@ class PluginLoader():
     @staticmethod
     def _import(attr, name):
         """ Import the plugin's module """
+        name = name.replace("-", "_")
         ttl = attr.split(".")[-1].title()
         print("Loading {} from {} plugin...".format(ttl, name.title()))
         mod = ".".join(("plugins", attr.lower(), name))
