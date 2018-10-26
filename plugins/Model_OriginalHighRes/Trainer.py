@@ -32,21 +32,24 @@ class Trainer():
 
     def train_one_step(self, iter_no, viewer):
         when = self._clock()
-        _, warped_A, target_A = next(self.images_A)
-        _, warped_B, target_B = next(self.images_B)
+        _, warped_A, target_A, *_ = next(self.images_A)
+        _, warped_B, target_B, *_ = next(self.images_B)
 
-        loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
-        loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)
+        if not self.model.USE_K_FUNCTION:
+            loss_A = self.model.autoencoder_A.train_on_batch(warped_A, target_A)
+            loss_B = self.model.autoencoder_B.train_on_batch(warped_B, target_B)    
+        else:
+            total, loss_B, loss_A  = self.model.autoencoder.train_on_batch( [warped_B, warped_A], [target_B, target_A] )        
         
-        self.model._epoch_no += 1        
+        self.model.epoch_no += 1        
                  
         if isinstance(loss_A, (list, tuple)):
             print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
-                time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A[1], loss_B[1]),
+                time.strftime("%H:%M:%S"), self.model.epoch_no, self._clock()-when, loss_A[1], loss_B[1]),
                 end='\r')
         else:
             print("[{0}] [#{1:05d}] [{2:.3f}s] loss_A: {3:.5f}, loss_B: {4:.5f}".format(
-                time.strftime("%H:%M:%S"), self.model._epoch_no, self._clock()-when, loss_A, loss_B),
+                time.strftime("%H:%M:%S"), self.model.epoch_no, self._clock()-when, loss_A, loss_B),
                 end='\r')         
 
         if viewer is not None:
@@ -54,23 +57,41 @@ class Trainer():
             
 
     def show_sample(self, test_A, test_B):
+
+        if self.model.USE_K_FUNCTION:
+            AA, *_ = self.model.A_view([test_A])
+            BA, *_ = self.model.B_view([test_A])     
+            BB, *_ = self.model.B_view([test_B])
+            AB, *_ = self.model.A_view([test_B])        
+        else:
+            AA = self.model.autoencoder_A.predict(test_A)
+            BA = self.model.autoencoder_B.predict(test_A)     
+            BB = self.model.autoencoder_B.predict(test_B)
+            AB = self.model.autoencoder_A.predict(test_B)            
+        
         figure_A = numpy.stack([
             test_A,
-            self.model.autoencoder_A.predict(test_A),
-            self.model.autoencoder_B.predict(test_A),
+            #self.model.autoencoder_A.predict(test_A),
+            AA,
+            #self.model.autoencoder_B.predict(test_A),
+            BA,
         ], axis=1)
         
         figure_B = numpy.stack([
             test_B,
-            self.model.autoencoder_B.predict(test_B),
-            self.model.autoencoder_A.predict(test_B),
+            #self.model.autoencoder_B.predict(test_B),
+            BB,            
+            #self.model.autoencoder_A.predict(test_B),
+            AB,
+            
         ], axis=1)
 
         if (test_A.shape[0] % 2)!=0:
-            figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0],0) ])
-            figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0],0) ])
+            figure_A = numpy.concatenate ([figure_A, numpy.expand_dims(figure_A[0], 0) ])
+            figure_B = numpy.concatenate ([figure_B, numpy.expand_dims(figure_B[0], 0) ])
 
         figure = numpy.concatenate([figure_A, figure_B], axis=0)
+        
         w = 4
         h = int( figure.shape[0] / w)
         figure = figure.reshape((w, h) + figure.shape[1:])
