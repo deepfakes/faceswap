@@ -50,16 +50,6 @@ def get_image_paths(directory, exclude=list(), debug=False):
     return dir_contents
 
 
-def backup_file(directory, filename):
-    """ Backup a given file by appending .bk to the end """
-    origfile = join(directory, filename)
-    backupfile = origfile + '.bk'
-    if exists(backupfile):
-        os.remove(backupfile)
-    if exists(origfile):
-        os.rename(origfile, backupfile)
-
-
 def set_system_verbosity(loglevel):
     """ Set the verbosity level of tensorflow and suppresses
         future and deprecation warnings from any modules

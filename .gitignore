@@ -23,5 +23,5 @@
 !plugins/model/*
 !tools
 !tools/lib*
-
+*.pyc
 __pycache__/

@@ -52,7 +52,7 @@ class Extract():
                        self.verify_output)
 
     def threaded_io(self, task, io_args=None):
-        """ Load images in a background thread """
+        """ Perform I/O in a background thread """
         io_args = tuple() if io_args is None else (io_args, )
         if task == "load":
             func = self.load_images
