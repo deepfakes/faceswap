@@ -340,7 +340,8 @@ class Reformat():
         self.alignments = alignments
         if self.alignments.src_format == "dfl":
             self.faces = Faces(arguments.faces_dir,
-                               self.verbose)
+                               self.verbose,
+                               dfl=True)
 
     def process(self):
         """ Run reformat """
@@ -388,8 +389,7 @@ class Reformat():
                 if chunk_name == b"fcWp":
                     chunk = dfl.read(chunk_length + 12)
                     return pickle.loads(chunk[8:-4])
-                else:
-                    dfl.seek(chunk_length+12, os.SEEK_CUR)
+                dfl.seek(chunk_length+12, os.SEEK_CUR)
             print("ERROR: Couldn't find DFL alignments: {}".format(filename))
 
     @staticmethod
@@ -471,8 +471,7 @@ class RemoveAlignments():
         """ Check the selected face exits """
         frame_name, number_alignments = item[0], item[2]
         number_faces = len(self.items.items.get(frame_name, list()))
-        return bool(number_alignments == 0
-                    or number_alignments == number_faces)
+        return bool(number_alignments in(0, number_faces))
 
     def remove_alignment(self, item):
         """ Remove the alignment from the alignments file """
