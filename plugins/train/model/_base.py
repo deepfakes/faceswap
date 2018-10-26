@@ -10,6 +10,8 @@ from json import JSONDecodeError
 
 from lib import Serializer
 
+# TODO Move multi_gpu code to here from initialize
+# TODO Move autoencoder compile code here or to an AE class
 
 class ModelBase():
     """ Base class that all models should inherit from """

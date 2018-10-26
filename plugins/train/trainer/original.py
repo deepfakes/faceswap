@@ -2,7 +2,7 @@
 """ Original Trainer """
 
 import time
-import numpy
+import numpy as np
 from lib.training_data import TrainingDataGenerator, stack_images
 
 
@@ -43,27 +43,25 @@ class Trainer():
                    "training")
 
     def show_sample(self, test_a, test_b):
-        figure_a = numpy.stack([
-            test_a,
-            self.model.autoencoder_a.predict(test_a),
-            self.model.autoencoder_b.predict(test_a),
-        ], axis=1)
-        figure_b = numpy.stack([
-            test_b,
-            self.model.autoencoder_b.predict(test_b),
-            self.model.autoencoder_a.predict(test_b),
-        ], axis=1)
+        figure_a = np.stack([test_a,
+                             self.model.autoencoder_a.predict(test_a),
+                             self.model.autoencoder_b.predict(test_a), ],
+                            axis=1)
+        figure_b = np.stack([test_b,
+                             self.model.autoencoder_b.predict(test_b),
+                             self.model.autoencoder_a.predict(test_b), ],
+                            axis=1)
 
         if test_a.shape[0] % 2 == 1:
-            figure_a = numpy.concatenate([figure_a,
-                                          numpy.expand_dims(figure_a[0], 0)])
-            figure_b = numpy.concatenate([figure_b,
-                                          numpy.expand_dims(figure_b[0], 0)])
+            figure_a = np.concatenate([figure_a,
+                                       np.expand_dims(figure_a[0], 0)])
+            figure_b = np.concatenate([figure_b,
+                                       np.expand_dims(figure_b[0], 0)])
 
-        figure = numpy.concatenate([figure_a, figure_b], axis=0)
+        figure = np.concatenate([figure_a, figure_b], axis=0)
         w = 4
         h = int(figure.shape[0] / w)
         figure = figure.reshape((w, h) + figure.shape[1:])
         figure = stack_images(figure)
 
-        return numpy.clip(figure * 255, 0, 255).astype('uint8')
+        return np.clip(figure * 255, 0, 255).astype('uint8')

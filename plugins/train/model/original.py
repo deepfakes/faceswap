@@ -36,20 +36,22 @@ class Model(ModelBase):
 
     def initialize(self):
         """ Initialize original model """
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
         inp = Input(shape=self.image_shape)
-
         for network in self.networks:
             if network.type == "encoder":
-                m_encoder = network.network
+                encoder = network.network
             elif network.type == "decoder" and network.side == "A":
-                m_decoder_a = network.network
+                decoder_a = network.network
             elif network.type == "decoder" and network.side == "B":
-                m_decoder_b = network.network
+                decoder_b = network.network
 
-        self.autoencoder_a = KerasModel(inp, m_decoder_a(m_encoder(inp)))
-        self.autoencoder_b = KerasModel(inp, m_decoder_b(m_encoder(inp)))
+        self.autoencoder_a = KerasModel(inp, decoder_a(encoder(inp)))
+        self.autoencoder_b = KerasModel(inp, decoder_b(encoder(inp)))
+        self.compile_autoencoders()
 
+    def compile_autoencoders(self):
+        """ Compile the autoencoders """
+        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
         if self.gpus > 1:
             self.autoencoder_a = multi_gpu_model(self.autoencoder_a, self.gpus)
             self.autoencoder_b = multi_gpu_model(self.autoencoder_b, self.gpus)
@@ -58,6 +60,11 @@ class Model(ModelBase):
                                    loss='mean_absolute_error')
         self.autoencoder_b.compile(optimizer=optimizer,
                                    loss='mean_absolute_error')
+
+    def converter(self, swap):
+        """ Load converter straight or swapped """
+        autoencoder = self.autoencoder_a if not swap else self.autoencoder_b
+        return lambda img: autoencoder.predict(img)
 
     @staticmethod
     def conv(filters):
