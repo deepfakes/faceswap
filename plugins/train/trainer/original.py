@@ -18,7 +18,8 @@ class Trainer():
         self.batch_size = batch_size
         self.model = model
 
-        generator = TrainingDataGenerator(self.random_transform_args, 160)
+        generator = TrainingDataGenerator(self.random_transform_args, 160,
+                                          zoom=self.model.image_shape[0]//64)
         self.images_a = generator.minibatchAB(fn_a, self.batch_size)
         self.images_b = generator.minibatchAB(fn_b, self.batch_size)
 
