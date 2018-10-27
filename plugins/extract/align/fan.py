@@ -34,7 +34,13 @@ class Align(Aligner):
         print("Initializing Face Alignment Network...")
         super().initialize(*args, **kwargs)
 
-        _, vram_total = self.get_vram_free()
+        card_id, _, vram_total = self.get_vram_free()
+        if card_id == -1:
+            self.queues["out"].put("No Graphics Card Detected! FAN is not "
+                                   "supported on CPU. Use another aligner.")
+            self.init.set()
+            return
+
         if vram_total <= self.vram:
             tf_ratio = 1.0
         else:
@@ -55,6 +61,9 @@ class Align(Aligner):
             while True:
                 item = self.queues["in"].get()
                 if item == "EOF":
+                    break
+                if item.get("exception", False):
+                    self.queues["out"].put(item)
                     break
                 image = item["image"][:, :, ::-1].copy()
                 self.process_landmarks(image, item["detected_faces"])
@@ -188,7 +197,7 @@ class Align(Aligner):
                 for i in range(var_a.shape[0])]
 
 
-class FAN(object):
+class FAN():
     """The FAN Model.
     Converted from pyTorch via ONNX from:
     https://github.com/1adrianb/face-alignment """

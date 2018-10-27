@@ -114,7 +114,7 @@ class Aligner():
                 vram["device"],
                 int(vram["free"]),
                 int(vram["total"])))
-        return int(vram["free"]), int(vram["total"])
+        return int(vram["card_id"]), int(vram["free"]), int(vram["total"])
 
 
 class Extract():

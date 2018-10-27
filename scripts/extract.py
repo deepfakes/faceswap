@@ -1,6 +1,5 @@
 #!/usr/bin python3
 """ The script to run the extract process of faceswap """
-# TODO S3FD Detector
 
 import os
 import sys
@@ -10,8 +9,8 @@ import cv2
 from tqdm import tqdm
 
 from lib.gpu_stats import GPUStats
-from lib.multithreading import (MultiThread, PoolProcess, QueueEmpty,
-                                SpawnProcess, queue_manager)
+from lib.multithreading import MultiThread, PoolProcess, SpawnProcess
+from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_folder
 from plugins.plugin_loader import PluginLoader
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
@@ -108,7 +107,6 @@ class Extract():
         if self.plugins.is_parallel:
             self.plugins.launch_aligner()
             self.plugins.launch_detector()
-
         if not self.plugins.is_parallel:
             self.run_detection(to_process)
             self.plugins.launch_aligner()
@@ -120,7 +118,7 @@ class Extract():
 
             exception = faces.get("exception", False)
             if exception:
-                break
+                exit(1)
             filename = faces["filename"]
 
             faces["output_file"] = self.output_dir / Path(filename).stem
@@ -300,6 +298,17 @@ class Plugins():
         event.wait(60)
         if not event.is_set():
             raise ValueError("Error inititalizing Aligner")
+
+        try:
+            err = None
+            err = out_queue.get(True, 1)
+        except QueueEmpty:
+            pass
+
+        if err:
+            queue_manager.terminate_queues()
+            print(err)
+            exit(1)
 
     def launch_detector(self):
         """ Launch the face detector """

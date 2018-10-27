@@ -6,7 +6,8 @@ import sys
 import cv2
 import numpy as np
 
-from lib.multithreading import SpawnProcess, queue_manager
+from lib.multithreading import SpawnProcess
+from lib.queue_manager import queue_manager
 from plugins.plugin_loader import PluginLoader
 from . import Annotate, ExtractedFaces, Frames, Rotate
 

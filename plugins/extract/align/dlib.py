@@ -33,6 +33,9 @@ class Align(Aligner):
             item = self.queues["in"].get()
             if item == "EOF":
                 break
+            if item.get("exception", False):
+                self.queues["out"].put(item)
+                break
             image = item["image"][:, :, ::-1].copy()
             self.process_landmarks(image, item["detected_faces"])
             self.finalize(item)

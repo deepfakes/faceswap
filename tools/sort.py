@@ -17,7 +17,8 @@ import face_recognition
 from lib.cli import FullHelpArgumentParser
 from lib import Serializer
 from lib.faces_detect import DetectedFace
-from lib.multithreading import queue_manager, SpawnProcess
+from lib.multithreading import SpawnProcess
+from lib.queue_manager import queue_manager
 from plugins.plugin_loader import PluginLoader
 
 from . import cli

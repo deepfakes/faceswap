@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 import cv2
-import numpy as np
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 from lib.faces_detect import DetectedFace
-from lib.multithreading import BackgroundGenerator, SpawnProcess, queue_manager
+from lib.multithreading import BackgroundGenerator, SpawnProcess
+from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths
 
 from plugins.plugin_loader import PluginLoader
@@ -155,7 +155,8 @@ class Convert():
             faces_count = len(detected_faces)
             if faces_count != 0:
                 # Post processing requires a dict with "detected_faces" key
-                self.post_process.do_actions({"detected_faces": detected_faces})
+                self.post_process.do_actions(
+                    {"detected_faces": detected_faces})
                 self.faces_count += faces_count
 
             if faces_count > 1:
