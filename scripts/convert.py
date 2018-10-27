@@ -6,24 +6,34 @@ import os
 import sys
 from pathlib import Path
 
+import cv2
+import numpy as np
 from tqdm import tqdm
 
-from scripts.fsmedia import Alignments, Images, Faces, Utils
-from scripts.extract import Extract
-from lib.utils import BackgroundGenerator, get_folder, get_image_paths
+from scripts.fsmedia import Alignments, Images, PostProcess, Utils
+from lib.faces_detect import DetectedFace
+from lib.multithreading import BackgroundGenerator, SpawnProcess, queue_manager
+from lib.utils import get_folder, get_image_paths
 
-from plugins.PluginLoader import PluginLoader
+from plugins.plugin_loader import PluginLoader
 
 
-class Convert(object):
+class Convert():
     """ The convert process. """
     def __init__(self, arguments):
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
+        self.extract_faces = False
+        self.faces_count = 0
 
         self.images = Images(self.args)
-        self.faces = Faces(self.args)
-        self.alignments = Alignments(self.args)
+        self.alignments = Alignments(self.args, False)
+
+        # Legacy rotation conversion
+        Rotate(self.alignments, self.args.verbose, self.images.input_images)
+
+        self.post_process = PostProcess(arguments)
+        self.verify_output = False
 
         self.opts = OptionalActions(self.args, self.images.input_images)
 
@@ -35,9 +45,7 @@ class Convert(object):
         Utils.set_verbosity(self.args.verbose)
 
         if not self.alignments.have_alignments_file:
-            self.generate_alignments()
-
-        self.faces.faces_detected = self.alignments.read_alignments()
+            self.load_extractor()
 
         model = self.load_model()
         converter = self.load_converter(model)
@@ -47,17 +55,46 @@ class Convert(object):
         for item in batch.iterator():
             self.convert(converter, item)
 
-        Utils.finalize(self.images.images_found,
-                       self.faces.num_faces_detected,
-                       self.faces.verify_output)
+        if self.extract_faces:
+            queue_manager.terminate_queues()
 
-    def generate_alignments(self):
-        """ Generate an alignments file if one does not already
-        exist. Does not save extracted faces """
-        print('Alignments file not found. Generating at default values...')
-        extract = Extract(self.args)
-        extract.export_face = False
-        extract.process()
+        Utils.finalize(self.images.images_found,
+                       self.faces_count,
+                       self.verify_output)
+
+    def load_extractor(self):
+        """ Set on the fly extraction """
+        print("\nNo Alignments file found. Extracting on the fly.\n"
+              "NB: This will use the inferior dlib-hog for extraction "
+              "and dlib pose predictor for landmarks.\nIt is recommended "
+              "to perfom Extract first for superior results\n")
+        for task in ("load", "detect", "align"):
+            queue_manager.add_queue(task, maxsize=0)
+
+        detector = PluginLoader.get_detector("dlib_hog")(
+            verbose=self.args.verbose)
+        aligner = PluginLoader.get_aligner("dlib")(verbose=self.args.verbose)
+
+        d_kwargs = {"in_queue": queue_manager.get_queue("load"),
+                    "out_queue": queue_manager.get_queue("detect")}
+        a_kwargs = {"in_queue": queue_manager.get_queue("detect"),
+                    "out_queue": queue_manager.get_queue("align")}
+
+        d_process = SpawnProcess()
+        d_event = d_process.event
+        a_process = SpawnProcess()
+        a_event = a_process.event
+
+        d_process.in_process(detector.detect_faces, **d_kwargs)
+        a_process.in_process(aligner.align, **a_kwargs)
+        d_event.wait(10)
+        if not d_event.is_set():
+            raise ValueError("Error inititalizing Detector")
+        a_event.wait(10)
+        if not a_event.is_set():
+            raise ValueError("Error inititalizing Aligner")
+
+        self.extract_faces = True
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -89,29 +126,75 @@ class Convert(object):
             erosion_kernel_size=args.erosion_kernel_size,
             match_histogram=args.match_histogram,
             smooth_mask=args.smooth_mask,
-            avg_color_adjust=args.avg_color_adjust)
+            avg_color_adjust=args.avg_color_adjust,
+            draw_transparent=args.draw_transparent)
 
         return converter
 
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        for filename in tqdm(self.images.input_images, file=sys.stdout):
-            if not self.check_alignments(filename):
-                continue
-            image = Utils.cv2_read_write('read', filename)
-            faces = self.faces.get_faces_alignments(filename, image)
-            if not faces:
+        for filename in tqdm(self.images.input_images,
+                             total=self.images.images_found,
+                             file=sys.stdout):
+
+            if (self.args.discard_frames and
+                    self.opts.check_skipframe(filename) == "discard"):
                 continue
 
-            yield filename, image, faces
+            frame = os.path.basename(filename)
+            if self.extract_faces:
+                convert_item = self.detect_faces(filename)
+            else:
+                convert_item = self.alignments_faces(filename, frame)
 
-    def check_alignments(self, filename):
+            if not convert_item:
+                continue
+            image, detected_faces = convert_item
+
+            faces_count = len(detected_faces)
+            if faces_count != 0:
+                # Post processing requires a dict with "detected_faces" key
+                self.post_process.do_actions({"detected_faces": detected_faces})
+                self.faces_count += faces_count
+
+            if faces_count > 1:
+                self.verify_output = True
+                if self.args.verbose:
+                    print("Warning: found more than one face in "
+                          "an image! {}".format(frame))
+
+            yield filename, image, detected_faces
+
+    def detect_faces(self, filename):
+        """ Extract the face from a frame (If not alignments file found) """
+        image = self.images.load_one_image(filename)
+        queue_manager.get_queue("load").put((filename, image))
+        item = queue_manager.get_queue("align").get()
+        detected_faces = item["detected_faces"]
+        return image, detected_faces
+
+    def alignments_faces(self, filename, frame):
+        """ Get the face from alignments file """
+        if not self.check_alignments(frame):
+            return None
+
+        faces = self.alignments.get_alignments_for_frame(frame)
+        image = self.images.load_one_image(filename)
+        detected_faces = list()
+
+        for rawface in faces:
+            face = DetectedFace()
+            face.from_alignment(rawface, image=image)
+            detected_faces.append(face)
+        return image, detected_faces
+
+    def check_alignments(self, frame):
         """ If we have no alignments for this image, skip it """
-        have_alignments = self.faces.have_face(filename)
+        have_alignments = self.alignments.frame_exists(frame)
         if not have_alignments:
             tqdm.write("No alignment found for {}, "
-                       "skipping".format(os.path.basename(filename)))
+                       "skipping".format(frame))
         return have_alignments
 
     def convert(self, converter, item):
@@ -121,15 +204,15 @@ class Convert(object):
             skip = self.opts.check_skipframe(filename)
 
             if not skip:
-                for idx, face in faces:
+                for idx, face in enumerate(faces):
                     image = self.convert_one_face(converter,
                                                   (filename, image, idx, face))
-            if skip != "discard":
                 filename = str(self.output_dir / Path(filename).name)
-                Utils.cv2_read_write('write', filename, image)
+                cv2.imwrite(filename, image)
         except Exception as err:
             print("Failed to convert image: {}. "
                   "Reason: {}".format(filename, err))
+            raise
 
     def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """
@@ -138,24 +221,18 @@ class Convert(object):
         if self.opts.check_skipface(filename, idx):
             return image
 
-        # Rotating an image is legacy code. Landmarks are now
-        # rotated at extract stage. For newer extracts face.r
-        # will always be zero.
-        image = self.images.rotate_image(image, face.r)
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
-        
         size = 128 if (self.args.trainer.strip().lower()
                        in ('gan128', 'originalhighres')) else 64
 
         image = converter.patch_image(image,
                                       face,
                                       size)
-        image = self.images.rotate_image(image, face.r, reverse=True)
         return image
 
 
-class OptionalActions(object):
+class OptionalActions():
     """ Process the optional actions for convert """
 
     def __init__(self, args, input_images):
@@ -229,3 +306,33 @@ class OptionalActions(object):
             print("face {} for frame {} was deleted, skipping".format(
                 face_idx, os.path.basename(filename)))
         return skip_face
+
+
+class Rotate():
+    """ Rotate landmarks and bounding boxes on legacy alignments
+        and remove the 'r' parameter """
+    def __init__(self, alignments, verbose, frames):
+        self.verbose = verbose
+        self.alignments = alignments
+        self.frames = {os.path.basename(frame): frame
+                       for frame in frames}
+        self.process()
+
+    def process(self):
+        """ Run the rotate alignments process """
+        rotated = self.alignments.get_legacy_frames()
+        if not rotated:
+            return
+        print("Legacy rotated frames found. Converting...")
+        self.rotate_landmarks(rotated)
+        self.alignments.save()
+
+    def rotate_landmarks(self, rotated):
+        """ Rotate the landmarks """
+        for rotate_item in tqdm(rotated,
+                                desc="Rotating Landmarks"):
+            if rotate_item not in self.frames.keys():
+                continue
+            filename = self.frames[rotate_item]
+            dims = cv2.imread(filename).shape[:2]
+            self.alignments.rotate_existing_landmarks(rotate_item, dims)

@@ -6,7 +6,7 @@ import os
 import platform
 import sys
 
-from plugins.PluginLoader import PluginLoader
+from plugins.plugin_loader import PluginLoader
 
 
 class ScriptExecutor():
@@ -280,81 +280,6 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
-        argument_list.append({"opts": ("--serializer", ),
-                              "type": str.lower,
-                              "dest": "serializer",
-                              "default": "json",
-                              "choices": ("json", "pickle", "yaml"),
-                              "help": "Serializer for alignments file. If "
-                                      "yaml is chosen and not available, then "
-                                      "json will be used as the default "
-                                      "fallback."})
-        argument_list.append({"opts": ("-D", "--detector"),
-                              "type": str,
-                              # case sensitive because this is used to load a
-                              # plugin.
-                              "choices": ("dlib-hog", "dlib-cnn",
-                                          "dlib-all", "mtcnn"),
-                              "default": "mtcnn",
-                              "help": "R|Detector to use.\n'dlib-hog': uses "
-                                      "least resources, but is the least\n\t"
-                                      "reliable.\n'dlib-cnn': faster than "
-                                      "mtcnn but detects fewer faces\n\tand "
-                                      "fewer false positives.\n'dlib-all': "
-                                      "attempts to find faces using "
-                                      "dlib-cnn,\n\tif none are found, "
-                                      "attempts to find faces\n\tusing "
-                                      "dlib-hog.\n'mtcnn': slower than dlib, "
-                                      "but uses fewer resources\n\twhilst "
-                                      "detecting more faces and more false\n\t"
-                                      "positives. Has superior alignment to "
-                                      "dlib"})
-        argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
-                              "type": int,
-                              "dest": "mtcnn_minsize",
-                              "default": 20,
-                              "help": "The minimum size of a face to be "
-                                      "accepted. Lower values use "
-                                      "significantly more VRAM. Minimum "
-                                      "value is 10. Default is 20 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-mtth", "--mtcnn-threshold"),
-                              "nargs": "+",
-                              "type": str,
-                              "dest": "mtcnn_threshold",
-                              "default": ["0.6", "0.7", "0.7"],
-                              "help": "R|Three step threshold for face "
-                                      "detection. Should be\nthree decimal "
-                                      "numbers each less than 1. Eg:\n"
-                                      "'--mtcnn-threshold 0.6 0.7 0.7'.\n"
-                                      "1st stage: obtains face candidates.\n"
-                                      "2nd stage: refinement of face "
-                                      "candidates.\n3rd stage: further "
-                                      "refinement of face candidates.\n"
-                                      "Default is 0.6 0.7 0.7 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-mtsc", "--mtcnn-scalefactor"),
-                              "type": float,
-                              "dest": "mtcnn_scalefactor",
-                              "default": 0.709,
-                              "help": "The scale factor for the image "
-                                      "pyramid. Should be a decimal number "
-                                      "less than one. Default is 0.709 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-dbf", "--dlib-buffer"),
-                              "type": int,
-                              "dest": "dlib_buffer",
-                              "default": 64,
-                              "help": "This should only be increased if you "
-                                      "are having issues extracting with "
-                                      "DLib-cnn. The calculation of RAM "
-                                      "required is approximate, so some RAM "
-                                      " is held back in reserve (64MB by "
-                                      "default). If this is not enough "
-                                      "increase this figure by providing an "
-                                      "integer representing the amount of "
-                                      "megabytes to reserve. (DLIB-CNN "
-                                      "Only)"})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
                               "type": float,
                               "dest": "ref_threshold",
@@ -397,6 +322,73 @@ class ExtractArgs(ExtractConvertArgs):
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
         argument_list = []
+        argument_list.append({"opts": ("--serializer", ),
+                              "type": str.lower,
+                              "dest": "serializer",
+                              "default": "json",
+                              "choices": ("json", "pickle", "yaml"),
+                              "help": "Serializer for alignments file. If "
+                                      "yaml is chosen and not available, then "
+                                      "json will be used as the default "
+                                      "fallback."})
+        argument_list.append({
+            "opts": ("-D", "--detector"),
+            "type": str,
+            "choices":  PluginLoader.get_available_extractors(
+                "detect"),
+            "default": "mtcnn",
+            "help": "R|Detector to use."
+                    "\n'dlib-hog': uses least resources, but is the"
+                    "\n\tleast reliable."
+                    "\n'dlib-cnn': faster than mtcnn but detects"
+                    "\n\tfewer faces and fewer false positives."
+                    "\n'mtcnn': slower than dlib, but uses fewer"
+                    "\n\tresources whilst detecting more faces and"
+                    "\n\tmore false positives. Has superior"
+                    "\n\talignment to dlib"})
+        argument_list.append({
+            "opts": ("-A", "--aligner"),
+            "type": str,
+            "choices": PluginLoader.get_available_extractors(
+                "align"),
+            "default": "fan",
+            "help": "R|Aligner to use."
+                    "\n'dlib': Dlib Pose Predictor. Faster, less "
+                    "\n\tresource intensive, but less accurate."
+                    "\n'fan': Face Alignment Network. Best aligner."
+                    "\n\tGPU heavy."})
+        argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
+                              "type": int,
+                              "dest": "mtcnn_minsize",
+                              "default": 20,
+                              "help": "The minimum size of a face to be "
+                                      "accepted. Lower values use "
+                                      "significantly more VRAM. Minimum "
+                                      "value is 10. Default is 20 "
+                                      "(MTCNN detector only)"})
+        argument_list.append({"opts": ("-mtth", "--mtcnn-threshold"),
+                              "nargs": "+",
+                              "type": str,
+                              "dest": "mtcnn_threshold",
+                              "default": ["0.6", "0.7", "0.7"],
+                              "help": "R|Three step threshold for face "
+                                      "detection. Should be\nthree decimal "
+                                      "numbers each less than 1. Eg:\n"
+                                      "'--mtcnn-threshold 0.6 0.7 0.7'.\n"
+                                      "1st stage: obtains face candidates.\n"
+                                      "2nd stage: refinement of face "
+                                      "candidates.\n3rd stage: further "
+                                      "refinement of face candidates.\n"
+                                      "Default is 0.6 0.7 0.7 "
+                                      "(MTCNN detector only)"})
+        argument_list.append({"opts": ("-mtsc", "--mtcnn-scalefactor"),
+                              "type": float,
+                              "dest": "mtcnn_scalefactor",
+                              "default": 0.709,
+                              "help": "The scale factor for the image "
+                                      "pyramid. Should be a decimal number "
+                                      "less than one. Default is 0.709 "
+                                      "(MTCNN detector only)"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -420,14 +412,34 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-mp", "--multiprocess"),
                               "action": "store_true",
                               "default": False,
-                              "help": "Run extraction on all available "
-                                      "cores. (CPU only)"})
+                              "help": "Run extraction in parallel. Offers "
+                                      "speed up for some extractor/detector "
+                                      "combinations, less so for others. "
+                                      "Only has an effect if both the "
+                                      "aligner and detector use the GPU, "
+                                      "otherwise this is automatic."})
+        argument_list.append({"opts": ("-sz", "--size"),
+                              "type": int,
+                              "default": 256,
+                              "help": "The output size of extracted faces. "
+                                      "Make sure that the model you intend "
+                                      "to train supports your required "
+                                      "size. This will only need to be "
+                                      "changed for hi-res models."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
                               "default": False,
                               "help": "Skips frames that have already been "
-                                      "extracted"})
+                                      "extracted and exist in the alignments "
+                                      "file"})
+        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
+                              "action": "store_true",
+                              "dest": "skip_faces",
+                              "default": False,
+                              "help": "Skip frames that already have "
+                                      "detected faces in the alignments "
+                                      "file"})
         argument_list.append({"opts": ("-dl", "--debug-landmarks"),
                               "action": "store_true",
                               "dest": "debug_landmarks",
@@ -579,6 +591,13 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": True,
                               "help": "Average color adjust. "
                                       "(Adjust converter only)"})
+        argument_list.append({"opts": ("-dt", "--draw-transparent"),
+                              "action": "store_true",
+                              "dest": "draw_transparent",
+                              "default": False,
+                              "help": "Place the swapped face on a "
+                                      "transparent layer rather than the "
+                                      "original frame."})
         return argument_list
 
 
