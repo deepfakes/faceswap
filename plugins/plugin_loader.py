@@ -37,7 +37,8 @@ class PluginLoader():
         """ Import the plugin's module """
         ttl = attr.split(".")[-1].title()
         print("Loading {} from {} plugin...".format(ttl, name.title()))
-        mod = ".".join(("plugins", attr.lower(), name))
+        attr = "model" if attr == "Trainer" else attr.lower()
+        mod = ".".join(("plugins", attr, name))
         module = import_module(mod)
         return getattr(module, ttl)
 
