@@ -18,7 +18,7 @@ from lib.cli import FullHelpArgumentParser
 from lib import Serializer
 from lib.faces_detect import DetectedFace
 from lib.multithreading import SpawnProcess
-from lib.queue_manager import queue_manager
+from lib.queue_manager import queue_manager, QueueEmpty
 from plugins.plugin_loader import PluginLoader
 
 from . import cli
@@ -26,6 +26,7 @@ from . import cli
 
 class Sort():
     """ Sorts folders of faces based on input criteria """
+    # pylint: disable=no-member
     def __init__(self, arguments):
         self.args = arguments
         self.changes = None
@@ -80,16 +81,39 @@ class Sort():
     @staticmethod
     def launch_aligner():
         """ Load the aligner plugin to retrieve landmarks """
-        aligner = PluginLoader.get_aligner("fan")()
+        out_queue = queue_manager.get_queue("out")
         kwargs = {"in_queue": queue_manager.get_queue("in"),
-                  "out_queue": queue_manager.get_queue("out")}
+                  "out_queue": out_queue}
         process = SpawnProcess()
         event = process.event
 
-        process.in_process(aligner.align, **kwargs)
-        event.wait(60)
-        if not event.is_set():
-            raise ValueError("Error inititalizing Aligner")
+        for plugin in ("fan", "dlib"):
+            aligner = PluginLoader.get_aligner(plugin)()
+            process.in_process(aligner.align, **kwargs)
+            # Wait for Aligner to take init
+            # The first ever load of the model for FAN has reportedly taken
+            # up to 3-4 minutes, hence high timeout.
+            event.wait(300)
+
+            if not event.is_set():
+                if plugin == "fan":
+                    process.join()
+                    print("Error initializing FAN. Trying Dlib")
+                    continue
+                else:
+                    raise ValueError("Error inititalizing Aligner")
+            if plugin == "dlib":
+                return
+
+            try:
+                err = None
+                err = out_queue.get(True, 1)
+            except QueueEmpty:
+                pass
+            if not err:
+                break
+            process.join()
+            print("Error initializing FAN. Trying Dlib")
 
     @staticmethod
     def alignment_dict(image):

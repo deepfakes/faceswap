@@ -98,6 +98,7 @@ class Extract():
             out_filename = "{}_{}{}".format(str(output_file),
                                             str(idx),
                                             Path(filename).suffix)
+            # pylint: disable=no-member
             cv2.imwrite(out_filename, resized_face)
 
     def run_extraction(self, save_thread):
@@ -295,7 +296,10 @@ class Plugins():
         align_process.in_process(self.aligner.align, **kwargs)
 
         # Wait for Aligner to take it's VRAM
-        event.wait(60)
+        # The first ever load of the model for FAN has reportedly taken
+        # up to 3-4 minutes, hence high timeout.
+        # TODO investigate why this is and fix if possible
+        event.wait(300)
         if not event.is_set():
             raise ValueError("Error inititalizing Aligner")
 
