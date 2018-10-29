@@ -11,7 +11,7 @@ else:
     is_macos = False
 
 
-class GPUStats(object):
+class GPUStats():
     """ Holds information about system GPU(s) """
     def __init__(self):
         self.verbose = False
@@ -96,10 +96,10 @@ class GPUStats(object):
         self.initialize()
         if is_macos:
             names = [pynvx.cudaGetName(handle, ignore=True)
-                    for handle in self.handles]
+                     for handle in self.handles]
         else:
             names = [pynvml.nvmlDeviceGetName(handle).decode("utf-8")
-                    for handle in self.handles]
+                     for handle in self.handles]
         return names
 
     def get_vram(self):
@@ -109,7 +109,8 @@ class GPUStats(object):
             vram = [pynvx.cudaGetMemTotal(handle, ignore=True) / (1024 * 1024)
                     for handle in self.handles]
         else:
-            vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).total / (1024 * 1024)
+            vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).total /
+                    (1024 * 1024)
                     for handle in self.handles]
         return vram
 
@@ -144,6 +145,11 @@ class GPUStats(object):
     def get_card_most_free(self):
         """ Return the card and available VRAM for card with
             most VRAM free """
+        if self.device_count == 0:
+            return {"card_id": -1,
+                    "device": "No Nvidia devices found",
+                    "free": 2048,
+                    "total": 2048}
         free_vram = self.get_free()
         vram_free = max(free_vram)
         card_id = free_vram.index(vram_free)
@@ -152,7 +158,6 @@ class GPUStats(object):
                 "free": vram_free,
                 "total": self.vram[card_id]}
 
-    
     def print_info(self):
         """ Output GPU info in verbose mode """
         print("GPU Driver:       {}".format(self.driver))

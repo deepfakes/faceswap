@@ -34,7 +34,13 @@ class Align(Aligner):
         print("Initializing Face Alignment Network...")
         super().initialize(*args, **kwargs)
 
-        _, vram_total = self.get_vram_free()
+        card_id, _, vram_total = self.get_vram_free()
+        if card_id == -1:
+            self.queues["out"].put("No Graphics Card Detected! FAN is not "
+                                   "supported on CPU. Use another aligner.")
+            self.init.set()
+            exit(0)
+
         if vram_total <= self.vram:
             tf_ratio = 1.0
         else:
@@ -55,6 +61,9 @@ class Align(Aligner):
             while True:
                 item = self.queues["in"].get()
                 if item == "EOF":
+                    break
+                if item.get("exception", False):
+                    self.queues["out"].put(item)
                     break
                 image = item["image"][:, :, ::-1].copy()
                 self.process_landmarks(image, item["detected_faces"])
@@ -155,6 +164,7 @@ class Align(Aligner):
         new_img[new_y[0] - 1:new_y[1],
                 new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
                                                old_x[0] - 1:old_x[1], :]
+        # pylint: disable=no-member
         new_img = cv2.resize(new_img,
                              dsize=(int(resolution), int(resolution)),
                              interpolation=cv2.INTER_LINEAR)
@@ -188,7 +198,7 @@ class Align(Aligner):
                 for i in range(var_a.shape[0])]
 
 
-class FAN(object):
+class FAN():
     """The FAN Model.
     Converted from pyTorch via ONNX from:
     https://github.com/1adrianb/face-alignment """
@@ -203,6 +213,7 @@ class FAN(object):
 
     def load_graph(self):
         """ Load the tensorflow Model and weights """
+        # pylint: disable=not-context-manager
         if self.verbose:
             print("Initializing Face Alignment Network model...")
 
@@ -216,6 +227,7 @@ class FAN(object):
 
     def set_session(self, vram_ratio):
         """ Set the TF Session and initialize """
+        # pylint: disable=not-context-manager, no-member
         placeholder = np.zeros((1, 3, 256, 256))
         with self.graph.as_default():
             config = tf.ConfigProto()

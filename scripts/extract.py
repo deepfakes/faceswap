@@ -10,8 +10,8 @@ import cv2
 from tqdm import tqdm
 
 from lib.gpu_stats import GPUStats
-from lib.multithreading import (MultiThread, PoolProcess, QueueEmpty,
-                                SpawnProcess, queue_manager)
+from lib.multithreading import MultiThread, PoolProcess, SpawnProcess
+from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_folder
 from plugins.plugin_loader import PluginLoader
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
@@ -99,6 +99,7 @@ class Extract():
             out_filename = "{}_{}{}".format(str(output_file),
                                             str(idx),
                                             Path(filename).suffix)
+            # pylint: disable=no-member
             cv2.imwrite(out_filename, resized_face)
 
     def run_extraction(self, save_thread):
@@ -108,7 +109,6 @@ class Extract():
         if self.plugins.is_parallel:
             self.plugins.launch_aligner()
             self.plugins.launch_detector()
-
         if not self.plugins.is_parallel:
             self.run_detection(to_process)
             self.plugins.launch_aligner()
@@ -120,7 +120,7 @@ class Extract():
 
             exception = faces.get("exception", False)
             if exception:
-                break
+                exit(1)
             filename = faces["filename"]
 
             faces["output_file"] = self.output_dir / Path(filename).stem
@@ -297,9 +297,23 @@ class Plugins():
         align_process.in_process(self.aligner.align, **kwargs)
 
         # Wait for Aligner to take it's VRAM
-        event.wait(60)
+        # The first ever load of the model for FAN has reportedly taken
+        # up to 3-4 minutes, hence high timeout.
+        # TODO investigate why this is and fix if possible
+        event.wait(300)
         if not event.is_set():
             raise ValueError("Error inititalizing Aligner")
+
+        try:
+            err = None
+            err = out_queue.get(True, 1)
+        except QueueEmpty:
+            pass
+
+        if err:
+            queue_manager.terminate_queues()
+            print(err)
+            exit(1)
 
     def launch_detector(self):
         """ Launch the face detector """

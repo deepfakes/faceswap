@@ -210,6 +210,7 @@ class Images():
         """ load requested image """
         return cv2.imread(filename)
 
+
 class PostProcess():
     """ Optional post processing tasks """
     def __init__(self, arguments):
