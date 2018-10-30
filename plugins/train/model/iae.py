@@ -17,12 +17,11 @@ class Model(OriginalModel):
 
     def add_networks(self):
         """ Add the IAE model weights """
-        self.add_network("IAE_encoder.h5", "encoder", None, self.encoder())
-        self.add_network("IAE_decoder.h5", "decoder", None, self.decoder())
-        self.add_network("IAE_inter_A.h5", "inter", "A", self.intermediate())
-        self.add_network("IAE_inter_B.h5", "inter", "B", self.intermediate())
-        self.add_network("IAE_inter_both.h5", "inter", None,
-                         self.intermediate())
+        self.add_network("encoder", None, self.encoder())
+        self.add_network("decoder", None, self.decoder())
+        self.add_network("inter", "A", self.intermediate())
+        self.add_network("inter", "B", self.intermediate())
+        self.add_network("inter", None, self.intermediate())
 
     def initialize(self):
         """ Initialize IAE model """
@@ -43,8 +42,8 @@ class Model(OriginalModel):
                                           inter_both(encoder(inp))]))
         output_b = decoder(Concatenate()([inter_b(encoder(inp)),
                                           inter_both(encoder(inp))]))
-        self.autoencoder_a = KerasModel(inp, output_a)
-        self.autoencoder_b = KerasModel(inp, output_b)
+        self.autoencoders["a"] = KerasModel(inp, output_a)
+        self.autoencoders["b"] = KerasModel(inp, output_b)
         self.compile_autoencoders()
 
     def encoder(self):

@@ -6,20 +6,27 @@
 
 """
 import os
+import sys
 from json import JSONDecodeError
-
+from keras.optimizers import Adam
+from keras.utils import multi_gpu_model
 from lib import Serializer
+from plugins.train._config import Config
 
-# TODO Move multi_gpu code to here from initialize
-# TODO Move autoencoder compile code here or to an AE class
 
 class ModelBase():
     """ Base class that all models should inherit from """
     def __init__(self, model_dir, gpus, image_shape=None, encoder_dim=None):
+        self.config = Config().config
         self.model_dir = model_dir
         self.gpus = gpus
         self.image_shape = image_shape
         self.encoder_dim = encoder_dim
+
+        # For autoencoder models, autoencoders should be placed in this dict
+        self.autoencoders = dict()
+
+        self.name = self.set_model_name()
         self.serializer = Serializer.get_serializer('json')
         self._epoch_no = self.load_state()
         self.networks = list()
@@ -35,34 +42,51 @@ class ModelBase():
         """ Override to add neural networks """
         raise NotImplementedError
 
-    def add_network(self, filename, network_type, side, network):
+    def add_network(self, network_type, side, network):
         """ Add a NNMeta object to self.models """
-        self.networks.append(NNMeta(self.model_dir,
-                                    filename,
+        filename = "{}_{}".format(self.name, network_type.lower())
+        if side:
+            filename += "_{}".format(side.upper())
+        filename += ".h5"
+        self.networks.append(NNMeta(str(self.model_dir / filename),
                                     network_type,
                                     side,
                                     network))
+
+    def set_model_name(self):
+        """ Set the model name based on the subclass """
+        basename = os.path.basename(sys.modules[self.__module__].__file__)
+        return os.path.splitext(basename)[0].lower()
+
+    def compile_autoencoders(self):
+        """ Compile the autoencoders """
+        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        if self.gpus > 1:
+            for acr in self.autoencoders.keys():
+                autoencoder = multi_gpu_model(self.autoencoders[acr],
+                                              self.gpus)
+                self.autoencoders[acr] = autoencoder
+
+        for autoencoder in self.autoencoders.values():
+            autoencoder.compile(optimizer=optimizer,
+                                loss='mean_absolute_error')
+
+    def converter(self, swap):
+        """ Converter for autoencoder models """
+        if swap:
+            return self.autoencoders["a"].predict
+        return self.autoencoders["b"].predict
 
     @property
     def epoch_no(self):
         "Get current training epoch number"
         return self._epoch_no
 
-    def set_weights_path(self, model_data):
-        """ Set the model information into a dict for future use """
-        for model in model_data:
-            model.filename = str(self.model_dir / model.filename)
-        return model_data
-
     def load_state(self):
         """ Load epoch number from state file """
-        # TODO Prefix model name to state, so models reading from
-        # the same folder don't conflict
-
         epoch_no = 0
-        state_fn = ".".join(["state", self.serializer.ext])
         try:
-            with open(str(self.model_dir / state_fn), 'rb') as inp:
+            with open(self.state_filename(), 'rb') as inp:
                 state = self.serializer.unmarshal(inp.read().decode('utf-8'))
                 epoch_no = state['epoch_no']
         except IOError as err:
@@ -74,15 +98,18 @@ class ModelBase():
 
     def save_state(self):
         """ Save epoch number to state file """
-        state_fn = ".".join(["state", self.serializer.ext])
-        state_dir = str(self.model_dir / state_fn)
         try:
-            with open(state_dir, 'wb') as out:
+            with open(self.state_filename(), 'wb') as out:
                 state = {'epoch_no': self.epoch_no}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode('utf-8'))
         except IOError as err:
             print(err.strerror)
+
+    def state_filename(self):
+        """ Return full filepath for this models state file """
+        filename = "{}_state.{}".format(self.name, self.serializer.ext)
+        return str(self.model_dir / filename)
 
     def map_weights(self, swapped):
         """ Map the weights for A/B side models for swapping """
@@ -134,9 +161,8 @@ class ModelBase():
 class NNMeta():
     """ Class to hold a neural network and it's meta data
 
-    model_dir:  The folder containing the weights for this model
-    filename:   The filename of the weights file for this network as
-                stored in the model_dir.
+    filename:   The full path and filename of the weights file for
+                this network.
     type:       The type of network. For networks that can be swapped
                 The type should be identical for the corresponding
                 A and B networks, and should be unique for every A/B pair.
@@ -146,8 +172,8 @@ class NNMeta():
     network:      Define network to this.
     """
 
-    def __init__(self, model_dir, filename, network_type, side, network):
-        self.filename = str(model_dir / filename)
+    def __init__(self, filename, network_type, side, network):
+        self.filename = filename
         self.type = network_type
         self.side = side
         self.network = network

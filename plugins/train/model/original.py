@@ -7,8 +7,6 @@ from keras.layers import Dense, Flatten, Input, Reshape
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
-from keras.optimizers import Adam
-from keras.utils import multi_gpu_model
 
 from lib.PixelShuffler import PixelShuffler
 
@@ -18,9 +16,6 @@ from ._base import ModelBase
 class Model(ModelBase):
     """ Original Faceswap Model """
     def __init__(self, *args, **kwargs):
-        self.autoencoder_a = None
-        self.autoencoder_b = None
-
         if "image_shape" not in kwargs:
             kwargs["image_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
@@ -30,9 +25,9 @@ class Model(ModelBase):
 
     def add_networks(self):
         """ Add the original model weights """
-        self.add_network("decoder_A.h5", "decoder", "A", self.decoder())
-        self.add_network("decoder_B.h5", "decoder", "B", self.decoder())
-        self.add_network("encoder.h5", "encoder", None, self.encoder())
+        self.add_network("decoder", "A", self.decoder())
+        self.add_network("decoder", "B", self.decoder())
+        self.add_network("encoder", None, self.encoder())
 
     def initialize(self):
         """ Initialize original model """
@@ -45,26 +40,9 @@ class Model(ModelBase):
             elif network.type == "decoder" and network.side == "B":
                 decoder_b = network.network
 
-        self.autoencoder_a = KerasModel(inp, decoder_a(encoder(inp)))
-        self.autoencoder_b = KerasModel(inp, decoder_b(encoder(inp)))
+        self.autoencoders["a"] = KerasModel(inp, decoder_a(encoder(inp)))
+        self.autoencoders["b"] = KerasModel(inp, decoder_b(encoder(inp)))
         self.compile_autoencoders()
-
-    def compile_autoencoders(self):
-        """ Compile the autoencoders """
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        if self.gpus > 1:
-            self.autoencoder_a = multi_gpu_model(self.autoencoder_a, self.gpus)
-            self.autoencoder_b = multi_gpu_model(self.autoencoder_b, self.gpus)
-
-        self.autoencoder_a.compile(optimizer=optimizer,
-                                   loss='mean_absolute_error')
-        self.autoencoder_b.compile(optimizer=optimizer,
-                                   loss='mean_absolute_error')
-
-    def converter(self, swap):
-        """ Load converter straight or swapped """
-        autoencoder = self.autoencoder_a if not swap else self.autoencoder_b
-        return lambda img: autoencoder.predict(img)
 
     @staticmethod
     def conv(filters):

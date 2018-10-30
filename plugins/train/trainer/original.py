@@ -2,7 +2,9 @@
 """ Original Trainer """
 
 import time
+
 import numpy as np
+
 from lib.training_data import TrainingDataGenerator, stack_images
 
 
@@ -27,8 +29,10 @@ class Trainer():
         epoch, warped_a, target_a = next(self.images_a)
         epoch, warped_b, target_b = next(self.images_b)
 
-        loss_a = self.model.autoencoder_a.train_on_batch(warped_a, target_a)
-        loss_b = self.model.autoencoder_b.train_on_batch(warped_b, target_b)
+        loss_a = self.model.autoencoders["a"].train_on_batch(warped_a,
+                                                             target_a)
+        loss_b = self.model.autoencoders["b"].train_on_batch(warped_b,
+                                                             target_b)
 
         self.model._epoch_no += 1
 
@@ -45,12 +49,12 @@ class Trainer():
 
     def show_sample(self, test_a, test_b):
         figure_a = np.stack([test_a,
-                             self.model.autoencoder_a.predict(test_a),
-                             self.model.autoencoder_b.predict(test_a), ],
+                             self.model.autoencoders["a"].predict(test_a),
+                             self.model.autoencoders["b"].predict(test_a), ],
                             axis=1)
         figure_b = np.stack([test_b,
-                             self.model.autoencoder_b.predict(test_b),
-                             self.model.autoencoder_a.predict(test_b), ],
+                             self.model.autoencoders["b"].predict(test_b),
+                             self.model.autoencoders["a"].predict(test_b), ],
                             axis=1)
 
         if test_a.shape[0] % 2 == 1:

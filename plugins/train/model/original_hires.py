@@ -20,12 +20,9 @@ class Model(OriginalModel):
 
     def add_networks(self):
         """ Add the original model weights """
-        self.add_network("original_hires_decoder_A.h5", "decoder", "A",
-                         self.decoder())
-        self.add_network("original_hires_decoder_B.h5", "decoder", "B",
-                         self.decoder())
-        self.add_network("original_hires_encoder.h5", "encoder", None,
-                         self.encoder())
+        self.add_network("decoder", "A", self.decoder())
+        self.add_network("decoder", "B", self.decoder())
+        self.add_network("encoder", None, self.encoder())
 
     @staticmethod
     def conv_sep(filters):
