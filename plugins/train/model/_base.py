@@ -10,6 +10,7 @@ import sys
 from json import JSONDecodeError
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
+
 from lib import Serializer
 from plugins.train._config import Config
 

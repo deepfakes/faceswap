@@ -11,8 +11,8 @@
 !Dockerfile*
 !requirements*
 !.cache
-!lib
-!lib/face_alignment
+!lib/
+!lib/*
 !lib/gui
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons

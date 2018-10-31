@@ -8,7 +8,7 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
-from lib.PixelShuffler import PixelShuffler
+from lib.train import PixelShuffler
 
 from ._base import ModelBase
 
@@ -58,7 +58,7 @@ class Model(ModelBase):
 
     @staticmethod
     def upscale(filters):
-        """ Updacale Layer """
+        """ Upscale Layer """
         def block(inp):
             inp = Conv2D(filters * 4, kernel_size=3, padding='same')(inp)
             inp = LeakyReLU(0.1)(inp)

@@ -1,6 +1,8 @@
-# PixelShuffler layer for Keras
-# by t-ae
-# https://gist.github.com/t-ae/6e1016cc188104d123676ccef3264981
+#!/usr/bin/env python3
+"""PixelShuffler layer for Keras
+    by t-ae
+    https://gist.github.com/t-ae/6e1016cc188104d123676ccef3264981
+"""
 
 from keras.utils import conv_utils
 from keras.engine.topology import Layer
@@ -8,12 +10,14 @@ import keras.backend as K
 
 
 class PixelShuffler(Layer):
+    """ Pixel Shuffler Layer for Keras """
+    # pylint: disable=C0103
     def __init__(self, size=(2, 2), data_format=None, **kwargs):
         super(PixelShuffler, self).__init__(**kwargs)
         self.data_format = K.normalize_data_format(data_format)
         self.size = conv_utils.normalize_tuple(size, 2, 'size')
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
 
         input_shape = K.int_shape(inputs)
         if len(input_shape) != 4:
@@ -34,7 +38,7 @@ class PixelShuffler(Layer):
             out = K.reshape(out, (batch_size, oc, oh, ow))
             return out
 
-        elif self.data_format == 'channels_last':
+        if self.data_format == 'channels_last':
             batch_size, h, w, c = input_shape
             if batch_size is None:
                 batch_size = -1
@@ -55,8 +59,12 @@ class PixelShuffler(Layer):
                              '; Received input shape:', str(input_shape))
 
         if self.data_format == 'channels_first':
-            height = input_shape[2] * self.size[0] if input_shape[2] is not None else None
-            width = input_shape[3] * self.size[1] if input_shape[3] is not None else None
+            height = None
+            width = None
+            if input_shape[2] is not None:
+                height = input_shape[2] * self.size[0]
+            if input_shape[3] is not None:
+                width = input_shape[3] * self.size[1]
             channels = input_shape[1] // self.size[0] // self.size[1]
 
             if channels * self.size[0] * self.size[1] != input_shape[1]:
@@ -67,9 +75,13 @@ class PixelShuffler(Layer):
                     height,
                     width)
 
-        elif self.data_format == 'channels_last':
-            height = input_shape[1] * self.size[0] if input_shape[1] is not None else None
-            width = input_shape[2] * self.size[1] if input_shape[2] is not None else None
+        if self.data_format == 'channels_last':
+            height = None
+            width = None
+            if input_shape[1] is not None:
+                height = input_shape[1] * self.size[0]
+            if input_shape[2] is not None:
+                width = input_shape[2] * self.size[1]
             channels = input_shape[3] // self.size[0] // self.size[1]
 
             if channels * self.size[0] * self.size[1] != input_shape[3]:
