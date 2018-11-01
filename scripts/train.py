@@ -3,12 +3,14 @@
 
 import os
 import sys
-import threading
+
+from threading import Lock
 
 import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
+from lib.multithreading import MultiThread
 from lib.utils import (get_folder, get_image_paths, set_system_verbosity,
                        Timelapse)
 from plugins.plugin_loader import PluginLoader
@@ -22,7 +24,7 @@ class Train():
         self.stop = False
         self.save_now = False
         self.preview_buffer = dict()
-        self.lock = threading.Lock()
+        self.lock = Lock()
 
         # this is so that you can enter case insensitive values for trainer
         trainer_name = self.args.trainer
@@ -32,6 +34,10 @@ class Train():
     def process(self):
         """ Call the training process object """
         print("Training data directory: {}".format(self.args.model_dir))
+        # TODO Remove this
+        from lib.queue_manager import queue_manager
+        queue_manager.debug_monitor(5)
+
         lvl = '0' if self.args.verbose else '2'
         set_system_verbosity(lvl)
         thread = self.start_thread()
@@ -63,8 +69,8 @@ class Train():
 
     def start_thread(self):
         """ Put the training process in a thread so we can keep control """
-        thread = threading.Thread(target=self.process_thread)
-        thread.start()
+        thread = MultiThread()
+        thread.in_thread(self.process_thread)
         return thread
 
     def end_thread(self, thread):
@@ -74,7 +80,7 @@ class Train():
               "depending on your training speed). If you want to kill it now, "
               "press Ctrl + c")
         self.stop = True
-        thread.join()
+        thread.join_threads()
         sys.stdout.flush()
 
     def process_thread(self):
@@ -153,9 +159,9 @@ class Train():
             try:
                 with self.lock:
                     for name, image in self.preview_buffer.items():
-                        cv2.imshow(name, image)
+                        cv2.imshow(name, image)  # pylint: disable=no-member
 
-                key = cv2.waitKey(1000)
+                key = cv2.waitKey(1000)  # pylint: disable=no-member
                 if key == ord("\n") or key == ord("\r"):
                     break
                 if key == ord("s"):
@@ -184,6 +190,7 @@ class Train():
     @staticmethod
     def set_tf_allow_growth():
         """ Allow TensorFlow to manage VRAM growth """
+        # pylint: disable=no-member
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.gpu_options.visible_device_list = "0"
@@ -196,12 +203,12 @@ class Train():
             if self.args.write_image:
                 img = "_sample_{}.jpg".format(name)
                 imgfile = os.path.join(scriptpath, img)
-                cv2.imwrite(imgfile, image)
+                cv2.imwrite(imgfile, image)  # pylint: disable=no-member
             if self.args.redirect_gui:
                 img = ".gui_preview_{}.jpg".format(name)
                 imgfile = os.path.join(scriptpath, "lib", "gui",
                                        ".cache", "preview", img)
-                cv2.imwrite(imgfile, image)
+                cv2.imwrite(imgfile, image)  # pylint: disable=no-member
             if self.args.preview:
                 with self.lock:
                     self.preview_buffer[name] = image

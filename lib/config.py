@@ -179,4 +179,3 @@ class FaceswapConfig():
             self.create_default()
         self.load_config()
         self.validate_config()
-        exit(0)

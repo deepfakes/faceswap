@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from lib.training_data import TrainingDataGenerator, stack_images
+from lib.train import TrainingDataGenerator, stack_images
 
 
 class Trainer():
@@ -22,8 +22,9 @@ class Trainer():
 
         generator = TrainingDataGenerator(self.random_transform_args, 160,
                                           zoom=self.model.image_shape[0]//64)
-        self.images_a = generator.minibatchAB(fn_a, self.batch_size)
-        self.images_b = generator.minibatchAB(fn_b, self.batch_size)
+
+        self.images_a = generator.minibatch_ab(fn_a, self.batch_size)
+        self.images_b = generator.minibatch_ab(fn_a, self.batch_size)
 
     def train_one_step(self, iter, viewer):
         epoch, warped_a, target_a = next(self.images_a)

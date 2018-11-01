@@ -6,7 +6,6 @@ from __future__ import absolute_import
 import tensorflow as tf
 import keras.backend as K
 from keras.engine import Layer
-from keras.utils.conv_utils import normalize_data_format
 from keras.utils.generic_utils import get_custom_objects
 
 
@@ -58,7 +57,7 @@ class SubPixelUpscaling(Layer):
         super(SubPixelUpscaling, self).__init__(**kwargs)
 
         self.scale_factor = scale_factor
-        self.data_format = normalize_data_format(data_format)
+        self.data_format = K.normalize_data_format(data_format)
 
     def build(self, input_shape):
         pass
