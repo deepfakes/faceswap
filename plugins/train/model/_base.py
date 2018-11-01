@@ -91,7 +91,7 @@ class ModelBase():
                 state = self.serializer.unmarshal(inp.read().decode('utf-8'))
                 epoch_no = state['epoch_no']
         except IOError as err:
-            print('Error loading training info:', err.strerror)
+            print('No existing training info found: {}'.format(err.strerror))
             epoch_no = 0
         except JSONDecodeError as err:
             epoch_no = 0

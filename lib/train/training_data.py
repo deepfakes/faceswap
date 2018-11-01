@@ -41,7 +41,7 @@ class TrainingDataGenerator():
             if do_shuffle:
                 shuffle(data)
             for img in data:
-                queue.put((epoch, self.read_image(img)))
+                queue.put((epoch, np.float32(self.read_image(img))))
             epoch += 1
 
     def validate_samples(self, data):
@@ -62,8 +62,7 @@ class TrainingDataGenerator():
             for _ in range(self.batchsize):
                 epoch, images = queue.get()
                 batch.append(images)
-
-            rtn = np.float32([img for img in batch])
+            rtn = np.array(batch)
             yield epoch, rtn[:, 0, :, :, :], rtn[:, 1, :, :, :]
 
     def read_image(self, filename):

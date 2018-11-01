@@ -34,9 +34,8 @@ class Train():
     def process(self):
         """ Call the training process object """
         print("Training data directory: {}".format(self.args.model_dir))
-        # TODO Remove this
-        from lib.queue_manager import queue_manager
-        queue_manager.debug_monitor(5)
+        # from lib.queue_manager import queue_manager
+        # queue_manager.debug_monitor(5)
 
         lvl = '0' if self.args.verbose else '2'
         set_system_verbosity(lvl)
