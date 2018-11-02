@@ -59,3 +59,17 @@ class Config(FaceswapConfig):
             section=section, title="subpixel_upscaling", datatype=bool,
             default=False,
             info="Might increase upscaling quality at cost of VRAM")
+
+        # << DFAKER MODEL OPTIONS >> #
+        section = "DFaker"
+        self.add_section(title=section,
+                         info="Dfaker Model (Adapted from "
+                              "https://github.com/dfaker/df)")
+
+        self.add_item(
+            section=section, title="alignments_format", datatype=str,
+            default="json",
+            info="Dfaker model requires the alignments for your training "
+                 "images to be avalaible within images folder.\nIt should be "
+                 "named 'alignments.<file extension>' (eg. alignments.json)."
+                 "\nChoose from: 'json', 'pickle' or 'yaml'")

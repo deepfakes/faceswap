@@ -16,17 +16,20 @@ class Trainer():
         'random_flip': 0.4,
     }
 
-    def __init__(self, model, fn_a, fn_b, batch_size, *args):
+    def __init__(self, model, images, batch_size, *args):
         self.batch_size = batch_size
         self.model = model
 
-        generator = TrainingDataGenerator(self.random_transform_args, 160,
-                                          zoom=self.model.image_shape[0]//64)
+        generator = TrainingDataGenerator(
+            self.random_transform_args, 160,
+            zoom=self.model.image_shape[0]//64,
+            training_opts=self.model.training_opts)
 
-        self.images_a = generator.minibatch_ab(fn_a, self.batch_size)
-        self.images_b = generator.minibatch_ab(fn_a, self.batch_size)
+        self.images_a = generator.minibatch_ab(images["a"], self.batch_size)
+        self.images_b = generator.minibatch_ab(images["b"], self.batch_size)
 
     def train_one_step(self, iter, viewer):
+        """ Train a batch """
         epoch, warped_a, target_a = next(self.images_a)
         epoch, warped_b, target_b = next(self.images_b)
 
@@ -49,6 +52,7 @@ class Trainer():
                    "training")
 
     def show_sample(self, test_a, test_b):
+        """ Display preview data """
         figure_a = np.stack([test_a,
                              self.model.autoencoders["a"].predict(test_a),
                              self.model.autoencoders["b"].predict(test_a), ],
@@ -65,9 +69,9 @@ class Trainer():
                                        np.expand_dims(figure_b[0], 0)])
 
         figure = np.concatenate([figure_a, figure_b], axis=0)
-        w = 4
-        h = int(figure.shape[0] / w)
-        figure = figure.reshape((w, h) + figure.shape[1:])
+        width = 4
+        height = int(figure.shape[0] / width)
+        figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
 
         return np.clip(figure * 255, 0, 255).astype('uint8')

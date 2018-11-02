@@ -51,8 +51,9 @@ class Train():
     def get_images(self):
         """ Check the image dirs exist, contain images and return the image
         objects """
-        images = []
-        for image_dir in [self.args.input_A, self.args.input_B]:
+        images = dict()
+        for image_group in ("A", "B"):
+            image_dir = getattr(self.args, "input_{}".format(image_group))
             if not os.path.isdir(image_dir):
                 print('Error: {} does not exist'.format(image_dir))
                 exit(1)
@@ -61,7 +62,7 @@ class Train():
                 print('Error: {} contains no images'.format(image_dir))
                 exit(1)
 
-            images.append(get_image_paths(image_dir))
+            images[image_group.lower()] = get_image_paths(image_dir)
         print("Model A Directory: {}".format(self.args.input_A))
         print("Model B Directory: {}".format(self.args.input_B))
         return images
@@ -120,12 +121,9 @@ class Train():
 
     def load_trainer(self, model):
         """ Load the trainer requested for training """
-        images_a, images_b = self.images
-
         trainer = PluginLoader.get_trainer(self.trainer_name)
         trainer = trainer(model,
-                          images_a,
-                          images_b,
+                          self.images,
                           self.args.batch_size,
                           self.args.perceptual_loss)
         return trainer

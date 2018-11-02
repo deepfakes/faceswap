@@ -24,6 +24,10 @@ class ModelBase():
         self.image_shape = image_shape
         self.encoder_dim = encoder_dim
 
+        # Training information specific to the model should be placed in this
+        # dict for reference by the trainer.
+        self.training_opts = dict()
+
         # For autoencoder models, autoencoders should be placed in this dict
         self.autoencoders = dict()
 

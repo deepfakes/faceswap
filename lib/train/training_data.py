@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Process training data for model training """
 
+import os
 from random import shuffle
 import uuid
 
@@ -15,7 +16,8 @@ from lib.umeyama import umeyama
 class TrainingDataGenerator():
     """ Generate training data for models """
     def __init__(self, random_transform_args, coverage,
-                 scale=5, zoom=1):
+                 scale=5, zoom=1, training_opts=None):
+        self.options = training_opts
         self.random_transform_args = random_transform_args
         self.coverage = coverage
         self.scale = scale
@@ -25,14 +27,43 @@ class TrainingDataGenerator():
     def minibatch_ab(self, images, batchsize, do_shuffle=True):
         """ Keep a queue filled to 8x Batch Size """
         self.batchsize = batchsize
+        options = self.process_training_options(images)
         q_name = str(uuid.uuid4())
         q_size = batchsize * 8
         queue_manager.add_queue(q_name, maxsize=q_size)
         thread = MultiThread()
-        thread.in_thread(self.load_batches, images, q_name, do_shuffle)
+        thread.in_thread(self.load_batches,
+                         images,
+                         q_name,
+                         options,
+                         do_shuffle)
         return self.minibatch(q_name)
 
-    def load_batches(self, data, q_name, do_shuffle=True):
+    def process_training_options(self, images):
+        """ Process the model specific training data """
+        opts = dict()
+        if not self.options or not isinstance(self.options, dict):
+            return opts
+        if self.options.get("use_alignments", False):
+            opts["alignments"] = self.get_alignments(images)
+        opts["use_mask"] = self.options.get("use_mask", False)
+        return opts
+
+    def get_alignments(self, images):
+        """ Return the alignments for current image folder """
+        serializer = self.options.get("serializer")
+        image_folder = os.path.dirname(images[0])
+        filename = "alignments.{}".format(serializer.ext)
+        alignments_file = os.path.join(image_folder, filename)
+        try:
+            with open(alignments_file, serializer.roptions) as align:
+                alignments = serializer.unmarshal(align.read())
+        except IOError:
+            print("Alignments file not found at {}".format(alignments_file))
+            exit(1)
+        return alignments
+
+    def load_batches(self, data, q_name, options, do_shuffle=True):
         """ Load the epoch, warped images and target images to queue """
         epoch = 0
         queue = queue_manager.get_queue(q_name)
@@ -113,12 +144,14 @@ class TrainingDataGenerator():
         assert height == width and height % 2 == 0
 
         range_ = np.linspace(height // 2 - self.coverage // 2,
-                             height // 2 + self.coverage // 2, 5)
-        mapx = np.broadcast_to(range_, (5, 5))
+                             height // 2 + self.coverage // 2, self.scale)
+        mapx = np.broadcast_to(range_, (self.scale, self.scale))
         mapy = mapx.T
 
-        mapx = mapx + np.random.normal(size=(5, 5), scale=self.scale)
-        mapy = mapy + np.random.normal(size=(5, 5), scale=self.scale)
+        mapx = mapx + np.random.normal(size=(self.scale, self.scale),
+                                       scale=self.scale)
+        mapy = mapy + np.random.normal(size=(self.scale, self.scale),
+                                       scale=self.scale)
 
         interp_mapx = cv2.resize(  # pylint: disable=no-member
             mapx, (80 * self.zoom, 80 * self.zoom)
@@ -143,7 +176,7 @@ class TrainingDataGenerator():
         mat = umeyama(src_points, dst_points, True)[0:2]
         target_image = cv2.warpAffine(image,  # pylint: disable=no-member
                                       mat,
-                                      (64*self.zoom, 64*self.zoom))
+                                      (64 * self.zoom, 64 * self.zoom))
 
         return warped_image, target_image
 
