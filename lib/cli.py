@@ -684,13 +684,6 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "verbose",
                               "default": False,
                               "help": "Show verbose output"})
-        # This is a hidden argument to indicate that the GUI is being used,
-        # so the preview window should be redirected Accordingly
-        argument_list.append({"opts": ("-gui", "--gui"),
-                              "action": "store_true",
-                              "dest": "redirect_gui",
-                              "default": False,
-                              "help": argparse.SUPPRESS})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
                               "dest": "timelapse_input_A",
@@ -721,6 +714,13 @@ class TrainArgs(FaceSwapArgs):
                                       "If the input folders are supplied but "
                                       "no output folder, it will default to "
                                       "your model folder /timelapse/"})
+        # This is a hidden argument to indicate that the GUI is being used,
+        # so the preview window should be redirected Accordingly
+        argument_list.append({"opts": ("-gui", "--gui"),
+                              "action": "store_true",
+                              "dest": "redirect_gui",
+                              "default": False,
+                              "help": argparse.SUPPRESS})
         return argument_list
 
 
