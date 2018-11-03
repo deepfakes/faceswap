@@ -3,6 +3,7 @@
     a serialized alignments file """
 
 import os
+from datetime import datetime
 
 import cv2
 
@@ -58,7 +59,7 @@ class Alignments():
             this will be used as the serializer, otherwise the
             specified serializer will be used """
         extension = os.path.splitext(filename)[1]
-        if extension in ("json", "p", "yaml", "yml"):
+        if extension in (".json", ".p", ".yaml", ".yml"):
             retval = Serializer.get_serializer_from_ext(extension)
         elif serializer not in ("json", "pickle", "yaml"):
             raise ValueError("Error: {} is not a valid serializer. Use "
@@ -71,9 +72,13 @@ class Alignments():
 
     def get_location(self, folder, filename):
         """ Return the path to alignments file """
-        location = os.path.join(
-            str(folder),
-            "{}.{}".format(filename, self.serializer.ext))
+        extension = os.path.splitext(filename)[1]
+        if extension in (".json", ".p", ".yaml", ".yml"):
+            location = os.path.join(str(folder), filename)
+        else:
+            location = os.path.join(str(folder),
+                                    "{}.{}".format(filename,
+                                                   self.serializer.ext))
         if self.verbose:
             print("Alignments filepath: {}".format(location))
         return location
@@ -107,6 +112,17 @@ class Alignments():
                 align.write(self.serializer.marshal(self.data))
         except IOError as err:
             print("Error: {} not written: {}".format(self.file, err.strerror))
+
+    def backup(self):
+        """ Backup copy of old alignments """
+        if not os.path.isfile(self.file):
+            return
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        src = self.file
+        split = os.path.splitext(src)
+        dst = split[0] + "_" + now + split[1]
+        print("Backing up original alignments to {}".format(dst))
+        os.rename(src, dst)
 
     # << VALIDATION >> #
 
@@ -175,8 +191,35 @@ class Alignments():
             original_idx = number_alignments - 1 - idx
             yield original_idx
 
-    # << LEGACY ROTATION FUNCTIONS >> #
+    # << LEGACY FUNCTIONS >> #
 
+    # < Original Frame Dimensions > #
+    # For dfaker the original dimensions of an image are required to
+    # calculate the transposed landmarks. Storing these for the
+    # calculations takes less space than storing the full transposed
+    # landmarks.
+    # These were not previously required, so this adds the dimensions
+    # to the landmarks file
+
+    def get_legacy_no_dims(self):
+        """ Return a list of frames that do not contain the original frame
+            height and width attributes """
+        keys = list()
+        for key, val in self.data.items():
+            for alignment in val:
+                if not set(["frame_h", "frame_w"]).issubset(alignment.keys()):
+                    keys.append(key)
+                    break
+        return keys
+
+    def add_dimensions(self, frame_name, dimensions):
+        """ Backward compatability fix. Add frame dimensions
+            to alignments """
+        for face in self.get_faces_in_frame(frame_name):
+            face["frame_h"] = dimensions[0]
+            face["frame_w"] = dimensions[1]
+
+    # < Rotation > #
     # The old rotation method would rotate the image to find a face, then
     # store the rotated landmarks along with a rotation value to tell the
     # convert process that it had to rotate the frame to find the landmarks.
@@ -186,7 +229,7 @@ class Alignments():
     # infrastructure.
     # This can eventually be removed
 
-    def get_legacy_frames(self):
+    def get_legacy_rotation(self):
         """ Return a list of frames with legacy rotations
             Looks for an 'r' value in the alignments file that
             is not zero """
@@ -196,17 +239,18 @@ class Alignments():
                 keys.append(key)
         return keys
 
-    def rotate_existing_landmarks(self, frame, dimensions):
+    def rotate_existing_landmarks(self, frame_name):
         """ Backwards compatability fix. Rotates the landmarks to
             their correct position and deletes r
 
             NB: The original frame dimensions must be passed in otherwise
             the transformation cannot be performed """
-        for face in self.get_faces_in_frame(frame):
+        for face in self.get_faces_in_frame(frame_name):
             angle = face.get("r", 0)
             if not angle:
                 return
-            r_mat = self.get_original_rotation_matrix(dimensions, angle)
+            dims = (face["frame_h"], face["frame_w"])
+            r_mat = self.get_original_rotation_matrix(dims, angle)
             rotate_landmarks(face, r_mat)
             del face["r"]
 

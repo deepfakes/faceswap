@@ -1,7 +1,7 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 
-from dlib import rectangle as d_rectangle
+from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
 
 
 class DetectedFace():
@@ -41,13 +41,19 @@ class DetectedFace():
         self.image = image[self.y: self.y + self.h,
                            self.x: self.x + self.w]
 
-    def to_alignment(self):
-        """ Convert a detected face to alignment dict """
+    def to_alignment(self, frame_dims):
+        """ Convert a detected face to alignment dict
+
+            NB: frame_dims should be the height and width
+                of the original frame. """
+
         alignment = dict()
         alignment["x"] = self.x
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
+        alignment["frame_w"] = frame_dims[1]
+        alignment["frame_h"] = frame_dims[0]
         alignment["landmarksXY"] = self.landmarksXY
         return alignment
 

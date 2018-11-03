@@ -3,7 +3,6 @@
     for alignments tool """
 
 import os
-from datetime import datetime
 
 import cv2
 import numpy as np
@@ -77,20 +76,8 @@ class AlignmentData(Alignments):
 
     def save(self):
         """ Backup copy of old alignments and save new alignments """
-        self.backup_alignments()
+        self.backup()
         super().save()
-
-    def backup_alignments(self):
-        """ Backup copy of old alignments """
-        if not os.path.isfile(self.file):
-            return
-        now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        src = self.file
-        dst = src.split(".")
-        dst[0] += "_" + now + "."
-        dst = dst[0] + dst[1]
-        print("Backing up original alignments to {}".format(dst))
-        os.rename(src, dst)
 
 
 class MediaLoader():

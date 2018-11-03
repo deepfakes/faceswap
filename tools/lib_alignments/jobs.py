@@ -552,24 +552,38 @@ class Rotate():
 
     def process(self):
         """ Run the rotate alignments process """
-        rotated = self.alignments.get_legacy_frames()
-        if not rotated and self.child_process:
+        no_dims = self.alignments.get_legacy_no_dims()
+        rotated = self.alignments.get_legacy_rotation()
+        if self.child_process and not rotated and not no_dims:
             return
-        print("\n[ROTATE LANDMARKS]")  # Tidy up cli output
-        if self.child_process:
-            print("Legacy rotated frames found. Rotating landmarks")
-        self.rotate_landmarks(rotated)
-        if not self.child_process:
-            self.alignments.save()
+        print("\n[UPDATE LEGACY LANDMARKS]")  # Tidy up cli output
+
+        if no_dims:
+            if self.child_process:
+                print("Legacy landmarks found. Adding frame dimensions...")
+            self.add_dimensions(no_dims)
+
+        if rotated:
+            if self.child_process:
+                print("Legacy rotated frames found. Rotating landmarks")
+            self.rotate_landmarks(rotated)
+
+        self.alignments.save()
+
+    def add_dimensions(self, no_dims):
+        """ Add width and height of original frame to alignments """
+        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
+            if no_dim not in self.frames.items.keys():
+                continue
+            dims = self.frames.load_image(no_dim).shape[:2]
+            self.alignments.add_dimensions(no_dim, dims)
 
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
-        for rotate_item in tqdm(rotated,
-                                desc="Rotating Landmarks"):
+        for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
             if rotate_item not in self.frames.items.keys():
                 continue
-            dims = self.frames.load_image(rotate_item).shape[:2]
-            self.alignments.rotate_existing_landmarks(rotate_item, dims)
+            self.alignments.rotate_existing_landmarks(rotate_item)
 
 
 class Sort():
