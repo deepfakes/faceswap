@@ -180,7 +180,7 @@ class Convert():
         if not self.check_alignments(frame):
             return None
 
-        faces = self.alignments.get_alignments_for_frame(frame)
+        faces = self.alignments.get_faces_in_frame(frame)
         image = self.images.load_one_image(filename)
         detected_faces = list()
 
@@ -209,7 +209,7 @@ class Convert():
                     image = self.convert_one_face(converter,
                                                   (filename, image, idx, face))
                 filename = str(self.output_dir / Path(filename).name)
-                cv2.imwrite(filename, image)
+                cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             print("Failed to convert image: {}. "
                   "Reason: {}".format(filename, err))
@@ -335,5 +335,5 @@ class Rotate():
             if rotate_item not in self.frames.keys():
                 continue
             filename = self.frames[rotate_item]
-            dims = cv2.imread(filename).shape[:2]
+            dims = cv2.imread(filename).shape[:2]  # pylint: disable=no-member
             self.alignments.rotate_existing_landmarks(rotate_item, dims)

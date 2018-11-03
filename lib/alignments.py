@@ -52,7 +52,11 @@ class Alignments():
 
     def get_serializer(self, filename, serializer):
         """ Set the serializer to be used for loading and
-            saving alignments """
+            saving alignments
+
+            If a filename with a valid extension is passed in
+            this will be used as the serializer, otherwise the
+            specified serializer will be used """
         extension = os.path.splitext(filename)[1]
         if extension in ("json", "p", "yaml", "yml"):
             retval = Serializer.get_serializer_from_ext(extension)
@@ -74,7 +78,7 @@ class Alignments():
             print("Alignments filepath: {}".format(location))
         return location
 
-    # << FILE SYSTEM >> #
+    # << I/O >> #
 
     def load(self):
         """ Load the alignments data if it exists or create empty dict """
@@ -91,6 +95,10 @@ class Alignments():
             exit(1)
         return data
 
+    def reload(self):
+        """ Read the alignments data from the correct format """
+        self.data = self.load()
+
     def save(self):
         """ Write the serialized alignments file """
         try:
@@ -100,15 +108,72 @@ class Alignments():
         except IOError as err:
             print("Error: {} not written: {}".format(self.file, err.strerror))
 
-    # << UTILITIES >> #
+    # << VALIDATION >> #
 
     def frame_exists(self, frame):
         """ return path of images that have faces """
         return frame in self.data.keys()
 
-    def get_alignments_for_frame(self, frame):
+    def frame_has_faces(self, frame):
+        """ Return true if frame exists and has faces """
+        return bool(self.data.get(frame, list()))
+
+    def frame_has_multiple_faces(self, frame):
+        """ Return true if frame exists and has faces """
+        if not frame:
+            return False
+        return bool(len(self.data.get(frame, list())) > 1)
+
+    # << DATA >> #
+
+    def get_faces_in_frame(self, frame):
         """ Return the alignments for the selected frame """
         return self.data.get(frame, list())
+
+    def get_full_frame_name(self, frame):
+        """ Return a frame with extension for when the extension is
+            not known """
+        return next(key for key in self.data.keys()
+                    if key.startswith(frame))
+
+    def count_faces_in_frame(self, frame):
+        """ Return number of alignments within frame """
+        return len(self.data.get(frame, list()))
+
+    # << MANIPULATION >> #
+
+    def delete_face_at_index(self, frame, idx):
+        """ Delete the face alignment for given frame at given index """
+        idx = int(idx)
+        if idx + 1 > self.count_faces_in_frame(frame):
+            return False
+        del self.data[frame][idx]
+        return True
+
+    def add_face(self, frame, alignment):
+        """ Add a new face for a frame and return it's index """
+        self.data[frame].append(alignment)
+        return self.count_faces_in_frame(frame) - 1
+
+    def update_face(self, frame, idx, alignment):
+        """ Replace a face for given frame and index """
+        self.data[frame][idx] = alignment
+
+    # << GENERATORS >> #
+
+    def yield_faces(self):
+        """ Yield face alignments for one image """
+        for frame_fullname, alignments in self.data.items():
+            frame_name = os.path.splitext(frame_fullname)[0]
+            yield frame_name, alignments, len(alignments), frame_fullname
+
+    @staticmethod
+    def yield_original_index_reverse(image_alignments, number_alignments):
+        """ Return the correct original index for
+            alignment in reverse order """
+        for idx, _ in enumerate(reversed(image_alignments)):
+            original_idx = number_alignments - 1 - idx
+            yield original_idx
 
     # << LEGACY ROTATION FUNCTIONS >> #
 
@@ -137,7 +202,7 @@ class Alignments():
 
             NB: The original frame dimensions must be passed in otherwise
             the transformation cannot be performed """
-        for face in self.get_alignments_for_frame(frame):
+        for face in self.get_faces_in_frame(frame):
             angle = face.get("r", 0)
             if not angle:
                 return
@@ -151,7 +216,7 @@ class Alignments():
         height, width = dimensions
         center = (width/2, height/2)
         r_mat = cv2.getRotationMatrix2D(  # pylint: disable=no-member
-            center, -1.0*angle, 1.)
+            center, -1.0 * angle, 1.)
 
         abs_cos = abs(r_mat[0, 0])
         abs_sin = abs(r_mat[0, 1])
