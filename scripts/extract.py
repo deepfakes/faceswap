@@ -310,9 +310,12 @@ class Plugins():
             pass
 
         if err:
-            queue_manager.terminate_queues()
-            print(err)
-            exit(1)
+            if isinstance(err, str):
+                queue_manager.terminate_queues()
+                print(err)
+                exit(1)
+            else:
+                queue_manager.get_queue("detect").put(err)
 
     def launch_detector(self):
         """ Launch the face detector """
