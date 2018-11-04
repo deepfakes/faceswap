@@ -85,7 +85,8 @@ class ProcessWrapper():
 
         self.statusbar.status_message.set("Executing - "
                                           + self.command + ".py")
-        mode = "indeterminate" if self.command == "train" else "determinate"
+        mode = "indeterminate" if self.command in ("effmpeg",
+                                                   "train") else "determinate"
         self.statusbar.progress_start(mode)
 
         args = self.build_args(category)
@@ -255,7 +256,7 @@ class FaceswapControl():
                 if os.name == "nt":
                     os.kill(
                         self.process.pid,
-                        signal.CTRL_BREAK_EVENT) # pylint: disable=no-member
+                        signal.CTRL_BREAK_EVENT)  # pylint: disable=no-member
                 else:
                     self.process.send_signal(signal.SIGINT)
                 while True:
