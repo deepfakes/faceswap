@@ -43,7 +43,7 @@ class PreviewExtract(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler("dir").retfile
+        location = FileHandler("dir", None).retfile
         if not location:
             return
         filename = "extract_convert_preview"
@@ -92,7 +92,7 @@ class PreviewTrain(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler("dir").retfile
+        location = FileHandler("dir", None).retfile
         if not location:
             return
         for preview in self.subnotebook.children.values():
@@ -178,7 +178,7 @@ class GraphDisplay(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save graphs """
-        graphlocation = FileHandler("dir").retfile
+        graphlocation = FileHandler("dir", None).retfile
         if not graphlocation:
             return
         for graph in self.subnotebook.children.values():

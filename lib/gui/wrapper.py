@@ -3,8 +3,7 @@
 import os
 import re
 import signal
-import subprocess
-from subprocess import PIPE, Popen, TimeoutExpired
+from subprocess import PIPE, Popen
 import sys
 import tkinter as tk
 from threading import Thread
@@ -134,8 +133,6 @@ class ProcessWrapper():
 
 class FaceswapControl():
     """ Control the underlying Faceswap tasks """
-    __group_processes = ["effmpeg"]
-
     def __init__(self, wrapper):
 
         self.wrapper = wrapper
@@ -155,11 +152,6 @@ class FaceswapControl():
                   "bufsize": 1,
                   "universal_newlines": True}
 
-        if self.command in self.__group_processes:
-            kwargs["preexec_fn"] = os.setsid
-
-        if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = Popen(args, **kwargs)
         self.thread_stdout()
         self.thread_stderr()
@@ -275,17 +267,6 @@ class FaceswapControl():
                 return
             except ValueError as err:
                 print(err)
-        elif self.command in self.__group_processes:
-            print("Terminating Process Group...")
-            pgid = os.getpgid(self.process.pid)
-            try:
-                os.killpg(pgid, signal.SIGINT)
-                self.process.wait(timeout=10)
-                print("Terminated")
-            except TimeoutExpired:
-                print("Termination timed out. Killing Process Group...")
-                os.killpg(pgid, signal.SIGKILL)
-                print("Killed")
         else:
             print("Terminating Process...")
             children = psutil.Process().children(recursive=True)
