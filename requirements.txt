@@ -2,6 +2,7 @@ pathlib==1.0.1
 scandir==1.7
 h5py==2.8.0
 Keras==2.2.4
+psutil
 opencv-python
 scikit-image
 scikit-learn

@@ -3,17 +3,18 @@
 import os
 import re
 import signal
-import subprocess
-from subprocess import PIPE, Popen, TimeoutExpired
+from subprocess import PIPE, Popen
 import sys
 import tkinter as tk
 from threading import Thread
 from time import time
 
+import psutil
+
 from .utils import Images
 
 
-class ProcessWrapper(object):
+class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
@@ -84,7 +85,8 @@ class ProcessWrapper(object):
 
         self.statusbar.status_message.set("Executing - "
                                           + self.command + ".py")
-        mode = "indeterminate" if self.command == "train" else "determinate"
+        mode = "indeterminate" if self.command in ("effmpeg",
+                                                   "train") else "determinate"
         self.statusbar.progress_start(mode)
 
         args = self.build_args(category)
@@ -130,10 +132,8 @@ class ProcessWrapper(object):
         print("Process exited.")
 
 
-class FaceswapControl(object):
+class FaceswapControl():
     """ Control the underlying Faceswap tasks """
-    __group_processes = ["effmpeg"]
-
     def __init__(self, wrapper):
 
         self.wrapper = wrapper
@@ -141,8 +141,9 @@ class FaceswapControl(object):
         self.command = None
         self.args = None
         self.process = None
-        self.consoleregex = {"loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
-                             "tqdm": re.compile(r"(\d+%|\d+/\d+|\d+:\d+|\d+\.\d+[a-zA-Z/]+)")}
+        self.consoleregex = {
+            "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
+            "tqdm": re.compile(r"(\d+%|\d+/\d+|\d+:\d+|\d+\.\d+[a-zA-Z/]+)")}
 
     def execute_script(self, command, args):
         """ Execute the requested Faceswap Script """
@@ -152,11 +153,6 @@ class FaceswapControl(object):
                   "bufsize": 1,
                   "universal_newlines": True}
 
-        if self.command in self.__group_processes:
-            kwargs["preexec_fn"] = os.setsid
-
-        if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         self.process = Popen(args, **kwargs)
         self.thread_stdout()
         self.thread_stderr()
@@ -258,7 +254,9 @@ class FaceswapControl(object):
             try:
                 now = time()
                 if os.name == "nt":
-                    os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+                    os.kill(
+                        self.process.pid,
+                        signal.CTRL_BREAK_EVENT)  # pylint: disable=no-member
                 else:
                     self.process.send_signal(signal.SIGINT)
                 while True:
@@ -270,31 +268,30 @@ class FaceswapControl(object):
                 return
             except ValueError as err:
                 print(err)
-        elif self.command in self.__group_processes:
-            print("Terminating Process Group...")
-            pgid = os.getpgid(self.process.pid)
-            try:
-                os.killpg(pgid, signal.SIGINT)
-                self.process.wait(timeout=10)
-                print("Terminated")
-            except TimeoutExpired:
-                print("Termination timed out. Killing Process Group...")
-                os.killpg(pgid, signal.SIGKILL)
-                print("Killed")
         else:
             print("Terminating Process...")
-            try:
-                self.process.terminate()
-                self.process.wait(timeout=10)
+            children = psutil.Process().children(recursive=True)
+            for child in children:
+                child.terminate()
+            _, alive = psutil.wait_procs(children, timeout=10)
+            if not alive:
                 print("Terminated")
-            except TimeoutExpired:
-                print("Termination timed out. Killing Process...")
-                self.process.kill()
+                return
+
+            print("Termination timed out. Killing Process...")
+            for child in alive:
+                child.kill()
+            _, alive = psutil.wait_procs(alive, timeout=10)
+            if not alive:
                 print("Killed")
+            else:
+                for child in alive:
+                    print("Process {} survived SIGKILL. "
+                          "Giving up".format(child))
 
     def set_final_status(self, returncode):
         """ Set the status bar output based on subprocess return code """
-        if returncode == 0 or returncode == 3221225786:
+        if returncode in (0, 3221225786):
             status = "Ready"
         elif returncode == -15:
             status = "Terminated - {}.py".format(self.command)

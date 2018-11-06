@@ -25,12 +25,13 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class FileHandler(object):
+class FileHandler():
     """ Raise a filedialog box and capture input """
 
     def __init__(self, handletype, filetype, command=None, action=None,
                  variable=None):
 
+        self.handletype = handletype
         all_files = ("All files", "*.*")
         self.filetypes = {"default": (all_files,),
                           "alignments": (("JSON", "*.json"),
@@ -58,14 +59,14 @@ class FileHandler(object):
                                     all_files)}
         self.contexts = {
             "effmpeg": {
-                "input": {"extract": "open",
+                "input": {"extract": "filename",
                           "gen-vid": "dir",
-                          "get-fps": "open",
-                          "get-info": "open",
-                          "mux-audio": "open",
-                          "rescale": "open",
-                          "rotate": "open",
-                          "slice": "open"},
+                          "get-fps": "filename",
+                          "get-info": "filename",
+                          "mux-audio": "filename",
+                          "rescale": "filename",
+                          "rotate": "filename",
+                          "slice": "filename"},
                 "output": {"extract": "dir",
                            "gen-vid": "save",
                            "get-fps": "nothing",
@@ -77,9 +78,8 @@ class FileHandler(object):
             }
         }
         self.defaults = self.set_defaults()
-        self.kwargs = self.set_kwargs(handletype, filetype, command, action,
-                                      variable)
-        self.retfile = getattr(self, handletype.lower())()
+        self.kwargs = self.set_kwargs(filetype, command, action, variable)
+        self.retfile = getattr(self, self.handletype.lower())()
 
     def set_defaults(self):
         """ Set the default filetype to be first in list of filetypes,
@@ -91,23 +91,29 @@ class FileHandler(object):
         defaults["image"] = ".png"
         return defaults
 
-    def set_kwargs(self, handletype, filetype, command, action, variable=None):
+    def set_kwargs(self, filetype, command, action, variable=None):
         """ Generate the required kwargs for the requested browser """
         kwargs = dict()
-        if handletype.lower() in ("open", "save", "filename", "savefilename"):
+        if self.handletype.lower() == "context":
+            self.set_context_handletype(command, action, variable)
+
+        if self.handletype.lower() in (
+                "open", "save", "filename", "savefilename"):
             kwargs["filetypes"] = self.filetypes[filetype]
             if self.defaults.get(filetype, None):
                 kwargs['defaultextension'] = self.defaults[filetype]
-        if handletype.lower() == "save":
+        if self.handletype.lower() == "save":
             kwargs["mode"] = "w"
-        if handletype.lower() == "open":
+        if self.handletype.lower() == "open":
             kwargs["mode"] = "r"
-        if handletype.lower() == "context":
-            kwargs["filetype"] = filetype
-            kwargs["command"] = command
-            kwargs["action"] = action
-            kwargs["variable"] = variable
         return kwargs
+
+    def set_context_handletype(self, command, action, variable):
+        """ Choose the correct file browser action based on context """
+        if self.contexts[command].get(variable, None) is not None:
+            self.handletype = self.contexts[command][variable][action]
+        else:
+            self.handletype = self.contexts[command][action]
 
     def open(self):
         """ Open a file """
@@ -133,26 +139,13 @@ class FileHandler(object):
         """ Get a save file location """
         return filedialog.asksaveasfilename(**self.kwargs)
 
-    def nothing(self):
+    @staticmethod
+    def nothing():
         """ Method that does nothing, used for disabling open/save pop up  """
         return
 
-    def context(self):
-        """ Choose the correct file browser action based on context """
-        command = self.kwargs["command"]
-        action = self.kwargs["action"]
-        filetype = self.kwargs["filetype"]
-        variable = self.kwargs["variable"]
-        if self.contexts[command].get(variable, None) is not None:
-            handletype = self.contexts[command][variable][action]
-        else:
-            handletype = self.contexts[command][action]
-        self.kwargs = self.set_kwargs(handletype, filetype, command, action,
-                                      variable)
-        self.retfile = getattr(self, handletype.lower())()
 
-
-class Images(object, metaclass=Singleton):
+class Images(metaclass=Singleton):
     """ Holds locations of images and actual images """
 
     def __init__(self, pathcache=None):
@@ -164,24 +157,33 @@ class Images(object, metaclass=Singleton):
         self.errcount = 0
 
         self.icons = dict()
-        self.icons["folder"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                               "open_folder.png"))
-        self.icons["load"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                             "open_file.png"))
-        self.icons["context"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                                "open_file.png"))
-        self.icons["save"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                             "save.png"))
-        self.icons["reset"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                              "reset.png"))
-        self.icons["clear"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                              "clear.png"))
-        self.icons["graph"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                              "graph.png"))
-        self.icons["zoom"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                             "zoom.png"))
-        self.icons["move"] = tk.PhotoImage(file=os.path.join(self.pathicons,
-                                                             "move.png"))
+        self.icons["folder"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "open_folder.png"))
+        self.icons["load"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "open_file.png"))
+        self.icons["context"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "open_file.png"))
+        self.icons["save"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "save.png"))
+        self.icons["reset"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "reset.png"))
+        self.icons["clear"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "clear.png"))
+        self.icons["graph"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "graph.png"))
+        self.icons["zoom"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "zoom.png"))
+        self.icons["move"] = tk.PhotoImage(file=os.path.join(
+            self.pathicons,
+            "move.png"))
 
     def delete_preview(self):
         """ Delete the preview files """
@@ -331,7 +333,7 @@ class ConsoleOut(ttk.Frame):
         self.console_clear.set(False)
 
 
-class SysOutRouter(object):
+class SysOutRouter():
     """ Route stdout/stderr to the console window """
 
     def __init__(self, console=None, out_type=None):
