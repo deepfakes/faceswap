@@ -47,7 +47,7 @@ class Extract():
         self.run_extraction(save_thread)
         self.alignments.save()
         Utils.finalize(self.images.images_found,
-                       self.alignments.faces_count(),
+                       self.alignments.faces_count,
                        self.verify_output)
 
     def threaded_io(self, task, io_args=None):

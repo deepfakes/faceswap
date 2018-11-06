@@ -1,18 +1,19 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 
-from dlib import rectangle as d_rectangle
+from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
 
 
 class DetectedFace():
     """ Detected face and landmark information """
     def __init__(self, image=None, x=None, w=None, y=None, h=None,
-                 landmarksXY=None):
+                 frame_dims=None, landmarksXY=None):
         self.image = image
         self.x = x
         self.w = w
         self.y = y
         self.h = h
+        self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
 
     def landmarks_as_xy(self):
@@ -37,7 +38,8 @@ class DetectedFace():
         self.h = d_rect.bottom() - d_rect.top()
 
     def image_to_face(self, image):
-        """ Crop an image around bounding box to the face """
+        """ Crop an image around bounding box to the face
+            and capture it's dimensions """
         self.image = image[self.y: self.y + self.h,
                            self.x: self.x + self.w]
 
@@ -48,6 +50,7 @@ class DetectedFace():
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
+        alignment["frame_dims"] = self.frame_dims
         alignment["landmarksXY"] = self.landmarksXY
         return alignment
 
@@ -57,6 +60,7 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
+        self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
         if image.any():
             self.image_to_face(image)
