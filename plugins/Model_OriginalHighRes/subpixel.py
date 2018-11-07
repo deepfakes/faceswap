@@ -4,7 +4,11 @@ import keras.backend as K
 import tensorflow as tf
 from keras.engine import Layer
 from keras.utils.generic_utils import get_custom_objects
-from keras.utils.conv_utils import normalize_data_format
+try:
+    from keras.utils.conv_utils import normalize_data_format
+except ImportError:
+    from keras.backend import normalize_data_format
+
 
 
 class SubPixelUpscaling(Layer):

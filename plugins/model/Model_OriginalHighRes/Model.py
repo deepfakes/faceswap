@@ -92,14 +92,14 @@ class Model():
         rec_B_bgr = self.decoder_B(self.encoder(input_B_bgr))                   
         
         if self.USE_DSSIM:
-            from .dssim import DSSIMObjective
+            from plugins.Model_OriginalHighRes.dssim import DSSIMObjective
             loss_func = DSSIMObjective()
             print('Using DSSIM loss ..', flush=True)
         else:
             loss_func = 'mean_absolute_error'
             
         if self.USE_SUBPIXEL:
-            from .subpixel import SubPixelUpscaling
+            from plugins.Model_OriginalHighRes.subpixel import SubPixelUpscaling
             self.upscale = self.upscale_sub
             print('Using subpixel upscaling ..', flush=True)            
         
