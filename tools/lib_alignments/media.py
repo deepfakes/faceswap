@@ -72,6 +72,8 @@ class AlignmentData(Alignments):
             print("Destination format set to {}".format(dst_fmt))
 
         self.serializer = self.get_serializer("", dst_fmt)
+        filename = os.path.splitext(self.file)[0]
+        self.file = "{}.{}".format(filename, self.serializer.ext)
 
     def save(self):
         """ Backup copy of old alignments and save new alignments """

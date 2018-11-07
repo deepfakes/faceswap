@@ -102,3 +102,11 @@ class DetectedFace():
                                points.shape)
         points = np.squeeze(points)
         return points
+
+    def aligned_face(self, image, size=256, padding=48):
+        """ Align the detected face """
+        self.set_alignment_matrix(size)
+        mat = self.matrix * (size - 2 * padding)
+        mat[:, 2] += padding
+        return cv2.warpAffine(  # pylint: disable=no-member
+            image, mat, (size, size))
