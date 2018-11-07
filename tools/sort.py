@@ -15,13 +15,18 @@ from tqdm import tqdm
 import face_recognition
 
 from lib.cli import FullHelpArgumentParser
-from lib import face_alignment, Serializer
+from lib import Serializer
+from lib.faces_detect import DetectedFace
+from lib.multithreading import SpawnProcess
+from lib.queue_manager import queue_manager, QueueEmpty
+from plugins.plugin_loader import PluginLoader
 
 from . import cli
 
 
-class Sort(object):
+class Sort():
     """ Sorts folders of faces based on input criteria """
+    # pylint: disable=no-member
     def __init__(self, arguments):
         self.args = arguments
         self.changes = None
@@ -72,6 +77,58 @@ class Sort(object):
         self.args.final_process = _final.replace('-', '_')
 
         self.sort_process()
+
+    @staticmethod
+    def launch_aligner():
+        """ Load the aligner plugin to retrieve landmarks """
+        out_queue = queue_manager.get_queue("out")
+        kwargs = {"in_queue": queue_manager.get_queue("in"),
+                  "out_queue": out_queue}
+        process = SpawnProcess()
+        event = process.event
+
+        for plugin in ("fan", "dlib"):
+            aligner = PluginLoader.get_aligner(plugin)()
+            process.in_process(aligner.align, **kwargs)
+            # Wait for Aligner to take init
+            # The first ever load of the model for FAN has reportedly taken
+            # up to 3-4 minutes, hence high timeout.
+            event.wait(300)
+
+            if not event.is_set():
+                if plugin == "fan":
+                    process.join()
+                    print("Error initializing FAN. Trying Dlib")
+                    continue
+                else:
+                    raise ValueError("Error inititalizing Aligner")
+            if plugin == "dlib":
+                return
+
+            try:
+                err = None
+                err = out_queue.get(True, 1)
+            except QueueEmpty:
+                pass
+            if not err:
+                break
+            process.join()
+            print("Error initializing FAN. Trying Dlib")
+
+    @staticmethod
+    def alignment_dict(image):
+        """ Set the image to a dict for alignment """
+        height, width = image.shape[:2]
+        face = DetectedFace(x=0, w=width, y=0, h=height)
+        return {"image": image,
+                "detected_faces": [face]}
+
+    def get_landmarks(self, filename):
+        """ Get landmarks for current image """
+        image = cv2.imread(filename)
+        queue_manager.get_queue("in").put(self.alignment_dict(image))
+        face = queue_manager.get_queue("out").get()
+        return face["detected_faces"][0].landmarksXY
 
     def sort_process(self):
         """
@@ -180,24 +237,21 @@ class Sort(object):
         return img_list
 
     def sort_face_cnn(self):
-        """ Sort by dlib CNN similarity """
+        """ Sort by CNN similarity """
+        self.launch_aligner()
         input_dir = self.args.input_dir
 
         print("Sorting by face-cnn similarity...")
-
         img_list = []
         for img in tqdm(self.find_images(input_dir),
                         desc="Loading",
                         file=sys.stdout):
-            landmarks = face_alignment.Extract(
-                input_image_bgr=cv2.imread(img),
-                detector='dlib-cnn',
-                verbose=True,
-                input_is_predetected_face=True).landmarks
-            img_list.append([img, np.array(landmarks[0][1])
+            landmarks = self.get_landmarks(img)
+            img_list.append([img, np.array(landmarks)
                              if landmarks
                              else np.zeros((68, 2))])
 
+        queue_manager.terminate_queues()
         img_list_len = len(img_list)
         for i in tqdm(range(0, img_list_len - 1),
                       desc="Sorting",
@@ -218,7 +272,8 @@ class Sort(object):
         return img_list
 
     def sort_face_cnn_dissim(self):
-        """ Sort by dlib CNN dissimilarity """
+        """ Sort by CNN dissimilarity """
+        self.launch_aligner()
         input_dir = self.args.input_dir
 
         print("Sorting by face-cnn dissimilarity...")
@@ -227,12 +282,8 @@ class Sort(object):
         for img in tqdm(self.find_images(input_dir),
                         desc="Loading",
                         file=sys.stdout):
-            landmarks = face_alignment.Extract(
-                input_image_bgr=cv2.imread(img),
-                detector='dlib-cnn',
-                verbose=True,
-                input_is_predetected_face=True).landmarks
-            img_list.append([img, np.array(landmarks[0][1])
+            landmarks = self.get_landmarks(img)
+            img_list.append([img, np.array(landmarks)
                              if landmarks
                              else np.zeros((68, 2)), 0])
 
@@ -257,19 +308,16 @@ class Sort(object):
 
     def sort_face_yaw(self):
         """ Sort by yaw of face """
+        self.launch_aligner()
         input_dir = self.args.input_dir
 
         img_list = []
         for img in tqdm(self.find_images(input_dir),
                         desc="Loading",
                         file=sys.stdout):
-            landmarks = face_alignment.Extract(
-                input_image_bgr=cv2.imread(img),
-                detector='dlib-cnn',
-                verbose=True,
-                input_is_predetected_face=True).landmarks
+            landmarks = self.get_landmarks(img)
             img_list.append(
-                [img, self.calc_landmarks_face_yaw(np.array(landmarks[0][1]))])
+                [img, self.calc_landmarks_face_yaw(np.array(landmarks))])
 
         print("Sorting by face-yaw...")
         img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
@@ -415,7 +463,7 @@ class Sort(object):
         return bins
 
     def group_face_cnn(self, img_list):
-        """ Group into bins by dlib CNN face similarity """
+        """ Group into bins by CNN face similarity """
         print("Grouping by face-cnn similarity...")
 
         # Groups are of the form: group_num -> reference faces
@@ -632,31 +680,25 @@ class Sort(object):
                                 desc="Reloading",
                                 file=sys.stdout)]
         elif group_method == 'group_face_cnn':
+            self.launch_aligner()
             temp_list = []
             for img in tqdm(self.find_images(input_dir),
                             desc="Reloading",
                             file=sys.stdout):
-                landmarks = face_alignment.Extract(
-                    input_image_bgr=cv2.imread(img),
-                    detector='dlib-cnn',
-                    verbose=True,
-                    input_is_predetected_face=True).landmarks
-                temp_list.append([img, np.array(landmarks[0][1])
+                landmarks = self.get_landmarks(img)
+                temp_list.append([img, np.array(landmarks)
                                   if landmarks
                                   else np.zeros((68, 2))])
         elif group_method == 'group_face_yaw':
+            self.launch_aligner()
             temp_list = []
             for img in tqdm(self.find_images(input_dir),
                             desc="Reloading",
                             file=sys.stdout):
-                landmarks = face_alignment.Extract(
-                    input_image_bgr=cv2.imread(img),
-                    detector='dlib-cnn',
-                    verbose=True,
-                    input_is_predetected_face=True).landmarks
+                landmarks = self.get_landmarks(img)
                 temp_list.append(
                     [img,
-                     self.calc_landmarks_face_yaw(np.array(landmarks[0][1]))])
+                     self.calc_landmarks_face_yaw(np.array(landmarks))])
         elif group_method == 'group_hist':
             temp_list = [
                 [img,
@@ -826,7 +868,7 @@ class Sort(object):
 
     @staticmethod
     def get_avg_score_faces_cnn(fl1, references):
-        """ Return the average dlib CNN similarity score
+        """ Return the average CNN similarity score
             between a face and reference image """
         scores = []
         for fl2 in references:

@@ -3,11 +3,12 @@
 
 import platform
 import sys
-
 import cv2
 import numpy as np
 
-from lib.face_alignment import Extract
+from lib.multithreading import SpawnProcess
+from lib.queue_manager import queue_manager, QueueEmpty
+from plugins.plugin_loader import PluginLoader
 from . import Annotate, ExtractedFaces, Frames, Rotate
 
 
@@ -334,6 +335,7 @@ class Help():
 
     def render(self):
         """ Render help text to image window """
+        # pylint: disable=no-member
         image = self.background()
         display_text = self.helptext + self.compile_status()
         self.text_to_image(image, display_text)
@@ -342,6 +344,7 @@ class Help():
 
     def background(self):
         """ Create an image to hold help text """
+        # pylint: disable=no-member
         height = 880
         width = 480
         image = np.zeros((height, width, 3), np.uint8)
@@ -372,6 +375,7 @@ class Help():
     @staticmethod
     def text_to_image(image, display_text):
         """ Write out and format help text to image """
+        # pylint: disable=no-member
         pos_y = 0
         for line in display_text.split("\n"):
             if line.startswith("==="):
@@ -417,6 +421,7 @@ class Manual():
 
     def display_frames(self):
         """ Iterate through frames """
+        # pylint: disable=no-member
         is_windows = True if platform.system() == "Windows" else False
         is_conda = True if "conda" in sys.version.lower() else False
         cv2.namedWindow("Frame")
@@ -433,6 +438,7 @@ class Manual():
             key = cv2.waitKey(1)
 
             if self.window_closed(is_windows, is_conda, key):
+                queue_manager.terminate_queues()
                 break
 
             if key in press.keys():
@@ -463,7 +469,7 @@ class Manual():
         Conda (tested on Windows) doesn't sppear to read the window
         state property or negative key press properly, so we arbitarily
         use another property """
-
+        # pylint: disable=no-member
         closed = False
         prop_autosize = cv2.getWindowProperty('Frame', cv2.WND_PROP_AUTOSIZE)
         prop_visible = cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE)
@@ -595,6 +601,7 @@ class FrameDisplay():
 
     def resize_frame(self, image):
         """ Set the displayed frame size and add state border"""
+        # pylint: disable=no-member
         height, width = image.shape[:2]
         color = self.interface.get_state_color()
         cv2.rectangle(image, (0, 0), (width - 1, height - 1),
@@ -672,6 +679,7 @@ class FacesDisplay():
 
     def build_faces_row(self, faces, size):
         """ Build a row of 4 faces """
+        # pylint: disable=no-member
         if len(faces) != 4:
             remainder = 4 - (len(faces) % self.row_length)
             for _ in range(remainder):
@@ -693,8 +701,10 @@ class MouseHandler():
         self.interface = interface
         self.alignments = interface.alignments
         self.frames = interface.frames
-        self.extract = Extract(None, "manual",
-                               initialize_only=True, verbose=verbose)
+
+        self.extractor = dict()
+        self.init_extractor(verbose)
+
         self.mouse_state = None
         self.last_move = None
         self.center = None
@@ -705,12 +715,66 @@ class MouseHandler():
                       "bounding_last": list(),
                       "bounding_box_orig": list()}
 
+    def init_extractor(self, verbose):
+        """ Initialize FAN """
+        in_queue = queue_manager.get_queue("in")
+        align_queue = queue_manager.get_queue("align")
+        out_queue = queue_manager.get_queue("out")
+
+        d_kwargs = {"in_queue": in_queue,
+                    "out_queue": align_queue}
+        a_kwargs = {"in_queue": align_queue,
+                    "out_queue": out_queue}
+        detect_process = SpawnProcess()
+        align_process = SpawnProcess()
+        d_event = detect_process.event
+        a_event = align_process.event
+
+        detector = PluginLoader.get_detector("manual")(verbose=verbose)
+        detect_process.in_process(detector.detect_faces, **d_kwargs)
+
+        for plugin in ("fan", "dlib"):
+            aligner = PluginLoader.get_aligner(plugin)(verbose=verbose)
+            align_process.in_process(aligner.align, **a_kwargs)
+
+            # Wait for Aligner to take init
+            # The first ever load of the model for FAN has reportedly taken
+            # up to 3-4 minutes, hence high timeout.
+            a_event.wait(300)
+            if not a_event.is_set():
+                if plugin == "fan":
+                    align_process.join()
+                    print("Error initializing FAN. Trying Dlib")
+                    continue
+                else:
+                    raise ValueError("Error inititalizing Aligner")
+            if plugin == "dlib":
+                break
+
+            try:
+                err = None
+                err = out_queue.get(True, 1)
+            except QueueEmpty:
+                pass
+            if not err:
+                break
+            align_process.join()
+            print("Error initializing FAN. Trying Dlib")
+
+        d_event.wait(10)
+        if not d_event.is_set():
+            raise ValueError("Error inititalizing Detector")
+
+        self.extractor["detect"] = detector
+        self.extractor["align"] = aligner
+
     def on_event(self, event, x, y, flags, param):
         """ Handle the mouse events """
+        # pylint: disable=no-member
         if self.interface.get_edit_mode() != "Edit":
             return
-        elif not self.mouse_state and event not in (cv2.EVENT_LBUTTONDOWN,
-                                                    cv2.EVENT_MBUTTONDOWN):
+        if not self.mouse_state and event not in (cv2.EVENT_LBUTTONDOWN,
+                                                  cv2.EVENT_MBUTTONDOWN):
             return
 
         self.initialize()
@@ -827,15 +891,17 @@ class MouseHandler():
 
     def update_landmarks(self):
         """ Update the landmarks """
-        self.extract.execute(self.media["image"],
-                             manual_face=self.media["bounding_box"])
-        landmarks = self.extract.landmarks[0][1]
-        left, top, right, bottom = self.media["bounding_box"]
-        alignment = {"x": left,
-                     "w": right - left,
-                     "y": top,
-                     "h": bottom - top,
-                     "landmarksXY": landmarks}
+        queue_manager.get_queue("in").put((self.media["image"],
+                                           self.media["bounding_box"]))
+        landmarks = queue_manager.get_queue("out").get()
+        if landmarks == "EOF":
+            exit(0)
+        face = landmarks["detected_faces"][0]
+        alignment = {"x": face.x,
+                     "w": face.w,
+                     "y": face.y,
+                     "h": face.h,
+                     "landmarksXY": face.landmarksXY}
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:

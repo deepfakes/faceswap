@@ -5,19 +5,22 @@
 !*.txt
 !*.png
 !*.h5
+!*.pb
 !*.dat
 !*.npy
 !Dockerfile*
 !requirements*
+!.cache
 !lib
 !lib/face_alignment
-!lib/face_alignment/.cache
 !lib/gui
-!lib/gui/.cache
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons
 !scripts
-!plugins
+!plugins/
+!plugins/*
+!plugins/extract/*
+!plugins/model/*
 !tools
 !tools/lib*
 

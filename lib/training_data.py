@@ -1,8 +1,8 @@
+from random import shuffle
 import cv2
 import numpy
-from random import shuffle
 
-from .utils import BackgroundGenerator
+from .multithreading import BackgroundGenerator
 from .umeyama import umeyama
 
 class TrainingDataGenerator():
@@ -12,40 +12,42 @@ class TrainingDataGenerator():
         self.scale = scale
         self.zoom = zoom
 
-    def minibatchAB(self, images, batchsize):
-        batch = BackgroundGenerator(self.minibatch(images, batchsize), 1)
+    def minibatchAB(self, images, batchsize, doShuffle=True):
+        batch = BackgroundGenerator(self.minibatch(images, batchsize, doShuffle), 1)
         for ep1, warped_img, target_img in batch.iterator():
             yield ep1, warped_img, target_img
 
     # A generator function that yields epoch, batchsize of warped_img and batchsize of target_img
-    def minibatch(self, data, batchsize):
+    def minibatch(self, data, batchsize, doShuffle=True):
         length = len(data)
         assert length >= batchsize, "Number of images is lower than batch-size (Note that too few images may lead to bad training). # images: {}, batch-size: {}".format(length, batchsize)
         epoch = i = 0
-        shuffle(data)
+        if doShuffle:
+            shuffle(data)
         while True:
             size = batchsize
             if i+size > length:
-                shuffle(data)
+                if doShuffle:
+                    shuffle(data)
                 i = 0
                 epoch+=1
             rtn = numpy.float32([self.read_image(img) for img in data[i:i+size]])
             i+=size
-            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]       
+            yield epoch, rtn[:,0,:,:,:], rtn[:,1,:,:,:]
 
     def color_adjust(self, img):
         return img / 255.0
-    
+
     def read_image(self, fn):
         try:
             image = self.color_adjust(cv2.imread(fn))
         except TypeError:
             raise Exception("Error while reading image", fn)
-        
+
         image = cv2.resize(image, (256,256))
         image = self.random_transform( image, **self.random_transform_args )
         warped_img, target_img = self.random_warp( image, self.coverage, self.scale, self.zoom )
-        
+
         return warped_img, target_img
 
     def random_transform(self, image, rotation_range, zoom_range, shift_range, random_flip):
@@ -94,7 +96,7 @@ def stack_images(images):
             y_axes = list(range(0, n - 1, 2))
             x_axes = list(range(1, n - 1, 2))
         return y_axes, x_axes, [n - 1]
-    
+
     images_shape = numpy.array(images.shape)
     new_axes = get_transpose_axes(len(images_shape))
     new_shape = [numpy.prod(images_shape[x]) for x in new_axes]
