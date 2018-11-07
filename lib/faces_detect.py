@@ -1,11 +1,8 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 
-import cv2
-import numpy as np
-
 from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
-from lib.aligner import get_align_mat
+from lib.aligner import Extract as AlignerExtract, get_align_mat
 
 
 class DetectedFace():
@@ -19,7 +16,8 @@ class DetectedFace():
         self.h = h
         self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
-        self.matrix = None
+
+        self.aligned = dict()
 
     def landmarks_as_xy(self):
         """ Landmarks as XY """
@@ -70,43 +68,45 @@ class DetectedFace():
         if image.any():
             self.image_to_face(image)
 
-    def set_alignment_matrix(self, size):
-        """ Set the alignment matrix for this face """
-        if self.matrix is not None:
-            return
-        self.matrix = get_align_mat(self, size, False)
+    # <<< Aligned Face methods and properties >>> #
+    def load_aligned(self, image, size=256, padding=48, align_eyes=False):
+        """ No need to load aligned information for all uses of this
+            class, so only call this to load the information for easy
+            reference to aligned properties for this face """
+        self.aligned["size"] = size
+        self.aligned["padding"] = padding
+        self.aligned["align_eyes"] = align_eyes
+        self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
+        self.aligned["face"] = AlignerExtract().transform(
+            image,
+            self.aligned["matrix"],
+            size,
+            padding)
 
-    def original_roi(self, size=256, padding=48):
+    @property
+    def original_roi(self):
         """ Return the square aligned box location on the original
             image """
-        self.set_alignment_matrix(size)
-        points = np.array([[0, 0],
-                           [0, size - 1],
-                           [size - 1, size - 1],
-                           [size - 1, 0]], np.int32)
-        points = points.reshape((-1, 1, 2))
+        return AlignerExtract().get_original_roi(self.aligned["matrix"],
+                                                 self.aligned["size"],
+                                                 self.aligned["padding"])
 
-        mat = self.matrix * (size - 2 * padding)
-        mat[:, 2] += padding
-        mat = cv2.invertAffineTransform(mat)  # pylint: disable=no-member
-        return [cv2.transform(points, mat)]  # pylint: disable=no-member
-
-    def aligned_landmarks(self, size=256, padding=48):
+    @property
+    def aligned_landmarks(self):
         """ Return the landmarks location transposed to extracted face """
-        self.set_alignment_matrix(size)
-        mat = self.matrix * (size - 2 * padding)
-        mat[:, 2] += padding
-        points = np.expand_dims(self.landmarksXY, axis=1)
-        points = cv2.transform(points,    # pylint: disable=no-member
-                               mat,
-                               points.shape)
-        points = np.squeeze(points)
-        return points
+        return AlignerExtract().transform_points(self.landmarksXY,
+                                                 self.aligned["matrix"],
+                                                 self.aligned["size"],
+                                                 self.aligned["padding"])
 
-    def aligned_face(self, image, size=256, padding=48):
-        """ Align the detected face """
-        self.set_alignment_matrix(size)
-        mat = self.matrix * (size - 2 * padding)
-        mat[:, 2] += padding
-        return cv2.warpAffine(  # pylint: disable=no-member
-            image, mat, (size, size))
+    @property
+    def aligned_face(self):
+        """ Return aligned detected face """
+        return self.aligned["face"]
+
+    @property
+    def adjusted_matrix(self):
+        """ Return adjusted matrix for size/padding combination """
+        return AlignerExtract().transform_matrix(self.aligned["matrix"],
+                                                 self.aligned["size"],
+                                                 self.aligned["padding"])

@@ -9,7 +9,6 @@ import cv2
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.utils import _image_extensions
-from plugins.extract.align._base import Extract as AlignerExtract
 
 
 class AlignmentData(Alignments):
@@ -221,40 +220,34 @@ class ExtractedFaces():
         self.size = size
         self.padding = padding
         self.align_eyes = align_eyes
-        self.extractor = AlignerExtract()
         self.alignments = alignments
         self.frames = frames
 
         self.current_frame = None
         self.faces = list()
-        self.detected_faces = list()
 
     def get_faces(self, frame):
         """ Return faces and transformed landmarks
             for each face in a given frame with it's alignments"""
         self.current_frame = None
-        self.faces = list()
-        self.detected_faces = list()
         alignments = self.alignments.get_faces_in_frame(frame)
         if not alignments:
+            self.faces = list()
             return
         image = self.frames.load_image(frame)
-        for alignment in alignments:
-            face, detected_face = self.extract_one_face(alignment,
-                                                        image.copy())
-            self.faces.append(face)
-            self.detected_faces.append(detected_face)
+        self.faces = [self.extract_one_face(alignment, image.copy())
+                      for alignment in alignments]
         self.current_frame = frame
 
     def extract_one_face(self, alignment, image):
         """ Extract one face from image """
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        aligned_face, _ = self.extractor.extract(image,
-                                                 face,
-                                                 self.size,
-                                                 self.align_eyes)
-        return aligned_face, face
+        face.load_aligned(image,
+                          size=self.size,
+                          padding=self.padding,
+                          align_eyes=self.align_eyes)
+        return face
 
     def get_faces_in_frame(self, frame, update=False):
         """ Return the faces for the selected frame """
@@ -268,9 +261,8 @@ class ExtractedFaces():
         if self.current_frame != frame:
             self.get_faces(frame)
         sizes = list()
-        for face in self.detected_faces:
-            original_roi = face.original_roi(self.size, self.padding)
-            top_left, top_right = original_roi[0], original_roi[3]
+        for face in self.faces:
+            top_left, top_right = face.original_roi[0], face.original_roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
             if top_left[1] == top_right[1]:

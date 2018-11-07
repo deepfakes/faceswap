@@ -505,9 +505,7 @@ class Manual():
         alignments = self.alignments.get_faces_in_frame(frame_name)
         faces_updated = self.interface.state["edit"]["update_faces"]
         self.extracted_faces.get_faces(frame_name)
-        roi = [face.original_roi(self.extracted_faces.size,
-                                 self.extracted_faces.padding)
-               for face in self.extracted_faces.detected_faces]
+        roi = [face.original_roi for face in self.extracted_faces.faces]
 
         if faces_updated:
             self.interface.state["edit"]["update_faces"] = False
@@ -552,10 +550,8 @@ class Manual():
     def set_faces(self, frame):
         """ Pass the current frame faces to faces window """
         faces = self.extracted_faces.get_faces_in_frame(frame)
-        landmarks = [{"landmarksXY": face.aligned_landmarks(
-            self.extracted_faces.size,
-            self.extracted_faces.padding)}
-                     for face in self.extracted_faces.detected_faces]
+        landmarks = [{"landmarksXY": face.aligned_landmarks}
+                     for face in self.extracted_faces.faces]
         return FacesDisplay(faces,
                             landmarks,
                             self.extracted_faces.size,
@@ -628,7 +624,7 @@ class FacesDisplay():
     @staticmethod
     def copy_faces(faces):
         """ Copy the extracted faces so as not to save the annotations back """
-        return [face.copy() for face in faces]
+        return [face.aligned_face.copy() for face in faces]
 
     @staticmethod
     def set_full_roi(size):

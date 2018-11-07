@@ -243,11 +243,9 @@ class Draw():
         """ Draw the alignments """
         alignments = self.alignments.get_faces_in_frame(frame)
         image = self.frames.load_image(frame)
-        original_roi = [face.original_roi(
-            self.extracted_faces.size,
-            self.extracted_faces.padding)
-                        for face in self.extracted_faces.detected_faces]
-
+        self.extracted_faces.get_faces_in_frame(frame)
+        original_roi = [face.original_roi
+                        for face in self.extracted_faces.faces]
         annotate = Annotate(image, alignments, original_roi)
         annotate.draw_bounding_box(1, 1)
         annotate.draw_extract_box(2, 1)
