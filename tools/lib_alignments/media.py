@@ -5,7 +5,6 @@
 import os
 
 import cv2
-import numpy as np
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
@@ -226,41 +225,34 @@ class ExtractedFaces():
 
         self.current_frame = None
         self.faces = list()
-        self.matrices = list()
+        self.detected_faces = list()
 
     def get_faces(self, frame):
-        """ Return faces and transformed face matrices
+        """ Return faces and transformed landmarks
             for each face in a given frame with it's alignments"""
         self.current_frame = None
         self.faces = list()
-        self.matrices = list()
+        self.detected_faces = list()
         alignments = self.alignments.get_faces_in_frame(frame)
         if not alignments:
             return
         image = self.frames.load_image(frame)
         for alignment in alignments:
-            face, matrix = self.extract_one_face(alignment, image.copy())
+            face, detected_face = self.extract_one_face(alignment,
+                                                        image.copy())
             self.faces.append(face)
-            self.matrices.append(matrix)
+            self.detected_faces.append(detected_face)
         self.current_frame = frame
 
     def extract_one_face(self, alignment, image):
         """ Extract one face from image """
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        return self.extractor.extract(image, face, self.size, self.align_eyes)
-
-    def original_roi(self, matrix):
-        """ Return the original ROI of an extracted face """
-        points = np.array([[0, 0], [0, self.size - 1],
-                           [self.size - 1, self.size - 1],
-                           [self.size - 1, 0]], np.int32)
-        points = points.reshape((-1, 1, 2))
-
-        mat = matrix * (self.size - 2 * self.padding)
-        mat[:, 2] += self.padding
-        mat = cv2.invertAffineTransform(mat)  # pylint: disable=no-member
-        return [cv2.transform(points, mat)]  # pylint: disable=no-member
+        aligned_face, _ = self.extractor.extract(image,
+                                                 face,
+                                                 self.size,
+                                                 self.align_eyes)
+        return aligned_face, face
 
     def get_faces_in_frame(self, frame, update=False):
         """ Return the faces for the selected frame """
@@ -268,20 +260,14 @@ class ExtractedFaces():
             self.get_faces(frame)
         return self.faces
 
-    def get_roi_for_frame(self, frame, update=False):
-        """ Return the original rois for the selected frame """
-        if self.current_frame != frame or update:
-            self.get_faces(frame)
-        return [self.original_roi(matrix) for matrix in self.matrices]
-
     def get_roi_size_for_frame(self, frame):
         """ Return the size of the original extract box for
             the selected frame """
         if self.current_frame != frame:
             self.get_faces(frame)
         sizes = list()
-        for matrix in self.matrices:
-            original_roi = self.original_roi(matrix)[0].squeeze()
+        for face in self.detected_faces:
+            original_roi = face.original_roi(self.size, self.padding)
             top_left, top_right = original_roi[0], original_roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
@@ -291,20 +277,3 @@ class ExtractedFaces():
                 length = int(((len_x ** 2) + (len_y ** 2)) ** 0.5)
             sizes.append(length)
         return sizes
-
-    def get_aligned_landmarks_for_frame(self, frame, landmarks_xy,
-                                        update=False):
-        """ Return the transposed landmarks for the selected face """
-        if self.current_frame != frame or update:
-            self.get_faces(frame)
-        aligned_landmarks = list()
-        if not self.matrices:
-            return aligned_landmarks
-        for idx, landmarks in enumerate(landmarks_xy):
-            matrix = self.matrices[idx]
-            aligned_landmarks.append(
-                self.extractor.transform_points(landmarks,
-                                                matrix,
-                                                self.size,
-                                                self.padding))
-        return aligned_landmarks

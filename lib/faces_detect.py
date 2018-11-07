@@ -1,7 +1,11 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 
+import cv2
+import numpy as np
+
 from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
+from lib.aligner import get_align_mat
 
 
 class DetectedFace():
@@ -15,6 +19,7 @@ class DetectedFace():
         self.h = h
         self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
+        self.matrix = None
 
     def landmarks_as_xy(self):
         """ Landmarks as XY """
@@ -64,3 +69,36 @@ class DetectedFace():
         self.landmarksXY = alignment["landmarksXY"]
         if image.any():
             self.image_to_face(image)
+
+    def set_alignment_matrix(self, size):
+        """ Set the alignment matrix for this face """
+        if self.matrix is not None:
+            return
+        self.matrix = get_align_mat(self, size, False)
+
+    def original_roi(self, size=256, padding=48):
+        """ Return the square aligned box location on the original
+            image """
+        self.set_alignment_matrix(size)
+        points = np.array([[0, 0],
+                           [0, size - 1],
+                           [size - 1, size - 1],
+                           [size - 1, 0]], np.int32)
+        points = points.reshape((-1, 1, 2))
+
+        mat = self.matrix * (size - 2 * padding)
+        mat[:, 2] += padding
+        mat = cv2.invertAffineTransform(mat)  # pylint: disable=no-member
+        return [cv2.transform(points, mat)]  # pylint: disable=no-member
+
+    def aligned_landmarks(self, size=256, padding=48):
+        """ Return the landmarks location transposed to extracted face """
+        self.set_alignment_matrix(size)
+        mat = self.matrix * (size - 2 * padding)
+        mat[:, 2] += padding
+        points = np.expand_dims(self.landmarksXY, axis=1)
+        points = cv2.transform(points,    # pylint: disable=no-member
+                               mat,
+                               points.shape)
+        points = np.squeeze(points)
+        return points

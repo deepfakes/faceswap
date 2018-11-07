@@ -91,18 +91,15 @@ class Aligner():
         image = output["image"]
 
         resized_faces = list()
-        t_mats = list()
 
         for face in detected_faces:
-            resized_face, t_mat = self.extract.extract(image,
-                                                       face,
-                                                       self.size,
-                                                       self.align_eyes)
+            resized_face, _ = self.extract.extract(image,
+                                                   face,
+                                                   self.size,
+                                                   self.align_eyes)
             resized_faces.append(resized_face)
-            t_mats.append(t_mat)
 
         output["resized_faces"] = resized_faces
-        output["t_mats"] = t_mats
 
     # <<< MISC METHODS >>> #
     def get_vram_free(self):
@@ -132,7 +129,8 @@ class Extract():
         """ Transform Image """
         matrix = mat * (size - 2 * padding)
         matrix[:, 2] += padding
-        return cv2.warpAffine(image, matrix, (size, size))
+        return cv2.warpAffine(  # pylint: disable=no-member
+            image, matrix, (size, size))
 
     @staticmethod
     def transform_points(points, mat, size, padding=0):
@@ -140,7 +138,8 @@ class Extract():
         matrix = mat * (size - 2 * padding)
         matrix[:, 2] += padding
         points = np.expand_dims(points, axis=1)
-        points = cv2.transform(points, matrix, points.shape)
+        points = cv2.transform(  # pylint: disable=no-member
+            points, matrix, points.shape)
         points = np.squeeze(points)
         return points
 
@@ -148,6 +147,7 @@ class Extract():
     def get_feature_mask(aligned_landmarks_68, size,
                          padding=0, dilation=30):
         """ Return the face feature mask """
+        # pylint: disable=no-member
         scale = size - 2*padding
         translation = padding
         pad_mat = np.matrix([[scale, 0.0, translation],

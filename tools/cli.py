@@ -24,10 +24,10 @@ class AlignmentsArgs(FaceSwapArgs):
             "opts": ("-j", "--job"),
             "type": str,
             "choices": ("draw", "extract", "extract-large", "manual",
-                        "missing-alignments", "missing-frames",
+                        "missing-alignments", "missing-frames", "legacy",
                         "leftover-faces", "multi-faces", "no-faces",
                         "reformat", "remove-faces", "remove-frames",
-                        "rotate", "sort-x", "sort-y", "spatial"),
+                        "sort-x", "sort-y", "spatial"),
             "required": True,
             "help": "R|Choose which action you want to perform.\n"
                     "NB: All actions require an alignments file (-a) to"
@@ -51,6 +51,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n'missing-frames': Identify frames in the alignments"
                     "\n\tfile that do not appear within the frames"
                     "\n\tfolder." + output_opts + frames_dir +
+                    "\n'legacy': This updates legacy alignments to the latest "
+                    "\n\tformat by adding frame dimensions and rotating "
+                    "\n\tthe landmarks and bounding boxes" + frames_dir +
                     "\n'leftover-faces': Identify faces in the faces"
                     "\n\tfolder that do not exist in the alignments file."
                     + output_opts + faces_dir +
@@ -77,14 +80,6 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\twill be backed up. A different file format for"
                     "\n\tthe alignments file can optionally be specified"
                     "\n\t(-fmt)." + frames_dir +
-                    "\n'rotate' - Rotate landmarks and bounding boxes. Legacy"
-                    "\n\talignments files hold an 'r' parameter indicating"
-                    "\n\tthat the image needs to be rotated for convert. This"
-                    "\n\tmeans that the stored landarks and bounding box do"
-                    "\n\tnot correspond to the actual frame. This command"
-                    "\n\tupdates the alignments file with the correct"
-                    "\n\tlandmarks and bounding boxes and removes the 'r'"
-                    "\n\tparameter." + frames_dir +
                     "\n'sort-x' - Re-index the alignments from left to"
                     "\n\tright. For alignments with multiple faces this will"
                     "\n\tensure that the left-most face is at index 0"

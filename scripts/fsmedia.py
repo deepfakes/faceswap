@@ -235,11 +235,8 @@ class BlurryFaceFilter(PostProcessAction):
             resized_face = output_item["resized_faces"][idx]
             dims = resized_face.shape[:2]
             size = dims[0]
-            t_mat = output_item["t_mats"][idx]
 
-            aligned_landmarks = extractor.transform_points(
-                face.landmarksXY,
-                t_mat, size, 48)
+            aligned_landmarks = face.aligned_landmarks(size, padding=48)
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
                 size, 48)
@@ -267,14 +264,10 @@ class DebugLandmarks(PostProcessAction):
 
     def process(self, output_item):
         """ Draw landmarks on image """
-        transform_points = AlignerExtract().transform_points
         for idx, face in enumerate(output_item["detected_faces"]):
             dims = output_item["resized_faces"][idx].shape[:2]
             size = dims[0]
-            landmarks = transform_points(face.landmarksXY,
-                                         output_item["t_mats"][idx],
-                                         size,
-                                         48)
+            landmarks = face.aligned_landmarks(size, padding=48)
             for (pos_x, pos_y) in landmarks:
                 cv2.circle(  # pylint: disable=no-member
                     output_item["resized_faces"][idx],
