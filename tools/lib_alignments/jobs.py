@@ -108,7 +108,7 @@ class Check():
         for frame in tqdm(self.items, total=len(self.items)):
             frame_name = frame["frame_fullname"]
             if (frame["frame_extension"] not in exclude_filetypes
-                    and not self.alignments.frame_in_alignments(frame_name)):
+                    and not self.alignments.frame_exists(frame_name)):
                 yield frame_name
 
     def get_missing_frames(self):
@@ -116,8 +116,8 @@ class Check():
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
         frames = [item["frame_fullname"] for item in self.items]
-        for frame in tqdm(self.alignments.alignments.keys(),
-                          total=len(self.alignments.count)):
+        for frame in tqdm(self.alignments.data.keys(),
+                          total=len(self.alignments.frames_count)):
             if frame not in frames:
                 yield frame
 
@@ -126,7 +126,7 @@ class Check():
         self.output_message = "Faces missing from the alignments file"
         for face in tqdm(self.items, total=len(self.items)):
             frame = self.alignments.get_full_frame_name(face["frame_name"])
-            alignment_faces = self.alignments.count_alignments_in_frame(frame)
+            alignment_faces = self.alignments.count_faces_in_frame(frame)
 
             if alignment_faces <= face["face_index"]:
                 yield face["face_fullname"]
@@ -214,9 +214,9 @@ class Draw():
 
     def process(self):
         """ Run the draw alignments process """
-        rotate = Rotate(self.alignments, self.arguments,
+        legacy = Legacy(self.alignments, self.arguments,
                         frames=self.frames, child_process=True)
-        rotate.process()
+        legacy.process()
 
         print("\n[DRAW LANDMARKS]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(
@@ -229,7 +229,7 @@ class Draw():
 
             frame_name = frame["frame_fullname"]
 
-            if not self.alignments.frame_in_alignments(frame_name):
+            if not self.alignments.frame_exists(frame_name):
                 if self.verbose:
                     print("Skipping {} - Alignments "
                           "not found".format(frame_name))
@@ -241,10 +241,11 @@ class Draw():
 
     def annotate_image(self, frame):
         """ Draw the alignments """
-        alignments = self.alignments.get_alignments_for_frame(frame)
+        alignments = self.alignments.get_faces_in_frame(frame)
         image = self.frames.load_image(frame)
-        original_roi = self.extracted_faces.get_roi_for_frame(frame)
-
+        self.extracted_faces.get_faces_in_frame(frame)
+        original_roi = [face.original_roi
+                        for face in self.extracted_faces.faces]
         annotate = Annotate(image, alignments, original_roi)
         annotate.draw_bounding_box(1, 1)
         annotate.draw_extract_box(2, 1)
@@ -298,7 +299,7 @@ class Extract():
 
             frame_name = frame["frame_fullname"]
 
-            if not self.alignments.frame_in_alignments(frame_name):
+            if not self.alignments.frame_exists(frame_name):
                 if self.verbose:
                     print("Skipping {} - Alignments "
                           "not found".format(frame_name))
@@ -322,7 +323,7 @@ class Extract():
 
     def select_valid_faces(self, frame):
         """ Return valid faces for extraction """
-        faces = self.extracted_faces.get_faces_for_frame(frame)
+        faces = self.extracted_faces.get_faces_in_frame(frame)
         if self.type != "large":
             return faces
         valid_faces = list()
@@ -338,7 +339,7 @@ class Reformat():
     def __init__(self, alignments, arguments):
         self.verbose = arguments.verbose
         self.alignments = alignments
-        if self.alignments.src_format == "dfl":
+        if self.alignments.file == "dfl":
             self.faces = Faces(arguments.faces_dir,
                                self.verbose,
                                dfl=True)
@@ -346,11 +347,12 @@ class Reformat():
     def process(self):
         """ Run reformat """
         print("\n[REFORMAT ALIGNMENTS]")  # Tidy up cli output
-        if self.alignments.src_format == "dfl":
-            self.alignments.alignments = self.load_dfl()
-            self.alignments.file = os.path.join(self.faces.folder,
-                                                "alignments.json")
-        self.alignments.save_alignments()
+        if self.alignments.file == "dfl":
+            self.alignments.data = self.load_dfl()
+            self.alignments.file = self.alignments.get_location(
+                self.faces.folder,
+                "alignments")
+        self.alignments.save()
 
     def load_dfl(self):
         """ Load alignments from DeepFaceLab and format for Faceswap """
@@ -433,13 +435,13 @@ class RemoveAlignments():
         print("\n[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
         del_count = 0
 
-        iterator = self.alignments.get_alignments_one_image
+        iterator = self.alignments.yield_faces
         if self.type == "frames":
             iterator = list(item[3] for item in iterator())
 
         for item in tqdm(iterator() if self.type == "faces" else iterator,
                          desc="Processing alignments file",
-                         total=self.alignments.count):
+                         total=self.alignments.frames_count):
             task = getattr(self, "remove_{}".format(self.type))
             del_count += task(item)
 
@@ -449,7 +451,7 @@ class RemoveAlignments():
 
         print("{} alignment(s) were removed from "
               "alignments file".format(del_count))
-        self.alignments.save_alignments()
+        self.alignments.save()
 
         if self.type == "faces":
             self.rename_faces()
@@ -458,7 +460,7 @@ class RemoveAlignments():
         """ Process to remove frames from an alignments file """
         if item in self.items:
             return 0
-        del self.alignments.alignments[item]
+        del self.alignments.data[item]
         return 1
 
     def remove_faces(self, item):
@@ -477,7 +479,7 @@ class RemoveAlignments():
         """ Remove the alignment from the alignments file """
         del_count = 0
         frame_name, alignments, number_alignments = item[:3]
-        processor = self.alignments.get_one_alignment_index_reverse
+        processor = self.alignments.yield_original_index_reverse
         for idx in processor(alignments, number_alignments):
             face_indexes = self.items.items.get(frame_name, [-1])
             if idx not in face_indexes:
@@ -537,9 +539,13 @@ class RemoveAlignments():
         return 1
 
 
-class Rotate():
-    """ Rotating landmarks and bounding boxes on legacy alignments
+class Legacy():
+    """ Update legacy alignments:
+
+        - Add frame dimensions
+        - Rotate landmarks and bounding boxes on legacy alignments
         and remove the 'r' parameter """
+
     def __init__(self, alignments, arguments,
                  frames=None, child_process=False):
         self.verbose = arguments.verbose
@@ -551,24 +557,38 @@ class Rotate():
 
     def process(self):
         """ Run the rotate alignments process """
-        rotated = self.alignments.get_rotated()
-        if not rotated and self.child_process:
+        no_dims = self.alignments.get_legacy_no_dims()
+        rotated = self.alignments.get_legacy_rotation()
+        if self.child_process and not rotated and not no_dims:
             return
-        print("\n[ROTATE LANDMARKS]")  # Tidy up cli output
-        if self.child_process:
-            print("Legacy rotated frames found. Rotating landmarks")
-        self.rotate_landmarks(rotated)
-        if not self.child_process:
-            self.alignments.save_alignments()
+        print("\n[UPDATE LEGACY LANDMARKS]")  # Tidy up cli output
+
+        if no_dims:
+            if self.child_process:
+                print("Legacy landmarks found. Adding frame dimensions...")
+            self.add_dimensions(no_dims)
+
+        if rotated:
+            if self.child_process:
+                print("Legacy rotated frames found. Rotating landmarks")
+            self.rotate_landmarks(rotated)
+
+        self.alignments.save()
+
+    def add_dimensions(self, no_dims):
+        """ Add width and height of original frame to alignments """
+        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
+            if no_dim not in self.frames.items.keys():
+                continue
+            dims = self.frames.load_image(no_dim).shape[:2]
+            self.alignments.add_dimensions(no_dim, dims)
 
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
-        for rotate_item in tqdm(rotated,
-                                desc="Rotating Landmarks"):
+        for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
             if rotate_item not in self.frames.items.keys():
                 continue
-            dims = self.frames.load_image(rotate_item).shape[:2]
-            self.alignments.rotate_existing_landmarks(rotate_item, dims)
+            self.alignments.rotate_existing_landmarks(rotate_item)
 
 
 class Sort():
@@ -592,13 +612,13 @@ class Sort():
         print("\n[SORT INDEXES]")  # Tidy up cli output
         self.check_rotated()
         self.reindex_faces()
-        self.alignments.save_alignments()
+        self.alignments.save()
 
     def check_rotated(self):
         """ Legacy rotated alignments will not have the correct x, y
             positions, so generate a warning and exit """
         if any(alignment.get("r", None)
-               for val in self.alignments.alignments.values()
+               for val in self.alignments.data.values()
                for alignment in val):
             print("WARNING: There are rotated frames in the alignments "
                   "file.\n\t Position of faces will not be correctly "
@@ -611,9 +631,9 @@ class Sort():
     def reindex_faces(self):
         """ Re-Index the faces """
         reindexed = 0
-        for alignment in tqdm(self.alignments.get_alignments_one_image(),
+        for alignment in tqdm(self.alignments.yield_faces(),
                               desc="Sort alignment indexes",
-                              total=self.alignments.count):
+                              total=self.alignments.frames_count):
             frame, alignments, count, key = alignment
             if count <= 1:
                 continue
@@ -625,7 +645,7 @@ class Sort():
                                             sorted_alignments,
                                             frame)
             self.rename_faces(map_faces)
-            self.alignments.alignments[key] = sorted_alignments
+            self.alignments.data[key] = sorted_alignments
             reindexed += 1
         print("{} Frames had their faces reindexed".format(reindexed))
 
@@ -695,7 +715,7 @@ class Spatial():
         landmarks = self.spatially_filter()
         landmarks = self.temporally_smooth(landmarks)
         self.update_alignments(landmarks)
-        self.alignments.save_alignments()
+        self.alignments.save()
 
         print("\nDone! To re-extract faces run:\n    python tools.py "
               "alignments -j extract -a {} -fr <path_to_frames_dir> -fc "
@@ -737,13 +757,13 @@ class Spatial():
 
     def normalize(self):
         """ Compile all original and normalized alignments """
-        count = sum(1 for val in self.alignments.alignments.values() if val)
+        count = sum(1 for val in self.alignments.data.values() if val)
         landmarks_all = np.zeros((68, 2, int(count)))
 
         end = 0
-        for key in tqdm(sorted(self.alignments.alignments.keys()),
+        for key in tqdm(sorted(self.alignments.data.keys()),
                         desc="Compiling"):
-            val = self.alignments.alignments[key]
+            val = self.alignments.data[key]
             if not val:
                 continue
             # We should only be normalizing a single face, so just take
@@ -816,4 +836,4 @@ class Spatial():
         for idx, frame in tqdm(self.mappings.items(), desc="Updating"):
             landmarks_update = landmarks[:, :, idx].astype(int)
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self.alignments.alignments[frame][0]["landmarksXY"] = landmarks_xy
+            self.alignments.data[frame][0]["landmarksXY"] = landmarks_xy

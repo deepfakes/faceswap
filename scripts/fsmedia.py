@@ -11,12 +11,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from lib import Serializer
+from lib.aligner import Extract as AlignerExtract
+from lib.alignments import Alignments as AlignmentsBase
 from lib.detect_blur import is_blurry
 from lib.FaceFilter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_folder, get_image_paths,
-                       rotate_landmarks, set_system_verbosity)
-from plugins.extract.align._base import Extract as AlignerExtract
+                       set_system_verbosity)
 
 
 class Utils():
@@ -46,76 +46,64 @@ class Utils():
         print("Done!")
 
 
-class Alignments():
-    """ Holds processes pertaining to the alignments file """
+class Alignments(AlignmentsBase):
+    """ Override main alignments class for extract """
     def __init__(self, arguments, is_extract):
-        self.is_extract = is_extract
         self.args = arguments
-        self.serializer = self.get_serializer()
-        self.location = self.get_location()
-        self.have_alignments_file = os.path.exists(self.location)
-        self.data = self.load()
+        self.is_extract = is_extract
+        folder, filename = self.set_folder_filename()
+        serializer = self.set_serializer()
+        super().__init__(folder,
+                         filename=filename,
+                         serializer=serializer,
+                         verbose=self.args.verbose)
 
-    def frames_count(self):
-        """ Return current frames count """
-        return len(self.data)
+    def set_folder_filename(self):
+        """ Return the folder for the alignments file"""
+        if self.args.alignments_path:
+            folder, filename = os.path.split(str(self.args.alignments_path))
+        else:
+            folder = str(self.args.input_dir)
+            filename = "alignments"
+        return folder, filename
 
-    def faces_count(self):
-        """ Return current faces count """
-        return sum(len(faces) for faces in self.data.values())
-
-    def get_serializer(self):
+    def set_serializer(self):
         """ Set the serializer to be used for loading and
             saving alignments """
-        if (not hasattr(self.args, "serializer")
-                or not self.args.serializer):
-            if self.args.alignments_path:
-                ext = os.path.splitext(self.args.alignments_path)[-1]
-            else:
-                ext = "json"
-            serializer = Serializer.get_serializer_from_ext(ext)
+        if hasattr(self.args, "serializer") and self.args.serializer:
+            serializer = self.args.serializer
         else:
-            serializer = Serializer.get_serializer(self.args.serializer)
-        print("Using {} serializer".format(serializer.ext))
+            # If there is a full filename then this will be overriden
+            # by filename extension
+            serializer = "json"
         return serializer
 
-    def get_location(self):
-        """ Return the path to alignments file """
-        if self.args.alignments_path:
-            alignfile = self.args.alignments_path
-        else:
-            alignfile = os.path.join(
-                str(self.args.input_dir),
-                "alignments.{}".format(self.serializer.ext))
-        print("Alignments filepath: %s" % alignfile)
-        return alignfile
-
     def load(self):
-        """ Load the alignments data if it exists or create empty dict """
+        """ Override  parent loader to handle skip existing on extract """
         data = dict()
-        skip_faces = None
-        if self.is_extract:
-            skip_existing = bool(hasattr(self.args, 'skip_existing')
-                                 and self.args.skip_existing)
-            skip_faces = bool(hasattr(self.args, 'skip_faces')
-                              and self.args.skip_faces)
+        if not self.is_extract:
+            data = super().load()
+            return data
 
-            if not self.have_alignments_file:
-                if skip_existing or skip_faces:
-                    print("Skip Existing/Skip Faces selected, but no "
-                          "alignments file found!")
-                return data
-            if not skip_existing and not skip_faces:
-                return data
+        skip_existing = bool(hasattr(self.args, 'skip_existing')
+                             and self.args.skip_existing)
+        skip_faces = bool(hasattr(self.args, 'skip_faces')
+                          and self.args.skip_faces)
+
+        if not skip_existing and not skip_faces:
+            return data
+
+        if not self.have_alignments_file and (skip_existing or skip_faces):
+            print("Skip Existing/Skip Faces selected, but no alignments file "
+                  "found!")
+            return data
 
         try:
-            with open(self.location, self.serializer.roptions) as align:
+            with open(self.file, self.serializer.roptions) as align:
                 data = self.serializer.unmarshal(align.read())
-
-        except Exception as err:
-            print("{} not read!".format(self.location))
-            print(str(err))
-            data = dict()
+        except IOError as err:
+            print("Error: {} not read: {}".format(self.file, err.strerror))
+            exit(1)
 
         if skip_faces:
             # Remove items from algnments that have no faces so they will
@@ -124,62 +112,7 @@ class Alignments():
             for key in del_keys:
                 if key in data:
                     del data[key]
-
         return data
-
-    def save(self):
-        """ Write the serialized alignments file """
-        try:
-            print("Writing alignments to: {}".format(self.location))
-            with open(self.location, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(self.data))
-        except Exception as err:
-            print("{} not written!".format(self.location))
-            print(str(err))
-
-    def frame_exists(self, frame):
-        """ return path of images that have faces """
-        return frame in self.data.keys()
-
-    def get_alignments_for_frame(self, frame):
-        """ Return the alignments for the selected frame """
-        return self.data.get(frame, list())
-
-    def get_legacy_frames(self):
-        """ Return a list of frames with legacy rotations """
-        keys = list()
-        for key, val in self.data.items():
-            if any(alignment.get("r", None) for alignment in val):
-                keys.append(key)
-        return keys
-
-    def rotate_existing_landmarks(self, frame, dimensions):
-        """ Backwards compatability fix. Rotates the landmarks to
-            their correct position and deletes r """
-        for face in self.get_alignments_for_frame(frame):
-            angle = face.get("r", 0)
-            if not angle:
-                return
-            rotation_matrix = self.get_original_rotation_matrix(dimensions,
-                                                                angle)
-            rotate_landmarks(face, rotation_matrix)
-            del face["r"]
-
-    @staticmethod
-    def get_original_rotation_matrix(dimensions, angle):
-        """ Calculate original rotation matrix and invert """
-        height, width = dimensions
-        center = (width/2, height/2)
-        rotation_matrix = cv2.getRotationMatrix2D(center, -1.0*angle, 1.)
-
-        abs_cos = abs(rotation_matrix[0, 0])
-        abs_sin = abs(rotation_matrix[0, 1])
-        rotated_width = int(height*abs_sin + width*abs_cos)
-        rotated_height = int(height*abs_cos + width*abs_sin)
-        rotation_matrix[0, 2] += rotated_width/2 - center[0]
-        rotation_matrix[1, 2] += rotated_height/2 - center[1]
-
-        return rotation_matrix
 
 
 class Images():
@@ -203,12 +136,12 @@ class Images():
     def load(self):
         """ Load an image and yield it with it's filename """
         for filename in self.input_images:
-            yield filename, cv2.imread(filename)
+            yield filename, cv2.imread(filename)  # pylint: disable=no-member
 
     @staticmethod
     def load_one_image(filename):
         """ load requested image """
-        return cv2.imread(filename)
+        return cv2.imread(filename)  # pylint: disable=no-member
 
 
 class PostProcess():
@@ -298,20 +231,16 @@ class BlurryFaceFilter(PostProcessAction):
         """ Detect and move blurry face """
         extractor = AlignerExtract()
 
-        for idx, face in enumerate(output_item["detected_faces"]):
-            resized_face = output_item["resized_faces"][idx]
-            dims = resized_face.shape[:2]
-            size = dims[0]
-            t_mat = output_item["t_mats"][idx]
-
-            aligned_landmarks = extractor.transform_points(
-                face.landmarksXY,
-                t_mat, size, 48)
+        for face in output_item["detected_faces"]:
+            aligned_landmarks = face.aligned_landmarks
+            resized_face = face.aligned_face
+            size = face.aligned["size"]
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
                 size, 48)
-            feature_mask = cv2.blur(feature_mask, (10, 10))
-            isolated_face = cv2.multiply(
+            feature_mask = cv2.blur(  # pylint: disable=no-member
+                feature_mask, (10, 10))
+            isolated_face = cv2.multiply(  # pylint: disable=no-member
                 feature_mask,
                 resized_face.astype(float)).astype(np.uint8)
             blurry, focus_measure = is_blurry(isolated_face, self.blur_thresh)
@@ -333,17 +262,12 @@ class DebugLandmarks(PostProcessAction):
 
     def process(self, output_item):
         """ Draw landmarks on image """
-        transform_points = AlignerExtract().transform_points
-        for idx, face in enumerate(output_item["detected_faces"]):
-            dims = output_item["resized_faces"][idx].shape[:2]
-            size = dims[0]
-            landmarks = transform_points(face.landmarksXY,
-                                         output_item["t_mats"][idx],
-                                         size,
-                                         48)
-            for (pos_x, pos_y) in landmarks:
-                cv2.circle(output_item["resized_faces"][idx],
-                           (pos_x, pos_y), 2, (0, 0, 255), -1)
+        for face in output_item["detected_faces"]:
+            aligned_landmarks = face.aligned_landmarks
+            for (pos_x, pos_y) in aligned_landmarks:
+                cv2.circle(  # pylint: disable=no-member
+                    face.aligned_face,
+                    (pos_x, pos_y), 2, (0, 0, 255), -1)
 
 
 class FaceFilter(PostProcessAction):

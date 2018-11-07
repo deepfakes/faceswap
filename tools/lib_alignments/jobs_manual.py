@@ -9,7 +9,7 @@ import numpy as np
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
 from plugins.plugin_loader import PluginLoader
-from . import Annotate, ExtractedFaces, Frames, Rotate
+from . import Annotate, ExtractedFaces, Frames, Legacy
 
 
 class Interface():
@@ -149,7 +149,7 @@ class Interface():
         """ Save alignments """
         if not self.state["edit"]["updated"]:
             return
-        self.alignments.save_alignments()
+        self.alignments.save()
         self.state["edit"]["updated"] = False
         self.set_redraw(True)
 
@@ -168,7 +168,7 @@ class Interface():
         if self.get_edit_mode() == "View" or selected_face is None:
             return
         frame = self.get_frame_name()
-        if self.alignments.delete_alignment_at_index(frame, selected_face):
+        if self.alignments.delete_face_at_index(frame, selected_face):
             self.state["edit"]["selected"] = None
             self.state["edit"]["updated"] = True
             self.state["edit"]["update_faces"] = True
@@ -184,9 +184,9 @@ class Interface():
             return
         current_frame = self.get_frame_name()
         get_frame = self.frames.file_list_sorted[frame_id]["frame_fullname"]
-        alignments = self.alignments.get_alignments_for_frame(get_frame)
+        alignments = self.alignments.get_faces_in_frame(get_frame)
         for alignment in alignments:
-            self.alignments. add_alignment(current_frame, alignment)
+            self.alignments. add_face(current_frame, alignment)
         self.state["edit"]["updated"] = True
         self.state["edit"]["update_faces"] = True
         self.set_redraw(True)
@@ -402,9 +402,9 @@ class Manual():
 
     def process(self):
         """ Process manual extraction """
-        rotate = Rotate(self.alignments, self.arguments,
+        legacy = Legacy(self.alignments, self.arguments,
                         frames=self.frames, child_process=True)
-        rotate.process()
+        legacy.process()
 
         print("\n[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
@@ -502,15 +502,16 @@ class Manual():
         """ Compile the frame and get faces """
         image = self.frame_selector()
         frame_name = self.interface.get_frame_name()
-        alignments = self.alignments.get_alignments_for_frame(frame_name)
+        alignments = self.alignments.get_faces_in_frame(frame_name)
         faces_updated = self.interface.state["edit"]["update_faces"]
-        roi = self.extracted_faces.get_roi_for_frame(frame_name,
-                                                     faces_updated)
+        self.extracted_faces.get_faces(frame_name)
+        roi = [face.original_roi for face in self.extracted_faces.faces]
+
         if faces_updated:
             self.interface.state["edit"]["update_faces"] = False
 
         frame = FrameDisplay(image, alignments, roi, self.interface).image
-        faces = self.set_faces(frame_name, alignments).image
+        faces = self.set_faces(frame_name).image
         return frame, faces
 
     def frame_selector(self):
@@ -546,20 +547,15 @@ class Manual():
         navigation["frame_name"] = frame
         return image
 
-    def set_faces(self, frame, alignments):
+    def set_faces(self, frame):
         """ Pass the current frame faces to faces window """
-        extracted = self.extracted_faces
-        size = extracted.size
-
-        faces = extracted.get_faces_for_frame(frame)
-
-        landmarks_xy = [alignment["landmarksXY"] for alignment in alignments]
-        landmarks = [
-            {"landmarksXY": aligned}
-            for aligned
-            in extracted.get_aligned_landmarks_for_frame(frame, landmarks_xy)]
-
-        return FacesDisplay(faces, landmarks, size, self.interface)
+        faces = self.extracted_faces.get_faces_in_frame(frame)
+        landmarks = [{"landmarksXY": face.aligned_landmarks}
+                     for face in self.extracted_faces.faces]
+        return FacesDisplay(faces,
+                            landmarks,
+                            self.extracted_faces.size,
+                            self.interface)
 
 
 class FrameDisplay():
@@ -628,7 +624,7 @@ class FacesDisplay():
     @staticmethod
     def copy_faces(faces):
         """ Copy the extracted faces so as not to save the annotations back """
-        return [face.copy() for face in faces]
+        return [face.aligned_face.copy() for face in faces]
 
     @staticmethod
     def set_full_roi(size):
@@ -717,13 +713,11 @@ class MouseHandler():
 
     def init_extractor(self, verbose):
         """ Initialize FAN """
-        in_queue = queue_manager.get_queue("in")
-        align_queue = queue_manager.get_queue("align")
         out_queue = queue_manager.get_queue("out")
 
-        d_kwargs = {"in_queue": in_queue,
-                    "out_queue": align_queue}
-        a_kwargs = {"in_queue": align_queue,
+        d_kwargs = {"in_queue": queue_manager.get_queue("in"),
+                    "out_queue": queue_manager.get_queue("align")}
+        a_kwargs = {"in_queue": queue_manager.get_queue("align"),
                     "out_queue": out_queue}
         detect_process = SpawnProcess()
         align_process = SpawnProcess()
@@ -824,7 +818,7 @@ class MouseHandler():
         """ Check whether the point clicked is within an existing
             bounding box and set face_id """
         frame = self.media["frame_id"]
-        alignments = self.alignments.get_alignments_for_frame(frame)
+        alignments = self.alignments.get_faces_in_frame(frame)
 
         for idx, alignment in enumerate(alignments):
             left = alignment["x"]
@@ -840,7 +834,7 @@ class MouseHandler():
         """ Set the height and width of bounding box from alignment """
         frame = self.media["frame_id"]
         face_id = self.interface.get_selected_face_id()
-        alignment = self.alignments.get_alignments_for_frame(frame)[face_id]
+        alignment = self.alignments.get_faces_in_frame(frame)[face_id]
         self.dims = (alignment["w"], alignment["h"])
 
     def dims_from_image(self):
@@ -896,22 +890,16 @@ class MouseHandler():
         landmarks = queue_manager.get_queue("out").get()
         if landmarks == "EOF":
             exit(0)
-        face = landmarks["detected_faces"][0]
-        alignment = {"x": face.x,
-                     "w": face.w,
-                     "y": face.y,
-                     "h": face.h,
-                     "landmarksXY": face.landmarksXY}
+        alignment = landmarks["detected_faces"][0].to_alignment()
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:
-            idx = self.alignments.add_alignment(frame, alignment)
+            idx = self.alignments.add_face(frame, alignment)
             self.interface.set_state_value("edit", "selected", idx)
         else:
-            self.alignments.update_alignment(
-                frame,
-                self.interface.get_selected_face_id(),
-                alignment)
+            self.alignments.update_face(frame,
+                                        self.interface.get_selected_face_id(),
+                                        alignment)
             self.interface.set_redraw(True)
 
         self.interface.state["edit"]["updated"] = True

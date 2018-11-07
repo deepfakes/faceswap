@@ -29,8 +29,8 @@ class Convert():
         self.images = Images(self.args)
         self.alignments = Alignments(self.args, False)
 
-        # Legacy rotation conversion
-        Rotate(self.alignments, self.args.verbose, self.images.input_images)
+        # Update Legacy alignments
+        Legacy(self.alignments, self.args.verbose, self.images.input_images)
 
         self.post_process = PostProcess(arguments)
         self.verify_output = False
@@ -180,7 +180,7 @@ class Convert():
         if not self.check_alignments(frame):
             return None
 
-        faces = self.alignments.get_alignments_for_frame(frame)
+        faces = self.alignments.get_faces_in_frame(frame)
         image = self.images.load_one_image(filename)
         detected_faces = list()
 
@@ -209,7 +209,7 @@ class Convert():
                     image = self.convert_one_face(converter,
                                                   (filename, image, idx, face))
                 filename = str(self.output_dir / Path(filename).name)
-                cv2.imwrite(filename, image)
+                cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             print("Failed to convert image: {}. "
                   "Reason: {}".format(filename, err))
@@ -309,8 +309,11 @@ class OptionalActions():
         return skip_face
 
 
-class Rotate():
-    """ Rotate landmarks and bounding boxes on legacy alignments
+class Legacy():
+    """ Update legacy alignments:
+
+        - Add frame dimensions
+        - Rotate landmarks and bounding boxes on legacy alignments
         and remove the 'r' parameter """
     def __init__(self, alignments, verbose, frames):
         self.verbose = verbose
@@ -321,19 +324,30 @@ class Rotate():
 
     def process(self):
         """ Run the rotate alignments process """
-        rotated = self.alignments.get_legacy_frames()
-        if not rotated:
+        no_dims = self.alignments.get_legacy_no_dims()
+        rotated = self.alignments.get_legacy_rotation()
+        if not no_dims and not rotated:
             return
-        print("Legacy rotated frames found. Converting...")
-        self.rotate_landmarks(rotated)
+        if no_dims:
+            print("Legacy landmarks found. Adding frame dimensions...")
+            self.add_dimensions(no_dims)
+        if rotated:
+            print("Legacy rotated frames found. Converting...")
+            self.rotate_landmarks(rotated)
         self.alignments.save()
+
+    def add_dimensions(self, no_dims):
+        """ Add width and height of original frame to alignments """
+        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
+            if no_dim not in self.frames.keys():
+                continue
+            filename = self.frames[no_dim]
+            dims = cv2.imread(filename).shape[:2]  # pylint: disable=no-member
+            self.alignments.add_dimensions(no_dim, dims)
 
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
-        for rotate_item in tqdm(rotated,
-                                desc="Rotating Landmarks"):
+        for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
             if rotate_item not in self.frames.keys():
                 continue
-            filename = self.frames[rotate_item]
-            dims = cv2.imread(filename).shape[:2]
-            self.alignments.rotate_existing_landmarks(rotate_item, dims)
+            self.alignments.rotate_existing_landmarks(rotate_item)

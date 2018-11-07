@@ -47,7 +47,7 @@ class Extract():
         self.run_extraction(save_thread)
         self.alignments.save()
         Utils.finalize(self.images.images_found,
-                       self.alignments.faces_count(),
+                       self.alignments.faces_count,
                        self.verify_output)
 
     def threaded_io(self, task, io_args=None):
@@ -188,13 +188,12 @@ class Extract():
 
         filename = faces["filename"]
         output_file = faces["output_file"]
-        resized_faces = faces["resized_faces"]
 
         for idx, face in enumerate(faces["detected_faces"]):
             if self.export_face:
                 save_queue.put((filename,
                                 output_file,
-                                resized_faces[idx],
+                                face.aligned_face,
                                 idx))
 
             final_faces.append(face.to_alignment())
