@@ -39,7 +39,7 @@ class DisplayPage(ttk.Frame):
 
     @staticmethod
     def set_vars():
-        """ Overide to return a dict of page specific variables """
+        """ Override to return a dict of page specific variables """
         return dict()
 
     def add_subnotebook(self):

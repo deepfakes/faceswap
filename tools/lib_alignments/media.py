@@ -15,7 +15,7 @@ class AlignmentData(Alignments):
     """ Class to hold the alignment data """
 
     def __init__(self, alignments_file, destination_format, verbose):
-        print("\n[ALIGNMENT DATA]")  # Tidy up cli output
+        print("\n[ALIGNMENT DATA]")
         folder, filename = self.check_file_exists(alignments_file, verbose)
         if filename == "dfl":
             self.set_dfl(verbose, destination_format)
@@ -48,7 +48,7 @@ class AlignmentData(Alignments):
         self.set_destination_format(destination_format)
 
     def set_destination_format(self, destination_format):
-        """ Standardise the destination format to the correct extension """
+        """ Standardize the destination format to the correct extension """
         extensions = {".json": "json",
                       ".p": "pickle",
                       ".yml": "yaml",
@@ -150,7 +150,8 @@ class Faces(MediaLoader):
         super().__init__(folder, verbose)
 
     def process_folder(self):
-        """ Iterate through the faces dir pulling out various information """
+        """ Iterate through the faces folder pulling out
+            various information """
         print("Loading file list from {}".format(self.folder))
         for face in os.listdir(self.folder):
             if not self.valid_extension(face):
@@ -186,7 +187,7 @@ class Frames(MediaLoader):
     """ Object to hold the frames that are to be checked against """
 
     def process_folder(self):
-        """ Iterate through the frames dir pulling the base filename """
+        """ Iterate through the frames folder pulling the base filename """
         print("Loading file list from {}".format(self.folder))
         for frame in os.listdir(self.folder):
             if not self.valid_extension(frame):

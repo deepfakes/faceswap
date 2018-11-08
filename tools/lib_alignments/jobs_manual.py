@@ -270,7 +270,7 @@ class Interface():
     def get_state_color(self):
         """ Return a color based on current state
             white - View Mode
-            yellow - Edit Mide
+            yellow - Edit Mode
             red - Unsaved alignments """
         color = (255, 255, 255)
         if self.state["edit"]["updated"]:
@@ -406,7 +406,7 @@ class Manual():
                         frames=self.frames, child_process=True)
         legacy.process()
 
-        print("\n[MANUAL PROCESSING]")  # Tidy up cli output
+        print("\n[MANUAL PROCESSING]")
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
                                               align_eyes=self.align_eyes)
@@ -466,8 +466,8 @@ class Manual():
         MS Windows doesn't appear to read the window state property
         properly, so we check for a negative key press.
 
-        Conda (tested on Windows) doesn't sppear to read the window
-        state property or negative key press properly, so we arbitarily
+        Conda (tested on Windows) doesn't appear to read the window
+        state property or negative key press properly, so we arbitrarily
         use another property """
         # pylint: disable=no-member
         closed = False
@@ -731,7 +731,7 @@ class MouseHandler():
             aligner = PluginLoader.get_aligner(plugin)(verbose=verbose)
             align_process.in_process(aligner.align, **a_kwargs)
 
-            # Wait for Aligner to take init
+            # Wait for Aligner to initialize
             # The first ever load of the model for FAN has reportedly taken
             # up to 3-4 minutes, hence high timeout.
             a_event.wait(300)

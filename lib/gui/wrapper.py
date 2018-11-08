@@ -112,14 +112,14 @@ class ProcessWrapper():
         return args
 
     def set_session_stats(self, cliopt):
-        """ Set the session stats for batchsize and modeldir """
+        """ Set the session stats for batch size and model folder """
         if cliopt[0] == "-bs":
             self.session.stats["batchsize"] = int(cliopt[1])
         if cliopt[0] == "-m":
             self.session.modeldir = cliopt[1]
 
     def terminate(self, message):
-        """ Finalise wrapper when process has exited """
+        """ Finalize wrapper when process has exited """
         self.tk_vars["runningtask"].set(False)
         self.statusbar.progress_stop()
         self.statusbar.status_message.set(message)

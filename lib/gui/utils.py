@@ -128,7 +128,7 @@ class FileHandler():
         return filedialog.askdirectory(**self.kwargs)
 
     def savedir(self):
-        """ Get a save dir location """
+        """ Get a save directory location """
         return filedialog.askdirectory(**self.kwargs)
 
     def filename(self):
@@ -214,7 +214,7 @@ class Images(metaclass=Singleton):
         if not imagefiles or len(imagefiles) == 1:
             self.previewoutput = None
             return
-        # Get penultimate file so we don't accidently
+        # Get penultimate file so we don't accidentally
         # load a file that is being saved
         show_file = sorted(imagefiles, key=os.path.getctime)[-2]
         img = Image.open(show_file)

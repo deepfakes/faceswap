@@ -13,7 +13,7 @@ from lib.Serializer import PickleSerializer
 
 
 def convert_time(timestamp):
-    """ Convert time stamp to total hours, mins and second """
+    """ Convert time stamp to total hours, minutes and seconds """
     hrs = int(timestamp // 3600)
     if hrs < 10:
         hrs = "{0:02d}".format(hrs)
@@ -57,8 +57,8 @@ class CurrentSession(object):
         self.filename = None
         self.historical = None
 
-    def initialise_session(self, currentloss):
-        """ Initialise the training session """
+    def initialize_session(self, currentloss):
+        """ Initialize the training session """
         self.load_historical()
         for item in currentloss:
             self.stats["losskeys"].append(item[0])
@@ -74,7 +74,7 @@ class CurrentSession(object):
     def add_loss(self, currentloss):
         """ Add a loss item from the training process """
         if self.stats["iterations"] == 0:
-            self.initialise_session(currentloss)
+            self.initialize_session(currentloss)
 
         self.stats["iterations"] += 1
         self.add_timestats()
@@ -83,7 +83,7 @@ class CurrentSession(object):
             self.stats["loss"][idx].append(float(item[1]))
 
     def add_timestats(self):
-        """ Add timestats to loss dict and timestats """
+        """ Add time stats and timestamps to loss dict """
         now = time.time()
         self.stats["timestamps"].append(now)
         elapsed_time = now - self.timestats["start"]
@@ -91,7 +91,7 @@ class CurrentSession(object):
         self.timestats["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
 
     def save_session(self):
-        """ Save the session file to the modeldir """
+        """ Save the session file to the model folder """
         if self.stats["iterations"] > 0:
             print("Saving session stats...")
             self.historical.save_sessions(self.filename)
@@ -111,7 +111,7 @@ class SessionsTotals(object):
         self.compile(all_sessions)
 
     def initiate(self, sessions):
-        """ Initiate correct losskey titles and number of loss lists """
+        """ Initiate correct loss key titles and number of loss lists """
         for losskey in sessions[0]["losskeys"]:
             self.stats["losskeys"].append(losskey)
             self.stats["loss"].append(list())
@@ -129,7 +129,7 @@ class SessionsTotals(object):
             self.add_loss(session["loss"])
 
     def add_loss(self, session_loss):
-        """ Add loss vals to each of their respective lists """
+        """ Add loss values to each of their respective lists """
         for idx, loss in enumerate(session_loss):
             self.stats["loss"][idx].extend(loss)
 
@@ -273,7 +273,7 @@ class Calculations(object):
     def calc_rate(self, data):
         """ Calculate rate per iteration
             NB: For totals, gaps between sessions can be large
-            so time diffeence has to be reset for each session's
+            so time difference has to be reset for each session's
             rate calculation """
         batchsize = data["batchsize"]
         if self.args["is_totals"]:
