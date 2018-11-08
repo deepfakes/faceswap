@@ -8,6 +8,7 @@ import uuid
 import cv2
 import numpy as np
 
+from lib.alignments import Alignments
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -51,16 +52,11 @@ class TrainingDataGenerator():
 
     def get_alignments(self, images):
         """ Return the alignments for current image folder """
-        serializer = self.options.get("serializer")
         image_folder = os.path.dirname(images[0])
-        filename = "alignments.{}".format(serializer.ext)
-        alignments_file = os.path.join(image_folder, filename)
-        try:
-            with open(alignments_file, serializer.roptions) as align:
-                alignments = serializer.unmarshal(align.read())
-        except IOError:
-            print("Alignments file not found at {}".format(alignments_file))
-            exit(1)
+        alignments = Alignments(image_folder,
+                                filename="alignments",
+                                serializer=self.options.get("serializer"))
+        alignments.load()
         return alignments
 
     def load_batches(self, data, q_name, options, do_shuffle=True):
@@ -72,7 +68,7 @@ class TrainingDataGenerator():
             if do_shuffle:
                 shuffle(data)
             for img in data:
-                queue.put((epoch, np.float32(self.read_image(img))))
+                queue.put((epoch, np.float32(self.process_face(img, None))))
             epoch += 1
 
     def validate_samples(self, data):
@@ -96,8 +92,8 @@ class TrainingDataGenerator():
             rtn = np.array(batch)
             yield epoch, rtn[:, 0, :, :, :], rtn[:, 1, :, :, :]
 
-    def read_image(self, filename):
-        """ Load an image and perdrom transformation and warping """
+    def process_face(self, filename, landmarks):
+        """ Load an image and perform transformation and warping """
         try:
             # pylint: disable=no-member
             image = self.color_adjust(cv2.imread(filename))

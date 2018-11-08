@@ -10,7 +10,6 @@ from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 
-from lib import Serializer
 from lib.train.dssim import DSSIMObjective
 from lib.train.penalized_loss import PenalizedLoss
 
@@ -56,8 +55,7 @@ class Model(OriginalModel):
 
     def set_training_data(self):
         """ Set the dictionary for training """
-        serializer_type = self.config.get("DFaker", "alignments_format")
-        serializer = Serializer.get_serializer(serializer_type)
+        serializer = self.config.get("DFaker", "alignments_format")
         self.training_opts["serializer"] = serializer
         self.training_opts["use_mask"] = True
         self.training_opts["use_alignments"] = True
