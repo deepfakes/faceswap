@@ -19,10 +19,9 @@ class Alignments():
                     valid extension is provided, then it will be used to
                     decide the serializer, and the serializer argument will
                     be ignored.
-        serializer: If provided, this will be the format data is saved in
-                    if data is to be saved. Can be 'json', 'pickle' or 'yaml'
-        is_extract: Used to indicate whether this class is being called by the
-                    extract process, so a missing alignments file is ok.
+        serializer: If provided, this will be the format that the data is
+                    saved in (if data is to be saved). Can be 'json', 'pickle'
+                    or 'yaml'
     """
     def __init__(self, folder, filename="alignments", serializer="json",
                  verbose=False):
@@ -194,10 +193,9 @@ class Alignments():
     # << LEGACY FUNCTIONS >> #
 
     # < Original Frame Dimensions > #
-    # For dfaker the original dimensions of an image are required to
-    # calculate the transposed landmarks. Storing these for the
-    # calculations takes less space than storing the full transposed
-    # landmarks.
+    # For dfaker and convert-adjust the original dimensions of a frame are
+    # required to calculate the transposed landmarks. As transposed landmarks
+    # will change on face size, we store original frame dimensions
     # These were not previously required, so this adds the dimensions
     # to the landmarks file
 
@@ -207,7 +205,7 @@ class Alignments():
         keys = list()
         for key, val in self.data.items():
             for alignment in val:
-                if not set(["frame_h", "frame_w"]).issubset(alignment.keys()):
+                if "frame_dims" not in alignment.keys():
                     keys.append(key)
                     break
         return keys
@@ -216,8 +214,7 @@ class Alignments():
         """ Backward compatability fix. Add frame dimensions
             to alignments """
         for face in self.get_faces_in_frame(frame_name):
-            face["frame_h"] = dimensions[0]
-            face["frame_w"] = dimensions[1]
+            face["frame_dims"] = dimensions
 
     # < Rotation > #
     # The old rotation method would rotate the image to find a face, then
@@ -249,7 +246,7 @@ class Alignments():
             angle = face.get("r", 0)
             if not angle:
                 return
-            dims = (face["frame_h"], face["frame_w"])
+            dims = face["frame_dims"]
             r_mat = self.get_original_rotation_matrix(dims, angle)
             rotate_landmarks(face, r_mat)
             del face["r"]

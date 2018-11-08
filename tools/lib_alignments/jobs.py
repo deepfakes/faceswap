@@ -214,9 +214,9 @@ class Draw():
 
     def process(self):
         """ Run the draw alignments process """
-        rotate = Rotate(self.alignments, self.arguments,
+        legacy = Legacy(self.alignments, self.arguments,
                         frames=self.frames, child_process=True)
-        rotate.process()
+        legacy.process()
 
         print("\n[DRAW LANDMARKS]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(
@@ -243,8 +243,9 @@ class Draw():
         """ Draw the alignments """
         alignments = self.alignments.get_faces_in_frame(frame)
         image = self.frames.load_image(frame)
-        original_roi = self.extracted_faces.get_roi_for_frame(frame)
-
+        self.extracted_faces.get_faces_in_frame(frame)
+        original_roi = [face.original_roi
+                        for face in self.extracted_faces.faces]
         annotate = Annotate(image, alignments, original_roi)
         annotate.draw_bounding_box(1, 1)
         annotate.draw_extract_box(2, 1)
@@ -538,9 +539,13 @@ class RemoveAlignments():
         return 1
 
 
-class Rotate():
-    """ Rotating landmarks and bounding boxes on legacy alignments
+class Legacy():
+    """ Update legacy alignments:
+
+        - Add frame dimensions
+        - Rotate landmarks and bounding boxes on legacy alignments
         and remove the 'r' parameter """
+
     def __init__(self, alignments, arguments,
                  frames=None, child_process=False):
         self.verbose = arguments.verbose

@@ -9,7 +9,7 @@ import numpy as np
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
 from plugins.plugin_loader import PluginLoader
-from . import Annotate, ExtractedFaces, Frames, Rotate
+from . import Annotate, ExtractedFaces, Frames, Legacy
 
 
 class Interface():
@@ -402,9 +402,9 @@ class Manual():
 
     def process(self):
         """ Process manual extraction """
-        rotate = Rotate(self.alignments, self.arguments,
+        legacy = Legacy(self.alignments, self.arguments,
                         frames=self.frames, child_process=True)
-        rotate.process()
+        legacy.process()
 
         print("\n[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
@@ -504,13 +504,14 @@ class Manual():
         frame_name = self.interface.get_frame_name()
         alignments = self.alignments.get_faces_in_frame(frame_name)
         faces_updated = self.interface.state["edit"]["update_faces"]
-        roi = self.extracted_faces.get_roi_for_frame(frame_name,
-                                                     faces_updated)
+        self.extracted_faces.get_faces(frame_name)
+        roi = [face.original_roi for face in self.extracted_faces.faces]
+
         if faces_updated:
             self.interface.state["edit"]["update_faces"] = False
 
         frame = FrameDisplay(image, alignments, roi, self.interface).image
-        faces = self.set_faces(frame_name, alignments).image
+        faces = self.set_faces(frame_name).image
         return frame, faces
 
     def frame_selector(self):
@@ -546,20 +547,15 @@ class Manual():
         navigation["frame_name"] = frame
         return image
 
-    def set_faces(self, frame, alignments):
+    def set_faces(self, frame):
         """ Pass the current frame faces to faces window """
-        extracted = self.extracted_faces
-        size = extracted.size
-
-        faces = extracted.get_faces_in_frame(frame)
-
-        landmarks_xy = [alignment["landmarksXY"] for alignment in alignments]
-        landmarks = [
-            {"landmarksXY": aligned}
-            for aligned
-            in extracted.get_aligned_landmarks_for_frame(frame, landmarks_xy)]
-
-        return FacesDisplay(faces, landmarks, size, self.interface)
+        faces = self.extracted_faces.get_faces_in_frame(frame)
+        landmarks = [{"landmarksXY": face.aligned_landmarks}
+                     for face in self.extracted_faces.faces]
+        return FacesDisplay(faces,
+                            landmarks,
+                            self.extracted_faces.size,
+                            self.interface)
 
 
 class FrameDisplay():
@@ -628,7 +624,7 @@ class FacesDisplay():
     @staticmethod
     def copy_faces(faces):
         """ Copy the extracted faces so as not to save the annotations back """
-        return [face.copy() for face in faces]
+        return [face.aligned_face.copy() for face in faces]
 
     @staticmethod
     def set_full_roi(size):
@@ -894,12 +890,7 @@ class MouseHandler():
         landmarks = queue_manager.get_queue("out").get()
         if landmarks == "EOF":
             exit(0)
-        face = landmarks["detected_faces"][0]
-        alignment = {"x": face.x,
-                     "w": face.w,
-                     "y": face.y,
-                     "h": face.h,
-                     "landmarksXY": face.landmarksXY}
+        alignment = landmarks["detected_faces"][0].to_alignment()
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:

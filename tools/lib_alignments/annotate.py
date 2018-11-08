@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ Tools for annotating an input image """
-# TODO Handle landmark rotation
 
-from cv2 import (rectangle, circle, polylines, putText,
-                 FONT_HERSHEY_DUPLEX, fillPoly, addWeighted)
+from cv2 import (  # pylint: disable=no-name-in-module
+    rectangle, circle, polylines, putText,
+    FONT_HERSHEY_DUPLEX, fillPoly, addWeighted)
 from numpy import array, int32, uint8, zeros
 
 from lib.align_eyes import FACIAL_LANDMARKS_IDXS
@@ -44,11 +44,11 @@ class Annotate():
             return
         color = self.colors[color_id]
         for idx, roi in enumerate(self.roi):
-            top_left = [point for point in roi[0].squeeze()[0]]
+            top_left = [point for point in roi.squeeze()[0]]
             top_left = (top_left[0], top_left[1] - 10)
             putText(self.image, str(idx), top_left, FONT_HERSHEY_DUPLEX, 1.0,
                     color, thickness)
-            polylines(self.image, roi, True, color, thickness)
+            polylines(self.image, [roi], True, color, thickness)
 
     def draw_landmarks(self, color_id=3, radius=1):
         """ Draw the facial landmarks """

@@ -11,12 +11,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.detect_blur import is_blurry
 from lib.FaceFilter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_folder, get_image_paths,
                        set_system_verbosity)
-from plugins.extract.align._base import Extract as AlignerExtract
 
 
 class Utils():
@@ -231,15 +231,10 @@ class BlurryFaceFilter(PostProcessAction):
         """ Detect and move blurry face """
         extractor = AlignerExtract()
 
-        for idx, face in enumerate(output_item["detected_faces"]):
-            resized_face = output_item["resized_faces"][idx]
-            dims = resized_face.shape[:2]
-            size = dims[0]
-            t_mat = output_item["t_mats"][idx]
-
-            aligned_landmarks = extractor.transform_points(
-                face.landmarksXY,
-                t_mat, size, 48)
+        for face in output_item["detected_faces"]:
+            aligned_landmarks = face.aligned_landmarks
+            resized_face = face.aligned_face
+            size = face.aligned["size"]
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
                 size, 48)
@@ -267,17 +262,11 @@ class DebugLandmarks(PostProcessAction):
 
     def process(self, output_item):
         """ Draw landmarks on image """
-        transform_points = AlignerExtract().transform_points
-        for idx, face in enumerate(output_item["detected_faces"]):
-            dims = output_item["resized_faces"][idx].shape[:2]
-            size = dims[0]
-            landmarks = transform_points(face.landmarksXY,
-                                         output_item["t_mats"][idx],
-                                         size,
-                                         48)
-            for (pos_x, pos_y) in landmarks:
+        for face in output_item["detected_faces"]:
+            aligned_landmarks = face.aligned_landmarks
+            for (pos_x, pos_y) in aligned_landmarks:
                 cv2.circle(  # pylint: disable=no-member
-                    output_item["resized_faces"][idx],
+                    face.aligned_face,
                     (pos_x, pos_y), 2, (0, 0, 255), -1)
 
 

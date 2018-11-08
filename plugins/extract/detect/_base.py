@@ -99,12 +99,15 @@ class Detector():
             and add the cropped face """
         retval = list()
         for d_rect in dlib_rects:
-            if not isinstance(d_rect, dlib.rectangle):
+            if not isinstance(
+                    d_rect,
+                    dlib.rectangle):  # pylint: disable=c-extension-no-member
                 retval.append(list())
                 continue
             detected_face = DetectedFace()
             detected_face.from_dlib_rect(d_rect)
             detected_face.image_to_face(image)
+            detected_face.frame_dims = image.shape[:2]
             retval.append(detected_face)
         return retval
 
@@ -136,6 +139,7 @@ class Detector():
 
     def set_detect_image(self, input_image):
         """ Convert the image to RGB and scale """
+        # pylint: disable=no-member
         image = input_image[:, :, ::-1].copy()
         if self.scale == 1.0:
             return image
@@ -220,7 +224,9 @@ class Detector():
     def is_mmod_rectangle(d_rectangle):
         """ Return whether the passed in object is
             a dlib.mmod_rectangle """
-        return isinstance(d_rectangle, dlib.mmod_rectangle)
+        return isinstance(
+            d_rectangle,
+            dlib.mmod_rectangle)  # pylint: disable=c-extension-no-member
 
     def convert_to_dlib_rectangle(self, d_rect):
         """ Convert detected mmod_rects to dlib_rectangle """
@@ -247,4 +253,5 @@ class Detector():
         # Landmarks should not be extracted again from predetected faces,
         # because face data is lost, resulting in a large variance
         # against extract from original image
-        return [dlib.rectangle(0, 0, width, height)]
+        return [dlib.rectangle(  # pylint: disable=c-extension-no-member
+            0, 0, width, height)]

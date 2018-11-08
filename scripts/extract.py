@@ -188,17 +188,15 @@ class Extract():
 
         filename = faces["filename"]
         output_file = faces["output_file"]
-        resized_faces = faces["resized_faces"]
-        dims = faces["image"].shape[:2]
 
         for idx, face in enumerate(faces["detected_faces"]):
             if self.export_face:
                 save_queue.put((filename,
                                 output_file,
-                                resized_faces[idx],
+                                face.aligned_face,
                                 idx))
 
-            final_faces.append(face.to_alignment(dims))
+            final_faces.append(face.to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces
 
 
