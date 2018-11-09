@@ -70,6 +70,7 @@ class Config(FaceswapConfig):
             section=section, title="alignments_format", datatype=str,
             default="json",
             info="Dfaker model requires the alignments for your training "
-                 "images to be avalaible within images folder.\nIt should be "
-                 "named 'alignments.<file extension>' (eg. alignments.json)."
+                 "images to be avalaible within the FACES folder.\nIt should "
+                 "be named 'alignments.<file extension>' (eg. "
+                 "alignments.json)."
                  "\nChoose from: 'json', 'pickle' or 'yaml'")

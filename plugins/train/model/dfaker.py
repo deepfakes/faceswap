@@ -73,7 +73,7 @@ class Model(OriginalModel):
             mask = kwargs["mask1"] if key == "a" else kwargs["mask2"]
             autoencoder.compile(optimizer=optimizer,
                                 loss=[PenalizedLoss(mask, DSSIMObjective()),
-                                      'mean_standard_error'])
+                                      'mse'])
 
     def decoder(self):
         """ Decoder Network """

@@ -9,6 +9,7 @@ from lib.train import TrainingDataGenerator, stack_images
 
 
 class Trainer():
+    """ Original Model Trainer """
     random_transform_args = {
         'rotation_range': 10,
         'zoom_range': 0.05,
@@ -19,16 +20,26 @@ class Trainer():
     def __init__(self, model, images, batch_size, *args):
         self.batch_size = batch_size
         self.model = model
+        self.images = images
+        self.process_training_opts()
 
         generator = TrainingDataGenerator(
             self.random_transform_args, 160,
             zoom=self.model.image_shape[0]//64,
             training_opts=self.model.training_opts)
 
-        self.images_a = generator.minibatch_ab(images["a"], self.batch_size)
-        self.images_b = generator.minibatch_ab(images["b"], self.batch_size)
+        self.images_a = generator.minibatch_ab(images["a"],
+                                               self.batch_size,
+                                               "a")
+        self.images_b = generator.minibatch_ab(images["b"],
+                                               self.batch_size,
+                                               "b")
 
-    def train_one_step(self, iter, viewer):
+    def process_training_opts(self):
+        """ Override for processing model specific training options """
+        pass
+
+    def train_one_step(self, iteration, viewer):
         """ Train a batch """
         epoch, warped_a, target_a = next(self.images_a)
         epoch, warped_b, target_b = next(self.images_b)

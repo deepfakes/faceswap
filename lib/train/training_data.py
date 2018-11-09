@@ -7,8 +7,8 @@ import uuid
 
 import cv2
 import numpy as np
+from scipy.interpolate import griddata
 
-from lib.alignments import Alignments
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -20,15 +20,15 @@ class TrainingDataGenerator():
                  scale=5, zoom=1, training_opts=None):
         self.options = training_opts
         self.random_transform_args = random_transform_args
+        self.training_opts = dict() if training_opts is None else training_opts
         self.coverage = coverage
         self.scale = scale
         self.zoom = zoom
         self.batchsize = 0
 
-    def minibatch_ab(self, images, batchsize, do_shuffle=True):
+    def minibatch_ab(self, images, batchsize, side, do_shuffle=True):
         """ Keep a queue filled to 8x Batch Size """
         self.batchsize = batchsize
-        options = self.process_training_options(images)
         q_name = str(uuid.uuid4())
         q_size = batchsize * 8
         queue_manager.add_queue(q_name, maxsize=q_size)
@@ -36,30 +36,11 @@ class TrainingDataGenerator():
         thread.in_thread(self.load_batches,
                          images,
                          q_name,
-                         options,
+                         side,
                          do_shuffle)
         return self.minibatch(q_name)
 
-    def process_training_options(self, images):
-        """ Process the model specific training data """
-        opts = dict()
-        if not self.options or not isinstance(self.options, dict):
-            return opts
-        if self.options.get("use_alignments", False):
-            opts["alignments"] = self.get_alignments(images)
-        opts["use_mask"] = self.options.get("use_mask", False)
-        return opts
-
-    def get_alignments(self, images):
-        """ Return the alignments for current image folder """
-        image_folder = os.path.dirname(images[0])
-        alignments = Alignments(image_folder,
-                                filename="alignments",
-                                serializer=self.options.get("serializer"))
-        alignments.load()
-        return alignments
-
-    def load_batches(self, data, q_name, options, do_shuffle=True):
+    def load_batches(self, data, q_name, side, do_shuffle=True):
         """ Load the epoch, warped images and target images to queue """
         epoch = 0
         queue = queue_manager.get_queue(q_name)
@@ -68,7 +49,8 @@ class TrainingDataGenerator():
             if do_shuffle:
                 shuffle(data)
             for img in data:
-                queue.put((epoch, np.float32(self.process_face(img, None))))
+                queue.put((epoch, self.process_face(img, side)))
+#                queue.put((epoch, np.float32(self.process_face(img, side))))
             epoch += 1
 
     def validate_samples(self, data):
@@ -88,12 +70,16 @@ class TrainingDataGenerator():
             batch = list()
             for _ in range(self.batchsize):
                 epoch, images = queue.get()
-                batch.append(images)
-            rtn = np.array(batch)
-            yield epoch, rtn[:, 0, :, :, :], rtn[:, 1, :, :, :]
+                for idx, image in enumerate(images):
+                    if len(batch) < idx + 1:
+                        batch.append(list())
+                    batch[idx].append(image)
+            batch = [epoch] + [np.float32(image) for image in batch]
+            yield batch
 
-    def process_face(self, filename, landmarks):
+    def process_face(self, filename, side):
         """ Load an image and perform transformation and warping """
+        landmarks = self.get_landmarks(filename, side)
         try:
             # pylint: disable=no-member
             image = self.color_adjust(cv2.imread(filename))
@@ -101,9 +87,40 @@ class TrainingDataGenerator():
             raise Exception("Error while reading image", filename)
 
         image = self.random_transform(image)
-        warped_img, target_img = self.random_warp(image)
+        if not landmarks:
+            retval = self.random_warp(image)
+        else:
+            image = self.add_alpha_channel(image)
+            warped_img, target_img, mask_image = self.random_warp_landmarks(
+                image,
+                landmarks[0],
+                landmarks[1])
+            if np.random.random() < 0.5:
+                warped_img = warped_img[:, ::-1]
+                target_img = target_img[:, ::-1]
+                mask_image = mask_image[:, ::-1]
 
-        return warped_img, target_img
+            retval = warped_img, target_img, mask_image
+        return retval
+
+    def get_landmarks(self, filename, side):
+        """ Return the landmarks for this face and the closest landmark
+            for corresponding set """
+        landmarks = self.training_opts.get("landmarks", None)
+        if not landmarks:
+            return None
+
+        lm_key = os.path.splitext(os.path.basename(filename))[0]
+        try:
+            src_points = landmarks[side][lm_key]
+        except KeyError:
+            raise Exception("Landmarks not found for {}".format(filename))
+        dst_points = landmarks["a"] if side == "b" else landmarks["b"]
+        dst_points = list(dst_points.values())
+        closest = (np.mean(np.square(src_points - dst_points),
+                           axis=(1, 2))).argsort()[:10]
+        closest = np.random.choice(closest)
+        return src_points, dst_points[closest]
 
     @staticmethod
     def color_adjust(img):
@@ -175,6 +192,81 @@ class TrainingDataGenerator():
                                       (64 * self.zoom, 64 * self.zoom))
 
         return warped_image, target_image
+
+    #TODO Unfix variables
+    def random_warp_landmarks(self, image, src_points, dst_points):
+        """ get warped image, target image and target mask """
+        # pylint: disable=no-member
+
+        edge_anchors = [(0, 0), (0, 255), (255, 255), (255, 0),
+                        (127, 0), (127, 255), (255, 127), (0, 127)]
+        grid_x, grid_y = np.mgrid[0:255:256j, 0:255:256j]
+
+        source = src_points
+        destination = (dst_points.copy().astype("float") +
+                       np.random.normal(size=(dst_points.shape),
+                                        scale=2))
+        destination = destination.astype("uint8")
+
+        face_core = cv2.convexHull(np.concatenate([source[17:],
+                                                   destination[17:]],
+                                                  axis=0).astype(int))
+
+        source = [(pty, ptx) for ptx, pty in source] + edge_anchors
+        destination = [(pty, ptx) for ptx, pty in destination] + edge_anchors
+
+        indicies_to_remove = set()
+        for fpl in source, destination:
+            for idx, (pty, ptx) in enumerate(fpl):
+                if idx > 17:
+                    break
+                elif cv2.pointPolygonTest(face_core, (pty, ptx), False) >= 0:
+                    indicies_to_remove.add(idx)
+
+        for idx in sorted(indicies_to_remove, reverse=True):
+            source.pop(idx)
+            destination.pop(idx)
+
+        grid_z = griddata(destination,
+                          source,
+                          (grid_x, grid_y),
+                          method="linear")
+        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(256, 256)
+        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(256, 256)
+        map_x_32 = map_x.astype('float32')
+        map_y_32 = map_y.astype('float32')
+
+        warped = cv2.remap(image[:, :, :3],
+                           map_x_32,
+                           map_y_32,
+                           cv2.INTER_LINEAR,
+                           cv2.BORDER_TRANSPARENT)
+        target_mask = image[:, :, 3].reshape((256, 256, 1))
+        target_image = image[:, :, :3]
+
+        warped = cv2.resize(warped[128 - 120:128 + 120,
+                                   128 - 120:128 + 120, :],
+                            (64, 64),
+                            cv2.INTER_AREA)
+        target_image = cv2.resize(target_image[128 - 120:128 + 120,
+                                               128 - 120:128 + 120, :],
+                                  (64 * 2, 64 * 2),
+                                  cv2.INTER_AREA)
+        target_mask = cv2.resize(target_mask[128 - 120:128 + 120,
+                                             128 - 120:128 + 120, :],
+                                 (64 * 2, 64 * 2),
+                                 cv2.INTER_AREA).reshape((64 * 2, 64 * 2, 1))
+
+        return warped, target_image, target_mask
+
+    @staticmethod
+    def add_alpha_channel(image):
+        """ Add an alpha channel to the image """
+        ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
+        ch_a = np.ones(ch_b.shape, dtype=ch_b.dtype) * 50
+        image_bgra = cv2.merge(  # pylint: disable=no-member
+            (ch_b, ch_g, ch_r, ch_a))
+        return image_bgra
 
 
 def stack_images(images):

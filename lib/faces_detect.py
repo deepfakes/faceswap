@@ -46,7 +46,7 @@ class DetectedFace():
         self.image = image[self.y: self.y + self.h,
                            self.x: self.x + self.w]
 
-    def to_alignment(self, frame_dims):
+    def to_alignment(self):
         """ Convert a detected face to alignment dict
 
             NB: frame_dims should be the height and width
@@ -69,7 +69,7 @@ class DetectedFace():
         self.h = alignment["h"]
         self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
-        if image.any():
+        if image is not None and image.any():
             self.image_to_face(image)
 
     # <<< Aligned Face methods and properties >>> #
@@ -81,6 +81,9 @@ class DetectedFace():
         self.aligned["padding"] = padding
         self.aligned["align_eyes"] = align_eyes
         self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
+        if image is None:
+            self.aligned["face"] = None
+            return
         self.aligned["face"] = AlignerExtract().transform(
             image,
             self.aligned["matrix"],
