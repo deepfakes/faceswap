@@ -78,6 +78,26 @@ def set_system_verbosity(loglevel):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
+def add_alpha_channel(image, intensity=100):
+    """ Add an alpha channel to an image
+
+        intensity: The opacity of the alpha channel between 0 and 100
+                   100 = transparent,
+                   0 = solid  """
+    assert 0 <= intensity <= 100, "Invalid intensity supplied"
+    intensity = (255.0 / 100.0) * intensity
+
+    d_type = image.dtype
+    image = image.astype("float32")
+
+    ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
+    ch_a = np.ones(ch_b.shape, dtype="float32") * intensity
+
+    image_bgra = cv2.merge(  # pylint: disable=no-member
+        (ch_b, ch_g, ch_r, ch_a))
+    return image_bgra.astype(d_type)
+
+
 def rotate_image_by_angle(image, angle,
                           rotated_width=None, rotated_height=None):
     """ Rotate an image by a given angle.
@@ -85,7 +105,8 @@ def rotate_image_by_angle(image, angle,
 
     height, width = image.shape[:2]
     image_center = (width/2, height/2)
-    rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
+    rotation_matrix = cv2.getRotationMatrix2D(  # pylint: disable=no-member
+        image_center, -1.*angle, 1.)
     if rotated_width is None or rotated_height is None:
         abs_cos = abs(rotation_matrix[0, 0])
         abs_sin = abs(rotation_matrix[0, 1])
@@ -95,7 +116,7 @@ def rotate_image_by_angle(image, angle,
             rotated_height = int(height*abs_cos + width*abs_sin)
     rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
     rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
-    return (cv2.warpAffine(image,
+    return (cv2.warpAffine(image,  # pylint: disable=no-member
                            rotation_matrix,
                            (rotated_width, rotated_height)),
             rotation_matrix)
@@ -122,7 +143,8 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)]]
         landmarks = face.get("landmarksXY", list())
 
-    elif isinstance(face, dlib.rectangle):
+    elif isinstance(face,
+                    dlib.rectangle):  # pylint: disable=c-extension-no-member
         bounding_box = [[face.left(), face.top()],
                         [face.right(), face.top()],
                         [face.right(), face.bottom()],
@@ -131,14 +153,15 @@ def rotate_landmarks(face, rotation_matrix):
     else:
         raise ValueError("Unsupported face type")
 
-    rotation_matrix = cv2.invertAffineTransform(rotation_matrix)
+    rotation_matrix = cv2.invertAffineTransform(  # pylint: disable=no-member
+        rotation_matrix)
     rotated = list()
     for item in (bounding_box, landmarks):
         if not item:
             continue
         points = np.array(item, np.int32)
         points = np.expand_dims(points, axis=0)
-        transformed = cv2.transform(points,
+        transformed = cv2.transform(points,  # pylint: disable=no-member
                                     rotation_matrix).astype(np.int32)
         rotated.append(transformed.squeeze())
 
@@ -167,7 +190,8 @@ def rotate_landmarks(face, rotation_matrix):
             face["landmarksXY"] = [tuple(point)
                                    for point in rotated[1].tolist()]
     else:
-        face = dlib.rectangle(int(pt_x), int(pt_y), int(pt_x1), int(pt_y1))
+        face = dlib.rectangle(  # pylint: disable=c-extension-no-member
+            int(pt_x), int(pt_y), int(pt_x1), int(pt_y1))
 
     return face
 
@@ -251,5 +275,5 @@ class Timelapse:
     def work(self):
         """ Write out timelapse image """
         image = self.trainer.show_sample(self.images_a, self.images_b)
-        cv2.imwrite(os.path.join(self.output_dir,
+        cv2.imwrite(os.path.join(self.output_dir,  # pylint: disable=no-member
                                  str(int(time())) + ".png"), image)

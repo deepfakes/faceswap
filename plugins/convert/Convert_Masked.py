@@ -4,6 +4,7 @@ import cv2
 import numpy
 
 from lib.aligner import get_align_mat
+from lib.utils import add_alpha_channel
 
 class Convert():
     def __init__(self, encoder, trainer, blur_size=2, seamless_clone=False, mask_type="facehullandrect", erosion_kernel_size=None, match_histogram=False, sharpen_image=None, draw_transparent=False, **kwargs):
@@ -44,33 +45,27 @@ class Convert():
 
     @staticmethod
     def convert_transparent(image, new_face, image_mask, image_size):
-        """ Add alpha channels to images and change to 
+        """ Add alpha channels to images and change to
             transparent background """
         image = numpy.zeros((image_size[1], image_size[0], 4),
                             dtype=numpy.uint8)
-        
-        mask_b, mask_g, mask_r = cv2.split(image_mask)
-        face_b, face_g, face_r = cv2.split(new_face)
-
-        alpha_mask = numpy.ones(mask_b.shape, dtype=mask_b.dtype) * 50
-        alpha_face = numpy.ones(face_b.shape, dtype=face_b.dtype) * 50
-
-        image_mask = cv2.merge((mask_b, mask_g, mask_r, alpha_mask))
-        new_face = cv2.merge((face_b, face_g, face_r, alpha_face))
+        image_mask = add_alpha_channel(image_mask, 100)
+        new_face = add_alpha_channel(new_face, 100)
         return image, new_face, image_mask
-    
+
     def apply_new_face(self, image, new_face, image_mask, mat, image_size, size):
-    
+
         if self.draw_transparent:
             image, new_face, image_mask = self.convert_transparent(image,
                                                                    new_face,
                                                                    image_mask,
                                                                    image_size)
+            self.seamless_clone = False  # Alpha channel not supported in seamless
         base_image = numpy.copy( image )
         new_image = numpy.copy( image )
 
         cv2.warpAffine( new_face, mat, image_size, new_image, cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC, cv2.BORDER_TRANSPARENT )
-        
+
         if self.sharpen_image == "bsharpen":
             # Sharpening using filter2D
             kernel = numpy.ones((3, 3)) * (-1)
@@ -85,7 +80,9 @@ class Convert():
         outimage = None
         if self.seamless_clone:
             unitMask = numpy.clip( image_mask * 365, 0, 255 ).astype(numpy.uint8)
-
+            print(unitMask.shape)
+            print(new_image.shape)
+            print(base_image.shape)
             maxregion = numpy.argwhere(unitMask==255)
 
             if maxregion.size > 0:
@@ -96,7 +93,6 @@ class Convert():
               masky = int(minx+(lenx//2))
               maskx = int(miny+(leny//2))
               outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),base_image.astype(numpy.uint8),unitMask,(masky,maskx) , cv2.NORMAL_CLONE )
-
               return outimage
 
         foreground = cv2.multiply(image_mask, new_image.astype(float))
