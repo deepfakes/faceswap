@@ -1,4 +1,5 @@
 *
+!setup.cfg
 !*.keep
 !*.py
 !*.md

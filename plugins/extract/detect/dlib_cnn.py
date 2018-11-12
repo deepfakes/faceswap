@@ -18,7 +18,7 @@ class Detect(Detector):
 
     def compiled_for_cuda(self):
         """ Return a message on DLIB Cuda Compilation status """
-        cuda = dlib.DLIB_USE_CUDA
+        cuda = dlib.DLIB_USE_CUDA  # pylint: disable=c-extension-no-member
         msg = "DLib is "
         if not cuda:
             msg += "NOT "
@@ -35,7 +35,8 @@ class Detect(Detector):
         """ Calculate batch size """
         print("Initializing Dlib-CNN Detector...")
         super().initialize(*args, **kwargs)
-        self.detector = dlib.cnn_face_detection_model_v1(self.model_path)
+        self.detector = dlib.cnn_face_detection_model_v1(  # pylint: disable=c-extension-no-member
+            self.model_path)
         is_cuda = self.compiled_for_cuda()
         if is_cuda:
             vram_free = self.get_vram_free()
@@ -68,7 +69,7 @@ class Detect(Detector):
                 exhausted, batch = self.get_batch()
                 filenames, images = map(list, zip(*batch))
                 detect_images = self.compile_detection_images(images)
-                batch_detected = self.detector(detect_images, 0)
+                batch_detected = self.detect_batch(detect_images)
                 processed = self.process_output(batch_detected,
                                                 indexes=None,
                                                 rotation_matrix=None,
@@ -103,6 +104,26 @@ class Detect(Detector):
             detect_images.append(self.set_detect_image(image))
         return detect_images
 
+    def detect_batch(self, detect_images):
+        """ Pass the batch through detector for consistently sized images
+            or each image seperately for inconsitently sized images """
+        can_batch = self.check_batch_dims(detect_images)
+        if can_batch:
+            batch_detected = self.detector(detect_images, 0)
+        else:
+            if self.verbose:
+                print("Batch has inconsistently sized images. Processing one "
+                      "image at a time")
+            batch_detected = [self.detector(detect_image, 0)
+                              for detect_image in detect_images]
+        return batch_detected
+
+    @staticmethod
+    def check_batch_dims(images):
+        """ Check all images are the same size for batching """
+        dims = set(frame.shape[:2] for frame in images)
+        return len(dims) == 1
+
     def process_output(self, batch_detected,
                        indexes=None, rotation_matrix=None, output=None):
         """ Process the output images """
@@ -116,10 +137,11 @@ class Detect(Detector):
 
             for face in faces:
                 face = self.convert_to_dlib_rectangle(face)
-                face = dlib.rectangle(int(face.left() / self.scale),
-                                      int(face.top() / self.scale),
-                                      int(face.right() / self.scale),
-                                      int(face.bottom() / self.scale))
+                face = dlib.rectangle(  # pylint: disable=c-extension-no-member
+                    int(face.left() / self.scale),
+                    int(face.top() / self.scale),
+                    int(face.right() / self.scale),
+                    int(face.bottom() / self.scale))
                 detected_faces.append(face)
             if indexes:
                 target = indexes[idx]
