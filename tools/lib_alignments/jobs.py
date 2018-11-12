@@ -317,7 +317,7 @@ class Extract():
 
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), ".png")
-            self.frames.save_image(self.faces_dir, output, face)
+            self.frames.save_image(self.faces_dir, output, face.aligned_face)
             face_count += 1
         return face_count
 
