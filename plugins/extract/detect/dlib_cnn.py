@@ -104,14 +104,14 @@ class Detect(Detector):
             detect_images.append(self.set_detect_image(image))
         return detect_images
 
-    def detect_batch(self, detect_images):
+    def detect_batch(self, detect_images, disable_message=False):
         """ Pass the batch through detector for consistently sized images
             or each image seperately for inconsitently sized images """
         can_batch = self.check_batch_dims(detect_images)
         if can_batch:
             batch_detected = self.detector(detect_images, 0)
         else:
-            if self.verbose:
+            if self.verbose and not disable_message:
                 print("Batch has inconsistently sized images. Processing one "
                       "image at a time")
             batch_detected = [self.detector(detect_image, 0)
@@ -162,7 +162,7 @@ class Detect(Detector):
                 detect_images,
                 angle)
 
-            batch_detected = self.detector(reprocess, 0)
+            batch_detected = self.detect_batch(reprocess, disable_message=True)
             if self.verbose and any(item for item in batch_detected):
                 print("found face(s) by rotating image {} degrees".format(
                     angle))
