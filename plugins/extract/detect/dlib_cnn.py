@@ -163,7 +163,7 @@ class Detect(Detector):
                 angle)
 
             batch_detected = self.detector(reprocess, 0)
-            if self.verbose and any(item.any() for item in batch_detected):
+            if self.verbose and any(item for item in batch_detected):
                 print("found face(s) by rotating image {} degrees".format(
                     angle))
             processed = self.process_output(batch_detected,
