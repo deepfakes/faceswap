@@ -12,7 +12,7 @@ class Detect(Detector):
     """ Dlib detector for face recognition """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.target = (2048, 2048)  # Uses approx 1805MB of VRAM
+        self.target = (1920, 1920)  # Uses approx 1805MB of VRAM
         self.vram = 1600  # Lower as batch size of 2 gives wiggle room
         self.detector = None
 
@@ -67,6 +67,8 @@ class Detect(Detector):
         try:
             while True:
                 exhausted, batch = self.get_batch()
+                if not batch:
+                    break
                 filenames, images = map(list, zip(*batch))
                 detect_images = self.compile_detection_images(images)
                 batch_detected = self.detect_batch(detect_images)
@@ -84,17 +86,15 @@ class Detect(Detector):
                               "detected_faces": faces}
                     self.finalize(retval)
                 if exhausted:
-                    self.queues["out"].put("EOF")
                     break
         except:
             retval = {"exception": True}
             self.queues["out"].put(retval)
-            # Free up VRAM
-            del self.detector
+            del self.detector  # Free up VRAM
             raise
 
-        # Free up VRAM
-        del self.detector
+        self.queues["out"].put("EOF")
+        del self.detector  # Free up VRAM
 
     def compile_detection_images(self, images):
         """ Compile the detection images into batches """
@@ -114,8 +114,8 @@ class Detect(Detector):
             if self.verbose and not disable_message:
                 print("Batch has inconsistently sized images. Processing one "
                       "image at a time")
-            batch_detected = [self.detector(detect_image, 0)
-                              for detect_image in detect_images]
+            batch_detected = dlib.mmod_rectangless(  # pylint: disable=c-extension-no-member
+                [self.detector(detect_image, 0) for detect_image in detect_images])
         return batch_detected
 
     @staticmethod
