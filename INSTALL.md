@@ -1,4 +1,5 @@
 # Installing Faceswap
+- [Installing Faceswap](#installing-faceswap)
 - [Prerequisites](#prerequisites)
     - [Hardware Requirements](#hardware-requirements)
     - [Supported operating systems](#supported-operating-systems)
@@ -20,14 +21,17 @@
         - [Git](#git)
     - [Setup](#setup-1)
         - [Anaconda](#anaconda-1)
+            - [Set up a virtual environment](#set-up-a-virtual-environment)
             - [Entering your virtual environment](#entering-your-virtual-environment)
-        - [Dlib](#dlib)
-            - [Build Latest Dlib with GPU Support](#build-latest-dlib-with-gpu-support)
-            - [Easy install of Dlib without GPU Support](#easy-install-of-dlib-without-gpu-support)
         - [Faceswap](#faceswap)
+            - [Easy install](#easy-install)
+            - [Manual install](#manual-install)
     - [Running Faceswap](#running-faceswap)
     - [Create a desktop shortcut](#create-a-desktop-shortcut)
     - [Updating faceswap](#updating-faceswap)
+    - [Dlib](#dlib)
+        - [Build Latest Dlib with GPU Support](#build-latest-dlib-with-gpu-support)
+        - [Easy install of Dlib without GPU Support](#easy-install-of-dlib-without-gpu-support)
 
 # Prerequisites
 Machine learning essentially involves a ton of trial and error. You're letting a program try millions of different settings to land on an algorithm that sort of does what you want it to do. This process is really really slow unless you have the hardware required to speed this up. 
@@ -199,14 +203,19 @@ At the time of writing Tensorflow (version 1.12) only supports Cuda up to versio
 
 Download and install the the correct version of the Cuda Toolkit from: https://developer.nvidia.com/cuda-toolkit-archive
 
+NB: Make a note of the install folder as you'll need to access it in the next step.
+
 ### cuDNN
 **GPU Only** If you do not have an Nvidia GPU you can skip this step.
 
 As with Cuda you will need to install the correct version of cuDNN that the latest Tensorflow supports. At the time of writing this is Tensorflow v1.12 which supports cuDNN version 7.2, but check https://www.tensorflow.org/install/gpu for the latest supported version.
 
-Download and install cuDNN from https://developer.nvidia.com/cudnn. You will need to create an account with Nvidia. 
+Download cuDNN from https://developer.nvidia.com/cudnn. You will need to create an account with Nvidia. 
 
 At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases". Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and is less than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.1)
+- Open the zip file
+- Extract all of the files and folders into your Cuda folder:\
+![cudnn to cudo](https://i.imgur.com/X098w0N.png)
 
 ### CMake
 Install the latest stable release of CMake from https://cmake.org/download/. (Scroll down the page for Latest Releases and select the relevant Binary distribution installer for your OS).
@@ -238,7 +247,7 @@ Download and install Git for Windows: https://git-scm.com/download/win. Unless y
 Reboot your PC, so that everything you have just installed gets registered.
 
 ### Anaconda
-
+#### Set up a virtual environment
 - Open up Anaconda Navigator
 - Select "Environments" on the left hand side
 - Select "Create" at the bottom
@@ -255,37 +264,21 @@ To enter the virtual environment:
 - Hit the ">" arrow next to your faceswap environment and select "Open Terminal"
 ![Anaconda enter virtual env](https://i.imgur.com/rKSq2Pd.png)
 
-### Dlib
-For reasons outside of our control, this is the trickiest part of the process, and most of the prerequisites you installed are to support just Dlib. It is recommended to build Dlib from source for 3 main reasons:
-1) To get the latest version
-2) Enable GPU Support in Dlib
-3) To prevent yourself running into a whole host of issues later in the process.
-
-If you are not bothered about having GPU support or the latest version, scroll to the end of this section for a simple one-liner to install the CPU version of Dlib.
-#### Build Latest Dlib with GPU Support
-- If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
-- In the terminal type: `git clone https://github.com/davisking/dlib.git`
-- Enter the dlib folder: `cd dlib`
-- Add Visual Studio to your path by typing: `SET PATH=%PATH%;C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin`
-- Enter: `python setup.py -G  "Visual Studio 14 2015" install --yes USE_AVX_INSTRUCTIONS --yes DLIB_USE_CUDA --clean`
-
-This will build and install dlib for you. It is worth backing up the generated .egg file somewhere so that you can re-install it if you ever need to rather than having to re-compile:
-- From within the dlib folder copy the file named `dlib-xx.yy.zz-py3.5-win-amd64.egg` to somewhere safe
-- If you ever need to install it again, then from within your virtual environment enter: `python -m easy_install <path to saved .egg>`
-
-Once Dlib is built, you can remove Visual Studio and CMake from your PC.
-
-#### Easy install of Dlib without GPU Support
-NB: Don't do this if you have already compiled Dlib with GPU support.
-- If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
-- In the terminal type: `conda install -c conda-forge dlib`
-
 ### Faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
-- In the terminal type: `git clone https://github.com/deepfakes/faceswap.git`
+- Get the Faceswap repo by typing: `git clone https://github.com/deepfakes/faceswap.git`
 - Enter the faceswap folder: `cd faceswap`
+
+#### Easy install
+- Enter `python setup.py` and follow the prompts.
+
+If you have issues/errors follow the Manual install steps below.
+
+#### Manual install
+If dlib failed to install you can follow the steps to [manually install dlib](#dlib).\
+Once dlib is installed follow these steps:
+
 - Install requirements: `pip install -r requirements.txt`
-- Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install Tensorflow (either GPU or CPU version depending on your setup):
     - GPU Version: `pip install tensorflow-gpu`
     - Non GPU Version: `pip install tensorflow`
@@ -311,3 +304,30 @@ It's good to keep faceswap up to date as new features are added and bugs are fix
 - Enter the faceswap folder: `cd faceswap`
 - Enter the following `git pull --all`
 - Once the latest version has downloaded, make sure your requirements are up to date: `pip install --upgrade -r requirements.txt`
+
+## Dlib
+You should only need to follow these steps if you want the latest Dlib code or the process was unable to install Dlib for you. 
+
+For reasons outside of our control, this is the trickiest part of the process, and most of the prerequisites you installed are to support just Dlib. It is recommended to build Dlib from source for 3 main reasons:
+1) To get the latest version
+2) Enable GPU Support in Dlib
+3) To prevent yourself running into a whole host of issues later in the process.
+
+If you are not bothered about having GPU support or the latest version, scroll to the end of this section for a simple one-liner to install the CPU version of Dlib.
+### Build Latest Dlib with GPU Support
+- If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
+- In the terminal type: `git clone https://github.com/davisking/dlib.git`
+- Enter the dlib folder: `cd dlib`
+- Add Visual Studio to your path by typing: `SET PATH=%PATH%;C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin`
+- Enter: `python setup.py -G  "Visual Studio 14 2015" install --yes USE_AVX_INSTRUCTIONS --yes DLIB_USE_CUDA --clean`
+
+This will build and install dlib for you. It is worth backing up the generated .egg file somewhere so that you can re-install it if you ever need to rather than having to re-compile:
+- From within the dlib folder copy the file named `dlib-xx.yy.zz-py3.5-win-amd64.egg` to somewhere safe
+- If you ever need to install it again, then from within your virtual environment enter: `python -m easy_install <path to saved .egg>`
+
+Once Dlib is built, you can remove Visual Studio and CMake from your PC.
+
+### Easy install of Dlib without GPU Support
+NB: Don't do this if you have already compiled Dlib with GPU support.
+- If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
+- In the terminal type: `conda install -c conda-forge dlib`
