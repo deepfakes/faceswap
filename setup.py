@@ -3,6 +3,7 @@
 
 # >>> ENV
 import ctypes
+import importlib
 import os
 import re
 import sys
@@ -165,9 +166,11 @@ def check_pip():
         out_error("Import pip failed. Please Install python3-pip "
                   "and try again")
         exit(1)
+    upgrade_pip()
+    importlib.reload(pip)
     pip_version = pip.__version__
     del pip
-    upgrade_pip()
+
     get_installed_packages()
     out_info("Installed pip: {}".format(pip_version))
 
@@ -201,6 +204,37 @@ def check_system_dependencies():
     if OS_VERSION[0] == "Windows":
         check_visual_studio()
         check_cplus_plus()
+    if OS_VERSION[0] == "Linux":
+        check_gcc()
+        check_gpp()
+
+
+def check_gcc():
+    """ Check installed gcc version for linux """
+    chk = Popen("gcc --version", shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = chk.communicate()
+    if stderr:
+        out_error("gcc not installed. Please install gcc for your distribution")
+        return
+    gcc = [re.sub(" +", " ", line.strip())
+           for line in stdout.decode().splitlines()
+           if line.lower().strip().startswith("gcc")][0]
+    version = gcc[gcc.rfind(" ") + 1:]
+    out_info("gcc version: {}".format(version))
+
+
+def check_gpp():
+    """ Check installed g++ version for linux """
+    chk = Popen("g++ --version", shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = chk.communicate()
+    if stderr:
+        out_error("g++ not installed. Please install g++ for your distribution")
+        return
+    gpp = [re.sub(" +", " ", line.strip())
+           for line in stdout.decode().splitlines()
+           if line.lower().strip().startswith("g++")][0]
+    version = gpp[gpp.rfind(" ") + 1:]
+    out_info("g++ version: {}".format(version))
 
 
 def check_cmake():
@@ -309,8 +343,8 @@ def check_cuda_linux():
                   "CUDA: https://developer.nvidia.com/cuda-downloads\n"
                   "cuDNN: https://developer.nvidia.com/rdp/cudnn-download")
         return
-
-    CUDA_VERSION = chk[13:].rstrip()
+    cudavers = chk.strip().replace("libcudart.so.", "")
+    CUDA_VERSION = cudavers[:cudavers.find(" ")]
     if CUDA_VERSION:
         out_info("CUDA version: " + CUDA_VERSION)
         CUDA_PATH = chk[chk.find("=>") + 3:chk.find("targets") - 1]
@@ -399,9 +433,6 @@ def check_dlib():
         i = input("Compile dlib with AVX? [Y/n] ")
         if i in ("", "Y", "y"):
             out_info("dlib Configured")
-            if OS_VERSION[0] == "Linux":
-                out_warning("Make sure you are using gcc-5/g++-5 "
-                            "and CUDA bin/lib in path")
             COMPILE_DLIB_WITH_AVX = True
         else:
             COMPILE_DLIB_WITH_AVX = False
@@ -430,7 +461,7 @@ def update_tf_dep(cpu_only):
                     "build and install your own tensorflow-gpu.\r\n"
                     "CUDA Version: {}\r\n"
                     "cuDNN Version: {}\r\n"
-                    "Help: "
+                    "Help:\n"
                     "Building Tensorflow: https://www.tensorflow.org/install/install_sources\r\n"
                     "Tensorflow supported versions: "
                     "https://www.tensorflow.org/install/source#tested_build_configurations".format(
@@ -441,7 +472,8 @@ def update_tf_dep(cpu_only):
         if custom_tf and not os.path.isfile(custom_tf):
             out_error("{} not found".format(custom_tf))
             return
-        REQUIRED_PACKAGES.append(custom_tf)
+        if custom_tf:
+            REQUIRED_PACKAGES.append(custom_tf)
         return
 
     tf_ver = "tensorflow-gpu=={}.0".format(tf_ver)
@@ -456,7 +488,12 @@ def install_missing_dep():
                  "This may take some time...")
         install_tkinter()
         for pkg in MISSING_PACKAGES:
-            msg = "Installing {}".format(pkg)
+            if pkg.startswith("dlib"):
+                msg = ("Compiling {}. This will take a while...\n"
+                       "Please ignore the following UserWarning: "
+                       "'Disabling all use of wheels...'".format(pkg))
+            else:
+                msg = "Installing {}".format(pkg)
             out_info(msg)
             pipexe = [sys.executable, "-m", "pip"]
             # hide info/warning and fix cache hang
@@ -598,13 +635,6 @@ to fix Unicode issues on Windows when installing dependencies
 
 
 def tips_2_2():
-    """ Output Tips """
-    out_info("1. Install System Dependencies.\n"
-             "In Debian/Ubuntu, try:\n"
-             "apt-get install -y cmake libsm6 libxrender1 libxext-dev python3-tk")
-
-
-def tips_2_3():
     """ Pip Tips """
     out_info("1. Install PIP requirements\n"
              "You may want to execute `chcp 866` in cmd line\n"
@@ -653,10 +683,8 @@ def main():
     check_system_dependencies()
     if FAIL:
         exit(1)
-    if OS_VERSION[0] == "Linux":
+    if OS_VERSION[0] == "Windows":
         tips_2_2()
-    elif OS_VERSION[0] == "Windows":
-        tips_2_3()
     # finally check dep
     ask_continue()
     check_missing_dep()
