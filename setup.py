@@ -455,29 +455,34 @@ def update_tf_dep(cpu_only):
                                          cudnn_req[1] >= cudnn_inst[1]):
             tf_ver = key
             break
-    if not tf_ver:
-        out_warning("Tensorflow currently has no official prebuild for your CUDA, cuDNN "
-                    "combination.\nEither install a combination that Tensorflow supports or "
-                    "build and install your own tensorflow-gpu.\r\n"
-                    "CUDA Version: {}\r\n"
-                    "cuDNN Version: {}\r\n"
-                    "Help:\n"
-                    "Building Tensorflow: https://www.tensorflow.org/install/install_sources\r\n"
-                    "Tensorflow supported versions: "
-                    "https://www.tensorflow.org/install/source#tested_build_configurations".format(
-                        CUDA_VERSION, CUDNN_VERSION))
-
-        custom_tf = input("Location of custom tensorflow-gpu wheel (leave "
-                          "blank to manually install): ")
-        if custom_tf and not os.path.isfile(custom_tf):
-            out_error("{} not found".format(custom_tf))
-            return
-        if custom_tf:
-            REQUIRED_PACKAGES.append(custom_tf)
+    if tf_ver:
+        tf_ver = "tensorflow-gpu=={}.0".format(tf_ver)
+        REQUIRED_PACKAGES.append(tf_ver)
         return
 
-    tf_ver = "tensorflow-gpu=={}.0".format(tf_ver)
-    REQUIRED_PACKAGES.append(tf_ver)
+    out_warning("Tensorflow currently has no official prebuild for your CUDA, cuDNN "
+                "combination.\nEither install a combination that Tensorflow supports or "
+                "build and install your own tensorflow-gpu.\r\n"
+                "CUDA Version: {}\r\n"
+                "cuDNN Version: {}\r\n"
+                "Help:\n"
+                "Building Tensorflow: https://www.tensorflow.org/install/install_sources\r\n"
+                "Tensorflow supported versions: "
+                "https://www.tensorflow.org/install/source#tested_build_configurations".format(
+                    CUDA_VERSION, CUDNN_VERSION))
+
+    custom_tf = input("Location of custom tensorflow-gpu wheel (leave "
+                      "blank to manually install): ")
+    if not custom_tf:
+        return
+
+    custom_tf = os.path.realpath(os.path.expanduser(custom_tf))
+    if not os.path.isfile(custom_tf):
+        out_error("{} not found".format(custom_tf))
+    elif os.path.splitext(custom_tf)[1] != ".whl":
+        out_error("{} is not a valid pip wheel".format(custom_tf))
+    elif custom_tf:
+        REQUIRED_PACKAGES.append(custom_tf)
 
 
 def install_missing_dep():
@@ -690,7 +695,9 @@ def main():
     check_missing_dep()
     check_dlib()
     install_missing_dep()
-    out_info("All python3 dependencies are met.\r\nYou are good to go.")
+    out_info("All python3 dependencies are met.\r\nYou are good to go.\r\n\r\n"
+             "Enter:  'python faceswap.py -h' to see the options\r\n"
+             "        'python faceswap.py gui' to launch the GUI")
 
 
 if __name__ == "__main__":

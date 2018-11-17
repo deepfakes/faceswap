@@ -278,6 +278,7 @@ If you have issues/errors follow the Manual install steps below.
 If dlib failed to install you can follow the steps to [manually install dlib](#dlib).\
 Once dlib is installed follow these steps:
 
+- Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements: `pip install -r requirements.txt`
 - Install Tensorflow (either GPU or CPU version depending on your setup):
     - GPU Version: `pip install tensorflow-gpu`
