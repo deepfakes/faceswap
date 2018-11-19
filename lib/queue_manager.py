@@ -4,11 +4,14 @@
     NB: Keep this in it's own module! If it gets loaded from
     a multiprocess on a Windows System it will break Faceswap"""
 
+import logging
 import multiprocessing as mp
 import threading
 
-from queue import Empty as QueueEmpty  # Used for imports
+from queue import Empty as QueueEmpty  # pylint: disable=unused-import; # noqa
 from time import sleep
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class QueueManager():
@@ -21,6 +24,7 @@ class QueueManager():
 
     def add_queue(self, name, maxsize=0):
         """ Add a queue to the manager """
+        logger.debug("QueueManager add: %s", locals())
         if name in self.queues.keys():
             raise ValueError("Queue '{}' already exists.".format(name))
         queue = self.manager.Queue(maxsize=maxsize)
@@ -28,11 +32,13 @@ class QueueManager():
 
     def del_queue(self, name):
         """ remove a queue from the manager """
+        logger.debug("QueueManager delete: %s", locals())
         del self.queues[name]
 
     def get_queue(self, name, maxsize=0):
         """ Return a queue from the manager
             If it doesn't exist, create it """
+        logger.debug("QueueManager get: %s", locals())
         queue = self.queues.get(name, None)
         if queue:
             return queue
@@ -42,7 +48,9 @@ class QueueManager():
     def terminate_queues(self):
         """ Clear all queues and send EOF
             To be called if there is an error """
-        for queue in self.queues.values():
+        logger.debug("QueueManager terminate: %s", locals())
+        for q_name, queue in self.queues.items():
+            logger.debug("QueueManager terminating: %s", q_name)
             while not queue.empty():
                 queue.get()
             queue.put("EOF")
@@ -64,4 +72,4 @@ class QueueManager():
             sleep(update_secs)
 
 
-queue_manager = QueueManager()
+queue_manager = QueueManager()  # pylint: disable=invalid-name

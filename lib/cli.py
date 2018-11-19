@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """ Command Line Arguments """
 import argparse
-from importlib import import_module
+import logging
 import os
 import platform
 import sys
 
+from importlib import import_module
+
+from lib.logger import set_loglevel, log_setup
 from plugins.plugin_loader import PluginLoader
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class ScriptExecutor():
@@ -47,16 +52,17 @@ class ScriptExecutor():
             traceback errors to console """
 
         try:
-            import tkinter
+            # pylint: disable=unused-variable
+            import tkinter  # noqa
         except ImportError:
             print(
                 "It looks like TkInter isn't installed for your OS, so "
                 "the GUI has been disabled. To enable the GUI please "
                 "install the TkInter application.\n\n"
                 "You can try:\n"
+                "  Anaconda:           conda install tk\n"
                 "  Windows/macOS:      Install ActiveTcl Community "
-                "Edition from "
-                "www.activestate.com\n"
+                "Edition from http://www.activestate.com\n"
                 "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
                 "  Arch:               sudo pacman -S tk\n"
                 "  CentOS/Redhat:      sudo yum install tkinter\n"
@@ -76,6 +82,9 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
+        log_setup()
+        set_loglevel(arguments.loglevel)
+        logger.debug("Executing: %s", self.command)
         script = self.import_script()
         process = script(arguments)
         process.process()
@@ -240,7 +249,17 @@ class FaceSwapArgs():
 
     def add_arguments(self):
         """ Parse the arguments passed in from argparse """
-        for option in self.argument_list + self.optional_arguments:
+        global_args = list()
+        global_args.append({"opts": ("-L", "--loglevel"),
+                            "type": str.upper,
+                            "dest": "loglevel",
+                            "default": "INFO",
+                            "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
+                            "help": "Log level. Stick with INFO or VERBOSE "
+                                    "unless you need to file an error report"})
+
+        options = global_args + self.argument_list + self.optional_arguments
+        for option in options:
             args = option["opts"]
             kwargs = {key: option[key]
                       for key in option.keys() if key != "opts"}

@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
 
+import logging
 import os
 import warnings
 
@@ -15,39 +16,44 @@ import dlib
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 # Global variables
-_image_extensions = ['.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
-_video_extensions = ['.avi', '.flv', '.mkv', '.mov', '.mp4', '.mpeg', '.webm']
+_image_extensions = [  # pylint: disable=invalid-name
+    ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
+_video_extensions = [  # pylint: disable=invalid-name
+    ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".webm"]
 
 
 def get_folder(path):
     """ Return a path to a folder, creating it if it doesn't exist """
+    logger.debug("Requested path: %s", path)
     output_dir = Path(path)
     output_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug("Returning: %s", output_dir)
     return output_dir
 
 
-def get_image_paths(directory, exclude=list(), debug=False):
+def get_image_paths(directory):
     """ Return a list of images that reside in a folder """
     image_extensions = _image_extensions
-    exclude_names = [os.path.basename(Path(x).stem[:Path(x).stem.rfind('_')] +
-                                      Path(x).suffix) for x in exclude]
     dir_contents = list()
 
     if not os.path.exists(directory):
+        logger.debug("Creating folder: %s", directory)
         directory = get_folder(directory)
 
     dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
+    logger.debug("Scanned Folder contains %s files", len(dir_scanned))
+    logger.trace("Scanned Folder Contents: %s", dir_scanned)
+
     for chkfile in dir_scanned:
         if any([chkfile.name.lower().endswith(ext)
                 for ext in image_extensions]):
-            if chkfile.name in exclude_names:
-                if debug:
-                    print("Already processed %s" % chkfile.name)
-                continue
-            else:
-                dir_contents.append(chkfile.path)
+            logger.trace("Adding '%s' to image list", chkfile.path)
+            dir_contents.append(chkfile.path)
 
+    logger.debug("Returning %s images", len(dir_contents))
     return dir_contents
 
 
@@ -72,6 +78,7 @@ def set_system_verbosity(loglevel):
         2 - filter out WARNING logs
         3 - filter out ERROR logs  """
 
+    logger.debug("System Verbosity level: %s", loglevel)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
         for warncat in (FutureWarning, DeprecationWarning):

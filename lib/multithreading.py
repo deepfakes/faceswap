@@ -1,31 +1,38 @@
 #!/usr/bin/env python3
 """ Multithreading/processing utils for faceswap """
 
+import logging
 import multiprocessing as mp
 import queue as Queue
 import threading
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class PoolProcess():
     """ Pool multiple processes """
     def __init__(self, method, processes=None, verbose=False):
+        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
         self.verbose = verbose
         self.method = method
         self.procs = self.set_procs(processes)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_procs(self, processes):
+    @staticmethod
+    def set_procs(processes):
         """ Set the number of processes to use """
         if processes is None:
             running_processes = len(mp.active_children())
             processes = max(mp.cpu_count() - running_processes, 1)
-        if self.verbose:
-            print("Processing in {} processes".format(processes))
+        logger.verbose("Processing in %s processes", processes)
         return processes
 
     def in_process(self, *args, **kwargs):
         """ Run the processing pool """
         pool = mp.Pool(processes=self.procs)
-        for _ in range(self.procs):
+        for idx in range(self.procs):
+            logger.debug("Adding process %s of %s to mp.Pool: %s",
+                         idx + 1, self.procs, locals())
             pool.apply_async(self.method, args=args, kwds=kwargs)
 
 
@@ -33,14 +40,17 @@ class SpawnProcess():
     """ Process in spawnable context
         Must be spawnable to share CUDA across processes """
     def __init__(self):
+        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
         self.context = mp.get_context("spawn")
         self.daemonize = True
         self.process = None
         self.event = self.context.Event()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def in_process(self, target, *args, **kwargs):
         """ Start a process in the spawn context """
         kwargs["event"] = self.event
+        logger.debug("Spawning Process: %s", locals())
         self.process = self.context.Process(target=target,
                                             args=args,
                                             kwargs=kwargs)
@@ -49,26 +59,33 @@ class SpawnProcess():
 
     def join(self):
         """ Join the process """
+        logger.debug("Joining Process: %s", locals())
         self.process.join()
 
 
 class MultiThread():
     """ Threading for IO heavy ops """
     def __init__(self, thread_count=1):
+        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
         self.thread_count = thread_count
         self.threads = list()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def in_thread(self, target, *args, **kwargs):
         """ Start a thread with the given method and args """
-        for _ in range(self.thread_count):
-            thread = threading.Thread(target=target, args=args, kwargs=kwargs)
+        for idx in range(self.thread_count):
+            name = "{}_{}".format(target.__name__, idx)
+            logger.debug("Adding thread %s of %s to Threads: %s",
+                         idx + 1, self.thread_count, locals())
+            thread = threading.Thread(name=name, target=target, args=args, kwargs=kwargs)
             thread.daemon = True
             thread.start()
             self.threads.append(thread)
 
     def join_threads(self):
         """ Join the running threads """
-        for thread in self.threads:
+        for idx, thread in enumerate(self.threads):
+            logger.debug("Joining Thread: %s: %s", idx + 1, locals())
             thread.join()
 
 
