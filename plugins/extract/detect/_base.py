@@ -13,10 +13,11 @@
 
 import os
 
+from copy import copy
+
 import cv2
 import dlib
 
-from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.utils import rotate_image_by_angle, rotate_landmarks
 
@@ -29,6 +30,9 @@ class Detector():
         self.rotation = self.get_rotation_angles(rotation)
         self.parent_is_pool = False
         self.init = None
+
+        # Detected_Face Object. Passed in from initialization to avoid race condition
+        self.obj_detected_face = None
 
         # The input and output queues for the plugin.
         # See lib.multithreading.QueueManager for getting queues
@@ -71,6 +75,7 @@ class Detector():
         self.init = init
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
+        self.obj_detected_face = kwargs["detected_face"]
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image
@@ -92,8 +97,7 @@ class Detector():
         output["detected_faces"] = detected_faces
         self.queues["out"].put(output)
 
-    @staticmethod
-    def to_detected_face(image, dlib_rects):
+    def to_detected_face(self, image, dlib_rects):
         """ Convert list of dlib rectangles to a
             list of DetectedFace objects
             and add the cropped face """
@@ -104,11 +108,11 @@ class Detector():
                     dlib.rectangle):  # pylint: disable=c-extension-no-member
                 retval.append(list())
                 continue
-            detected_face = DetectedFace()
-            detected_face.from_dlib_rect(d_rect)
-            detected_face.image_to_face(image)
-            detected_face.frame_dims = image.shape[:2]
-            retval.append(detected_face)
+            this_face = copy(self.obj_detected_face)
+            this_face.from_dlib_rect(d_rect)
+            this_face.image_to_face(image)
+            this_face.frame_dims = image.shape[:2]
+            retval.append(this_face)
         return retval
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #

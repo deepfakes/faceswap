@@ -8,6 +8,7 @@ from pathlib import Path
 import cv2
 from tqdm import tqdm
 
+from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.multithreading import MultiThread, PoolProcess, SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
@@ -320,7 +321,9 @@ class Plugins():
         """ Launch the face detector """
         out_queue = queue_manager.get_queue("detect")
         kwargs = {"in_queue": queue_manager.get_queue("load"),
-                  "out_queue": out_queue}
+                  "out_queue": out_queue,
+                  "detected_face": DetectedFace()}  # Passed in to avoid race condition
+
         if self.args.detector == "mtcnn":
             mtcnn_kwargs = self.detector.validate_kwargs(
                 self.get_mtcnn_kwargs())
