@@ -13,8 +13,6 @@
 
 import os
 
-from copy import copy
-
 import cv2
 import dlib
 
@@ -93,31 +91,10 @@ class Detector():
     def finalize(self, output):
         """ This should be called as the final task of each plugin
             Performs fianl processing and puts to the out queue """
-        detected_faces = self.to_detected_face(output["image"],
-                                               output["detected_faces"])
-        output["detected_faces"] = detected_faces
         self.logger.trace("Putting to queue: %s", {key: val
                                                    for key, val in output.items()
                                                    if key != "image"})
         self.queues["out"].put(output)
-
-    def to_detected_face(self, image, dlib_rects):
-        """ Convert list of dlib rectangles to a
-            list of DetectedFace objects
-            and add the cropped face """
-        retval = list()
-        for d_rect in dlib_rects:
-            if not isinstance(
-                    d_rect,
-                    dlib.rectangle):  # pylint: disable=c-extension-no-member
-                retval.append(list())
-                continue
-            this_face = copy(self.obj_detected_face)
-            this_face.from_dlib_rect(d_rect)
-            this_face.image_to_face(image)
-            this_face.frame_dims = image.shape[:2]
-            retval.append(this_face)
-        return retval
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def compile_detection_image(self, image, is_square, scale_up):

@@ -201,7 +201,7 @@ Setting up Faceswap can seem a little intimidating to new users, but it isn't th
   
 At the time of writing Tensorflow (version 1.12) only supports Cuda up to version 9.0, but check https://www.tensorflow.org/install/gpu for the latest supported version. It is crucial that you download the correct version of Cuda.
 
-Download and install the the correct version of the Cuda Toolkit from: https://developer.nvidia.com/cuda-toolkit-archive
+Download and install the correct version of the Cuda Toolkit from: https://developer.nvidia.com/cuda-toolkit-archive
 
 NB: Make a note of the install folder as you'll need to access it in the next step.
 
@@ -214,8 +214,8 @@ Download cuDNN from https://developer.nvidia.com/cudnn. You will need to create 
 
 At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases". Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and is less than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.1)
 - Open the zip file
-- Extract all of the files and folders into your Cuda folder:\
-![cudnn to cudo](https://i.imgur.com/X098w0N.png)
+- Extract all of the files and folders into your Cuda folder (It is likely to be located in `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA`):\
+![cudnn to cuda](https://i.imgur.com/X098w0N.png)
 
 ### CMake
 Install the latest stable release of CMake from https://cmake.org/download/. (Scroll down the page for Latest Releases and select the relevant Binary distribution installer for your OS).

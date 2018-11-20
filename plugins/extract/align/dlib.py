@@ -22,7 +22,7 @@ class Align(Aligner):
         """ Initialization tasks to run prior to alignments """
         super().initialize(*args, **kwargs)
         print("Initializing Dlib Pose Predictor...")
-        self.model = dlib.shape_predictor(self.model_path)
+        self.model = dlib.shape_predictor(self.model_path)  # pylint: disable=c-extension-no-member
         self.init.set()
         print("Initialized Dlib Pose Predictor.")
 
@@ -37,13 +37,15 @@ class Align(Aligner):
                 self.queues["out"].put(item)
                 break
             image = item["image"][:, :, ::-1].copy()
-            self.process_landmarks(image, item["detected_faces"])
+            item["detected_faces"] = self.process_landmarks(image, item["detected_faces"])
             self.finalize(item)
         self.finalize("EOF")
 
     def process_landmarks(self, image, detected_faces):
         """ Align image and process landmarks """
+        retval = list()
         for detected_face in detected_faces:
-            process_face = detected_face.to_dlib_rect()
-            pts = self.model(image, process_face).parts()
-            detected_face.landmarksXY = [(point.x, point.y) for point in pts]
+            pts = self.model(image, detected_face).parts()
+            landmarks = [(point.x, point.y) for point in pts]
+            retval.append((detected_face, landmarks))
+        return retval

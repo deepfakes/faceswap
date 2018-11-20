@@ -204,20 +204,39 @@ class Extract():
 
     def process_faces(self, filename, faces, save_queue):
         """ Perform processing on found faces """
+        size = self.args.size if hasattr(self.args, "size") else 256
+        align_eyes = self.args.align_eyes if hasattr(self.args, "align_eyes") else False
+
         final_faces = list()
 
         filename = faces["filename"]
+        image = faces["image"]
         output_file = faces["output_file"]
 
         for idx, face in enumerate(faces["detected_faces"]):
+            detected_face = self.align_face(image, face, align_eyes, size)
+
             if self.export_face:
                 save_queue.put((filename,
                                 output_file,
-                                face.aligned_face,
+                                detected_face.aligned_face,
                                 idx))
 
-            final_faces.append(face.to_alignment())
+            final_faces.append(detected_face.to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces
+
+    @staticmethod
+    def align_face(image, face, align_eyes, size, padding=48):
+        """ Align the detected face """
+        detected_face = DetectedFace()
+        detected_face.from_dlib_rect(face[0])
+        detected_face.landmarksXY = face[1]
+        detected_face.frame_dims = image.shape[:2]
+        detected_face.load_aligned(image,
+                                   size=size,
+                                   padding=padding,
+                                   align_eyes=align_eyes)
+        return detected_face
 
 
 class Plugins():
@@ -292,20 +311,8 @@ class Plugins():
         aligner_name = self.args.aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: %s", aligner_name)
 
-        # Align Eyes
-        align_eyes = False
-        if hasattr(self.args, 'align_eyes'):
-            align_eyes = self.args.align_eyes
-
-        # Extracted Face Size
-        size = 256
-        if hasattr(self.args, 'size'):
-            size = self.args.size
-
         aligner = PluginLoader.get_aligner(aligner_name)(
-            verbose=self.args.verbose,
-            align_eyes=align_eyes,
-            size=size)
+            verbose=self.args.verbose)
 
         return aligner
 
@@ -349,7 +356,7 @@ class Plugins():
         logger.debug("Launching Detector")
         out_queue = queue_manager.get_queue("detect")
         kwargs = {"in_queue": queue_manager.get_queue("load"),
-                  "out_queue": out_queue}  # Passed in to avoid race condition
+                  "out_queue": out_queue}
 
         if self.args.detector == "mtcnn":
             mtcnn_kwargs = self.detector.validate_kwargs(

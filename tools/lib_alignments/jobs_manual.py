@@ -890,7 +890,8 @@ class MouseHandler():
         landmarks = queue_manager.get_queue("out").get()
         if landmarks == "EOF":
             exit(0)
-        alignment = landmarks["detected_faces"][0].to_alignment()
+        alignment = self.extracted_to_alignment(landmarks["detected_faces"][0])
+        print(alignment)
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:
@@ -904,3 +905,15 @@ class MouseHandler():
 
         self.interface.state["edit"]["updated"] = True
         self.interface.state["edit"]["update_faces"] = True
+
+    def extracted_to_alignment(self, extract_data):
+        """ Convert Extracted Tuple to Alignments data """
+        alignment = dict()
+        d_rect, landmarks = extract_data
+        alignment["x"] = d_rect.left()
+        alignment["w"] = d_rect.right() - d_rect.left()
+        alignment["y"] = d_rect.top()
+        alignment["h"] = d_rect.bottom() - d_rect.top()
+        alignment["frame_dims"] = self.media["image"].shape[:2]
+        alignment["landmarksXY"] = landmarks
+        return alignment
