@@ -13,8 +13,6 @@
 
 import os
 
-from copy import copy
-
 import cv2
 import dlib
 
@@ -30,9 +28,6 @@ class Detector():
         self.rotation = self.get_rotation_angles(rotation)
         self.parent_is_pool = False
         self.init = None
-
-        # Detected_Face Object. Passed in from initialization to avoid race condition
-        self.obj_detected_face = None
 
         # The input and output queues for the plugin.
         # See lib.multithreading.QueueManager for getting queues
@@ -75,7 +70,6 @@ class Detector():
         self.init = init
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
-        self.obj_detected_face = kwargs["detected_face"]
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image
@@ -92,28 +86,7 @@ class Detector():
     def finalize(self, output):
         """ This should be called as the final task of each plugin
             Performs fianl processing and puts to the out queue """
-        detected_faces = self.to_detected_face(output["image"],
-                                               output["detected_faces"])
-        output["detected_faces"] = detected_faces
         self.queues["out"].put(output)
-
-    def to_detected_face(self, image, dlib_rects):
-        """ Convert list of dlib rectangles to a
-            list of DetectedFace objects
-            and add the cropped face """
-        retval = list()
-        for d_rect in dlib_rects:
-            if not isinstance(
-                    d_rect,
-                    dlib.rectangle):  # pylint: disable=c-extension-no-member
-                retval.append(list())
-                continue
-            this_face = copy(self.obj_detected_face)
-            this_face.from_dlib_rect(d_rect)
-            this_face.image_to_face(image)
-            this_face.frame_dims = image.shape[:2]
-            retval.append(this_face)
-        return retval
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def compile_detection_image(self, image, is_square, scale_up):

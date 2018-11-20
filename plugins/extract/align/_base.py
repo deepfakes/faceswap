@@ -8,12 +8,12 @@
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of DetectedFaces objects without landmarks>}
+     "detected_faces": <list of DlibRectangles>}
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of final DetectedFaces objects>}
+     "detected_faces": <list of tuples containing (dlibRectangle, Landmarks)>}
     """
 
 import os
@@ -24,12 +24,9 @@ from lib.gpu_stats import GPUStats
 
 class Aligner():
     """ Landmarks Aligner Object """
-    def __init__(self, verbose=False, align_eyes=False, size=256, padding=48):
+    def __init__(self, verbose=False):
         self.verbose = verbose
-        self.size = size
-        self.padding = padding
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
-        self.align_eyes = align_eyes
         self.extract = Extract()
         self.init = None
 
@@ -79,19 +76,7 @@ class Aligner():
         if output == "EOF":
             self.queues["out"].put("EOF")
             return
-        self.align_faces(output)
         self.queues["out"].put((output))
-
-    def align_faces(self, output):
-        """ Align the faces """
-        detected_faces = output["detected_faces"]
-        image = output["image"]
-
-        for face in detected_faces:
-            face.load_aligned(image,
-                              size=self.size,
-                              padding=self.padding,
-                              align_eyes=self.align_eyes)
 
     # <<< MISC METHODS >>> #
     def get_vram_free(self):
