@@ -13,7 +13,8 @@
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of tuples containing (dlibRectangle, Landmarks)>}
+     "detected_faces": <list of dlibRectangles>,
+     "landmarks": <list of landmarks>}
     """
 
 import os

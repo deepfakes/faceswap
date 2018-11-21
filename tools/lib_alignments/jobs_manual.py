@@ -890,8 +890,8 @@ class MouseHandler():
         landmarks = queue_manager.get_queue("out").get()
         if landmarks == "EOF":
             exit(0)
-        alignment = self.extracted_to_alignment(landmarks["detected_faces"][0])
-        print(alignment)
+        alignment = self.extracted_to_alignment((landmarks["detected_faces"][0],
+                                                 landmarks["landmarks"][0]))
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:

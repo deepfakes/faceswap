@@ -12,7 +12,7 @@ class Detect(Detector):
     """ Dlib detector for face recognition """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.target = (1920, 1920)  # Uses approx 1805MB of VRAM
+        self.target = (1792, 1792)  # Uses approx 1805MB of VRAM
         self.vram = 1600  # Lower as batch size of 2 gives wiggle room
         self.detector = None
 

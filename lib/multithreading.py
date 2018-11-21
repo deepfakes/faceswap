@@ -12,6 +12,7 @@ class PoolProcess():
         self.verbose = verbose
         self.method = method
         self.procs = self.set_procs(processes)
+        self.pool = None
 
     def set_procs(self, processes):
         """ Set the number of processes to use """
@@ -24,9 +25,14 @@ class PoolProcess():
 
     def in_process(self, *args, **kwargs):
         """ Run the processing pool """
-        pool = mp.Pool(processes=self.procs)
+        self.pool = mp.Pool(processes=self.procs)
         for _ in range(self.procs):
-            pool.apply_async(self.method, args=args, kwds=kwargs)
+            self.pool.apply_async(self.method, args=args, kwds=kwargs)
+
+    def join(self):
+        """ Join the process """
+        self.pool.close()
+        self.pool.join()
 
 
 class SpawnProcess():

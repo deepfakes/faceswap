@@ -59,6 +59,10 @@ class Align(Aligner):
         super().align(*args, **kwargs)
         try:
             while True:
+                # NB: There appears to be a bug somewhere that re-inserts the first item (after
+                # detecting landmarks) back into the in queue. This happens consistently when -mp
+                # is not set, only appears to happen for the first item and always places it in
+                # the same place. It doesn't effect output, but should be squashed.
                 item = self.queues["in"].get()
                 if item == "EOF":
                     break
@@ -66,7 +70,7 @@ class Align(Aligner):
                     self.queues["out"].put(item)
                     break
                 image = item["image"][:, :, ::-1].copy()
-                item["detected_faces"] = self.process_landmarks(image, item["detected_faces"])
+                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
                 self.finalize(item)
             self.finalize("EOF")
         except:
@@ -81,7 +85,7 @@ class Align(Aligner):
             center, scale = self.get_center_scale(detected_face)
             aligned_image = self.align_image(image, center, scale)
             landmarks = self.predict_landmarks(aligned_image, center, scale)
-            retval.append((detected_face, landmarks))
+            retval.append(landmarks)
         return retval
 
     def get_center_scale(self, detected_face):

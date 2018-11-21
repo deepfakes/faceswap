@@ -50,6 +50,8 @@ class Extract():
         Utils.finalize(self.images.images_found,
                        self.alignments.faces_count,
                        self.verify_output)
+        self.plugins.process_detect.join()
+        self.plugins.process_align.join()
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
@@ -106,6 +108,9 @@ class Extract():
         """ Run Face Detection """
         to_process = self.process_item_count()
         frame_no = 0
+        size = self.args.size if hasattr(self.args, "size") else 256
+        align_eyes = self.args.align_eyes if hasattr(self.args, "align_eyes") else False
+
         if self.plugins.is_parallel:
             self.plugins.launch_aligner()
             self.plugins.launch_detector()
@@ -122,9 +127,9 @@ class Extract():
             if exception:
                 exit(1)
             filename = faces["filename"]
-
             faces["output_file"] = self.output_dir / Path(filename).stem
 
+            self.align_face(faces, align_eyes, size)
             self.post_process.do_actions(faces)
 
             faces_count = len(faces["detected_faces"])
@@ -182,42 +187,41 @@ class Extract():
 
         self.threaded_io("reload", detected_faces)
 
+    @staticmethod
+    def align_face(faces, align_eyes, size, padding=48):
+        """ Align the detected face """
+        final_faces = list()
+        image = faces["image"]
+        landmarks = faces["landmarks"]
+        detected_faces = faces["detected_faces"]
+        for idx, face in enumerate(detected_faces):
+            detected_face = DetectedFace()
+            detected_face.from_dlib_rect(face)
+            detected_face.landmarksXY = landmarks[idx]
+            detected_face.frame_dims = image.shape[:2]
+            detected_face.load_aligned(image,
+                                       size=size,
+                                       padding=padding,
+                                       align_eyes=align_eyes)
+            final_faces.append(detected_face)
+        faces["detected_faces"] = final_faces
+
     def process_faces(self, filename, faces):
         """ Perform processing on found faces """
-        size = self.args.size if hasattr(self.args, "size") else 256
-        align_eyes = self.args.align_eyes if hasattr(self.args, "align_eyes") else False
-
         final_faces = list()
         save_queue = queue_manager.get_queue("save")
-
         filename = faces["filename"]
-        image = faces["image"]
         output_file = faces["output_file"]
 
         for idx, face in enumerate(faces["detected_faces"]):
-            detected_face = self.align_face(image, face, align_eyes, size)
-
             if self.export_face:
                 save_queue.put((filename,
                                 output_file,
-                                detected_face.aligned_face,
+                                face.aligned_face,
                                 idx))
 
-            final_faces.append(detected_face.to_alignment())
+            final_faces.append(face.to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces
-
-    @staticmethod
-    def align_face(image, face, align_eyes, size, padding=48):
-        """ Align the detected face """
-        detected_face = DetectedFace()
-        detected_face.from_dlib_rect(face[0])
-        detected_face.landmarksXY = face[1]
-        detected_face.frame_dims = image.shape[:2]
-        detected_face.load_aligned(image,
-                                   size=size,
-                                   padding=padding,
-                                   align_eyes=align_eyes)
-        return detected_face
 
 
 class Plugins():
@@ -228,6 +232,8 @@ class Plugins():
         self.aligner = self.load_aligner()
         self.is_parallel = self.set_parallel_processing()
 
+        self.process_detect = None
+        self.process_align = None
         self.add_queues()
 
     def set_parallel_processing(self):
@@ -297,10 +303,10 @@ class Plugins():
         kwargs = {"in_queue": queue_manager.get_queue("detect"),
                   "out_queue": out_queue}
 
-        align_process = SpawnProcess()
-        event = align_process.event
+        self.process_align = SpawnProcess()
+        event = self.process_align.event
 
-        align_process.in_process(self.aligner.align, **kwargs)
+        self.process_align.in_process(self.aligner.align, **kwargs)
 
         # Wait for Aligner to take it's VRAM
         # The first ever load of the model for FAN has reportedly taken
@@ -336,15 +342,15 @@ class Plugins():
             kwargs["mtcnn_kwargs"] = mtcnn_kwargs
 
         if self.detector.parent_is_pool:
-            detect_process = PoolProcess(self.detector.detect_faces)
+            self.process_detect = PoolProcess(self.detector.detect_faces)
         else:
-            detect_process = SpawnProcess()
+            self.process_detect = SpawnProcess()
 
         event = None
-        if hasattr(detect_process, "event"):
-            event = detect_process.event
+        if hasattr(self.process_detect, "event"):
+            event = self.process_detect.event
 
-        detect_process.in_process(self.detector.detect_faces, **kwargs)
+        self.process_detect.in_process(self.detector.detect_faces, **kwargs)
 
         if not event:
             return
