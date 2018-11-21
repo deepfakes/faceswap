@@ -11,6 +11,7 @@
      "detected_faces": <list of dlib.rectangles>}
     """
 
+import logging
 import os
 
 import cv2
@@ -18,17 +19,18 @@ import dlib
 
 from lib.gpu_stats import GPUStats
 from lib.utils import rotate_image_by_angle, rotate_landmarks
+import lib.logger
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Detector():
     """ Detector object """
-    def __init__(self, verbose=False, rotation=None, logger=None, detected_face=None):
-        self.logger = logger  # Passed in to maintain scope
-        self.logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
+    def __init__(self, log_queue, loglevel = "INFO", verbose=False, rotation=None):
+        logger.debug("Initializing %s: (PID: %s) %s", self.__class__.__name__, os.getpid(), locals())
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
         self.verbose = verbose
         self.rotation = self.get_rotation_angles(rotation)
-        self.obj_detected_face = detected_face  # Passed in to avoid mp race condition
         self.parent_is_pool = False
         self.init = None
 
@@ -56,7 +58,7 @@ class Detector():
         # will support. It is also used for holding the number of threads/
         # processes for parallel processing plugins
         self.batch_size = 1
-        self.logger.verbose("Initialized %s", self.__class__.__name__)
+        logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
     # These methods must be overriden when creating a plugin
@@ -70,7 +72,7 @@ class Detector():
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
             Override for specific detector """
-        self.logger.debug("_base initialize: %s", locals())
+        logger.debug("_base initialize: %s", locals())
         init = kwargs.get("event", False)
         self.init = init
         self.queues["in"] = kwargs["in_queue"]
@@ -91,7 +93,7 @@ class Detector():
     def finalize(self, output):
         """ This should be called as the final task of each plugin
             Performs fianl processing and puts to the out queue """
-        self.logger.trace("Putting to queue: %s", {key: val
+        logger.trace("Putting to queue: %s", {key: val
                                                    for key, val in output.items()
                                                    if key != "image"})
         self.queues["out"].put(output)
@@ -121,7 +123,7 @@ class Detector():
             self.scale = target / source
         else:
             self.scale = 1.0
-        self.logger.trace("Detector scale: %s", self.scale)
+        logger.trace("Detector scale: %s", self.scale)
 
     def set_detect_image(self, input_image):
         """ Convert the image to RGB and scale """
@@ -135,7 +137,7 @@ class Detector():
         dims = (int(width * self.scale), int(height * self.scale))
 
         if self.scale < 1.0:
-            self.logger.verbose("Resizing image from %sx%s to %s.",
+            logger.verbose("Resizing image from %sx%s to %s.",
                                 width, height, "x".join(str(i) for i in dims))
 
         image = cv2.resize(image, dims, interpolation=interpln)
@@ -167,7 +169,7 @@ class Detector():
             elif len(passed_angles) > 1:
                 rotation_angles.extend(passed_angles)
 
-        self.logger.debug("Rotation Angles: %s", rotation_angles)
+        logger.debug("Rotation Angles: %s", rotation_angles)
         return rotation_angles
 
     def rotate_image(self, image, angle):
@@ -175,7 +177,7 @@ class Detector():
             Image with rotation matrix """
         if angle == 0:
             return image, None
-        self.logger.trace("Rotating image by angle: %s", angle)
+        logger.trace("Rotating image by angle: %s", angle)
         return rotate_image_by_angle(image, angle)
 
     @staticmethod
@@ -200,11 +202,11 @@ class Detector():
         for _ in range(self.batch_size):
             item = self.queues["in"].get()
             if item == "EOF":
-                self.logger.debug("Input exhausted")
+                logger.debug("Input exhausted")
                 exhausted = True
                 break
             batch.append(item)
-        self.logger.trace("Returning batch size: %s", len(batch))
+        logger.trace("Returning batch size: %s", len(batch))
         return (exhausted, batch)
 
     # <<< DLIB RECTANGLE METHODS >>> #
@@ -227,7 +229,7 @@ class Detector():
         """ Return total free VRAM on largest card """
         stats = GPUStats()
         vram = stats.get_card_most_free()
-        self.logger.verbose("Using device %s with %sMB free of %sMB",
+        logger.verbose("Using device %s with %sMB free of %sMB",
                             vram["device"],
                             int(vram["free"]),
                             int(vram["total"]))
@@ -239,5 +241,5 @@ class Detector():
         # Landmarks should not be extracted again from predetected faces,
         # because face data is lost, resulting in a large variance
         # against extract from original image
-        self.logger.debug("Setting predetected face")
+        logger.debug("Setting predetected face")
         return [dlib.rectangle(0, 0, width, height)]  # pylint: disable=c-extension-no-member

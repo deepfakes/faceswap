@@ -45,7 +45,7 @@ class Extract():
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
         Utils.set_verbosity(self.args.verbose)
-#        queue_manager.debug_monitor(1)
+        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
         self.run_extraction(save_thread)
@@ -53,6 +53,8 @@ class Extract():
         Utils.finalize(self.images.images_found,
                        self.alignments.faces_count,
                        self.verify_output)
+        # TODO Fix Sentinel
+        queue_manager.get_queue("logger").put(None)
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
@@ -299,10 +301,10 @@ class Plugins():
             rotation = self.args.rotate_images
 
         detector = PluginLoader.get_detector(detector_name)(
+            log_queue=queue_manager.get_queue("logger"),
+            loglevel=self.args.loglevel,
             verbose=self.args.verbose,
-            rotation=rotation,
-            logger=logger,  # Passed in to maintain scope
-            detected_face=DetectedFace())  # Passed in to avoid mp race condition
+            rotation=rotation)
 
         return detector
 

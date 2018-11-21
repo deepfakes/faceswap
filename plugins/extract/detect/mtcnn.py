@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from lib.multithreading import MultiThread
-from ._base import Detector, dlib
+from ._base import Detector, dlib, logger
 
 
 class Detect(Detector):
@@ -23,6 +23,7 @@ class Detect(Detector):
         self.name = "mtcnn"
         self.target = 2073600  # Uses approx 1.30 GB of VRAM
         self.vram = 1408
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
     def validate_kwargs(kwargs):
@@ -39,10 +40,11 @@ class Detect(Detector):
             valid = False
 
         if not valid:
-            print("Invalid MTCNN arguments received. Running with defaults")
-            return {"minsize": 20,                 # minimum size of face
-                    "threshold": [0.6, 0.7, 0.7],  # three steps threshold
-                    "factor": 0.709}               # scale factor
+            kwargs = {"minsize": 20,                 # minimum size of face
+                      "threshold": [0.6, 0.7, 0.7],  # three steps threshold
+                      "factor": 0.709}               # scale factor
+            logger.warning("Invalid MTCNN arguments received. Running with defaults")
+        logger.debug("Using mtcnn kwargs: %s", kwargs)
         return kwargs
 
     def set_model_path(self):
@@ -52,23 +54,26 @@ class Detect(Detector):
             if not os.path.exists(model_path):
                 raise Exception("Error: Unable to find {}, reinstall "
                                 "the lib!".format(model_path))
+            logger.debug("Loading model: %s", model)
         return self.cachepath
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
-        print("Initializing MTCNN Detector...")
+        logger.info("Initializing MTCNN Detector...")
+        logger.debug("mtcnn initialize: %s", locals())
         super().initialize(*args, **kwargs)
         is_gpu = False
         self.kwargs = kwargs["mtcnn_kwargs"]
 
         mtcnn_graph = tf.Graph()
-        with mtcnn_graph.as_default():
+        with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
             sess = tf.Session()
-            with sess.as_default():
+            with sess.as_default():  # pylint: disable=not-context-manager
                 pnet, rnet, onet = create_mtcnn(sess, self.model_path)
 
             if any("gpu" in str(device).lower()
                    for device in sess.list_devices()):
+                logger.debug("Using GPU")
                 is_gpu = True
                 alloc = int(sess.run(tf.contrib.memory_stats.BytesLimit()) /
                             (1024 * 1024))
@@ -76,8 +81,8 @@ class Detect(Detector):
 
         if not is_gpu:
             alloc = 2048
-            if self.verbose:
-                print("Using CPU. Limiting RAM useage to {}MB".format(alloc))
+            logger.warning("Using CPU")
+        logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
         self.batch_size = int(alloc / self.vram)
 
@@ -85,15 +90,14 @@ class Detect(Detector):
             raise ValueError("Insufficient VRAM available to continue "
                              "({}MB)".format(int(alloc)))
 
-        if self.verbose:
-            print("Processing in {} threads".format(self.batch_size))
+        logger.verbose("Processing in %s threads", self.batch_size)
 
         self.kwargs["pnet"] = pnet
         self.kwargs["rnet"] = rnet
         self.kwargs["onet"] = onet
 
         self.init.set()
-        print("Initialized MTCNN Detector.")
+        logger.info("Initialized MTCNN Detector.")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """
