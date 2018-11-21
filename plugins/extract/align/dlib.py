@@ -37,7 +37,7 @@ class Align(Aligner):
                 self.queues["out"].put(item)
                 break
             image = item["image"][:, :, ::-1].copy()
-            item["detected_faces"] = self.process_landmarks(image, item["detected_faces"])
+            item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
             self.finalize(item)
         self.finalize("EOF")
 
@@ -47,5 +47,5 @@ class Align(Aligner):
         for detected_face in detected_faces:
             pts = self.model(image, detected_face).parts()
             landmarks = [(point.x, point.y) for point in pts]
-            retval.append((detected_face, landmarks))
+            retval.append(landmarks)
         return retval

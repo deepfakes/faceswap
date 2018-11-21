@@ -16,6 +16,7 @@ class PoolProcess():
         self.verbose = verbose
         self.method = method
         self.procs = self.set_procs(processes)
+        self.pool = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -29,11 +30,16 @@ class PoolProcess():
 
     def in_process(self, *args, **kwargs):
         """ Run the processing pool """
-        pool = mp.Pool(processes=self.procs)
+        self.pool = mp.Pool(processes=self.procs)
         for idx in range(self.procs):
             logger.debug("Adding process %s of %s to mp.Pool: %s",
                          idx + 1, self.procs, locals())
-            pool.apply_async(self.method, args=args, kwds=kwargs)
+            self.pool.apply_async(self.method, args=args, kwds=kwargs)
+
+    def join(self):
+        """ Join the process """
+        self.pool.close()
+        self.pool.join()
 
 
 class SpawnProcess():
