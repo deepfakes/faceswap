@@ -275,27 +275,20 @@ def check_cmake_windows():
 
 
 def check_visual_studio():
-    """ Check Visual Studio 2015 is installed for Windows """
+    """ Check Visual Studio 2015 is installed for Windows
+
+        Somewhat hacky solution which checks for the existence
+        of the VS2015 Performance Report
+    """
     chk = Popen("reg query HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VSPerf",
                 shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = chk.communicate()
+    _, stderr = chk.communicate()
     if stderr:
         out_error("Visual Studio 2015 could not be found. See "
                   "https://github.com/deepfakes/faceswap/blob/master/"
                   "INSTALL.md#microsoft-visual-studio-2015 for instructions")
         return
-    vspath = [re.sub(" +", " ", line.strip())
-              for line in stdout.decode().splitlines()
-              if line.lower().strip().startswith("vsperfreportpath")][0]
-    vspath = vspath[vspath.find("REG_SZ") + 7:]  # Hacky!
-    vspath = vspath.replace("\\Team Tools\\Performance Tools\\VSPerfReport.exe", "")  # Hacky!
-    version = vspath[vspath.rfind(" ") + 1:]
-    if not version.startswith("14"):
-        out_error("Visual Studio 2015 could not be found. See "
-                  "https://github.com/deepfakes/faceswap/blob/master/"
-                  "INSTALL.md#microsoft-visual-studio-2015 for instructions")
-        return
-    out_info("Visual Studio 2015 version: {}".format(version))
+    out_info("Visual Studio 2015 version: 14.0")
 
 
 def check_cplus_plus():
