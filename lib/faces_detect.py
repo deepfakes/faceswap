@@ -7,8 +7,9 @@ from lib.aligner import Extract as AlignerExtract, get_align_mat
 
 class DetectedFace():
     """ Detected face and landmark information """
-    def __init__(self, image=None, x=None, w=None, y=None, h=None,
-                 frame_dims=None, landmarksXY=None):
+    def __init__(  # pylint: disable=invalid-name
+            self, image=None, x=None, w=None, y=None, h=None,
+            frame_dims=None, landmarksXY=None):
         self.image = image
         self.x = x
         self.w = w
@@ -31,7 +32,7 @@ class DetectedFace():
         bottom = self.y + self.h
         return d_rectangle(left, top, right, bottom)
 
-    def from_dlib_rect(self, d_rect):
+    def from_dlib_rect(self, d_rect, image=None):
         """ Set Bounding Box from a Dlib Rectangle """
         if not isinstance(d_rect, d_rectangle):
             raise ValueError("Supplied Bounding Box is not a dlib.rectangle.")
@@ -39,6 +40,8 @@ class DetectedFace():
         self.w = d_rect.right() - d_rect.left()
         self.y = d_rect.top()
         self.h = d_rect.bottom() - d_rect.top()
+        if image.any():
+            self.image_to_face(image)
 
     def image_to_face(self, image):
         """ Crop an image around bounding box to the face

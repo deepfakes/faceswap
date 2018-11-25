@@ -196,7 +196,7 @@ class Extract():
         detected_faces = faces["detected_faces"]
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_dlib_rect(face)
+            detected_face.from_dlib_rect(face, image)
             detected_face.landmarksXY = landmarks[idx]
             detected_face.frame_dims = image.shape[:2]
             detected_face.load_aligned(image,
