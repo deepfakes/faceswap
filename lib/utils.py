@@ -67,7 +67,7 @@ def backup_file(directory, filename):
         os.rename(origfile, backupfile)
 
 
-def set_system_verbosity(loglevel):
+def set_system_verbosity():
     """ Set the verbosity level of tensorflow and suppresses
         future and deprecation warnings from any modules
         From:
@@ -78,6 +78,7 @@ def set_system_verbosity(loglevel):
         2 - filter out WARNING logs
         3 - filter out ERROR logs  """
 
+    loglevel = "2" if logger.getEffectiveLevel() > 15 else "0"
     logger.debug("System Verbosity level: %s", loglevel)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
@@ -236,7 +237,7 @@ class Timelapse:
         self.trainer = trainer
 
         if not os.path.isdir(self.output_dir):
-            print('Error: {} does not exist'.format(self.output_dir))
+            logger.error("'%s' does not exist", self.output_dir)
             exit(1)
 
         self.files_a = self.read_input_images(input_dir_a)
@@ -251,11 +252,11 @@ class Timelapse:
     def read_input_images(input_dir):
         """ Get the image paths """
         if not os.path.isdir(input_dir):
-            print('Error: {} does not exist'.format(input_dir))
+            logger.error("'%s' does not exist", input_dir)
             exit(1)
 
         if not os.listdir(input_dir):
-            print('Error: {} contains no images'.format(input_dir))
+            logger.error("'%s' contains no images", input_dir)
             exit(1)
 
         return get_image_paths(input_dir)
@@ -284,3 +285,19 @@ class Timelapse:
         image = self.trainer.show_sample(self.images_a, self.images_b)
         cv2.imwrite(os.path.join(self.output_dir,  # pylint: disable=no-member
                                  str(int(time())) + ".png"), image)
+
+
+def cleanup():
+    """ Clean up all processess """
+    logger.debug("Cleaning Up")
+    from lib.queue_manager import queue_manager
+    from lib.multithreading import cleanup_processes
+
+    queue_manager.terminate_queues()
+    logger.debug("Terminating spawned processes and exiting")
+    # TODO Fix Sentinel
+    queue_manager.get_queue("logger").put(None)
+    queue_manager.del_queues()
+    queue_manager.manager.shutdown()
+
+    cleanup_processes()

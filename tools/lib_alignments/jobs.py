@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments seralized file """
 
+import logging
 import os
 import pickle
 import struct
@@ -13,6 +14,8 @@ from tqdm import tqdm
 
 from . import Annotate, ExtractedFaces, Faces, Frames
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 class Check():
     """ Frames and faces checking tasks """
@@ -22,7 +25,7 @@ class Check():
         self.type = None
         self.output = arguments.output
         self.source_dir = self.get_source_dir(arguments)
-        self.items = self.get_items(arguments)
+        self.items = self.get_items()
 
         self.output_message = ""
 
@@ -35,18 +38,18 @@ class Check():
             self.type = "frames"
             source_dir = arguments.frames_dir
         else:
-            print("No source folder (-fr or -fc) was provided")
+            logger.error("No source folder (-fr or -fc) was provided")
             exit(0)
         return source_dir
 
-    def get_items(self, arguments):
+    def get_items(self):
         """ Set the correct items to process """
         items = globals()[self.type.title()]
-        return items(self.source_dir, arguments.verbose).file_list_sorted
+        return items(self.source_dir).file_list_sorted
 
     def process(self):
         """ Process the frames check against the alignments file """
-        print("\n[CHECK {}]".format(self.type.upper()))
+        logger.info("[CHECK %s]", self.type.upper())
         self.validate()
         items_output = self.compile_output()
         self.output_results(items_output)
@@ -55,15 +58,13 @@ class Check():
         """ Check that the selected type is valid for
             selected task and job """
         if self.job == "missing-frames" and self.output == "move":
-            print("WARNING: missing_frames was selected with move output, but "
-                  "there will be nothing to move. "
-                  "Defaulting to output: console")
+            logger.warning("Missing_frames was selected with move output, but there will "
+                           "be nothing to move. Defaulting to output: console")
             self.output = "console"
         elif self.type == "faces" and self.job not in ("multi-faces",
                                                        "leftover-faces"):
-            print("WARNING: The selected folder is not valid. "
-                  "Only folder set with '-fc' is supported for "
-                  "'multi-faces' and 'leftover-faces'")
+            logger.warning("The selected folder is not valid. Only folder set with '-fc' is "
+                           "supported for 'multi-faces' and 'leftover-faces'")
             exit(0)
 
     def compile_output(self):
@@ -134,7 +135,7 @@ class Check():
     def output_results(self, items_output):
         """ Output the results in the requested format """
         if not items_output:
-            print("No {} were found meeting the criteria".format(self.type))
+            logger.info("No %s were found meeting the criteria", self.type)
             return
         if self.output == "move":
             self.move_file(items_output)
@@ -155,8 +156,7 @@ class Check():
         filename = self.output_message.replace(" ", "_").lower()
         filename += "_" + now + ".txt"
         output_file = os.path.join(self.source_dir, filename)
-        print("Saving {} result(s) to {}".format(items_discovered,
-                                                 output_file))
+        logger.info("Saving %s result(s) to '%s'", items_discovered, output_file)
         with open(output_file, "w") as f_output:
             f_output.write(output_message)
 
@@ -172,8 +172,7 @@ class Check():
 
     def move_frames(self, output_folder, items_output):
         """ Move frames into single subfolder """
-        print("Moving {} frame(s) to {}".format(len(items_output),
-                                                output_folder))
+        logger.info("Moving %s frame(s) to '%s'", len(items_output), output_folder)
         for frame in items_output:
             src = os.path.join(self.source_dir, frame)
             dst = os.path.join(output_folder, frame)
@@ -182,8 +181,7 @@ class Check():
     def move_faces(self, output_folder, items_output):
         """ Make additional subdirs for each face that appears
             Enables easier manual sorting """
-        print("Moving {} faces(s) to {}".format(len(items_output),
-                                                output_folder))
+        logger.info("Moving %s faces(s) to '%s'", len(items_output), output_folder)
         for frame in items_output:
             idx = frame[frame.rfind("_") + 1:frame.rfind(".")]
             src = os.path.join(self.source_dir, frame)
@@ -198,9 +196,8 @@ class Draw():
     """ Draw Alignments on passed in images """
     def __init__(self, alignments, arguments):
         self.arguments = arguments
-        self.verbose = arguments.verbose
         self.alignments = alignments
-        self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.frames = Frames(arguments.frames_dir)
         self.output_folder = self.set_output()
         self.extracted_faces = None
 
@@ -218,7 +215,7 @@ class Draw():
                         frames=self.frames, child_process=True)
         legacy.process()
 
-        print("\n[DRAW LANDMARKS]")  # Tidy up cli output
+        logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(
             self.frames,
             self.alignments,
@@ -230,14 +227,12 @@ class Draw():
             frame_name = frame["frame_fullname"]
 
             if not self.alignments.frame_exists(frame_name):
-                if self.verbose:
-                    print("Skipping {} - Alignments "
-                          "not found".format(frame_name))
+                logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
 
             self.annotate_image(frame_name)
             frames_drawn += 1
-        print("{} Frame(s) output".format(frames_drawn))
+        logger.info("%s Frame(s) output", frames_drawn)
 
     def annotate_image(self, frame):
         """ Draw the alignments """
@@ -260,18 +255,17 @@ class Extract():
     """ Re-extract faces from source frames based on
         Alignment data """
     def __init__(self, alignments, arguments):
-        self.verbose = arguments.verbose
         self.alignments = alignments
         self.type = arguments.job.replace("extract-", "")
         self.faces_dir = arguments.faces_dir
-        self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.frames = Frames(arguments.frames_dir)
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
                                               align_eyes=arguments.align_eyes)
 
     def process(self):
         """ Run extraction """
-        print("\n[EXTRACT FACES]")  # Tidy up cli output
+        logger.info("[EXTRACT FACES]")  # Tidy up cli output
         self.check_folder()
         self.export_faces()
 
@@ -284,10 +278,9 @@ class Extract():
         elif os.path.isdir(self.faces_dir):
             err = "ERROR: Folder already exists at {}".format(self.faces_dir)
         if err:
-            print(err)
+            logger.error(err)
             exit(0)
-        if self.verbose:
-            print("Creating output folder at {}".format(self.faces_dir))
+        logger.verbose("Creating output folder at '%s'", self.faces_dir)
         os.makedirs(self.faces_dir)
 
     def export_faces(self):
@@ -300,13 +293,11 @@ class Extract():
             frame_name = frame["frame_fullname"]
 
             if not self.alignments.frame_exists(frame_name):
-                if self.verbose:
-                    print("Skipping {} - Alignments "
-                          "not found".format(frame_name))
+                logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
             extracted_faces += self.output_faces(frame)
 
-        print("{} face(s) extracted".format(extracted_faces))
+        logger.info("%s face(s) extracted", extracted_faces)
 
     def output_faces(self, frame):
         """ Output the frame's faces to file """
@@ -337,16 +328,13 @@ class Extract():
 class Reformat():
     """ Reformat Alignment file """
     def __init__(self, alignments, arguments):
-        self.verbose = arguments.verbose
         self.alignments = alignments
         if self.alignments.file == "dfl":
-            self.faces = Faces(arguments.faces_dir,
-                               self.verbose,
-                               dfl=True)
+            self.faces = Faces(arguments.faces_dir, dfl=True)
 
     def process(self):
         """ Run reformat """
-        print("\n[REFORMAT ALIGNMENTS]")  # Tidy up cli output
+        logger.info("[REFORMAT ALIGNMENTS]")  # Tidy up cli output
         if self.alignments.file == "dfl":
             self.alignments.data = self.load_dfl()
             self.alignments.file = self.alignments.get_location(
@@ -359,9 +347,7 @@ class Reformat():
         alignments = dict()
         for face in self.faces.file_list_sorted:
             if face["face_extension"] != ".png":
-                if self.verbose:
-                    print("{} is not a png. "
-                          "Skipping".format(face["face_fullname"]))
+                logger.verbose("'%s' is not a png. Skipping", face["face_fullname"])
                 continue
 
             fullpath = os.path.join(self.faces.folder, face["face_fullname"])
@@ -379,7 +365,7 @@ class Reformat():
         with open(filename, "rb") as dfl:
             header = dfl.read(8)
             if header != b"\x89PNG\r\n\x1a\n":
-                print("ERROR: No Valid PNG header: {}".format(filename))
+                logger.error("No Valid PNG header: %s", filename)
                 return None
             while True:
                 chunk_start = dfl.tell()
@@ -392,7 +378,7 @@ class Reformat():
                     chunk = dfl.read(chunk_length + 12)
                     return pickle.loads(chunk[8:-4])
                 dfl.seek(chunk_length+12, os.SEEK_CUR)
-            print("ERROR: Couldn't find DFL alignments: {}".format(filename))
+            logger.error("Couldn't find DFL alignments: %s", filename)
 
     @staticmethod
     def convert_dfl_alignment(dfl_alignments, alignments):
@@ -414,7 +400,6 @@ class Reformat():
 class RemoveAlignments():
     """ Remove items from alignments file """
     def __init__(self, alignments, arguments):
-        self.verbose = arguments.verbose
         self.alignments = alignments
         self.type = arguments.job.replace("remove-", "")
         self.items = self.get_items(arguments)
@@ -424,15 +409,14 @@ class RemoveAlignments():
         """ Set the correct items to process """
         retval = None
         if self.type == "frames":
-            retval = list(Frames(arguments.frames_dir,
-                                 self.verbose).items.keys())
+            retval = list(Frames(arguments.frames_dir).items.keys())
         elif self.type == "faces":
-            retval = Faces(arguments.faces_dir, self.verbose)
+            retval = Faces(arguments.faces_dir)
         return retval
 
     def process(self):
         """ run removal """
-        print("\n[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
+        logger.info("[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
         del_count = 0
 
         iterator = self.alignments.yield_faces
@@ -446,11 +430,10 @@ class RemoveAlignments():
             del_count += task(item)
 
         if del_count == 0:
-            print("No changes made to alignments file. Exiting")
+            logger.info("No changes made to alignments file. Exiting")
             return
 
-        print("{} alignment(s) were removed from "
-              "alignments file".format(del_count))
+        logger.info("%s alignment(s) were removed from alignments file", del_count)
         self.alignments.save()
 
         if self.type == "faces":
@@ -485,9 +468,8 @@ class RemoveAlignments():
             if idx not in face_indexes:
                 del alignments[idx]
                 self.removed.add(frame_name)
-                if self.verbose:
-                    print("Removed alignment data for image:{} "
-                          "index: {}".format(frame_name, str(idx)))
+                logger.verbose("Removed alignment data for image: '%s'"
+                               "index: %s", frame_name, str(idx))
                 del_count += 1
         return del_count
 
@@ -514,10 +496,9 @@ class RemoveAlignments():
 
             current_index += 1
         if rename_count == 0:
-            print("No files were renamed. Exiting")
+            logger.info("No files were renamed. Exiting")
             return
-        print("{} face(s) were renamed to match with "
-              "alignments file".format(rename_count))
+        logger.info("%s face(s) were renamed to match with alignments file", rename_count)
 
     @staticmethod
     def set_image_index(index, current, original):
@@ -534,8 +515,7 @@ class RemoveAlignments():
         src = os.path.join(self.items.folder, old_file)
         dst = os.path.join(self.items.folder, new_file)
         os.rename(src, dst)
-        if self.verbose:
-            print("Renamed {} to {}".format(src, dst))
+        logger.verbose("Renamed '%s' to '%s'", src, dst)
         return 1
 
 
@@ -548,12 +528,11 @@ class Legacy():
 
     def __init__(self, alignments, arguments,
                  frames=None, child_process=False):
-        self.verbose = arguments.verbose
         self.alignments = alignments
         self.child_process = child_process
         self.frames = frames
         if not frames:
-            self.frames = Frames(arguments.frames_dir, self.verbose)
+            self.frames = Frames(arguments.frames_dir)
 
     def process(self):
         """ Run the rotate alignments process """
@@ -561,16 +540,16 @@ class Legacy():
         rotated = self.alignments.get_legacy_rotation()
         if self.child_process and not rotated and not no_dims:
             return
-        print("\n[UPDATE LEGACY LANDMARKS]")  # Tidy up cli output
+        logger.info("[UPDATE LEGACY LANDMARKS]")  # Tidy up cli output
 
         if no_dims:
             if self.child_process:
-                print("Legacy landmarks found. Adding frame dimensions...")
+                logger.info("Legacy landmarks found. Adding frame dimensions...")
             self.add_dimensions(no_dims)
 
         if rotated:
             if self.child_process:
-                print("Legacy rotated frames found. Rotating landmarks")
+                logger.info("Legacy rotated frames found. Rotating landmarks")
             self.rotate_landmarks(rotated)
 
         self.alignments.save()
@@ -595,21 +574,21 @@ class Sort():
     """ Sort alignments' index by the order they appear in
         an image """
     def __init__(self, alignments, arguments):
-        self.verbose = arguments.verbose
         self.alignments = alignments
         self.axis = arguments.job.replace("sort-", "")
         self.faces = self.get_faces(arguments)
 
-    def get_faces(self, arguments):
+    @staticmethod
+    def get_faces(arguments):
         """ If faces argument is specified, load faces_dir
             otherwise return None """
         if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
             return None
-        return Faces(arguments.faces_dir, self.verbose)
+        return Faces(arguments.faces_dir)
 
     def process(self):
         """ Execute the sort process """
-        print("\n[SORT INDEXES]")  # Tidy up cli output
+        logger.info("[SORT INDEXES]")  # Tidy up cli output
         self.check_rotated()
         self.reindex_faces()
         self.alignments.save()
@@ -620,12 +599,12 @@ class Sort():
         if any(alignment.get("r", None)
                for val in self.alignments.data.values()
                for alignment in val):
-            print("WARNING: There are rotated frames in the alignments "
-                  "file.\n\t Position of faces will not be correctly "
-                  "calculated for these frames.\n\t You should run rotation "
-                  "tool to update the file prior to running sort:\n\t "
-                  "'python tools.py alignments -j rotate -a "
-                  "<alignments_file> -fr <frames_folder>'")
+            logger.error("There are rotated frames in the alignments "
+                         "file. Position of faces will not be correctly "
+                         "calculated for these frames. You should run rotation "
+                         "tool to update the file prior to running sort: "
+                         "'python tools.py alignments -j rotate -a "
+                         "<alignments_file> -fr <frames_folder>'")
             exit(0)
 
     def reindex_faces(self):
@@ -647,7 +626,7 @@ class Sort():
             self.rename_faces(map_faces)
             self.alignments.data[key] = sorted_alignments
             reindexed += 1
-        print("{} Frames had their faces reindexed".format(reindexed))
+        logger.info("%s Frames had their faces reindexed", reindexed)
 
     def map_face_names(self, alignments, sorted_alignments, frame):
         """ Map the old and new indexes for face renaming """
@@ -664,8 +643,7 @@ class Sort():
                        if face["frame_name"] == frame
                        and face["face_index"] == idx]
             if not mapping:
-                print("WARNING: No face image found "
-                      "for frame '{}' at index '{}'".format(frame, idx))
+                logger.warning("No face image found for frame '%s' at index %s", frame, idx)
             map_faces.extend(mapping)
         return map_faces
 
@@ -684,8 +662,8 @@ class Sort():
                 src = os.path.join(self.faces.folder, old_file)
                 dst = os.path.join(self.faces.folder, new_file)
                 os.rename(src, dst)
-                if self.verbose and action == "final":
-                    print("Renamed {} to {}".format(old, new))
+                if action == "final":
+                    logger.verbose("Renamed '%s' to '%s'", old, new)
 
 
 class Spatial():
@@ -694,7 +672,6 @@ class Spatial():
         https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook """
 
     def __init__(self, alignments, arguments):
-        self.verbose = arguments.verbose
         self.arguments = arguments
         self.alignments = alignments
         self.mappings = dict()
@@ -703,12 +680,11 @@ class Spatial():
 
     def process(self):
         """ Perform spatial filtering """
-        print("\n[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
-        print("NB: The process only processes the alignments for the first "
-              "face it finds for any given frame\n"
-              "    For best results only run this when:\n"
-              "      - there is only a single face in the alignments file\n"
-              "      - all false positives have been removed\n")
+        logger.info("[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
+        logger.info("NB: The process only processes the alignments for the first "
+                    "face it finds for any given frame. For best results only run this when "
+                    "there is only a single face in the alignments file and all false positives "
+                    "have been removed")
 
         self.normalize()
         self.shape_model()
@@ -717,9 +693,9 @@ class Spatial():
         self.update_alignments(landmarks)
         self.alignments.save()
 
-        print("\nDone! To re-extract faces run:\n    python tools.py "
-              "alignments -j extract -a {} -fr <path_to_frames_dir> -fc "
-              "<output_folder>\n".format(self.arguments.alignments_file))
+        logger.info("Done! To re-extract faces run: python tools.py "
+                    "alignments -j extract -a %s -fr <path_to_frames_dir> -fc "
+                    "<output_folder>", self.arguments.alignments_file)
 
     # define shape normalization utility functions
     @staticmethod
@@ -793,8 +769,8 @@ class Spatial():
             whiten=True,
             random_state=1).fit(normalized_shapes_tbl)
         explained = self.shapes_model.explained_variance_ratio_.sum()
-        print("\nTotal explained percent by PCA model with {} components is "
-              "{}%\n".format(num_components, round(100 * explained, 1)))
+        logger.info("Total explained percent by PCA model with %s components is %s%%",
+                    num_components, round(100 * explained, 1))
 
     def spatially_filter(self):
         """ interpret the shapes using our shape model

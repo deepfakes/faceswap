@@ -11,18 +11,11 @@ class Alignments():
     """ Perform tasks relating to alignments file """
     def __init__(self, arguments):
         self.args = arguments
-        self.set_verbosity(arguments.verbose)
+        set_system_verbosity()
 
         dest_format = self.get_dest_format()
         self.alignments = AlignmentData(self.args.alignments_file,
-                                        dest_format,
-                                        self.args.verbose)
-
-    @staticmethod
-    def set_verbosity(verbose):
-        """ Set the system output verbosity """
-        lvl = '0' if verbose else '2'
-        set_system_verbosity(lvl)
+                                        dest_format)
 
     def get_dest_format(self):
         """ Set the destination format for Alignments """

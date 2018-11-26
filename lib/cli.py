@@ -8,7 +8,8 @@ import sys
 
 from importlib import import_module
 
-from lib.logger import set_loglevel, log_setup
+from lib.logger import crash_log, log_setup
+from lib.utils import cleanup
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -55,18 +56,17 @@ class ScriptExecutor():
             # pylint: disable=unused-variable
             import tkinter  # noqa
         except ImportError:
-            print(
+            logger.warning(
                 "It looks like TkInter isn't installed for your OS, so "
                 "the GUI has been disabled. To enable the GUI please "
-                "install the TkInter application.\n\n"
-                "You can try:\n"
-                "  Anaconda:           conda install tk\n"
-                "  Windows/macOS:      Install ActiveTcl Community "
-                "Edition from http://www.activestate.com\n"
-                "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
-                "  Arch:               sudo pacman -S tk\n"
-                "  CentOS/Redhat:      sudo yum install tkinter\n"
-                "  Fedora:             sudo dnf install python3-tkinter\n")
+                "install the TkInter application. You can try:")
+            logger.info("Anaconda: conda install tk")
+            logger.info("Windows/macOS: Install ActiveTcl Community Edition from "
+                        "http://www.activestate.com")
+            logger.info("Ubuntu/Mint/Debian: sudo apt install python3-tk")
+            logger.info("Arch: sudo pacman -S tk")
+            logger.info("CentOS/Redhat: sudo yum install tkinter")
+            logger.info("Fedora: sudo dnf install python3-tkinter")
             exit(1)
 
     @staticmethod
@@ -74,24 +74,33 @@ class ScriptExecutor():
         """ Check whether there is a display to output the GUI. If running on
             Windows then assume not running in headless mode """
         if not os.environ.get("DISPLAY", None) and os.name != "nt":
-            print("No display detected. GUI mode has been disabled.")
+            logger.warning("No display detected. GUI mode has been disabled.")
             if platform.system() == "Darwin":
-                print("macOS users need to install XQuartz. "
-                      "See https://support.apple.com/en-gb/HT201341")
+                logger.info("macOS users need to install XQuartz. "
+                            "See https://support.apple.com/en-gb/HT201341")
             exit(1)
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup()
-        set_loglevel(arguments.loglevel)
-        logger.debug("Executing: %s", self.command)
+        log_setup(arguments.loglevel)
+        logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         script = self.import_script()
         process = script(arguments)
-        process.process()
+        try:
+            process.process()
+        # TODO KeyboardInterrupt
+        except KeyboardInterrupt:
+            raise
+        except:
+            crash_log(logger)
+            logger.exception("Got Exception on main handler:")
+            cleanup()
+            exit(1)
 
 
 class FullPaths(argparse.Action):
     """ Expand user- and relative-paths """
+    # pylint: disable=too-few-public-methods
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
             os.path.expanduser(values)))
@@ -99,6 +108,7 @@ class FullPaths(argparse.Action):
 
 class DirFullPaths(FullPaths):
     """ Class that gui uses to determine if you need to open a directory """
+    # pylint: disable=too-few-public-methods
     pass
 
 
@@ -108,6 +118,7 @@ class FileFullPaths(FullPaths):
 
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
+    # pylint: disable=too-few-public-methods
     def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  **kwargs):
         super(FileFullPaths, self).__init__(option_strings, dest, **kwargs)
@@ -137,6 +148,7 @@ class SaveFileFullPaths(FileFullPaths):
 
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
+    # pylint: disable=too-few-public-methods
     pass
 
 
@@ -150,6 +162,7 @@ class ContextFullPaths(FileFullPaths):
 
     Bespoke actions are then set in lib/gui/utils.py FileHandler
     """
+    # pylint: disable=too-few-public-methods, too-many-arguments
     def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  action_option=None, **kwargs):
         if nargs is not None:
@@ -256,7 +269,9 @@ class FaceSwapArgs():
                             "default": "INFO",
                             "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
                             "help": "Log level. Stick with INFO or VERBOSE "
-                                    "unless you need to file an error report"})
+                                    "unless you need to file an error report. Be "
+                                    "careful with TRACE as it will generate a lot "
+                                    "of data"})
 
         options = global_args + self.argument_list + self.optional_arguments
         for option in options:
@@ -323,11 +338,6 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "want to process. Should be a front "
                                       "portrait. Multiple images can be added "
                                       "space separated"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
         return argument_list
 
 
@@ -698,11 +708,6 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Sets allow_growth option of Tensorflow "
                                       "to spare memory on some configs"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
                               "dest": "timelapse_input_A",

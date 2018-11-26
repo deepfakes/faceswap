@@ -1,11 +1,19 @@
 #!/usr/bin/python
 """ Logging Setup """
+import collections
 import logging
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 import os
+import re
 import sys
+import traceback
+
+from datetime import datetime
 
 from lib.queue_manager import queue_manager
+from lib.sysinfo import sysinfo
+
+LOG_QUEUE = queue_manager.get_queue("logger")
 
 
 class MultiProcessingLogger(logging.Logger):
@@ -34,56 +42,107 @@ class MultiProcessingLogger(logging.Logger):
             self._log(5, msg, args, **kwargs)
 
 
-logging.setLoggerClass(MultiProcessingLogger)
+class FaceswapFormatter(logging.Formatter):
+    """ Override formatter to strip newlines and multiple spaces from logger """
+    def format(self, record):
+        record.msg = re.sub(" +", " ", record.msg.replace("\n", "\\n").replace("\r", "\\r"))
+        return super().format(record)
 
 
-def log_setup():
-    """ initial log set up. """
-    log_queue = queue_manager.get_queue("logger")
-    q_handler = QueueHandler(log_queue)
-    f_handler = file_handler()
-    s_handler = stream_handler()
-    q_listener = QueueListener(log_queue, f_handler, s_handler)
-#    q_listener._sentinel = "EOF"
+class RollingBuffer(collections.deque):
+    """File-like that keeps a certain number of lines of text in memory."""
+    def write(self, buffer):
+        """ Write line to buffer """
+        for line in buffer.rstrip().splitlines():
+            self.append(line + "\n")
 
+
+def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
+    """ Setup the root logger.
+        Loaded in main process and into any spawned processes
+        Automatically added in multithreading.py"""
     rootlogger = logging.getLogger()
-    rootlogger.setLevel(logging.INFO)
-
+    q_handler = QueueHandler(queue)
     rootlogger.addHandler(q_handler)
+    rootlogger.setLevel(loglevel)
+
+
+def log_setup(loglevel):
+    """ initial log set up. """
+    set_root_logger(logging.NOTSET)
+    log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
+                                   "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
+                                   datefmt="%m/%d/%Y %H:%M:%S")
+    numeric_loglevel = get_loglevel(loglevel)
+    f_handler = file_handler(numeric_loglevel, log_format)
+    s_handler = stream_handler(numeric_loglevel)
+    c_handler = crash_handler(log_format)
+
+    q_listener = QueueListener(LOG_QUEUE, f_handler, s_handler, c_handler,
+                               respect_handler_level=True)
+#    q_listener._sentinel = "EOF"
     q_listener.start()
+    logging.info('Log level set to: %s', loglevel.upper())
 
 
-def file_handler():
+def file_handler(loglevel, log_format):
     """ Add a logging rotating file handler """
-    log_format = logging.Formatter("%(asctime)s %(threadName)-15s %(module)-15s %(funcName)-25s "
-                                   "%(levelname)-8s %(message)s", datefmt="%m/%d/%Y %H:%M:%S")
-
     filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap.log")
     should_rotate = os.path.isfile(filename)
     log_file = RotatingFileHandler(filename, backupCount=1)
     if should_rotate:
         log_file.doRollover()
     log_file.setFormatter(log_format)
+    log_file.setLevel(loglevel)
     return log_file
 
 
-def stream_handler():
+def stream_handler(loglevel):
     """ Add a logging cli handler """
-    log_format = logging.Formatter("%(asctime)s %(module)-20s %(levelname)-8s %(message)s",
+    # Don't set stdout to lower than verbose
+    loglevel = max(loglevel, 15)
+    log_format = FaceswapFormatter("%(asctime)s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
 
     log_console = logging.StreamHandler()
     log_console.setFormatter(log_format)
+    log_console.setLevel(loglevel)
     return log_console
 
 
-def set_loglevel(loglevel):
-    ''' Check valid log level supplied and set log level '''
+def crash_handler(log_format):
+    """ Add a handler that sores the last 50 debug lines to `debug_buffer`
+        for use in crash reports """
+    log_crash = logging.StreamHandler(debug_buffer)
+    log_crash.setFormatter(log_format)
+    log_crash.setLevel(logging.DEBUG)
+    return log_crash
+
+
+def get_loglevel(loglevel):
+    ''' Check valid log level supplied and return numeric log level '''
     numeric_level = getattr(logging, loglevel.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % loglevel)
 
-    logger = logging.getLogger()
-    logger.setLevel(numeric_level)
+    return numeric_level
 
-    logging.info('Log level set to: %s', loglevel.upper())
+
+def crash_log(logger):
+    """ Write debug_buffer to a crash log on crash """
+    path = os.getcwd()
+    filename = os.path.join(path, datetime.now().strftime('crash_report.%Y.%m.%d.%H%M%S%f.log'))
+    logger.critical("An unexpected crash has occurred. Writing crash report to %s."
+                    "Please verify you are running the latest version of "
+                    "faceswap before reporting", filename)
+    with open(filename, "w") as outfile:
+        outfile.writelines(debug_buffer)
+        traceback.print_exc(file=outfile)
+        outfile.write(sysinfo.full_info())
+
+
+# Set logger class to custom logger
+logging.setLoggerClass(MultiProcessingLogger)
+
+# Stores the last 50 debug messages
+debug_buffer = RollingBuffer(maxlen=50)  # pylint: disable=invalid-name

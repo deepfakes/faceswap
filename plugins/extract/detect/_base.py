@@ -19,23 +19,22 @@ import dlib
 
 from lib.gpu_stats import GPUStats
 from lib.utils import rotate_image_by_angle, rotate_landmarks
-import lib.logger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Detector():
     """ Detector object """
-    def __init__(self, log_queue, loglevel = "INFO", verbose=False, rotation=None):
-        logger.debug("Initializing %s: (PID: %s) %s", self.__class__.__name__, os.getpid(), locals())
+    def __init__(self, loglevel, rotation=None):
+        logger.debug("Initializing %s: (rotation: %s)", self.__class__.__name__, rotation)
+        self.loglevel = loglevel
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
-        self.verbose = verbose
         self.rotation = self.get_rotation_angles(rotation)
         self.parent_is_pool = False
         self.init = None
 
         # The input and output queues for the plugin.
-        # See lib.multithreading.QueueManager for getting queues
+        # See lib.queue_manager.QueueManager for getting queues
         self.queues = {"in": None, "out": None}
 
         # Scaling factor for image. Plugin dependent
@@ -72,7 +71,11 @@ class Detector():
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
             Override for specific detector """
-        logger.debug("_base initialize: %s", locals())
+        logger_init = kwargs["log_init"]
+        log_queue = kwargs["log_queue"]
+        logger_init(self.loglevel, log_queue)
+        logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
+                     self.__class__.__name__, os.getpid(), args, kwargs)
         init = kwargs.get("event", False)
         self.init = init
         self.queues["in"] = kwargs["in_queue"]
@@ -86,16 +89,20 @@ class Detector():
             if not self.init:
                 self.initialize(*args, **kwargs)
         except ValueError as err:
-            print("ERROR: {}".format(err))
+            logger.error(err)
             exit(1)
+        logger.debug("Detecting Faces (args: %s, kwargs: %s)", args, kwargs)
 
     # <<< FINALIZE METHODS>>> #
     def finalize(self, output):
         """ This should be called as the final task of each plugin
             Performs fianl processing and puts to the out queue """
-        logger.trace("Putting to queue: %s", {key: val
-                                                   for key, val in output.items()
-                                                   if key != "image"})
+        if isinstance(output, dict):
+            logger.trace("Item out: %s", {key: val
+                                          for key, val in output.items()
+                                          if key != "image"})
+        else:
+            logger.trace("Item out: %s", output)
         self.queues["out"].put(output)
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
@@ -138,13 +145,14 @@ class Detector():
 
         if self.scale < 1.0:
             logger.verbose("Resizing image from %sx%s to %s.",
-                                width, height, "x".join(str(i) for i in dims))
+                           width, height, "x".join(str(i) for i in dims))
 
         image = cv2.resize(image, dims, interpolation=interpln)
         return image
 
     # <<< IMAGE ROTATION METHODS >>> #
-    def get_rotation_angles(self, rotation):
+    @staticmethod
+    def get_rotation_angles(rotation):
         """ Set the rotation angles. Includes backwards compatibility for the
             'on' and 'off' options:
                 - 'on' - increment 90 degrees
@@ -154,6 +162,7 @@ class Detector():
         rotation_angles = [0]
 
         if not rotation or rotation.lower() == "off":
+            logger.debug("Not setting rotation angles")
             return rotation_angles
 
         if rotation.lower() == "on":
@@ -172,21 +181,36 @@ class Detector():
         logger.debug("Rotation Angles: %s", rotation_angles)
         return rotation_angles
 
-    def rotate_image(self, image, angle):
+    @staticmethod
+    def rotate_image(image, angle):
         """ Rotate the image by given angle and return
             Image with rotation matrix """
         if angle == 0:
             return image, None
-        logger.trace("Rotating image by angle: %s", angle)
+        logger.trace("Rotating by angle %s degrees", angle)
         return rotate_image_by_angle(image, angle)
 
     @staticmethod
     def rotate_rect(d_rect, rotation_matrix):
         """ Rotate a dlib rect based on the rotation_matrix"""
+        logger.trace("Rotating d_rectangle")
         d_rect = rotate_landmarks(d_rect, rotation_matrix)
         return d_rect
 
     # << QUEUE METHODS >> #
+    def get_item(self):
+        """ Yield one item from the queue """
+        item = self.queues["in"].get()
+        if isinstance(item, dict):
+            logger.trace("Item in: %s", item["filename"])
+        else:
+            logger.trace("Item in: %s", item)
+        if item == "EOF":
+            logger.debug("In Queue Exhausted")
+            # Re-put EOF into queue for other threads
+            self.queues["in"].put(item)
+        return item
+
     def get_batch(self):
         """ Get items from the queue in batches of
             self.batch_size
@@ -200,9 +224,8 @@ class Detector():
         exhausted = False
         batch = list()
         for _ in range(self.batch_size):
-            item = self.queues["in"].get()
+            item = self.get_item()
             if item == "EOF":
-                logger.debug("Input exhausted")
                 exhausted = True
                 break
             batch.append(item)
@@ -225,17 +248,19 @@ class Detector():
         return d_rect
 
     # <<< MISC METHODS >>> #
-    def get_vram_free(self):
+    @staticmethod
+    def get_vram_free():
         """ Return total free VRAM on largest card """
         stats = GPUStats()
         vram = stats.get_card_most_free()
         logger.verbose("Using device %s with %sMB free of %sMB",
-                            vram["device"],
-                            int(vram["free"]),
-                            int(vram["total"]))
+                       vram["device"],
+                       int(vram["free"]),
+                       int(vram["total"]))
         return int(vram["free"])
 
-    def set_predetected(self, width, height):
+    @staticmethod
+    def set_predetected(width, height):
         """ Set a dlib rectangle for predetected faces """
         # Predetected_face is used for sort tool.
         # Landmarks should not be extracted again from predetected faces,

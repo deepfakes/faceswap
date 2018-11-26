@@ -13,7 +13,7 @@ from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.multithreading import MultiThread, PoolProcess, SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import get_folder
+from lib.utils import cleanup, get_folder
 from plugins.plugin_loader import PluginLoader
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Extract():
     """ The extract process. """
     def __init__(self, arguments):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
+        logger.debug("Initializing '%s': (args: %s", self.__class__.__name__, arguments)
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
         logger.info("Output Directory: %s", self.args.output_dir)
@@ -39,13 +39,13 @@ class Extract():
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
             self.save_interval = self.args.save_interval
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def process(self):
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
-        Utils.set_verbosity(self.args.verbose)
-        queue_manager.debug_monitor(1)
+        Utils.set_verbosity()
+#        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
         self.run_extraction(save_thread)
@@ -55,12 +55,12 @@ class Extract():
                        self.verify_output)
         self.plugins.process_detect.join()
         self.plugins.process_align.join()
-        # TODO Fix Sentinel
-        queue_manager.get_queue("logger").put(None)
+        logger.debug("Process Succesfully Completed")
+        cleanup()
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
-        logger.debug("Task: %s, io_args: %s", task, io_args)
+        logger.debug("Threading task: (Task: '%s', io_args: %s)", task, io_args)
         io_args = tuple() if io_args is None else (io_args, )
         if task == "load":
             func = self.load_images
@@ -68,44 +68,47 @@ class Extract():
             func = self.save_faces
         elif task == "reload":
             func = self.reload_images
-        io_thread = MultiThread(thread_count=1)
-        io_thread.in_thread(func, *io_args)
+        io_thread = MultiThread(target=func, *io_args, thread_count=1)
+        io_thread.start()
         return io_thread
 
     def load_images(self):
         """ Load the images """
-        logger.debug("Start")
+        logger.debug("Load Images: Start")
         load_queue = queue_manager.get_queue("load")
         for filename, image in self.images.load():
             imagename = os.path.basename(filename)
             if imagename in self.alignments.data.keys():
-                logger.trace("Skipping image: %s", filename)
+                logger.trace("Skipping image: '%s'", filename)
                 continue
-            load_queue.put((filename, image))
+            item = {"filename": filename,
+                    "image": image,
+                    "exception": False}
+            load_queue.put(item)
         load_queue.put("EOF")
-        logger.debug("Complete")
+        logger.debug("Load Images: Complete")
 
     def reload_images(self, detected_faces):
         """ Reload the images and pair to detected face """
-        logger.debug("Start. Detected Faces Count: %s", len(detected_faces))
+        logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
         load_queue = queue_manager.get_queue("detect")
         for filename, image in self.images.load():
-            logger.trace("Loading image: %s", filename)
+            logger.trace("Reloading image: '%s'", filename)
             detect_item = detected_faces.pop(filename, None)
             if not detect_item:
-                logger.trace("Skipping image: %s", filename)
+                logger.warning("Couldn't find faces for: %s", filename)
                 continue
             detect_item["image"] = image
             load_queue.put(detect_item)
         load_queue.put("EOF")
-        logger.debug("Complete")
+        logger.debug("Reload Images: Complete")
 
     def save_faces(self):
         """ Save the generated faces """
-        logger.debug("Start")
+        logger.debug("Save Faces: Start")
         if not self.export_face:
             logger.debug("Not exporting faces")
-            logger.debug("Complete")
+            logger.debug("Save Faces: Complete")
             return
 
         save_queue = queue_manager.get_queue("save")
@@ -117,9 +120,9 @@ class Extract():
             out_filename = "{}_{}{}".format(str(output_file),
                                             str(idx),
                                             Path(filename).suffix)
-            logger.trace("Saving face: %s", out_filename)
+            logger.trace("Saving face: '%s'", out_filename)
             cv2.imwrite(out_filename, resized_face)  # pylint: disable=no-member
-        logger.debug("Complete")
+        logger.debug("Save Faces: Complete")
 
     def run_extraction(self, save_thread):
         """ Run Face Detection """
@@ -143,9 +146,6 @@ class Extract():
                           file=sys.stdout,
                           desc="Extracting faces"):
 
-            exception = faces.get("exception", False)
-            if exception:
-                exit(1)
             filename = faces["filename"]
             faces["output_file"] = self.output_dir / Path(filename).stem
 
@@ -169,21 +169,21 @@ class Extract():
 
         if self.export_face:
             save_queue.put("EOF")
-        save_thread.join_threads()
+        save_thread.join()
 
     def process_item_count(self):
         """ Return the number of items to be processedd """
         processed = sum(os.path.basename(frame) in self.alignments.data.keys()
                         for frame in self.images.input_images)
-        logger.debug("Items Processed: %s", processed)
+        logger.debug("Items already processed: %s", processed)
 
         if processed != 0 and self.args.skip_existing:
-            logger.info("Skipping %s previously extracted frames", processed)
+            logger.info("Skipping previously extracted frames: %s", processed)
         if processed != 0 and self.args.skip_faces:
-            logger.info("Skipping %s frames with detected faces", processed)
+            logger.info("Skipping frames with detected faces: %s", processed)
 
         to_process = self.images.images_found - processed
-        logger.debug("Items to Process: %s", to_process)
+        logger.debug("Items to be Processed: %s", to_process)
         if to_process == 0:
             logger.error("No frames to process. Exiting")
             queue_manager.terminate_queues()
@@ -228,10 +228,9 @@ class Extract():
             final_faces.append(detected_face)
         faces["detected_faces"] = final_faces
 
-    def process_faces(self, filename, faces):
+    def process_faces(self, filename, faces, save_queue):
         """ Perform processing on found faces """
         final_faces = list()
-        save_queue = queue_manager.get_queue("save")
         filename = faces["filename"]
         output_file = faces["output_file"]
 
@@ -249,7 +248,7 @@ class Extract():
 class Plugins():
     """ Detector and Aligner Plugins and queues """
     def __init__(self, arguments):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
+        logger.debug("Initializing '%s'", self.__class__.__name__)
         self.args = arguments
         self.detector = self.load_detector()
         self.aligner = self.load_aligner()
@@ -258,7 +257,7 @@ class Plugins():
         self.process_detect = None
         self.process_align = None
         self.add_queues()
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def set_parallel_processing(self):
         """ Set whether to run detect and align together or seperately """
@@ -301,16 +300,14 @@ class Plugins():
     def load_detector(self):
         """ Set global arguments and load detector plugin """
         detector_name = self.args.detector.replace("-", "_").lower()
-        logger.debug("Loading Detector: %s", detector_name)
+        logger.debug("Loading Detector: '%s'", detector_name)
         # Rotation
         rotation = None
         if hasattr(self.args, "rotate_images"):
             rotation = self.args.rotate_images
 
         detector = PluginLoader.get_detector(detector_name)(
-            log_queue=queue_manager.get_queue("logger"),
             loglevel=self.args.loglevel,
-            verbose=self.args.verbose,
             rotation=rotation)
 
         return detector
@@ -318,10 +315,10 @@ class Plugins():
     def load_aligner(self):
         """ Set global arguments and load aligner plugin """
         aligner_name = self.args.aligner.replace("-", "_").lower()
-        logger.debug("Loading Aligner: %s", aligner_name)
+        logger.debug("Loading Aligner: '%s'", aligner_name)
 
         aligner = PluginLoader.get_aligner(aligner_name)(
-            verbose=self.args.verbose)
+            loglevel=self.args.loglevel)
 
         return aligner
 
@@ -332,10 +329,9 @@ class Plugins():
         kwargs = {"in_queue": queue_manager.get_queue("detect"),
                   "out_queue": out_queue}
 
-        self.process_align = SpawnProcess()
+        self.process_align = SpawnProcess(self.aligner.align, **kwargs)
         event = self.process_align.event
-
-        self.process_align.in_process(self.aligner.align, **kwargs)
+        self.process_align.start()
 
         # Wait for Aligner to take it's VRAM
         # The first ever load of the model for FAN has reportedly taken
@@ -372,18 +368,16 @@ class Plugins():
                 self.get_mtcnn_kwargs())
             kwargs["mtcnn_kwargs"] = mtcnn_kwargs
 
-        if self.detector.parent_is_pool:
-            self.process_detect = PoolProcess(self.detector.detect_faces)
-        else:
-            self.process_detect = SpawnProcess()
+        mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
+        self.process_detect = mp_func(self.detector.detect_faces, **kwargs)
 
         event = None
         if hasattr(self.process_detect, "event"):
             event = self.process_detect.event
 
-        self.process_detect.in_process(self.detector.detect_faces, **kwargs)
+        self.process_detect.start()
 
-        if not event:
+        if event is None:
             logger.debug("Launched Detector")
             return
 
@@ -402,7 +396,7 @@ class Plugins():
 
     def detect_faces(self, extract_pass="detect"):
         """ Detect faces from in an image """
-        logger.debug("Running Detection. Pass: %s", extract_pass)
+        logger.debug("Running Detection. Pass: '%s'", extract_pass)
         if self.is_parallel or extract_pass == "align":
             out_queue = queue_manager.get_queue("align")
         if not self.is_parallel and extract_pass == "detect":
@@ -412,11 +406,6 @@ class Plugins():
             try:
                 faces = out_queue.get(True, 1)
                 if faces == "EOF":
-                    break
-                exception = faces.get("exception", None)
-                if exception is not None:
-                    queue_manager.terminate_queues()
-                    yield faces
                     break
             except QueueEmpty:
                 continue

@@ -5,94 +5,137 @@ import logging
 import multiprocessing as mp
 import queue as Queue
 import threading
+from lib.logger import LOG_QUEUE, set_root_logger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class PoolProcess():
     """ Pool multiple processes """
-    def __init__(self, method, processes=None, verbose=False):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
-        self.verbose = verbose
-        self.method = method
+    def __init__(self, method, in_queue, out_queue, *args, processes=None, **kwargs):
+        self._name = method.__name__
+        logger.debug("Initializing '%s': (target: '%s', processes: %s)",
+                     self.__class__.__name__, self._name, processes)
+
         self.procs = self.set_procs(processes)
-        self.pool = None
-        logger.debug("Initialized %s", self.__class__.__name__)
+        ctx = mp.get_context("spawn")
+        self.pool = ctx.Pool(processes=self.procs)
+
+        self._method = method
+        self._kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
+        self._args = args
+
+        logger.debug("Initialized '%s': '%s'", self.__class__.__name__, self._name)
 
     @staticmethod
-    def set_procs(processes):
+    def build_target_kwargs(in_queue, out_queue, kwargs):
+        """ Add standard kwargs to passed in kwargs list """
+        kwargs["log_init"] = set_root_logger
+        kwargs["log_queue"] = LOG_QUEUE
+        kwargs["in_queue"] = in_queue
+        kwargs["out_queue"] = out_queue
+        return kwargs
+
+    def set_procs(self, processes):
         """ Set the number of processes to use """
         if processes is None:
             running_processes = len(mp.active_children())
             processes = max(mp.cpu_count() - running_processes, 1)
-        logger.verbose("Processing in %s processes", processes)
+        logger.verbose("Processing '%s' in %s processes", self._name, processes)
         return processes
 
-    def in_process(self, *args, **kwargs):
+    def start(self):
         """ Run the processing pool """
-        self.pool = mp.Pool(processes=self.procs)
+        logging.debug("Pooling Processes: (target: '%s', args: %s, kwargs: %s)",
+                      self._name, self._args, self._kwargs)
         for idx in range(self.procs):
-            logger.debug("Adding process %s of %s to mp.Pool: %s",
-                         idx + 1, self.procs, locals())
-            self.pool.apply_async(self.method, args=args, kwds=kwargs)
+            logger.debug("Adding process %s of %s to mp.Pool '%s'",
+                         idx + 1, self.procs, self._name)
+            self.pool.apply_async(self._method, args=self._args, kwds=self._kwargs)
+        logging.debug("Pooled Processes: '%s'", self._name)
 
     def join(self):
         """ Join the process """
+        logger.debug("Joining Pooled Process: '%s'", self._name)
         self.pool.close()
         self.pool.join()
+        logger.debug("Joined Pooled Process: '%s'", self._name)
 
 
-class SpawnProcess():
+class SpawnProcess(mp.context.SpawnProcess):
     """ Process in spawnable context
         Must be spawnable to share CUDA across processes """
-    def __init__(self):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
-        self.context = mp.get_context("spawn")
-        self.daemonize = True
-        self.process = None
-        self.event = self.context.Event()
-        logger.debug("Initialized %s", self.__class__.__name__)
+    def __init__(self, target, in_queue, out_queue, *args, **kwargs):
+        name = target.__name__
+        logger.debug("Initializing '%s': (target: '%s', args: %s, kwargs: %s)",
+                     self.__class__.__name__, name, args, kwargs)
+        ctx = mp.get_context("spawn")
+        self.event = ctx.Event()
+        kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
+        super().__init__(target=target, name=name, args=args, kwargs=kwargs)
+        self.daemon = True
+        logger.debug("Initialized '%s': '%s'", self.__class__.__name__, name)
 
-    def in_process(self, target, *args, **kwargs):
-        """ Start a process in the spawn context """
+    def build_target_kwargs(self, in_queue, out_queue, kwargs):
+        """ Add standard kwargs to passed in kwargs list """
         kwargs["event"] = self.event
-        logger.debug("Spawning Process: %s", locals())
-        self.process = self.context.Process(target=target,
-                                            args=args,
-                                            kwargs=kwargs)
-        self.process.daemon = self.daemonize
-        self.process.start()
+        kwargs["log_init"] = set_root_logger
+        kwargs["log_queue"] = LOG_QUEUE
+        kwargs["in_queue"] = in_queue
+        kwargs["out_queue"] = out_queue
+        return kwargs
 
-    def join(self):
-        """ Join the process """
-        logger.debug("Joining Process: %s", locals())
-        self.process.join()
+    def start(self):
+        """ Add logging to start function """
+        logger.debug("Spawning Process: (name: '%s', args: %s, kwargs: %s, daemon: %s)",
+                     self._name, self._args, self._kwargs, self.daemon)
+        super().start()
+        logger.debug("Spawned Process: (name: '%s', PID: %s)", self._name, self.pid)
+
+    def join(self, timeout=None):
+        """ Add logging to join function """
+        logger.debug("Joining Process: (name: '%s', PID: %s)", self._name, self.pid)
+        super().join(timeout=timeout)
+        logger.debug("Joined Process: (name: '%s', PID: %s)", self._name, self.pid)
 
 
 class MultiThread():
     """ Threading for IO heavy ops """
-    def __init__(self, thread_count=1):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
-        self.thread_count = thread_count
-        self.threads = list()
-        logger.debug("Initialized %s", self.__class__.__name__)
+    def __init__(self, target, *args, thread_count=1, **kwargs):
+        self._name = target.__name__
+        logger.debug("Initializing '%s': (target: '%s', thread_count: %s, args: %s, kwargs: %s)",
+                     self.__class__.__name__, self._name, thread_count, args, kwargs)
+        self.daemon = True
+        self._thread_count = thread_count
+        self._threads = list()
+        self._target = target
+        self._args = args
+        self._kwargs = kwargs
+        logger.debug("Initialized '%s': '%s'", self.__class__.__name__, self._name)
 
-    def in_thread(self, target, *args, **kwargs):
+    def start(self):
         """ Start a thread with the given method and args """
-        for idx in range(self.thread_count):
-            name = "{}_{}".format(target.__name__, idx)
-            logger.debug("Adding thread %s of %s to Threads: %s",
-                         idx + 1, self.thread_count, locals())
-            thread = threading.Thread(name=name, target=target, args=args, kwargs=kwargs)
-            thread.daemon = True
+        logger.debug("Starting thread(s): '%s'", self._name)
+        for idx in range(self._thread_count):
+            name = "{}_{}".format(self._name, idx)
+            logger.debug("Starting thread %s of %s: '%s'",
+                         idx + 1, self._thread_count, name)
+            thread = threading.Thread(name=name,
+                                      target=self._target,
+                                      args=self._args,
+                                      kwargs=self._kwargs)
+            thread.daemon = self.daemon
             thread.start()
-            self.threads.append(thread)
+            self._threads.append(thread)
+        logger.debug("Started all threads '%s': %s", self._name, len(self._threads))
 
-    def join_threads(self):
+    def join(self):
         """ Join the running threads """
-        for idx, thread in enumerate(self.threads):
-            logger.debug("Joining Thread: %s: %s", idx + 1, locals())
+        logger.debug("Joining Threads: '%s'", self._name)
+        for thread in self._threads:
+            logger.debug("Joining Thread: '%s'", thread._name)  # pylint: disable=protected-access
             thread.join()
+        logger.debug("Joined all Threads: '%s'", self._name)
 
 
 class BackgroundGenerator(threading.Thread):
@@ -122,3 +165,11 @@ class BackgroundGenerator(threading.Thread):
             if next_item is None:
                 break
             yield next_item
+
+
+def cleanup_processes():
+    """ Clean up all spawned children """
+    for child in mp.active_children():
+        # Don't log as logger queue has been cleaned up
+        print("Terminating child process: {}".format(child))
+        child.terminate()

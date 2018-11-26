@@ -19,41 +19,54 @@ class QueueManager():
         Don't import this class directly, instead
         import the variable: queue_manager """
     def __init__(self):
+        logger.debug("Initializing '%s'", self.__class__.__name__)
         self.manager = mp.Manager()
         self.queues = dict()
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def add_queue(self, name, maxsize=0):
         """ Add a queue to the manager """
-        logger.debug("QueueManager add: %s", locals())
+        logger.debug("QueueManager adding: (name: '%s', maxsize: %s)", name, maxsize)
         if name in self.queues.keys():
             raise ValueError("Queue '{}' already exists.".format(name))
         queue = self.manager.Queue(maxsize=maxsize)
         self.queues[name] = queue
+        logger.debug("QueueManager added: (name: '%s')", name)
 
     def del_queue(self, name):
         """ remove a queue from the manager """
-        logger.debug("QueueManager delete: %s", locals())
+        logger.debug("QueueManager deleting: '%s'", name)
         del self.queues[name]
+        logger.debug("QueueManager deleted: '%s'", name)
 
     def get_queue(self, name, maxsize=0):
         """ Return a queue from the manager
             If it doesn't exist, create it """
-        logger.debug("QueueManager get: %s", locals())
+        logger.debug("QueueManager getting: '%s'", name)
         queue = self.queues.get(name, None)
-        if queue:
-            return queue
-        self.add_queue(name, maxsize)
-        return self.queues[name]
+        if not queue:
+            self.add_queue(name, maxsize)
+            queue = self.queues[name]
+        logger.debug("QueueManager got: '%s'", name)
+        return queue
 
     def terminate_queues(self):
         """ Clear all queues and send EOF
             To be called if there is an error """
-        logger.debug("QueueManager terminate: %s", locals())
+        logger.debug("QueueManager terminating all queues")
         for q_name, queue in self.queues.items():
-            logger.debug("QueueManager terminating: %s", q_name)
+            if q_name == "logger":
+                continue
+            logger.debug("QueueManager terminating: '%s'", q_name)
             while not queue.empty():
                 queue.get()
             queue.put("EOF")
+        logger.debug("QueueManager terminated all queues")
+
+    def del_queues(self):
+        """ remove all queue from the manager """
+        for q_name in list(self.queues.keys()):
+            self.del_queue(q_name)
 
     def debug_monitor(self, update_secs=2):
         """ Debug tool for monitoring queues """
@@ -65,10 +78,8 @@ class QueueManager():
     def debug_queue_sizes(self, update_secs):
         """ Output the queue sizes """
         while True:
-            print("=== QUEUE SIZES ===")
             for name in sorted(self.queues.keys()):
-                print(name, self.queues[name].qsize())
-            print("====================\n")
+                logger.debug("%s: %s", name, self.queues[name].qsize())
             sleep(update_secs)
 
 

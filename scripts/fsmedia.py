@@ -15,7 +15,7 @@ import numpy as np
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.detect_blur import is_blurry
-from lib.FaceFilter import FaceFilter as FilterFunc
+from lib.face_filter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_folder, get_image_paths,
                        set_system_verbosity)
 
@@ -27,12 +27,9 @@ class Utils():
         object """
 
     @staticmethod
-    def set_verbosity(verbose):
+    def set_verbosity():
         """ Set the system output verbosity """
-        print(logger.getEffectiveLevel())
-        print(type(logger.getEffectiveLevel()))
-        lvl = "2" if logger.getEffectiveLevel() > 15 else "0"
-        set_system_verbosity(lvl)
+        set_system_verbosity()
 
     @staticmethod
     def finalize(images_found, num_faces_detected, verify_output):
@@ -54,40 +51,39 @@ class Utils():
 class Alignments(AlignmentsBase):
     """ Override main alignments class for extract """
     def __init__(self, arguments, is_extract):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
+        logger.debug("Initializing '%s': (is_extract: %s)", self.__class__.__name__, is_extract)
         self.args = arguments
         self.is_extract = is_extract
         folder, filename = self.set_folder_filename()
         serializer = self.set_serializer()
         super().__init__(folder,
                          filename=filename,
-                         serializer=serializer,
-                         verbose=self.args.verbose)
-        logger.debug("Initialized %s", self.__class__.__name__)
+                         serializer=serializer)
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def set_folder_filename(self):
         """ Return the folder for the alignments file"""
         if self.args.alignments_path:
-            logger.debug("Alignments File provided: %s", self.args.alignments_path)
+            logger.debug("Alignments File provided: '%s'", self.args.alignments_path)
             folder, filename = os.path.split(str(self.args.alignments_path))
         else:
-            logger.debug("Alignments from Input Folder: %s", self.args.input_dir)
+            logger.debug("Alignments from Input Folder: '%s'", self.args.input_dir)
             folder = str(self.args.input_dir)
             filename = "alignments"
-        logger.debug("folder: %s filename: %s", folder, filename)
+        logger.debug("Setting Alignments: folder: '%s' filename: '%s'", folder, filename)
         return folder, filename
 
     def set_serializer(self):
         """ Set the serializer to be used for loading and
             saving alignments """
         if hasattr(self.args, "serializer") and self.args.serializer:
-            logger.debug("Serializer provided: %s", self.args.serializer)
+            logger.debug("Serializer provided: '%s'", self.args.serializer)
             serializer = self.args.serializer
         else:
             # If there is a full filename then this will be overriden
             # by filename extension
             serializer = "json"
-            logger.debug("No Serializer defaulting to: %s", serializer)
+            logger.debug("No Serializer defaulting to: '%s'", serializer)
         return serializer
 
     def load(self):
@@ -114,7 +110,7 @@ class Alignments(AlignmentsBase):
             with open(self.file, self.serializer.roptions) as align:
                 data = self.serializer.unmarshal(align.read())
         except IOError as err:
-            logger.error("Error: %s not read: %s", self.file, err.strerror)
+            logger.error("Error: '%s' not read: %s", self.file, err.strerror)
             exit(1)
 
         if skip_faces:
@@ -124,7 +120,7 @@ class Alignments(AlignmentsBase):
             logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
             for key in del_keys:
                 if key in data:
-                    logger.trace("Selected for redetection: %s", key)
+                    logger.trace("Selected for redetection: '%s'", key)
                     del data[key]
         return data
 
@@ -132,11 +128,11 @@ class Alignments(AlignmentsBase):
 class Images():
     """ Holds the full frames/images """
     def __init__(self, arguments):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
+        logger.debug("Initializing '%s'", self.__class__.__name__)
         self.args = arguments
         self.input_images = self.get_input_images()
         self.images_found = len(self.input_images)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def get_input_images(self):
         """ Return the list of images that are to be processed """
@@ -152,24 +148,23 @@ class Images():
     def load(self):
         """ Load an image and yield it with it's filename """
         for filename in self.input_images:
-            logger.trace("Loading image: %s", filename)
+            logger.trace("Loading image: '%s'", filename)
             yield filename, cv2.imread(filename)  # pylint: disable=no-member
 
     @staticmethod
     def load_one_image(filename):
         """ load requested image """
-        logger.trace("Loading image: %s", filename)
+        logger.trace("Loading image: '%s'", filename)
         return cv2.imread(filename)  # pylint: disable=no-member
 
 
 class PostProcess():
     """ Optional post processing tasks """
     def __init__(self, arguments):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
+        logger.debug("Initializing '%s'", self.__class__.__name__)
         self.args = arguments
-        self.verbose = self.args.verbose
         self.actions = self.set_actions()
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def set_actions(self):
         """ Compile the actions to be performed into a list """
@@ -181,9 +176,8 @@ class PostProcess():
             kwargs = options.get("kwargs", dict())
             args = args if isinstance(args, tuple) else tuple()
             kwargs = kwargs if isinstance(kwargs, dict) else dict()
-            kwargs["verbose"] = self.verbose
             task = globals()[action](*args, **kwargs)
-            logger.debug("Adding Postprocess action: %s", task)
+            logger.debug("Adding Postprocess action: '%s'", task)
             actions.append(task)
 
         for action in actions:
@@ -226,7 +220,7 @@ class PostProcess():
     def do_actions(self, output_item):
         """ Perform the requested post-processing actions """
         for action in self.actions:
-            logger.debug("Performing postprocess action: %s", action)
+            logger.debug("Performing postprocess action: '%s'", action)
             action.process(output_item)
 
 
@@ -235,9 +229,9 @@ class PostProcessAction():
         Usuable in Extract or Convert or both
         depending on context """
     def __init__(self, *args, **kwargs):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
-        self.verbose = kwargs["verbose"]
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.debug("Initializing '%s': (args: %s, kwargs: %s)",
+                     self.__class__.__name__, args, kwargs)
+        logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def process(self, output_item):
         """ Override for specific post processing action """
@@ -257,7 +251,7 @@ class BlurryFaceFilter(PostProcessAction):
 
         for idx, face in enumerate(output_item["detected_faces"]):
             frame_name = output_item["output_file"].parts[-1]
-            logger.trace("Checking for blurriness. Frame: %s, Face: %s", frame_name, idx)
+            logger.trace("Checking for blurriness. Frame: '%s', Face: %s", frame_name, idx)
             aligned_landmarks = face.aligned_landmarks
             resized_face = face.aligned_face
             size = face.aligned["size"]
@@ -276,7 +270,7 @@ class BlurryFaceFilter(PostProcessAction):
                 blur_folder = get_folder(Path(*blur_folder) / Path("blurry"))
                 output_item["output_file"] = blur_folder / Path(frame_name)
                 logger.verbose("%s's focus measure of %s was below the blur threshold, "
-                               "moving to \"blurry\"", frame_name, focus_measure)
+                               "moving to 'blurry'", frame_name, focus_measure)
 
 
 class DebugLandmarks(PostProcessAction):
@@ -286,7 +280,7 @@ class DebugLandmarks(PostProcessAction):
     def process(self, output_item):
         """ Draw landmarks on image """
         for idx, face in enumerate(output_item["detected_faces"]):
-            logger.trace("Drawing Landmarks. Frame: %s. Face: %s",
+            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
                          output_item["output_file"].parts[-1], idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:

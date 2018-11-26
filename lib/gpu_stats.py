@@ -11,14 +11,14 @@ else:
     import pynvml
     IS_MACOS = False
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
 
 class GPUStats():
     """ Holds information about system GPU(s) """
-    def __init__(self):
-        logger.debug("Initializing %s: %s", self.__class__.__name__, locals())
-        self.verbose = False
+    def __init__(self, log=True):
+        self.logger = None
+        if log:
+            self.logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+            self.logger.debug("Initializing '%s'", self.__class__.__name__)
 
         self.initialized = False
         self.device_count = 0
@@ -37,12 +37,15 @@ class GPUStats():
         self.vram = self.get_vram()
 
         self.shutdown()
-        logger.debug("Initialized %s", self.__class__.__name__)
+        if self.logger:
+            self.logger.debug("Initialized '%s'", self.__class__.__name__)
 
     def initialize(self):
         """ Initialize pynvml """
         if not self.initialized:
             if IS_MACOS:
+                if self.logger:
+                    self.logger.debug("macOS Detected. Using pynvx")
                 try:
                     pynvx.cudaInit()
                 except RuntimeError:
@@ -50,6 +53,8 @@ class GPUStats():
                     return
             else:
                 try:
+                    if self.logger:
+                        self.logger.debug("OS is not macOS. Using pynvml")
                     pynvml.nvmlInit()
                 except pynvml.NVMLError_LibraryNotFound:
                     self.initialized = True
@@ -75,7 +80,8 @@ class GPUStats():
                 self.device_count = pynvml.nvmlDeviceGetCount()
             except pynvml.NVMLError:
                 self.device_count = 0
-        logger.debug("GPU Device count: %s", self.device_count)
+        if self.logger:
+            self.logger.debug("GPU Device count: %s", self.device_count)
 
     def get_handles(self):
         """ Return all listed Nvidia handles """
@@ -84,10 +90,10 @@ class GPUStats():
         else:
             self.handles = [pynvml.nvmlDeviceGetHandleByIndex(i)
                             for i in range(self.device_count)]
-        logger.debug("GPU Handles found: %s", len(self.handles))
+        if self.logger:
+            self.logger.debug("GPU Handles found: %s", len(self.handles))
 
-    @staticmethod
-    def get_driver():
+    def get_driver(self):
         """ Get the driver version """
         if IS_MACOS:
             driver = pynvx.cudaSystemGetDriverVersion(ignore=True)
@@ -96,7 +102,8 @@ class GPUStats():
                 driver = pynvml.nvmlSystemGetDriverVersion().decode("utf-8")
             except pynvml.NVMLError:
                 driver = "No Nvidia driver found"
-        logger.debug("GPU Driver: %s", driver)
+        if self.logger:
+            self.logger.debug("GPU Driver: %s", driver)
         return driver
 
     def get_devices(self):
@@ -108,7 +115,8 @@ class GPUStats():
         else:
             names = [pynvml.nvmlDeviceGetName(handle).decode("utf-8")
                      for handle in self.handles]
-        logger.debug("GPU Devices: %s", names)
+        if self.logger:
+            self.logger.debug("GPU Devices: %s", names)
         return names
 
     def get_vram(self):
@@ -121,7 +129,8 @@ class GPUStats():
             vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).total /
                     (1024 * 1024)
                     for handle in self.handles]
-        logger.debug("GPU VRAM: %s", vram)
+        if self.logger:
+            self.logger.debug("GPU VRAM: %s", vram)
         return vram
 
     def get_used(self):
@@ -135,7 +144,8 @@ class GPUStats():
                     for handle in self.handles]
         self.shutdown()
 
-        logger.verbose("GPU VRAM used: %s", vram)
+        if self.logger:
+            self.logger.verbose("GPU VRAM used: %s", vram)
         return vram
 
     def get_free(self):
@@ -148,7 +158,8 @@ class GPUStats():
             vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).free / (1024 * 1024)
                     for handle in self.handles]
         self.shutdown()
-        logger.debug("GPU VRAM free: %s", vram)
+        if self.logger:
+            self.logger.debug("GPU VRAM free: %s", vram)
         return vram
 
     def get_card_most_free(self):
@@ -166,5 +177,6 @@ class GPUStats():
                   "device": self.devices[card_id],
                   "free": vram_free,
                   "total": self.vram[card_id]}
-        logger.debug("GPU Card with most free VRAM: %s", retval)
+        if self.logger:
+            self.logger.debug("GPU Card with most free VRAM: %s", retval)
         return retval

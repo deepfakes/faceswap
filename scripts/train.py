@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ The script to run the training process of faceswap """
 
+import logging
 import os
 import sys
 import threading
@@ -12,6 +13,8 @@ from keras.backend.tensorflow_backend import set_session
 from lib.utils import (get_folder, get_image_paths, set_system_verbosity,
                        Timelapse)
 from plugins.plugin_loader import PluginLoader
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Train():
@@ -33,9 +36,8 @@ class Train():
 
     def process(self):
         """ Call the training process object """
-        print("Training data directory: {}".format(self.args.model_dir))
-        lvl = '0' if self.args.verbose else '2'
-        set_system_verbosity(lvl)
+        logger.info("Training data directory: %s", self.args.model_dir)
+        set_system_verbosity()
         thread = self.start_thread()
 
         if self.args.preview:
@@ -51,16 +53,16 @@ class Train():
         images = []
         for image_dir in [self.args.input_A, self.args.input_B]:
             if not os.path.isdir(image_dir):
-                print('Error: {} does not exist'.format(image_dir))
+                logger.error("Error: '%s' does not exist", image_dir)
                 exit(1)
 
             if not os.listdir(image_dir):
-                print('Error: {} contains no images'.format(image_dir))
+                logger.error("Error: '%s' contains no images", image_dir)
                 exit(1)
 
             images.append(get_image_paths(image_dir))
-        print("Model A Directory: {}".format(self.args.input_A))
-        print("Model B Directory: {}".format(self.args.input_B))
+        logger.info("Model A Directory: %s", self.args.input_A)
+        logger.info("Model B Directory: %s", self.args.input_B)
         return images
 
     def start_thread(self):
@@ -71,10 +73,10 @@ class Train():
 
     def end_thread(self, thread):
         """ On termination output message and join thread back to main """
-        print("Exit requested! The trainer will complete its current cycle, "
-              "save the models and quit (it can take up a couple of seconds "
-              "depending on your training speed). If you want to kill it now, "
-              "press Ctrl + c")
+        logger.info("Exit requested! The trainer will complete its current cycle, "
+                    "save the models and quit (it can take up a couple of seconds "
+                    "depending on your training speed). If you want to kill it now, "
+                    "press Ctrl + c")
         self.stop = True
         thread.join()
         sys.stdout.flush()
@@ -82,7 +84,7 @@ class Train():
     def process_thread(self):
         """ The training process to be run inside a thread """
         try:
-            print("Loading data, this may take a while...")
+            logger.info("Loading data, this may take a while...")
 
             if self.args.allow_growth:
                 self.set_tf_allow_growth()
@@ -101,7 +103,7 @@ class Train():
             try:
                 model.save_weights()
             except KeyboardInterrupt:
-                print("Saving model weights has been cancelled!")
+                logger.info("Saving model weights has been cancelled!")
             exit(0)
         except Exception as err:
             raise err
@@ -147,10 +149,10 @@ class Train():
 
     def monitor_preview(self):
         """ Generate the preview window and wait for keyboard input """
-        print("Using live preview.\n"
-              "Press 'ENTER' on the preview window to save and quit.\n"
-              "Press 'S' on the preview window to save model weights "
-              "immediately")
+        logger.info("Using live preview.\n"
+                    "Press 'ENTER' on the preview window to save and quit.\n"
+                    "Press 'S' on the preview window to save model weights "
+                    "immediately")
         while True:
             try:
                 with self.lock:
@@ -177,7 +179,7 @@ class Train():
         # reached. At the moment, setting a target iteration and using the -p
         # flag is the only guaranteed way to exit the training loop on
         # hitting target iterations.
-        print("Starting. Press 'ENTER' to stop training and save model")
+        logger.info("Starting. Press 'ENTER' to stop training and save model")
         try:
             input()
         except KeyboardInterrupt:
@@ -208,5 +210,5 @@ class Train():
                 with self.lock:
                     self.preview_buffer[name] = image
         except Exception as err:
-            print("could not preview sample")
+            logging.error("could not preview sample")
             raise err
