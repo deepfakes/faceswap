@@ -71,11 +71,6 @@ class QueueManager():
             queue.put("EOF")
         logger.debug("QueueManager terminated all queues")
 
-    def del_queues(self):
-        """ remove all queue from the manager """
-        for q_name in list(self.queues.keys()):
-            self.del_queue(q_name)
-
     def debug_monitor(self, update_secs=2):
         """ Debug tool for monitoring queues """
         thread = threading.Thread(target=self.debug_queue_sizes,

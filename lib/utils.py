@@ -13,8 +13,10 @@ import cv2
 import numpy as np
 
 import dlib
+
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -285,19 +287,3 @@ class Timelapse:
         image = self.trainer.show_sample(self.images_a, self.images_b)
         cv2.imwrite(os.path.join(self.output_dir,  # pylint: disable=no-member
                                  str(int(time())) + ".png"), image)
-
-
-def cleanup():
-    """ Clean up all processess """
-    logger.debug("Cleaning Up")
-    from lib.queue_manager import queue_manager
-    from lib.multithreading import cleanup_processes
-
-    queue_manager.terminate_queues()
-    logger.debug("Terminating spawned processes and exiting")
-    # TODO Fix Sentinel
-    queue_manager.get_queue("logger").put(None)
-    queue_manager.del_queues()
-    queue_manager.manager.shutdown()
-
-    cleanup_processes()

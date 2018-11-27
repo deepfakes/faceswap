@@ -9,7 +9,6 @@ import sys
 from importlib import import_module
 
 from lib.logger import crash_log, log_setup
-from lib.utils import cleanup
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -96,7 +95,6 @@ class ScriptExecutor():
         except Exception:
             crash_log(logger)
             logger.exception("Got Exception on main handler:")
-            cleanup()
 
 
 class FullPaths(argparse.Action):

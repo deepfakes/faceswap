@@ -165,11 +165,3 @@ class BackgroundGenerator(threading.Thread):
             if next_item is None:
                 break
             yield next_item
-
-
-def cleanup_processes():
-    """ Clean up all spawned children """
-    for child in mp.active_children():
-        # Don't log as logger queue has been cleaned up
-        print("Terminating child process: {}".format(child))
-        child.terminate()

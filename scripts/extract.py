@@ -13,7 +13,7 @@ from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.multithreading import MultiThread, PoolProcess, SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import cleanup, get_folder
+from lib.utils import get_folder
 from plugins.plugin_loader import PluginLoader
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -56,7 +56,6 @@ class Extract():
         self.plugins.process_detect.join()
         self.plugins.process_align.join()
         logger.debug("Process Succesfully Completed")
-        cleanup()
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
