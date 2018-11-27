@@ -59,7 +59,7 @@ class Extract():
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
-        logger.debug("Threading task: (Task: '%s', io_args: %s)", task, io_args)
+        logger.debug("Threading task: (Task: '%s'", task)
         io_args = tuple() if io_args is None else (io_args, )
         if task == "load":
             func = self.load_images
@@ -67,7 +67,7 @@ class Extract():
             func = self.save_faces
         elif task == "reload":
             func = self.reload_images
-        io_thread = MultiThread(target=func, *io_args, thread_count=1)
+        io_thread = MultiThread(func, *io_args, thread_count=1)
         io_thread.start()
         return io_thread
 
