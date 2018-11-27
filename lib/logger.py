@@ -69,11 +69,11 @@ def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
 
 def log_setup(loglevel):
     """ initial log set up. """
-    set_root_logger(logging.NOTSET)
+    numeric_loglevel = get_loglevel(loglevel)
+    set_root_logger(loglevel=numeric_loglevel)
     log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
-    numeric_loglevel = get_loglevel(loglevel)
     f_handler = file_handler(numeric_loglevel, log_format)
     s_handler = stream_handler(numeric_loglevel)
     c_handler = crash_handler(log_format)

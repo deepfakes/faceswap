@@ -91,12 +91,12 @@ class ScriptExecutor():
         # TODO KeyboardInterrupt
         except KeyboardInterrupt:
             raise
-        except:
+        except SystemExit:
+            pass
+        except Exception:
             crash_log(logger)
             logger.exception("Got Exception on main handler:")
             cleanup()
-        finally:
-            sys.exit()
 
 
 class FullPaths(argparse.Action):
@@ -265,7 +265,7 @@ class FaceSwapArgs():
                                     "careful with TRACE as it will generate a lot "
                                     "of data"})
         return global_args
-    
+
     @staticmethod
     def create_parser(subparser, command, description):
         """ Create the parser for the selected command """
