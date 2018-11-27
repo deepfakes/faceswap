@@ -70,7 +70,7 @@ class CliOptions(object):
     def get_cli_arguments(cli_source, classname, command):
         """ Extract the options from the main and tools cli files """
         meth = getattr(cli_source, classname)(None, command)
-        return meth.argument_list + meth.optional_arguments
+        return meth.global_arguments + meth.argument_list + meth.optional_arguments
 
     def process_options(self, command_options):
         """ Process the options for a single command """

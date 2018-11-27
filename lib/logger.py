@@ -104,7 +104,7 @@ def stream_handler(loglevel):
     log_format = FaceswapFormatter("%(asctime)s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
 
-    log_console = logging.StreamHandler()
+    log_console = logging.StreamHandler(sys.stdout)
     log_console.setFormatter(log_format)
     log_console.setLevel(loglevel)
     return log_console

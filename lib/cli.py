@@ -95,7 +95,8 @@ class ScriptExecutor():
             crash_log(logger)
             logger.exception("Got Exception on main handler:")
             cleanup()
-            exit(1)
+        finally:
+            sys.exit()
 
 
 class FullPaths(argparse.Action):
@@ -221,6 +222,7 @@ class FaceSwapArgs():
     def __init__(self, subparser, command,
                  description="default", subparsers=None):
 
+        self.global_arguments = self.get_global_arguments()
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
         if not subparser:
@@ -249,6 +251,22 @@ class FaceSwapArgs():
         return argument_list
 
     @staticmethod
+    def get_global_arguments():
+        """ Arguments that are used in ALL parts of Faceswap
+            DO NOT override this """
+        global_args = list()
+        global_args.append({"opts": ("-L", "--loglevel"),
+                            "type": str.upper,
+                            "dest": "loglevel",
+                            "default": "INFO",
+                            "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
+                            "help": "Log level. Stick with INFO or VERBOSE "
+                                    "unless you need to file an error report. Be "
+                                    "careful with TRACE as it will generate a lot "
+                                    "of data"})
+        return global_args
+    
+    @staticmethod
     def create_parser(subparser, command, description):
         """ Create the parser for the selected command """
         parser = subparser.add_parser(
@@ -262,18 +280,7 @@ class FaceSwapArgs():
 
     def add_arguments(self):
         """ Parse the arguments passed in from argparse """
-        global_args = list()
-        global_args.append({"opts": ("-L", "--loglevel"),
-                            "type": str.upper,
-                            "dest": "loglevel",
-                            "default": "INFO",
-                            "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
-                            "help": "Log level. Stick with INFO or VERBOSE "
-                                    "unless you need to file an error report. Be "
-                                    "careful with TRACE as it will generate a lot "
-                                    "of data"})
-
-        options = global_args + self.argument_list + self.optional_arguments
+        options = self.global_arguments + self.argument_list + self.optional_arguments
         for option in options:
             args = option["opts"]
             kwargs = {key: option[key]
