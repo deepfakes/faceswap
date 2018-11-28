@@ -287,3 +287,11 @@ class Timelapse:
         image = self.trainer.show_sample(self.images_a, self.images_b)
         cv2.imwrite(os.path.join(self.output_dir,  # pylint: disable=no-member
                                  str(int(time())) + ".png"), image)
+
+
+def safe_shutdown():
+    """ Close queues, threads and processes in event of crash """
+    from lib.queue_manager import queue_manager
+    from lib.multithreading import terminate_threads
+    queue_manager.terminate_queues()
+    terminate_threads()

@@ -8,6 +8,7 @@ import threading
 from lib.logger import LOG_QUEUE, set_root_logger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_launched_threads = set()  # pylint: disable=invalid-name
 
 
 class PoolProcess():
@@ -126,6 +127,7 @@ class MultiThread():
                                       kwargs=self._kwargs)
             thread.daemon = self.daemon
             thread.start()
+            _launched_threads.add(thread)
             self._threads.append(thread)
         logger.debug("Started all threads '%s': %s", self._name, len(self._threads))
 
@@ -135,6 +137,7 @@ class MultiThread():
         for thread in self._threads:
             logger.debug("Joining Thread: '%s'", thread._name)  # pylint: disable=protected-access
             thread.join()
+            _launched_threads.remove(thread)
         logger.debug("Joined all Threads: '%s'", self._name)
 
 
@@ -165,3 +168,15 @@ class BackgroundGenerator(threading.Thread):
             if next_item is None:
                 break
             yield next_item
+
+
+def terminate_threads():
+    """ Join all active threads on unexpected shutdown
+
+        If the thread is doing long running work, make sure you
+        have a mechanism in place to terminate this work to avoid
+        long blocks
+    """
+    for thread in _launched_threads:
+        if thread.is_alive():
+            thread.join()

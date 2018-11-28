@@ -90,7 +90,7 @@ class Sort():
 
         for plugin in ("fan", "dlib"):
             aligner = PluginLoader.get_aligner(plugin)()
-            process = SpawnProcess(aligner.align, **kwargs)
+            process = SpawnProcess(aligner.run, **kwargs)
             event = process.event
             process.start()
             # Wait for Aligner to take init

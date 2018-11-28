@@ -723,13 +723,13 @@ class MouseHandler():
                     "out_queue": out_queue}
 
         detector = PluginLoader.get_detector("manual")(loglevel=loglevel)
-        detect_process = SpawnProcess(detector.detect_faces, **d_kwargs)
+        detect_process = SpawnProcess(detector.run, **d_kwargs)
         d_event = detect_process.event
         detect_process.start()
 
         for plugin in ("fan", "dlib"):
             aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
-            align_process = SpawnProcess(aligner.align, **a_kwargs)
+            align_process = SpawnProcess(aligner.run, **a_kwargs)
             a_event = align_process.event
             align_process.start()
 

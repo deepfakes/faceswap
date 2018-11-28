@@ -82,11 +82,11 @@ class Convert():
         a_kwargs = {"in_queue": queue_manager.get_queue("detect"),
                     "out_queue": queue_manager.get_queue("align")}
 
-        d_process = SpawnProcess(detector.detect_faces, **d_kwargs)
+        d_process = SpawnProcess(detector.run, **d_kwargs)
         d_event = d_process.event
         d_process.start()
 
-        a_process = SpawnProcess(aligner.align, **a_kwargs)
+        a_process = SpawnProcess(aligner.run, **a_kwargs)
         a_event = a_process.event
         a_process.start()
 

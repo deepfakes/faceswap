@@ -19,6 +19,9 @@
 
 import logging
 import os
+import traceback
+
+from io import StringIO
 
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
@@ -81,6 +84,22 @@ class Aligner():
             exit(1)
         logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
 
+    # <<< DETECTION WRAPPER >>> #
+    def run(self, *args, **kwargs):
+        """ Parent align process.
+            This should always be called as the entry point so exceptions
+            are passed back to parent.
+            Do not override """
+        try:
+            self.align(*args, **kwargs)
+        except Exception:
+            logger.error("Error in child process: %s", os.getpid())
+            tb_buffer = StringIO()
+            traceback.print_exc(file=tb_buffer)
+            exception = {"exception": (os.getpid(), tb_buffer)}
+            self.queues["out"].put(exception)
+            exit(1)
+
     # <<< FINALIZE METHODS>>> #
     def finalize(self, output):
         """ This should be called as the final task of each plugin
@@ -118,6 +137,10 @@ class Aligner():
                 logger.trace("Item in: %s", {key: val
                                              for key, val in item.items()
                                              if key != "image"})
+                # Pass Detector failures straight out and quit
+                if item.get("exception", None):
+                    self.queues["out"].put(item)
+                    exit(1)
             else:
                 logger.trace("Item in: %s", item)
             yield item

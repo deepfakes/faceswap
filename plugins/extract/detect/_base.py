@@ -13,6 +13,8 @@
 
 import logging
 import os
+import traceback
+from io import StringIO
 
 import cv2
 import dlib
@@ -92,6 +94,22 @@ class Detector():
             logger.error(err)
             exit(1)
         logger.debug("Detecting Faces (args: %s, kwargs: %s)", args, kwargs)
+
+    # <<< DETECTION WRAPPER >>> #
+    def run(self, *args, **kwargs):
+        """ Parent detect process.
+            This should always be called as the entry point so exceptions
+            are passed back to parent.
+            Do not override """
+        try:
+            self.detect_faces(*args, **kwargs)
+        except Exception:
+            logger.error("Error in child process: %s", os.getpid())
+            tb_buffer = StringIO()
+            traceback.print_exc(file=tb_buffer)
+            exception = {"exception": (os.getpid(), tb_buffer)}
+            self.queues["out"].put(exception)
+            exit(1)
 
     # <<< FINALIZE METHODS>>> #
     def finalize(self, output):

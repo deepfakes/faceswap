@@ -79,10 +79,12 @@ class QueueManager():
         thread.start()
 
     def debug_queue_sizes(self, update_secs):
-        """ Output the queue sizes """
+        """ Output the queue sizes
+            logged to INFO so it also displays in console
+        """
         while True:
             for name in sorted(self.queues.keys()):
-                logger.debug("%s: %s", name, self.queues[name].qsize())
+                logger.info("%s: %s", name, self.queues[name].qsize())
             sleep(update_secs)
 
 

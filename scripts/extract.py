@@ -81,8 +81,7 @@ class Extract():
                 logger.trace("Skipping image: '%s'", filename)
                 continue
             item = {"filename": filename,
-                    "image": image,
-                    "exception": False}
+                    "image": image}
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -328,7 +327,7 @@ class Plugins():
         kwargs = {"in_queue": queue_manager.get_queue("detect"),
                   "out_queue": out_queue}
 
-        self.process_align = SpawnProcess(self.aligner.align, **kwargs)
+        self.process_align = SpawnProcess(self.aligner.run, **kwargs)
         event = self.process_align.event
         self.process_align.start()
 
@@ -368,7 +367,7 @@ class Plugins():
             kwargs["mtcnn_kwargs"] = mtcnn_kwargs
 
         mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
-        self.process_detect = mp_func(self.detector.detect_faces, **kwargs)
+        self.process_detect = mp_func(self.detector.run, **kwargs)
 
         event = None
         if hasattr(self.process_detect, "event"):
@@ -406,6 +405,11 @@ class Plugins():
                 faces = out_queue.get(True, 1)
                 if faces == "EOF":
                     break
+                if isinstance(faces, dict) and faces.get("exception"):
+                    pid = faces["exception"][0]
+                    t_back = faces["exception"][1].getvalue()
+                    err = "Error in child process {}. {}".format(pid, t_back)
+                    raise Exception(err)
             except QueueEmpty:
                 continue
 
