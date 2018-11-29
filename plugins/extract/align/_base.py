@@ -92,7 +92,7 @@ class Aligner():
             Do not override """
         try:
             self.align(*args, **kwargs)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
@@ -128,10 +128,6 @@ class Aligner():
     def get_item(self):
         """ Yield one item from the queue """
         while True:
-            # NB: There appears to be a bug somewhere that re-inserts the first item (after
-            # detecting landmarks) back into the in queue. This happens consistently when -mp
-            # is not set, only appears to happen for the first item and always places it in
-            # the same place. It doesn't effect output, but should be squashed.
             item = self.queues["in"].get()
             if isinstance(item, dict):
                 logger.trace("Item in: %s", {key: val

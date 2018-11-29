@@ -88,8 +88,7 @@ class ScriptExecutor():
         process = script(arguments)
         try:
             process.process()
-        # TODO KeyboardInterrupt
-        except KeyboardInterrupt:
+        except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise
         except SystemExit:
             pass

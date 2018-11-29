@@ -167,8 +167,6 @@ def rotate_landmarks(face, rotation_matrix):
     pt_x1 = max([pnt[0] for pnt in rotated[0]])
     pt_y1 = max([pnt[1] for pnt in rotated[0]])
 
-    rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-
     if isinstance(face, DetectedFace):
         face.x = int(pt_x)
         face.y = int(pt_y)
@@ -176,6 +174,7 @@ def rotate_landmarks(face, rotation_matrix):
         face.h = int(pt_y1 - pt_y)
         face.r = 0
         if len(rotated) > 1:
+            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
             face.landmarksXY = rotated_landmarks
     elif isinstance(face, dict):
         face["x"] = int(pt_x)
@@ -184,13 +183,14 @@ def rotate_landmarks(face, rotation_matrix):
         face["h"] = int(pt_y1 - pt_y)
         face["r"] = 0
         if len(rotated) > 1:
+            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
             face["landmarksXY"] = rotated_landmarks
     else:
-        face = dlib.rectangle(  # pylint: disable=c-extension-no-member
+        rotated_landmarks = dlib.rectangle(  # pylint: disable=c-extension-no-member
             int(pt_x), int(pt_y), int(pt_x1), int(pt_y1))
+        face = rotated_landmarks
 
     logger.trace("Rotated landmarks: %s", rotated_landmarks)
-
     return face
 
 

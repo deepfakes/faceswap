@@ -57,7 +57,7 @@ class Convert():
 
         image_mask = self.get_image_mask(image,
                                          new_face,
-                                         face_detected.landmarks_as_xy(),
+                                         face_detected.landmarks_as_xy,
                                          mat,
                                          image_size)
 

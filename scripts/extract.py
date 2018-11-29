@@ -345,19 +345,6 @@ class Plugins():
         if not event.is_set():
             raise ValueError("Error initializing Aligner")
 
-        try:
-            err = None
-            err = out_queue.get(True, 1)
-        except QueueEmpty:
-            pass
-
-        if err:
-            if isinstance(err, str):
-                queue_manager.terminate_queues()
-                logger.error(err)
-                exit(1)
-            else:
-                queue_manager.get_queue("detect").put(err)
         logger.debug("Launched Aligner")
 
     def launch_detector(self):

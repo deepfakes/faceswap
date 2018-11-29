@@ -15,7 +15,7 @@ _launched_processes = set()  # pylint: disable=invalid-name
 class PoolProcess():
     """ Pool multiple processes """
     def __init__(self, method, in_queue, out_queue, *args, processes=None, **kwargs):
-        self._name = method.__name__
+        self._name = method.__qualname__
         logger.debug("Initializing %s: (target: '%s', processes: %s)",
                      self.__class__.__name__, self._name, processes)
 
@@ -128,8 +128,9 @@ class MultiThread():
         Catches errors in thread and rethrows to parent """
     def __init__(self, target, *args, thread_count=1, **kwargs):
         self._name = target.__name__
-        logger.debug("Initializing %s: (target: '%s', thread_count: %s, args: %s, kwargs: %s)",
-                     self.__class__.__name__, self._name, thread_count, args, kwargs)
+        logger.debug("Initializing %s: (target: '%s', thread_count: %s)",
+                     self.__class__.__name__, self._name, thread_count)
+        logger.trace("args: %s, kwargs: %s", args, kwargs)
         self.daemon = True
         self._thread_count = thread_count
         self._threads = list()

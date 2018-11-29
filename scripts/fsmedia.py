@@ -14,7 +14,6 @@ import numpy as np
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
-from lib.detect_blur import is_blurry
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_folder, get_image_paths,
                        set_system_verbosity)
@@ -220,7 +219,7 @@ class PostProcess():
     def do_actions(self, output_item):
         """ Perform the requested post-processing actions """
         for action in self.actions:
-            logger.debug("Performing postprocess action: '%s'", action)
+            logger.debug("Performing postprocess action: '%s'", action.__class__.__name__)
             action.process(output_item)
 
 
@@ -263,7 +262,7 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
             isolated_face = cv2.multiply(  # pylint: disable=no-member
                 feature_mask,
                 resized_face.astype(float)).astype(np.uint8)
-            blurry, focus_measure = is_blurry(isolated_face, self.blur_thresh)
+            blurry, focus_measure = self.is_blurry(isolated_face)
 
             if blurry:
                 blur_folder = output_item["output_file"].parts[:-1]
@@ -271,6 +270,26 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
                 output_item["output_file"] = blur_folder / Path(frame_name)
                 logger.verbose("%s's focus measure of %s was below the blur threshold, "
                                "moving to 'blurry'", frame_name, focus_measure)
+
+    def is_blurry(self, image):
+        """ Convert to grayscale, and compute the focus measure of the image using the
+            Variance of Laplacian method """
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
+        focus_measure = self.variance_of_laplacian(gray)
+
+        # if the focus measure is less than the supplied threshold,
+        # then the image should be considered "blurry"
+        retval = (focus_measure < self.blur_thresh, focus_measure)
+        logger.trace("Returning: (is_blurry: %s, focus_measure %s)", retval[0], retval[1])
+        return retval
+
+    @staticmethod
+    def variance_of_laplacian(image):
+        """ Compute the Laplacian of the image and then return the focus
+            measure, which is simply the variance of the Laplacian """
+        retval = cv2.Laplacian(image, cv2.CV_64F).var()  # pylint: disable=no-member
+        logger.trace("Returning: %s", retval)
+        return retval
 
 
 class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
