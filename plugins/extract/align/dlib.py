@@ -16,7 +16,7 @@ class Align(Aligner):
     def set_model_path(self):
         """ Model path handled by face_recognition_models """
         model_path = face_recognition_models.pose_predictor_model_location()
-        logger.debug("Loading model: %s", model_path)
+        logger.debug("Loading model: '%s'", model_path)
         return model_path
 
     def initialize(self, *args, **kwargs):

@@ -20,7 +20,7 @@ import cv2
 import dlib
 
 from lib.gpu_stats import GPUStats
-from lib.utils import rotate_image_by_angle, rotate_landmarks
+from lib.utils import rotate_landmarks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -102,7 +102,7 @@ class Detector():
             Do not override """
         try:
             self.detect_faces(*args, **kwargs)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
@@ -198,14 +198,12 @@ class Detector():
         logger.debug("Rotation Angles: %s", rotation_angles)
         return rotation_angles
 
-    @staticmethod
-    def rotate_image(image, angle):
+    def rotate_image(self, image, angle):
         """ Rotate the image by given angle and return
             Image with rotation matrix """
         if angle == 0:
             return image, None
-        logger.trace("Rotating by angle %s degrees", angle)
-        return rotate_image_by_angle(image, angle)
+        return self.rotate_image_by_angle(image, angle)
 
     @staticmethod
     def rotate_rect(d_rect, rotation_matrix):
@@ -213,6 +211,33 @@ class Detector():
         logger.trace("Rotating d_rectangle")
         d_rect = rotate_landmarks(d_rect, rotation_matrix)
         return d_rect
+
+    @staticmethod
+    def rotate_image_by_angle(image, angle,
+                              rotated_width=None, rotated_height=None):
+        """ Rotate an image by a given angle.
+            From: https://stackoverflow.com/questions/22041699 """
+
+        logger.trace("Rotating image: (angle: %s, rotated_width: %s, rotated_height: %s)",
+                     angle, rotated_width, rotated_height)
+        height, width = image.shape[:2]
+        image_center = (width/2, height/2)
+        rotation_matrix = cv2.getRotationMatrix2D(  # pylint: disable=no-member
+            image_center, -1.*angle, 1.)
+        if rotated_width is None or rotated_height is None:
+            abs_cos = abs(rotation_matrix[0, 0])
+            abs_sin = abs(rotation_matrix[0, 1])
+            if rotated_width is None:
+                rotated_width = int(height*abs_sin + width*abs_cos)
+            if rotated_height is None:
+                rotated_height = int(height*abs_cos + width*abs_sin)
+        rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
+        rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
+        logger.trace("Rotated image: (rotation_matrix: %s", rotation_matrix)
+        return (cv2.warpAffine(image,  # pylint: disable=no-member
+                               rotation_matrix,
+                               (rotated_width, rotated_height)),
+                rotation_matrix)
 
     # << QUEUE METHODS >> #
     def get_item(self):

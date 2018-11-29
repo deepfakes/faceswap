@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Extract():
     """ The extract process. """
     def __init__(self, arguments):
-        logger.debug("Initializing '%s': (args: %s", self.__class__.__name__, arguments)
+        logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
         logger.info("Output Directory: %s", self.args.output_dir)
@@ -39,7 +39,7 @@ class Extract():
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
             self.save_interval = self.args.save_interval
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
         """ Perform the extraction process """
@@ -53,9 +53,6 @@ class Extract():
         Utils.finalize(self.images.images_found,
                        self.alignments.faces_count,
                        self.verify_output)
-        self.plugins.process_detect.join()
-        self.plugins.process_align.join()
-        logger.debug("Process Succesfully Completed")
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
@@ -258,7 +255,7 @@ class Extract():
 class Plugins():
     """ Detector and Aligner Plugins and queues """
     def __init__(self, arguments):
-        logger.debug("Initializing '%s'", self.__class__.__name__)
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
         self.detector = self.load_detector()
         self.aligner = self.load_aligner()
@@ -267,7 +264,7 @@ class Plugins():
         self.process_detect = None
         self.process_align = None
         self.add_queues()
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_parallel_processing(self):
         """ Set whether to run detect and align together or seperately """

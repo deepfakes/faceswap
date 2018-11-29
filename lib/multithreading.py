@@ -16,7 +16,7 @@ class PoolProcess():
     """ Pool multiple processes """
     def __init__(self, method, in_queue, out_queue, *args, processes=None, **kwargs):
         self._name = method.__name__
-        logger.debug("Initializing '%s': (target: '%s', processes: %s)",
+        logger.debug("Initializing %s: (target: '%s', processes: %s)",
                      self.__class__.__name__, self._name, processes)
 
         self.procs = self.set_procs(processes)
@@ -27,7 +27,7 @@ class PoolProcess():
         self._kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
         self._args = args
 
-        logger.debug("Initialized '%s': '%s'", self.__class__.__name__, self._name)
+        logger.debug("Initialized %s: '%s'", self.__class__.__name__, self._name)
 
     @staticmethod
     def build_target_kwargs(in_queue, out_queue, kwargs):
@@ -69,14 +69,14 @@ class SpawnProcess(mp.context.SpawnProcess):
         Must be spawnable to share CUDA across processes """
     def __init__(self, target, in_queue, out_queue, *args, **kwargs):
         name = target.__qualname__
-        logger.debug("Initializing '%s': (target: '%s', args: %s, kwargs: %s)",
+        logger.debug("Initializing %s: (target: '%s', args: %s, kwargs: %s)",
                      self.__class__.__name__, name, args, kwargs)
         ctx = mp.get_context("spawn")
         self.event = ctx.Event()
         kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
         super().__init__(target=target, name=name, args=args, kwargs=kwargs)
         self.daemon = True
-        logger.debug("Initialized '%s': '%s'", self.__class__.__name__, name)
+        logger.debug("Initialized %s: '%s'", self.__class__.__name__, name)
 
     def build_target_kwargs(self, in_queue, out_queue, kwargs):
         """ Add standard kwargs to passed in kwargs list """
@@ -128,7 +128,7 @@ class MultiThread():
         Catches errors in thread and rethrows to parent """
     def __init__(self, target, *args, thread_count=1, **kwargs):
         self._name = target.__name__
-        logger.debug("Initializing '%s': (target: '%s', thread_count: %s, args: %s, kwargs: %s)",
+        logger.debug("Initializing %s: (target: '%s', thread_count: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, self._name, thread_count, args, kwargs)
         self.daemon = True
         self._thread_count = thread_count
@@ -136,7 +136,7 @@ class MultiThread():
         self._target = target
         self._args = args
         self._kwargs = kwargs
-        logger.debug("Initialized '%s': '%s'", self.__class__.__name__, self._name)
+        logger.debug("Initialized %s: '%s'", self.__class__.__name__, self._name)
 
     def start(self):
         """ Start a thread with the given method and args """

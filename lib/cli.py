@@ -93,9 +93,10 @@ class ScriptExecutor():
             raise
         except SystemExit:
             pass
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             logger.exception("Got Exception on main handler:")
             crash_log(logger)
+        finally:
             safe_shutdown()
 
 

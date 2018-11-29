@@ -17,8 +17,10 @@ class GPUStats():
     def __init__(self, log=True):
         self.logger = None
         if log:
+            # Logger is held internally, as we don't want to log
+            # when obtaining system stats on crash
             self.logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-            self.logger.debug("Initializing '%s'", self.__class__.__name__)
+            self.logger.debug("Initializing %s", self.__class__.__name__)
 
         self.initialized = False
         self.device_count = 0
@@ -38,7 +40,7 @@ class GPUStats():
 
         self.shutdown()
         if self.logger:
-            self.logger.debug("Initialized '%s'", self.__class__.__name__)
+            self.logger.debug("Initialized %s", self.__class__.__name__)
 
     def initialize(self):
         """ Initialize pynvml """

@@ -28,7 +28,7 @@ class Alignments():
     """
     # pylint: disable=too-many-public-methods
     def __init__(self, folder, filename="alignments", serializer="json"):
-        logger.debug("Initializing %s: (folder: %s, filename: %s, serializer: %s)",
+        logger.debug("Initializing %s: (folder: '%s', filename: '%s', serializer: '%s')",
                      self.__class__.__name__, folder, filename, serializer)
         self.serializer = self.get_serializer(filename, serializer)
         self.file = self.get_location(folder, filename)
@@ -69,7 +69,8 @@ class Alignments():
             If a filename with a valid extension is passed in
             this will be used as the serializer, otherwise the
             specified serializer will be used """
-        logger.debug("Getting serializer: filename: '%s', serializer: '%s'", filename, serializer)
+        logger.debug("Getting serializer: (filename: '%s', serializer: '%s')",
+                     filename, serializer)
         extension = os.path.splitext(filename)[1]
         if extension in (".json", ".p", ".yaml", ".yml"):
             logger.debug("Serializer set from file extension: '%s'", extension)
@@ -85,7 +86,7 @@ class Alignments():
 
     def get_location(self, folder, filename):
         """ Return the path to alignments file """
-        logger.debug("Getting location: folder: '%s', filename: '%s'", folder, filename)
+        logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
         extension = os.path.splitext(filename)[1]
         if extension in (".json", ".p", ".yaml", ".yml"):
             logger.debug("File extension set from filename: '%s'", extension)
@@ -226,7 +227,7 @@ class Alignments():
         for frame_fullname, alignments in self.data.items():
             frame_name = os.path.splitext(frame_fullname)[0]
             face_count = len(alignments)
-            logger.trace("Yielding: frame: '%s', faces: %s, frame_fullname: '%s'",
+            logger.trace("Yielding: (frame: '%s', faces: %s, frame_fullname: '%s')",
                          frame_name, face_count, frame_fullname)
             yield frame_name, alignments, face_count, frame_fullname
 
@@ -264,7 +265,7 @@ class Alignments():
     def add_dimensions(self, frame_name, dimensions):
         """ Backward compatability fix. Add frame dimensions
             to alignments """
-        logger.trace("Adding dimensions: frame: '%s', dimensions: %s", frame_name, dimensions)
+        logger.trace("Adding dimensions: (frame: '%s', dimensions: %s)", frame_name, dimensions)
         for face in self.get_faces_in_frame(frame_name):
             face["frame_dims"] = dimensions
 
@@ -302,7 +303,7 @@ class Alignments():
             if not angle:
                 logger.trace("Landmarks do not require rotation: '%s'", frame_name)
                 return
-            logger.trace("Rotating landmarks for frame '%s' by angle %s", frame_name, angle)
+            logger.trace("Rotating landmarks: (frame: '%s', angle: %s)", frame_name, angle)
             dims = face["frame_dims"]
             r_mat = self.get_original_rotation_matrix(dims, angle)
             rotate_landmarks(face, r_mat)
@@ -312,7 +313,7 @@ class Alignments():
     @staticmethod
     def get_original_rotation_matrix(dimensions, angle):
         """ Calculate original rotation matrix and invert """
-        logger.trace("Getting original rotation matrix: dimensions: %s, angle: %s",
+        logger.trace("Getting original rotation matrix: (dimensions: %s, angle: %s)",
                      dimensions, angle)
         height, width = dimensions
         center = (width/2, height/2)

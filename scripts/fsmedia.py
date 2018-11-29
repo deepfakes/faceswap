@@ -45,13 +45,13 @@ class Utils():
             logger.info("Double check your results.")
             logger.info("-------------------------")
 
-        logger.info("Done!")
+        logger.info("Process Succesfully Completed. Shutting Down...")
 
 
 class Alignments(AlignmentsBase):
     """ Override main alignments class for extract """
     def __init__(self, arguments, is_extract):
-        logger.debug("Initializing '%s': (is_extract: %s)", self.__class__.__name__, is_extract)
+        logger.debug("Initializing %s: (is_extract: %s)", self.__class__.__name__, is_extract)
         self.args = arguments
         self.is_extract = is_extract
         folder, filename = self.set_folder_filename()
@@ -59,7 +59,7 @@ class Alignments(AlignmentsBase):
         super().__init__(folder,
                          filename=filename,
                          serializer=serializer)
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_folder_filename(self):
         """ Return the folder for the alignments file"""
@@ -70,7 +70,7 @@ class Alignments(AlignmentsBase):
             logger.debug("Alignments from Input Folder: '%s'", self.args.input_dir)
             folder = str(self.args.input_dir)
             filename = "alignments"
-        logger.debug("Setting Alignments: folder: '%s' filename: '%s'", folder, filename)
+        logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
     def set_serializer(self):
@@ -128,11 +128,11 @@ class Alignments(AlignmentsBase):
 class Images():
     """ Holds the full frames/images """
     def __init__(self, arguments):
-        logger.debug("Initializing '%s'", self.__class__.__name__)
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
         self.input_images = self.get_input_images()
         self.images_found = len(self.input_images)
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_input_images(self):
         """ Return the list of images that are to be processed """
@@ -161,10 +161,10 @@ class Images():
 class PostProcess():
     """ Optional post processing tasks """
     def __init__(self, arguments):
-        logger.debug("Initializing '%s'", self.__class__.__name__)
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
         self.actions = self.set_actions()
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_actions(self):
         """ Compile the actions to be performed into a list """
@@ -224,21 +224,21 @@ class PostProcess():
             action.process(output_item)
 
 
-class PostProcessAction():
+class PostProcessAction():  # pylint: disable=too-few-public-methods
     """ Parent class for Post Processing Actions
         Usuable in Extract or Convert or both
         depending on context """
     def __init__(self, *args, **kwargs):
-        logger.debug("Initializing '%s': (args: %s, kwargs: %s)",
+        logger.debug("Initializing %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self, output_item):
         """ Override for specific post processing action """
         raise NotImplementedError
 
 
-class BlurryFaceFilter(PostProcessAction):
+class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Move blurry faces to a different folder
         Extract Only """
     def __init__(self, *args, **kwargs):
@@ -273,7 +273,7 @@ class BlurryFaceFilter(PostProcessAction):
                                "moving to 'blurry'", frame_name, focus_measure)
 
 
-class DebugLandmarks(PostProcessAction):
+class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Draw debug landmarks on face
         Extract Only """
 

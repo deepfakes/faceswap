@@ -26,7 +26,7 @@ class Align(Aligner):
         if not os.path.exists(model_path):
             raise Exception("Error: Unable to find {}, reinstall "
                             "the lib!".format(model_path))
-        logger.debug("Loading model: %s", model_path)
+        logger.debug("Loading model: '%s'", model_path)
         return model_path
 
     def initialize(self, *args, **kwargs):
@@ -135,7 +135,7 @@ class Align(Aligner):
         logger.trace("Transformed Points: %s", retval)
         return retval
 
-    def crop(self, image, center, scale, resolution=256.0):
+    def crop(self, image, center, scale, resolution=256.0):  # pylint: disable=too-many-locals
         """ Crop image around the center point """
         logger.trace("Cropping image")
         v_ul = self.transform([1, 1], center, scale, resolution).astype(np.int)

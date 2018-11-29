@@ -29,10 +29,10 @@ _video_extensions = [  # pylint: disable=invalid-name
 
 def get_folder(path):
     """ Return a path to a folder, creating it if it doesn't exist """
-    logger.debug("Requested path: %s", path)
+    logger.debug("Requested path: '%s'", path)
     output_dir = Path(path)
     output_dir.mkdir(parents=True, exist_ok=True)
-    logger.debug("Returning: %s", output_dir)
+    logger.debug("Returning: '%s'", output_dir)
     return output_dir
 
 
@@ -42,7 +42,7 @@ def get_image_paths(directory):
     dir_contents = list()
 
     if not os.path.exists(directory):
-        logger.debug("Creating folder: %s", directory)
+        logger.debug("Creating folder: '%s'", directory)
         directory = get_folder(directory)
 
     dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
@@ -61,11 +61,14 @@ def get_image_paths(directory):
 
 def backup_file(directory, filename):
     """ Backup a given file by appending .bk to the end """
+    logger.trace("Backing up: '%s'", filename)
     origfile = os.path.join(directory, filename)
     backupfile = origfile + '.bk'
     if os.path.exists(backupfile):
+        logger.trace("Removing existing file: '%s'", backup_file)
         os.remove(backupfile)
     if os.path.exists(origfile):
+        logger.trace("Renaming: '%s' to '%s'", origfile, backup_file)
         os.rename(origfile, backupfile)
 
 
@@ -94,6 +97,7 @@ def add_alpha_channel(image, intensity=100):
         intensity: The opacity of the alpha channel between 0 and 100
                    100 = transparent,
                    0 = solid  """
+    logger.trace("Adding alpha channel: intensity: %s", intensity)
     assert 0 <= intensity <= 100, "Invalid intensity supplied"
     intensity = (255.0 / 100.0) * intensity
 
@@ -105,37 +109,16 @@ def add_alpha_channel(image, intensity=100):
 
     image_bgra = cv2.merge(  # pylint: disable=no-member
         (ch_b, ch_g, ch_r, ch_a))
+    logger.trace("Added alpha channel", intensity)
     return image_bgra.astype(d_type)
-
-
-def rotate_image_by_angle(image, angle,
-                          rotated_width=None, rotated_height=None):
-    """ Rotate an image by a given angle.
-        From: https://stackoverflow.com/questions/22041699 """
-
-    height, width = image.shape[:2]
-    image_center = (width/2, height/2)
-    rotation_matrix = cv2.getRotationMatrix2D(  # pylint: disable=no-member
-        image_center, -1.*angle, 1.)
-    if rotated_width is None or rotated_height is None:
-        abs_cos = abs(rotation_matrix[0, 0])
-        abs_sin = abs(rotation_matrix[0, 1])
-        if rotated_width is None:
-            rotated_width = int(height*abs_sin + width*abs_cos)
-        if rotated_height is None:
-            rotated_height = int(height*abs_cos + width*abs_sin)
-    rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
-    rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
-    return (cv2.warpAffine(image,  # pylint: disable=no-member
-                           rotation_matrix,
-                           (rotated_width, rotated_height)),
-            rotation_matrix)
 
 
 def rotate_landmarks(face, rotation_matrix):
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
         Pass in a DetectedFace object, Alignments dict or DLib rectangle"""
+    logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
+                 rotation_matrix, type(face))
     if isinstance(face, DetectedFace):
         bounding_box = [[face.x, face.y],
                         [face.x + face.w, face.y],
@@ -163,6 +146,8 @@ def rotate_landmarks(face, rotation_matrix):
     else:
         raise ValueError("Unsupported face type")
 
+    logger.trace("Original landmarks: %s", landmarks)
+
     rotation_matrix = cv2.invertAffineTransform(  # pylint: disable=no-member
         rotation_matrix)
     rotated = list()
@@ -182,6 +167,8 @@ def rotate_landmarks(face, rotation_matrix):
     pt_x1 = max([pnt[0] for pnt in rotated[0]])
     pt_y1 = max([pnt[1] for pnt in rotated[0]])
 
+    rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
+
     if isinstance(face, DetectedFace):
         face.x = int(pt_x)
         face.y = int(pt_y)
@@ -189,7 +176,7 @@ def rotate_landmarks(face, rotation_matrix):
         face.h = int(pt_y1 - pt_y)
         face.r = 0
         if len(rotated) > 1:
-            face.landmarksXY = [tuple(point) for point in rotated[1].tolist()]
+            face.landmarksXY = rotated_landmarks
     elif isinstance(face, dict):
         face["x"] = int(pt_x)
         face["y"] = int(pt_y)
@@ -197,11 +184,12 @@ def rotate_landmarks(face, rotation_matrix):
         face["h"] = int(pt_y1 - pt_y)
         face["r"] = 0
         if len(rotated) > 1:
-            face["landmarksXY"] = [tuple(point)
-                                   for point in rotated[1].tolist()]
+            face["landmarksXY"] = rotated_landmarks
     else:
         face = dlib.rectangle(  # pylint: disable=c-extension-no-member
             int(pt_x), int(pt_y), int(pt_x1), int(pt_y1))
+
+    logger.trace("Rotated landmarks: %s", rotated_landmarks)
 
     return face
 
@@ -291,6 +279,7 @@ class Timelapse:
 
 def safe_shutdown():
     """ Close queues, threads and processes in event of crash """
+    logger.debug("Safely shutting down")
     from lib.queue_manager import queue_manager
     from lib.multithreading import terminate_processes
     queue_manager.terminate_queues()

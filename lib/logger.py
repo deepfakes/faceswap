@@ -137,8 +137,9 @@ def crash_log(logger):
     while not LOG_QUEUE.empty():
         sleep(1)
 
+    freeze_log = list(debug_buffer)
     with open(filename, "w") as outfile:
-        outfile.writelines(debug_buffer)
+        outfile.writelines(freeze_log)
         outfile.write(sysinfo.full_info())
 
     logger.critical("An unexpected crash has occurred. Crash report written to %s, Please verify "

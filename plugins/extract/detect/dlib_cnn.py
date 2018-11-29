@@ -3,7 +3,6 @@
 
 import numpy as np
 import face_recognition_models
-from lib.utils import rotate_image_by_angle
 
 from ._base import Detector, dlib, logger
 
@@ -30,7 +29,7 @@ class Detect(Detector):
     def set_model_path(self):
         """ Model path handled by face_recognition_models """
         model_path = face_recognition_models.cnn_face_detector_model_location()
-        logger.debug("Loading model: %s", model_path)
+        logger.debug("Loading model: '%s'", model_path)
         return model_path
 
     def initialize(self, *args, **kwargs):
@@ -183,8 +182,7 @@ class Detect(Detector):
         logger.trace("Processed Rotations")
         return processed
 
-    @staticmethod
-    def compile_reprocess(processed, detect_images, angle):
+    def compile_reprocess(self, processed, detect_images, angle):
         """ Rotate images which did not find a face for reprocessing """
         logger.trace("Compile images for reprocessing")
         indexes = list()
@@ -193,7 +191,7 @@ class Detect(Detector):
             if faces:
                 continue
             image = detect_images[idx]
-            rot_image, rot_matrix = rotate_image_by_angle(image, angle)
+            rot_image, rot_matrix = self.rotate_image_by_angle(image, angle)
             to_detect.append(rot_image)
             indexes.append(idx)
         logger.trace("Compiled images for reprocessing")

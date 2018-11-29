@@ -53,7 +53,7 @@ class Detect(Detector):
             if not os.path.exists(model_path):
                 raise Exception("Error: Unable to find {}, reinstall "
                                 "the lib!".format(model_path))
-            logger.debug("Loading model: %s", model_path)
+            logger.debug("Loading model: '%s'", model_path)
         return self.cachepath
 
     def initialize(self, *args, **kwargs):
@@ -114,7 +114,7 @@ class Detect(Detector):
             item = self.get_item()
             if item == "EOF":
                 break
-            logger.trace("Detecting faces: %s", item["filename"])
+            logger.trace("Detecting faces: '%s'", item["filename"])
             detect_image = self.compile_detection_image(item["image"], False, False)
 
             for angle in self.rotation:

@@ -19,7 +19,7 @@ class QueueManager():
         Don't import this class directly, instead
         import the variable: queue_manager """
     def __init__(self):
-        logger.debug("Initializing '%s'", self.__class__.__name__)
+        logger.debug("Initializing %s", self.__class__.__name__)
 
         # Hacky fix to stop multiprocessing spawning managers in child processes
         if mp.current_process().name == "MainProcess":
@@ -32,7 +32,7 @@ class QueueManager():
         self.queues = dict()
         self.stop_signals = set()
         self._log_queue = self.manager.Queue()
-        logger.debug("Initialized '%s'", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_queue(self, name, maxsize=0):
         """ Add a queue to the manager """
