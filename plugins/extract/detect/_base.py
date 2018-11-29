@@ -78,8 +78,7 @@ class Detector():
         logger_init(self.loglevel, log_queue)
         logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
-        init = kwargs.get("event", False)
-        self.init = init
+        self.init = kwargs.get("event", False)
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
@@ -104,7 +103,7 @@ class Detector():
         try:
             self.detect_faces(*args, **kwargs)
         except Exception:
-            logger.error("Error in child process: %s", os.getpid())
+            logger.error("Caught exception in child process: %s", os.getpid())
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             exception = {"exception": (os.getpid(), tb_buffer)}

@@ -93,7 +93,7 @@ class Aligner():
         try:
             self.align(*args, **kwargs)
         except Exception:
-            logger.error("Error in child process: %s", os.getpid())
+            logger.error("Caught exception in child process: %s", os.getpid())
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             exception = {"exception": (os.getpid(), tb_buffer)}

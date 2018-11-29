@@ -292,6 +292,11 @@ class Timelapse:
 def safe_shutdown():
     """ Close queues, threads and processes in event of crash """
     from lib.queue_manager import queue_manager
-    from lib.multithreading import terminate_threads
+    from lib.multithreading import terminate_processes
     queue_manager.terminate_queues()
-    terminate_threads()
+    terminate_processes()
+    logger.debug("Cleanup complete. Shutting down queue manager and exiting")
+    queue_manager._log_queue.put(None)  # pylint: disable=protected-access
+    while not queue_manager._log_queue.empty():  # pylint: disable=protected-access
+        continue
+    queue_manager.manager.shutdown()

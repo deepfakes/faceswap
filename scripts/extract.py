@@ -59,7 +59,7 @@ class Extract():
 
     def threaded_io(self, task, io_args=None):
         """ Load images in a background thread """
-        logger.debug("Threading task: (Task: '%s'", task)
+        logger.debug("Threading task: (Task: '%s')", task)
         io_args = tuple() if io_args is None else (io_args, )
         if task == "load":
             func = self.load_images
@@ -73,9 +73,13 @@ class Extract():
 
     def load_images(self):
         """ Load the images """
+        name = "load"
         logger.debug("Load Images: Start")
-        load_queue = queue_manager.get_queue("load")
+        load_queue = queue_manager.get_queue(name)
         for filename, image in self.images.load():
+            if name in queue_manager.stop_signals:
+                logger.debug("Load Queue: Stop signal received. Terminating")
+                break
             imagename = os.path.basename(filename)
             if imagename in self.alignments.data.keys():
                 logger.trace("Skipping image: '%s'", filename)
@@ -88,9 +92,13 @@ class Extract():
 
     def reload_images(self, detected_faces):
         """ Reload the images and pair to detected face """
+        name = "detect"
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
-        load_queue = queue_manager.get_queue("detect")
+        load_queue = queue_manager.get_queue(name)
         for filename, image in self.images.load():
+            if name in queue_manager.stop_signals:
+                logger.debug("Reload Queue: Stop signal received. Terminating")
+                break
             logger.trace("Reloading image: '%s'", filename)
             detect_item = detected_faces.pop(filename, None)
             if not detect_item:
@@ -103,14 +111,18 @@ class Extract():
 
     def save_faces(self):
         """ Save the generated faces """
+        name = "save"
         logger.debug("Save Faces: Start")
         if not self.export_face:
             logger.debug("Not exporting faces")
             logger.debug("Save Faces: Complete")
             return
 
-        save_queue = queue_manager.get_queue("save")
+        save_queue = queue_manager.get_queue(name)
         while True:
+            if name in queue_manager.stop_signals:
+                logger.debug("Save Queue: Stop signal received. Terminating")
+                break
             item = save_queue.get()
             if item == "EOF":
                 break

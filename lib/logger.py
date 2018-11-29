@@ -13,7 +13,7 @@ from time import sleep
 from lib.queue_manager import queue_manager
 from lib.sysinfo import sysinfo
 
-LOG_QUEUE = queue_manager.get_queue("logger")
+LOG_QUEUE = queue_manager._log_queue  # pylint: disable=protected-access
 
 
 class MultiProcessingLogger(logging.Logger):
@@ -132,17 +132,17 @@ def crash_log(logger):
     """ Write debug_buffer to a crash log on crash """
     path = os.getcwd()
     filename = os.path.join(path, datetime.now().strftime('crash_report.%Y.%m.%d.%H%M%S%f.log'))
-    logger.critical("An unexpected crash has occurred. Writing crash report to %s, Please verify "
-                    "you are running the latest version of faceswap before reporting", filename)
 
-    # Flush log queue and wait until empty
-    LOG_QUEUE.put(None)
+    # Wait until all loq items have been processed
     while not LOG_QUEUE.empty():
         sleep(1)
 
     with open(filename, "w") as outfile:
         outfile.writelines(debug_buffer)
         outfile.write(sysinfo.full_info())
+
+    logger.critical("An unexpected crash has occurred. Crash report written to %s, Please verify "
+                    "you are running the latest version of faceswap before reporting", filename)
 
 
 # Set logger class to custom logger

@@ -4,11 +4,12 @@
 import logging
 import multiprocessing as mp
 import queue as Queue
+import sys
 import threading
 from lib.logger import LOG_QUEUE, set_root_logger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_launched_threads = set()  # pylint: disable=invalid-name
+_launched_processes = set()  # pylint: disable=invalid-name
 
 
 class PoolProcess():
@@ -67,7 +68,7 @@ class SpawnProcess(mp.context.SpawnProcess):
     """ Process in spawnable context
         Must be spawnable to share CUDA across processes """
     def __init__(self, target, in_queue, out_queue, *args, **kwargs):
-        name = target.__name__
+        name = target.__qualname__
         logger.debug("Initializing '%s': (target: '%s', args: %s, kwargs: %s)",
                      self.__class__.__name__, name, args, kwargs)
         ctx = mp.get_context("spawn")
@@ -91,17 +92,40 @@ class SpawnProcess(mp.context.SpawnProcess):
         logger.debug("Spawning Process: (name: '%s', args: %s, kwargs: %s, daemon: %s)",
                      self._name, self._args, self._kwargs, self.daemon)
         super().start()
+        _launched_processes.add(self)
         logger.debug("Spawned Process: (name: '%s', PID: %s)", self._name, self.pid)
 
     def join(self, timeout=None):
         """ Add logging to join function """
         logger.debug("Joining Process: (name: '%s', PID: %s)", self._name, self.pid)
         super().join(timeout=timeout)
+        _launched_processes.remove(self)
         logger.debug("Joined Process: (name: '%s', PID: %s)", self._name, self.pid)
 
 
+class FSThread(threading.Thread):
+    """ Subclass of thread that passes errors back to parent """
+    def __init__(self, group=None, target=None, name=None,  # pylint: disable=too-many-arguments
+                 args=(), kwargs=None, *, daemon=None):
+        super().__init__(group=group, target=target, name=name,
+                         args=args, kwargs=kwargs, daemon=daemon)
+        self.err = None
+
+    def run(self):
+        try:
+            if self._target:
+                self._target(*self._args, **self._kwargs)
+        except Exception:  # pylint: disable=broad-except
+            self.err = sys.exc_info()
+        finally:
+            # Avoid a refcycle if the thread is running a function with
+            # an argument that has a member that points to the thread.
+            del self._target, self._args, self._kwargs
+
+
 class MultiThread():
-    """ Threading for IO heavy ops """
+    """ Threading for IO heavy ops
+        Catches errors in thread and rethrows to parent """
     def __init__(self, target, *args, thread_count=1, **kwargs):
         self._name = target.__name__
         logger.debug("Initializing '%s': (target: '%s', thread_count: %s, args: %s, kwargs: %s)",
@@ -121,23 +145,25 @@ class MultiThread():
             name = "{}_{}".format(self._name, idx)
             logger.debug("Starting thread %s of %s: '%s'",
                          idx + 1, self._thread_count, name)
-            thread = threading.Thread(name=name,
-                                      target=self._target,
-                                      args=self._args,
-                                      kwargs=self._kwargs)
+            thread = FSThread(name=name,
+                              target=self._target,
+                              args=self._args,
+                              kwargs=self._kwargs)
             thread.daemon = self.daemon
             thread.start()
-            _launched_threads.add(thread)
             self._threads.append(thread)
         logger.debug("Started all threads '%s': %s", self._name, len(self._threads))
 
     def join(self):
-        """ Join the running threads """
+        """ Join the running threads, catching and re-raising any errors """
         logger.debug("Joining Threads: '%s'", self._name)
         for thread in self._threads:
             logger.debug("Joining Thread: '%s'", thread._name)  # pylint: disable=protected-access
             thread.join()
-            _launched_threads.remove(thread)
+            if thread.err:
+                logger.error("Caught exception in thread: '%s'",
+                             thread._name)  # pylint: disable=protected-access
+                raise thread.err[1].with_traceback(thread.err[2])
         logger.debug("Joined all Threads: '%s'", self._name)
 
 
@@ -170,13 +196,16 @@ class BackgroundGenerator(threading.Thread):
             yield next_item
 
 
-def terminate_threads():
-    """ Join all active threads on unexpected shutdown
+def terminate_processes():
+    """ Join all active processes on unexpected shutdown
 
-        If the thread is doing long running work, make sure you
+        If the process is doing long running work, make sure you
         have a mechanism in place to terminate this work to avoid
         long blocks
     """
-    for thread in _launched_threads:
-        if thread.is_alive():
-            thread.join()
+    logger.debug("Processes to join: %s", [process.name
+                                           for process in _launched_processes
+                                           if process.is_alive()])
+    for process in list(_launched_processes):
+        if process.is_alive():
+            process.join()
