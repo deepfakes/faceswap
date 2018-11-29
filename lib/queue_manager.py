@@ -29,17 +29,22 @@ class QueueManager():
             # Use a standard mp.queue in child process. NB: This will never be used
             # but spawned processes will load this module, so we need to dummy in a queue
             self.manager = mp
+        self.shutdown = self.manager.Event()
         self.queues = dict()
-        self.stop_signals = set()
         self._log_queue = self.manager.Queue()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_queue(self, name, maxsize=0):
-        """ Add a queue to the manager """
+        """ Add a queue to the manager
+
+            Adds an event "shutdown" to the queue that can be used to indicate
+            to a process that any activity on the queue should cease """
+
         logger.debug("QueueManager adding: (name: '%s', maxsize: %s)", name, maxsize)
         if name in self.queues.keys():
             raise ValueError("Queue '{}' already exists.".format(name))
         queue = self.manager.Queue(maxsize=maxsize)
+        setattr(queue, "shutdown", self.shutdown)
         self.queues[name] = queue
         logger.debug("QueueManager added: (name: '%s')", name)
 
@@ -60,21 +65,13 @@ class QueueManager():
         logger.debug("QueueManager got: '%s'", name)
         return queue
 
-    def signal_stop(self, name):
-        """ Add a queue name  to the queue to tell workers to stop processing it """
-        if name in self.queues.keys():
-            logger.debug("Adding to queue stop_signals: '%s'", name)
-            self.stop_signals.add(name)
-        else:
-            logger.error("Queue name does not exist not adding to stop_signals: %s", name)
-
     def terminate_queues(self):
-        """ Clear all queues and send EOF
+        """ Set shutdown event, clear and send EOF to all queues
             To be called if there is an error """
         logger.debug("QueueManager terminating all queues")
+        self.shutdown.set()
         for q_name, queue in self.queues.items():
             logger.debug("QueueManager terminating: '%s'", q_name)
-            self.signal_stop(q_name)
             while not queue.empty():
                 queue.get(True, 1)
             queue.put("EOF")
