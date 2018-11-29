@@ -10,8 +10,9 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class DetectedFace():
     """ Detected face and landmark information """
-    def __init__(self, image=None, x=None, w=None, y=None, h=None,
-                 frame_dims=None, landmarksXY=None):
+    def __init__(  # pylint: disable=invalid-name
+            self, image=None, x=None, w=None, y=None, h=None,
+            frame_dims=None, landmarksXY=None):
         logger.trace("Initializing %s", self.__class__.__name__)
         self.image = image
         self.x = x
@@ -39,7 +40,7 @@ class DetectedFace():
         logger.trace("Returning: %s", retval)
         return retval
 
-    def from_dlib_rect(self, d_rect):
+    def from_dlib_rect(self, d_rect, image=None):
         """ Set Bounding Box from a Dlib Rectangle """
         logger.trace("Creating from dlib_rectangle: %s", d_rect)
         if not isinstance(d_rect, d_rectangle):
@@ -48,6 +49,8 @@ class DetectedFace():
         self.w = d_rect.right() - d_rect.left()
         self.y = d_rect.top()
         self.h = d_rect.bottom() - d_rect.top()
+        if image.any():
+            self.image_to_face(image)
         logger.trace("Created from dlib_rectangle: (x: %s, w: %s, y: %s. h: %s)",
                      self.x, self.w, self.y, self.h)
 
