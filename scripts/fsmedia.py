@@ -230,7 +230,7 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.debug("Initialized base class %s", self.__class__.__name__)
 
     def process(self, output_item):
         """ Override for specific post processing action """
@@ -240,9 +240,11 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
 class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Move blurry faces to a different folder
         Extract Only """
+    # TODO Blurry folder duplication. Output file must be associated with face, not frame
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.blur_thresh = kwargs["blur_thresh"]
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self, output_item):
         """ Detect and move blurry face """
@@ -317,14 +319,15 @@ class FaceFilter(PostProcessAction):
         filter_lists = kwargs["filter_lists"]
         ref_threshold = kwargs.get("ref_threshold", 0.6)
         self.filter = self.load_face_filter(filter_lists, ref_threshold)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def load_face_filter(self, filter_lists, ref_threshold):
         """ Load faces to filter out of images """
         if not any(val for val in filter_lists.values()):
             return None
 
-        filter_files = [self.set_face_filter(key, val)
-                        for key, val in filter_lists.items()]
+        filter_files = [self.set_face_filter(f_type, filter_lists[f_type])
+                        for f_type in ("filter", "nfilter")]
 
         if any(filters for filters in filter_files):
             facefilter = FilterFunc(filter_files[0],
@@ -341,8 +344,7 @@ class FaceFilter(PostProcessAction):
 
         logger.info("%s: %s", f_type.title(), f_args)
         filter_files = f_args if isinstance(f_args, list) else [f_args]
-        filter_files = list(filter(lambda fnc: Path(fnc).exists(),
-                                   filter_files))
+        filter_files = list(filter(lambda fpath: Path(fpath).exists(), filter_files))
         logger.debug("Face Filter files: %s", filter_files)
         return filter_files
 
