@@ -175,7 +175,7 @@ class SysInfo():
     @staticmethod
     def cuda_path_windows():
         """ Get the path to Cuda on Windows systems """
-        cuda_path = os.environ("CUDA_PATH", None)
+        cuda_path = os.environ.get("CUDA_PATH", None)
         return cuda_path
 
     @staticmethod
