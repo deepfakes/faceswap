@@ -148,7 +148,12 @@ class Images():
         """ Load an image and yield it with it's filename """
         for filename in self.input_images:
             logger.trace("Loading image: '%s'", filename)
-            yield filename, cv2.imread(filename)  # pylint: disable=no-member
+            try:
+                image = cv2.imread(filename)  # pylint: disable=no-member
+            except Exception as err:  # pylint: disable=broad-except
+                logger.error("Failed to load image '%s'. Original Error: %s", filename, err)
+                continue
+            yield filename, image
 
     @staticmethod
     def load_one_image(filename):

@@ -84,9 +84,9 @@ class ScriptExecutor():
         """ Run the script for called command """
         log_setup(arguments.loglevel)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
-        script = self.import_script()
-        process = script(arguments)
         try:
+            script = self.import_script()
+            process = script(arguments)
             process.process()
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise

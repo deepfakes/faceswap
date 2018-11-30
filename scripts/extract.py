@@ -125,7 +125,11 @@ class Extract():
                                             str(idx),
                                             Path(filename).suffix)
             logger.trace("Saving face: '%s'", out_filename)
-            cv2.imwrite(out_filename, resized_face)  # pylint: disable=no-member
+            try:
+                cv2.imwrite(out_filename, resized_face)  # pylint: disable=no-member
+            except Exception as err:  # pylint: disable=broad-except
+                logger.error("Failed to save image '%s'. Original Error: %s", out_filename, err)
+                continue
         logger.debug("Save Faces: Complete")
 
     def run_extraction(self, save_thread):

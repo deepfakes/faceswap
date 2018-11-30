@@ -99,6 +99,17 @@ class SysInfo():
         return "\n".join(installed)
 
     @property
+    def tensorflow_version(self):
+        """ Get the installed tensorflow version """
+        try:
+            import tensorflow as tf
+            retval = tf.__version__
+            del tf
+        except ImportError:
+            retval = "Not installed"
+        return retval
+
+    @property
     def cuda_version(self):
         """ Get the installed CUDA version """
         if self.is_linux:
@@ -207,6 +218,7 @@ class SysInfo():
                     "sys_cores": self.cpu_count,
                     "sys_processor": self.processor,
                     "sys_ram": self.format_ram(),
+                    "tensorflow": self.tensorflow_version,
                     "gpu_cuda": self.cuda_version,
                     "gpu_cudnn": self.cudnn_version,
                     "gpu_driver": self.gfx_driver,
