@@ -6,6 +6,7 @@ from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 import os
 import re
 import sys
+import traceback
 
 from datetime import datetime
 from time import sleep
@@ -128,22 +129,21 @@ def get_loglevel(loglevel):
     return numeric_level
 
 
-def crash_log(logger):
+def crash_log():
     """ Write debug_buffer to a crash log on crash """
     path = os.getcwd()
     filename = os.path.join(path, datetime.now().strftime('crash_report.%Y.%m.%d.%H%M%S%f.log'))
 
-    # Wait until all loq items have been processed
+    # Wait until all log items have been processed
     while not LOG_QUEUE.empty():
         sleep(1)
 
     freeze_log = list(debug_buffer)
     with open(filename, "w") as outfile:
         outfile.writelines(freeze_log)
+        traceback.print_exc(file=outfile)
         outfile.write(sysinfo.full_info())
-
-    logger.critical("An unexpected crash has occurred. Crash report written to %s, Please verify "
-                    "you are running the latest version of faceswap before reporting", filename)
+    return filename
 
 
 # Set logger class to custom logger

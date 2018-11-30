@@ -232,7 +232,7 @@ class SysInfo():
         retval += self.installed_pip
         if not self.is_conda:
             return retval
-        retval += "\n============== Conda Packages ==============\n"
+        retval += "\n\n============== Conda Packages ==============\n"
         retval += self.installed_conda
         return retval
 

@@ -93,8 +93,12 @@ class ScriptExecutor():
         except SystemExit:
             pass
         except Exception:  # pylint: disable=broad-except
+            crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
-            crash_log(logger)
+            logger.critical("An unexpected crash has occurred. Crash report written to %s. "
+                            "Please verify you are running the latest version of faceswap "
+                            "before reporting", crash_file)
+
         finally:
             safe_shutdown()
 
