@@ -9,10 +9,14 @@ from six import string_types, iteritems
 
 import cv2
 import numpy as np
-import tensorflow as tf
 
 from lib.multithreading import MultiThread
 from ._base import Detector, dlib, logger
+
+
+# Must import tensorflow inside the spawned process
+# for Windows machines
+tf = None
 
 
 class Detect(Detector):
@@ -63,6 +67,12 @@ class Detect(Detector):
         is_gpu = False
         self.kwargs = kwargs["mtcnn_kwargs"]
 
+        # Must import tensorflow inside the spawned process
+        # for Windows machines
+        global tf
+        import tensorflow as tflow
+        tf = tflow
+        
         mtcnn_graph = tf.Graph()
         with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
             sess = tf.Session()

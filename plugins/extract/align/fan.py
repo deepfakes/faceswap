@@ -6,7 +6,6 @@
 import os
 import cv2
 import numpy as np
-import tensorflow as tf
 
 from ._base import Aligner, logger
 
@@ -215,6 +214,11 @@ class FAN():
     https://github.com/1adrianb/face-alignment """
 
     def __init__(self, model_path, ratio=1.0):
+        # Must import tensorflow inside the spawned process
+        # for Windows machines
+        import tensorflow as tf
+        self.tf = tf
+
         self.model_path = model_path
         self.graph = self.load_graph()
         self.input = self.graph.get_tensor_by_name("fa/0:0")
@@ -225,12 +229,12 @@ class FAN():
         """ Load the tensorflow Model and weights """
         # pylint: disable=not-context-manager
         logger.verbose("Initializing Face Alignment Network model...")
-        with tf.gfile.GFile(self.model_path, "rb") as gfile:
-            graph_def = tf.GraphDef()
+        with self.tf.gfile.GFile(self.model_path, "rb") as gfile:
+            graph_def = self.tf.GraphDef()
             graph_def.ParseFromString(gfile.read())
-        fa_graph = tf.Graph()
+        fa_graph = self.tf.Graph()
         with fa_graph.as_default():
-            tf.import_graph_def(graph_def, name="fa")
+            self.tf.import_graph_def(graph_def, name="fa")
         return fa_graph
 
     def set_session(self, vram_ratio):
@@ -238,9 +242,9 @@ class FAN():
         # pylint: disable=not-context-manager, no-member
         placeholder = np.zeros((1, 3, 256, 256))
         with self.graph.as_default():
-            config = tf.ConfigProto()
+            config = self.tf.ConfigProto()
             config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
-            session = tf.Session(config=config)
+            session = self.tf.Session(config=config)
             with session.as_default():
                 session.run(self.output, feed_dict={self.input: placeholder})
         return session
