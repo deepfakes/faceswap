@@ -151,9 +151,8 @@ class Extract():
                           desc="Extracting faces"):
 
             filename = faces["filename"]
-            faces["output_file"] = self.output_dir / Path(filename).stem
 
-            self.align_face(faces, align_eyes, size)
+            self.align_face(faces, align_eyes, size, filename)
             self.post_process.do_actions(faces)
 
             faces_count = len(faces["detected_faces"])
@@ -213,9 +212,8 @@ class Extract():
 
         self.threaded_io("reload", detected_faces)
 
-    @staticmethod
-    def align_face(faces, align_eyes, size, padding=48):
-        """ Align the detected face """
+    def align_face(self, faces, align_eyes, size, filename, padding=48):
+        """ Align the detected face and add the destination file path """
         final_faces = list()
         image = faces["image"]
         landmarks = faces["landmarks"]
@@ -229,23 +227,23 @@ class Extract():
                                        size=size,
                                        padding=padding,
                                        align_eyes=align_eyes)
-            final_faces.append(detected_face)
+            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
+                                "face": detected_face})
         faces["detected_faces"] = final_faces
 
     def process_faces(self, filename, faces, save_queue):
         """ Perform processing on found faces """
         final_faces = list()
         filename = faces["filename"]
-        output_file = faces["output_file"]
 
-        for idx, face in enumerate(faces["detected_faces"]):
+        for idx, detected_face in enumerate(faces["detected_faces"]):
             if self.export_face:
                 save_queue.put((filename,
-                                output_file,
-                                face.aligned_face,
+                                detected_face["file_location"],
+                                detected_face["face"].aligned_face,
                                 idx))
 
-            final_faces.append(face.to_alignment())
+            final_faces.append(detected_face["face"].to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces
 
 

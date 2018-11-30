@@ -240,7 +240,6 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
 class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Move blurry faces to a different folder
         Extract Only """
-    # TODO Blurry folder duplication. Output file must be associated with face, not frame
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.blur_thresh = kwargs["blur_thresh"]
@@ -250,8 +249,9 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
         """ Detect and move blurry face """
         extractor = AlignerExtract()
 
-        for idx, face in enumerate(output_item["detected_faces"]):
-            frame_name = output_item["output_file"].parts[-1]
+        for idx, detected_face in enumerate(output_item["detected_faces"]):
+            frame_name = detected_face["file_location"].parts[-1]
+            face = detected_face["face"]
             logger.trace("Checking for blurriness. Frame: '%s', Face: %s", frame_name, idx)
             aligned_landmarks = face.aligned_landmarks
             resized_face = face.aligned_face
@@ -267,11 +267,11 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
             blurry, focus_measure = self.is_blurry(isolated_face)
 
             if blurry:
-                blur_folder = output_item["output_file"].parts[:-1]
+                blur_folder = detected_face["file_location"].parts[:-1]
                 blur_folder = get_folder(Path(*blur_folder) / Path("blurry"))
-                output_item["output_file"] = blur_folder / Path(frame_name)
+                detected_face["file_location"] = blur_folder / Path(frame_name)
                 logger.verbose("%s's focus measure of %s was below the blur threshold, "
-                               "moving to 'blurry'", frame_name, focus_measure)
+                               "moving to 'blurry'", frame_name, "{0:.2f}".format(focus_measure))
 
     def is_blurry(self, image):
         """ Convert to grayscale, and compute the focus measure of the image using the
@@ -300,9 +300,10 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
 
     def process(self, output_item):
         """ Draw landmarks on image """
-        for idx, face in enumerate(output_item["detected_faces"]):
+        for idx, detected_face in enumerate(output_item["detected_faces"]):
+            face = detected_face["face"]
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
-                         output_item["output_file"].parts[-1], idx)
+                         detected_face["file_location"].parts[-1], idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
                 cv2.circle(  # pylint: disable=no-member
@@ -353,14 +354,13 @@ class FaceFilter(PostProcessAction):
         if not self.filter:
             return
 
-        detected_faces = output_item["detected_faces"]
         ret_faces = list()
-        for idx, face in enumerate(detected_faces):
-            if not self.filter.check(face):
+        for idx, detected_face in enumerate(output_item["detected_faces"]):
+            if not self.filter.check(detected_face["face"]):
                 logger.verbose("Skipping not recognized face! Frame: %s Face %s",
-                               output_item["output_file"].parts[-1], idx)
+                               detected_face["file_location"].parts[-1], idx)
                 continue
             logger.trace("Accepting recognised face. Frame: %s. Face: %s",
-                         output_item["output_file"].parts[-1], idx)
-            ret_faces.append(face)
+                         detected_face["file_location"].parts[-1], idx)
+            ret_faces.append(detected_face)
         output_item["detected_faces"] = ret_faces

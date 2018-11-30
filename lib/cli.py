@@ -437,7 +437,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "pass in a list of numbers to enumerate "
                                       "exactly what angles to check"})
         argument_list.append({"opts": ("-bt", "--blur-threshold"),
-                              "type": int,
+                              "type": float,
                               "dest": "blur_thresh",
                               "default": None,
                               "help": "Automatically discard images blurrier "
