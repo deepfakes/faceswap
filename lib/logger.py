@@ -70,7 +70,8 @@ def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
 def log_setup(loglevel):
     """ initial log set up. """
     numeric_loglevel = get_loglevel(loglevel)
-    set_root_logger(loglevel=numeric_loglevel)
+    root_loglevel = min(logging.DEBUG, numeric_loglevel)
+    set_root_logger(loglevel=root_loglevel)
     log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
@@ -80,7 +81,6 @@ def log_setup(loglevel):
 
     q_listener = QueueListener(LOG_QUEUE, f_handler, s_handler, c_handler,
                                respect_handler_level=True)
-#    q_listener._sentinel = "EOF"
     q_listener.start()
     logging.info('Log level set to: %s', loglevel.upper())
 
