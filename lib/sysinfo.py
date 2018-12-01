@@ -99,15 +99,37 @@ class SysInfo():
         return "\n".join(installed)
 
     @property
-    def tensorflow_version(self):
-        """ Get the installed tensorflow version """
-        try:
-            import tensorflow as tf
-            retval = tf.__version__
-            del tf
-        except ImportError:
-            retval = "Not installed"
-        return retval
+    def conda_version(self):
+        """ Get conda version """
+        if not self.is_conda:
+            return "N/A"
+        conda = Popen("conda --version", shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = conda.communicate()
+        if stderr:
+            return "Conda is used, but version not found"
+        version = stdout.decode().splitlines()
+        return "\n".join(version)
+
+    @property
+    def git_branch(self):
+        """ Get the current git branch """
+        git = Popen("git status", shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = git.communicate()
+        if stderr:
+            return "Not Found"
+        branch = stdout.decode().splitlines()[0].replace("On branch ", "")
+        return branch
+
+    @property
+    def git_commits(self):
+        """ Get last 5 git commits """
+        git = Popen("git log --pretty=oneline --abbrev-commit -n 5",
+                    shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = git.communicate()
+        if stderr:
+            return "Not Found"
+        commits = stdout.decode().splitlines()
+        return ". ".join(commits)
 
     @property
     def cuda_version(self):
@@ -212,13 +234,15 @@ class SysInfo():
         sys_info = {"os_platform": self.platform,
                     "os_machine": self.machine,
                     "os_release": self.release,
+                    "py_conda_version": self.conda_version,
                     "py_implementation": self.py_implementation,
                     "py_version": self.py_version,
                     "py_command": self.fs_command,
                     "sys_cores": self.cpu_count,
                     "sys_processor": self.processor,
                     "sys_ram": self.format_ram(),
-                    "tensorflow": self.tensorflow_version,
+                    "git_branch": self.git_branch,
+                    "git_commits": self.git_commits,
                     "gpu_cuda": self.cuda_version,
                     "gpu_cudnn": self.cudnn_version,
                     "gpu_driver": self.gfx_driver,
