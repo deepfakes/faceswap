@@ -16,7 +16,14 @@ from ._base import Detector, dlib, logger
 
 # Must import tensorflow inside the spawned process
 # for Windows machines
-tf = None
+tf = None  # pylint: disable = invalid-name
+
+
+def import_tensorflow():
+    """ Import tensorflow from inside spawned process """
+    global tf  # pylint: disable = invalid-name,global-statement
+    import tensorflow as tflow
+    tf = tflow
 
 
 class Detect(Detector):
@@ -69,13 +76,17 @@ class Detect(Detector):
 
         # Must import tensorflow inside the spawned process
         # for Windows machines
-        global tf
-        import tensorflow as tflow
-        tf = tflow
-        
+        import_tensorflow()
+        vram_free = self.get_vram_free()
         mtcnn_graph = tf.Graph()
+
+        # Windows machines sometimes misreport available vram, and overuse
+        # causing OOM. Allow growth fixes that
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True  # pylint: disable=no-member
+
         with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
-            sess = tf.Session()
+            sess = tf.Session(config=config)
             with sess.as_default():  # pylint: disable=not-context-manager
                 pnet, rnet, onet = create_mtcnn(sess, self.model_path)
 
@@ -83,13 +94,13 @@ class Detect(Detector):
                    for device in sess.list_devices()):
                 logger.debug("Using GPU")
                 is_gpu = True
-                alloc = int(sess.run(tf.contrib.memory_stats.BytesLimit()) /
-                            (1024 * 1024))
         mtcnn_graph.finalize()
 
         if not is_gpu:
             alloc = 2048
             logger.warning("Using CPU")
+        else:
+            alloc = vram_free
         logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
         self.batch_size = int(alloc / self.vram)

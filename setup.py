@@ -445,7 +445,7 @@ def update_tf_dep(cpu_only):
         cuda_req = val[0]
         cudnn_req = val[1].split(".")
         if cuda_req == CUDA_VERSION and (cudnn_req[0] == cudnn_inst[0] and
-                                         cudnn_req[1] >= cudnn_inst[1]):
+                                         cudnn_req[1] <= cudnn_inst[1]):
             tf_ver = key
             break
     if tf_ver:

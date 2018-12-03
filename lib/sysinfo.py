@@ -94,8 +94,11 @@ class SysInfo():
         """ Installed Conda packages """
         if not self.is_conda:
             return None
-        conda = Popen("conda list", shell=True, stdout=PIPE)
-        installed = conda.communicate()[0].decode().splitlines()
+        conda = Popen("conda list", shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = conda.communicate()
+        if stderr:
+            return "Could not get package list"
+        installed = stdout.decode().splitlines()
         return "\n".join(installed)
 
     @property
