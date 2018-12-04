@@ -31,10 +31,10 @@ class AutoEncoder:
                 state = serializer.unmarshal(fp.read().decode('utf-8'))
                 self._epoch_no = state['epoch_no']
         except IOError as e:
-            logger.error('Error loading training info:', e.strerror)
+            logger.warning('Error loading training info: %s', str(e.strerror))
             self._epoch_no = 0
         except JSONDecodeError as e:
-            logger.error('Error loading training info:', e.msg)
+            logger.warning('Error loading training info: %s', str(e.msg))
             self._epoch_no = 0
 
         (face_A,face_B) = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])
@@ -46,7 +46,7 @@ class AutoEncoder:
             logger.info('loaded model weights')
             return True
         except Exception as e:
-            logger.error('Failed loading existing training data: %s', e)
+            logger.warning('Failed loading existing training data. Starting a fresh model: %s', self.model_dir)
             return False
 
     def save_weights(self):

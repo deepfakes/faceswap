@@ -37,8 +37,8 @@ class AutoEncoder:
             self.inter_B.load_weights(str(self.model_dir / face_B))
             logger.info('loaded model weights')
             return True
-        except Exception as e:
-            logger.error('Failed loading existing training data: %s', e)
+        except Exception:
+            logger.warning('Failed loading existing training data. Starting a fresh model: %s', self.model_dir)
             return False
 
     def save_weights(self):

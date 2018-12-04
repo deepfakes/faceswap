@@ -126,10 +126,10 @@ class Model():
                 state = ser.unmarshal(fp.read().decode('utf-8'))
                 self._epoch_no = state['epoch_no']
         except IOError as e:
-            logger.error('Error loading training info:', e.strerror)
+            logger.warning('Error loading training info: %s', str(e.strerror))
             self._epoch_no = 0
         except JSONDecodeError as e:
-            logger.error('Error loading training info:', e.msg)
+            logger.warning('Error loading training info: %s', str(e.msg))
             self._epoch_no = 0
 
         try:
@@ -139,9 +139,9 @@ class Model():
             logger.info('loaded model weights')
             return True
         except IOError as e:
-            logger.error('Failed loading training data:', e.strerror)
+            logger.warning('Error loading training info: %s', str(e.strerror))
         except Exception as e:
-            logger.error('Failed loading training data:', str(e))
+            logger.warning('Error loading training info: %s', str(e))
 
         return False
 

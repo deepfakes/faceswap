@@ -48,7 +48,7 @@ class AutoEncoder:
             logger.info('loaded model weights')
             return True
         except Exception as e:
-            logger.error('Failed loading existing training data. %s', e)
+            logger.warning('Failed loading existing training data. Starting a fresh model: %s', self.model_dir)
             return False
 
     def save_weights(self):
