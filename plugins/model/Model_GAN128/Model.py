@@ -1,5 +1,6 @@
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
+import logging
 
 from keras.models import Model
 from keras.layers import *
@@ -15,13 +16,16 @@ from lib.utils import backup_file
 
 from keras.utils import multi_gpu_model
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
 hdf = {'netGAH5':'netGA_GAN128.h5',
        'netGBH5': 'netGB_GAN128.h5',
        'netDAH5': 'netDA_GAN128.h5',
        'netDBH5': 'netDB_GAN128.h5'}
 
 def __conv_init(a):
-    print("conv_init", a)
+    logger.info("conv_init %s", a)
     k = RandomNormal(0, 0.02)(a) # for convolution kernel
     k.conv_weight = True
     return k
@@ -137,9 +141,9 @@ class GANModel():
         try:
             netGA.load_weights(str(self.model_dir / hdf['netGAH5']))
             netGB.load_weights(str(self.model_dir / hdf['netGBH5']))
-            print ("Generator models loaded.")
+            logger.info("Generator models loaded.")
         except:
-            print ("Generator weights files not found.")
+            logger.info("Generator weights files not found.")
             pass
 
         if self.gpus > 1:
@@ -173,15 +177,15 @@ class GANModel():
         try:
             netDA.load_weights(str(self.model_dir / hdf['netDAH5']))
             netDB.load_weights(str(self.model_dir / hdf['netDBH5']))
-            print ("Discriminator models loaded.")
+            logger.info("Discriminator models loaded.")
         except:
-            print ("Discriminator weights files not found.")
+            logger.info("Discriminator weights files not found.")
             pass
         return netDA, netDB
 
     def load(self, swapped):
         if swapped:
-            print("swapping not supported on GAN")
+            logger.warning("swapping not supported on GAN")
             # TODO load is done in __init__ => look how to swap if possible
         return True
 
@@ -197,4 +201,4 @@ class GANModel():
             self.netGB.save_weights(str(self.model_dir / hdf['netGBH5']))
         self.netDA.save_weights(str(self.model_dir / hdf['netDAH5']))
         self.netDB.save_weights(str(self.model_dir / hdf['netDBH5']))
-        print ("Models saved.")
+        logger.info("Models saved.")

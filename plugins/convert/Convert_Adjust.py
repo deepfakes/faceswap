@@ -7,15 +7,18 @@
 import cv2
 import numpy as np
 
+from lib.utils import add_alpha_channel
+
 
 class Convert():
     """ Adjust Converter """
     def __init__(self, encoder, smooth_mask=True, avg_color_adjust=True,
-                 **kwargs):
+                 draw_transparent=False, **kwargs):
         self.encoder = encoder
 
         self.use_smooth_mask = smooth_mask
         self.use_avg_color_adjust = avg_color_adjust
+        self.draw_transparent = draw_transparent
 
     def patch_image(self, frame, detected_face, size):
         """ Patch swapped face onto original image """
@@ -50,6 +53,10 @@ class Convert():
 
         new_face = self.superpose(src_face, new_face, crop)
         new_image = frame.copy()
+
+        if self.draw_transparent:
+            new_image, new_face = self.convert_transparent(new_image,
+                                                           new_face)
 
         cv2.warpAffine(
             new_face,
@@ -96,3 +103,12 @@ class Convert():
         new_image = src_face.copy()
         new_image[crop, crop] = new_face
         return new_image
+
+    @staticmethod
+    def convert_transparent(image, new_face):
+        """ Add alpha channels to images and change to
+            transparent background """
+        height, width = image.shape[:2]
+        image = np.zeros((height, width, 4), dtype=np.uint8)
+        new_face = add_alpha_channel(new_face, 100)
+        return image, new_face

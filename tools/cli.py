@@ -141,11 +141,6 @@ class AlignmentsArgs(FaceSwapArgs):
                               "help": "Enable this option if manual "
                                       "alignments window is closing "
                                       "instantly. (Manual only)"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
         return argument_list
 
 

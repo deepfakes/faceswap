@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """ Aligner for faceswap.py """
 
+import logging
+
 import cv2
 import numpy as np
 
 from lib.umeyama import umeyama
 from lib.align_eyes import align_eyes as func_align_eyes, FACIAL_LANDMARKS_IDXS
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 MEAN_FACE_X = np.array([
     0.000213256, 0.0752622, 0.18113, 0.29077, 0.393397, 0.586856, 0.689483,
@@ -36,34 +41,43 @@ class Extract():
 
     def extract(self, image, face, size, align_eyes):
         """ Extract a face from an image """
+        logger.trace("size: %s. align_eyes: %s", size, align_eyes)
         alignment = get_align_mat(face, size, align_eyes)
         extracted = self.transform(image, alignment, size, 48)
+        logger.trace("Returning face and alignment matrix: (alignment_matrix: %s)", alignment)
         return extracted, alignment
 
     @staticmethod
     def transform_matrix(mat, size, padding):
         """ Transform the matrix for current size and padding """
+        logger.trace("size: %s. padding: %s", size, padding)
         matrix = mat * (size - 2 * padding)
         matrix[:, 2] += padding
+        logger.trace("Returning: %s", matrix)
         return matrix
 
     def transform(self, image, mat, size, padding=0):
         """ Transform Image """
+        logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         return cv2.warpAffine(  # pylint: disable=no-member
             image, matrix, (size, size))
 
     def transform_points(self, points, mat, size, padding=0):
         """ Transform points along matrix """
+        logger.trace("points: %s, matrix: %s, size: %s. padding: %s", points, mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         points = np.expand_dims(points, axis=1)
         points = cv2.transform(  # pylint: disable=no-member
             points, matrix, points.shape)
-        return np.squeeze(points)
+        retval = np.squeeze(points)
+        logger.trace("Returning: %s", retval)
+        return retval
 
     def get_original_roi(self, mat, size, padding=0):
         """ Return the square aligned box location on the original
             image """
+        logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         points = np.array([[0, 0],
                            [0, size - 1],
@@ -71,6 +85,7 @@ class Extract():
                            [size - 1, 0]], np.int32)
         points = points.reshape((-1, 1, 2))
         matrix = cv2.invertAffineTransform(matrix)  # pylint: disable=no-member
+        logger.trace("Returning: (points: %s, matrix: %s", points, matrix)
         return cv2.transform(points, matrix)  # pylint: disable=no-member
 
     @staticmethod
@@ -78,7 +93,9 @@ class Extract():
                          padding=0, dilation=30):
         """ Return the face feature mask """
         # pylint: disable=no-member
-        scale = size - 2*padding
+        logger.trace("aligned_landmarks_68: %s, size: %s, padding: %s, dilation: %s",
+                     aligned_landmarks_68, size, padding, dilation)
+        scale = size - 2 * padding
         translation = padding
         pad_mat = np.matrix([[scale, 0.0, translation],
                              [0.0, scale, translation]])
@@ -123,12 +140,14 @@ class Extract():
             kernel = np.ones((dilation, dilation), np.uint8)
             mask = cv2.dilate(mask, kernel, iterations=1)
 
+        logger.trace("Returning: %s", mask)
         return mask
 
 
 def get_align_mat(face, size, should_align_eyes):
     """ Return the alignment Matrix """
-    mat_umeyama = umeyama(np.array(face.landmarks_as_xy()[17:]),
+    logger.trace("size: %s, should_align_eyes: %s", size, should_align_eyes)
+    mat_umeyama = umeyama(np.array(face.landmarks_as_xy[17:]),
                           LANDMARKS_2D,
                           True)[0:2]
 
@@ -138,7 +157,7 @@ def get_align_mat(face, size, should_align_eyes):
     mat_umeyama = mat_umeyama * size
 
     # Convert to matrix
-    landmarks = np.matrix(face.landmarks_as_xy())
+    landmarks = np.matrix(face.landmarks_as_xy)
 
     # cv2 expects points to be in the form
     # np.array([ [[x1, y1]], [[x2, y2]], ... ]), we'll expand the dim
@@ -167,4 +186,5 @@ def get_align_mat(face, size, should_align_eyes):
     # Remove the extra row added, shape needs to be 2x3
     transform_mat = np.delete(transform_mat, 2, 0)
     transform_mat = transform_mat / size
+    logger.trace("Returning: %s", transform_mat)
     return transform_mat

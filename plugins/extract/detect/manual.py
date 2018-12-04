@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Manual face detection plugin """
 
-from ._base import Detector, dlib
+from ._base import Detector, dlib, logger
 
 
 class Detect(Detector):
@@ -15,24 +15,23 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
-        print("Initializing Manual Detector...")
         super().initialize(*args, **kwargs)
+        logger.info("Initializing Manual Detector...")
         self.init.set()
-        print("Initialized Manual Detector.")
+        logger.info("Initialized Manual Detector.")
 
     def detect_faces(self, *args, **kwargs):
         """ Return the given bounding box in a dlib rectangle """
         super().detect_faces(*args, **kwargs)
         while True:
-            item = self.queues["in"].get()
+            item = self.get_item()
             if item == "EOF":
                 break
-            image, face = item
+            face = item["face"]
 
-            bounding_box = [dlib.rectangle(int(face[0]), int(face[1]),
-                                           int(face[2]), int(face[3]))]
-            retval = {"image": image,
-                      "detected_faces": bounding_box}
-            self.finalize(retval)
+            bounding_box = [dlib.rectangle(  # pylint: disable=c-extension-no-member
+                int(face[0]), int(face[1]), int(face[2]), int(face[3]))]
+            item["detected_faces"] = bounding_box
+            self.finalize(item)
 
         self.queues["out"].put("EOF")
