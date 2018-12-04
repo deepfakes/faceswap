@@ -9,10 +9,21 @@ from six import string_types, iteritems
 
 import cv2
 import numpy as np
-import tensorflow as tf
 
 from lib.multithreading import MultiThread
-from ._base import Detector, dlib
+from ._base import Detector, dlib, logger
+
+
+# Must import tensorflow inside the spawned process
+# for Windows machines
+tf = None  # pylint: disable = invalid-name
+
+
+def import_tensorflow():
+    """ Import tensorflow from inside spawned process """
+    global tf  # pylint: disable = invalid-name,global-statement
+    import tensorflow as tflow
+    tf = tflow
 
 
 class Detect(Detector):
@@ -39,10 +50,11 @@ class Detect(Detector):
             valid = False
 
         if not valid:
-            print("Invalid MTCNN arguments received. Running with defaults")
-            return {"minsize": 20,                 # minimum size of face
-                    "threshold": [0.6, 0.7, 0.7],  # three steps threshold
-                    "factor": 0.709}               # scale factor
+            kwargs = {"minsize": 20,                 # minimum size of face
+                      "threshold": [0.6, 0.7, 0.7],  # three steps threshold
+                      "factor": 0.709}               # scale factor
+            logger.warning("Invalid MTCNN arguments received. Running with defaults")
+        logger.debug("Using mtcnn kwargs: %s", kwargs)
         return kwargs
 
     def set_model_path(self):
@@ -52,32 +64,44 @@ class Detect(Detector):
             if not os.path.exists(model_path):
                 raise Exception("Error: Unable to find {}, reinstall "
                                 "the lib!".format(model_path))
+            logger.debug("Loading model: '%s'", model_path)
         return self.cachepath
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
-        print("Initializing MTCNN Detector...")
         super().initialize(*args, **kwargs)
+        logger.info("Initializing MTCNN Detector...")
         is_gpu = False
         self.kwargs = kwargs["mtcnn_kwargs"]
 
+        # Must import tensorflow inside the spawned process
+        # for Windows machines
+        import_tensorflow()
+        vram_free = self.get_vram_free()
         mtcnn_graph = tf.Graph()
+
+        # Windows machines sometimes misreport available vram, and overuse
+        # causing OOM. Allow growth fixes that
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True  # pylint: disable=no-member
+
         with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
-            sess = tf.Session()
+            sess = tf.Session(config=config)
             with sess.as_default():  # pylint: disable=not-context-manager
                 pnet, rnet, onet = create_mtcnn(sess, self.model_path)
 
             if any("gpu" in str(device).lower()
                    for device in sess.list_devices()):
+                logger.debug("Using GPU")
                 is_gpu = True
-                alloc = int(sess.run(tf.contrib.memory_stats.BytesLimit()) /
-                            (1024 * 1024))
         mtcnn_graph.finalize()
 
         if not is_gpu:
             alloc = 2048
-            if self.verbose:
-                print("Using CPU. Limiting RAM useage to {}MB".format(alloc))
+            logger.warning("Using CPU")
+        else:
+            alloc = vram_free
+        logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
         self.batch_size = int(alloc / self.vram)
 
@@ -85,59 +109,53 @@ class Detect(Detector):
             raise ValueError("Insufficient VRAM available to continue "
                              "({}MB)".format(int(alloc)))
 
-        if self.verbose:
-            print("Processing in {} threads".format(self.batch_size))
+        logger.verbose("Processing in %s threads", self.batch_size)
 
         self.kwargs["pnet"] = pnet
         self.kwargs["rnet"] = rnet
         self.kwargs["onet"] = onet
 
         self.init.set()
-        print("Initialized MTCNN Detector.")
+        logger.info("Initialized MTCNN Detector.")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """
         super().detect_faces(*args, **kwargs)
-        workers = MultiThread(thread_count=self.batch_size)
-        workers.in_thread(target=self.detect_thread)
-        workers.join_threads()
+        workers = MultiThread(target=self.detect_thread, thread_count=self.batch_size)
+        workers.start()
+        workers.join()
         sentinel = self.queues["in"].get()
         self.queues["out"].put(sentinel)
+        logger.debug("Detecting Faces complete")
 
     def detect_thread(self):
         """ Detect faces in rgb image """
-        try:
-            while True:
-                item = self.queues["in"].get()
-                if item == "EOF":
-                    self.queues["in"].put(item)
+        logger.debug("Launching Detect")
+        while True:
+            item = self.get_item()
+            if item == "EOF":
+                break
+            logger.trace("Detecting faces: '%s'", item["filename"])
+            detect_image = self.compile_detection_image(item["image"], False, False)
+
+            for angle in self.rotation:
+                current_image, rotmat = self.rotate_image(detect_image, angle)
+                faces, points = detect_face(current_image, **self.kwargs)
+                if angle != 0 and faces.any():
+                    logger.verbose("found face(s) by rotating image %s degrees", angle)
+                if faces.any():
                     break
 
-                filename, image = item
-                detect_image = self.compile_detection_image(image, False, False)
+            detected_faces = self.process_output(faces, points, rotmat)
+            item["detected_faces"] = detected_faces
+            self.finalize(item)
 
-                for angle in self.rotation:
-                    current_image, rotmat = self.rotate_image(detect_image, angle)
-                    faces, points = detect_face(current_image, **self.kwargs)
-                    if self.verbose and angle != 0 and faces.any():
-                        print("found face(s) by rotating image {} degrees".format(
-                            angle))
-                    if faces.any():
-                        break
-
-                detected_faces = self.process_output(faces, points, rotmat)
-                retval = {
-                    "filename": filename,
-                    "image": image,
-                    "detected_faces": detected_faces}
-                self.finalize(retval)
-        except:
-            retval = {"exception": True}
-            self.queues["out"].put(retval)
-            raise
+        logger.debug("Thread Completed Detect")
 
     def process_output(self, faces, points, rotation_matrix):
         """ Compile found faces for output """
+        logger.trace("Processing Output: (faces: %s, points: %s, rotation_matrix: %s)",
+                     faces, points, rotation_matrix)
         faces = self.recalculate_bounding_box(faces, points)
         faces = [dlib.rectangle(  # pylint: disable=c-extension-no-member
             int(face[0]), int(face[1]), int(face[2]), int(face[3]))
@@ -151,6 +169,7 @@ class Detect(Detector):
             int(face.right() / self.scale),
             int(face.bottom() / self.scale))
                     for face in faces]
+        logger.trace("Processed Output: %s", detected)
         return detected
 
     @staticmethod
@@ -162,6 +181,8 @@ class Detect(Detector):
             Resize the bounding box around features to present
             a better box to Face Alignment. Helps its chances
             on edge cases and helps remove 'jitter' """
+        logger.trace("Recalculating Bounding Boxes: (faces: %s, landmarks: %s)",
+                     faces, landmarks)
         retval = list()
         no_faces = len(faces)
         if no_faces == 0:
@@ -184,8 +205,8 @@ class Detect(Detector):
 
             bounding = [center[0] - padding[0], center[1] - padding[1],
                         center[0] + padding[0], center[1] + padding[1]]
-
             retval.append(bounding)
+        logger.trace("Recalculated Bounding Boxes: %s", retval)
         return retval
 
 
@@ -537,7 +558,6 @@ def detect_face(img, minsize, pnet, rnet,  # pylint: disable=too-many-arguments
     # # # # # # # # # # # # #
     # first stage - fast proposal network (pnet) to obtain face candidates
     # # # # # # # # # # # # #
-
     for scale in scales:
         height_scale = int(np.ceil(height * scale))
         width_scale = int(np.ceil(width * scale))

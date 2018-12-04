@@ -4,12 +4,10 @@
     https://github.com/1adrianb/face-alignment
 """
 import os
-
 import cv2
 import numpy as np
-import tensorflow as tf
 
-from ._base import Aligner
+from ._base import Aligner, logger
 
 
 class Align(Aligner):
@@ -27,12 +25,14 @@ class Align(Aligner):
         if not os.path.exists(model_path):
             raise Exception("Error: Unable to find {}, reinstall "
                             "the lib!".format(model_path))
+        logger.debug("Loading model: '%s'", model_path)
         return model_path
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
-        print("Initializing Face Alignment Network...")
         super().initialize(*args, **kwargs)
+        logger.info("Initializing Face Alignment Network...")
+        logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
 
         card_id, _, vram_total = self.get_vram_free()
         if card_id == -1:
@@ -45,51 +45,44 @@ class Align(Aligner):
             tf_ratio = 1.0
         else:
             tf_ratio = self.vram / vram_total
-        if self.verbose:
-            print("Reserving {}MB for face alignments".format(self.vram))
+        logger.verbose("Reserving %sMB for face alignments", self.vram)
 
-        self.model = FAN(self.model_path,
-                         verbose=self.verbose, ratio=tf_ratio)
+        self.model = FAN(self.model_path, ratio=tf_ratio)
 
         self.init.set()
-        print("Initialized Face Alignment Network.")
+        logger.info("Initialized Face Alignment Network.")
 
     def align(self, *args, **kwargs):
         """ Perform alignments on detected faces """
         super().align(*args, **kwargs)
-        try:
-            while True:
-                # NB: There appears to be a bug somewhere that re-inserts the first item (after
-                # detecting landmarks) back into the in queue. This happens consistently when -mp
-                # is not set, only appears to happen for the first item and always places it in
-                # the same place. It doesn't effect output, but should be squashed.
-                item = self.queues["in"].get()
-                if item == "EOF":
-                    break
-                if item.get("exception", False):
-                    self.queues["out"].put(item)
-                    break
-                image = item["image"][:, :, ::-1].copy()
-                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
+        for item in self.get_item():
+            if item == "EOF":
                 self.finalize(item)
-            self.finalize("EOF")
-        except:
-            item["exception"] = True
-            self.queues["out"].put(item)
-            raise
+                break
+            image = item["image"][:, :, ::-1].copy()
+
+            logger.trace("Algning faces")
+            item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
+            logger.trace("Algned faces: %s", item["landmarks"])
+
+            self.finalize(item)
+        logger.debug("Completed Align")
 
     def process_landmarks(self, image, detected_faces):
         """ Align image and process landmarks """
+        logger.trace("Processing landmarks")
         retval = list()
         for detected_face in detected_faces:
             center, scale = self.get_center_scale(detected_face)
             aligned_image = self.align_image(image, center, scale)
             landmarks = self.predict_landmarks(aligned_image, center, scale)
             retval.append(landmarks)
+        logger.trace("Processed landmarks: %s", retval)
         return retval
 
     def get_center_scale(self, detected_face):
         """ Get the center and set scale of bounding box """
+        logger.trace("Calculating center and scale")
         center = np.array([(detected_face.left()
                             + detected_face.right()) / 2.0,
                            (detected_face.top()
@@ -103,27 +96,32 @@ class Align(Aligner):
                  + detected_face.bottom()
                  - detected_face.top()) / self.reference_scale
 
+        logger.trace("Calculated center and scale: %s, %s", center, scale)
         return center, scale
 
     def align_image(self, image, center, scale):
         """ Crop and align image around center """
+        logger.trace("Aligning image around center")
         image = self.crop(
             image,
             center,
             scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
-
+        logger.trace("Aligned image around center")
         return np.expand_dims(image, 0)
 
     def predict_landmarks(self, image, center, scale):
         """ Predict the 68 point landmarks """
+        logger.trace("Predicting Landmarks")
         prediction = self.model.predict(image)[-1]
         pts_img = self.get_pts_from_predict(prediction, center, scale)
-
-        return [(int(pt[0]), int(pt[1])) for pt in pts_img]
+        retval = [(int(pt[0]), int(pt[1])) for pt in pts_img]
+        logger.trace("Predicted Landmarks: %s", retval)
+        return retval
 
     @staticmethod
     def transform(point, center, scale, resolution):
         """ Transform Image """
+        logger.trace("Transforming Points")
         pnt = np.array([point[0], point[1], 1.0])
         hscl = 200.0 * scale
         eye = np.eye(3)
@@ -132,10 +130,13 @@ class Align(Aligner):
         eye[0, 2] = resolution * (-center[0] / hscl + 0.5)
         eye[1, 2] = resolution * (-center[1] / hscl + 0.5)
         eye = np.linalg.inv(eye)
-        return np.matmul(eye, pnt)[0:2]
+        retval = np.matmul(eye, pnt)[0:2]
+        logger.trace("Transformed Points: %s", retval)
+        return retval
 
-    def crop(self, image, center, scale, resolution=256.0):
+    def crop(self, image, center, scale, resolution=256.0):  # pylint: disable=too-many-locals
         """ Crop image around the center point """
+        logger.trace("Cropping image")
         v_ul = self.transform([1, 1], center, scale, resolution).astype(np.int)
         v_br = self.transform([resolution, resolution],
                               center,
@@ -172,10 +173,12 @@ class Align(Aligner):
         new_img = cv2.resize(new_img,
                              dsize=(int(resolution), int(resolution)),
                              interpolation=cv2.INTER_LINEAR)
+        logger.trace("Cropped image")
         return new_img
 
     def get_pts_from_predict(self, var_a, center, scale):
         """ Get points from predictor """
+        logger.trace("Obtain points from prediction")
         var_b = var_a.reshape((var_a.shape[0],
                                var_a.shape[1] * var_a.shape[2]))
         var_c = var_b.argmax(1).reshape((var_a.shape[0],
@@ -198,8 +201,11 @@ class Align(Aligner):
                 var_c[i] += np.sign(diff)*0.25
 
         var_c += 0.5
-        return [self.transform(var_c[i], center, scale, var_a.shape[2])
-                for i in range(var_a.shape[0])]
+        retval = [self.transform(var_c[i], center, scale, var_a.shape[2])
+                  for i in range(var_a.shape[0])]
+        logger.trace("Obtained points from prediction: %s", retval)
+
+        return retval
 
 
 class FAN():
@@ -207,8 +213,12 @@ class FAN():
     Converted from pyTorch via ONNX from:
     https://github.com/1adrianb/face-alignment """
 
-    def __init__(self, model_path, verbose=False, ratio=1.0):
-        self.verbose = verbose
+    def __init__(self, model_path, ratio=1.0):
+        # Must import tensorflow inside the spawned process
+        # for Windows machines
+        import tensorflow as tf
+        self.tf = tf
+
         self.model_path = model_path
         self.graph = self.load_graph()
         self.input = self.graph.get_tensor_by_name("fa/0:0")
@@ -218,15 +228,13 @@ class FAN():
     def load_graph(self):
         """ Load the tensorflow Model and weights """
         # pylint: disable=not-context-manager
-        if self.verbose:
-            print("Initializing Face Alignment Network model...")
-
-        with tf.gfile.GFile(self.model_path, "rb") as gfile:
-            graph_def = tf.GraphDef()
+        logger.verbose("Initializing Face Alignment Network model...")
+        with self.tf.gfile.GFile(self.model_path, "rb") as gfile:
+            graph_def = self.tf.GraphDef()
             graph_def.ParseFromString(gfile.read())
-        fa_graph = tf.Graph()
+        fa_graph = self.tf.Graph()
         with fa_graph.as_default():
-            tf.import_graph_def(graph_def, name="fa")
+            self.tf.import_graph_def(graph_def, name="fa")
         return fa_graph
 
     def set_session(self, vram_ratio):
@@ -234,9 +242,9 @@ class FAN():
         # pylint: disable=not-context-manager, no-member
         placeholder = np.zeros((1, 3, 256, 256))
         with self.graph.as_default():
-            config = tf.ConfigProto()
+            config = self.tf.ConfigProto()
             config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
-            session = tf.Session(config=config)
+            session = self.tf.Session(config=config)
             with session.as_default():
                 session.run(self.output, feed_dict={self.input: placeholder})
         return session

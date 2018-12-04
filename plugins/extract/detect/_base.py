@@ -11,26 +11,32 @@
      "detected_faces": <list of dlib.rectangles>}
     """
 
+import logging
 import os
+import traceback
+from io import StringIO
 
 import cv2
 import dlib
 
 from lib.gpu_stats import GPUStats
-from lib.utils import rotate_image_by_angle, rotate_landmarks
+from lib.utils import rotate_landmarks
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Detector():
     """ Detector object """
-    def __init__(self, verbose=False, rotation=None):
+    def __init__(self, loglevel, rotation=None):
+        logger.debug("Initializing %s: (rotation: %s)", self.__class__.__name__, rotation)
+        self.loglevel = loglevel
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
-        self.verbose = verbose
         self.rotation = self.get_rotation_angles(rotation)
         self.parent_is_pool = False
         self.init = None
 
         # The input and output queues for the plugin.
-        # See lib.multithreading.QueueManager for getting queues
+        # See lib.queue_manager.QueueManager for getting queues
         self.queues = {"in": None, "out": None}
 
         # Scaling factor for image. Plugin dependent
@@ -53,6 +59,7 @@ class Detector():
         # will support. It is also used for holding the number of threads/
         # processes for parallel processing plugins
         self.batch_size = 1
+        logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
     # These methods must be overriden when creating a plugin
@@ -66,8 +73,12 @@ class Detector():
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
             Override for specific detector """
-        init = kwargs.get("event", False)
-        self.init = init
+        logger_init = kwargs["log_init"]
+        log_queue = kwargs["log_queue"]
+        logger_init(self.loglevel, log_queue)
+        logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
+                     self.__class__.__name__, os.getpid(), args, kwargs)
+        self.init = kwargs.get("event", False)
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
@@ -79,13 +90,36 @@ class Detector():
             if not self.init:
                 self.initialize(*args, **kwargs)
         except ValueError as err:
-            print("ERROR: {}".format(err))
+            logger.error(err)
+            exit(1)
+        logger.debug("Detecting Faces (args: %s, kwargs: %s)", args, kwargs)
+
+    # <<< DETECTION WRAPPER >>> #
+    def run(self, *args, **kwargs):
+        """ Parent detect process.
+            This should always be called as the entry point so exceptions
+            are passed back to parent.
+            Do not override """
+        try:
+            self.detect_faces(*args, **kwargs)
+        except Exception:  # pylint: disable=broad-except
+            logger.error("Caught exception in child process: %s", os.getpid())
+            tb_buffer = StringIO()
+            traceback.print_exc(file=tb_buffer)
+            exception = {"exception": (os.getpid(), tb_buffer)}
+            self.queues["out"].put(exception)
             exit(1)
 
     # <<< FINALIZE METHODS>>> #
     def finalize(self, output):
         """ This should be called as the final task of each plugin
             Performs fianl processing and puts to the out queue """
+        if isinstance(output, dict):
+            logger.trace("Item out: %s", {key: val
+                                          for key, val in output.items()
+                                          if key != "image"})
+        else:
+            logger.trace("Item out: %s", output)
         self.queues["out"].put(output)
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
@@ -113,6 +147,7 @@ class Detector():
             self.scale = target / source
         else:
             self.scale = 1.0
+        logger.trace("Detector scale: %s", self.scale)
 
     def set_detect_image(self, input_image):
         """ Convert the image to RGB and scale """
@@ -125,9 +160,9 @@ class Detector():
         interpln = cv2.INTER_LINEAR if self.scale > 1.0 else cv2.INTER_AREA
         dims = (int(width * self.scale), int(height * self.scale))
 
-        if self.verbose and self.scale < 1.0:
-            print("Resizing image from {}x{} to {}.".format(
-                str(width), str(height), "x".join(str(i) for i in dims)))
+        if self.scale < 1.0:
+            logger.verbose("Resizing image from %sx%s to %s.",
+                           width, height, "x".join(str(i) for i in dims))
 
         image = cv2.resize(image, dims, interpolation=interpln)
         return image
@@ -144,6 +179,7 @@ class Detector():
         rotation_angles = [0]
 
         if not rotation or rotation.lower() == "off":
+            logger.debug("Not setting rotation angles")
             return rotation_angles
 
         if rotation.lower() == "on":
@@ -159,23 +195,64 @@ class Detector():
             elif len(passed_angles) > 1:
                 rotation_angles.extend(passed_angles)
 
+        logger.debug("Rotation Angles: %s", rotation_angles)
         return rotation_angles
 
-    @staticmethod
-    def rotate_image(image, angle):
+    def rotate_image(self, image, angle):
         """ Rotate the image by given angle and return
             Image with rotation matrix """
         if angle == 0:
             return image, None
-        return rotate_image_by_angle(image, angle)
+        return self.rotate_image_by_angle(image, angle)
 
     @staticmethod
     def rotate_rect(d_rect, rotation_matrix):
         """ Rotate a dlib rect based on the rotation_matrix"""
+        logger.trace("Rotating d_rectangle")
         d_rect = rotate_landmarks(d_rect, rotation_matrix)
         return d_rect
 
+    @staticmethod
+    def rotate_image_by_angle(image, angle,
+                              rotated_width=None, rotated_height=None):
+        """ Rotate an image by a given angle.
+            From: https://stackoverflow.com/questions/22041699 """
+
+        logger.trace("Rotating image: (angle: %s, rotated_width: %s, rotated_height: %s)",
+                     angle, rotated_width, rotated_height)
+        height, width = image.shape[:2]
+        image_center = (width/2, height/2)
+        rotation_matrix = cv2.getRotationMatrix2D(  # pylint: disable=no-member
+            image_center, -1.*angle, 1.)
+        if rotated_width is None or rotated_height is None:
+            abs_cos = abs(rotation_matrix[0, 0])
+            abs_sin = abs(rotation_matrix[0, 1])
+            if rotated_width is None:
+                rotated_width = int(height*abs_sin + width*abs_cos)
+            if rotated_height is None:
+                rotated_height = int(height*abs_cos + width*abs_sin)
+        rotation_matrix[0, 2] += rotated_width/2 - image_center[0]
+        rotation_matrix[1, 2] += rotated_height/2 - image_center[1]
+        logger.trace("Rotated image: (rotation_matrix: %s", rotation_matrix)
+        return (cv2.warpAffine(image,  # pylint: disable=no-member
+                               rotation_matrix,
+                               (rotated_width, rotated_height)),
+                rotation_matrix)
+
     # << QUEUE METHODS >> #
+    def get_item(self):
+        """ Yield one item from the queue """
+        item = self.queues["in"].get()
+        if isinstance(item, dict):
+            logger.trace("Item in: %s", item["filename"])
+        else:
+            logger.trace("Item in: %s", item)
+        if item == "EOF":
+            logger.debug("In Queue Exhausted")
+            # Re-put EOF into queue for other threads
+            self.queues["in"].put(item)
+        return item
+
     def get_batch(self):
         """ Get items from the queue in batches of
             self.batch_size
@@ -189,11 +266,12 @@ class Detector():
         exhausted = False
         batch = list()
         for _ in range(self.batch_size):
-            item = self.queues["in"].get()
+            item = self.get_item()
             if item == "EOF":
                 exhausted = True
                 break
             batch.append(item)
+        logger.trace("Returning batch size: %s", len(batch))
         return (exhausted, batch)
 
     # <<< DLIB RECTANGLE METHODS >>> #
@@ -212,15 +290,15 @@ class Detector():
         return d_rect
 
     # <<< MISC METHODS >>> #
-    def get_vram_free(self):
+    @staticmethod
+    def get_vram_free():
         """ Return total free VRAM on largest card """
         stats = GPUStats()
         vram = stats.get_card_most_free()
-        if self.verbose:
-            print("Using device {} with {}MB free of {}MB".format(
-                vram["device"],
-                int(vram["free"]),
-                int(vram["total"])))
+        logger.verbose("Using device %s with %sMB free of %sMB",
+                       vram["device"],
+                       int(vram["free"]),
+                       int(vram["total"]))
         return int(vram["free"])
 
     @staticmethod
@@ -230,5 +308,5 @@ class Detector():
         # Landmarks should not be extracted again from predetected faces,
         # because face data is lost, resulting in a large variance
         # against extract from original image
-        return [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            0, 0, width, height)]
+        logger.debug("Setting predetected face")
+        return [dlib.rectangle(0, 0, width, height)]  # pylint: disable=c-extension-no-member

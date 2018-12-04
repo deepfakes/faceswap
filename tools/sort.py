@@ -2,6 +2,7 @@
 """
 A tool that allows for sorting and grouping images in different ways.
 """
+import logging
 import os
 import sys
 import operator
@@ -22,6 +23,8 @@ from lib.queue_manager import queue_manager, QueueEmpty
 from plugins.plugin_loader import PluginLoader
 
 from . import cli
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Sort():
@@ -84,12 +87,12 @@ class Sort():
         out_queue = queue_manager.get_queue("out")
         kwargs = {"in_queue": queue_manager.get_queue("in"),
                   "out_queue": out_queue}
-        process = SpawnProcess()
-        event = process.event
 
         for plugin in ("fan", "dlib"):
             aligner = PluginLoader.get_aligner(plugin)()
-            process.in_process(aligner.align, **kwargs)
+            process = SpawnProcess(aligner.run, **kwargs)
+            event = process.event
+            process.start()
             # Wait for Aligner to take init
             # The first ever load of the model for FAN has reportedly taken
             # up to 3-4 minutes, hence high timeout.
@@ -98,7 +101,7 @@ class Sort():
             if not event.is_set():
                 if plugin == "fan":
                     process.join()
-                    print("Error initializing FAN. Trying Dlib")
+                    logger.error("Error initializing FAN. Trying Dlib")
                     continue
                 else:
                     raise ValueError("Error inititalizing Aligner")
@@ -113,7 +116,7 @@ class Sort():
             if not err:
                 break
             process.join()
-            print("Error initializing FAN. Trying Dlib")
+            logger.error("Error initializing FAN. Trying Dlib")
 
     @staticmethod
     def alignment_dict(image):
@@ -151,20 +154,20 @@ class Sort():
 
         getattr(self, final_method)(img_list)
 
-        print("Done.")
+        logger.info("Done.")
 
     # Methods for sorting
     def sort_blur(self):
         """ Sort by blur amount """
         input_dir = self.args.input_dir
 
-        print("Sorting by blur...")
+        logger.info("Sorting by blur...")
         img_list = [[img, self.estimate_blur(cv2.imread(img))]
                     for img in
                     tqdm(self.find_images(input_dir),
                          desc="Loading",
                          file=sys.stdout)]
-        print("Sorting...")
+        logger.info("Sorting...")
 
         img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
 
@@ -174,7 +177,7 @@ class Sort():
         """ Sort by face similarity """
         input_dir = self.args.input_dir
 
-        print("Sorting by face similarity...")
+        logger.info("Sorting by face similarity...")
 
         img_list = [[img, face_recognition.face_encodings(cv2.imread(img))]
                     for img in
@@ -209,7 +212,7 @@ class Sort():
         """ Sort by face dissimilarity """
         input_dir = self.args.input_dir
 
-        print("Sorting by face dissimilarity...")
+        logger.info("Sorting by face dissimilarity...")
 
         img_list = [[img, face_recognition.face_encodings(cv2.imread(img)), 0]
                     for img in
@@ -232,7 +235,7 @@ class Sort():
 
             img_list[i][2] = score_total
 
-        print("Sorting...")
+        logger.info("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
         return img_list
 
@@ -241,7 +244,7 @@ class Sort():
         self.launch_aligner()
         input_dir = self.args.input_dir
 
-        print("Sorting by face-cnn similarity...")
+        logger.info("Sorting by face-cnn similarity...")
         img_list = []
         for img in tqdm(self.find_images(input_dir),
                         desc="Loading",
@@ -276,7 +279,7 @@ class Sort():
         self.launch_aligner()
         input_dir = self.args.input_dir
 
-        print("Sorting by face-cnn dissimilarity...")
+        logger.info("Sorting by face-cnn dissimilarity...")
 
         img_list = []
         for img in tqdm(self.find_images(input_dir),
@@ -301,7 +304,7 @@ class Sort():
 
             img_list[i][2] = score_total
 
-        print("Sorting...")
+        logger.info("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
 
         return img_list
@@ -319,7 +322,7 @@ class Sort():
             img_list.append(
                 [img, self.calc_landmarks_face_yaw(np.array(landmarks))])
 
-        print("Sorting by face-yaw...")
+        logger.info("Sorting by face-yaw...")
         img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
 
         return img_list
@@ -328,7 +331,7 @@ class Sort():
         """ Sort by histogram of face similarity """
         input_dir = self.args.input_dir
 
-        print("Sorting by histogram similarity...")
+        logger.info("Sorting by histogram similarity...")
 
         img_list = [
             [img, cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256])]
@@ -357,7 +360,7 @@ class Sort():
         """ Sort by histigram of face dissimilarity """
         input_dir = self.args.input_dir
 
-        print("Sorting by histogram dissimilarity...")
+        logger.info("Sorting by histogram dissimilarity...")
 
         img_list = [
             [img,
@@ -378,7 +381,7 @@ class Sort():
 
             img_list[i][2] = score_total
 
-        print("Sorting...")
+        logger.info("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
 
         return img_list
@@ -394,7 +397,7 @@ class Sort():
         num_per_bin = len(img_list) // num_bins
         remainder = len(img_list) % num_bins
 
-        print("Grouping by blur...")
+        logger.info("Grouping by blur...")
         bins = [[] for _ in range(num_bins)]
         idx = 0
         for i in range(num_bins):
@@ -410,7 +413,7 @@ class Sort():
 
     def group_face(self, img_list):
         """ Group into bins by face similarity """
-        print("Grouping by face similarity...")
+        logger.info("Grouping by face similarity...")
 
         # Groups are of the form: group_num -> reference face
         reference_groups = dict()
@@ -464,7 +467,7 @@ class Sort():
 
     def group_face_cnn(self, img_list):
         """ Group into bins by CNN face similarity """
-        print("Grouping by face-cnn similarity...")
+        logger.info("Grouping by face-cnn similarity...")
 
         # Groups are of the form: group_num -> reference faces
         reference_groups = dict()
@@ -517,7 +520,7 @@ class Sort():
         num_per_bin = len(img_list) // num_bins
         remainder = len(img_list) % num_bins
 
-        print("Grouping by face-yaw...")
+        logger.info("Grouping by face-yaw...")
         bins = [[] for _ in range(num_bins)]
         idx = 0
         for i in range(num_bins):
@@ -533,7 +536,7 @@ class Sort():
 
     def group_hist(self, img_list):
         """ Group into bins by histogram """
-        print("Grouping by histogram...")
+        logger.info("Grouping by histogram...")
 
         # Groups are of the form: group_num -> reference histogram
         reference_groups = dict()
@@ -594,8 +597,8 @@ class Sort():
             try:
                 process_file(src, dst, self.changes)
             except FileNotFoundError as err:
-                print(err)
-                print('fail to rename {}'.format(src))
+                logger.error(err)
+                logger.error('fail to rename %s', src)
 
         for i in tqdm(range(0, len(img_list)),
                       desc=description,
@@ -606,8 +609,8 @@ class Sort():
             try:
                 os.rename(src, dst)
             except FileNotFoundError as err:
-                print(err)
-                print('fail to rename {}'.format(src))
+                logger.error(err)
+                logger.error('fail to rename %s', format(src))
 
         if self.args.log_changes:
             self.write_to_log(self.changes)
@@ -621,7 +624,7 @@ class Sort():
 
         # First create new directories to avoid checking
         # for directory existence in the moving loop
-        print("Creating group directories.")
+        logger.info("Creating group directories.")
         for i in range(len(bins)):
             directory = os.path.join(output_dir, str(i))
             if not os.path.exists(directory):
@@ -632,7 +635,7 @@ class Sort():
             else "Moving into Groups"
         )
 
-        print("Total groups found: {}".format(len(bins)))
+        logger.info("Total groups found: %s", len(bins))
         for i in tqdm(range(len(bins)), desc=description, file=sys.stdout):
             for j in range(len(bins[i])):
                 src = bins[i][j]
@@ -642,8 +645,8 @@ class Sort():
                 try:
                     process_file(src, dst, self.changes)
                 except FileNotFoundError as err:
-                    print(err)
-                    print('Failed to move {0} to {1}'.format(src, dst))
+                    logger.error(err)
+                    logger.error("Failed to move '%s' to '%s'", src, dst)
 
         if self.args.log_changes:
             self.write_to_log(self.changes)
@@ -651,7 +654,7 @@ class Sort():
     # Various helper methods
     def write_to_log(self, changes):
         """ Write the changes to log file """
-        print("Writing sort log to: {}".format(self.args.log_file_path))
+        logger.info("Writing sort log to: '%s'", self.args.log_file_path)
         with open(self.args.log_file_path, 'w') as lfile:
             lfile.write(self.serializer.marshal(changes))
 
@@ -666,7 +669,7 @@ class Sort():
         grouping method expects.
         """
         input_dir = self.args.input_dir
-        print("Preparing to group...")
+        logger.info("Preparing to group...")
         if group_method == 'group_blur':
             temp_list = [[img, self.estimate_blur(cv2.imread(img))]
                          for img in

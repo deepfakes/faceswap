@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ The script to run the convert process of faceswap """
 
+import logging
 import re
 import os
 import sys
@@ -17,6 +18,8 @@ from lib.utils import get_folder, get_image_paths
 
 from plugins.plugin_loader import PluginLoader
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 class Convert():
     """ The convert process. """
@@ -30,7 +33,7 @@ class Convert():
         self.alignments = Alignments(self.args, False)
 
         # Update Legacy alignments
-        Legacy(self.alignments, self.args.verbose, self.images.input_images)
+        Legacy(self.alignments, self.images.input_images)
 
         self.post_process = PostProcess(arguments)
         self.verify_output = False
@@ -42,7 +45,7 @@ class Convert():
 
             Note: GAN prediction outputs a mask + an image, while other
             predicts only an image. """
-        Utils.set_verbosity(self.args.verbose)
+        Utils.set_verbosity()
 
         if not self.alignments.have_alignments_file:
             self.load_extractor()
@@ -64,29 +67,29 @@ class Convert():
 
     def load_extractor(self):
         """ Set on the fly extraction """
-        print("\nNo Alignments file found. Extracting on the fly.\n"
-              "NB: This will use the inferior dlib-hog for extraction "
-              "and dlib pose predictor for landmarks.\nIt is recommended "
-              "to perfom Extract first for superior results\n")
+        logger.warning("No Alignments file found. Extracting on the fly.")
+        logger.warning("NB: This will use the inferior dlib-hog for extraction "
+                       "and dlib pose predictor for landmarks. It is recommended "
+                       "to perfom Extract first for superior results")
         for task in ("load", "detect", "align"):
             queue_manager.add_queue(task, maxsize=0)
 
-        detector = PluginLoader.get_detector("dlib_hog")(
-            verbose=self.args.verbose)
-        aligner = PluginLoader.get_aligner("dlib")(verbose=self.args.verbose)
+        detector = PluginLoader.get_detector("dlib_hog")(loglevel=self.args.loglevel)
+        aligner = PluginLoader.get_aligner("dlib")(loglevel=self.args.loglevel)
 
         d_kwargs = {"in_queue": queue_manager.get_queue("load"),
                     "out_queue": queue_manager.get_queue("detect")}
         a_kwargs = {"in_queue": queue_manager.get_queue("detect"),
                     "out_queue": queue_manager.get_queue("align")}
 
-        d_process = SpawnProcess()
+        d_process = SpawnProcess(detector.run, **d_kwargs)
         d_event = d_process.event
-        a_process = SpawnProcess()
-        a_event = a_process.event
+        d_process.start()
 
-        d_process.in_process(detector.detect_faces, **d_kwargs)
-        a_process.in_process(aligner.align, **a_kwargs)
+        a_process = SpawnProcess(aligner.run, **a_kwargs)
+        a_event = a_process.event
+        a_process.start()
+
         d_event.wait(10)
         if not d_event.is_set():
             raise ValueError("Error inititalizing Detector")
@@ -105,8 +108,8 @@ class Convert():
         model = PluginLoader.get_model(model_name)(model_dir, num_gpus)
 
         if not model.load(self.args.swap_model):
-            print("Model Not Found! A valid model "
-                  "must be provided to continue!")
+            logger.error("Model Not Found! A valid model "
+                         "must be provided to continue!")
             exit(1)
 
         return model
@@ -161,9 +164,8 @@ class Convert():
 
             if faces_count > 1:
                 self.verify_output = True
-                if self.args.verbose:
-                    print("Warning: found more than one face in "
-                          "an image! {}".format(frame))
+                logger.verbose("Found more than one face in "
+                               "an image! '%s'", frame)
 
             yield filename, image, detected_faces
 
@@ -211,8 +213,7 @@ class Convert():
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
-            print("Failed to convert image: {}. "
-                  "Reason: {}".format(filename, err))
+            logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
 
     def convert_one_face(self, converter, imagevars):
@@ -253,21 +254,19 @@ class OptionalActions():
         input_aligned_dir = self.args.input_aligned_dir
 
         if input_aligned_dir is None:
-            print("Aligned directory not specified. All faces listed in the "
-                  "alignments file will be converted")
+            logger.info("Aligned directory not specified. All faces listed in the "
+                        "alignments file will be converted")
         elif not os.path.isdir(input_aligned_dir):
-            print("Aligned directory not found. All faces listed in the "
-                  "alignments file will be converted")
+            logger.warning("Aligned directory not found. All faces listed in the "
+                           "alignments file will be converted")
         else:
             faces_to_swap = [Path(path)
                              for path in get_image_paths(input_aligned_dir)]
             if not faces_to_swap:
-                print("Aligned directory is empty, "
-                      "no faces will be converted!")
+                logger.warning("Aligned directory is empty, no faces will be converted!")
             elif len(faces_to_swap) <= len(self.input_images) / 3:
-                print("Aligned directory contains an amount of images much "
-                      "less than the input, are you sure this is the right "
-                      "directory?")
+                logger.warning("Aligned directory contains an amount of images much less than "
+                               "the input, are you sure this is the right directory?")
         return faces_to_swap
 
     # SKIP FRAME RANGES #
@@ -304,8 +303,8 @@ class OptionalActions():
         face_file = Path(self.args.input_aligned_dir) / Path(face_name)
         skip_face = face_file not in self.faces_to_swap
         if skip_face:
-            print("face {} for frame {} was deleted, skipping".format(
-                face_idx, os.path.basename(filename)))
+            logger.info("face %s for frame '%s' was deleted, skipping",
+                        face_idx, os.path.basename(filename))
         return skip_face
 
 
@@ -315,8 +314,7 @@ class Legacy():
         - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
         and remove the 'r' parameter """
-    def __init__(self, alignments, verbose, frames):
-        self.verbose = verbose
+    def __init__(self, alignments, frames):
         self.alignments = alignments
         self.frames = {os.path.basename(frame): frame
                        for frame in frames}
@@ -329,10 +327,10 @@ class Legacy():
         if not no_dims and not rotated:
             return
         if no_dims:
-            print("Legacy landmarks found. Adding frame dimensions...")
+            logger.info("Legacy landmarks found. Adding frame dimensions...")
             self.add_dimensions(no_dims)
         if rotated:
-            print("Legacy rotated frames found. Converting...")
+            logger.info("Legacy rotated frames found. Converting...")
             self.rotate_landmarks(rotated)
         self.alignments.save()
 

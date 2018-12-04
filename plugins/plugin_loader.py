@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """ Plugin loader for extract, training and model tasks """
 
+import logging
 import os
 from importlib import import_module
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class PluginLoader():
@@ -36,7 +39,7 @@ class PluginLoader():
     def _import(attr, name):
         """ Import the plugin's module """
         ttl = attr.split(".")[-1].title()
-        print("Loading {} from {} plugin...".format(ttl, name.title()))
+        logger.info("Loading %s from %s plugin...", ttl, name.title())
         attr = "model" if attr == "Trainer" else attr.lower()
         mod = ".".join(("plugins", attr, name))
         module = import_module(mod)

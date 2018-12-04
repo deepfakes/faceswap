@@ -13,10 +13,10 @@
     - [Notes](#notes)
 - [Windows Install Guide](#windows-install-guide)
     - [Prerequisites](#prerequisites-1)
+        - [Microsoft Visual Studio 2015](#microsoft-visual-studio-2015)
         - [Cuda](#cuda)
         - [cuDNN](#cudnn)
         - [CMake](#cmake)
-        - [Microsoft Visual Studio 2015](#microsoft-visual-studio-2015)
         - [Anaconda](#anaconda)
         - [Git](#git)
     - [Setup](#setup-1)
@@ -196,6 +196,20 @@ If you are experiencing issues, please raise them in the [faceswap-playground](h
 Setting up Faceswap can seem a little intimidating to new users, but it isn't that complicated, although a little time consuming. It is recommended to use Linux where possible as Windows will hog about 20% of your GPU Memory, making Faceswap run a little slower, however using Windows is perfectly fine and 100% supported.
 
 ## Prerequisites
+### Microsoft Visual Studio 2015
+**Important** Make sure to downoad the 2015 version of Microsoft Visual Studio
+
+Download and install Microsoft Visual Studio 2015 from: https://go.microsoft.com/fwlink/?LinkId=532606&clcid=0x409
+
+On the install screen:
+- Select "Custom" then click "Next"\
+![MSVS Custom](https://i.imgur.com/Bx8fjzT.png)
+- Uncheck all previously checked options
+- Expand "Programming Languages" and select "Visual C++"\
+![MSVS C++](https://i.imgur.com/c8k1IYD.png)
+- Select "Next" and "Install"
+
+
 ### Cuda
 **GPU Only** If you do not have an Nvidia GPU you can skip this step.
   
@@ -212,7 +226,7 @@ As with Cuda you will need to install the correct version of cuDNN that the late
 
 Download cuDNN from https://developer.nvidia.com/cudnn. You will need to create an account with Nvidia. 
 
-At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases". Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and is less than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.1)
+At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases". Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and has a minor version greater than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.3)
 - Open the zip file
 - Extract all of the files and folders into your Cuda folder (It is likely to be located in `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA`):\
 ![cudnn to cuda](https://i.imgur.com/X098w0N.png)
@@ -223,19 +237,6 @@ Install the latest stable release of CMake from https://cmake.org/download/. (Sc
 When installing CMake make sure to enable the option to CMake to the system path:
 ![cmake path](https://i.imgur.com/XTtacdY.png)
 
-
-### Microsoft Visual Studio 2015
-**Important** Make sure to downoad the 2015 version of Microsoft Visual Studio
-
-Download and install Microsoft Visual Studio 2015 from: https://go.microsoft.com/fwlink/?LinkId=532606&clcid=0x409
-
-On the install screen:
-- Select "Custom" then click "Next"\
-![MSVS Custom](https://i.imgur.com/Bx8fjzT.png)
-- Uncheck all previously checked options
-- Expand "Programming Languages" and select "Visual C++"\
-![MSVS C++](https://i.imgur.com/c8k1IYD.png)
-- Select "Next" and "Install"
 
 ### Anaconda
 Download and install the latest Python 3 Anacconda from: https://www.anaconda.com/download/. Unless you know what you are doing, you can leave all the options at default.

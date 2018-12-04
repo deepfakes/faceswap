@@ -2,6 +2,7 @@
 """ Media items (Alignments, Faces, Frames)
     for alignments tool """
 
+import logging
 import os
 
 import cv2
@@ -10,40 +11,39 @@ from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.utils import _image_extensions
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 class AlignmentData(Alignments):
     """ Class to hold the alignment data """
 
-    def __init__(self, alignments_file, destination_format, verbose):
-        print("\n[ALIGNMENT DATA]")  # Tidy up cli output
-        folder, filename = self.check_file_exists(alignments_file, verbose)
+    def __init__(self, alignments_file, destination_format):
+        logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
+        folder, filename = self.check_file_exists(alignments_file)
         if filename == "dfl":
-            self.set_dfl(verbose, destination_format)
+            self.set_dfl(destination_format)
             return
-        super().__init__(folder, filename=filename, verbose=verbose)
+        super().__init__(folder, filename=filename)
         self.set_destination_format(destination_format)
-        if self.verbose:
-            print("{} items loaded".format(self.frames_count))
+        logger.verbose("%s items loaded", self.frames_count)
 
     @staticmethod
-    def check_file_exists(alignments_file, verbose):
+    def check_file_exists(alignments_file):
         """ Check the alignments file exists"""
         folder, filename = os.path.split(alignments_file)
         if filename.lower() == "dfl":
             folder = None
             filename = "dfl"
-            print("Using extracted pngs for alignments")
+            logger.info("Using extracted pngs for alignments")
         elif not os.path.isfile(alignments_file):
-            print("ERROR: alignments file not "
-                  "found at: {}".format(alignments_file))
+            logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
             exit(0)
-        if verbose and folder:
-            print("Alignments file exists at {}".format(alignments_file))
+        if folder:
+            logger.verbose("Alignments file exists at '%s'", alignments_file)
         return folder, filename
 
-    def set_dfl(self, verbose, destination_format):
+    def set_dfl(self, destination_format):
         """ Set the alignments for dfl alignments """
-        self.verbose = verbose
         self.file = "dfl"
         self.set_destination_format(destination_format)
 
@@ -63,12 +63,10 @@ class AlignmentData(Alignments):
         elif file_ext in extensions.keys():
             dst_fmt = extensions[file_ext]
         else:
-            print("{} is not a supported serializer. "
-                  "Exiting".format(file_ext))
+            logger.error("'%s' is not a supported serializer. Exiting", file_ext)
             exit(0)
 
-        if self.verbose:
-            print("Destination format set to {}".format(dst_fmt))
+        logger.verbose("Destination format set to '%s'", dst_fmt)
 
         self.serializer = self.get_serializer("", dst_fmt)
         filename = os.path.splitext(self.file)[0]
@@ -82,16 +80,14 @@ class AlignmentData(Alignments):
 
 class MediaLoader():
     """ Class to load filenames from folder """
-    def __init__(self, folder, verbose):
-        print("\n[{} DATA]".format(self.__class__.__name__.upper()))
-        self.verbose = verbose
+    def __init__(self, folder):
+        logger.info("[%s DATA]", self.__class__.__name__.upper())
         self.folder = folder
         self.check_folder_exists()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
         self.count = len(self.file_list_sorted)
-        if self.verbose:
-            print("{} items loaded".format(self.count))
+        logger.verbose("%s items loaded", self.count)
 
     def check_folder_exists(self):
         """ makes sure that the faces folder exists """
@@ -103,11 +99,10 @@ class MediaLoader():
             err = ("ERROR: The {} folder {} could not be "
                    "found".format(loadtype, self.folder))
         if err:
-            print(err)
+            logger.error(err)
             exit(0)
 
-        if self.verbose:
-            print("Folder exists at {}".format(self.folder))
+        logger.verbose("Folder exists at '%s'", self.folder)
 
     @staticmethod
     def valid_extension(filename):
@@ -145,13 +140,13 @@ class MediaLoader():
 
 class Faces(MediaLoader):
     """ Object to hold the faces that are to be swapped out """
-    def __init__(self, folder, verbose, dfl=False):
+    def __init__(self, folder, dfl=False):
         self.dfl = dfl
-        super().__init__(folder, verbose)
+        super().__init__(folder)
 
     def process_folder(self):
         """ Iterate through the faces dir pulling out various information """
-        print("Loading file list from {}".format(self.folder))
+        logger.info("Loading file list from %s", self.folder)
         for face in os.listdir(self.folder):
             if not self.valid_extension(face):
                 continue
@@ -187,7 +182,7 @@ class Frames(MediaLoader):
 
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
-        print("Loading file list from {}".format(self.folder))
+        logger.info("Loading file list from %s", self.folder)
         for frame in os.listdir(self.folder):
             if not self.valid_extension(frame):
                 continue

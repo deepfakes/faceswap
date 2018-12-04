@@ -4,7 +4,7 @@ from time import sleep
 
 import numpy as np
 
-from ._base import Detector, dlib
+from ._base import Detector, dlib, logger
 
 
 class Detect(Detector):
@@ -14,7 +14,7 @@ class Detect(Detector):
         self.parent_is_pool = True
         self.target = (2048, 2048)  # Doesn't use VRAM
         self.vram = 0
-        self.detector = dlib.get_frontal_face_detector()
+        self.detector = dlib.get_frontal_face_detector()  # pylint: disable=c-extension-no-member
         self.iterator = None
 
     def set_model_path(self):
@@ -23,61 +23,54 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Calculate batch size """
-        print("Initializing Dlib-HOG Detector...")
         super().initialize(*args, **kwargs)
-        if self.verbose:
-            print("Using CPU for detection")
+        logger.info("Initializing Dlib-HOG Detector...")
+        logger.verbose("Using CPU for detection")
         self.init = True
-        print("Initialized Dlib-HOG Detector...")
+        logger.info("Initialized Dlib-HOG Detector...")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image """
         super().detect_faces(*args, **kwargs)
-        try:
-            while True:
-                item = self.queues["in"].get()
-                if item in ("EOF", "END"):
-                    self.queues["in"].put("END")
+        while True:
+            item = self.get_item()
+            if item == "EOF":
+                break
+            logger.trace("Detecting faces: %s", item["filename"])
+            detect_image = self.compile_detection_image(item["image"], True, True)
+
+            for angle in self.rotation:
+                current_image, rotmat = self.rotate_image(detect_image, angle)
+
+                logger.trace("Detecting faces")
+                faces = self.detector(current_image, 0)
+                logger.trace("Detected faces: %s", [face for face in faces])
+
+                if angle != 0 and faces.any():
+                    logger.verbose("found face(s) by rotating image %s degrees", angle)
+
+                if faces:
                     break
 
-                filename, image = item
-                detect_image = self.compile_detection_image(image, True, True)
-
-                for angle in self.rotation:
-                    current_image, rotmat = self.rotate_image(detect_image,
-                                                              angle)
-
-                    faces = self.detector(current_image, 0)
-
-                    if self.verbose and angle != 0 and faces.any():
-                        print("found face(s) by rotating image {} "
-                              "degrees".format(angle))
-
-                    if faces:
-                        break
-
-                detected_faces = self.process_output(faces, rotmat)
-                retval = {"filename": filename,
-                          "image": image,
-                          "detected_faces": detected_faces}
-                self.finalize(retval)
-        except:
-            retval = {"exception": True}
-            self.queues["out"].put(retval)
-            raise
+            detected_faces = self.process_output(faces, rotmat)
+            item["detected_faces"] = detected_faces
+            self.finalize(item)
 
         if item == "EOF":
             sleep(3)  # Wait for all processes to finish before EOF (hacky!)
             self.queues["out"].put("EOF")
+        logger.debug("Detecting Faces Complete")
 
     def process_output(self, faces, rotation_matrix):
         """ Compile found faces for output """
+        logger.trace("Processing Output: (faces: %s, rotation_matrix: %s)",
+                     faces, rotation_matrix)
         if isinstance(rotation_matrix, np.ndarray):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
-        detected = [dlib.rectangle(int(face.left() / self.scale),
-                                   int(face.top() / self.scale),
-                                   int(face.right() / self.scale),
-                                   int(face.bottom() / self.scale))
+        detected = [dlib.rectangle(  # pylint: disable=c-extension-no-member
+            int(face.left() / self.scale), int(face.top() / self.scale),
+            int(face.right() / self.scale), int(face.bottom() / self.scale))
                     for face in faces]
+        logger.trace("Processed Output: %s", detected)
         return detected

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Manual processing of alignments """
 
+import logging
 import platform
 import sys
 import cv2
@@ -10,6 +11,8 @@ from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
 from plugins.plugin_loader import PluginLoader
 from . import Annotate, ExtractedFaces, Frames, Legacy
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Interface():
@@ -145,7 +148,7 @@ class Interface():
 
         return state
 
-    def save_alignments(self, *args):
+    def save_alignments(self, *args):  # pylint: disable=unused-argument
         """ Save alignments """
         if not self.state["edit"]["updated"]:
             return
@@ -153,7 +156,7 @@ class Interface():
         self.state["edit"]["updated"] = False
         self.set_redraw(True)
 
-    def reload_alignments(self, *args):
+    def reload_alignments(self, *args):  # pylint: disable=unused-argument
         """ Reload alignments """
         if not self.state["edit"]["updated"]:
             return
@@ -162,7 +165,7 @@ class Interface():
         self.state["edit"]["update_faces"] = True
         self.set_redraw(True)
 
-    def delete_alignment(self, *args):
+    def delete_alignment(self, *args):  # pylint: disable=unused-argument
         """ Save alignments """
         selected_face = self.get_selected_face_id()
         if self.get_edit_mode() == "View" or selected_face is None:
@@ -391,10 +394,9 @@ class Manual():
     """ Manually adjust or create landmarks data """
     def __init__(self, alignments, arguments):
         self.arguments = arguments
-        self.verbose = arguments.verbose
         self.alignments = alignments
         self.align_eyes = arguments.align_eyes
-        self.frames = Frames(arguments.frames_dir, self.verbose)
+        self.frames = Frames(arguments.frames_dir)
         self.extracted_faces = None
         self.interface = None
         self.help = None
@@ -406,13 +408,13 @@ class Manual():
                         frames=self.frames, child_process=True)
         legacy.process()
 
-        print("\n[MANUAL PROCESSING]")  # Tidy up cli output
+        logger.info("[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames,
                                               self.alignments,
                                               align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
-        self.mouse_handler = MouseHandler(self.interface, self.verbose)
+        self.mouse_handler = MouseHandler(self.interface, self.arguments.loglevel)
 
         print(self.help.helptext)
         max_idx = self.frames.count - 1
@@ -693,13 +695,13 @@ class FacesDisplay():
 
 class MouseHandler():
     """ Manual Extraction """
-    def __init__(self, interface, verbose):
+    def __init__(self, interface, loglevel):
         self.interface = interface
         self.alignments = interface.alignments
         self.frames = interface.frames
 
         self.extractor = dict()
-        self.init_extractor(verbose)
+        self.init_extractor(loglevel)
 
         self.mouse_state = None
         self.last_move = None
@@ -711,7 +713,7 @@ class MouseHandler():
                       "bounding_last": list(),
                       "bounding_box_orig": list()}
 
-    def init_extractor(self, verbose):
+    def init_extractor(self, loglevel):
         """ Initialize FAN """
         out_queue = queue_manager.get_queue("out")
 
@@ -719,17 +721,17 @@ class MouseHandler():
                     "out_queue": queue_manager.get_queue("align")}
         a_kwargs = {"in_queue": queue_manager.get_queue("align"),
                     "out_queue": out_queue}
-        detect_process = SpawnProcess()
-        align_process = SpawnProcess()
-        d_event = detect_process.event
-        a_event = align_process.event
 
-        detector = PluginLoader.get_detector("manual")(verbose=verbose)
-        detect_process.in_process(detector.detect_faces, **d_kwargs)
+        detector = PluginLoader.get_detector("manual")(loglevel=loglevel)
+        detect_process = SpawnProcess(detector.run, **d_kwargs)
+        d_event = detect_process.event
+        detect_process.start()
 
         for plugin in ("fan", "dlib"):
-            aligner = PluginLoader.get_aligner(plugin)(verbose=verbose)
-            align_process.in_process(aligner.align, **a_kwargs)
+            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
+            align_process = SpawnProcess(aligner.run, **a_kwargs)
+            a_event = align_process.event
+            align_process.start()
 
             # Wait for Aligner to take init
             # The first ever load of the model for FAN has reportedly taken
@@ -738,7 +740,7 @@ class MouseHandler():
             if not a_event.is_set():
                 if plugin == "fan":
                     align_process.join()
-                    print("Error initializing FAN. Trying Dlib")
+                    logger.error("Error initializing FAN. Trying Dlib")
                     continue
                 else:
                     raise ValueError("Error inititalizing Aligner")
@@ -753,7 +755,7 @@ class MouseHandler():
             if not err:
                 break
             align_process.join()
-            print("Error initializing FAN. Trying Dlib")
+            logger.error("Error initializing FAN. Trying Dlib")
 
         d_event.wait(10)
         if not d_event.is_set():
@@ -762,7 +764,7 @@ class MouseHandler():
         self.extractor["detect"] = detector
         self.extractor["align"] = aligner
 
-    def on_event(self, event, x, y, flags, param):
+    def on_event(self, event, x, y, flags, param):  # pylint: disable=unused-argument,invalid-name
         """ Handle the mouse events """
         # pylint: disable=no-member
         if self.interface.get_edit_mode() != "Edit":
@@ -885,8 +887,8 @@ class MouseHandler():
 
     def update_landmarks(self):
         """ Update the landmarks """
-        queue_manager.get_queue("in").put((self.media["image"],
-                                           self.media["bounding_box"]))
+        queue_manager.get_queue("in").put({"image": self.media["image"],
+                                           "face": self.media["bounding_box"]})
         landmarks = queue_manager.get_queue("out").get()
         if landmarks == "EOF":
             exit(0)

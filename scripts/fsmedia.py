@@ -5,6 +5,7 @@
             Faces
             Alignments"""
 
+import logging
 import os
 from pathlib import Path
 
@@ -13,10 +14,11 @@ import numpy as np
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
-from lib.detect_blur import is_blurry
-from lib.FaceFilter import FaceFilter as FilterFunc
+from lib.face_filter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_folder, get_image_paths,
                        set_system_verbosity)
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Utils():
@@ -24,58 +26,63 @@ class Utils():
         object """
 
     @staticmethod
-    def set_verbosity(verbose):
+    def set_verbosity():
         """ Set the system output verbosity """
-        lvl = '0' if verbose else '2'
-        set_system_verbosity(lvl)
+        set_system_verbosity()
 
     @staticmethod
     def finalize(images_found, num_faces_detected, verify_output):
         """ Finalize the image processing """
-        print("-------------------------")
-        print("Images found:        {}".format(images_found))
-        print("Faces detected:      {}".format(num_faces_detected))
-        print("-------------------------")
+        logger.info("-------------------------")
+        logger.info("Images found:        %s", images_found)
+        logger.info("Faces detected:      %s", num_faces_detected)
+        logger.info("-------------------------")
 
         if verify_output:
-            print("Note:")
-            print("Multiple faces were detected in one or more pictures.")
-            print("Double check your results.")
-            print("-------------------------")
+            logger.info("Note:")
+            logger.info("Multiple faces were detected in one or more pictures.")
+            logger.info("Double check your results.")
+            logger.info("-------------------------")
 
-        print("Done!")
+        logger.info("Process Succesfully Completed. Shutting Down...")
 
 
 class Alignments(AlignmentsBase):
     """ Override main alignments class for extract """
     def __init__(self, arguments, is_extract):
+        logger.debug("Initializing %s: (is_extract: %s)", self.__class__.__name__, is_extract)
         self.args = arguments
         self.is_extract = is_extract
         folder, filename = self.set_folder_filename()
         serializer = self.set_serializer()
         super().__init__(folder,
                          filename=filename,
-                         serializer=serializer,
-                         verbose=self.args.verbose)
+                         serializer=serializer)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_folder_filename(self):
         """ Return the folder for the alignments file"""
         if self.args.alignments_path:
+            logger.debug("Alignments File provided: '%s'", self.args.alignments_path)
             folder, filename = os.path.split(str(self.args.alignments_path))
         else:
+            logger.debug("Alignments from Input Folder: '%s'", self.args.input_dir)
             folder = str(self.args.input_dir)
             filename = "alignments"
+        logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
     def set_serializer(self):
         """ Set the serializer to be used for loading and
             saving alignments """
         if hasattr(self.args, "serializer") and self.args.serializer:
+            logger.debug("Serializer provided: '%s'", self.args.serializer)
             serializer = self.args.serializer
         else:
             # If there is a full filename then this will be overriden
             # by filename extension
             serializer = "json"
+            logger.debug("No Serializer defaulting to: '%s'", serializer)
         return serializer
 
     def load(self):
@@ -91,26 +98,28 @@ class Alignments(AlignmentsBase):
                           and self.args.skip_faces)
 
         if not skip_existing and not skip_faces:
+            logger.debug("No skipping selected. Returning empty dictionary")
             return data
 
         if not self.have_alignments_file and (skip_existing or skip_faces):
-            print("Skip Existing/Skip Faces selected, but no alignments file "
-                  "found!")
+            logger.warning("Skip Existing/Skip Faces selected, but no alignments file found!")
             return data
 
         try:
             with open(self.file, self.serializer.roptions) as align:
                 data = self.serializer.unmarshal(align.read())
         except IOError as err:
-            print("Error: {} not read: {}".format(self.file, err.strerror))
+            logger.error("Error: '%s' not read: %s", self.file, err.strerror)
             exit(1)
 
         if skip_faces:
             # Remove items from algnments that have no faces so they will
             # be re-detected
             del_keys = [key for key, val in data.items() if not val]
+            logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
             for key in del_keys:
                 if key in data:
+                    logger.trace("Selected for redetection: '%s'", key)
                     del data[key]
         return data
 
@@ -118,17 +127,19 @@ class Alignments(AlignmentsBase):
 class Images():
     """ Holds the full frames/images """
     def __init__(self, arguments):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
         self.input_images = self.get_input_images()
         self.images_found = len(self.input_images)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_input_images(self):
         """ Return the list of images that are to be processed """
         if not os.path.exists(self.args.input_dir):
-            print("Input directory {} not found.".format(self.args.input_dir))
+            logger.error("Input directory %s not found.", self.args.input_dir)
             exit(1)
 
-        print("Input Directory: {}".format(self.args.input_dir))
+        logger.info("Input Directory: %s", self.args.input_dir)
         input_images = get_image_paths(self.args.input_dir)
 
         return input_images
@@ -136,20 +147,48 @@ class Images():
     def load(self):
         """ Load an image and yield it with it's filename """
         for filename in self.input_images:
-            yield filename, cv2.imread(filename)  # pylint: disable=no-member
+            logger.trace("Loading image: '%s'", filename)
+            try:
+                image = cv2.imread(filename)  # pylint: disable=no-member
+            except Exception as err:  # pylint: disable=broad-except
+                logger.error("Failed to load image '%s'. Original Error: %s", filename, err)
+                continue
+            yield filename, image
 
     @staticmethod
     def load_one_image(filename):
         """ load requested image """
+        logger.trace("Loading image: '%s'", filename)
         return cv2.imread(filename)  # pylint: disable=no-member
 
 
 class PostProcess():
     """ Optional post processing tasks """
     def __init__(self, arguments):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
-        self.verbose = self.args.verbose
         self.actions = self.set_actions()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_actions(self):
+        """ Compile the actions to be performed into a list """
+        postprocess_items = self.get_items()
+        actions = list()
+        for action, options in postprocess_items.items():
+            options = dict() if options is None else options
+            args = options.get("args", tuple())
+            kwargs = options.get("kwargs", dict())
+            args = args if isinstance(args, tuple) else tuple()
+            kwargs = kwargs if isinstance(kwargs, dict) else dict()
+            task = globals()[action](*args, **kwargs)
+            logger.debug("Adding Postprocess action: '%s'", task)
+            actions.append(task)
+
+        for action in actions:
+            action_name = camel_case_split(action.__class__.__name__)
+            logger.info("Adding post processing item: %s", " ".join(action_name))
+
+        return actions
 
     def get_items(self):
         """ Set the post processing actions """
@@ -179,59 +218,46 @@ class PostProcess():
             face_filter["filter_lists"] = filter_lists
             postprocess_items["FaceFilter"] = {"kwargs": face_filter}
 
+        logger.debug("Postprocess Items: %s", postprocess_items)
         return postprocess_items
-
-    def set_actions(self):
-        """ Compile the actions to be performed into a list """
-        postprocess_items = self.get_items()
-        actions = list()
-        for action, options in postprocess_items.items():
-            options = dict() if options is None else options
-            args = options.get("args", tuple())
-            kwargs = options.get("kwargs", dict())
-            args = args if isinstance(args, tuple) else tuple()
-            kwargs = kwargs if isinstance(kwargs, dict) else dict()
-            kwargs["verbose"] = self.verbose
-            task = globals()[action](*args, **kwargs)
-            actions.append(task)
-
-        for action in actions:
-            action_name = camel_case_split(action.__class__.__name__)
-            print("Adding post processing item: "
-                  "{}".format(" ".join(action_name)))
-
-        return actions
 
     def do_actions(self, output_item):
         """ Perform the requested post-processing actions """
         for action in self.actions:
+            logger.debug("Performing postprocess action: '%s'", action.__class__.__name__)
             action.process(output_item)
 
 
-class PostProcessAction():
+class PostProcessAction():  # pylint: disable=too-few-public-methods
     """ Parent class for Post Processing Actions
         Usuable in Extract or Convert or both
         depending on context """
     def __init__(self, *args, **kwargs):
-        self.verbose = kwargs["verbose"]
+        logger.debug("Initializing %s: (args: %s, kwargs: %s)",
+                     self.__class__.__name__, args, kwargs)
+        logger.debug("Initialized base class %s", self.__class__.__name__)
 
     def process(self, output_item):
         """ Override for specific post processing action """
         raise NotImplementedError
 
 
-class BlurryFaceFilter(PostProcessAction):
+class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Move blurry faces to a different folder
         Extract Only """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.blur_thresh = kwargs["blur_thresh"]
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self, output_item):
         """ Detect and move blurry face """
         extractor = AlignerExtract()
 
-        for face in output_item["detected_faces"]:
+        for idx, detected_face in enumerate(output_item["detected_faces"]):
+            frame_name = detected_face["file_location"].parts[-1]
+            face = detected_face["face"]
+            logger.trace("Checking for blurriness. Frame: '%s', Face: %s", frame_name, idx)
             aligned_landmarks = face.aligned_landmarks
             resized_face = face.aligned_face
             size = face.aligned["size"]
@@ -243,26 +269,46 @@ class BlurryFaceFilter(PostProcessAction):
             isolated_face = cv2.multiply(  # pylint: disable=no-member
                 feature_mask,
                 resized_face.astype(float)).astype(np.uint8)
-            blurry, focus_measure = is_blurry(isolated_face, self.blur_thresh)
+            blurry, focus_measure = self.is_blurry(isolated_face)
 
             if blurry:
-                blur_folder = output_item["output_file"].parts[:-1]
+                blur_folder = detected_face["file_location"].parts[:-1]
                 blur_folder = get_folder(Path(*blur_folder) / Path("blurry"))
-                frame_name = output_item["output_file"].parts[-1]
-                output_item["output_file"] = blur_folder / Path(frame_name)
-                if self.verbose:
-                    print("{}'s focus measure of {} was below the blur "
-                          "threshold, moving to \"blurry\"".format(
-                              frame_name, focus_measure))
+                detected_face["file_location"] = blur_folder / Path(frame_name)
+                logger.verbose("%s's focus measure of %s was below the blur threshold, "
+                               "moving to 'blurry'", frame_name, "{0:.2f}".format(focus_measure))
+
+    def is_blurry(self, image):
+        """ Convert to grayscale, and compute the focus measure of the image using the
+            Variance of Laplacian method """
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
+        focus_measure = self.variance_of_laplacian(gray)
+
+        # if the focus measure is less than the supplied threshold,
+        # then the image should be considered "blurry"
+        retval = (focus_measure < self.blur_thresh, focus_measure)
+        logger.trace("Returning: (is_blurry: %s, focus_measure %s)", retval[0], retval[1])
+        return retval
+
+    @staticmethod
+    def variance_of_laplacian(image):
+        """ Compute the Laplacian of the image and then return the focus
+            measure, which is simply the variance of the Laplacian """
+        retval = cv2.Laplacian(image, cv2.CV_64F).var()  # pylint: disable=no-member
+        logger.trace("Returning: %s", retval)
+        return retval
 
 
-class DebugLandmarks(PostProcessAction):
+class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Draw debug landmarks on face
         Extract Only """
 
     def process(self, output_item):
         """ Draw landmarks on image """
-        for face in output_item["detected_faces"]:
+        for idx, detected_face in enumerate(output_item["detected_faces"]):
+            face = detected_face["face"]
+            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
+                         detected_face["file_location"].parts[-1], idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
                 cv2.circle(  # pylint: disable=no-member
@@ -279,19 +325,21 @@ class FaceFilter(PostProcessAction):
         filter_lists = kwargs["filter_lists"]
         ref_threshold = kwargs.get("ref_threshold", 0.6)
         self.filter = self.load_face_filter(filter_lists, ref_threshold)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def load_face_filter(self, filter_lists, ref_threshold):
         """ Load faces to filter out of images """
         if not any(val for val in filter_lists.values()):
             return None
 
-        filter_files = [self.set_face_filter(key, val)
-                        for key, val in filter_lists.items()]
+        filter_files = [self.set_face_filter(f_type, filter_lists[f_type])
+                        for f_type in ("filter", "nfilter")]
 
         if any(filters for filters in filter_files):
             facefilter = FilterFunc(filter_files[0],
                                     filter_files[1],
                                     ref_threshold)
+        logger.debug("Face filter: %s", facefilter)
         return facefilter
 
     @staticmethod
@@ -300,10 +348,10 @@ class FaceFilter(PostProcessAction):
         if not f_args:
             return list()
 
-        print("{}: {}".format(f_type.title(), f_args))
+        logger.info("%s: %s", f_type.title(), f_args)
         filter_files = f_args if isinstance(f_args, list) else [f_args]
-        filter_files = list(filter(lambda fnc: Path(fnc).exists(),
-                                   filter_files))
+        filter_files = list(filter(lambda fpath: Path(fpath).exists(), filter_files))
+        logger.debug("Face Filter files: %s", filter_files)
         return filter_files
 
     def process(self, output_item):
@@ -311,12 +359,13 @@ class FaceFilter(PostProcessAction):
         if not self.filter:
             return
 
-        detected_faces = output_item["detected_faces"]
         ret_faces = list()
-        for face in detected_faces:
-            if not self.filter.check(face):
-                if self.verbose:
-                    print("Skipping not recognized face!")
+        for idx, detected_face in enumerate(output_item["detected_faces"]):
+            if not self.filter.check(detected_face["face"]):
+                logger.verbose("Skipping not recognized face! Frame: %s Face %s",
+                               detected_face["file_location"].parts[-1], idx)
                 continue
-            ret_faces.append(face)
+            logger.trace("Accepting recognised face. Frame: %s. Face: %s",
+                         detected_face["file_location"].parts[-1], idx)
+            ret_faces.append(detected_face)
         output_item["detected_faces"] = ret_faces
