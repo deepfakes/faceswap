@@ -645,15 +645,15 @@ class TrainArgs(FaceSwapArgs):
         argument_list = list()
         argument_list.append({"opts": ("-A", "--input-A"),
                               "action": DirFullPaths,
-                              "dest": "input_A",
-                              "default": "input_A",
+                              "dest": "input_a",
+                              "default": "input_a",
                               "help": "Input directory. A directory "
                                       "containing training images for face A. "
                                       "Defaults to 'input'"})
         argument_list.append({"opts": ("-B", "--input-B"),
                               "action": DirFullPaths,
-                              "dest": "input_B",
-                              "default": "input_B",
+                              "dest": "input_b",
+                              "default": "input_b",
                               "help": "Input directory. A directory "
                                       "containing training images for face B. "
                                       "Defaults to 'input'"})
@@ -715,7 +715,7 @@ class TrainArgs(FaceSwapArgs):
                                       "to spare memory on some configs"})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
-                              "dest": "timelapse_input_A",
+                              "dest": "timelapse_input_a",
                               "default": None,
                               "help": "For if you want a timelapse: "
                                       "The input folder for the timelapse. "
@@ -726,7 +726,7 @@ class TrainArgs(FaceSwapArgs):
                                       "--timelapse-input-B parameter."})
         argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
                               "action": DirFullPaths,
-                              "dest": "timelapse_input_B",
+                              "dest": "timelapse_input_b",
                               "default": None,
                               "help": "For if you want a timelapse: "
                                       "The input folder for the timelapse. "

@@ -24,5 +24,6 @@
 !plugins/train/*
 !tools
 !tools/lib*
+*.ini
 *.pyc
 __pycache__/

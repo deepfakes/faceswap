@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Process training data for model training """
 
+import logging
 import os
 from random import shuffle
 import uuid
@@ -13,11 +14,16 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 class TrainingDataGenerator():
     """ Generate training data for models """
     def __init__(self, random_transform_args, coverage,
                  scale=5, zoom=1, training_opts=None):
+        logger.debug("Initializing %s: (random_transform_args: %s, coverage: %s, scale: %s, "
+                     " zoom: %s, training_opts: %s", self.__class__.__name__,
+                     random_transform_args, coverage, scale, zoom, training_opts)
         self.options = training_opts
         self.random_transform_args = random_transform_args
         self.training_opts = dict() if training_opts is None else training_opts
@@ -25,34 +31,41 @@ class TrainingDataGenerator():
         self.scale = scale
         self.zoom = zoom
         self.batchsize = 0
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def minibatch_ab(self, images, batchsize, side, do_shuffle=True):
         """ Keep a queue filled to 8x Batch Size """
+        logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s",
+                     len(images), batchsize, side, do_shuffle)
         self.batchsize = batchsize
         q_name = str(uuid.uuid4())
         q_size = batchsize * 8
         queue_manager.add_queue(q_name, maxsize=q_size)
-        thread = MultiThread()
-        thread.in_thread(self.load_batches,
-                         images,
-                         q_name,
-                         side,
-                         do_shuffle)
+        thread = MultiThread(self.load_batches, images, q_name, side, do_shuffle)
+        thread.start()
+        logger.debug("Batching to queue: (side: '%s', queue: '%s')", side, q_name)
         return self.minibatch(q_name)
 
-    def load_batches(self, data, q_name, side, do_shuffle=True):
+    def load_batches(self, images, q_name, side, do_shuffle=True):
         """ Load the epoch, warped images and target images to queue """
+        logger.debug("Loading batch: (image_count: %s, q_name: '%s', side: '%s'. do_shuffle: %s)",
+                     len(images), q_name, side, do_shuffle)
         epoch = 0
         queue = queue_manager.get_queue(q_name)
-        self.validate_samples(data)
+        self.validate_samples(images)
         while True:
             if do_shuffle:
-                shuffle(data)
-            for img in data:
+                shuffle(images)
+            for img in images:
+                logger.trace("Putting to batch queue: (epoch: %s, q_name: '%s', side: '%s')",
+                             epoch, q_name, side)
                 queue.put((epoch, self.process_face(img, side)))
 #                queue.put((epoch, np.float32(self.process_face(img, side))))
             epoch += 1
+        logger.debug("Finished batching: (epoch: %s, q_name: '%s', side: '%s')",
+                     epoch, q_name, side)
 
+    # TODO Check this raises error properly
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
             the total number of images """
@@ -65,6 +78,7 @@ class TrainingDataGenerator():
     def minibatch(self, q_name):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
+        logger.debug("Launching minibatch generator for queue: '%s'", q_name)
         queue = queue_manager.get_queue(q_name)
         while True:
             batch = list()
@@ -75,11 +89,15 @@ class TrainingDataGenerator():
                         batch.append(list())
                     batch[idx].append(image)
             batch = [epoch] + [np.float32(image) for image in batch]
+            logger.trace("Yielding batch: (size: %s, queue:  '%s'", len(batch), q_name)
             yield batch
+        logger.debug("Finished minibatch generator for queue: '%s'", q_name)
 
     def process_face(self, filename, side):
         """ Load an image and perform transformation and warping """
-        landmarks = self.get_landmarks(filename, side)
+        logger.trace("Process face: (filename: '%s', side: '%s'", filename, side)
+        landmarks = self.training_opts.get("landmarks", None)
+        landmarks = self.get_landmarks(filename, side, landmarks) if landmarks else None
         try:
             # pylint: disable=no-member
             image = self.color_adjust(cv2.imread(filename))
@@ -101,15 +119,15 @@ class TrainingDataGenerator():
                 mask_image = mask_image[:, ::-1]
 
             retval = warped_img, target_img, mask_image
+        logger.trace("Processed face: (filename: '%s', side: '%s'", filename, side)
         return retval
 
-    def get_landmarks(self, filename, side):
+    # TODO Check exception raises
+    @staticmethod
+    def get_landmarks(filename, side, landmarks):
         """ Return the landmarks for this face and the closest landmark
             for corresponding set """
-        landmarks = self.training_opts.get("landmarks", None)
-        if not landmarks:
-            return None
-
+        logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
         lm_key = os.path.splitext(os.path.basename(filename))[0]
         try:
             src_points = landmarks[side][lm_key]
@@ -120,15 +138,19 @@ class TrainingDataGenerator():
         closest = (np.mean(np.square(src_points - dst_points),
                            axis=(1, 2))).argsort()[:10]
         closest = np.random.choice(closest)
-        return src_points, dst_points[closest]
+        retval = src_points, dst_points[closest]
+        logger.trace("Returning: (src_points: %s, dst_points: %s)", retval[0], retval[1])
+        return retval
 
     @staticmethod
     def color_adjust(img):
         """ Color adjust RGB image """
+        logger.trace("Color adjusting image")
         return img / 255.0
 
     def random_transform(self, image):
         """ Randomly transform an image """
+        logger.trace("Randomly transforming image")
         height, width = image.shape[0:2]
         rotation_range = self.random_transform_args["rotation_range"]
         zoom_range = self.random_transform_args["zoom_range"]
@@ -149,10 +171,12 @@ class TrainingDataGenerator():
 
         if np.random.random() < random_flip:
             result = result[:, ::-1]
+        logger.trace("Randomly transformed image")
         return result
 
     def random_warp(self, image):
         """ get pair of random warped images from aligned face image """
+        logger.trace("Randomly warping image")
         height, width = image.shape[0:2]
         assert height == width and height % 2 == 0
 
@@ -191,12 +215,14 @@ class TrainingDataGenerator():
                                       mat,
                                       (64 * self.zoom, 64 * self.zoom))
 
+        logger.trace("Randomly warped image")
         return warped_image, target_image
 
-    #TODO Unfix variables
+    # TODO Unfix variables
     def random_warp_landmarks(self, image, src_points, dst_points):
         """ get warped image, target image and target mask """
         # pylint: disable=no-member
+        logger.trace("Randomly warping landmarks")
 
         edge_anchors = [(0, 0), (0, 255), (255, 255), (255, 0),
                         (127, 0), (127, 255), (255, 127), (0, 127)]
@@ -257,25 +283,32 @@ class TrainingDataGenerator():
                                  (64 * 2, 64 * 2),
                                  cv2.INTER_AREA).reshape((64 * 2, 64 * 2, 1))
 
+        logger.trace("Randomly warped image")
         return warped, target_image, target_mask
 
     @staticmethod
     def add_alpha_channel(image):
         """ Add an alpha channel to the image """
+        logger.trace("Add alpha channel to image")
         ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
         ch_a = np.ones(ch_b.shape, dtype=ch_b.dtype) * 50
         image_bgra = cv2.merge(  # pylint: disable=no-member
             (ch_b, ch_g, ch_r, ch_a))
+        logger.trace("Added alpha channel to image")
         return image_bgra
 
 
 def stack_images(images):
     """ Stack images """
+    logger.debug("Stack images")
+
     def get_transpose_axes(num):
         if num % 2 == 0:
+            logger.debug("Even number of images to stack")
             y_axes = list(range(1, num - 1, 2))
             x_axes = list(range(0, num - 1, 2))
         else:
+            logger.debug("Odd number of images to stack")
             y_axes = list(range(0, num - 1, 2))
             x_axes = list(range(1, num - 1, 2))
         return y_axes, x_axes, [num - 1]
@@ -283,6 +316,7 @@ def stack_images(images):
     images_shape = np.array(images.shape)
     new_axes = get_transpose_axes(len(images_shape))
     new_shape = [np.prod(images_shape[x]) for x in new_axes]
+    logger.debug("Stacked images")
     return np.transpose(
         images,
         axes=np.concatenate(new_axes)

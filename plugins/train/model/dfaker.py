@@ -13,24 +13,30 @@ from keras.utils import multi_gpu_model
 from lib.train.dssim import DSSIMObjective
 from lib.train.penalized_loss import PenalizedLoss
 
-from .original import Model as OriginalModel
+from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
     """ Improved Autoeencoder Model """
     def __init__(self, *args, **kwargs):
+        logger.debug("Initializing %s: (args: %s, kwargs: %s",
+                     self.__class__.__name__, args, kwargs)
         kwargs["image_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
         super().__init__(*args, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_networks(self):
         """ Add the IAE model weights """
+        logger.debug("Adding networks")
         self.add_network("encoder", None, self.encoder())
         self.add_network("decoder", "A", self.decoder())
         self.add_network("decoder", "B", self.decoder())
+        logger.debug("Added networks")
 
     def initialize(self):
         """ Initialize original model """
+        logger.debug("Initializing model")
         self.set_training_data()
         inp1 = Input(shape=self.image_shape)
         mask1 = Input(shape=(64*2, 64*2, 1))
@@ -52,16 +58,20 @@ class Model(OriginalModel):
         self.autoencoders["b"] = KerasModel([inp2, mask2],
                                             decoder_b(encoder(inp2)))
         self.compile_autoencoders(mask1=mask1, mask2=mask2)
+        logger.debug("Initialized model")
 
     def set_training_data(self):
         """ Set the dictionary for training """
+        logger.debug("Setting training data")
         serializer = self.config.get("DFaker", "alignments_format")
         self.training_opts["serializer"] = serializer
         self.training_opts["use_mask"] = True
         self.training_opts["use_alignments"] = True
+        logger.debug("Set training data: %s", self.training_opts)
 
     def compile_autoencoders(self, *args, **kwargs):
         """ Compile the autoencoders """
+        logger.debug("Compiling Autoencoders")
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
         if self.gpus > 1:
             for acr in self.autoencoders.keys():
@@ -74,6 +84,7 @@ class Model(OriginalModel):
             autoencoder.compile(optimizer=optimizer,
                                 loss=[PenalizedLoss(mask, DSSIMObjective()),
                                       'mse'])
+        logger.debug("Compiled Autoencoders")
 
     def decoder(self):
         """ Decoder Network """

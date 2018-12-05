@@ -117,6 +117,8 @@ class FSThread(threading.Thread):
                 self._target(*self._args, **self._kwargs)
         except Exception:  # pylint: disable=broad-except
             self.err = sys.exc_info()
+            logger.error("Error in thread (%s): %s", self._name,
+                         self.err[1].with_traceback(self.err[2]))
         finally:
             # Avoid a refcycle if the thread is running a function with
             # an argument that has a member that points to the thread.

@@ -6,20 +6,25 @@
 from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
-from .original import Model as OriginalModel
+from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
     """ Low Memory version of Original Faceswap Model """
     def __init__(self, *args, **kwargs):
+        logger.debug("Initializing %s: (args: %s, kwargs: %s",
+                     self.__class__.__name__, args, kwargs)
         kwargs["encoder_dim"] = 512
         super().__init__(*args, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_networks(self):
         """ Add the original lowmem model weights """
+        logger.debug("Adding networks")
         self.add_network("decoder", "A", self.decoder())
         self.add_network("decoder", "B", self.decoder())
         self.add_network("encoder", None, self.encoder())
+        logger.debug("Added networks")
 
     def encoder(self):
         """ Encoder Network

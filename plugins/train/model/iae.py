@@ -5,26 +5,32 @@ from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
 from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
-from .original import Model as OriginalModel
+from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
     """ Improved Autoeencoder Model """
     def __init__(self, *args, **kwargs):
+        logger.debug("Initializing %s: (args: %s, kwargs: %s",
+                     self.__class__.__name__, args, kwargs)
         kwargs["image_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
         super().__init__(*args, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_networks(self):
         """ Add the IAE model weights """
+        logger.debug("Adding networks")
         self.add_network("encoder", None, self.encoder())
         self.add_network("decoder", None, self.decoder())
         self.add_network("inter", "A", self.intermediate())
         self.add_network("inter", "B", self.intermediate())
         self.add_network("inter", None, self.intermediate())
+        logger.debug("Added networks")
 
     def initialize(self):
         """ Initialize IAE model """
+        logger.debug("Initializing model")
         inp = Input(shape=self.image_shape)
         for network in self.networks:
             if network.type == "encoder":
@@ -45,6 +51,7 @@ class Model(OriginalModel):
         self.autoencoders["a"] = KerasModel(inp, output_a)
         self.autoencoders["b"] = KerasModel(inp, output_b)
         self.compile_autoencoders()
+        logger.debug("Initialized model")
 
     def encoder(self):
         """ Encoder Network """

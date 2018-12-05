@@ -59,7 +59,7 @@ def get_image_paths(directory):
     return dir_contents
 
 
-def set_system_verbosity(loglevel):
+def set_system_verbosity():
     """ Set the verbosity level of tensorflow and suppresses
         future and deprecation warnings from any modules
         From:
@@ -190,7 +190,7 @@ def camel_case_split(identifier):
         identifier)
     return [m.group(0) for m in matches]
 
-
+# TODO Move and fix this
 class Timelapse:
     """ Time lapse function for training """
     @classmethod

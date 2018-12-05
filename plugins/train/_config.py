@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """ Default configurations for models """
 
+import logging
+
 from lib.config import FaceswapConfig
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Config(FaceswapConfig):
@@ -10,6 +14,7 @@ class Config(FaceswapConfig):
     def set_defaults(self):
         """ Set the default values for config """
         # << GLOBAL OPTIONS >> #
+        logger.debug("Setting defaults")
         section = "Global"
         self.add_section(title=section,
                          info="Options that apply to all models")
@@ -74,3 +79,4 @@ class Config(FaceswapConfig):
                  "be named 'alignments.<file extension>' (eg. "
                  "alignments.json)."
                  "\nChoose from: 'json', 'pickle' or 'yaml'")
+        logger.debug("Set defaults: %s", self.defaults)

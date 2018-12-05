@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """ Original Trainer """
 
+import logging
 import time
 
 import numpy as np
 
 from lib.train import TrainingDataGenerator, stack_images
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Trainer():
@@ -18,6 +21,8 @@ class Trainer():
     }
 
     def __init__(self, model, images, batch_size, *args):
+        logger.debug("Initializing %s: (model: '%s', batch_size: %s, args: %s, ",
+                     self.__class__.__name__, model, batch_size, args)
         self.batch_size = batch_size
         self.model = model
         self.images = images
@@ -34,6 +39,7 @@ class Trainer():
         self.images_b = generator.minibatch_ab(images["b"],
                                                self.batch_size,
                                                "b")
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process_training_opts(self):
         """ Override for processing model specific training options """
@@ -41,6 +47,7 @@ class Trainer():
 
     def train_one_step(self, iteration, viewer):
         """ Train a batch """
+        logger.trace("Training one step: (iteration: %s)", iteration)
         epoch, warped_a, target_a = next(self.images_a)
         epoch, warped_b, target_b = next(self.images_b)
 
@@ -64,6 +71,7 @@ class Trainer():
 
     def show_sample(self, test_a, test_b):
         """ Display preview data """
+        logger.debug("Compiling sample")
         figure_a = np.stack([test_a,
                              self.model.autoencoders["a"].predict(test_a),
                              self.model.autoencoders["b"].predict(test_a), ],
@@ -85,4 +93,5 @@ class Trainer():
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
 
+        logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')

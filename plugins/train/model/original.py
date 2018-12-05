@@ -10,27 +10,33 @@ from keras.models import Model as KerasModel
 
 from lib.train import PixelShuffler
 
-from ._base import ModelBase
+from ._base import ModelBase, logger
 
 
 class Model(ModelBase):
     """ Original Faceswap Model """
     def __init__(self, *args, **kwargs):
+        logger.debug("Initializing %s: (args: %s, kwargs: %s",
+                     self.__class__.__name__, args, kwargs)
         if "image_shape" not in kwargs:
             kwargs["image_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
             kwargs["encoder_dim"] = 1024
 
         super().__init__(*args, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_networks(self):
         """ Add the original model weights """
+        logger.debug("Adding networks")
         self.add_network("decoder", "A", self.decoder())
         self.add_network("decoder", "B", self.decoder())
         self.add_network("encoder", None, self.encoder())
+        logger.debug("Added networks")
 
     def initialize(self):
         """ Initialize original model """
+        logger.debug("Initializing model")
         inp = Input(shape=self.image_shape)
         for network in self.networks:
             if network.type == "encoder":
@@ -43,6 +49,7 @@ class Model(ModelBase):
         self.autoencoders["a"] = KerasModel(inp, decoder_a(encoder(inp)))
         self.autoencoders["b"] = KerasModel(inp, decoder_b(encoder(inp)))
         self.compile_autoencoders()
+        logger.debug("Initialized model")
 
     @staticmethod
     def conv(filters):
