@@ -54,7 +54,7 @@ class ScriptExecutor():
 
         try:
             # pylint: disable=unused-variable
-            import tkinter  # noqa
+            import tkinter  # noqa pylint: disable=unused-import
         except ImportError:
             logger.warning(
                 "It looks like TkInter isn't installed for your OS, so "
@@ -82,7 +82,7 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup(arguments.loglevel)
+        log_setup(arguments.loglevel, self.command)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         try:
             script = self.import_script()
@@ -113,7 +113,7 @@ class FullPaths(argparse.Action):
 
 class DirFullPaths(FullPaths):
     """ Class that gui uses to determine if you need to open a directory """
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,unnecessary-pass
     pass
 
 
@@ -153,7 +153,7 @@ class SaveFileFullPaths(FileFullPaths):
 
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,unnecessary-pass
     pass
 
 

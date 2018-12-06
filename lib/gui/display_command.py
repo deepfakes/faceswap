@@ -56,7 +56,7 @@ class PreviewExtract(DisplayOptionalPage):
         print("Saved preview to {}".format(filename))
 
 
-class PreviewTrain(DisplayOptionalPage):
+class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Training preview image(s) """
 
     def display_item_set(self):
@@ -99,7 +99,7 @@ class PreviewTrain(DisplayOptionalPage):
             preview.save_preview(location)
 
 
-class PreviewTrainCanvas(ttk.Frame):
+class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Canvas to hold a training preview image """
     def __init__(self, parent, previewname):
         ttk.Frame.__init__(self, parent)
@@ -141,7 +141,7 @@ class PreviewTrainCanvas(ttk.Frame):
         print("Saved preview to {}".format(filename))
 
 
-class GraphDisplay(DisplayOptionalPage):
+class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
 
     def display_item_set(self):

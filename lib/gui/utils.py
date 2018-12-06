@@ -288,7 +288,7 @@ class Images(metaclass=Singleton):
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
 
-class ConsoleOut(ttk.Frame):
+class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ The Console out section of the GUI """
 
     def __init__(self, parent, debug, tk_vars):

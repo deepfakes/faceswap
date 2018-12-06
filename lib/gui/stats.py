@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Stats functions for the GUI """
 
+import logging
 import time
 import os
 import warnings
@@ -10,6 +11,8 @@ from math import ceil, sqrt
 import numpy as np
 
 from lib.Serializer import PickleSerializer
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def convert_time(timestamp):
@@ -22,7 +25,7 @@ def convert_time(timestamp):
     return hrs, mins, secs
 
 
-class SavedSessions(object):
+class SavedSessions():
     """ Saved Training Session """
     def __init__(self, sessions_data):
         self.serializer = PickleSerializer
@@ -40,10 +43,10 @@ class SavedSessions(object):
         """ Save the session file  """
         with open(filename, self.serializer.woptions) as session:
             session.write(self.serializer.marshal(self.sessions))
-        print("Saved session stats to: {}".format(filename))
+        logger.info("Saved session stats to: %s", filename)
 
 
-class CurrentSession(object):
+class CurrentSession():
     """ The current training session """
     def __init__(self):
         self.stats = {"iterations": 0,
@@ -93,11 +96,11 @@ class CurrentSession(object):
     def save_session(self):
         """ Save the session file to the modeldir """
         if self.stats["iterations"] > 0:
-            print("Saving session stats...")
+            logger.info("Saving session stats...")
             self.historical.save_sessions(self.filename)
 
 
-class SessionsTotals(object):
+class SessionsTotals():
     """ The compiled totals of all saved sessions """
     def __init__(self, all_sessions):
         self.stats = {"split": [],
@@ -134,7 +137,7 @@ class SessionsTotals(object):
             self.stats["loss"][idx].extend(loss)
 
 
-class SessionsSummary(object):
+class SessionsSummary():
     """ Calculations for analysis summary stats """
 
     def __init__(self, raw_data):
@@ -211,7 +214,7 @@ class SessionsSummary(object):
         self.summary = raw_summaries
 
 
-class Calculations(object):
+class Calculations():
     """ Class to hold calculations against raw session data """
     def __init__(self,
                  session,
@@ -339,7 +342,7 @@ class Calculations(object):
         datapoints = len(data)
 
         if datapoints <= (self.args["avg_samples"] * 2):
-            print("Not enough data to compile rolling average")
+            logger.info("Not enough data to compile rolling average")
             return avgs
 
         for idx in range(0, datapoints):

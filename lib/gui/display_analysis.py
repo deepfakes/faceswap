@@ -12,7 +12,7 @@ from .tooltip import Tooltip
 from .utils import Images, FileHandler
 
 
-class Analysis(DisplayPage):
+class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Session analysis tab """
     def __init__(self, parent, tabname, helptext, scaling_factor):
         DisplayPage.__init__(self, parent, tabname, helptext)
@@ -107,7 +107,7 @@ class Analysis(DisplayPage):
                 csvout.writerow(row)
 
 
-class Options(object):
+class Options():
     """ Options bar of Analysis tab """
     def __init__(self, parent):
         self.optsframe = parent.optsframe
@@ -143,7 +143,7 @@ class Options(object):
         return hlp
 
 
-class StatsData(ttk.Frame):
+class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Stats frame of analysis tab """
     def __init__(self,
                  parent,
@@ -287,7 +287,7 @@ class SessionPopUp(tk.Toplevel):
     def __init__(self, data, session_id):
         tk.Toplevel.__init__(self)
 
-        self.is_totals = True if session_id == "Total" else False
+        self.is_totals = session_id == "Total"
         self.data = self.set_session_data(data, session_id)
 
         self.graph = None
