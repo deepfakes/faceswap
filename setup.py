@@ -293,10 +293,14 @@ def check_visual_studio():
 
 def check_cplus_plus():
     """ Check Visual C++ Redistributable 2015 is instlled for Windows """
-    chk = Popen("reg query HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies"
-                "\\{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
-                shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = chk.communicate()
+    keys = (
+        "HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies\\{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
+        "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64")
+    for key in keys:
+        chk = Popen("reg query {}".format(key), shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = chk.communicate()
+        if stdout:
+            break
     if stderr:
         out_error("Visual C++ 2015 could not be found. Make sure you have selected 'Visual C++' "
                   "in Visual Studio 2015 Configuration or download the Visual C++ 2015 "
@@ -305,7 +309,7 @@ def check_cplus_plus():
         return
     vscpp = [re.sub(" +", " ", line.strip())
              for line in stdout.decode().splitlines()
-             if line.lower().strip().startswith("displayname")][0]
+             if line.lower().strip().startswith(("displayname", "version"))][0]
     version = vscpp[vscpp.find("REG_SZ") + 7:]
     out_info("Visual Studio C++ version: {}".format(version))
 
