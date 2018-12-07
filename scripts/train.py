@@ -11,6 +11,7 @@ import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
+from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.utils import (get_folder, get_image_paths, set_system_verbosity,
                        Timelapse)
@@ -44,11 +45,11 @@ class Train():
         thread = self.start_thread()
 
         if self.args.preview:
-            self.monitor_preview()
+            err = self.monitor_preview(thread)
         else:
-            self.monitor_console()
+            err = self.monitor_console(thread)
 
-        self.end_thread(thread)
+        self.end_thread(thread, err)
         logger.debug("Completed Training Process")
 
     def get_images(self):
@@ -81,13 +82,19 @@ class Train():
         logger.debug("Launched Trainer thread")
         return thread
 
-    def end_thread(self, thread):
+    def end_thread(self, thread, err):
         """ On termination output message and join thread back to main """
         logger.debug("Ending Training thread")
-        logger.info("Exit requested! The trainer will complete its current cycle, "
-                    "save the models and quit (it can take up a couple of seconds "
-                    "depending on your training speed). If you want to kill it now, "
-                    "press Ctrl + c")
+        if err:
+            msg = "Error caught! Exiting..."
+            log = logger.critical
+        else:
+            msg = ("Exit requested! The trainer will complete its current cycle, "
+                   "save the models and quit (it can take up a couple of seconds "
+                   "depending on your training speed). If you want to kill it now, "
+                   "press Ctrl + c")
+            log = logger.info
+        log(msg)
         self.stop = True
         thread.join()
         sys.stdout.flush()
@@ -170,7 +177,7 @@ class Train():
         model.save_weights()
         self.stop = True
 
-    def monitor_preview(self):
+    def monitor_preview(self, thread):
         """ Generate the preview window and wait for keyboard input """
         logger.debug("Launching Preview Monitor")
         logger.info("==================================================================")
@@ -178,6 +185,7 @@ class Train():
         logger.info(" Press 'ENTER' on the preview window to save and quit")
         logger.info(" Press 'S' on the preview window to save model weights immediately")
         logger.info("==================================================================")
+        err = False
         while True:
             try:
                 with self.lock:
@@ -185,40 +193,67 @@ class Train():
                         cv2.imshow(name, image)  # pylint: disable=no-member
 
                 key = cv2.waitKey(1000)  # pylint: disable=no-member
+                if self.stop:
+                    logger.debug("Stop received")
+                    break
+                if thread.has_error:
+                    logger.debug("Thread error detected")
+                    err = True
+                    break
                 if key == ord("\n") or key == ord("\r"):
                     logger.debug("Exit requested")
                     break
                 if key == ord("s"):
-                    logger.debug("Save requested")
+                    logger.info("Save requested")
                     self.save_now = True
+            except KeyboardInterrupt:
+                logger.debug("Keyboard Interrupt received")
+                break
+        logger.debug("Closed Preview Monitor")
+        return err
+
+    def monitor_console(self, thread):
+        """ Monitor the console
+            NB: A custom function needs to be used for this because
+                input() blocks """
+        logger.debug("Launching Console Monitor")
+        logger.info("============================================")
+        logger.info(" Starting")
+        logger.info(" Press 'ENTER' to save and quit")
+        logger.info(" Press 'S' to save model weights immediately")
+        logger.info("============================================")
+        keypress = KBHit()
+        err = False
+        while True:
+            try:
+                if thread.has_error:
+                    logger.debug("Thread error detected")
+                    err = True
+                    break
                 if self.stop:
                     logger.debug("Stop received")
                     break
+                if keypress.kbhit():
+                    key = keypress.getch()
+                    logger.debug("Input received: %s", key)
+                    if key in ("\n", "\r"):
+                        logger.debug("Exit requested")
+                        break
+                    if key in ("s", "S"):
+                        logger.info("Save requested")
+                        self.save_now = True
             except KeyboardInterrupt:
+                logger.debug("Keyboard Interrupt received")
                 break
-        logger.debug("Closed Preview Monitor")
+        keypress.set_normal_term()
+        logger.debug("Closed Console Monitor")
+        return err
 
     @staticmethod
-    def monitor_console():
-        """ Monitor the console for any input followed by enter or ctrl+c """
-        # TODO: how to catch a specific key instead of Enter?
-        # there isn't a good multiplatform solution:
-        # https://stackoverflow.com/questions/3523174
-        # TODO: Find a way to interrupt input() if the target iterations are
-        # reached. At the moment, setting a target iteration and using the -p
-        # flag is the only guaranteed way to exit the training loop on
-        # hitting target iterations.
-        logger.debug("Launching Console Monitor")
-        logger.info("==============================================")
-        logger.info(" Starting")
-        logger.info(" Press 'ENTER' to stop training and save model")
-        logger.info("==============================================")
-        try:
-            input()
-            logger.debug("Input received")
-        except KeyboardInterrupt:
-            logger.debug("Keyboard Interrupt received")
-        logger.debug("Closed Console Monitor")
+    def keypress_monitor(keypress_queue):
+        """ Monitor stdin for keypress """
+        while True:
+            keypress_queue.put(sys.stdin.read(1))
 
     @staticmethod
     def set_tf_allow_growth():
