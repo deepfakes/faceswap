@@ -137,7 +137,7 @@ class Train():
     def load_trainer(self, model):
         """ Load the trainer requested for training """
         logger.debug("Loading Trainer")
-        trainer = PluginLoader.get_trainer(self.trainer_name)
+        trainer = PluginLoader.get_trainer(model.trainer)
         trainer = trainer(model,
                           self.images,
                           self.args.batch_size,

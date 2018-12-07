@@ -5,6 +5,7 @@ from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
 from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
+from lib.train.nn_blocks import conv, upscale
 from .original import logger, Model as OriginalModel
 
 
@@ -50,6 +51,11 @@ class Model(OriginalModel):
                                           inter_both(encoder(inp))]))
         self.autoencoders["a"] = KerasModel(inp, output_a)
         self.autoencoders["b"] = KerasModel(inp, output_b)
+
+        self.log_summary("encoder", encoder)
+        self.log_summary("inter", inter_a)
+        self.log_summary("decoder", decoder)
+
         self.compile_autoencoders()
         logger.debug("Initialized model")
 
@@ -57,10 +63,10 @@ class Model(OriginalModel):
         """ Encoder Network """
         input_ = Input(shape=self.image_shape)
         inp = input_
-        inp = self.conv(128)(inp)
-        inp = self.conv(256)(inp)
-        inp = self.conv(512)(inp)
-        inp = self.conv(1024)(inp)
+        inp = conv(128)(inp)
+        inp = conv(256)(inp)
+        inp = conv(512)(inp)
+        inp = conv(1024)(inp)
         inp = Flatten()(inp)
         return KerasModel(input_, inp)
 
@@ -77,10 +83,10 @@ class Model(OriginalModel):
         """ Decoder Network """
         input_ = Input(shape=(4, 4, self.encoder_dim))
         inp = input_
-        inp = self.upscale(512)(inp)
-        inp = self.upscale(256)(inp)
-        inp = self.upscale(128)(inp)
-        inp = self.upscale(64)(inp)
+        inp = upscale(512)(inp)
+        inp = upscale(256)(inp)
+        inp = upscale(128)(inp)
+        inp = upscale(64)(inp)
         inp = Conv2D(3,
                      kernel_size=5,
                      padding='same',

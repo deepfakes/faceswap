@@ -2,16 +2,14 @@
 """ DFaker Model
     Based on the dfaker model: https://github.com/dfaker """
 
-from keras.initializers import RandomNormal
-from keras.layers import Add, Input
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import Conv2D
+
+from keras.layers import Input
 from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 
-from lib.train.dssim import DSSIMObjective
-from lib.train.penalized_loss import PenalizedLoss
+from lib.train import DSSIMObjective, PenalizedLoss
+from lib.train.nn_blocks import Conv2D, res_block, upscale
 
 from .original import logger, Model as OriginalModel
 
@@ -23,11 +21,12 @@ class Model(OriginalModel):
                      self.__class__.__name__, args, kwargs)
         kwargs["image_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
+        kwargs["trainer"] = "dfaker"
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_networks(self):
-        """ Add the IAE model weights """
+        """ Add the Dfaker model networks """
         logger.debug("Adding networks")
         self.add_network("encoder", None, self.encoder())
         self.add_network("decoder", "A", self.decoder())
@@ -35,7 +34,7 @@ class Model(OriginalModel):
         logger.debug("Added networks")
 
     def initialize(self):
-        """ Initialize original model """
+        """ Initialize Dfaker model """
         logger.debug("Initializing model")
         self.set_training_data()
         inp1 = Input(shape=self.image_shape)
@@ -50,8 +49,8 @@ class Model(OriginalModel):
             elif network.type == "decoder" and network.side == "B":
                 decoder_b = network.network
 
-        print(encoder.summary())
-        print(decoder_a.summary())
+        self.log_summary("encoder", encoder)
+        self.log_summary("decoder", decoder_a)
 
         self.autoencoders["a"] = KerasModel([inp1, mask1],
                                             decoder_a(encoder(inp1)))
@@ -86,51 +85,32 @@ class Model(OriginalModel):
                                       'mse'])
         logger.debug("Compiled Autoencoders")
 
-    def decoder(self):
+    @staticmethod
+    def decoder():
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
         inp_x = input_
         inp_y = input_
 
-        inp_x = self.upscale(512)(inp_x)
-        inp_x = self.res_block(inp_x, 512)
-        inp_x = self.upscale(256)(inp_x)
-        inp_x = self.res_block(inp_x, 256)
-        inp_x = self.upscale(128)(inp_x)
-        inp_x = self.res_block(inp_x, 128)
-        inp_x = self.upscale(64)(inp_x)
+        inp_x = upscale(512)(inp_x)
+        inp_x = res_block(inp_x, 512)
+        inp_x = upscale(256)(inp_x)
+        inp_x = res_block(inp_x, 256)
+        inp_x = upscale(128)(inp_x)
+        inp_x = res_block(inp_x, 128)
+        inp_x = upscale(64)(inp_x)
         inp_x = Conv2D(3,
                        kernel_size=5,
                        padding='same',
                        activation='sigmoid')(inp_x)
 
-        inp_y = self.upscale(512)(inp_y)
-        inp_y = self.upscale(256)(inp_y)
-        inp_y = self.upscale(128)(inp_y)
-        inp_y = self.upscale(64)(inp_y)
+        inp_y = upscale(512)(inp_y)
+        inp_y = upscale(256)(inp_y)
+        inp_y = upscale(128)(inp_y)
+        inp_y = upscale(64)(inp_y)
         inp_y = Conv2D(1,
                        kernel_size=5,
                        padding='same',
                        activation='sigmoid')(inp_y)
 
         return KerasModel([input_], outputs=[inp_x, inp_y])
-
-    @staticmethod
-    def res_block(input_tensor, filters):
-        """ Residual block """
-        conv_init = RandomNormal(0, 0.02)
-        inp = input_tensor
-        inp = Conv2D(filters,
-                     kernel_size=3,
-                     kernel_initializer=conv_init,
-                     use_bias=False,
-                     padding="same")(inp)
-        inp = LeakyReLU(alpha=0.2)(inp)
-        inp = Conv2D(filters,
-                     kernel_size=3,
-                     kernel_initializer=conv_init,
-                     use_bias=False,
-                     padding="same")(inp)
-        inp = Add()([inp, input_tensor])
-        inp = LeakyReLU(alpha=0.2)(inp)
-        return inp

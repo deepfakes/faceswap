@@ -31,8 +31,7 @@ class Config(FaceswapConfig):
                               "Model")
 
         self.add_item(
-            section=section, title="encoder_type", datatype=str,
-            default="ORIGINAL",
+            section=section, title="encoder_type", datatype=str, default="ORIGINAL",
             info="Encoder type to use. Choose from:\n"
                  "ORIGINAL: Basic encoder for this model type\n"
                  "STANDARD: New, balanced encoder. More memory consuming\n"
@@ -46,23 +45,19 @@ class Config(FaceswapConfig):
             info="Number of pixels for face width and height. Don't change "
                  "this unless you know what you are doing!")
         self.add_item(
-            section=section, title="complexity_encoder", datatype=int,
-            default=128,
+            section=section, title="complexity_encoder", datatype=int, default=128,
             info="Encoder Convolution Layer Complexity. sensible ranges: "
                  "128 to 160")
         self.add_item(
-            section=section, title="complexity_decoder_a", datatype=int,
-            default=384,
+            section=section, title="complexity_decoder_a", datatype=int, default=384,
             info="Decoder A Complexity. Only applicable for STANDARD and "
                  "ORIGINAL encoders")
         self.add_item(
-            section=section, title="complexity_decoder_b", datatype=int,
-            default=512,
+            section=section, title="complexity_decoder_b", datatype=int, default=512,
             info="Decoder B Complexity. Only applicable for STANDARD and "
                  "ORIGINAL encoders")
         self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool,
-            default=False,
+            section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Might increase upscaling quality at cost of VRAM")
 
         # << DFAKER MODEL OPTIONS >> #
@@ -72,11 +67,37 @@ class Config(FaceswapConfig):
                               "https://github.com/dfaker/df)")
 
         self.add_item(
-            section=section, title="alignments_format", datatype=str,
-            default="json",
+            section=section, title="alignments_format", datatype=str, default="json",
             info="Dfaker model requires the alignments for your training "
                  "images to be avalaible within the FACES folder.\nIt should "
                  "be named 'alignments.<file extension>' (eg. "
                  "alignments.json)."
                  "\nChoose from: 'json', 'pickle' or 'yaml'")
+
+        # << GAN MODEL OPTIONS >> #
+        section = "GAN_2-2"
+        self.add_section(title=section,
+                         info="GAN v2.2. Model (Adapted from "
+                              "https://github.com/shaoanlu/faceswap-GAN)")
+
+        self.add_item(
+            section=section, title="resolution", datatype=int, default=64,
+            info="Resolution (in pixels) of the image to train on.\n"
+                 "BE AWARE Larger resolution will dramatically increase"
+                 "VRAM requirements.\nMake sure your resolution is divisible by 64 "
+                 "(e.g. 64, 128, 256 etc.)")
+        self.add_item(
+            section=section, title="use_self_attention", datatype=bool, default=True,
+            info="Use a self-attention mechanism as proposed in SAGAN("
+                 "https://arxiv.org/abs/1805.08318)\n NB: There is still no official code release "
+                 "for SAGAN, this implementation may be wrong."
+                 "\nChoose from: 'True', 'False'")
+        self.add_item(
+            section=section, title="normalization", datatype=str, default="instancenorm",
+            info="Normalization method.\n"
+                 "\nChoose from: 'instancenorm', 'batchnorm', 'layernorm', 'groupnorm', 'none'")
+        self.add_item(
+            section=section, title="model_capacity", datatype=str, default="standard",
+            info="Capacity of the model.\nChoose from: 'standard', 'light'")
+
         logger.debug("Set defaults: %s", self.defaults)

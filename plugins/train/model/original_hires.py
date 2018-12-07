@@ -4,11 +4,11 @@
         code sample + contribs """
 
 
-from keras.layers import Dense, Flatten, Input, Reshape, SeparableConv2D
+from keras.layers import Dense, Flatten, Input, Reshape
 from keras.layers.convolutional import Conv2D
-from keras.layers.core import Activation
 from keras.models import Model as KerasModel
 
+from lib.train.nn_blocks import conv, conv_sep, upscale
 from .original import logger, Model as OriginalModel
 
 
@@ -29,39 +29,28 @@ class Model(OriginalModel):
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
-    @staticmethod
-    def conv_sep(filters):
-        """ Seperable Convolution Layer """
-        def block(inp):
-            inp = SeparableConv2D(filters,
-                                  kernel_size=5,
-                                  strides=2,
-                                  padding='same')(inp)
-            inp = Activation("relu")(inp)
-            return inp
-        return block
-
     def encoder(self):
         """ Original HiRes Encoder """
         input_ = Input(shape=self.image_shape)
         inp = input_
-        inp = self.conv(128)(inp)
-        inp = self.conv_sep(256)(inp)
-        inp = self.conv(512)(inp)
-        inp = self.conv_sep(1024)(inp)
+        inp = conv(128)(inp)
+        inp = conv_sep(256)(inp)
+        inp = conv(512)(inp)
+        inp = conv_sep(1024)(inp)
         inp = Dense(self.encoder_dim)(Flatten()(inp))
         inp = Dense(8 * 8 * 512)(inp)
         inp = Reshape((8, 8, 512))(inp)
-        inp = self.upscale(512)(inp)
+        inp = upscale(512)(inp)
         return KerasModel(input_, inp)
 
-    def decoder(self):
+    @staticmethod
+    def decoder():
         """ Original HiRes Encoder """
         input_ = Input(shape=(16, 16, 512))
         inp = input_
-        inp = self.upscale(384)(inp)
-        inp = self.upscale(256-32)(inp)
-        inp = self.upscale(128)(inp)
+        inp = upscale(384)(inp)
+        inp = upscale(256-32)(inp)
+        inp = upscale(128)(inp)
         inp = Conv2D(3,
                      kernel_size=5,
                      padding='same',

@@ -6,6 +6,7 @@
 from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
+from lib.train.nn_blocks import conv, upscale
 from .original import logger, Model as OriginalModel
 
 
@@ -31,11 +32,11 @@ class Model(OriginalModel):
             1 layer fewer for lowmem """
         input_ = Input(shape=self.image_shape)
         inp = input_
-        inp = self.conv(128)(inp)
-        inp = self.conv(256)(inp)
-        inp = self.conv(512)(inp)
+        inp = conv(128)(inp)
+        inp = conv(256)(inp)
+        inp = conv(512)(inp)
         inp = Dense(self.encoder_dim)(Flatten()(inp))
         inp = Dense(4 * 4 * 1024)(inp)
         inp = Reshape((4, 4, 1024))(inp)
-        inp = self.upscale(512)(inp)
+        inp = upscale(512)(inp)
         return KerasModel(input_, inp)

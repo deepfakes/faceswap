@@ -4,12 +4,10 @@
     code sample + contribs """
 
 from keras.layers import Dense, Flatten, Input, Reshape
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import Conv2D
+
 from keras.models import Model as KerasModel
 
-from lib.train import PixelShuffler
-
+from lib.train.nn_blocks import conv, Conv2D, upscale
 from ._base import ModelBase, logger
 
 
@@ -48,52 +46,35 @@ class Model(ModelBase):
 
         self.autoencoders["a"] = KerasModel(inp, decoder_a(encoder(inp)))
         self.autoencoders["b"] = KerasModel(inp, decoder_b(encoder(inp)))
+
+        self.log_summary("encoder", encoder)
+        self.log_summary("decoder", decoder_a)
+
         self.compile_autoencoders()
         logger.debug("Initialized model")
-
-    @staticmethod
-    def conv(filters):
-        """ Convolution Layer"""
-        def block(inp):
-            inp = Conv2D(filters,
-                         kernel_size=5,
-                         strides=2,
-                         padding='same')(inp)
-            inp = LeakyReLU(0.1)(inp)
-            return inp
-        return block
-
-    @staticmethod
-    def upscale(filters):
-        """ Upscale Layer """
-        def block(inp):
-            inp = Conv2D(filters * 4, kernel_size=3, padding='same')(inp)
-            inp = LeakyReLU(0.1)(inp)
-            inp = PixelShuffler()(inp)
-            return inp
-        return block
 
     def encoder(self):
         """ Encoder Network """
         input_ = Input(shape=self.image_shape)
         inp = input_
-        inp = self.conv(128)(inp)
-        inp = self.conv(256)(inp)
-        inp = self.conv(512)(inp)
-        inp = self.conv(1024)(inp)
+        inp = conv(128)(inp)
+        inp = conv(256)(inp)
+        inp = conv(512)(inp)
+        inp = conv(1024)(inp)
         inp = Dense(self.encoder_dim)(Flatten()(inp))
         inp = Dense(4 * 4 * 1024)(inp)
         inp = Reshape((4, 4, 1024))(inp)
-        inp = self.upscale(512)(inp)
+        inp = upscale(512)(inp)
         return KerasModel(input_, inp)
 
-    def decoder(self):
+    @staticmethod
+    def decoder():
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
         inp = input_
-        inp = self.upscale(256)(inp)
-        inp = self.upscale(128)(inp)
-        inp = self.upscale(64)(inp)
+        inp = upscale(256)(inp)
+        inp = upscale(128)(inp)
+        inp = upscale(64)(inp)
         inp = Conv2D(3,
                      kernel_size=5,
                      padding='same',

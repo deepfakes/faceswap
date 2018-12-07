@@ -7,6 +7,7 @@
 import logging
 import os
 import sys
+
 from json import JSONDecodeError
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, image_shape=None, encoder_dim=None):
+    def __init__(self, model_dir, gpus, image_shape=None, encoder_dim=None, trainer="original"):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, image_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      image_shape, encoder_dim)
@@ -28,6 +29,7 @@ class ModelBase():
         self.gpus = gpus
         self.image_shape = image_shape
         self.encoder_dim = encoder_dim
+        self.trainer = trainer
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
@@ -53,14 +55,11 @@ class ModelBase():
         """ Override to add neural networks """
         raise NotImplementedError
 
-    def set_training_data(self):
-        """ Override to set the model specific options for training """
-        raise NotImplementedError
-
     def add_network(self, network_type, side, network):
         """ Add a NNMeta object to self.models """
         logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
-        filename = "{}_{}".format(self.name, network_type.lower())
+        resolution = self.image_shape[0]
+        filename = "{}_{}_{}".format(self.name, resolution, network_type.lower())
         if side:
             filename += "_{}".format(side.upper())
         filename += ".h5"
@@ -198,6 +197,12 @@ class ModelBase():
             if os.path.exists(origfile):
                 os.rename(origfile, backupfile)
         logger.debug("Backed up weights")
+
+    @staticmethod
+    def log_summary(name, model):
+        """ Verbose log the passed in model summary """
+        logger.debug("%s Summary:", name.title())
+        model.summary(print_fn=logger.verbose)
 
 
 class NNMeta():
