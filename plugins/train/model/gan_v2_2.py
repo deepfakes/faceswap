@@ -6,11 +6,11 @@
 from keras.models import Model as KerasModel
 from keras.layers import concatenate, Conv2D, Dense, Flatten, Input, K, Lambda, Reshape
 from keras.optimizers import Adam
-import tensorflow as tf
+from keras_vggface.vggface import VGGFace
 
-
-# from .losses import *
-
+from lib.train.initializers import icnr_keras
+from lib.train.losses import (adversarial_loss, cyclic_loss, edge_loss, first_order,
+                              perceptual_loss, reconstruction_loss)
 from lib.train.nn_blocks import (conv_gan, conv_d_gan, self_attn_block,
                                  res_block_gan, upscale_nn, upscale_ps)
 
@@ -34,15 +34,14 @@ class Model(OriginalModel):
         self.norm = self.config.get("GAN_2-2", "normalization")
         self.model_capacity = self.config.get("GAN_2-2", "model_capacity")
 
-        self.nc_g_inp = 3
-        self.nc_d_inp = 6
-        self.enc_nc_out = 256 if self.model_capacity == "light" else 512
-        self.lr_d = 2e-4
-        self.lr_g = 1e-4
-        self.variables = dict()
+        self.num_chans_g_inp = 3
+        self.num_chans_d_inp = 6
+        self.enc_num_chans_out = 256 if self.model_capacity == "light" else 512
+        self.loss_funcs = dict()
 
         resolution = self.config.get("GAN_2-2", "resolution")
         kwargs["image_shape"] = (resolution, resolution, 3)
+        kwargs["trainer"] = "gan_v2_2"
         super().__init__(*args, **kwargs)
 
     def add_networks(self):
@@ -59,47 +58,25 @@ class Model(OriginalModel):
         """ Initialize GAN model """
         logger.debug("Initializing model")
         inp = Input(shape=self.image_shape)  # dummy input tensor
-        for network in self.networks:
-            if network.type == "encoder":
-                encoder = network.network
-            elif network.type == "decoder" and network.side == "A":
-                decoder_a = network.network
-            elif network.type == "decoder" and network.side == "B":
-                decoder_b = network.network
-            elif network.type == "discriminator" and network.side == "A":
-                self.autoencoders["da"] = network.network
-            elif network.type == "discriminator" and network.side == "B":
-                self.autoencoders["db"] = network.network
 
-        self.log_summary("encoder", encoder)
-        self.log_summary("decoder", decoder_a)
-        self.log_summary("discriminator", self.autoencoders["da"])
+        ae_a = KerasModel(
+            inp,
+            self.networks["decoder_a"].network(self.networks["encoder"].network(inp)))
+        ae_b = KerasModel(
+            inp,
+            self.networks["decoder_b"].network(self.networks["encoder"].network(inp)))
+        self.add_predictors(ae_a, ae_b)
 
-        self.autoencoders["a"] = KerasModel(inp, decoder_a(encoder(inp)))
-        self.autoencoders["b"] = KerasModel(inp, decoder_b(encoder(inp)))
-
-        self.variables["a"] = self.define_variables(netG=self.autoencoders["a"])
-        self.variables["b"] = self.define_variables(netG=self.autoencoders["a"])
+        self.log_summary("encoder", self.networks["encoder"].network)
+        self.log_summary("decoder", self.networks["decoder_a"].network)
+        self.log_summary("discriminator", self.networks["discriminator_a"].network)
+        self.convert_multi_gpu()
+        self.build_loss_functions()
         logger.debug("Initialized model")
 
-    @staticmethod
-    def icnr_keras(shape, dtype=None):
-        """
-        Custom initializer for subpix upscaling
-        From https://github.com/kostyaev/ICNR
-        Note: upscale factor is fixed to 2, and the base initializer is fixed to random normal.
-        """
-        shape = list(shape)
-        scale = 2
-        initializer = tf.keras.initializers.RandomNormal(0, 0.02)
-
-        new_shape = shape[:3] + [int(shape[3] / (scale ** 2))]
-        var_x = initializer(new_shape, dtype)
-        var_x = tf.transpose(var_x, perm=[2, 0, 1, 3])
-        var_x = tf.image.resize_nearest_neighbor(var_x, size=(shape[0] * scale, shape[1] * scale))
-        var_x = tf.space_to_depth(var_x, block_size=scale)
-        var_x = tf.transpose(var_x, perm=[1, 2, 0, 3])
-        return var_x
+    def compile_predictors(self):
+        """ Predictors are not compiled for GAN """
+        pass
 
     def encoder(self):
         """ Build the GAN Encoder """
@@ -114,9 +91,9 @@ class Model(OriginalModel):
             upscale_kwargs = dict()
         else:
             upscale_block = upscale_ps
-            upscale_kwargs = {"initializer": self.icnr_keras}
+            upscale_kwargs = {"initializer": icnr_keras}
 
-        inp = Input(shape=(input_size, input_size, self.nc_g_inp))
+        inp = Input(shape=(input_size, input_size, self.num_chans_g_inp))
         var_x = Conv2D(64 // coef,
                        kernel_size=5,
                        use_bias=False,  # use_bias should be True
@@ -149,7 +126,7 @@ class Model(OriginalModel):
         activ_map_size = input_size
         use_norm = False if self.norm == 'none' else True
 
-        inp = Input(shape=(input_size, input_size, self.enc_nc_out))
+        inp = Input(shape=(input_size, input_size, self.enc_num_chans_out))
         var_x = inp
         var_x = upscale_block(var_x, 256 // coef, use_norm, norm=self.norm)
         var_x = upscale_block(var_x, 128 // coef, use_norm, norm=self.norm)
@@ -181,7 +158,7 @@ class Model(OriginalModel):
         activ_map_size = input_size
         use_norm = False if self.norm == 'none' else True
 
-        inp = Input(shape=(input_size, input_size, self.nc_d_inp))
+        inp = Input(shape=(input_size, input_size, self.num_chans_d_inp))
         var_x = conv_d_gan(inp, 64, False)
         var_x = conv_d_gan(var_x, 128, use_norm, norm=self.norm)
         var_x = conv_d_gan(var_x, 256, use_norm, norm=self.norm)
@@ -199,6 +176,22 @@ class Model(OriginalModel):
                      padding="same")(var_x)
         return KerasModel(inputs=[inp], outputs=out)
 
+    def build_loss_functions(self):
+        """ Build the loss functions """
+        loss_weights = {"w_D": self.config.get("GAN_2-2", "w_D"),
+                        "w_recon": self.config.get("GAN_2-2", "w_recon"),
+                        "w_edge": self.config.get("GAN_2-2", "w_edge"),
+                        "w_eyes": self.config.get("GAN_2-2", "w_eyes"),
+                        "w_pl": self.config.get("GAN_2-2", "w_pl")}
+        variables = {"a": self.define_variables(net_g=self.predictors["a"]),
+                     "b": self.define_variables(net_g=self.predictors["b"])}
+
+        loss = self.build_standard_loss(loss_weights, variables)
+        self.build_perceptual_loss(loss_weights, loss, variables)
+        self.build_optional_loss(loss, variables)
+        self.build_train_functions(loss, variables)
+        return loss
+
     def define_variables(self, net_g):
         """ Define the GAN Variables """
         variables = dict()
@@ -206,7 +199,6 @@ class Model(OriginalModel):
         fake_output = net_g.outputs[-1]
         alpha = Lambda(lambda var_x: var_x[:, :, :, :1])(fake_output)
         bgr = Lambda(lambda var_x: var_x[:, :, :, 1:])(fake_output)
-
         masked_fake_output = alpha * bgr + (1-alpha) * distorted_input
 
         variables["fn_generate"] = K.function([distorted_input], [masked_fake_output])
@@ -220,143 +212,76 @@ class Model(OriginalModel):
         variables["mask_eyes"] = Input(shape=self.image_shape)
         return variables
 
-    def build_train_functions(self, loss_weights=None, **loss_config):
-        assert loss_weights is not None, "loss weights are not provided."
+    def build_standard_loss(self, loss_weights, variables):
+        """ Build the standard loss functions """
+        loss = dict()
         # Adversarial loss
-        loss_DA, loss_adv_GA = adversarial_loss(self.autoencoders["da"],
-                                                self.variables["a"]["real"],
-                                                self.variables["a"]["fake_output"],
-                                                self.variables["a"]["distorted_input"],
-                                                loss_config["gan_training"],
-                                                **loss_weights)
-        loss_DB, loss_adv_GB = adversarial_loss(self.autoencoders["db"],
-                                                self.variables["b"]["real"],
-                                                self.variables["b"]["fake_output"],
-                                                self.variables["b"]["distorted_input"],
-                                                loss_config["gan_training"],
-                                                **loss_weights)
-
+        loss["da"], loss["adv_ga"] = adversarial_loss(self.networks["discriminator_a"],
+                                                      variables["a"]["real"],
+                                                      variables["a"]["fake_output"],
+                                                      variables["a"]["distorted_input"],
+                                                      self.config.get("GAN_2-2", "gan_training"),
+                                                      **loss_weights)
+        loss["db"], loss["adv_gb"] = adversarial_loss(self.networks["discriminator_b"],
+                                                      variables["b"]["real"],
+                                                      variables["b"]["fake_output"],
+                                                      variables["b"]["distorted_input"],
+                                                      self.config.get("GAN_2-2", "gan_training"),
+                                                      **loss_weights)
         # Reconstruction loss
-        loss_recon_GA = reconstruction_loss(self.variables["a"]["real"],
-                                            self.variables["a"]["fake_output"],
-                                            self.variables["a"]["mask_eyes"],
-                                            self.autoencoders["a"].outputs,
-                                            **loss_weights)
-        loss_recon_GB = reconstruction_loss(self.variables["b"]["real"],
-                                            self.variables["b"]["fake_output"],
-                                            self.variables["b"]["mask_eyes"],
-                                            self.autoencoders["b"].outputs,
-                                            **loss_weights)
-
+        loss["recon_ga"] = reconstruction_loss(variables["a"]["real"],
+                                               variables["a"]["fake_output"],
+                                               variables["a"]["mask_eyes"],
+                                               self.predictors["a"].outputs,
+                                               **loss_weights)
+        loss["recon_gb"] = reconstruction_loss(variables["b"]["real"],
+                                               variables["b"]["fake_output"],
+                                               variables["b"]["mask_eyes"],
+                                               self.predictors["b"].outputs,
+                                               **loss_weights)
         # Edge loss
-        loss_edge_GA = edge_loss(self.variables["a"]["real"],
-                                 self.variables["a"]["fake_output"],
-                                 self.variables["a"]["mask_eyes"],
-                                 **loss_weights)
-        loss_edge_GB = edge_loss(self.variables["b"]["real"],
-                                 self.variables["b"]["fake_output"],
-                                 self.variables["b"]["mask_eyes"],
-                                 **loss_weights)
+        loss["edge_ga"] = edge_loss(variables["a"]["real"],
+                                    variables["a"]["fake_output"],
+                                    variables["a"]["mask_eyes"],
+                                    **loss_weights)
+        loss["edge_gb"] = edge_loss(variables["b"]["real"],
+                                    variables["b"]["fake_output"],
+                                    variables["b"]["mask_eyes"],
+                                    **loss_weights)
 
-        if loss_config['use_PL']:
-            loss_pl_GA = perceptual_loss(self.variables["a"]["real"],
-                                         self.variables["a"]["fake_output"],
-                                         self.variables["a"]["distorted_input"],
-                                         self.variables["a"]["mask_eyes"],
-                                         self.vggface_feats, **loss_weights)
-            loss_pl_GB = perceptual_loss(self.variables["b"]["real"],
-                                         self.variables["b"]["fake_output"],
-                                         self.variables["b"]["distorted_input"],
-                                         self.variables["b"]["mask_eyes"],
-                                         self.vggface_feats, **loss_weights)
+        loss["ga"] = loss["adv_ga"] + loss["recon_ga"] + loss["edge_ga"]
+        loss["gb"] = loss["adv_gb"] + loss["recon_gb"] + loss["edge_gb"]
+        return loss
+
+    def build_perceptual_loss(self, loss_weights, loss, variables):
+        """ Build the perceptual loss function """
+        if self.config.get("GAN_2-2", "use_pl"):
+            # VGGFace ResNet50
+            vggface = VGGFace(include_top=False,
+                              model='resnet50',
+                              input_shape=(224, 224, 3))
+            self.build_pl_model(vggface, variables)
+            loss["pl_ga"] = perceptual_loss(variables["a"]["real"],
+                                            variables["a"]["fake_output"],
+                                            variables["a"]["distorted_input"],
+                                            variables["a"]["mask_eyes"],
+                                            variables["vggface_feats"],
+                                            **loss_weights)
+            loss["pl_gb"] = perceptual_loss(variables["b"]["real"],
+                                            variables["b"]["fake_output"],
+                                            variables["b"]["distorted_input"],
+                                            variables["b"]["mask_eyes"],
+                                            variables["vggface_feats"],
+                                            **loss_weights)
         else:
-            loss_pl_GA = loss_pl_GB = K.zeros(1)
+            loss["pl_ga"] = loss["pl_gb"] = K.zeros(1)
 
-        loss_GA = loss_adv_GA + loss_recon_GA + loss_edge_GA + loss_pl_GA
-        loss_GB = loss_adv_GB + loss_recon_GB + loss_edge_GB + loss_pl_GB
+        loss["ga"] += loss["pl_ga"]
+        loss["gb"] += loss["pl_gb"]
 
-        # The following losses are rather trivial, thus their weights are fixed.
-        # Cycle consistency loss
-        if loss_config['use_cyclic_loss']:
-            loss_GA += 10 * cyclic_loss(self.autoencoders["a"],
-                                        self.autoencoders["b"],
-                                        self.variables["a"]["real"])
-            loss_GB += 10 * cyclic_loss(self.autoencoders["b"],
-                                        self.autoencoders["a"],
-                                        self.variables["b"]["real"])
-
-        # Alpha mask loss
-        if not loss_config['use_mask_hinge_loss']:
-            loss_GA += 1e-2 * K.mean(K.abs(self.variables["a"]["alpha"]))
-            loss_GB += 1e-2 * K.mean(K.abs(self.variables["b"]["alpha"]))
-        else:
-            loss_GA += 0.1 * K.mean(
-                K.maximum(0., loss_config['m_mask'] - self.variables["a"]["alpha"]))
-            loss_GB += 0.1 * K.mean(
-                K.maximum(0., loss_config['m_mask'] - self.variables["b"]["alpha"]))
-
-        # Alpha mask total variation loss
-        loss_GA += 0.1 * K.mean(first_order(self.variables["a"]["alpha"], axis=1))
-        loss_GA += 0.1 * K.mean(first_order(self.variables["a"]["alpha"], axis=2))
-        loss_GB += 0.1 * K.mean(first_order(self.variables["b"]["alpha"], axis=1))
-        loss_GB += 0.1 * K.mean(first_order(self.variables["b"]["alpha"], axis=2))
-
-        # L2 weight decay
-        # https://github.com/keras-team/keras/issues/2662
-        for loss_tensor in self.autoencoders["a"].losses:
-            loss_GA += loss_tensor
-        for loss_tensor in self.autoencoders["b"].losses:
-            loss_GB += loss_tensor
-        for loss_tensor in self.autoencoders["da"].losses:
-            loss_DA += loss_tensor
-        for loss_tensor in self.autoencoders["db"].losses:
-            loss_DB += loss_tensor
-
-        weightsDA = self.autoencoders["da"].trainable_weights
-        weightsGA = self.autoencoders["a"].trainable_weights
-        weightsDB = self.autoencoders["db"].trainable_weights
-        weightsGB = self.autoencoders["b"].trainable_weights
-
-        # Define training functions
-        # Adam(...).get_updates(...)
-        training_updates = Adam(lr=self.lr_d*loss_config['lr_factor'],
-                                beta_1=0.5).get_updates(weightsDA, [], loss_DA)
-        self.netDA_train = K.function([self.variables["a"]["distorted_input"],
-                                       self.variables["a"]["real"]],
-                                      [loss_DA],
-                                      training_updates)
-        training_updates = Adam(lr=self.lr_g*loss_config['lr_factor'],
-                                beta_1=0.5).get_updates(weightsGA, [], loss_GA)
-        self.netGA_train = K.function([self.variables["a"]["distorted_input"],
-                                       self.variables["a"]["real"],
-                                       self.variables["a"]["mask_eyes"]],
-                                      [loss_GA,
-                                       loss_adv_GA,
-                                       loss_recon_GA,
-                                       loss_edge_GA,
-                                       loss_pl_GA],
-                                      training_updates)
-
-        training_updates = Adam(lr=self.lr_d*loss_config['lr_factor'],
-                                beta_1=0.5).get_updates(weightsDB, [], loss_DB)
-        self.netDB_train = K.function([self.variables["b"]["distorted_input"],
-                                       self.variables["b"]["real"]],
-                                      [loss_DB],
-                                      training_updates)
-        training_updates = Adam(lr=self.lr_g*loss_config['lr_factor'],
-                                beta_1=0.5).get_updates(weightsGB, [], loss_GB)
-        self.netGB_train = K.function([self.variables["b"]["distorted_input"],
-                                       self.variables["b"]["real"],
-                                       self.variables["b"]["mask_eyes"]],
-                                      [loss_GB,
-                                       loss_adv_GB,
-                                       loss_recon_GB,
-                                       loss_edge_GB,
-                                       loss_pl_GB],
-                                      training_updates)
-
-    def build_pl_model(self, vggface_model, before_activ=False):
-        # Define Perceptual Loss Model
+    def build_pl_model(self, vggface_model, variables):
+        """ Define Perceptual Loss Model """
+        before_activ = self.config.get("GAN_2-2", "pl_before_activ")
         vggface_model.trainable = False
         if not before_activ:
             out_size112 = vggface_model.layers[1].output
@@ -368,59 +293,129 @@ class Model(OriginalModel):
             out_size55 = vggface_model.layers[35].output
             out_size28 = vggface_model.layers[77].output
             out_size7 = vggface_model.layers[-3].output
-        self.vggface_feats = KerasModel(vggface_model.input,
-                                        [out_size112, out_size55, out_size28, out_size7])
-        self.vggface_feats.trainable = False
+        variables["vggface_feats"] = KerasModel(vggface_model.input,
+                                                [out_size112, out_size55, out_size28, out_size7])
+        variables["vggface_feats"].trainable = False
 
-    def load_weights(self, path="./models"):
-        try:
-            self.encoder.load_weights(f"{path}/encoder.h5")
-            self.decoder_A.load_weights(f"{path}/decoder_A.h5")
-            self.decoder_B.load_weights(f"{path}/decoder_B.h5")
-            self.autoencoders["da"].load_weights(f"{path}/netDA.h5")
-            self.autoencoders["db"].load_weights(f"{path}/netDB.h5")
-            print("Model weights files are successfully loaded.")
-        except:
-            print("Error occurs during loading weights files.")
-            pass
+    def build_optional_loss(self, loss, variables):
+        """ Add the optional loss functions
 
-    def save_weights(self, path="./models"):
-        try:
-            self.encoder.save_weights(f"{path}/encoder.h5")
-            self.decoder_A.save_weights(f"{path}/decoder_A.h5")
-            self.decoder_B.save_weights(f"{path}/decoder_B.h5")
-            self.autoencoders["da"].save_weights(f"{path}/netDA.h5")
-            self.autoencoders["db"].save_weights(f"{path}/netDB.h5")
-            print(f"Model weights files have been saved to {path}.")
-        except:
-            print("Error occurs during saving weights.")
-            pass
+            The following losses are rather trivial, thus their weights are fixed. """
+        # Cycle consistency loss
+        if self.config.get("GAN_2-2", "use_cyclic_loss"):
+            loss["ga"] += 10 * cyclic_loss(self.predictors["a"],
+                                           self.predictors["b"],
+                                           variables["a"]["real"])
+            loss["gb"] += 10 * cyclic_loss(self.predictors["b"],
+                                           self.predictors["a"],
+                                           variables["b"]["real"])
+        # Alpha mask loss
+        if self.config.get("GAN_2-2", "use_mask_hinge_loss"):
+            m_mask = self.config.get("GAN_2-2", "m_mask")
+            loss["ga"] += 0.1 * K.mean(K.maximum(0., m_mask - variables["a"]["alpha"]))
+            loss["gb"] += 0.1 * K.mean(K.maximum(0., m_mask - variables["b"]["alpha"]))
+        else:
+            loss["ga"] += 1e-2 * K.mean(K.abs(variables["a"]["alpha"]))
+            loss["gb"] += 1e-2 * K.mean(K.abs(variables["b"]["alpha"]))
+        # Alpha mask total variation loss
+        loss["ga"] += 0.1 * K.mean(first_order(variables["a"]["alpha"], axis=1))
+        loss["ga"] += 0.1 * K.mean(first_order(variables["a"]["alpha"], axis=2))
+        loss["gb"] += 0.1 * K.mean(first_order(variables["b"]["alpha"], axis=1))
+        loss["gb"] += 0.1 * K.mean(first_order(variables["b"]["alpha"], axis=2))
+        # L2 weight decay
+        # https://github.com/keras-team/keras/issues/2662
+        for loss_tensor in self.predictors["a"].losses:
+            loss["ga"] += loss_tensor
+        for loss_tensor in self.predictors["b"].losses:
+            loss["gb"] += loss_tensor
+        for loss_tensor in self.networks["discriminator_a"].network.losses:
+            loss["da"] += loss_tensor
+        for loss_tensor in self.networks["discriminator_b"].network.losses:
+            loss["db"] += loss_tensor
 
-    def train_one_batch_G(self, data_A, data_B):
-        if len(data_A) == 4 and len(data_B) == 4:
-            _, warped_A, target_A, bm_eyes_A = data_A
-            _, warped_B, target_B, bm_eyes_B = data_B
-        elif len(data_A) == 3 and len(data_B) == 3:
-            warped_A, target_A, bm_eyes_A = data_A
-            warped_B, target_B, bm_eyes_B = data_B
+    def build_train_functions(self, loss, variables):
+        """ Define training functions """
+        # Adam(...).get_updates(...)
+        weights = self.get_trainable_weights()
+        optimizers = self.build_optimizers()
+        training_updates = optimizers["discriminator"].get_updates(weights["da"], [], loss["da"])
+        self.loss_funcs["da"] = K.function([variables["a"]["distorted_input"],
+                                            variables["a"]["real"]],
+                                           [loss["da"]],
+                                           training_updates)
+        training_updates = optimizers["generator"].get_updates(weights["ga"], [], loss["ga"])
+        self.loss_funcs["ga"] = K.function([variables["a"]["distorted_input"],
+                                            variables["a"]["real"],
+                                            variables["a"]["mask_eyes"]],
+                                           [loss["ga"],
+                                            loss["adv_ga"],
+                                            loss["recon_ga"],
+                                            loss["edge_ga"],
+                                            loss["pl_ga"]],
+                                           training_updates)
+
+        training_updates = optimizers["discriminator"].get_updates(weights["db"], [], loss["db"])
+        self.loss_funcs["db"] = K.function([variables["b"]["distorted_input"],
+                                            variables["b"]["real"]],
+                                           [loss["db"]],
+                                           training_updates)
+        training_updates = optimizers["generator"].get_updates(weights["gb"], [], loss["gb"])
+        self.loss_funcs["gb"] = K.function([variables["b"]["distorted_input"],
+                                            variables["b"]["real"],
+                                            variables["b"]["mask_eyes"]],
+                                           [loss["gb"],
+                                            loss["adv_gb"],
+                                            loss["recon_gb"],
+                                            loss["edge_gb"],
+                                            loss["pl_gb"]],
+                                           training_updates)
+
+    def get_trainable_weights(self):
+        """ Obtain the trainable weights """
+        weights = dict()
+        weights["da"] = self.networks["discriminator_a"].network.trainable_weights
+        weights["ga"] = self.predictors["a"].trainable_weights
+        weights["db"] = self.networks["discriminator_b"].network.trainable_weights
+        weights["gb"] = self.predictors["b"].trainable_weights
+        return weights
+
+    def build_optimizers(self):
+        """ Build the optimizers """
+        optimizers = dict()
+        lr_factor = self.config.get("GAN_2-2", "lr_factor")
+        learning_rate_d = 2e-4 * lr_factor
+        learning_rate_g = 1e-4 * lr_factor
+        optimizers["discriminator"] = Adam(lr=learning_rate_d, beta_1=0.5)
+        optimizers["generator"] = Adam(lr=learning_rate_g, beta_1=0.5)
+        return optimizers
+
+    def train_one_batch_g(self, data_a, data_b):
+        """ Train one generator batch """
+        if len(data_a) == 4 and len(data_b) == 4:
+            _, warped_a, target_a, bm_eyes_a = data_a
+            _, warped_b, target_b, bm_eyes_b = data_b
+        elif len(data_a) == 3 and len(data_b) == 3:
+            warped_a, target_a, bm_eyes_a = data_a
+            warped_b, target_b, bm_eyes_b = data_b
         else:
             raise ValueError("Something's wrong with the input data generator.")
-        errGA = self.netGA_train([warped_A, target_A, bm_eyes_A])
-        errGB = self.netGB_train([warped_B, target_B, bm_eyes_B])
-        return errGA, errGB
+        err_ga = self.loss_funcs["ga"]([warped_a, target_a, bm_eyes_a])
+        err_gb = self.loss_funcs["gb"]([warped_b, target_b, bm_eyes_b])
+        return err_ga, err_gb
 
-    def train_one_batch_D(self, data_A, data_B):
-        if len(data_A) == 4 and len(data_B) == 4:
-            _, warped_A, target_A, _ = data_A
-            _, warped_B, target_B, _ = data_B
-        elif len(data_A) == 3 and len(data_B) == 3:
-            warped_A, target_A, _ = data_A
-            warped_B, target_B, _ = data_B
+    def train_one_batch_d(self, data_a, data_b):
+        """ Train one discriminator batch """
+        if len(data_a) == 4 and len(data_b) == 4:
+            _, warped_a, target_a, _ = data_a
+            _, warped_b, target_b, _ = data_b
+        elif len(data_a) == 3 and len(data_b) == 3:
+            warped_a, target_a, _ = data_a
+            warped_b, target_b, _ = data_b
         else:
             raise ValueError("Something's wrong with the input data generator.")
-        errDA = self.netDA_train([warped_A, target_A])
-        errDB = self.netDB_train([warped_B, target_B])
-        return errDA, errDB
+        err_da = self.loss_funcs["da"]([warped_a, target_a])
+        err_db = self.loss_funcs["db"]([warped_b, target_b])
+        return err_da, err_db
 
     def transform_a2b(self, img):
         """ Transform A to B """

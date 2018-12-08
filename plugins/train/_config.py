@@ -80,6 +80,7 @@ class Config(FaceswapConfig):
                          info="GAN v2.2. Model (Adapted from "
                               "https://github.com/shaoanlu/faceswap-GAN)")
 
+        # Main Options
         self.add_item(
             section=section, title="resolution", datatype=int, default=64,
             info="Resolution (in pixels) of the image to train on.\n"
@@ -99,5 +100,44 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="model_capacity", datatype=str, default="standard",
             info="Capacity of the model.\nChoose from: 'standard', 'light'")
+        # Loss Config
+        self.add_item(
+            section=section, title="gan_training", datatype=str, default="mixup_LSGAN",
+            info="GAN Training method.\nChoose from: 'mixup_LSGAN' or 'relativistic_avg_LSGAN'")
+        self.add_item(
+            section=section, title="use_pl", datatype=bool, default=False,
+            info="Use Perceptual Loss.\nChoose from: 'True', 'False'")
+        self.add_item(
+            section=section, title="pl_before_activ", datatype=bool, default=False,
+            info="Perceptual Loss before activation.\nChoose from: 'True', 'False'")
+        self.add_item(
+            section=section, title="use_mask_hinge_loss", datatype=bool, default=False,
+            info="Use Mask Hinge Loss.\nChoose from: 'True', 'False'")
+        self.add_item(
+            section=section, title="m_mask", datatype=float, default=0.0,
+            info="M Mask\nSpecify a number")
+        self.add_item(
+            section=section, title="lr_factor", datatype=float, default=1.0,
+            info="Learning Rate Factor for Optimizer\nSpecify a number")
+        self.add_item(
+            section=section, title="use_cyclic_loss", datatype=bool, default=False,
+            info="Use Cycle Consistency Loss.\nChoose from: 'True', 'False'")
+        # Loss function weights configuration
+        self.add_item(
+            section=section, title="w_D", datatype=float, default=0.1,
+            info="Discriminator Loss weights.\nSpecify a number")
+        self.add_item(
+            section=section, title="w_recon", datatype=float, default=1.0,
+            info="L1 Reconstuction Loss weights.\nSpecify a number")
+        self.add_item(
+            section=section, title="w_edge", datatype=float, default=1.0,
+            info="Edge Loss weights.\nSpecify a number")
+        self.add_item(
+            section=section, title="w_eyes", datatype=float, default=30.0,
+            info="Reconstruction and Edge loss on eyes area.\nSpecify a number")
+        self.add_item(
+            section=section, title="w_pl", datatype=str, default="(0.01, 0.1, 0.3, 0.1)",
+            info=("Perceptual Loss weights.\n"
+                  "Specify a list of 4 numbers in brackets. eg: (0.003, 0.03, 0.3, 0.3)"))
 
         logger.debug("Set defaults: %s", self.defaults)
