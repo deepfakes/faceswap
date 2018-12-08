@@ -40,11 +40,13 @@ class TrainingDataGenerator():
         self.batchsize = batchsize
         q_name = str(uuid.uuid4())
         q_size = batchsize * 8
-        queue_manager.add_queue(q_name, maxsize=q_size)
-        thread = MultiThread(self.load_batches, images, q_name, side, do_shuffle)
-        thread.start()
+        # Don't use a multiprocessing queue because sometimes the MP Manager
+        # borks on numpy arrays
+        queue_manager.add_queue(q_name, maxsize=q_size, multiprocessing_queue=False)
+        load_thread = MultiThread(self.load_batches, images, q_name, side, do_shuffle)
+        load_thread.start()
         logger.debug("Batching to queue: (side: '%s', queue: '%s')", side, q_name)
-        return self.minibatch(q_name)
+        return self.minibatch(q_name, load_thread)
 
     def load_batches(self, images, q_name, side, do_shuffle=True):
         """ Load the epoch, warped images and target images to queue """
@@ -65,7 +67,6 @@ class TrainingDataGenerator():
         logger.debug("Finished batching: (epoch: %s, q_name: '%s', side: '%s')",
                      epoch, q_name, side)
 
-    # TODO Check this raises error properly
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
             the total number of images """
@@ -75,12 +76,15 @@ class TrainingDataGenerator():
                "batch-size: {}".format(length, self.batchsize))
         assert length >= self.batchsize, msg
 
-    def minibatch(self, q_name):
+    def minibatch(self, q_name, load_thread):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
         logger.debug("Launching minibatch generator for queue: '%s'", q_name)
         queue = queue_manager.get_queue(q_name)
         while True:
+            if load_thread.has_error:
+                logger.debug("Thread error detected")
+                break
             batch = list()
             for _ in range(self.batchsize):
                 epoch, images = queue.get()
@@ -92,6 +96,7 @@ class TrainingDataGenerator():
             logger.trace("Yielding batch: (size: %s, queue:  '%s'", len(batch), q_name)
             yield batch
         logger.debug("Finished minibatch generator for queue: '%s'", q_name)
+        load_thread.join()
 
     def process_face(self, filename, side):
         """ Load an image and perform transformation and warping """
@@ -122,7 +127,6 @@ class TrainingDataGenerator():
         logger.trace("Processed face: (filename: '%s', side: '%s'", filename, side)
         return retval
 
-    # TODO Check exception raises
     @staticmethod
     def get_landmarks(filename, side, landmarks):
         """ Return the landmarks for this face and the closest landmark
