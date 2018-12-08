@@ -15,7 +15,7 @@ import numpy as np
 import dlib
 
 from lib.faces_detect import DetectedFace
-from lib.train import TrainingDataGenerator
+from lib.training_data import TrainingDataGenerator
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -189,6 +189,7 @@ def camel_case_split(identifier):
         ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)",
         identifier)
     return [m.group(0) for m in matches]
+
 
 # TODO Move and fix this
 class Timelapse:

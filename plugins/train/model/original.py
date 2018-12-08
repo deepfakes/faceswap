@@ -7,7 +7,7 @@ from keras.layers import Dense, Flatten, Input, Reshape
 
 from keras.models import Model as KerasModel
 
-from lib.train.nn_blocks import conv, Conv2D, upscale
+from lib.model.nn_blocks import conv, Conv2D, upscale
 from ._base import ModelBase, logger
 
 

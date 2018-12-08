@@ -66,6 +66,8 @@ class InstanceNormalization(Layer):
                  beta_constraint=None,
                  gamma_constraint=None,
                  **kwargs):
+        self.beta = None
+        self.gamma = None
         super(InstanceNormalization, self).__init__(**kwargs)
         self.supports_masking = True
         self.axis = axis
@@ -158,6 +160,9 @@ get_custom_objects().update({'InstanceNormalization': InstanceNormalization})
 
 
 class GroupNormalization(Layer):
+    """ Group Normalization
+        from: shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
+
     def __init__(self, axis=-1,
                  gamma_init='one', beta_init='zero',
                  gamma_regularizer=None, beta_regularizer=None,
@@ -165,6 +170,8 @@ class GroupNormalization(Layer):
                  group=32,
                  data_format=None,
                  **kwargs):
+        self.beta = None
+        self.gamma = None
         super(GroupNormalization, self).__init__(**kwargs)
 
         self.axis = to_list(axis)
@@ -208,39 +215,47 @@ class GroupNormalization(Layer):
 
         if len(input_shape) == 4:
             if self.data_format == 'channels_last':
-                batch_size, h, w, c = input_shape
+                batch_size, height, width, channels = input_shape
                 if batch_size is None:
                     batch_size = -1
 
-                if c < self.group:
+                if channels < self.group:
                     raise ValueError('Input channels should be larger than group size' +
-                                     '; Received input channels: ' + str(c) +
+                                     '; Received input channels: ' + str(channels) +
                                      '; Group size: ' + str(self.group))
 
-                x = K.reshape(inputs, (batch_size, h, w, self.group, c // self.group))
-                mean = K.mean(x, axis=[1, 2, 4], keepdims=True)
-                std = K.sqrt(K.var(x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
-                x = (x - mean) / std
+                var_x = K.reshape(inputs, (batch_size,
+                                           height,
+                                           width,
+                                           self.group,
+                                           channels // self.group))
+                mean = K.mean(var_x, axis=[1, 2, 4], keepdims=True)
+                std = K.sqrt(K.var(var_x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
+                var_x = (var_x - mean) / std
 
-                x = K.reshape(x, (batch_size, h, w, c))
-                return self.gamma * x + self.beta
+                var_x = K.reshape(var_x, (batch_size, height, width, channels))
+                retval = self.gamma * var_x + self.beta
             elif self.data_format == 'channels_first':
-                batch_size, c, h, w = input_shape
+                batch_size, channels, height, width = input_shape
                 if batch_size is None:
                     batch_size = -1
 
-                if c < self.group:
+                if channels < self.group:
                     raise ValueError('Input channels should be larger than group size' +
-                                     '; Received input channels: ' + str(c) +
+                                     '; Received input channels: ' + str(channels) +
                                      '; Group size: ' + str(self.group))
 
-                x = K.reshape(inputs, (batch_size, self.group, c // self.group, h, w))
-                mean = K.mean(x, axis=[2, 3, 4], keepdims=True)
-                std = K.sqrt(K.var(x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
-                x = (x - mean) / std
+                var_x = K.reshape(inputs, (batch_size,
+                                           self.group,
+                                           channels // self.group,
+                                           height,
+                                           width))
+                mean = K.mean(var_x, axis=[2, 3, 4], keepdims=True)
+                std = K.sqrt(K.var(var_x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
+                var_x = (var_x - mean) / std
 
-                x = K.reshape(x, (batch_size, c, h, w))
-                return self.gamma * x + self.beta
+                var_x = K.reshape(var_x, (batch_size, channels, height, width))
+                retval = self.gamma * var_x + self.beta
 
         elif len(input_shape) == 2:
             reduction_axes = list(range(0, len(input_shape)))
@@ -251,9 +266,11 @@ class GroupNormalization(Layer):
 
             mean = K.mean(inputs, keepdims=True)
             std = K.sqrt(K.var(inputs, keepdims=True) + self.epsilon)
-            x = (inputs - mean) / std
+            var_x = (inputs - mean) / std
 
-            return self.gamma * x + self.beta
+            retval = self.gamma * var_x + self.beta
+        return retval
+
 
     def get_config(self):
         config = {'epsilon': self.epsilon,

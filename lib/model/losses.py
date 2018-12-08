@@ -323,7 +323,7 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
 # <<< END: from Shoanlu GAN >>> #
 
 
-class PenalizedLoss():
+class PenalizedLoss():  # pylint: disable=too-few-public-methods
     """ Penalized Loss
         from: https://github.com/dfaker/df """
     def __init__(self, mask, loss_func, mask_prop=1.0):
@@ -333,7 +333,7 @@ class PenalizedLoss():
         self.mask_as_k_inv_prop = 1-mask_prop
 
     def __call__(self, y_true, y_pred):
-        # pylint: disable=C0103
+        # pylint: disable=invalid-name
         tro, tgo, tbo = tf.split(y_true, 3, 3)
         pro, pgo, pbo = tf.split(y_pred, 3, 3)
 

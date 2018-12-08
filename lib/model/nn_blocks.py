@@ -15,8 +15,7 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 
-from .layers import Scale
-from .pixel_shuffler import PixelShuffler
+from .layers import PixelShuffler, Scale
 from .normalization import GroupNormalization, InstanceNormalization
 
 

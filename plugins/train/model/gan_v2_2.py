@@ -8,10 +8,10 @@ from keras.layers import concatenate, Conv2D, Dense, Flatten, Input, K, Lambda, 
 from keras.optimizers import Adam
 from keras_vggface.vggface import VGGFace
 
-from lib.train.initializers import icnr_keras
-from lib.train.losses import (adversarial_loss, cyclic_loss, edge_loss, first_order,
+from lib.model.initializers import icnr_keras
+from lib.model.losses import (adversarial_loss, cyclic_loss, edge_loss, first_order,
                               perceptual_loss, reconstruction_loss)
-from lib.train.nn_blocks import (conv_gan, conv_d_gan, self_attn_block,
+from lib.model.nn_blocks import (conv_gan, conv_d_gan, self_attn_block,
                                  res_block_gan, upscale_nn, upscale_ps)
 
 from .original import logger, Model as OriginalModel

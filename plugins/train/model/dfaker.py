@@ -7,8 +7,8 @@ from keras.layers import Input
 from keras.models import Model as KerasModel
 from keras.optimizers import Adam
 
-from lib.train.losses import DSSIMObjective, PenalizedLoss
-from lib.train.nn_blocks import Conv2D, res_block, upscale
+from lib.model.losses import DSSIMObjective, PenalizedLoss
+from lib.model.nn_blocks import Conv2D, res_block, upscale
 
 from .original import logger, Model as OriginalModel
 

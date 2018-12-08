@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from lib.train import TrainingDataGenerator, stack_images
+from lib.training_data import TrainingDataGenerator, stack_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
