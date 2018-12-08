@@ -33,62 +33,52 @@ class Model(OriginalModel):
         """ Initialize IAE model """
         logger.debug("Initializing model")
         inp = Input(shape=self.image_shape)
-        for network in self.networks:
-            if network.type == "encoder":
-                encoder = network.network
-            elif network.type == "decoder":
-                decoder = network.network
-            elif network.type == "inter" and network.side == "A":
-                inter_a = network.network
-            elif network.type == "inter" and network.side == "B":
-                inter_b = network.network
-            elif network.type == "inter" and not network.side:
-                inter_both = network.network
+        decoder = self.networks["decoder"].network
+        encoder = self.networks["encoder"].network
+        inter_a = self.networks["inter_a"].network
+        inter_b = self.networks["inter_b"].network
+        inter_both = self.networks["inter"].network
 
-        output_a = decoder(Concatenate()([inter_a(encoder(inp)),
-                                          inter_both(encoder(inp))]))
-        output_b = decoder(Concatenate()([inter_b(encoder(inp)),
-                                          inter_both(encoder(inp))]))
-        self.autoencoders["a"] = KerasModel(inp, output_a)
-        self.autoencoders["b"] = KerasModel(inp, output_b)
+        ae_a = decoder(Concatenate()([inter_a(encoder(inp)),
+                                      inter_both(encoder(inp))]))
+        ae_b = decoder(Concatenate()([inter_b(encoder(inp)),
+                                      inter_both(encoder(inp))]))
+        self.add_predictors(KerasModel(inp, ae_a), KerasModel(inp, ae_b))
 
         self.log_summary("encoder", encoder)
         self.log_summary("inter", inter_a)
         self.log_summary("decoder", decoder)
 
-        self.compile_autoencoders()
+        self.compile_predictors()
         logger.debug("Initialized model")
 
     def encoder(self):
         """ Encoder Network """
         input_ = Input(shape=self.image_shape)
-        inp = input_
-        inp = conv(128)(inp)
-        inp = conv(256)(inp)
-        inp = conv(512)(inp)
-        inp = conv(1024)(inp)
-        inp = Flatten()(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = conv(128)(var_x)
+        var_x = conv(256)(var_x)
+        var_x = conv(512)(var_x)
+        var_x = conv(1024)(var_x)
+        var_x = Flatten()(var_x)
+        return KerasModel(input_, var_x)
 
     def intermediate(self):
         """ Intermediate Network """
         input_ = Input(shape=(None, 4 * 4 * 1024))
-        inp = input_
-        inp = Dense(self.encoder_dim)(inp)
-        inp = Dense(4 * 4 * int(self.encoder_dim/2))(inp)
-        inp = Reshape((4, 4, int(self.encoder_dim/2)))(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = Dense(self.encoder_dim)(var_x)
+        var_x = Dense(4 * 4 * int(self.encoder_dim/2))(var_x)
+        var_x = Reshape((4, 4, int(self.encoder_dim/2)))(var_x)
+        return KerasModel(input_, var_x)
 
     def decoder(self):
         """ Decoder Network """
         input_ = Input(shape=(4, 4, self.encoder_dim))
-        inp = input_
-        inp = upscale(512)(inp)
-        inp = upscale(256)(inp)
-        inp = upscale(128)(inp)
-        inp = upscale(64)(inp)
-        inp = Conv2D(3,
-                     kernel_size=5,
-                     padding='same',
-                     activation='sigmoid')(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = upscale(512)(var_x)
+        var_x = upscale(256)(var_x)
+        var_x = upscale(128)(var_x)
+        var_x = upscale(64)(var_x)
+        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        return KerasModel(input_, var_x)

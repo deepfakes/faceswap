@@ -32,27 +32,24 @@ class Model(OriginalModel):
     def encoder(self):
         """ Original HiRes Encoder """
         input_ = Input(shape=self.image_shape)
-        inp = input_
-        inp = conv(128)(inp)
-        inp = conv_sep(256)(inp)
-        inp = conv(512)(inp)
-        inp = conv_sep(1024)(inp)
-        inp = Dense(self.encoder_dim)(Flatten()(inp))
-        inp = Dense(8 * 8 * 512)(inp)
-        inp = Reshape((8, 8, 512))(inp)
-        inp = upscale(512)(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = conv(128)(var_x)
+        var_x = conv_sep(256)(var_x)
+        var_x = conv(512)(var_x)
+        var_x = conv_sep(1024)(var_x)
+        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
+        var_x = Dense(8 * 8 * 512)(var_x)
+        var_x = Reshape((8, 8, 512))(var_x)
+        var_x = upscale(512)(var_x)
+        return KerasModel(input_, var_x)
 
     @staticmethod
     def decoder():
         """ Original HiRes Encoder """
         input_ = Input(shape=(16, 16, 512))
-        inp = input_
-        inp = upscale(384)(inp)
-        inp = upscale(256-32)(inp)
-        inp = upscale(128)(inp)
-        inp = Conv2D(3,
-                     kernel_size=5,
-                     padding='same',
-                     activation='sigmoid')(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = upscale(384)(var_x)
+        var_x = upscale(256-32)(var_x)
+        var_x = upscale(128)(var_x)
+        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        return KerasModel(input_, var_x)

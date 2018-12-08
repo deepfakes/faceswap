@@ -31,12 +31,12 @@ class Model(OriginalModel):
         """ Encoder Network
             1 layer fewer for lowmem """
         input_ = Input(shape=self.image_shape)
-        inp = input_
-        inp = conv(128)(inp)
-        inp = conv(256)(inp)
-        inp = conv(512)(inp)
-        inp = Dense(self.encoder_dim)(Flatten()(inp))
-        inp = Dense(4 * 4 * 1024)(inp)
-        inp = Reshape((4, 4, 1024))(inp)
-        inp = upscale(512)(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = conv(128)(var_x)
+        var_x = conv(256)(var_x)
+        var_x = conv(512)(var_x)
+        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
+        var_x = Dense(4 * 4 * 1024)(var_x)
+        var_x = Reshape((4, 4, 1024))(var_x)
+        var_x = upscale(512)(var_x)
+        return KerasModel(input_, var_x)

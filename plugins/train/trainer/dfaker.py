@@ -55,10 +55,10 @@ class Trainer(OriginalTrainer):
         epoch, warped_a, target_a, mask_a = next(self.images_a)
         epoch, warped_b, target_b, mask_b = next(self.images_b)
 
-        loss_a = self.model.autoencoders["a"].train_on_batch(
+        loss_a = self.model.predictors["a"].train_on_batch(
             [warped_a, mask_a],
             [target_a, mask_a])
-        loss_b = self.model.autoencoders["b"].train_on_batch(
+        loss_b = self.model.predictors["b"].train_on_batch(
             [warped_b, mask_b],
             [target_b, mask_b])
 
@@ -94,11 +94,11 @@ class Trainer(OriginalTrainer):
 
         zmask = np.zeros((test_a.shape[0], 128, 128, 1), float)
 
-        pred_a_a, _ = self.model.autoencoders["a"].predict([test_a_i, zmask])
-        pred_b_a, _ = self.model.autoencoders["b"].predict([test_a_i, zmask])
+        pred_a_a, _ = self.model.predictors["a"].predict([test_a_i, zmask])
+        pred_b_a, _ = self.model.predictors["b"].predict([test_a_i, zmask])
 
-        pred_a_b, _ = self.model.autoencoders["a"].predict([test_b_i, zmask])
-        pred_b_b, _ = self.model.autoencoders["b"].predict([test_b_i, zmask])
+        pred_a_b, _ = self.model.predictors["a"].predict([test_b_i, zmask])
+        pred_b_b, _ = self.model.predictors["b"].predict([test_b_i, zmask])
 
         pred_a_a = pred_a_a[0:18, :, :, :3]
         pred_a_b = pred_a_b[0:18, :, :, :3]

@@ -36,47 +36,42 @@ class Model(ModelBase):
         """ Initialize original model """
         logger.debug("Initializing model")
         inp = Input(shape=self.image_shape)
-        for network in self.networks:
-            if network.type == "encoder":
-                encoder = network.network
-            elif network.type == "decoder" and network.side == "A":
-                decoder_a = network.network
-            elif network.type == "decoder" and network.side == "B":
-                decoder_b = network.network
 
-        self.autoencoders["a"] = KerasModel(inp, decoder_a(encoder(inp)))
-        self.autoencoders["b"] = KerasModel(inp, decoder_b(encoder(inp)))
+        ae_a = KerasModel(
+            inp,
+            self.networks["decoder_a"].network(self.networks["encoder"].network(inp)))
+        ae_b = KerasModel(
+            inp,
+            self.networks["decoder_b"].network(self.networks["encoder"].network(inp)))
+        self.add_predictors(ae_a, ae_b)
 
-        self.log_summary("encoder", encoder)
-        self.log_summary("decoder", decoder_a)
+        self.log_summary("encoder", self.networks["encoder"].network)
+        self.log_summary("decoder", self.networks["decoder_a"].network)
 
-        self.compile_autoencoders()
+        self.compile_predictors()
         logger.debug("Initialized model")
 
     def encoder(self):
         """ Encoder Network """
         input_ = Input(shape=self.image_shape)
-        inp = input_
-        inp = conv(128)(inp)
-        inp = conv(256)(inp)
-        inp = conv(512)(inp)
-        inp = conv(1024)(inp)
-        inp = Dense(self.encoder_dim)(Flatten()(inp))
-        inp = Dense(4 * 4 * 1024)(inp)
-        inp = Reshape((4, 4, 1024))(inp)
-        inp = upscale(512)(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = conv(128)(var_x)
+        var_x = conv(256)(var_x)
+        var_x = conv(512)(var_x)
+        var_x = conv(1024)(var_x)
+        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
+        var_x = Dense(4 * 4 * 1024)(var_x)
+        var_x = Reshape((4, 4, 1024))(var_x)
+        var_x = upscale(512)(var_x)
+        return KerasModel(input_, var_x)
 
     @staticmethod
     def decoder():
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
-        inp = input_
-        inp = upscale(256)(inp)
-        inp = upscale(128)(inp)
-        inp = upscale(64)(inp)
-        inp = Conv2D(3,
-                     kernel_size=5,
-                     padding='same',
-                     activation='sigmoid')(inp)
-        return KerasModel(input_, inp)
+        var_x = input_
+        var_x = upscale(256)(var_x)
+        var_x = upscale(128)(var_x)
+        var_x = upscale(64)(var_x)
+        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        return KerasModel(input_, var_x)

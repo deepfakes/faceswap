@@ -235,7 +235,6 @@ class Train():
                     break
                 if keypress.kbhit():
                     key = keypress.getch()
-                    logger.debug("Input received: %s", key)
                     if key in ("\n", "\r"):
                         logger.debug("Exit requested")
                         break

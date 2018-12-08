@@ -6,9 +6,8 @@
 from keras.layers import Input
 from keras.models import Model as KerasModel
 from keras.optimizers import Adam
-from keras.utils import multi_gpu_model
 
-from lib.train import DSSIMObjective, PenalizedLoss
+from lib.train.losses import DSSIMObjective, PenalizedLoss
 from lib.train.nn_blocks import Conv2D, res_block, upscale
 
 from .original import logger, Model as OriginalModel
@@ -41,22 +40,20 @@ class Model(OriginalModel):
         mask1 = Input(shape=(64*2, 64*2, 1))
         inp2 = Input(shape=self.image_shape)
         mask2 = Input(shape=(64*2, 64*2, 1))
-        for network in self.networks:
-            if network.type == "encoder":
-                encoder = network.network
-            elif network.type == "decoder" and network.side == "A":
-                decoder_a = network.network
-            elif network.type == "decoder" and network.side == "B":
-                decoder_b = network.network
 
-        self.log_summary("encoder", encoder)
-        self.log_summary("decoder", decoder_a)
+        ae_a = KerasModel(
+            [inp1, mask1],
+            self.networks["decoder_a"].network(self.networks["encoder"].network(inp1)))
+        ae_b = KerasModel(
+            [inp2, mask2],
+            self.networks["decoder_b"].network(self.networks["encoder"].network(inp2)))
 
-        self.autoencoders["a"] = KerasModel([inp1, mask1],
-                                            decoder_a(encoder(inp1)))
-        self.autoencoders["b"] = KerasModel([inp2, mask2],
-                                            decoder_b(encoder(inp2)))
-        self.compile_autoencoders(mask1=mask1, mask2=mask2)
+        self.add_predictors(ae_a, ae_b)
+
+        self.log_summary("encoder", self.networks["encoder"].network)
+        self.log_summary("decoder", self.networks["decoder_a"].network)
+
+        self.compile_predictors(mask1=mask1, mask2=mask2)
         logger.debug("Initialized model")
 
     def set_training_data(self):
@@ -68,22 +65,17 @@ class Model(OriginalModel):
         self.training_opts["use_alignments"] = True
         logger.debug("Set training data: %s", self.training_opts)
 
-    def compile_autoencoders(self, *args, **kwargs):
-        """ Compile the autoencoders """
-        logger.debug("Compiling Autoencoders")
+    def compile_predictors(self, *args, **kwargs):
+        """ Compile the predictors """
+        logger.debug("Compiling Predictors")
+        self.convert_multi_gpu()
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        if self.gpus > 1:
-            for acr in self.autoencoders.keys():
-                autoencoder = multi_gpu_model(self.autoencoders[acr],
-                                              self.gpus)
-                self.autoencoders[acr] = autoencoder
-
-        for key, autoencoder in self.autoencoders.items():
-            mask = kwargs["mask1"] if key == "a" else kwargs["mask2"]
-            autoencoder.compile(optimizer=optimizer,
-                                loss=[PenalizedLoss(mask, DSSIMObjective()),
-                                      'mse'])
-        logger.debug("Compiled Autoencoders")
+        for side, model in self.predictors.items():
+            mask = kwargs["mask1"] if side == "a" else kwargs["mask2"]
+            model.compile(optimizer=optimizer,
+                          loss=[PenalizedLoss(mask, DSSIMObjective()),
+                                "mse"])
+        logger.debug("Compiled Predictors")
 
     @staticmethod
     def decoder():

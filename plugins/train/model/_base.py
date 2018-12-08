@@ -35,13 +35,11 @@ class ModelBase():
         # dict for reference by the trainer.
         self.training_opts = dict()
 
-        # For autoencoder models, autoencoders should be placed in this dict
-        self.autoencoders = dict()
-
         self.name = self.set_model_name()
+        self.networks = dict()  # Networks for the model
+        self.predictors = dict()  # Predictors for model
         self.serializer = Serializer.get_serializer("json")
         self._epoch_no = self.load_state()
-        self.networks = list()
 
         self.add_networks()
         self.initialize()
@@ -55,20 +53,6 @@ class ModelBase():
         """ Override to add neural networks """
         raise NotImplementedError
 
-    def add_network(self, network_type, side, network):
-        """ Add a NNMeta object to self.models """
-        logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
-        resolution = self.image_shape[0]
-        filename = "{}_{}_{}".format(self.name, resolution, network_type.lower())
-        if side:
-            filename += "_{}".format(side.upper())
-        filename += ".h5"
-        logger.debug("filename: '%s'", filename)
-        self.networks.append(NNMeta(str(self.model_dir / filename),
-                                    network_type,
-                                    side,
-                                    network))
-
     def set_model_name(self):
         """ Set the model name based on the subclass """
         basename = os.path.basename(sys.modules[self.__module__].__file__)
@@ -76,28 +60,55 @@ class ModelBase():
         logger.debug("model name: '%s'", retval)
         return retval
 
-    def compile_autoencoders(self):
-        """ Compile the autoencoders """
-        logger.debug("Compiling Autoencoders")
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        if self.gpus > 1:
-            for acr in self.autoencoders.keys():
-                autoencoder = multi_gpu_model(self.autoencoders[acr],
-                                              self.gpus)
-                self.autoencoders[acr] = autoencoder
+    def add_network(self, network_type, side, network):
+        """ Add a NNMeta object """
+        logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
+        resolution = self.image_shape[0]
+        filename = "{}_{}_{}".format(self.name, resolution, network_type.lower())
+        name = network_type.lower()
+        if side:
+            filename += "_{}".format(side.upper())
+            name += "_{}".format(side.lower())
+        filename += ".h5"
+        logger.debug("name: '%s', filename: '%s'", name, filename)
+        self.networks["{}".format(name)] = NNMeta(str(self.model_dir / filename),
+                                                  network_type,
+                                                  side,
+                                                  network)
 
-        for autoencoder in self.autoencoders.values():
-            autoencoder.compile(optimizer=optimizer,
-                                loss="mean_absolute_error")
-        logger.debug("Compiled Autoencoders: %s", self.autoencoders)
+    def add_predictors(self, model_a, model_b):
+        """ Add the predictors to the predictors dictionary """
+        logger.debug("Adding predictors: (model_a: %s, model_b: %s)", model_a, model_b)
+        self.predictors["a"] = model_a
+        self.predictors["b"] = model_b
+        logger.debug("Added predictors: %s", self.predictors)
+
+    def convert_multi_gpu(self):
+        """ Convert models to multi-gpu if requested """
+        if self.gpus > 1:
+            for side in self.predictors.keys():
+                logger.debug("Converting to multi-gpu: '%s_%s'",
+                             self.predictors[side].network_type, side)
+                model = multi_gpu_model(self.predictors[side], self.gpus)
+                self.predictors[side] = model
+            logger.debug("Converted to multi-gpu: %s", self.predictors)
+
+    def compile_predictors(self):
+        """ Compile the predictors """
+        logger.debug("Compiling Predictors")
+        self.convert_multi_gpu()
+        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        for model in self.predictors.values():
+            model.compile(optimizer=optimizer, loss="mean_absolute_error")
+        logger.debug("Compiled Predictors: %s", self.predictors)
 
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
         if swap:
-            retval = self.autoencoders["a"].predict
+            retval = self.predictors["a"].predict
         else:
-            retval = self.autoencoders["b"].predict
+            retval = self.predictors["b"].predict
         logger.debug("Got Converter: %s", retval)
         return retval
 
@@ -148,7 +159,7 @@ class ModelBase():
         logger.debug("Map weights: (swapped: %s)", swapped)
         weights_map = {"A": dict(), "B": dict()}
         side_a, side_b = ("A", "B") if not swapped else ("B", "A")
-        for network in self.networks:
+        for network in self.networks.values():
             if network.side == side_a:
                 weights_map["A"][network.type] = network.filename
             if network.side == side_b:
@@ -161,7 +172,7 @@ class ModelBase():
         logger.debug("Load weights: (swapped: %s)", swapped)
         weights_mapping = self.map_weights(swapped)
         try:
-            for network in self.networks:
+            for network in self.networks.values():
                 if not network.side:
                     network.load_weights()
                 else:
@@ -175,34 +186,21 @@ class ModelBase():
             return False
 
     def save_weights(self):
-        """ Save the weights files """
-        logger.debug("Saving weights")
-        self.backup_weights()
-        for network in self.networks:
+        """ Backup and save the weights files """
+        logger.debug("Backing up and saving weights")
+        for network in self.networks.values():
+            network.backup_weights()
             network.save_weights()
         # Put in a line break to avoid jumbled console
         print("\n")
         logger.info("saved model weights")
         self.save_state()
 
-    def backup_weights(self):
-        """ Backup the weights files by appending .bk to the end """
-        logger.debug("Backing up weights")
-        for network in self.networks:
-            origfile = network.filename
-            backupfile = origfile + ".bk"
-            logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
-            if os.path.exists(backupfile):
-                os.remove(backupfile)
-            if os.path.exists(origfile):
-                os.rename(origfile, backupfile)
-        logger.debug("Backed up weights")
-
     @staticmethod
     def log_summary(name, model):
         """ Verbose log the passed in model summary """
         logger.debug("%s Summary:", name.title())
-        model.summary(print_fn=logger.verbose)
+        model.summary(print_fn=logger.debug)
 
 
 class NNMeta():
@@ -240,3 +238,13 @@ class NNMeta():
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Saving weights: '%s'", fullpath)
         self.network.save_weights(fullpath)
+
+    def backup_weights(self, fullpath=None):
+        """ Backup Model Weights """
+        origfile = fullpath if fullpath else self.filename
+        backupfile = origfile + ".bk"
+        logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
+        if os.path.exists(backupfile):
+            os.remove(backupfile)
+        if os.path.exists(origfile):
+            os.rename(origfile, backupfile)
