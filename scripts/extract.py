@@ -343,9 +343,13 @@ class Plugins():
         # The first ever load of the model for FAN has reportedly taken
         # up to 3-4 minutes, hence high timeout.
         # TODO investigate why this is and fix if possible
-        event.wait(300)
-        if not event.is_set():
-            raise ValueError("Error initializing Aligner")
+        for mins in reversed(range(5)):
+            event.wait(60)
+            if event.is_set():
+                break
+            if mins == 0:
+                raise ValueError("Error initializing Aligner")
+            logger.info("Waiting for Aligner... Time out in %s minutes", mins)
 
         logger.debug("Launched Aligner")
 
@@ -374,9 +378,14 @@ class Plugins():
             logger.debug("Launched Detector")
             return
 
-        event.wait(60)
-        if not event.is_set():
-            raise ValueError("Error inititalizing Detector")
+        for mins in reversed(range(5)):
+            event.wait(60)
+            if event.is_set():
+                break
+            if mins == 0:
+                raise ValueError("Error initializing Detector")
+            logger.info("Waiting for Detector... Time out in %s minutes", mins)
+
         logger.debug("Launched Detector")
 
     def get_mtcnn_kwargs(self):
