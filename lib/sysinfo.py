@@ -38,18 +38,24 @@ class SysInfo():
 
     @property
     def is_linux(self):
-        """ Boolean for whether in a conda environment """
+        """ Boolean for whether system is Linux """
         return self.system.lower() == "linux"
 
     @property
     def is_macos(self):
-        """ Boolean for whether in a conda environment """
+        """ Boolean for whether system is macOS """
         return self.system.lower() == "darwin"
 
     @property
     def is_windows(self):
-        """ Boolean for whether in a conda environment """
+        """ Boolean for whether system is Windows """
         return self.system.lower() == "windows"
+
+    @property
+    def is_virtual_env(self):
+        """ Boolean for whether running in a virtual environment """
+        return hasattr(sys, "real_prefix") or (
+            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)
 
     @property
     def ram(self):
@@ -241,6 +247,7 @@ class SysInfo():
                     "py_implementation": self.py_implementation,
                     "py_version": self.py_version,
                     "py_command": self.fs_command,
+                    "py_virtual_env": self.is_virtual_env,
                     "sys_cores": self.cpu_count,
                     "sys_processor": self.processor,
                     "sys_ram": self.format_ram(),
