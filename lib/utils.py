@@ -64,7 +64,7 @@ def hash_image_file(filename):
     """ Return the filename with it's sha1 hash """
     img = cv2.imread(filename)  # pylint: disable=no-member
     img_hash = sha1(img).hexdigest()
-    logger.trace("filename: %s, hash: %s", filename, img_hash)
+    logger.trace("filename: '%s', hash: %s", filename, img_hash)
     return img_hash
 
 

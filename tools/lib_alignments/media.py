@@ -4,12 +4,13 @@
 
 import logging
 import os
+from tqdm import tqdm
 
 import cv2
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import _image_extensions
+from lib.utils import _image_extensions, hash_image_file, hash_encode_image
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -18,14 +19,17 @@ class AlignmentData(Alignments):
     """ Class to hold the alignment data """
 
     def __init__(self, alignments_file, destination_format):
+        logger.debug("Initializing %s: (alignments file: '%s', destination_format: '%s')",
+                     self.__class__.__name__, alignments_file, destination_format)
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
-        if filename == "dfl":
+        if filename.lower() == "dfl":
             self.set_dfl(destination_format)
             return
         super().__init__(folder, filename=filename)
         self.set_destination_format(destination_format)
         logger.verbose("%s items loaded", self.frames_count)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
     def check_file_exists(alignments_file):
@@ -44,6 +48,7 @@ class AlignmentData(Alignments):
 
     def set_dfl(self, destination_format):
         """ Set the alignments for dfl alignments """
+        logger.debug("Alignments are DFL format")
         self.file = "dfl"
         self.set_destination_format(destination_format)
 
@@ -55,6 +60,7 @@ class AlignmentData(Alignments):
                       ".yaml": "yaml"}
         dst_fmt = None
         file_ext = os.path.splitext(self.file)[1].lower()
+        logger.debug("File extension: '%s'", file_ext)
 
         if destination_format is not None:
             dst_fmt = destination_format
@@ -71,6 +77,7 @@ class AlignmentData(Alignments):
         self.serializer = self.get_serializer("", dst_fmt)
         filename = os.path.splitext(self.file)[0]
         self.file = "{}.{}".format(filename, self.serializer.ext)
+        logger.debug("Destination file: '%s'", self.file)
 
     def save(self):
         """ Backup copy of old alignments and save new alignments """
@@ -81,6 +88,7 @@ class AlignmentData(Alignments):
 class MediaLoader():
     """ Class to load filenames from folder """
     def __init__(self, folder):
+        logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self.folder = folder
         self.check_folder_exists()
@@ -88,6 +96,7 @@ class MediaLoader():
         self.items = self.load_items()
         self.count = len(self.file_list_sorted)
         logger.verbose("%s items loaded", self.count)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def check_folder_exists(self):
         """ makes sure that the faces folder exists """
@@ -108,7 +117,9 @@ class MediaLoader():
     def valid_extension(filename):
         """ Check whether passed in file has a valid extension """
         extension = os.path.splitext(filename)[1]
-        return bool(extension in _image_extensions)
+        retval = extension in _image_extensions
+        logger.trace("Filename has valid extension: '%s': %s", filename, retval)
+        return retval
 
     @staticmethod
     def sorted_items():
@@ -128,6 +139,7 @@ class MediaLoader():
     def load_image(self, filename):
         """ Load an image """
         src = os.path.join(self.folder, filename)
+        logger.trace("Loading image: '%s'", src)
         image = cv2.imread(src)  # pylint: disable=no-member
         return image
 
@@ -135,46 +147,42 @@ class MediaLoader():
     def save_image(output_folder, filename, image):
         """ Save an image """
         output_file = os.path.join(output_folder, filename)
+        logger.trace("Saving image: '%s'", output_file)
         cv2.imwrite(output_file, image)  # pylint: disable=no-member
 
 
 class Faces(MediaLoader):
     """ Object to hold the faces that are to be swapped out """
-    def __init__(self, folder, dfl=False):
-        self.dfl = dfl
-        super().__init__(folder)
 
     def process_folder(self):
         """ Iterate through the faces dir pulling out various information """
         logger.info("Loading file list from %s", self.folder)
-        for face in os.listdir(self.folder):
+        for face in tqdm(os.listdir(self.folder), desc="Reading Face Hashes"):
             if not self.valid_extension(face):
                 continue
             filename = os.path.splitext(face)[0]
             file_extension = os.path.splitext(face)[1]
-            index = 0
-            original_file = ""
-            if not self.dfl:
-                index = int(filename[filename.rindex("_") + 1:])
-                original_file = "{}".format(filename[:filename.rindex("_")])
-            yield {"face_fullname": face,
-                   "face_name": filename,
-                   "face_extension": file_extension,
-                   "frame_name": original_file,
-                   "face_index": index}
+            face_hash = hash_image_file(os.path.join(self.folder, face))
+            retval = {"face_fullname": face,
+                      "face_name": filename,
+                      "face_extension": file_extension,
+                      "face_hash": face_hash}
+            logger.trace(retval)
+            yield retval
 
     def load_items(self):
         """ Load the face names into dictionary """
-        faces = dict()
-        for face in self.file_list_sorted:
-            faces.setdefault(face["frame_name"],
-                             list()).append(face["face_index"])
+        faces = {face["face_hash"]: (face["face_name"], face["face_extension"])
+                 for face in self.file_list_sorted}
+        logger.trace(faces)
         return faces
 
     def sorted_items(self):
-        """ Return the items sorted by filename then index """
-        return sorted([item for item in self.process_folder()],
-                      key=lambda x: (x["frame_name"], x["face_index"]))
+        """ Return the items sorted by face name """
+        items = sorted([item for item in self.process_folder()],
+                       key=lambda x: (x["face_name"]))
+        logger.trace(items)
+        return items
 
 
 class Frames(MediaLoader):
@@ -189,9 +197,11 @@ class Frames(MediaLoader):
             filename = os.path.splitext(frame)[0]
             file_extension = os.path.splitext(frame)[1]
 
-            yield {"frame_fullname": frame,
-                   "frame_name": filename,
-                   "frame_extension": file_extension}
+            retval = {"frame_fullname": frame,
+                      "frame_name": filename,
+                      "frame_extension": file_extension}
+            logger.trace(retval)
+            yield retval
 
     def load_items(self):
         """ Load the frame info into dictionary """
@@ -199,12 +209,15 @@ class Frames(MediaLoader):
         for frame in self.file_list_sorted:
             frames[frame["frame_fullname"]] = (frame["frame_name"],
                                                frame["frame_extension"])
+        logger.trace(frames)
         return frames
 
     def sorted_items(self):
         """ Return the items sorted by filename """
-        return sorted([item for item in self.process_folder()],
-                      key=lambda x: (x["frame_name"]))
+        items = sorted([item for item in self.process_folder()],
+                       key=lambda x: (x["frame_name"]))
+        logger.trace(items)
+        return items
 
 
 class ExtractedFaces():
@@ -212,6 +225,8 @@ class ExtractedFaces():
         alignments """
     def __init__(self, frames, alignments, size=256,
                  padding=48, align_eyes=False):
+        logger.trace("Initializing %s: (size: %s, padding: %s, align_eyes: %s)",
+                     self.__class__.__name__, size, padding, align_eyes)
         self.size = size
         self.padding = padding
         self.align_eyes = align_eyes
@@ -220,12 +235,15 @@ class ExtractedFaces():
 
         self.current_frame = None
         self.faces = list()
+        logger.trace("Initialized %s", self.__class__.__name__)
 
     def get_faces(self, frame):
         """ Return faces and transformed landmarks
             for each face in a given frame with it's alignments"""
+        logger.trace("Getting faces for frame: '%s'", frame)
         self.current_frame = None
         alignments = self.alignments.get_faces_in_frame(frame)
+        logger.trace("Alignments for frame: (frame: '%s', alignments: %s)", frame, alignments)
         if not alignments:
             self.faces = list()
             return
@@ -236,6 +254,8 @@ class ExtractedFaces():
 
     def extract_one_face(self, alignment, image):
         """ Extract one face from image """
+        logger.trace("Extracting one face: (frame: '%s', alignment: %s)",
+                     self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
         face.load_aligned(image,
@@ -246,6 +266,7 @@ class ExtractedFaces():
 
     def get_faces_in_frame(self, frame, update=False):
         """ Return the faces for the selected frame """
+        logger.trace("frame: '%s', update: %s", frame, update)
         if self.current_frame != frame or update:
             self.get_faces(frame)
         return self.faces
@@ -253,6 +274,7 @@ class ExtractedFaces():
     def get_roi_size_for_frame(self, frame):
         """ Return the size of the original extract box for
             the selected frame """
+        logger.trace("frame: '%s'", frame)
         if self.current_frame != frame:
             self.get_faces(frame)
         sizes = list()
@@ -265,4 +287,14 @@ class ExtractedFaces():
             else:
                 length = int(((len_x ** 2) + (len_y ** 2)) ** 0.5)
             sizes.append(length)
+        logger.trace("sizes: '%s'", sizes)
         return sizes
+
+    @staticmethod
+    def save_face_with_hash(filename, extension, face):
+        """ Save a face and return it's hash """
+        f_hash, img = hash_encode_image(face, extension)
+        logger.trace("Saving face: '%s'", filename)
+        with open(filename, "wb") as out_file:
+            out_file.write(img)
+        return f_hash

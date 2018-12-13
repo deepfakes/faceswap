@@ -313,7 +313,9 @@ class Legacy():
 
         - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
-        and remove the 'r' parameter """
+        and remove the 'r' parameter
+        - Add face hashes to alignments file
+        """
     def __init__(self, alignments, frames, faces_dir):
         self.alignments = alignments
         self.frames = {os.path.basename(frame): frame
