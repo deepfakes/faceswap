@@ -59,6 +59,14 @@ class Alignments():
         logger.trace(retval)
         return retval
 
+    @property
+    def hashes_to_frame(self):
+        """ Return a dict of each face_hash with their parent
+            frame name and their index in the frame """
+        return{face["hash"]: (frame_name, idx)
+               for frame_name, faces in self.data.items()
+               for idx, face in enumerate(faces)}
+
     # << INIT FUNCTIONS >> #
 
     @staticmethod
@@ -155,13 +163,13 @@ class Alignments():
     def frame_exists(self, frame):
         """ return path of images that have faces """
         retval = frame in self.data.keys()
-        logger.trace(retval)
+        logger.trace("'%s': %s", frame, retval)
         return retval
 
     def frame_has_faces(self, frame):
         """ Return true if frame exists and has faces """
         retval = bool(self.data.get(frame, list()))
-        logger.trace(retval)
+        logger.trace("'%s': %s", frame, retval)
         return retval
 
     def frame_has_multiple_faces(self, frame):
@@ -170,7 +178,7 @@ class Alignments():
             retval = False
         else:
             retval = bool(len(self.data.get(frame, list())) > 1)
-        logger.trace(retval)
+        logger.trace("'%s': %s", frame, retval)
         return retval
 
     # << DATA >> #
@@ -201,10 +209,10 @@ class Alignments():
         logger.debug("Deleting face %s for frame '%s'", idx, frame)
         idx = int(idx)
         if idx + 1 > self.count_faces_in_frame(frame):
-            logger.debug("No face to delete")
+            logger.debug("No face to delete: (frame: '%s', idx %s)", frame, idx)
             return False
         del self.data[frame][idx]
-        logger.debug("Deleted face")
+        logger.debug("Deleted face: (frame: '%s', idx %s)", frame, idx)
         return True
 
     def add_face(self, frame, alignment):
@@ -219,6 +227,23 @@ class Alignments():
         """ Replace a face for given frame and index """
         logger.debug("Updating face %s for frame '%s'", idx, frame)
         self.data[frame][idx] = alignment
+
+    def filter_hashes(self, hashlist, filter_out=False):
+        """ Filter in or out faces that match the hashlist
+
+            filter_out=True: Remove faces that match in the hashlist
+            filter_out=False: Remove faces that are not in the hashlist
+        """
+        hashset = set(hashlist)
+        for filename, frame in self.data.items():
+            for idx, face in reversed(list(enumerate(frame))):
+                if ((filter_out and face.get("hash", None) in hashset) or
+                        (not filter_out and face.get("hash", None) not in hashset)):
+                    logger.verbose("Filtering out face: (filename: %s, index: %s)", filename, idx)
+                    del frame[idx]
+                else:
+                    logger.trace("Not filtering out face: (filename: %s, index: %s)",
+                                 filename, idx)
 
     # << GENERATORS >> #
 
@@ -328,3 +353,33 @@ class Alignments():
         r_mat[1, 2] += rotated_height/2 - center[1]
         logger.trace("Returning rotation matrix: %s", r_mat)
         return r_mat
+
+    # <Face Hashes> #
+    # The old index based method of face matching is problematic.
+    # The SHA1 Hash of the extracted face is now stored in the alignments file.
+    # This has it's own issues, but they are far reduced from the index/filename method
+    # This can eventually be removed
+    def get_legacy_no_hashes(self):
+        """ Get alignments without face hashes """
+        logger.debug("Getting alignments without face hashes")
+        keys = list()
+        for key, val in self.data.items():
+            for alignment in val:
+                if "hash" not in alignment.keys():
+                    keys.append(key)
+                    break
+        logger.debug("Got alignments without face hashes: %s", len(keys))
+        return keys
+
+    def add_face_hashes(self, frame_name, hashes):
+        """ Backward compatability fix. Add face hash to alignments """
+        logger.trace("Adding face hash: (frame: '%s', hashes: %s)", frame_name, hashes)
+        faces = self.get_faces_in_frame(frame_name)
+        count_match = len(faces) - len(hashes)
+        if count_match != 0:
+            msg = "more" if count_match > 0 else "fewer"
+            logger.warning("There are %s %s face(s) in the alignments file than exist in the "
+                           "faces folder. Check your sources for frame '%s'.",
+                           abs(count_match), msg, frame_name)
+        for idx, i_hash in hashes.items():
+            faces[idx]["hash"] = i_hash

@@ -23,11 +23,10 @@ class AlignmentsArgs(FaceSwapArgs):
 
             "opts": ("-j", "--job"),
             "type": str,
-            "choices": ("draw", "extract", "extract-large", "manual",
-                        "missing-alignments", "missing-frames", "legacy",
-                        "leftover-faces", "multi-faces", "no-faces",
-                        "reformat", "remove-faces", "remove-frames",
-                        "sort-x", "sort-y", "spatial"),
+            "choices": ("draw", "extract", "extract-large", "manual", "missing-alignments",
+                        "missing-frames", "legacy", "leftover-faces", "multi-faces", "no-faces",
+                        "reformat", "remove-faces", "remove-frames", "rename", "sort-x", "sort-y",
+                        "spatial", "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform.\n"
                     "NB: All actions require an alignments file (-a) to"
@@ -51,9 +50,10 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n'missing-frames': Identify frames in the alignments"
                     "\n\tfile that do not appear within the frames"
                     "\n\tfolder." + output_opts + frames_dir +
-                    "\n'legacy': This updates legacy alignments to the latest "
-                    "\n\tformat by adding frame dimensions and rotating "
-                    "\n\tthe landmarks and bounding boxes" + frames_dir +
+                    "\n'legacy': This updates legacy alignments to the latest"
+                    "\n\tformat by adding frame dimensions, rotating the"
+                    "\n\tlandmarks and bounding boxes and adding face_hashes" +
+                    frames_and_faces_dir +
                     "\n'leftover-faces': Identify faces in the faces"
                     "\n\tfolder that do not exist in the alignments file."
                     + output_opts + faces_dir +
@@ -80,6 +80,10 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\twill be backed up. A different file format for"
                     "\n\tthe alignments file can optionally be specified"
                     "\n\t(-fmt)." + frames_dir +
+                    "\n'rename' - Rename faces to correspond with their"
+                    "\n\tparent frame and position index in the alignments"
+                    "\n\tfile (i.e. how they are named after running"
+                    "\n\textract)." + faces_dir +
                     "\n'sort-x' - Re-index the alignments from left to"
                     "\n\tright. For alignments with multiple faces this will"
                     "\n\tensure that the left-most face is at index 0"
@@ -90,7 +94,7 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tensure that the top-most face is at index 0"
                     "\n\tOptionally pass in a faces folder (-fc) to also"
                     "\n\trename extracted faces."
-                    "\n'spatial' - Perform spatial and temporal filtering to "
+                    "\n'spatial' - Perform spatial and temporal filtering to"
                     "\n\tsmooth alignments (EXPERIMENTAL!)"})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
