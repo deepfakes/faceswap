@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments seralized file """
+# TODO merge alignments
 
 import logging
 import os
