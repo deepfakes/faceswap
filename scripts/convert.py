@@ -14,7 +14,7 @@ from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 from lib.faces_detect import DetectedFace
 from lib.multithreading import BackgroundGenerator, SpawnProcess
 from lib.queue_manager import queue_manager
-from lib.utils import get_folder, get_image_paths, hash_image_file
+from lib.utils import get_folder, get_image_paths
 
 from plugins.plugin_loader import PluginLoader
 
@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Convert():
     """ The convert process. """
     def __init__(self, arguments):
-        logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
         self.extract_faces = False
@@ -34,13 +33,12 @@ class Convert():
         self.alignments = Alignments(self.args, False)
 
         # Update Legacy alignments
-        Legacy(self.alignments, self.images.input_images, arguments.input_aligned_dir)
+        Legacy(self.alignments, self.images.input_images)
 
         self.post_process = PostProcess(arguments)
         self.verify_output = False
 
-        self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        self.opts = OptionalActions(self.args, self.images.input_images)
 
     def process(self):
         """ Original & LowMem models go with Adjust or Masked converter
@@ -209,16 +207,22 @@ class Convert():
             skip = self.opts.check_skipframe(filename)
 
             if not skip:
-                for face in faces:
-                    image = self.convert_one_face(converter, image, face)
+                for idx, face in enumerate(faces):
+                    image = self.convert_one_face(converter,
+                                                  (filename, image, idx, face))
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
 
-    def convert_one_face(self, converter, image, face):
+    def convert_one_face(self, converter, imagevars):
         """ Perform the conversion on the given frame for a single face """
+        filename, image, idx, face = imagevars
+
+        if self.opts.check_skipface(filename, idx):
+            return image
+
         # TODO: This switch between 64 and 128 is a hack for now.
         # We should have a separate cli option for size
         size = 128 if (self.args.trainer.strip().lower()
@@ -233,55 +237,37 @@ class Convert():
 class OptionalActions():
     """ Process the optional actions for convert """
 
-    def __init__(self, args, input_images, alignments):
-        logger.debug("Initializing %s", self.__class__.__name__)
+    def __init__(self, args, input_images):
         self.args = args
         self.input_images = input_images
-        self.alignments = alignments
+
+        self.faces_to_swap = self.get_aligned_directory()
+
         self.frame_ranges = self.get_frame_ranges()
         self.imageidxre = re.compile(r"[^(mp4)](\d+)(?!.*\d)")
 
-        self.remove_skipped_faces()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
     # SKIP FACES #
-    def remove_skipped_faces(self):
-        """ Remove deleted faces from the loaded alignments """
-        logger.debug("Filtering Faces")
-        face_hashes = self.get_face_hashes()
-        if not face_hashes:
-            logger.debug("No face hashes. Not skipping any faces")
-            return
-        pre_face_count = self.alignments.faces_count
-        self.alignments.filter_hashes(face_hashes, filter_out=False)
-        logger.info("Faces filtered out: %s", pre_face_count - self.alignments.faces_count)
-
-    def get_face_hashes(self):
+    def get_aligned_directory(self):
         """ Check for the existence of an aligned directory for identifying
-            which faces in the target frames should be swapped.
-            If it exists, obtain the hashes of the faces in the folder """
-        face_hashes = list()
+            which faces in the target frames should be swapped """
+        faces_to_swap = None
         input_aligned_dir = self.args.input_aligned_dir
 
         if input_aligned_dir is None:
-            logger.verbose("Aligned directory not specified. All faces listed in the "
-                           "alignments file will be converted")
+            logger.info("Aligned directory not specified. All faces listed in the "
+                        "alignments file will be converted")
         elif not os.path.isdir(input_aligned_dir):
             logger.warning("Aligned directory not found. All faces listed in the "
                            "alignments file will be converted")
         else:
-            file_list = [path for path in get_image_paths(input_aligned_dir)]
-            logger.info("Getting Face Hashes for selected Aligned Images")
-            for face in tqdm(file_list, desc="Hashing Faces"):
-                face_hashes.append(hash_image_file(face))
-            logger.debug("Face Hashes: %s", (len(face_hashes)))
-            if not face_hashes:
-                logger.error("Aligned directory is empty, no faces will be converted!")
-                exit(1)
-            elif len(face_hashes) <= len(self.input_images) / 3:
-                logger.warning("Aligned directory contains far fewer images than the input "
-                               "directory, are you sure this is the right folder?")
-        return face_hashes
+            faces_to_swap = [Path(path)
+                             for path in get_image_paths(input_aligned_dir)]
+            if not faces_to_swap:
+                logger.warning("Aligned directory is empty, no faces will be converted!")
+            elif len(faces_to_swap) <= len(self.input_images) / 3:
+                logger.warning("Aligned directory contains an amount of images much less than "
+                               "the input, are you sure this is the right directory?")
+        return faces_to_swap
 
     # SKIP FRAME RANGES #
     def get_frame_ranges(self):
@@ -307,40 +293,46 @@ class OptionalActions():
             skipframe = "discard"
         return skipframe
 
+    def check_skipface(self, filename, face_idx):
+        """ Check whether face is to be skipped """
+        if self.faces_to_swap is None:
+            return False
+        face_name = "{}_{}{}".format(Path(filename).stem,
+                                     face_idx,
+                                     Path(filename).suffix)
+        face_file = Path(self.args.input_aligned_dir) / Path(face_name)
+        skip_face = face_file not in self.faces_to_swap
+        if skip_face:
+            logger.info("face %s for frame '%s' was deleted, skipping",
+                        face_idx, os.path.basename(filename))
+        return skip_face
+
 
 class Legacy():
     """ Update legacy alignments:
 
         - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
-        and remove the 'r' parameter
-        - Add face hashes to alignments file
-        """
-    def __init__(self, alignments, frames, faces_dir):
+        and remove the 'r' parameter """
+    def __init__(self, alignments, frames):
         self.alignments = alignments
         self.frames = {os.path.basename(frame): frame
                        for frame in frames}
-        self.process(faces_dir)
+        self.process()
 
-    def process(self, faces_dir):
+    def process(self):
         """ Run the rotate alignments process """
         no_dims = self.alignments.get_legacy_no_dims()
         rotated = self.alignments.get_legacy_rotation()
-        hashes = self.alignments.get_legacy_no_hashes()
-        if not no_dims and not rotated and not hashes:
+        if not no_dims and not rotated:
             return
         if no_dims:
             logger.info("Legacy landmarks found. Adding frame dimensions...")
             self.add_dimensions(no_dims)
-            self.alignments.save()
         if rotated:
             logger.info("Legacy rotated frames found. Converting...")
             self.rotate_landmarks(rotated)
-            self.alignments.save()
-        if hashes and faces_dir:
-            logger.info("Legacy alignments found. Adding Face Hashes...")
-            self.add_hashes(hashes, faces_dir)
-            self.alignments.save()
+        self.alignments.save()
 
     def add_dimensions(self, no_dims):
         """ Add width and height of original frame to alignments """
@@ -355,27 +347,5 @@ class Legacy():
         """ Rotate the landmarks """
         for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
             if rotate_item not in self.frames.keys():
-                logger.debug("Skipping missing frame: '%s'", rotate_item)
                 continue
             self.alignments.rotate_existing_landmarks(rotate_item)
-
-    def add_hashes(self, hashes, faces_dir):
-        """ Add Face Hashes to the alignments file """
-        all_faces = dict()
-        face_files = sorted(face for face in os.listdir(faces_dir) if "_" in face)
-        for face in face_files:
-            filename, extension = os.path.splitext(face)
-            index = filename[filename.rfind("_") + 1:]
-            if not index.isdigit():
-                continue
-            orig_frame = filename[:filename.rfind("_")] + extension
-            all_faces.setdefault(orig_frame, dict())[int(index)] = os.path.join(faces_dir, face)
-
-        for frame in tqdm(hashes):
-            if frame not in all_faces.keys():
-                logger.warning("Skipping missing frame: '%s'", frame)
-                continue
-            hash_faces = all_faces[frame]
-            for index, face_path in hash_faces.items():
-                hash_faces[index] = hash_image_file(face_path)
-            self.alignments.add_face_hashes(frame, hash_faces)

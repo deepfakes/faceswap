@@ -6,13 +6,14 @@ import os
 import sys
 from pathlib import Path
 
+import cv2
 from tqdm import tqdm
 
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.multithreading import MultiThread, PoolProcess, SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import get_folder, hash_encode_image
+from lib.utils import get_folder
 from plugins.plugin_loader import PluginLoader
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -33,6 +34,7 @@ class Extract():
 
         self.post_process = PostProcess(arguments)
 
+        self.export_face = True
         self.verify_output = False
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
@@ -46,8 +48,7 @@ class Extract():
 #        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
-        self.run_extraction()
-        save_thread.join()
+        self.run_extraction(save_thread)
         self.alignments.save()
         Utils.finalize(self.images.images_found,
                        self.alignments.faces_count,
@@ -103,10 +104,14 @@ class Extract():
         load_queue.put("EOF")
         logger.debug("Reload Images: Complete")
 
-    @staticmethod
-    def save_faces():
+    def save_faces(self):
         """ Save the generated faces """
         logger.debug("Save Faces: Start")
+        if not self.export_face:
+            logger.debug("Not exporting faces")
+            logger.debug("Save Faces: Complete")
+            return
+
         save_queue = queue_manager.get_queue("save")
         while True:
             if save_queue.shutdown.is_set():
@@ -115,18 +120,19 @@ class Extract():
             item = save_queue.get()
             if item == "EOF":
                 break
-            filename, face = item
-
-            logger.trace("Saving face: '%s'", filename)
+            filename, output_file, resized_face, idx = item
+            out_filename = "{}_{}{}".format(str(output_file),
+                                            str(idx),
+                                            Path(filename).suffix)
+            logger.trace("Saving face: '%s'", out_filename)
             try:
-                with open(filename, "wb") as out_file:
-                    out_file.write(face)
+                cv2.imwrite(out_filename, resized_face)  # pylint: disable=no-member
             except Exception as err:  # pylint: disable=broad-except
-                logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
+                logger.error("Failed to save image '%s'. Original Error: %s", out_filename, err)
                 continue
         logger.debug("Save Faces: Complete")
 
-    def run_extraction(self):
+    def run_extraction(self, save_thread):
         """ Run Face Detection """
         save_queue = queue_manager.get_queue("save")
         to_process = self.process_item_count()
@@ -161,14 +167,16 @@ class Extract():
             if not self.verify_output and faces_count > 1:
                 self.verify_output = True
 
-            self.output_faces(filename, faces, save_queue)
+            self.process_faces(filename, faces, save_queue)
 
             frame_no += 1
             if frame_no == self.save_interval:
                 self.alignments.save()
                 frame_no = 0
 
-        save_queue.put("EOF")
+        if self.export_face:
+            save_queue.put("EOF")
+        save_thread.join()
 
     def process_item_count(self):
         """ Return the number of items to be processedd """
@@ -227,20 +235,19 @@ class Extract():
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
 
-    def output_faces(self, filename, faces, save_queue):
-        """ Output faces to save thread """
+    def process_faces(self, filename, faces, save_queue):
+        """ Perform processing on found faces """
         final_faces = list()
+        filename = faces["filename"]
+
         for idx, detected_face in enumerate(faces["detected_faces"]):
-            output_file = detected_face["file_location"]
-            extension = Path(filename).suffix
-            out_filename = "{}_{}{}".format(str(output_file), str(idx), extension)
+            if self.export_face:
+                save_queue.put((filename,
+                                detected_face["file_location"],
+                                detected_face["face"].aligned_face,
+                                idx))
 
-            face = detected_face["face"]
-            resized_face = face.aligned_face
-
-            face.hash, img = hash_encode_image(resized_face, extension)
-            save_queue.put((out_filename, img))
-            final_faces.append(face.to_alignment())
+            final_faces.append(detected_face["face"].to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces
 
 

@@ -21,7 +21,6 @@ class DetectedFace():
         self.h = h
         self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
-        self.hash = None  # Hash must be set when the file is saved due to image compression
 
         self.aligned = dict()
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -63,11 +62,7 @@ class DetectedFace():
                            self.x: self.x + self.w]
 
     def to_alignment(self):
-        """ Convert a detected face to alignment dict
-
-            NB: frame_dims should be the height and width
-                of the original frame. """
-
+        """ Convert a detected face to alignment dict """
         alignment = dict()
         alignment["x"] = self.x
         alignment["w"] = self.w
@@ -75,7 +70,6 @@ class DetectedFace():
         alignment["h"] = self.h
         alignment["frame_dims"] = self.frame_dims
         alignment["landmarksXY"] = self.landmarksXY
-        alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
         return alignment
 
@@ -89,9 +83,7 @@ class DetectedFace():
         self.h = alignment["h"]
         self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
-        # Manual tool does not know the final hash so default to None
-        self.hash = alignment.get("hash", None)
-        if image is not None and image.any():
+        if image.any():
             self.image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
                      "frame_dims: %s, landmarks: %s)",
@@ -108,14 +100,11 @@ class DetectedFace():
         self.aligned["padding"] = padding
         self.aligned["align_eyes"] = align_eyes
         self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
-        if image is None:
-            self.aligned["face"] = None
-        else:
-            self.aligned["face"] = AlignerExtract().transform(
-                image,
-                self.aligned["matrix"],
-                size,
-                padding)
+        self.aligned["face"] = AlignerExtract().transform(
+            image,
+            self.aligned["matrix"],
+            size,
+            padding)
         logger.trace("Loaded aligned face: %s", {key: val
                                                  for key, val in self.aligned.items()
                                                  if key != "face"})
