@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Interface():
     """ Key controls and interfacing options for OpenCV """
     def __init__(self, alignments, frames):
+        logger.debug("Initializing %s: (alignments: %s, frames: %s)",
+                     self.__class__.__name__, alignments, frames)
         self.alignments = alignments
         self.frames = frames
         self.controls = self.set_controls()
@@ -26,6 +28,7 @@ class Interface():
                           2: "No Faces",
                           3: "Multi-Faces",
                           4: "Has Faces"}
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_controls(self):
         """ Set keyboard controls, destination and help text """
@@ -57,8 +60,7 @@ class Interface():
                           "help": "Cycle Frame Zoom"},
                     "s": {"action": self.iterate_state,
                           "args": ("navigation", "skip-mode"),
-                          "help": ("Skip Mode (All, No Faces, Multi Faces, "
-                                   "Has Faces)")},
+                          "help": ("Skip Mode (All, No Faces, Multi Faces, Has Faces)")},
                     " ": {"action": self.save_alignments,
                           "key_text": "SPACE",
                           "args": ("edit", None),
@@ -111,6 +113,7 @@ class Interface():
                           "args": ("landmarks_mesh", "size"),
                           "help": "Cycle Landmarks Mesh - thickness"}}
 
+        logger.debug("Controls: %s", controls)
         return controls
 
     @staticmethod
@@ -136,8 +139,7 @@ class Interface():
         # See lib_alignments/annotate.py for color mapping
         color = 0
         for key in sorted(state.keys()):
-            if key not in ("bounding_box", "extract_box", "landmarks",
-                           "landmarks_mesh", "image"):
+            if key not in ("bounding_box", "extract_box", "landmarks", "landmarks_mesh", "image"):
                 continue
             state[key]["display"] = True
             if key == "image":
@@ -145,12 +147,14 @@ class Interface():
             color += 1
             state[key]["size"] = 1
             state[key]["color"] = color
-
+        logger.debug("State: %s", state)
         return state
 
     def save_alignments(self, *args):  # pylint: disable=unused-argument
         """ Save alignments """
+        logger.debug("Saving Alignments")
         if not self.state["edit"]["updated"]:
+            logger.debug("Save received, but state not updated. Not saving")
             return
         self.alignments.save()
         self.state["edit"]["updated"] = False
@@ -158,7 +162,9 @@ class Interface():
 
     def reload_alignments(self, *args):  # pylint: disable=unused-argument
         """ Reload alignments """
+        logger.debug("Reloading Alignments")
         if not self.state["edit"]["updated"]:
+            logger.debug("Reload received, but state not updated. Not reloading")
             return
         self.alignments.reload()
         self.state["edit"]["updated"] = False
@@ -167,8 +173,10 @@ class Interface():
 
     def delete_alignment(self, *args):  # pylint: disable=unused-argument
         """ Save alignments """
+        logger.debug("Deleting Alignments")
         selected_face = self.get_selected_face_id()
         if self.get_edit_mode() == "View" or selected_face is None:
+            logger.debug("Delete received, but edit mode is 'View'. Not deleting")
             return
         frame = self.get_frame_name()
         if self.alignments.delete_face_at_index(frame, selected_face):
@@ -180,7 +188,9 @@ class Interface():
     def copy_alignments(self, *args):
         """ Copy the alignments from the previous or next frame
             to the current frame """
+        logger.debug("Copying Alignments")
         if self.get_edit_mode() != "Edit":
+            logger.debug("Copy received, but edit mode is not 'Edit'. Not copying")
             return
         frame_id = self.state["navigation"]["frame_idx"] + args[1]
         if not 0 <= frame_id <= self.state["navigation"]["max_frame"]:
@@ -196,11 +206,15 @@ class Interface():
 
     def toggle_state(self, item, category):
         """ Toggle state of requested item """
+        logger.debug("Toggling state: (item: %s, category: %s)", item, category)
         self.state[item][category] = not self.state[item][category]
+        logger.debug("State toggled: (item: %s, category: %s, value: %s)",
+                     item, category, self.state[item][category])
         self.set_redraw(True)
 
     def iterate_state(self, item, category):
         """ Cycle through options (6 possible or 3 currently supported) """
+        logger.debug("Cycling state: (item: %s, category: %s)", item, category)
         if category == "color":
             max_val = 7
         elif category == "frame-size":
@@ -212,20 +226,27 @@ class Interface():
         val = self.state[item][category]
         val = val + 1 if val != max_val else 1
         self.state[item][category] = val
+        logger.debug("Cycled state: (item: %s, category: %s, value: %s)",
+                     item, category, self.state[item][category])
         self.set_redraw(True)
 
     def set_state_value(self, item, category, value):
         """ Set state of requested item or toggle off """
+        logger.debug("Setting state value: (item: %s, category: %s, value: %s)",
+                     item, category, value)
         state = self.state[item][category]
         value = str(value) if value is not None else value
         if state == value:
             self.state[item][category] = None
         else:
             self.state[item][category] = value
+        logger.debug("Setting state value: (item: %s, category: %s, value: %s)",
+                     item, category, self.state[item][category])
         self.set_redraw(True)
 
     def iterate_frame(self, *args):
         """ Iterate frame up or down, stopping at either end """
+        logger.debug("Iterating frame: (args: %s)", args)
         iteration = args[1]
         max_frame = self.state["navigation"]["max_frame"]
         if iteration in ("first", "last"):
@@ -305,20 +326,26 @@ class Interface():
 class Help():
     """ Generate and display help in cli and in window """
     def __init__(self, interface):
+        logger.debug("Initializing %s: (interface: %s)", self.__class__.__name__, interface)
         self.interface = interface
         self.helptext = self.generate()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def generate(self):
         """ Generate help output """
+        logger.debug("Generating help")
         sections = ("navigation", "display", "color", "size", "edit")
         helpout = {section: list() for section in sections}
         helptext = ""
         for key, val in self.interface.controls.items():
+            logger.trace("Generating help for:(key: '%s', val: '%s'", key, val)
             help_section = val["args"][0]
             if help_section not in ("navigation", "edit"):
                 help_section = val["args"][1]
             key_text = val.get("key_text", None)
             key_text = key_text if key_text else key
+            logger.trace("Adding help for:(section: '%s', val: '%s', text: '%s'",
+                         help_section, val["help"], key_text)
             helpout[help_section].append((val["help"], key_text))
 
         helpout["edit"].append(("Bounding Box - Move", "Left Click"))
@@ -334,30 +361,35 @@ class Help():
                                  for item in helpsection)
 
             helptext += display
+        logger.debug("Added helptext: '%s'", helptext)
         return helptext
 
     def render(self):
         """ Render help text to image window """
         # pylint: disable=no-member
+        logger.trace("Rendering help text")
         image = self.background()
         display_text = self.helptext + self.compile_status()
         self.text_to_image(image, display_text)
         cv2.namedWindow("Help")
         cv2.imshow("Help", image)
+        logger.trace("Rendered help text")
 
     def background(self):
         """ Create an image to hold help text """
         # pylint: disable=no-member
+        logger.trace("Creating help text canvas")
         height = 880
         width = 480
         image = np.zeros((height, width, 3), np.uint8)
         color = self.interface.get_state_color()
-        cv2.rectangle(image, (0, 0), (width - 1, height - 1),
-                      color, 2)
+        cv2.rectangle(image, (0, 0), (width - 1, height - 1), color, 2)
+        logger.trace("Created help text canvas")
         return image
 
     def compile_status(self):
         """ Render the status text """
+        logger.trace("Compiling Status text")
         status = "\n=== STATUS\n"
         navigation = self.interface.state["navigation"]
         frame_scale = int(self.interface.get_frame_scaling() * 100)
@@ -368,17 +400,18 @@ class Help():
         status += "  Skip Mode: {}\n".format(self.interface.get_skip_mode())
         status += "  View Mode: {}\n".format(self.interface.get_edit_mode())
         if self.interface.get_selected_face_id() is not None:
-            status += "  Selected Face Index: {}\n".format(
-                self.interface.get_selected_face_id())
+            status += "  Selected Face Index: {}\n".format(self.interface.get_selected_face_id())
         if self.interface.state["edit"]["updated"]:
             status += "  Warning: There are unsaved changes\n"
 
+        logger.trace("Compiled Status text")
         return status
 
     @staticmethod
     def text_to_image(image, display_text):
         """ Write out and format help text to image """
         # pylint: disable=no-member
+        logger.trace("Converting help text to image")
         pos_y = 0
         for line in display_text.split("\n"):
             if line.startswith("==="):
@@ -388,11 +421,14 @@ class Help():
             cv2.putText(image, line, (20, pos_y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.43, (255, 255, 255), 1)
             pos_y += 20
+        logger.trace("Converted help text to image")
 
 
 class Manual():
     """ Manually adjust or create landmarks data """
     def __init__(self, alignments, arguments):
+        logger.debug("Initializing %s: (alignments: %s, arguments: %s)",
+                     self.__class__.__name__, alignments, arguments)
         self.arguments = arguments
         self.alignments = alignments
         self.align_eyes = arguments.align_eyes
@@ -401,6 +437,7 @@ class Manual():
         self.interface = None
         self.help = None
         self.mouse_handler = None
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
         """ Process manual extraction """
@@ -409,8 +446,7 @@ class Manual():
         legacy.process()
 
         logger.info("[MANUAL PROCESSING]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames,
-                                              self.alignments,
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments,
                                               align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
@@ -424,8 +460,10 @@ class Manual():
     def display_frames(self):
         """ Iterate through frames """
         # pylint: disable=no-member
+        logger.debug("Display frames")
         is_windows = True if platform.system() == "Windows" else False
         is_conda = True if "conda" in sys.version.lower() else False
+        logger.debug("is_windows: %s, is_conda: %s", is_windows, is_conda)
         cv2.namedWindow("Frame")
         cv2.namedWindow("Faces")
         cv2.setMouseCallback('Frame', self.mouse_handler.on_event)
@@ -443,8 +481,11 @@ class Manual():
                 queue_manager.terminate_queues()
                 break
 
+            if key:
+                logger.trace("Keypress received: '%s'", key)
             if key in press.keys():
                 action = press[key]["action"]
+                logger.debug("Keypress action: key: ('%s', action: '%s')", key, action)
                 if action == "quit":
                     break
 
@@ -457,6 +498,7 @@ class Manual():
             if not self.interface.redraw():
                 continue
 
+            logger.trace("Redraw requested")
             frame, faces = self.get_frame()
             self.interface.set_redraw(False)
 
@@ -472,6 +514,7 @@ class Manual():
         state property or negative key press properly, so we arbitarily
         use another property """
         # pylint: disable=no-member
+        logger.trace("Commencing closed window check")
         closed = False
         prop_autosize = cv2.getWindowProperty('Frame', cv2.WND_PROP_AUTOSIZE)
         prop_visible = cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE)
@@ -483,6 +526,9 @@ class Manual():
             closed = True
         elif not is_windows and not is_conda and prop_visible < 1:
             closed = True
+        logger.trace("Completed closed window check. Closed is %s", closed)
+        if closed:
+            logger.debug("Window closed detected")
         return closed
 
     def get_keys(self):
@@ -504,8 +550,10 @@ class Manual():
         """ Compile the frame and get faces """
         image = self.frame_selector()
         frame_name = self.interface.get_frame_name()
+        logger.debug("Frame Name: '%s'", frame_name)
         alignments = self.alignments.get_faces_in_frame(frame_name)
         faces_updated = self.interface.state["edit"]["update_faces"]
+        logger.debug("Faces Updated: %s", faces_updated)
         self.extracted_faces.get_faces(frame_name)
         roi = [face.original_roi for face in self.extracted_faces.faces]
 
@@ -522,6 +570,7 @@ class Manual():
         frame_list = self.frames.file_list_sorted
         frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
         skip_mode = self.interface.get_skip_mode().lower()
+        logger.debug("navigation: %s, frame: '%s', skip_mode: '%s'", navigation, frame, skip_mode)
 
         while True:
             if navigation["last_request"] == 0:
@@ -554,39 +603,36 @@ class Manual():
         faces = self.extracted_faces.get_faces_in_frame(frame)
         landmarks = [{"landmarksXY": face.aligned_landmarks}
                      for face in self.extracted_faces.faces]
-        return FacesDisplay(faces,
-                            landmarks,
-                            self.extracted_faces.size,
-                            self.interface)
+        return FacesDisplay(faces, landmarks, self.extracted_faces.size, self.interface)
 
 
 class FrameDisplay():
     """" Window that holds the frame """
     def __init__(self, image, alignments, roi, interface):
+        logger.trace("Initializing %s: (alignments: %s, roi: %s, interface: %s)",
+                     self.__class__.__name__, alignments, roi, interface)
         self.image = image
         self.roi = roi
         self.alignments = alignments
         self.interface = interface
         self.annotate_frame()
+        logger.trace("Initialized %s", self.__class__.__name__)
 
     def annotate_frame(self):
         """ Annotate the frame """
         state = self.interface.state
+        logger.trace("State: %s", state)
         annotate = Annotate(self.image, self.alignments, self.roi)
         if not state["image"]["display"]:
             annotate.draw_black_image()
 
-        for item in ("bounding_box", "extract_box",
-                     "landmarks", "landmarks_mesh"):
-
+        for item in ("bounding_box", "extract_box", "landmarks", "landmarks_mesh"):
             color = self.interface.get_color(item)
             size = self.interface.get_size(item)
-
             state[item]["display"] = False if color == 7 else True
-
             if not state[item]["display"]:
                 continue
-
+            logger.trace("Annotating: '%s'", item)
             annotation = getattr(annotate, "draw_{}".format(item))
             annotation(color, size)
 
@@ -600,19 +646,22 @@ class FrameDisplay():
     def resize_frame(self, image):
         """ Set the displayed frame size and add state border"""
         # pylint: disable=no-member
+        logger.trace("Resizing frame")
         height, width = image.shape[:2]
         color = self.interface.get_state_color()
-        cv2.rectangle(image, (0, 0), (width - 1, height - 1),
-                      color, 1)
-
+        cv2.rectangle(image, (0, 0), (width - 1, height - 1), color, 1)
         scaling = self.interface.get_frame_scaling()
         image = cv2.resize(image, (0, 0), fx=scaling, fy=scaling)
+        logger.trace("Resized frame")
         return image
 
 
 class FacesDisplay():
     """ Window that holds faces thumbnail """
     def __init__(self, extracted_faces, landmarks, size, interface):
+        logger.trace("Initializing %s: (extracted_faces: %s, landmarks: %s, size: %s, "
+                     "interface: %s)", self.__class__.__name__, extracted_faces,
+                     landmarks, size, interface)
         self.row_length = 4
         self.faces = self.copy_faces(extracted_faces)
         self.roi = self.set_full_roi(size)
@@ -622,6 +671,7 @@ class FacesDisplay():
         self.annotate_faces()
 
         self.image = self.build_faces_image(size)
+        logger.trace("Initialized %s", self.__class__.__name__)
 
     @staticmethod
     def copy_faces(faces):
@@ -631,13 +681,13 @@ class FacesDisplay():
     @staticmethod
     def set_full_roi(size):
         """ ROI is the full frame for faces, so set based on size """
-        return [np.array([[(0, 0), (0, size - 1),
-                           (size - 1, size - 1), (size - 1, 0)]], np.int32)]
+        return [np.array([[(0, 0), (0, size - 1), (size - 1, size - 1), (size - 1, 0)]], np.int32)]
 
     def annotate_faces(self):
         """ Annotate each of the faces """
         state = self.interface.state
         selected_face = self.interface.get_selected_face_id()
+        logger.trace("State: %s, Selected Face ID: %s", state, selected_face)
         for idx, face in enumerate(self.faces):
             annotate = Annotate(face, [self.landmarks[idx]], self.roi)
             if not state["image"]["display"]:
@@ -646,7 +696,7 @@ class FacesDisplay():
             for item in ("landmarks", "landmarks_mesh"):
                 if not state[item]["display"]:
                     continue
-
+                logger.trace("Annotating: '%s'", item)
                 color = self.interface.get_color(item)
                 size = self.interface.get_size(item)
                 annotation = getattr(annotate, "draw_{}".format(item))
@@ -662,11 +712,14 @@ class FacesDisplay():
     def build_faces_image(self, size):
         """ Display associated faces """
         total_faces = len(self.faces)
+        logger.trace("Building faces panel. (total_faces: %s", total_faces)
         if not total_faces:
+            logger.trace("Returning empty row")
             image = self.build_faces_row(list(), size)
             return image
         total_rows = int(total_faces / self.row_length) + 1
         for idx in range(total_rows):
+            logger.trace("Building row %s", idx)
             face_idx = idx * self.row_length
             row_faces = self.faces[face_idx:face_idx + self.row_length]
             if not row_faces:
@@ -678,6 +731,7 @@ class FacesDisplay():
     def build_faces_row(self, faces, size):
         """ Build a row of 4 faces """
         # pylint: disable=no-member
+        logger.trace("Building row for %s faces", len(faces))
         if len(faces) != 4:
             remainder = 4 - (len(faces) % self.row_length)
             for _ in range(remainder):
@@ -696,6 +750,7 @@ class FacesDisplay():
 class MouseHandler():
     """ Manual Extraction """
     def __init__(self, interface, loglevel):
+        logger.debug("Initializing %s: (interface: %s)", self.__class__.__name__, interface)
         self.interface = interface
         self.alignments = interface.alignments
         self.frames = interface.frames
@@ -712,9 +767,11 @@ class MouseHandler():
                       "bounding_box": list(),
                       "bounding_last": list(),
                       "bounding_box_orig": list()}
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def init_extractor(self, loglevel):
         """ Initialize FAN """
+        logger.debug("Initialize Extractor")
         out_queue = queue_manager.get_queue("out")
 
         d_kwargs = {"in_queue": queue_manager.get_queue("in"),
@@ -763,14 +820,16 @@ class MouseHandler():
 
         self.extractor["detect"] = detector
         self.extractor["align"] = aligner
+        logger.debug("Initialized Extractor")
 
     def on_event(self, event, x, y, flags, param):  # pylint: disable=unused-argument,invalid-name
         """ Handle the mouse events """
         # pylint: disable=no-member
         if self.interface.get_edit_mode() != "Edit":
             return
-        if not self.mouse_state and event not in (cv2.EVENT_LBUTTONDOWN,
-                                                  cv2.EVENT_MBUTTONDOWN):
+        logger.trace("Mouse event: (event: %s, x: %s, y: %s, flags: %s, param: %s",
+                     event, x, y, flags, param)
+        if not self.mouse_state and event not in (cv2.EVENT_LBUTTONDOWN, cv2.EVENT_MBUTTONDOWN):
             return
 
         self.initialize()
@@ -795,6 +854,7 @@ class MouseHandler():
         frame = self.interface.get_frame_name()
         if frame == self.media["frame_id"]:
             return
+        logger.debug("Initialize frame: '%s'", frame)
         self.media["frame_id"] = frame
         self.media["image"] = self.frames.load_image(frame)
         self.dims = None
@@ -888,10 +948,19 @@ class MouseHandler():
     def update_landmarks(self):
         """ Update the landmarks """
         queue_manager.get_queue("in").put({"image": self.media["image"],
+                                           "filename": self.media["frame_id"],
                                            "face": self.media["bounding_box"]})
         landmarks = queue_manager.get_queue("out").get()
+
+        if isinstance(landmarks, dict) and landmarks.get("exception"):
+            cv2.destroyAllWindows()  # pylint: disable=no-member
+            pid = landmarks["exception"][0]
+            t_back = landmarks["exception"][1].getvalue()
+            err = "Error in child process {}. {}".format(pid, t_back)
+            raise Exception(err)
         if landmarks == "EOF":
             exit(0)
+
         alignment = self.extracted_to_alignment((landmarks["detected_faces"][0],
                                                  landmarks["landmarks"][0]))
         frame = self.media["frame_id"]

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments seralized file """
 
-# TODO merge alignments
 from lib.utils import set_system_verbosity
-from .lib_alignments import (AlignmentData, Check, Draw, Extract, Legacy,
-                             Manual, Reformat, RemoveAlignments, Sort, Spatial)
+from .lib_alignments import (AlignmentData, Check, Draw, # noqa pylint: disable=unused-import
+                             Extract, Legacy, Manual, Reformat, Rename,
+                             RemoveAlignments, Sort, Spatial)
 
 
 class Alignments():
@@ -14,14 +14,12 @@ class Alignments():
         set_system_verbosity()
 
         dest_format = self.get_dest_format()
-        self.alignments = AlignmentData(self.args.alignments_file,
-                                        dest_format)
+        self.alignments = AlignmentData(self.args.alignments_file, dest_format)
 
     def get_dest_format(self):
         """ Set the destination format for Alignments """
         dest_format = None
-        if (hasattr(self.args, 'alignment_format')
-                and self.args.alignment_format):
+        if hasattr(self.args, 'alignment_format') and self.args.alignment_format:
             dest_format = self.args.alignment_format
         return dest_format
 
@@ -34,8 +32,7 @@ class Alignments():
         elif self.args.job.startswith("sort-"):
             job = Sort
         elif self.args.job in("missing-alignments", "missing-frames",
-                              "multi-faces", "leftover-faces",
-                              "no-faces"):
+                              "multi-faces", "leftover-faces", "no-faces"):
             job = Check
         else:
             job = globals()[self.args.job.title()]
