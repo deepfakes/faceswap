@@ -3,7 +3,7 @@
 
 from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Draw, # noqa pylint: disable=unused-import
-                             Extract, Legacy, Manual, Reformat, Rename,
+                             Extract, Legacy, Manual, Merge, Reformat, Rename,
                              RemoveAlignments, Sort, Spatial)
 
 

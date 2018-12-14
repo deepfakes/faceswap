@@ -13,7 +13,7 @@ from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from . import Annotate, ExtractedFaces, Faces, Frames
+from . import AlignmentData, Annotate, ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -352,6 +352,63 @@ class Extract():
         logger.trace("frame: '%s', total_faces: %s, valid_faces: %s",
                      frame, len(faces), len(valid_faces))
         return valid_faces
+
+
+class Merge():
+    """ Merge two alignments files into one """
+    def __init__(self, alignments, arguments):
+        self.alignments = alignments
+        self.alignments2 = AlignmentData(arguments.alignments_file2, "json")
+
+    def process(self):
+        """Process the alignments file merge """
+        logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
+        skip_count = 0
+        merge_count = 0
+        for _, src_alignments, _, frame in tqdm(self.alignments2.yield_faces(),
+                                                desc="Merging Alignments",
+                                                total=self.alignments2.frames_count):
+            for idx, alignment in enumerate(src_alignments):
+                if not alignment.get("hash", None):
+                    logger.warning("Alignment '%s':%s has no Hash! Skipping", frame, idx)
+                    skip_count += 1
+                    continue
+                if self.check_exists(frame, alignment, idx):
+                    skip_count += 1
+                    continue
+                self.merge_alignment(frame, alignment, idx)
+                merge_count += 1
+        logger.info("Alignments Merged: %s", merge_count)
+        logger.info("Alignments Skipped: %s", skip_count)
+        if merge_count != 0:
+            self.set_destination_filename()
+            self.alignments.save()
+
+    def check_exists(self, frame, alignment, idx):
+        """ Check whether this has already exists """
+        existing_frame = self.alignments.hashes_to_frame.get(alignment["hash"], None)
+        if not existing_frame:
+            return False
+        if existing_frame[0] == frame:
+            logger.verbose("Face '%s': %s already exists in destination at position %s. "
+                           "Skipping", frame, idx, existing_frame[1])
+        elif existing_frame[0] != frame:
+            logger.verbose("Face '%s': %s exists in destination as face '%s': %s. "
+                           "Skipping", frame, idx, existing_frame[0], existing_frame[1])
+        return True
+
+    def merge_alignment(self, frame, alignment, idx):
+        """ Merge the source alignment into the destination """
+        logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
+                     frame, idx, alignment["hash"])
+        self.alignments.data.setdefault(frame, list()).append(alignment)
+
+    def set_destination_filename(self):
+        """ Set the destination filename """
+        orig, ext = os.path.splitext(self.alignments.file)
+        filename = "{}_merged{}".format(orig, ext)
+        logger.debug("Output set to: '%s'", filename)
+        self.alignments.file = filename
 
 
 class Reformat():

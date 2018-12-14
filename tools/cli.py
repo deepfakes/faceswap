@@ -23,10 +23,10 @@ class AlignmentsArgs(FaceSwapArgs):
 
             "opts": ("-j", "--job"),
             "type": str,
-            "choices": ("draw", "extract", "extract-large", "manual", "missing-alignments",
-                        "missing-frames", "legacy", "leftover-faces", "multi-faces", "no-faces",
-                        "reformat", "remove-faces", "remove-frames", "rename", "sort-x", "sort-y",
-                        "spatial", "update-hashes"),
+            "choices": ("draw", "extract", "extract-large", "manual", "merge",
+                        "missing-alignments", "missing-frames", "legacy", "leftover-faces",
+                        "multi-faces", "no-faces", "reformat", "remove-faces", "remove-frames",
+                        "rename", "sort-x", "sort-y", "spatial", "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform.\n"
                     "NB: All actions require an alignments file (-a) to"
@@ -44,6 +44,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\ttraining set" + frames_and_faces_dir + align_eyes +
                     "\n'manual': Manually view and edit landmarks." +
                     frames_dir + align_eyes +
+                    "\n'merge': Merge multiple alignment files into one."
+                    "\n\tSpecify the main alignments file with the -a flag"
+                    "\n\tand the file to be merged with the -a2 flag."
                     "\n'missing-alignments': Identify frames that do not"
                     "\n\texist in the alignments file." + output_opts +
                     frames_dir +
@@ -103,6 +106,14 @@ class AlignmentsArgs(FaceSwapArgs):
                               "filetypes": "alignments",
                               "help": "Full path to the alignments "
                                       "file to be processed."})
+        argument_list.append({"opts": ("-a2", "--alignments_file2"),
+                              "action": FileFullPaths,
+                              "dest": "alignments_file2",
+                              "required": False,
+                              "filetypes": "alignments",
+                              "help": "Full path to the alignments file to "
+                                      "be merged into the main alignments "
+                                      "file (merge only)"})
         argument_list.append({"opts": ("-fc", "-faces_folder"),
                               "action": DirFullPaths,
                               "dest": "faces_dir",
