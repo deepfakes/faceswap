@@ -209,10 +209,10 @@ class Alignments():
         logger.debug("Deleting face %s for frame '%s'", idx, frame)
         idx = int(idx)
         if idx + 1 > self.count_faces_in_frame(frame):
-            logger.debug("No face to delete")
+            logger.debug("No face to delete: (frame: '%s', idx %s)", frame, idx)
             return False
         del self.data[frame][idx]
-        logger.debug("Deleted face")
+        logger.debug("Deleted face: (frame: '%s', idx %s)", frame, idx)
         return True
 
     def add_face(self, frame, alignment):
