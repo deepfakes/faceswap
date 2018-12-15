@@ -76,12 +76,8 @@ class Aligner():
         """ Process landmarks
             Override for specific detector
             Must return a list of dlib rects"""
-        try:
-            if not self.init:
-                self.initialize(*args, **kwargs)
-        except ValueError as err:
-            logger.error(err)
-            exit(1)
+        if not self.init:
+            self.initialize(*args, **kwargs)
         logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
 
     # <<< DETECTION WRAPPER >>> #
