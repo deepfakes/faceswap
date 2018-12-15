@@ -3,7 +3,7 @@
 import os
 import re
 import signal
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, TimeoutExpired
 import sys
 import tkinter as tk
 from threading import Thread
@@ -153,7 +153,7 @@ class FaceswapControl():
                   "bufsize": 1,
                   "universal_newlines": True}
 
-        self.process = Popen(args, **kwargs)
+        self.process = Popen(args, **kwargs, stdin=PIPE)
         self.thread_stdout()
         self.thread_stderr()
 
@@ -161,7 +161,12 @@ class FaceswapControl():
         """ Read stdout from the subprocess. If training, pass the loss
         values to Queue """
         while True:
-            output = self.process.stdout.readline()
+            try:
+                output = self.process.stdout.readline()
+            except ValueError as err:
+                if str(err).lower().startswith("i/o operation on closed file"):
+                    break
+                raise
             if output == "" and self.process.poll() is not None:
                 break
             if output:
@@ -177,7 +182,12 @@ class FaceswapControl():
         """ Read stdout from the subprocess. If training, pass the loss
         values to Queue """
         while True:
-            output = self.process.stderr.readline()
+            try:
+                output = self.process.stderr.readline()
+            except ValueError as err:
+                if str(err).lower().startswith("i/o operation on closed file"):
+                    break
+                raise
             if output == "" and self.process.poll() is not None:
                 break
             if output:
@@ -249,22 +259,23 @@ class FaceswapControl():
 
     def terminate(self):
         """ Terminate the subprocess """
-        if self.command == "train":
+        if self.command != "train":
             print("Sending Exit Signal", flush=True)
             try:
                 now = time()
                 if os.name == "nt":
-                    os.kill(
-                        self.process.pid,
-                        signal.CTRL_BREAK_EVENT)  # pylint: disable=no-member
+                    try:
+                        self.process.communicate(input="\n", timeout=60)
+                    except TimeoutExpired:
+                        raise ValueError("Timeout reached sending Exit Signal")
                 else:
                     self.process.send_signal(signal.SIGINT)
-                while True:
-                    timeelapsed = time() - now
-                    if self.process.poll() is not None:
-                        break
-                    if timeelapsed > 30:
-                        raise ValueError("Timeout reached sending Exit Signal")
+                    while True:
+                        timeelapsed = time() - now
+                        if self.process.poll() is not None:
+                            break
+                        if timeelapsed > 60:
+                            raise ValueError("Timeout reached sending Exit Signal")
                 return
             except ValueError as err:
                 print(err)
