@@ -36,10 +36,9 @@ class Align(Aligner):
 
         card_id, _, vram_total = self.get_vram_free()
         if card_id == -1:
-            self.queues["out"].put("No Graphics Card Detected! FAN is not "
-                                   "supported on CPU. Use another aligner.")
             self.init.set()
-            exit(0)
+            raise ValueError("No Graphics Card Detected! FAN is not currently supported on CPU. "
+                             "Use another aligner.")
 
         if vram_total <= self.vram:
             tf_ratio = 1.0
@@ -217,7 +216,7 @@ class FAN():
         # Must import tensorflow inside the spawned process
         # for Windows machines
         import tensorflow as tf
-        self.tf = tf
+        self.tf = tf  # pylint: disable=invalid-name
 
         self.model_path = model_path
         self.graph = self.load_graph()
