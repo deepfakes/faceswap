@@ -59,6 +59,8 @@ class GPUStats():
                         self.logger.debug("OS is not macOS. Using pynvml")
                     pynvml.nvmlInit()
                 except (pynvml.NVMLError_LibraryNotFound, pynvml.NVMLError_DriverNotLoaded):
+                    if self.logger:
+                        self.logger.warning("No GPU detected. Switching to CPU mode")
                     self.initialized = True
                     return
             self.initialized = True
