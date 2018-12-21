@@ -2,6 +2,7 @@
 """ Cli Options and Config functions for the GUI """
 import inspect
 from argparse import SUPPRESS
+import logging
 from tkinter import ttk
 
 from lib import cli
@@ -10,23 +11,28 @@ import tools.cli as ToolsCli
 from .utils import FileHandler, Images
 
 # TODO Fix the bug that breaks GUI if timeshift isn't the last option in it's group
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class CliOptions():
     """ Class and methods for the command line options """
     def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.categories = ("faceswap", "tools")
         self.commands = dict()
         self.opts = dict()
         self.build_options()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build_options(self):
         """ Get the commands that belong to each category """
         for category in self.categories:
+            logger.debug("Building '%s'", category)
             src = ToolsCli if category == "tools" else cli
             mod_classes = self.get_cli_classes(src)
             self.commands[category] = self.sort_commands(category, mod_classes)
             self.opts.update(self.extract_options(src, mod_classes))
+            logger.debug("Built '%s'", category)
 
     @staticmethod
     def get_cli_classes(cli_source):
@@ -38,6 +44,7 @@ class CliOptions():
                                               "extractconvertargs",
                                               "guiargs")):
                 mod_classes.append(name)
+        logger.debug(mod_classes)
         return mod_classes
 
     def sort_commands(self, category, classes):
@@ -50,6 +57,7 @@ class CliOptions():
             ordered = ["extract", "train", "convert"]
             commands = ordered + [command for command in commands
                                   if command not in ordered]
+        logger.debug(commands)
         return commands
 
     @staticmethod
@@ -62,9 +70,12 @@ class CliOptions():
             into master options Dictionary """
         subopts = dict()
         for classname in mod_classes:
+            logger.debug("Processing: (classname: '%s')", classname)
             command = self.format_command_name(classname)
             options = self.get_cli_arguments(cli_source, classname, command)
             self.process_options(options)
+            logger.debug("Processed: (classname: '%s', command: '%s', options: %s)",
+                         classname, command, options)
             subopts[command] = options
         return subopts
 
@@ -77,6 +88,7 @@ class CliOptions():
     def process_options(self, command_options):
         """ Process the options for a single command """
         for opt in command_options:
+            logger.trace("Processing: %s", opt)
             if opt.get("help", "") == SUPPRESS:
                 command_options.remove(opt)
             ctl, sysbrowser, filetypes, action_option = self.set_control(opt)
@@ -86,6 +98,7 @@ class CliOptions():
             opt["filesystem_browser"] = sysbrowser
             opt["filetypes"] = filetypes
             opt["action_option"] = action_option
+            logger.trace("Processed: %s", opt)
 
     @staticmethod
     def set_control_title(opts):
@@ -104,6 +117,7 @@ class CliOptions():
         if action in (cli.FullPaths,
                       cli.DirFullPaths,
                       cli.FileFullPaths,
+                      cli.DirOrFileFullPaths,
                       cli.SaveFileFullPaths,
                       cli.ContextFullPaths):
             sysbrowser, filetypes = self.set_sysbrowser(action,
@@ -119,14 +133,17 @@ class CliOptions():
     def set_sysbrowser(action, filetypes, action_option):
         """ Set the correct file system browser and filetypes
             for the passed in action """
-        sysbrowser = "folder"
+        sysbrowser = ["folder"]
         filetypes = "default" if not filetypes else filetypes
         if action == cli.FileFullPaths:
-            sysbrowser = "load"
+            sysbrowser = ["load"]
         elif action == cli.SaveFileFullPaths:
-            sysbrowser = "save"
+            sysbrowser = ["save"]
+        elif action == cli.DirOrFileFullPaths:
+            sysbrowser = ["folder", "load"]
         elif action == cli.ContextFullPaths and action_option:
-            sysbrowser = "context"
+            sysbrowser = ["context"]
+        logger.debug("sysbrowser: %s, filetypes: '%s'", sysbrowser, filetypes)
         return sysbrowser, filetypes
 
     def set_context_option(self, command):
@@ -156,6 +173,7 @@ class CliOptions():
     def reset(self, command=None):
         """ Reset the options for all or passed command
             back to default value """
+        logger.debug("Resetting options to default. (command: '%s'", command)
         for option in self.options_to_process(command):
             default = option.get("default", "")
             default = "" if default is None else default
@@ -167,6 +185,7 @@ class CliOptions():
     def clear(self, command=None):
         """ Clear the options values for all or passed
             commands """
+        logger.debug("Clearing options. (command: '%s'", command)
         for option in self.options_to_process(command):
             if isinstance(option["value"].get(), bool):
                 option["value"].set(False)
@@ -186,6 +205,7 @@ class CliOptions():
             for opt in opts:
                 cmd_dict[opt["control_title"]] = opt["value"].get()
             ctl_dict[cmd] = cmd_dict
+        logger.debug("command: '%s', ctl_dict: '%s'", command, ctl_dict)
         return ctl_dict
 
     def get_one_option_variable(self, command, title):
@@ -221,12 +241,15 @@ class Config():
     """ Actions for loading and saving Faceswap GUI command configurations """
 
     def __init__(self, cli_opts, tk_vars):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.cli_opts = cli_opts
         self.serializer = JSONSerializer
         self.tk_vars = tk_vars
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def load(self, command=None):
         """ Load a saved config file """
+        logger.debug("Loading config: (command: '%s')", command)
         cfgfile = FileHandler("open", "config").retfile
         if not cfgfile:
             return
@@ -234,6 +257,7 @@ class Config():
         opts = self.get_command_options(cfg, command) if command else cfg
         for cmd, opts in opts.items():
             self.set_command_args(cmd, opts)
+        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
 
     def get_command_options(self, cfg, command):
         """ return the saved options for the requested
@@ -241,8 +265,11 @@ class Config():
         opts = cfg.get(command, None)
         if not opts:
             self.tk_vars["consoleclear"].set(True)
-            print("No " + command + " section found in file")
-        return {command: opts}
+            print("No {} section found in file".format(command))
+            logger.info("No  %s section found in file", command)
+        retval = {command: opts}
+        logger.debug(retval)
+        return retval
 
     def set_command_args(self, command, options):
         """ Pass the saved config items back to the CliOptions """
@@ -256,9 +283,11 @@ class Config():
 
     def save(self, command=None):
         """ Save the current GUI state to a config file in json format """
+        logger.debug("Saving config: (command: '%s')", command)
         cfgfile = FileHandler("save", "config").retfile
         if not cfgfile:
             return
         cfg = self.cli_opts.get_option_values(command)
         cfgfile.write(self.serializer.marshal(cfg))
         cfgfile.close()
+        logger.debug("Saved config: (command: '%s', cfgfile: '%s')", command, cfgfile)
