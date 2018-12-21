@@ -31,7 +31,7 @@ class Convert():
         self.faces_count = 0
 
         self.images = Images(self.args)
-        self.alignments = Alignments(self.args, False)
+        self.alignments = Alignments(self.args, False, self.images.is_video)
 
         # Update Legacy alignments
         Legacy(self.alignments, self.images.input_images, arguments.input_aligned_dir)
@@ -139,9 +139,9 @@ class Convert():
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        for filename in tqdm(self.images.input_images,
-                             total=self.images.images_found,
-                             file=sys.stdout):
+        for filename, image in tqdm(self.images.load(),
+                                    total=self.images.images_found,
+                                    file=sys.stdout):
 
             if (self.args.discard_frames and
                     self.opts.check_skipframe(filename) == "discard"):
@@ -149,13 +149,12 @@ class Convert():
 
             frame = os.path.basename(filename)
             if self.extract_faces:
-                convert_item = self.detect_faces(filename)
+                detected_faces = self.detect_faces(filename, image)
             else:
-                convert_item = self.alignments_faces(filename, frame)
+                detected_faces = self.alignments_faces(frame, image)
 
-            if not convert_item:
+            if not detected_faces:
                 continue
-            image, detected_faces = convert_item
 
             faces_count = len(detected_faces)
             if faces_count != 0:
@@ -171,28 +170,27 @@ class Convert():
 
             yield filename, image, detected_faces
 
-    def detect_faces(self, filename):
+    @staticmethod
+    def detect_faces(filename, image):
         """ Extract the face from a frame (If not alignments file found) """
-        image = self.images.load_one_image(filename)
         queue_manager.get_queue("load").put((filename, image))
         item = queue_manager.get_queue("align").get()
         detected_faces = item["detected_faces"]
-        return image, detected_faces
+        return detected_faces
 
-    def alignments_faces(self, filename, frame):
+    def alignments_faces(self, frame, image):
         """ Get the face from alignments file """
         if not self.check_alignments(frame):
             return None
 
         faces = self.alignments.get_faces_in_frame(frame)
-        image = self.images.load_one_image(filename)
         detected_faces = list()
 
         for rawface in faces:
             face = DetectedFace()
             face.from_alignment(rawface, image=image)
             detected_faces.append(face)
-        return image, detected_faces
+        return detected_faces
 
     def check_alignments(self, frame):
         """ If we have no alignments for this image, skip it """

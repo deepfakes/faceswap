@@ -28,7 +28,7 @@ class Extract():
         self.output_dir = get_folder(self.args.output_dir)
         logger.info("Output Directory: %s", self.args.output_dir)
         self.images = Images(self.args)
-        self.alignments = Alignments(self.args, True)
+        self.alignments = Alignments(self.args, True, self.images.is_video)
         self.plugins = Plugins(self.args)
 
         self.post_process = PostProcess(arguments)

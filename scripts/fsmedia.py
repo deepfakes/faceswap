@@ -16,7 +16,7 @@ from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.utils import (camel_case_split, get_folder, get_image_paths,
-                       set_system_verbosity)
+                       set_system_verbosity, _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -49,22 +49,27 @@ class Utils():
 
 class Alignments(AlignmentsBase):
     """ Override main alignments class for extract """
-    def __init__(self, arguments, is_extract):
-        logger.debug("Initializing %s: (is_extract: %s)", self.__class__.__name__, is_extract)
+    def __init__(self, arguments, is_extract, input_is_video=False):
+        logger.debug("Initializing %s: (is_extract: %s, input_is_video: %s)",
+                     self.__class__.__name__, is_extract, input_is_video)
         self.args = arguments
         self.is_extract = is_extract
-        folder, filename = self.set_folder_filename()
+        folder, filename = self.set_folder_filename(input_is_video)
         serializer = self.set_serializer()
         super().__init__(folder,
                          filename=filename,
                          serializer=serializer)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_folder_filename(self):
+    def set_folder_filename(self, input_is_video):
         """ Return the folder for the alignments file"""
         if self.args.alignments_path:
             logger.debug("Alignments File provided: '%s'", self.args.alignments_path)
             folder, filename = os.path.split(str(self.args.alignments_path))
+        elif input_is_video:
+            logger.debug("Alignments from Video File: '%s'", self.args.input_dir)
+            folder, filename = os.path.split(self.args.input_dir)
+            filename = "{}_alignments".format(os.path.splitext(filename)[0])
         else:
             logger.debug("Alignments from Input Folder: '%s'", self.args.input_dir)
             folder = str(self.args.input_dir)
@@ -129,23 +134,53 @@ class Images():
     def __init__(self, arguments):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
+        self.is_video = self.check_input_folder()
         self.input_images = self.get_input_images()
-        self.images_found = len(self.input_images)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_input_images(self):
-        """ Return the list of images that are to be processed """
-        if not os.path.exists(self.args.input_dir):
-            logger.error("Input directory %s not found.", self.args.input_dir)
-            exit(1)
+    @property
+    def images_found(self):
+        """ Number of images or frames """
+        if self.is_video:
+            cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
+            retval = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
+            cap.release()
+        else:
+            retval = len(self.input_images)
+        return retval
 
-        logger.info("Input Directory: %s", self.args.input_dir)
-        input_images = get_image_paths(self.args.input_dir)
+    def check_input_folder(self):
+        """ Check whether the input is a folder or video """
+        if not os.path.exists(self.args.input_dir):
+            logger.error("Input location %s not found.", self.args.input_dir)
+            exit(1)
+        if (os.path.isfile(self.args.input_dir) and
+                os.path.splitext(self.args.input_dir)[1] in _video_extensions):
+            logger.info("Input Video: %s", self.args.input_dir)
+            retval = True
+        else:
+            logger.info("Input Directory: %s", self.args.input_dir)
+            retval = False
+        return retval
+
+    def get_input_images(self):
+        """ Return the list of images or video file that is to be processed """
+        if self.is_video:
+            input_images = self.args.input_dir
+        else:
+            input_images = get_image_paths(self.args.input_dir)
 
         return input_images
 
     def load(self):
         """ Load an image and yield it with it's filename """
+        iterator = self.load_video_frames if self.is_video else self.load_disk_frames
+        for filename, image in iterator():
+            yield filename, image
+
+    def load_disk_frames(self):
+        """ Load frames from disk """
+        logger.debug("Input is Seperate Frames. Loading images")
         for filename in self.input_images:
             logger.trace("Loading image: '%s'", filename)
             try:
@@ -154,6 +189,24 @@ class Images():
                 logger.error("Failed to load image '%s'. Original Error: %s", filename, err)
                 continue
             yield filename, image
+
+    def load_video_frames(self):
+        """ Return frames from a video file """
+        logger.debug("Input is video. Capturing frames")
+        vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
+        cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
+        i = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                logger.debug("Video terminated")
+                break
+            i += 1
+            # Keep filename format for outputted face
+            filename = "{}_{:06d}.png".format(vidname, i)
+            logger.trace("Loading video frame: '%s'", filename)
+            yield filename, frame
+        cap.release()
 
     @staticmethod
     def load_one_image(filename):
