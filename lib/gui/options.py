@@ -4,13 +4,15 @@ import inspect
 from argparse import SUPPRESS
 from tkinter import ttk
 
-import lib.cli as cli
+from lib import cli
 from lib.Serializer import JSONSerializer
 import tools.cli as ToolsCli
 from .utils import FileHandler, Images
 
+# TODO Fix the bug that breaks GUI if timeshift isn't the last option in it's group
 
-class CliOptions(object):
+
+class CliOptions():
     """ Class and methods for the command line options """
     def __init__(self):
         self.categories = ("faceswap", "tools")
@@ -70,7 +72,7 @@ class CliOptions(object):
     def get_cli_arguments(cli_source, classname, command):
         """ Extract the options from the main and tools cli files """
         meth = getattr(cli_source, classname)(None, command)
-        return meth.argument_list + meth.optional_arguments
+        return meth.global_arguments + meth.argument_list + meth.optional_arguments
 
     def process_options(self, command_options):
         """ Process the options for a single command """
@@ -202,7 +204,7 @@ class CliOptions(object):
             opt = option["opts"][0]
             if command in ("extract", "convert") and opt == "-o":
                 Images().pathoutput = optval
-            if optval == "False" or optval == "":
+            if optval in ("False", ""):
                 continue
             elif optval == "True":
                 yield (opt, )
@@ -215,7 +217,7 @@ class CliOptions(object):
                 yield opt
 
 
-class Config(object):
+class Config():
     """ Actions for loading and saving Faceswap GUI command configurations """
 
     def __init__(self, cli_opts, tk_vars):

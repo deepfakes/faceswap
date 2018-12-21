@@ -1,4 +1,5 @@
 *
+!setup.cfg
 !*.keep
 !*.py
 !*.md
@@ -24,4 +25,5 @@
 !tools
 !tools/lib*
 
+*.pyc
 __pycache__/

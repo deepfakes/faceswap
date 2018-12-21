@@ -23,11 +23,10 @@ class AlignmentsArgs(FaceSwapArgs):
 
             "opts": ("-j", "--job"),
             "type": str,
-            "choices": ("draw", "extract", "extract-large", "manual",
-                        "missing-alignments", "missing-frames",
-                        "leftover-faces", "multi-faces", "no-faces",
-                        "reformat", "remove-faces", "remove-frames",
-                        "rotate", "sort-x", "sort-y", "spatial"),
+            "choices": ("draw", "extract", "extract-large", "manual", "merge",
+                        "missing-alignments", "missing-frames", "legacy", "leftover-faces",
+                        "multi-faces", "no-faces", "reformat", "remove-faces", "remove-frames",
+                        "rename", "sort-x", "sort-y", "spatial", "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform.\n"
                     "NB: All actions require an alignments file (-a) to"
@@ -45,12 +44,19 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\ttraining set" + frames_and_faces_dir + align_eyes +
                     "\n'manual': Manually view and edit landmarks." +
                     frames_dir + align_eyes +
+                    "\n'merge': Merge multiple alignment files into one."
+                    "\n\tSpecify the main alignments file with the -a flag"
+                    "\n\tand the file to be merged with the -a2 flag."
                     "\n'missing-alignments': Identify frames that do not"
                     "\n\texist in the alignments file." + output_opts +
                     frames_dir +
                     "\n'missing-frames': Identify frames in the alignments"
                     "\n\tfile that do not appear within the frames"
                     "\n\tfolder." + output_opts + frames_dir +
+                    "\n'legacy': This updates legacy alignments to the latest"
+                    "\n\tformat by adding frame dimensions, rotating the"
+                    "\n\tlandmarks and bounding boxes and adding face_hashes" +
+                    frames_and_faces_dir +
                     "\n'leftover-faces': Identify faces in the faces"
                     "\n\tfolder that do not exist in the alignments file."
                     + output_opts + faces_dir +
@@ -77,14 +83,10 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\twill be backed up. A different file format for"
                     "\n\tthe alignments file can optionally be specified"
                     "\n\t(-fmt)." + frames_dir +
-                    "\n'rotate' - Rotate landmarks and bounding boxes. Legacy"
-                    "\n\talignments files hold an 'r' parameter indicating"
-                    "\n\tthat the image needs to be rotated for convert. This"
-                    "\n\tmeans that the stored landarks and bounding box do"
-                    "\n\tnot correspond to the actual frame. This command"
-                    "\n\tupdates the alignments file with the correct"
-                    "\n\tlandmarks and bounding boxes and removes the 'r'"
-                    "\n\tparameter." + frames_dir +
+                    "\n'rename' - Rename faces to correspond with their"
+                    "\n\tparent frame and position index in the alignments"
+                    "\n\tfile (i.e. how they are named after running"
+                    "\n\textract)." + faces_dir +
                     "\n'sort-x' - Re-index the alignments from left to"
                     "\n\tright. For alignments with multiple faces this will"
                     "\n\tensure that the left-most face is at index 0"
@@ -95,7 +97,7 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tensure that the top-most face is at index 0"
                     "\n\tOptionally pass in a faces folder (-fc) to also"
                     "\n\trename extracted faces."
-                    "\n'spatial' - Perform spatial and temporal filtering to "
+                    "\n'spatial' - Perform spatial and temporal filtering to"
                     "\n\tsmooth alignments (EXPERIMENTAL!)"})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
@@ -104,6 +106,14 @@ class AlignmentsArgs(FaceSwapArgs):
                               "filetypes": "alignments",
                               "help": "Full path to the alignments "
                                       "file to be processed."})
+        argument_list.append({"opts": ("-a2", "--alignments_file2"),
+                              "action": FileFullPaths,
+                              "dest": "alignments_file2",
+                              "required": False,
+                              "filetypes": "alignments",
+                              "help": "Full path to the alignments file to "
+                                      "be merged into the main alignments "
+                                      "file (merge only)"})
         argument_list.append({"opts": ("-fc", "-faces_folder"),
                               "action": DirFullPaths,
                               "dest": "faces_dir",
@@ -146,11 +156,6 @@ class AlignmentsArgs(FaceSwapArgs):
                               "help": "Enable this option if manual "
                                       "alignments window is closing "
                                       "instantly. (Manual only)"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
         return argument_list
 
 

@@ -8,36 +8,38 @@
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of DetectedFaces objects without landmarks>}
+     "detected_faces": <list of DlibRectangles>}
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of final DetectedFaces objects>}
+     "detected_faces": <list of dlibRectangles>,
+     "landmarks": <list of landmarks>}
     """
 
+import logging
 import os
-import cv2
-import numpy as np
+import traceback
 
-from lib.aligner import get_align_mat
-from lib.align_eyes import FACIAL_LANDMARKS_IDXS
+from io import StringIO
 
+from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Aligner():
     """ Landmarks Aligner Object """
-    def __init__(self, verbose=False, align_eyes=False, size=256):
-        self.verbose = verbose
-        self.size = size
+    def __init__(self, loglevel):
+        logger.debug("Initializing %s", self.__class__.__name__)
+        self.loglevel = loglevel
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
-        self.align_eyes = align_eyes
         self.extract = Extract()
         self.init = None
 
         # The input and output queues for the plugin.
-        # See lib.multithreading.QueueManager for getting queues
+        # See lib.queue_manager.QueueManager for getting queues
         self.queues = {"in": None, "out": None}
 
         #  Path to model if required
@@ -47,6 +49,7 @@ class Aligner():
         # how many parallel processes / batches can be run.
         # Be conservative to avoid OOM.
         self.vram = None
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
     # These methods must be overriden when creating a plugin
@@ -60,6 +63,11 @@ class Aligner():
         """ Inititalize the aligner
             Tasks to be run before any alignments are performed.
             Override for specific detector """
+        logger_init = kwargs["log_init"]
+        log_queue = kwargs["log_queue"]
+        logger_init(self.loglevel, log_queue)
+        logger.debug("_base initialize %s: (PID: %s, args: %s, kwargs: %s)",
+                     self.__class__.__name__, os.getpid(), args, kwargs)
         self.init = kwargs["event"]
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
@@ -68,11 +76,24 @@ class Aligner():
         """ Process landmarks
             Override for specific detector
             Must return a list of dlib rects"""
+        if not self.init:
+            self.initialize(*args, **kwargs)
+        logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
+
+    # <<< DETECTION WRAPPER >>> #
+    def run(self, *args, **kwargs):
+        """ Parent align process.
+            This should always be called as the entry point so exceptions
+            are passed back to parent.
+            Do not override """
         try:
-            if not self.init:
-                self.initialize(*args, **kwargs)
-        except ValueError as err:
-            print("ERROR: {}".format(err))
+            self.align(*args, **kwargs)
+        except Exception:  # pylint: disable=broad-except
+            logger.error("Caught exception in child process: %s", os.getpid())
+            tb_buffer = StringIO()
+            traceback.print_exc(file=tb_buffer)
+            exception = {"exception": (os.getpid(), tb_buffer)}
+            self.queues["out"].put(exception)
             exit(1)
 
     # <<< FINALIZE METHODS>>> #
@@ -80,117 +101,40 @@ class Aligner():
         """ This should be called as the final task of each plugin
             aligns faces and puts to the out queue """
         if output == "EOF":
+            logger.trace("Item out: %s", output)
             self.queues["out"].put("EOF")
             return
-        self.align_faces(output)
+        logger.trace("Item out: %s", {key: val
+                                      for key, val in output.items()
+                                      if key != "image"})
         self.queues["out"].put((output))
 
-    def align_faces(self, output):
-        """ Align the faces """
-        detected_faces = output["detected_faces"]
-        image = output["image"]
-
-        resized_faces = list()
-        t_mats = list()
-
-        for face in detected_faces:
-            resized_face, t_mat = self.extract.extract(image,
-                                                       face,
-                                                       self.size,
-                                                       self.align_eyes)
-            resized_faces.append(resized_face)
-            t_mats.append(t_mat)
-
-        output["resized_faces"] = resized_faces
-        output["t_mats"] = t_mats
-
     # <<< MISC METHODS >>> #
-    def get_vram_free(self):
+    @staticmethod
+    def get_vram_free():
         """ Return free and total VRAM on card with most VRAM free"""
         stats = GPUStats()
         vram = stats.get_card_most_free()
-        if self.verbose:
-            print("Using device {} with {}MB free of {}MB".format(
-                vram["device"],
-                int(vram["free"]),
-                int(vram["total"])))
+        logger.verbose("Using device %s with %sMB free of %sMB",
+                       vram["device"],
+                       int(vram["free"]),
+                       int(vram["total"]))
         return int(vram["card_id"]), int(vram["free"]), int(vram["total"])
 
-
-class Extract():
-    """ Based on the original https://www.reddit.com/r/deepfakes/
-        code sample + contribs """
-
-    def extract(self, image, face, size, align_eyes):
-        """ Extract a face from an image """
-        alignment = get_align_mat(face, size, align_eyes)
-        extracted = self.transform(image, alignment, size, 48)
-        return extracted, alignment
-
-    @staticmethod
-    def transform(image, mat, size, padding=0):
-        """ Transform Image """
-        matrix = mat * (size - 2 * padding)
-        matrix[:, 2] += padding
-        return cv2.warpAffine(image, matrix, (size, size))
-
-    @staticmethod
-    def transform_points(points, mat, size, padding=0):
-        """ Transform points along matrix """
-        matrix = mat * (size - 2 * padding)
-        matrix[:, 2] += padding
-        points = np.expand_dims(points, axis=1)
-        points = cv2.transform(points, matrix, points.shape)
-        points = np.squeeze(points)
-        return points
-
-    @staticmethod
-    def get_feature_mask(aligned_landmarks_68, size,
-                         padding=0, dilation=30):
-        """ Return the face feature mask """
-        scale = size - 2*padding
-        translation = padding
-        pad_mat = np.matrix([[scale, 0.0, translation],
-                             [0.0, scale, translation]])
-        aligned_landmarks_68 = np.expand_dims(aligned_landmarks_68, axis=1)
-        aligned_landmarks_68 = cv2.transform(aligned_landmarks_68,
-                                             pad_mat,
-                                             aligned_landmarks_68.shape)
-        aligned_landmarks_68 = np.squeeze(aligned_landmarks_68)
-
-        (l_start, l_end) = FACIAL_LANDMARKS_IDXS["left_eye"]
-        (r_start, r_end) = FACIAL_LANDMARKS_IDXS["right_eye"]
-        (m_start, m_end) = FACIAL_LANDMARKS_IDXS["mouth"]
-        (n_start, n_end) = FACIAL_LANDMARKS_IDXS["nose"]
-        (lb_start, lb_end) = FACIAL_LANDMARKS_IDXS["left_eyebrow"]
-        (rb_start, rb_end) = FACIAL_LANDMARKS_IDXS["right_eyebrow"]
-        (c_start, c_end) = FACIAL_LANDMARKS_IDXS["chin"]
-
-        l_eye_points = aligned_landmarks_68[l_start:l_end].tolist()
-        l_brow_points = aligned_landmarks_68[lb_start:lb_end].tolist()
-        r_eye_points = aligned_landmarks_68[r_start:r_end].tolist()
-        r_brow_points = aligned_landmarks_68[rb_start:rb_end].tolist()
-        nose_points = aligned_landmarks_68[n_start:n_end].tolist()
-        chin_points = aligned_landmarks_68[c_start:c_end].tolist()
-        mouth_points = aligned_landmarks_68[m_start:m_end].tolist()
-        l_eye_points = l_eye_points + l_brow_points
-        r_eye_points = r_eye_points + r_brow_points
-        mouth_points = mouth_points + nose_points + chin_points
-
-        l_eye_hull = cv2.convexHull(np.array(l_eye_points).reshape(
-            (-1, 2)).astype(int)).flatten().reshape((-1, 2))
-        r_eye_hull = cv2.convexHull(np.array(r_eye_points).reshape(
-            (-1, 2)).astype(int)).flatten().reshape((-1, 2))
-        mouth_hull = cv2.convexHull(np.array(mouth_points).reshape(
-            (-1, 2)).astype(int)).flatten().reshape((-1, 2))
-
-        mask = np.zeros((size, size, 3), dtype=float)
-        cv2.fillConvexPoly(mask, l_eye_hull, (1, 1, 1))
-        cv2.fillConvexPoly(mask, r_eye_hull, (1, 1, 1))
-        cv2.fillConvexPoly(mask, mouth_hull, (1, 1, 1))
-
-        if dilation > 0:
-            kernel = np.ones((dilation, dilation), np.uint8)
-            mask = cv2.dilate(mask, kernel, iterations=1)
-
-        return mask
+    def get_item(self):
+        """ Yield one item from the queue """
+        while True:
+            item = self.queues["in"].get()
+            if isinstance(item, dict):
+                logger.trace("Item in: %s", {key: val
+                                             for key, val in item.items()
+                                             if key != "image"})
+                # Pass Detector failures straight out and quit
+                if item.get("exception", None):
+                    self.queues["out"].put(item)
+                    exit(1)
+            else:
+                logger.trace("Item in: %s", item)
+            yield item
+            if item == "EOF":
+                break

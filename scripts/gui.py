@@ -1,6 +1,9 @@
 #!/usr/bin python3
 """ The optional GUI for faceswap """
 
+# NB: The GUI can't currently log as it is a wrapper for the python scripts, so don't
+#     implement logging unless you can handle the conflicts
+
 import os
 import sys
 import tkinter as tk
@@ -124,7 +127,7 @@ class FaceswapGui(tk.Tk):
         exit()
 
 
-class Gui(object):
+class Gui():  # pylint: disable=too-few-public-methods
     """ The GUI process. """
     def __init__(self, arguments):
         cmd = sys.argv[0]

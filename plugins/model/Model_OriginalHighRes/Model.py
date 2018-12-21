@@ -6,8 +6,9 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import enum
 from json import JSONDecodeError
-import sys
+import logging
 import os
+import sys
 import configparser
 import warnings
 
@@ -33,9 +34,12 @@ from .instance_normalization import InstanceNormalization
 
 if isinstance(__version__, (list, tuple)):
     version_str = ".".join([str(n) for n in __version__[1:]])
-else: 
+else:
     version_str = __version__
 
+mswindows = sys.platform=="win32"
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 mswindows = sys.platform=="win32"
 
 _kern_init = RandomNormal(0, 0.02)
@@ -69,7 +73,7 @@ class Model():
                'decoder_BH5': 'decoder_B_{}{}.h5'.format( version_str, self.encoder_name.lower() ) }
                 
         self.model_dir = model_dir
-        
+
         # can't chnage gpu's when the model is initialized no point in making it r/w
         self._gpus = gpus 
         
@@ -118,16 +122,16 @@ class Model():
 
         face_A, face_B = (hdf['decoder_AH5'], hdf['decoder_BH5']) if not swapped else (hdf['decoder_BH5'], hdf['decoder_AH5'])                            
 
-        try:            
+        try:
             self.encoder.load_weights(os.path.join(model_dir, hdf['encoderH5']))
             self.decoder_A.load_weights(os.path.join(model_dir, face_A))
             self.decoder_B.load_weights(os.path.join(model_dir, face_B))
-            print('loaded model weights')
+            logger.info('loaded model weights')
             return True
         except IOError as e:
-            print('Failed loading training data:', e.strerror)            
+            logger.warning('Error loading training info: %s', str(e.strerror))
         except Exception as e:
-            print('Failed loading training data:', str(e))           
+            logger.warning('Error loading training info: %s', str(e))
             
         self.epoch_no = 1 
       
@@ -337,7 +341,7 @@ class Model():
         return Encoder(cls.IMAGE_SHAPE), Decoder_A(), Decoder_B()   
         
 
-    def save_weights(self):        
+    def save_weights(self):
         model_dir = str(self.model_dir)
         
         state_dir = os.path.join(model_dir, 'state_{version_str}.json'.format(**globals()))
@@ -347,9 +351,10 @@ class Model():
                 state_json = ser.marshal(self._state)
                 fp.write(state_json.encode('utf-8'))            
         except IOError as e:
-            print(e.strerror)                     
-        
-        print('\nsaving model weights', end='', flush=True)                                    
+            logger.error(e.strerror)
+
+        logger.info('saving model weights')
+
         with ThreadPoolExecutor(max_workers=len(hdf)) as executor:
             futures = [executor.submit(backup_file, model_dir, model) for model in hdf.values()]
             for future in as_completed(futures):
@@ -359,7 +364,7 @@ class Model():
             for future in as_completed(futures):
                 future.result()
                 print('.', end='', flush=True)
-        print('done', flush=True)  
+        logger.info('done')
         
     @property
     def epoch_no(self):
@@ -381,17 +386,17 @@ class Model():
             pass
         
         try:
-            print('Loading training info ..')
+            logger.info('Loading training info ..')
             self._state = self._load_state()
         except IOError as e:
             import errno
             if e.errno==errno.ENOENT:
-                print('No training info found.')
+                logger.info('No training info found.')
             else:
-                print('Error loading training info:', e.strerror)
+                logger.error('Error loading training info: %s', e.strerror)
             self._state = { self.encoder_name : self._new_state() }            
         except JSONDecodeError as e:
-            print('Error loading training info:', e.msg)
+            logger.error('Error loading training info: %s', e.msg)
             self._state = { self.encoder_name : self._new_state() }
             
         return self._state        
@@ -399,7 +404,7 @@ class Model():
     @property
     def gpus(self):
         return self._gpus
-    
+
     @property
     def is_new_training(self):
         return self.epoch_no <= 1

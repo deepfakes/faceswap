@@ -1,10 +1,13 @@
 # AutoEncoder base classes
+import logging
 
 from lib.utils import backup_file
 
 hdf = {'encoderH5': 'lowmem_encoder.h5',
        'decoder_AH5': 'lowmem_decoder_A.h5',
        'decoder_BH5': 'lowmem_decoder_B.h5'}
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 #Part of Filename migration, should be remopved some reasonable time after first added
 import os.path
@@ -30,23 +33,22 @@ class AutoEncoder:
         try:
             #Part of Filename migration, should be remopved some reasonable time after first added
             if os.path.isfile(str(self.model_dir / old_encoderH5)):
-                print('Migrating to new filenames: ', end='')
+                logger.info('Migrating to new filenames:')
                 if os.path.isfile(str(self.model_dir / hdf['encoderH5'])) is not True:
                     os.rename(str(self.model_dir / old_decoder_AH5), str(self.model_dir / hdf['decoder_AH5']))
                     os.rename(str(self.model_dir / old_decoder_BH5), str(self.model_dir / hdf['decoder_BH5']))
                     os.rename(str(self.model_dir / old_encoderH5), str(self.model_dir / hdf['encoderH5']))
-                    print('Complete')
+                    logger.info('Complete')
                 else:
-                    print('Failed due to existing files in folder.  Loading already migrated files')
+                    logger.warning('Failed due to existing files in folder.  Loading already migrated files')
             #End filename migration
             self.encoder.load_weights(str(self.model_dir / hdf['encoderH5']))
             self.decoder_A.load_weights(str(self.model_dir / face_A))
             self.decoder_B.load_weights(str(self.model_dir / face_B))
-            print('loaded model weights')
+            logger.info('loaded model weights')
             return True
         except Exception as e:
-            print('Failed loading existing training data.')
-            print(e)
+            logger.warning('Failed loading existing training data. Starting a fresh model: %s', self.model_dir)
             return False
 
     def save_weights(self):
@@ -56,4 +58,4 @@ class AutoEncoder:
         self.encoder.save_weights(str(self.model_dir / hdf['encoderH5']))
         self.decoder_A.save_weights(str(self.model_dir / hdf['decoder_AH5']))
         self.decoder_B.save_weights(str(self.model_dir / hdf['decoder_BH5']))
-        print('saved model weights')
+        logger.info('saved model weights')
