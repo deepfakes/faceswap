@@ -10,7 +10,7 @@ import cv2
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import _image_extensions, hash_image_file, hash_encode_image
+from lib.utils import _image_extensions, _video_extensions, hash_image_file, hash_encode_image
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -91,27 +91,44 @@ class MediaLoader():
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self.folder = folder
-        self.check_folder_exists()
+        self.vid_cap = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
-        self.count = len(self.file_list_sorted)
         logger.verbose("%s items loaded", self.count)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def check_folder_exists(self):
-        """ makes sure that the faces folder exists """
+    @property
+    def count(self):
+        """ Number of faces or frames """
+        if self.vid_cap:
+            retval = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
+        else:
+            retval = len(self.file_list_sorted)
+        return retval
+
+    def check_input_folder(self):
+        """ makes sure that the frames or faces folder exists
+            If frames folder contains a video file return video capture object """
         err = None
         loadtype = self.__class__.__name__
         if not self.folder:
             err = "ERROR: A {} folder must be specified".format(loadtype)
-        elif not os.path.isdir(self.folder):
-            err = ("ERROR: The {} folder {} could not be "
+        elif not os.path.exists(self.folder):
+            err = ("ERROR: The {} location {} could not be "
                    "found".format(loadtype, self.folder))
         if err:
             logger.error(err)
             exit(0)
 
-        logger.verbose("Folder exists at '%s'", self.folder)
+        if (loadtype == "Frames" and
+                os.path.isfile(self.folder) and
+                os.path.splitext(self.folder)[1] in _video_extensions):
+            logger.verbose("Video exists at : '%s'", self.folder)
+            retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
+        else:
+            logger.verbose("Folder exists at '%s'", self.folder)
+            retval = None
+        return retval
 
     @staticmethod
     def valid_extension(filename):
@@ -138,9 +155,21 @@ class MediaLoader():
 
     def load_image(self, filename):
         """ Load an image """
-        src = os.path.join(self.folder, filename)
-        logger.trace("Loading image: '%s'", src)
-        image = cv2.imread(src)  # pylint: disable=no-member
+        if self.vid_cap:
+            image = self.load_video_frame(filename)
+        else:
+            src = os.path.join(self.folder, filename)
+            logger.trace("Loading image: '%s'", src)
+            image = cv2.imread(src)  # pylint: disable=no-member
+        return image
+
+    def load_video_frame(self, filename):
+        """ Load a requested frame from video """
+        frame = os.path.splitext(filename)[0]
+        logger.trace("Loading video frame: '%s'", frame)
+        frame_no = int(frame[frame.rfind("_") + 1:])
+        self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
+        _, image = self.vid_cap.read()
         return image
 
     @staticmethod
@@ -191,6 +220,13 @@ class Frames(MediaLoader):
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
         logger.info("Loading file list from %s", self.folder)
+        iterator = self.process_video if self.vid_cap else self.process_frames
+        for item in iterator():
+            yield item
+
+    def process_frames(self):
+        """ Process exported Frames """
+        logger.info("Loading file list from %s", self.folder)
         for frame in os.listdir(self.folder):
             if not self.valid_extension(frame):
                 continue
@@ -200,6 +236,20 @@ class Frames(MediaLoader):
             retval = {"frame_fullname": frame,
                       "frame_name": filename,
                       "frame_extension": file_extension}
+            logger.trace(retval)
+            yield retval
+
+    def process_video(self):
+        """Dummy in frames for video """
+        logger.info("Loading video frames from %s", self.folder)
+        vidname = os.path.splitext(os.path.basename(self.folder))[0]
+        for i in range(self.count):
+            idx = i + 1
+            # Keep filename format for outputted face
+            filename = "{}_{:06d}".format(vidname, idx)
+            retval = {"frame_fullname": "{}.png".format(filename),
+                      "frame_name": filename,
+                      "frame_extension": ".png"}
             logger.trace(retval)
             yield retval
 

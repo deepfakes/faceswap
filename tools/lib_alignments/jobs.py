@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments seralized file """
-# TODO merge alignments
 
 import logging
 import os
@@ -224,7 +223,11 @@ class Draw():
         """ Set the output folder path """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "drawn_landmarks_{}".format(now)
-        output_folder = os.path.join(self.frames.folder, folder_name)
+        if self.frames.vid_cap:
+            dest_folder = os.path.split(self.frames.folder)[0]
+        else:
+            dest_folder = self.frames.folder
+        output_folder = os.path.join(dest_folder, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
         return output_folder

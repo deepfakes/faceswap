@@ -260,7 +260,7 @@ class OptionControl():
             frame) if control == ttk.Checkbutton else tk.StringVar(frame)
         var.set(default)
 
-        if sysbrowser is not None:
+        if sysbrowser:
             self.add_browser_buttons(frame, sysbrowser, var)
 
         if control == ttk.Checkbutton:
@@ -311,15 +311,16 @@ class OptionControl():
         """ Add correct file browser button for control """
         logger.debug("Adding browser buttons: (sysbrowser: '%s', filepath: '%s'",
                      sysbrowser, filepath)
-        img = Images().icons[sysbrowser]
-        action = getattr(self, "ask_" + sysbrowser)
-        filetypes = self.option.get("filetypes", "default")
-        fileopn = ttk.Button(frame, image=img,
-                             command=lambda cmd=action: cmd(filepath,
-                                                            filetypes))
-        fileopn.pack(padx=(0, 5), side=tk.RIGHT)
-        logger.debug("Added browser buttons: (action: %s, filetypes: %s",
-                     action, filetypes)
+        for browser in sysbrowser:
+            img = Images().icons[browser]
+            action = getattr(self, "ask_" + browser)
+            filetypes = self.option.get("filetypes", "default")
+            fileopn = ttk.Button(frame, image=img,
+                                 command=lambda cmd=action: cmd(filepath,
+                                                                filetypes))
+            fileopn.pack(padx=(0, 5), side=tk.RIGHT)
+            logger.debug("Added browser buttons: (action: %s, filetypes: %s",
+                         action, filetypes)
 
     @staticmethod
     def ask_folder(filepath, filetypes=None):
