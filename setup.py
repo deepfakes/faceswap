@@ -487,10 +487,11 @@ def update_tf_dep(cpu_only):
 def install_missing_dep():
     """ Install missing dependencies """
     global MISSING_PACKAGES, ENABLE_CUDA
+    install_tkinter()
+    install_ffmpeg()
     if MISSING_PACKAGES:
         out_info("Installing Required Python Packages. "
                  "This may take some time...")
-        install_tkinter()
         for pkg in MISSING_PACKAGES:
             if pkg.startswith("dlib"):
                 msg = ("Compiling {}. This will take a while...\n"
@@ -534,6 +535,21 @@ def install_tkinter():
     out_info("Installing tkInter")
     with open(os.devnull, "w") as devnull:
         run(["conda", "install", "-q", "-y", "tk"], stdout=devnull)
+
+
+def install_ffmpeg():
+    """ Install ffmpeg on Conda Environments """
+    if not IS_CONDA:
+        return
+    pkgs = os.popen("conda list").read()
+    ffm = [re.sub(" +", " ", line.strip())
+           for line in pkgs.splitlines()
+           if line.lower().strip().startswith("ffmpeg")]
+    if ffm:
+        return
+    out_info("Installing ffmpeg")
+    with open(os.devnull, "w") as devnull:
+        run(["conda", "install", "-q", "-y", "-c", "conda-forge", "ffmpeg"], stdout=devnull)
 
 
 def tips_1_1():
