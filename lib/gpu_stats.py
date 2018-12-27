@@ -33,12 +33,11 @@ class GPUStats():
 
         self.driver = self.get_driver()
         self.devices = self.get_devices()
+        self.vram = self.get_vram()
         if self.device_count == 0:
             if self.logger:
                 self.logger.warning("No GPU detected. Switching to CPU mode")
             return
-
-        self.vram = self.get_vram()
 
         self.shutdown()
         if self.logger:
