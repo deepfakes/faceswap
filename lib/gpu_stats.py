@@ -128,7 +128,9 @@ class GPUStats():
     def get_vram(self):
         """ Return total vram in megabytes per device """
         self.initialize()
-        if IS_MACOS:
+        if self.device_count == 0:
+            vram = list()
+        elif IS_MACOS:
             vram = [pynvx.cudaGetMemTotal(handle, ignore=True) / (1024 * 1024)
                     for handle in self.handles]
         else:
