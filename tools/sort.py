@@ -766,7 +766,6 @@ class Sort():
         image = cv2.imread(image_file,cv2.IMREAD_GRAYSCALE)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
         score = np.var(blur_map)  / np.sqrt(image.shape[0] * image.shape[1])
-        print(score)
         return score
 
     @staticmethod
