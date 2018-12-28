@@ -1,42 +1,53 @@
-import json, pickle
-class Serializer(object):
-    ext = "wtf"
-    woptions = "????"
-    roptions = "????"
+#!/usr/bin/env python3
+"""
+Library providing convenient classes and methods for writing data to files.
+"""
+import logging
+import json
+import pickle
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+class Serializer():
+    """ Parent Serializer class """
+    ext = ""
+    woptions = ""
+    roptions = ""
 
     @classmethod
     def marshal(cls, input_data):
+        """ Override for marshalling """
         raise NotImplementedError()
 
     @classmethod
     def unmarshal(cls, input_string):
+        """ Override for unmarshalling """
         raise NotImplementedError()
 
 
 class YAMLSerializer(Serializer):
+    """ YAML Serializer """
     ext = "yml"
     woptions = "w"
     roptions = "r"
 
     @classmethod
     def marshal(cls, input_data):
-        try:
-            import yaml
-        except ImportError:
-            print("You must have PyYAML installed to use YAMLSerializer")
         return yaml.dump(input_data, default_flow_style=False)
 
     @classmethod
     def unmarshal(cls, input_string):
-        try:
-            import yaml
-        except ImportError:
-            print("You must have PyYAML installed to use YAMLSerializer")
         return yaml.load(input_string)
 
 
-
 class JSONSerializer(Serializer):
+    """ JSON Serializer """
     ext = "json"
     woptions = "w"
     roptions = "r"
@@ -51,6 +62,7 @@ class JSONSerializer(Serializer):
 
 
 class PickleSerializer(Serializer):
+    """ Picke Serializer """
     ext = "p"
     woptions = "wb"
     roptions = "rb"
@@ -60,24 +72,33 @@ class PickleSerializer(Serializer):
         return pickle.dumps(input_data)
 
     @classmethod
-    def unmarshal(cls, input_bytes):
+    def unmarshal(cls, input_bytes):  # pylint: disable=arguments-differ
         return pickle.loads(input_bytes)
 
+
 def get_serializer(serializer):
-    if serializer == "yaml":
-        return YAMLSerializer
+    """ Return requested serializer """
     if serializer == "json":
         return JSONSerializer
     if serializer == "pickle":
         return PickleSerializer
-    raise NotImplementedError()
-
-
-def get_serializer_fromext(ext):
-    if ext in (".yaml", ".yml"):
+    if serializer == "yaml" and yaml is not None:
         return YAMLSerializer
+    if serializer == "yaml" and yaml is None:
+        logger.warning("You must have PyYAML installed to use YAML as the serializer."
+                       "Switching to JSON as the serializer.")
+    return JSONSerializer
+
+
+def get_serializer_from_ext(ext):
+    """ Get the sertializer from filename extension """
     if ext == ".json":
         return JSONSerializer
     if ext == ".p":
         return PickleSerializer
-    raise NotImplementedError("No serializer matching that file type.")
+    if ext in (".yaml", ".yml") and yaml is not None:
+        return YAMLSerializer
+    if ext in (".yaml", ".yml") and yaml is None:
+        logger.warning("You must have PyYAML installed to use YAML as the serializer.\n"
+                       "Switching to JSON as the serializer.")
+    return JSONSerializer
