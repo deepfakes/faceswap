@@ -101,7 +101,10 @@ class Align(Aligner):
     def align_image(self, image, center, scale):
         """ Crop and align image around center """
         logger.trace("Aligning image around center")
-        image = self.crop(image, center, scale).transpose((2, 0, 1))
+        image = self.crop(
+            image,
+            center,
+            scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
         logger.trace("Aligned image around center")
         return np.expand_dims(image, 0)
 
@@ -113,50 +116,6 @@ class Align(Aligner):
         retval = [(int(pt[0]), int(pt[1])) for pt in pts_img]
         logger.trace("Predicted Landmarks: %s", retval)
         return retval
-
-    def crop(self, image, center, scale, res=256.0):  # pylint: disable=too-many-locals
-        """ Crop image around the center point """
-        logger.trace("Cropping image")
-        v_ul = self.transform([1, 1], center, scale, res)
-        v_br = self.transform([res, res], center, scale, res)
-        if image.ndim > 2:
-            self.test = np.array([v_br[1] - v_ul[1],
-                                  v_br[0] - v_ul[0],
-                                  image.shape[2]],
-                                  dtype=np.int32)     
-        else:
-            self.test = np.array([v_br[1] - v_ul[1],
-                                  v_br[0] - v_ul[0]],
-                                  dtype=np.int32)
-        new_img = np.zeros(self.test, dtype=np.float32)
-        height = image.shape[0]
-        width = image.shape[1]
-        new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
-                         dtype=np.int32)
-        new_y = np.array([max(1, -v_ul[1] + 1), min(v_br[1], height) - v_ul[1]],
-                         dtype=np.int32)
-        old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
-                         dtype=np.int32)
-        old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
-                         dtype=np.int32)
-        """         
-        print()
-        print(center)
-        print(scale)
-        print(v_ul,v_br,height,width) 
-        print('new shape', new_img.shape[0],new_img.shape[1])        
-        print('new y axis',new_y[0] - 1,new_y[1],'old y axis',old_y[0] - 1,old_y[1])
-        print('new x axis',new_x[0] - 1,new_x[1],'old x axis',old_x[0] - 1,old_x[1])
-        """
-        new_img[new_y[0] - 1:new_y[1],
-                new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
-                                               old_x[0] - 1:old_x[1], :]
-        # pylint: disable=no-member
-        new_img = cv2.resize(new_img,
-                             dsize=(int(res), int(res)),
-                             interpolation=cv2.INTER_LINEAR) / 255.0
-        logger.trace("Cropped image")
-        return new_img
 
     @staticmethod
     def transform(point, center, scale, resolution):
@@ -170,9 +129,51 @@ class Align(Aligner):
         eye[0, 2] = resolution * (-center[0] / hscl + 0.5)
         eye[1, 2] = resolution * (-center[1] / hscl + 0.5)
         eye = np.linalg.inv(eye)
-        retval = np.matmul(eye, pnt)[0:2].astype(np.int)
+        retval = np.matmul(eye, pnt)[0:2]
         logger.trace("Transformed Points: %s", retval)
         return retval
+
+    def crop(self, image, center, scale, resolution=256.0):  # pylint: disable=too-many-locals
+        """ Crop image around the center point """
+        logger.trace("Cropping image")
+        v_ul = self.transform([1, 1], center, scale, resolution).astype(np.int)
+        v_br = self.transform([resolution, resolution],
+                              center,
+                              scale,
+                              resolution).astype(np.int)
+        if image.ndim > 2:
+            new_dim = np.array([v_br[1] - v_ul[1],
+                                v_br[0] - v_ul[0],
+                                image.shape[2]],
+                               dtype=np.int32)
+            self.test = new_dim
+            new_img = np.zeros(new_dim, dtype=np.uint8)
+        else:
+            new_dim = np.array([v_br[1] - v_ul[1],
+                                v_br[0] - v_ul[0]],
+                               dtype=np.int)
+            self.test = new_dim
+            new_img = np.zeros(new_dim, dtype=np.uint8)
+        height = image.shape[0]
+        width = image.shape[1]
+        new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
+                         dtype=np.int32)
+        new_y = np.array([max(1, -v_ul[1] + 1),
+                          min(v_br[1], height) - v_ul[1]],
+                         dtype=np.int32)
+        old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
+                         dtype=np.int32)
+        old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
+                         dtype=np.int32)
+        new_img[new_y[0] - 1:new_y[1],
+                new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
+                                               old_x[0] - 1:old_x[1], :]
+        # pylint: disable=no-member
+        new_img = cv2.resize(new_img,
+                             dsize=(int(resolution), int(resolution)),
+                             interpolation=cv2.INTER_LINEAR)
+        logger.trace("Cropped image")
+        return new_img
 
     def get_pts_from_predict(self, var_a, center, scale):
         """ Get points from predictor """

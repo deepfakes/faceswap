@@ -45,10 +45,9 @@ class Convert():
         mat = numpy.array(get_align_mat(face_detected,
                                         size,
                                         should_align_eyes=False)).reshape(2, 3)
-        
+
         if "GAN" not in self.trainer:
             mat = mat * size
-        
         else:
             padding = int(48/256*size)
             mat = mat * (size - 2 * padding)
