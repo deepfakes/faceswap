@@ -4,6 +4,7 @@
 # >>> ENV
 import ctypes
 import importlib
+import locale
 import os
 import re
 import sys
@@ -11,6 +12,7 @@ import platform
 
 from subprocess import run, PIPE, Popen
 
+ENCODING = locale.getpreferredencoding()
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
 TENSORFLOW_REQUIREMENTS = {"1.2": ["8.0", "5.1"],
                            "1.4": ["8.0", "6.0"],
@@ -191,7 +193,7 @@ def get_installed_packages():
     global INSTALLED_PACKAGES
     chk = Popen("{} -m pip freeze".format(sys.executable),
                 shell=True, stdout=PIPE)
-    installed = chk.communicate()[0].decode().splitlines()
+    installed = chk.communicate()[0].decode(ENCODING).splitlines()
     for pkg in installed:
         item = pkg.split("==")
         INSTALLED_PACKAGES[item[0]] = item[1]
@@ -217,7 +219,7 @@ def check_gcc():
         out_error("gcc not installed. Please install gcc for your distribution")
         return
     gcc = [re.sub(" +", " ", line.strip())
-           for line in stdout.decode().splitlines()
+           for line in stdout.decode(ENCODING).splitlines()
            if line.lower().strip().startswith("gcc")][0]
     version = gcc[gcc.rfind(" ") + 1:]
     out_info("gcc version: {}".format(version))
@@ -231,7 +233,7 @@ def check_gpp():
         out_error("g++ not installed. Please install g++ for your distribution")
         return
     gpp = [re.sub(" +", " ", line.strip())
-           for line in stdout.decode().splitlines()
+           for line in stdout.decode(ENCODING).splitlines()
            if line.lower().strip().startswith("g++")][0]
     version = gpp[gpp.rfind(" ") + 1:]
     out_info("g++ version: {}".format(version))
@@ -241,7 +243,7 @@ def check_cmake():
     """ Check CMake is installed for Windows """
     chk = Popen("cmake --version", shell=True, stdout=PIPE, stderr=PIPE)
     stdout, stderr = chk.communicate()
-    stdout = stdout.decode()
+    stdout = stdout.decode(ENCODING)
     if stderr and OS_VERSION[0] == "Windows":
         stdout, stderr = check_cmake_windows()
     if stderr:
@@ -264,7 +266,7 @@ def check_cmake_windows():
     if stderr:
         return False, stderr
     lines = [re.sub(" +", " ", line.strip())
-             for line in stdout.decode().splitlines()
+             for line in stdout.decode(ENCODING).splitlines()
              if line.strip()]
     stdout = lines[1]
     location = stdout[:stdout.rfind(" ")] + "bin"
@@ -293,10 +295,14 @@ def check_visual_studio():
 
 def check_cplus_plus():
     """ Check Visual C++ Redistributable 2015 is instlled for Windows """
-    chk = Popen("reg query HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies"
-                "\\{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
-                shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = chk.communicate()
+    keys = (
+        "HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies\\{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
+        "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64")
+    for key in keys:
+        chk = Popen("reg query {}".format(key), shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = chk.communicate()
+        if stdout:
+            break
     if stderr:
         out_error("Visual C++ 2015 could not be found. Make sure you have selected 'Visual C++' "
                   "in Visual Studio 2015 Configuration or download the Visual C++ 2015 "
@@ -304,8 +310,8 @@ def check_cplus_plus():
                   "https://www.microsoft.com/en-us/download/details.aspx?id=48145")
         return
     vscpp = [re.sub(" +", " ", line.strip())
-             for line in stdout.decode().splitlines()
-             if line.lower().strip().startswith("displayname")][0]
+             for line in stdout.decode(ENCODING).splitlines()
+             if line.lower().strip().startswith(("displayname", "version"))][0]
     version = vscpp[vscpp.find("REG_SZ") + 7:]
     out_info("Visual Studio C++ version: {}".format(version))
 
@@ -481,10 +487,11 @@ def update_tf_dep(cpu_only):
 def install_missing_dep():
     """ Install missing dependencies """
     global MISSING_PACKAGES, ENABLE_CUDA
+    install_tkinter()
+    install_ffmpeg()
     if MISSING_PACKAGES:
         out_info("Installing Required Python Packages. "
                  "This may take some time...")
-        install_tkinter()
         for pkg in MISSING_PACKAGES:
             if pkg.startswith("dlib"):
                 msg = ("Compiling {}. This will take a while...\n"
@@ -528,6 +535,21 @@ def install_tkinter():
     out_info("Installing tkInter")
     with open(os.devnull, "w") as devnull:
         run(["conda", "install", "-q", "-y", "tk"], stdout=devnull)
+
+
+def install_ffmpeg():
+    """ Install ffmpeg on Conda Environments """
+    if not IS_CONDA:
+        return
+    pkgs = os.popen("conda list").read()
+    ffm = [re.sub(" +", " ", line.strip())
+           for line in pkgs.splitlines()
+           if line.lower().strip().startswith("ffmpeg")]
+    if ffm:
+        return
+    out_info("Installing ffmpeg")
+    with open(os.devnull, "w") as devnull:
+        run(["conda", "install", "-q", "-y", "-c", "conda-forge", "ffmpeg"], stdout=devnull)
 
 
 def tips_1_1():

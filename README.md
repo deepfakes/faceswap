@@ -1,11 +1,35 @@
 **Notice:** This repository is not operated or maintained by /u/deepfakes. Please read the explanation below for details.
-
----
-
 # deepfakes_faceswap
 
 Faceswap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
 
+ 
+- [Manifesto](#manifesto)
+- [How To setup and run the project](#how-to-setup-and-run-the-project)
+  - [Overview](#overview)
+  - [Extract](#extract)
+  - [Train](#train)
+  - [Convert](#convert)
+  - [GUI](#gui)
+- [General notes:](#general-notes)
+- [Training Data](#training-data)
+- [Help I need support!](#help-i-need-support)
+  - [Discord Server](#discord-server)
+  - [Faceswap-Playground](#faceswap-playground)
+- [How to contribute](#how-to-contribute)
+  - [For people interested in the generative models](#for-people-interested-in-the-generative-models)
+  - [For devs](#for-devs)
+  - [For non-dev advanced users](#for-non-dev-advanced-users)
+  - [For end-users](#for-end-users)
+  - [For haters](#for-haters)
+- [About github.com/deepfakes](#about-githubcomdeepfakes)
+  - [What is this repo?](#what-is-this-repo)
+  - [Why this repo?](#why-this-repo)
+  - [Why is it named 'deepfakes' if it is not /u/deepfakes?](#why-is-it-named-deepfakes-if-it-is-not-udeepfakes)
+  - [What if /u/deepfakes feels bad about that?](#what-if-udeepfakes-feels-bad-about-that)
+- [About machine learning](#about-machine-learning)
+  - [How does a computer know how to recognise/shape a faces? How does machine learning work? What is a neural network?](#how-does-a-computer-know-how-to-recogniseshape-a-faces-how-does-machine-learning-work-what-is-a-neural-network)
+---
 ## Manifesto
 
 ### Faceswap is not porn.
@@ -25,12 +49,19 @@ We are not trying to denigrate celebrities or to demean anyone. We are programme
 
 We are very troubled by the fact that faceswap can be used for unethical and disreputable things. However, we support the development of tools and techniques that can be used ethically as well as provide education and experience in AI for anyone who wants to learn it hands-on. We will take a zero tolerance approach to anyone using this software for any unethical purposes and will actively discourage any such uses.
 
+## How To setup and run the project
+Faceswap is a Python program that will run on multiple Operating Systems including Windows, Linux and MacOS.
+
+See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a modern GPU with CUDA support for best performance.
+
 ## Overview
 The project has multiple entry points. You will have to:
  - Gather photos (or use the one provided in the training data provided below)
  - **Extract** faces from your raw photos
  - **Train** a model on your photos (or use the one provided in the training data provided below)
  - **Convert** your sources with the model
+
+Check out [USAGE.md](USAGE.md) for more detailed instructions.
 
 ### Extract
 From your setup folder, run `python faceswap.py extract`. This will take photos from `src` folder and extract faces into `extract` folder.
@@ -55,21 +86,17 @@ A pre-trained model is not required, but you can download the following pre-trai
 **Whole project with training images and trained model (~300MB):**
 https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
-## How To setup and run the project
-
-### Setup
-Clone the repo and setup you environment.
-
-You can either use the docker image or run `python setup.py`
-
-Check out [INSTALL.md](INSTALL.md) and [USAGE.md](USAGE.md) for more detailed instructions and basic information on how to configure virtualenv.
-
-You also need a modern GPU with CUDA support for best performance
-
 **Some tips:**
 
 Reusing existing models will train much faster than starting from nothing.  
 If there is not enough training data, start with someone who looks similar, then switch the data.
+
+## Help I need support!
+### Discord Server
+Your best bet is to join the [Faceswap Discord server](https://discord.gg/FdEwxXd) where there are plenty of users willing to help. Please note that, like this repo, this is a SFW Server!
+
+### Faceswap-Playground
+Alternatively you can post questions in the [Faceswap Playground](https://github.com/deepfakes/faceswap-playground). Please do not post general support questions in this repo.
 
 ## How to contribute
 
@@ -79,7 +106,7 @@ If there is not enough training data, start with someone who looks similar, then
 ### For devs
  - Read this README entirely
  - Fork the repo
- - Download the data with the link provided below
+ - Download the data with the link provided above
  - Play with it
  - Check issues with the 'dev' tag
  - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvments
@@ -87,7 +114,7 @@ If there is not enough training data, start with someone who looks similar, then
 ### For non-dev advanced users
  - Read this README entirely
  - Clone the repo
- - Download the data with the link provided below
+ - Download the data with the link provided above
  - Play with it
  - Check issues with the 'advuser' tag
  - Also go to the 'faceswap-playground' repo and help others.

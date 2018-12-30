@@ -22,7 +22,7 @@ class DetectedFace():
         self.h = h
         self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
-        self.hash = None
+        self.hash = None  # Hash must be set when the file is saved due to image compression
 
         self.aligned = dict()
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -90,7 +90,8 @@ class DetectedFace():
         self.h = alignment["h"]
         self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
-        self.hash = alignment["hash"]
+        # Manual tool does not know the final hash so default to None
+        self.hash = alignment.get("hash", None)
         if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
@@ -116,7 +117,6 @@ class DetectedFace():
                 self.aligned["matrix"],
                 size,
                 padding)
-            self.hash = sha256(self.aligned["face"]).hexdigest()
         logger.trace("Loaded aligned face: %s", {key: val
                                                  for key, val in self.aligned.items()
                                                  if key != "face"})

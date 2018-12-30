@@ -31,12 +31,13 @@ class GPUStats():
 
         self.initialize()
 
-        if self.device_count == 0:
-            return
-
         self.driver = self.get_driver()
         self.devices = self.get_devices()
         self.vram = self.get_vram()
+        if self.device_count == 0:
+            if self.logger:
+                self.logger.warning("No GPU detected. Switching to CPU mode")
+            return
 
         self.shutdown()
         if self.logger:
@@ -58,7 +59,7 @@ class GPUStats():
                     if self.logger:
                         self.logger.debug("OS is not macOS. Using pynvml")
                     pynvml.nvmlInit()
-                except pynvml.NVMLError_LibraryNotFound:
+                except (pynvml.NVMLError_LibraryNotFound, pynvml.NVMLError_DriverNotLoaded):
                     self.initialized = True
                     return
             self.initialized = True
@@ -111,7 +112,9 @@ class GPUStats():
     def get_devices(self):
         """ Return name of devices """
         self.initialize()
-        if IS_MACOS:
+        if self.device_count == 0:
+            names = list()
+        elif IS_MACOS:
             names = [pynvx.cudaGetName(handle, ignore=True)
                      for handle in self.handles]
         else:
@@ -124,7 +127,9 @@ class GPUStats():
     def get_vram(self):
         """ Return total vram in megabytes per device """
         self.initialize()
-        if IS_MACOS:
+        if self.device_count == 0:
+            vram = list()
+        elif IS_MACOS:
             vram = [pynvx.cudaGetMemTotal(handle, ignore=True) / (1024 * 1024)
                     for handle in self.handles]
         else:

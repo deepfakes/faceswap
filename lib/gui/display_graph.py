@@ -18,7 +18,7 @@ from .tooltip import Tooltip
 from .utils import Images
 
 
-class NavigationToolbar(NavigationToolbar2Tk):
+class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ancestors
     """ Same as default, but only including buttons we need
         with custom icons and layout
         From: https://stackoverflow.com/questions/12695678 """
@@ -73,7 +73,7 @@ class NavigationToolbar(NavigationToolbar2Tk):
         self.pack(side=tk.BOTTOM, fill=tk.X)
 
 
-class GraphBase(ttk.Frame):
+class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Base class for matplotlib line graphs """
     def __init__(self, parent, data, ylabel):
         ttk.Frame.__init__(self, parent)
@@ -235,7 +235,7 @@ class GraphBase(ttk.Frame):
         self.toolbar.update()
 
 
-class TrainingGraph(GraphBase):
+class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """ Live graph to be displayed during training. """
 
     def __init__(self, parent, data, ylabel):
@@ -299,7 +299,7 @@ class TrainingGraph(GraphBase):
 
     def resize_fig(self):
         """ Resize the figure back to the canvas """
-        class Event(object):
+        class Event():
             """ Event class that needs to be passed to
                 plotcanvas.resize """
             pass
@@ -308,7 +308,7 @@ class TrainingGraph(GraphBase):
         self.plotcanvas.resize(Event)
 
 
-class SessionGraph(GraphBase):
+class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """ Session Graph for session pop-up """
     def __init__(self, parent, data, ylabel, scale):
         GraphBase.__init__(self, parent, data, ylabel)

@@ -54,7 +54,7 @@ class ScriptExecutor():
 
         try:
             # pylint: disable=unused-variable
-            import tkinter  # noqa
+            import tkinter  # noqa pylint: disable=unused-import
         except ImportError:
             logger.warning(
                 "It looks like TkInter isn't installed for your OS, so "
@@ -82,7 +82,7 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup(arguments.loglevel)
+        log_setup(arguments.loglevel, self.command)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         try:
             script = self.import_script()
@@ -113,7 +113,7 @@ class FullPaths(argparse.Action):
 
 class DirFullPaths(FullPaths):
     """ Class that gui uses to determine if you need to open a directory """
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,unnecessary-pass
     pass
 
 
@@ -147,13 +147,20 @@ class FileFullPaths(FullPaths):
         return [(name, getattr(self, name)) for name in names]
 
 
+class DirOrFileFullPaths(FileFullPaths):
+    """ Class that the gui uses to determine that the input can take a folder or a filename.
+        Inherits functionality from FileFullPaths
+        Has the effect of giving the user 2 Open Dialogue buttons in the gui """
+    pass
+
+
 class SaveFileFullPaths(FileFullPaths):
     """
     Class that gui uses to determine if you need to save a file.
 
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,unnecessary-pass
     pass
 
 
@@ -306,12 +313,14 @@ class ExtractConvertArgs(FaceSwapArgs):
         argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ("-i", "--input-dir"),
-                              "action": DirFullPaths,
+                              "action": DirOrFileFullPaths,
+                              "filetypes": "video",
                               "dest": "input_dir",
                               "default": "input",
-                              "help": "Input directory. A directory "
-                                      "containing the files you wish to "
-                                      "process. Defaults to 'input'"})
+                              "help": "Input directory or video. Either a "
+                                      "directory containing the image files "
+                                      "you wish to process or path to a "
+                                      "video file. Defaults to 'input'"})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",

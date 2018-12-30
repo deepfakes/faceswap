@@ -20,7 +20,7 @@ LOG_QUEUE = queue_manager._log_queue  # pylint: disable=protected-access
 class MultiProcessingLogger(logging.Logger):
     """ Create custom logger  with custom levels """
     def __init__(self, name):
-        for new_level in (('VERBOSE', 15), ('TRACE', 5)):
+        for new_level in (("VERBOSE", 15), ("TRACE", 5)):
             level_name, level_num = new_level
             if hasattr(logging, level_name):
                 continue
@@ -68,7 +68,7 @@ def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
     rootlogger.setLevel(loglevel)
 
 
-def log_setup(loglevel):
+def log_setup(loglevel, command):
     """ initial log set up. """
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
@@ -76,19 +76,21 @@ def log_setup(loglevel):
     log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
-    f_handler = file_handler(numeric_loglevel, log_format)
+    f_handler = file_handler(numeric_loglevel, log_format, command)
     s_handler = stream_handler(numeric_loglevel)
     c_handler = crash_handler(log_format)
 
     q_listener = QueueListener(LOG_QUEUE, f_handler, s_handler, c_handler,
                                respect_handler_level=True)
     q_listener.start()
-    logging.info('Log level set to: %s', loglevel.upper())
+    logging.info("Log level set to: %s", loglevel.upper())
 
 
-def file_handler(loglevel, log_format):
+def file_handler(loglevel, log_format, command):
     """ Add a logging rotating file handler """
-    filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap.log")
+    filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
+    # Windows has issues sharing the log file with subprocesses, so log GUI seperately
+    filename += "_gui.log" if command == "gui" else ".log"
     should_rotate = os.path.isfile(filename)
     log_file = RotatingFileHandler(filename, backupCount=1)
     if should_rotate:
@@ -121,10 +123,10 @@ def crash_handler(log_format):
 
 
 def get_loglevel(loglevel):
-    ''' Check valid log level supplied and return numeric log level '''
+    """ Check valid log level supplied and return numeric log level """
     numeric_level = getattr(logging, loglevel.upper(), None)
     if not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % loglevel)
+        raise ValueError("Invalid log level: %s" % loglevel)
 
     return numeric_level
 
@@ -132,7 +134,7 @@ def get_loglevel(loglevel):
 def crash_log():
     """ Write debug_buffer to a crash log on crash """
     path = os.getcwd()
-    filename = os.path.join(path, datetime.now().strftime('crash_report.%Y.%m.%d.%H%M%S%f.log'))
+    filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
 
     # Wait until all log items have been processed
     while not LOG_QUEUE.empty():
