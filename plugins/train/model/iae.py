@@ -6,10 +6,10 @@ from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import conv, upscale
-from .original import logger, Model as OriginalModel
+from ._base import ModelBase, logger
 
 
-class Model(OriginalModel):
+class Model(ModelBase):
     """ Improved Autoeencoder Model """
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
@@ -45,11 +45,6 @@ class Model(OriginalModel):
                                       inter_both(encoder(inp))]))
         self.add_predictors(KerasModel(inp, ae_a), KerasModel(inp, ae_b))
 
-        self.log_summary("encoder", encoder)
-        self.log_summary("inter", inter_a)
-        self.log_summary("decoder", decoder)
-
-        self.compile_predictors()
         logger.debug("Initialized model")
 
     def encoder(self):

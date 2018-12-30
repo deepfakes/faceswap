@@ -346,7 +346,7 @@ class PenalizedLoss():  # pylint: disable=too-few-public-methods
         pb = pbo
         m = self.mask
 
-        m = m*self.mask_prop
+        m = m * self.mask_prop
         m += self.mask_as_k_inv_prop
         tr *= m
         tg *= m

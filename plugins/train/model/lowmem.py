@@ -19,14 +19,6 @@ class Model(OriginalModel):
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def add_networks(self):
-        """ Add the original lowmem model weights """
-        logger.debug("Adding networks")
-        self.add_network("decoder", "A", self.decoder())
-        self.add_network("decoder", "B", self.decoder())
-        self.add_network("encoder", None, self.encoder())
-        logger.debug("Added networks")
-
     def encoder(self):
         """ Encoder Network
             1 layer fewer for lowmem """

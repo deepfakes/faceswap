@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 import logging
+from hashlib import sha256
 
 from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
 from lib.aligner import Extract as AlignerExtract, get_align_mat
@@ -21,6 +22,7 @@ class DetectedFace():
         self.h = h
         self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
+        self.hash = None
 
         self.aligned = dict()
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -74,6 +76,7 @@ class DetectedFace():
         alignment["h"] = self.h
         alignment["frame_dims"] = self.frame_dims
         alignment["landmarksXY"] = self.landmarksXY
+        alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
         return alignment
 
@@ -87,6 +90,7 @@ class DetectedFace():
         self.h = alignment["h"]
         self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
+        self.hash = alignment["hash"]
         if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
@@ -106,12 +110,13 @@ class DetectedFace():
         self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
         if image is None:
             self.aligned["face"] = None
-            return
-        self.aligned["face"] = AlignerExtract().transform(
-            image,
-            self.aligned["matrix"],
-            size,
-            padding)
+        else:
+            self.aligned["face"] = AlignerExtract().transform(
+                image,
+                self.aligned["matrix"],
+                size,
+                padding)
+            self.hash = sha256(self.aligned["face"]).hexdigest()
         logger.trace("Loaded aligned face: %s", {key: val
                                                  for key, val in self.aligned.items()
                                                  if key != "face"})

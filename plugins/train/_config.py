@@ -15,7 +15,7 @@ class Config(FaceswapConfig):
         """ Set the default values for config """
         # << GLOBAL OPTIONS >> #
         logger.debug("Setting defaults")
-        section = "Global"
+        section = "global"
         self.add_section(title=section,
                          info="Options that apply to all models")
 
@@ -25,7 +25,7 @@ class Config(FaceswapConfig):
                  "May increase overall quality.")
 
         # << ORIGINAL HIRES MODEL OPTIONS >> #
-        section = "Original_HiRes"
+        section = "original_hires"
         self.add_section(title=section,
                          info="Higher resolution version of the Original "
                               "Model")
@@ -61,10 +61,9 @@ class Config(FaceswapConfig):
             info="Might increase upscaling quality at cost of VRAM")
 
         # << DFAKER MODEL OPTIONS >> #
-        section = "DFaker"
+        section = "dfaker"
         self.add_section(title=section,
-                         info="Dfaker Model (Adapted from "
-                              "https://github.com/dfaker/df)")
+                         info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
 
         self.add_item(
             section=section, title="alignments_format", datatype=str, default="json",
@@ -74,8 +73,18 @@ class Config(FaceswapConfig):
                  "alignments.json)."
                  "\nChoose from: 'json', 'pickle' or 'yaml'")
 
+        # << DFL MODEL OPTIONS >> #
+        section = "dfl_h128"
+        self.add_section(title=section,
+                         info="DFL H128 Model (Adapted from https://github.com/iperov/DeepFaceLab")
+        self.add_item(
+            section=section, title="lowmem", datatype=bool, default=False,
+            info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
+                 "with a changed lowmem mode are not compatible with each other."
+                 "\nChoose from: True, False")
+
         # << GAN MODEL OPTIONS >> #
-        section = "GAN_2-2"
+        section = "gan_v2_2"
         self.add_section(title=section,
                          info="GAN v2.2. Model (Adapted from "
                               "https://github.com/shaoanlu/faceswap-GAN)")

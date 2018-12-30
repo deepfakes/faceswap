@@ -162,7 +162,7 @@ class Train():
             if save_iteration and self.timelapse is not None:
                 logger.trace("Updating Timelapse: (iteration: %s", iteration)
                 self.timelapse.work()
-            trainer.train_one_step(iteration, viewer)
+            trainer.train_one_step(viewer)
             if self.stop:
                 logger.debug("Stop received. Terminating")
                 break

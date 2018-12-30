@@ -13,6 +13,7 @@ from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 
 from lib import Serializer
+from lib.model.losses import DSSIMObjective, PenalizedLoss
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -24,29 +25,37 @@ class ModelBase():
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, image_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      image_shape, encoder_dim)
-        self.config = Config().config
+        self.config = Config(self.__module__.split(".")[-1]).config_dict
         self.model_dir = model_dir
         self.gpus = gpus
         self.image_shape = image_shape
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        # Training information specific to the model should be placed in this
-        # dict for reference by the trainer.
-        self.training_opts = dict()
+        self.masks = None  # List of masks to be set if masks are used
 
         self.name = self.set_model_name()
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.serializer = Serializer.get_serializer("json")
-        self._epoch_no = self.load_state()
+        self._iterations = self.load_state()
+        # Training information specific to the model should be placed in this
+        # dict for reference by the trainer.
+        self.training_opts = self.set_training_data()
 
         self.add_networks()
         self.initialize()
+        self.log_summary()
+        self.compile_predictors()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
+    def set_training_data(self):
+        """ Override to set model specific training data """
+        return dict()
+
     def initialize(self):
-        """ Override for Model Specific Initialization """
+        """ Override for Model Specific Initialization
+            Must list of masks if used or None if not """
         raise NotImplementedError
 
     def add_networks(self):
@@ -98,9 +107,24 @@ class ModelBase():
         logger.debug("Compiling Predictors")
         self.convert_multi_gpu()
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        for model in self.predictors.values():
-            model.compile(optimizer=optimizer, loss="mean_absolute_error")
-        logger.debug("Compiled Predictors: %s", self.predictors)
+        loss_func = self.loss_function()
+        for side, model in self.predictors.items():
+            if self.masks:
+                mask = self.masks[0] if side == "a" else self.masks[1]
+                model.compile(optimizer=optimizer,
+                              loss=[PenalizedLoss(mask, loss_func), "mse"])
+            else:
+                model.compile(optimizer=optimizer, loss=loss_func)
+        logger.debug("Compiled Predictors")
+
+    def loss_function(self):
+        """ Set the loss function """
+        if self.config["dssim_loss"]:
+            loss_func = DSSIMObjective()
+        else:
+            loss_func = "mean_absolute_error"
+        logger.debug(loss_func)
+        return loss_func
 
     def converter(self, swap):
         """ Converter for autoencoder models """
@@ -113,34 +137,36 @@ class ModelBase():
         return retval
 
     @property
-    def epoch_no(self):
+    def iterations(self):
         "Get current training epoch number"
-        return self._epoch_no
+        return self._iterations
 
     def load_state(self):
         """ Load epoch number from state file """
         logger.debug("Loading State")
-        epoch_no = 0
+        iterations = 0
         try:
             with open(self.state_filename(), "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                epoch_no = state["epoch_no"]
+                # TODO Remove this backwards compatibility fix to get iterations from epoch_no
+                iterations = state.get("epoch_no", None)
+                iterations = state["iterations"] if iterations is None else iterations
         except IOError as err:
             logger.warning("No existing training info found. Generating.")
             logger.debug("IOError: %s", str(err))
-            epoch_no = 0
+            iterations = 0
         except JSONDecodeError as err:
             logger.debug("JSONDecodeError: %s:", str(err))
-            epoch_no = 0
-        logger.debug("Loaded State: (epoch_no: %s)", epoch_no)
-        return epoch_no
+            iterations = 0
+        logger.debug("Loaded State: (iterations: %s)", iterations)
+        return iterations
 
     def save_state(self):
         """ Save epoch number to state file """
         logger.debug("Saving State")
         try:
             with open(self.state_filename(), "wb") as out:
-                state = {"epoch_no": self.epoch_no}
+                state = {"iterations": self.iterations}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))
         except IOError as err:
@@ -196,11 +222,11 @@ class ModelBase():
         logger.info("saved model weights")
         self.save_state()
 
-    @staticmethod
-    def log_summary(name, model):
-        """ Verbose log the passed in model summary """
-        logger.debug("%s Summary:", name.title())
-        model.summary(print_fn=logger.debug)
+    def log_summary(self):
+        """ Verbose log the model summaries """
+        for name, nnmeta in self.networks.items():
+            logger.verbose("%s Summary:", name.title())
+            nnmeta.network.summary(print_fn=logger.verbose)
 
 
 class NNMeta():

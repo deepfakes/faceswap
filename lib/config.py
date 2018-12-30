@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class FaceswapConfig():
     """ Config Items """
-    def __init__(self):
+    def __init__(self, section):
         """ Init Configuration  """
         logger.debug("Initializing: %s", self.__class__.__name__)
         self.configfile = self.get_config_file()
         self.config = ConfigParser(allow_no_value=True)
         self.defaults = OrderedDict()
         self.config.optionxform = str
+        self.section = section
 
         self.set_defaults()
         self.handle_config()
@@ -45,6 +46,18 @@ class FaceswapConfig():
                           info="sect_1 option_1 information")
         """
         raise NotImplementedError
+
+    @property
+    def config_dict(self):
+        """ Collate global options and requested section into a dictionary
+            with the correct datatypes """
+        conf = dict()
+        for sect in ("global", self.section):
+            if sect not in self.config.sections():
+                continue
+            for key in self.config[sect]:
+                conf[key] = self.get(sect, key)
+        return conf
 
     def get(self, section, option):
         """ Return a config item in it's correct format """
@@ -135,6 +148,7 @@ class FaceswapConfig():
         logger.debug("Inserting item: (section: '%s', item: '%s', default: '%s', helptext: '%s', "
                      "config: '%s')", section, item, default, helptext, config)
         config = self.config if config is None else config
+        helptext += "\n[Default: {}]".format(default)
         helptext = self.format_help(helptext, is_section=False)
         config.set(section, helptext)
         config.set(section, item, str(default))
