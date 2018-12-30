@@ -27,10 +27,8 @@ class Trainer(TrainerBase):
     def transform_landmarks(alignments, side):
         """ For each face transform landmarks and return """
         landmarks = dict()
-        for frame, faces, _, _ in alignments.yield_faces():
-            for idx, face in enumerate(faces):
-                face_name = "{}_{}".format(frame, idx)
-
+        for _, faces, _, _ in alignments.yield_faces():
+            for face in faces:
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
                 # TODO Load size from face
@@ -38,7 +36,7 @@ class Trainer(TrainerBase):
                                            size=256,
                                            padding=48,
                                            align_eyes=False)
-                landmarks[face_name] = detected_face.aligned_landmarks
+                landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks
 
     def print_loss(self, loss_a, loss_b):

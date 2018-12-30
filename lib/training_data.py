@@ -3,8 +3,10 @@
 
 import logging
 import os
-from random import shuffle
 import uuid
+
+from hashlib import sha1
+from random import shuffle
 
 import cv2
 import numpy as np
@@ -93,15 +95,17 @@ class TrainingDataGenerator():
     def process_face(self, filename, side):
         """ Load an image and perform transformation and warping """
         logger.trace("Process face: (filename: '%s', side: '%s'", filename, side)
-        landmarks = self.training_opts.get("landmarks", None)
-        landmarks = self.get_landmarks(filename, side, landmarks) if landmarks else None
         try:
-            # pylint: disable=no-member
-            image = self.color_adjust(cv2.imread(filename))
+            image = cv2.imread(filename)  # pylint: disable=no-member
         except TypeError:
             raise Exception("Error while reading image", filename)
 
+        landmarks = self.training_opts.get("landmarks", None)
+        landmarks = self.get_landmarks(filename, image, side, landmarks) if landmarks else None
+
+        image = self.color_adjust(image)
         image = self.processing.random_transform(image)
+
         if not landmarks:
             retval = self.processing.random_warp(image)
         else:
@@ -120,15 +124,15 @@ class TrainingDataGenerator():
         return retval
 
     @staticmethod
-    def get_landmarks(filename, side, landmarks):
+    def get_landmarks(filename, image, side, landmarks):
         """ Return the landmarks for this face and the closest landmark
             for corresponding set """
         logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
-        lm_key = os.path.splitext(os.path.basename(filename))[0]
+        lm_key = sha1(image).hexdigest()
         try:
             src_points = landmarks[side][lm_key]
         except KeyError:
-            raise Exception("Landmarks not found for {}".format(filename))
+            raise Exception("Landmarks not found for hash: '{}' file: '{}'".format(lm_key, filename))
         dst_points = landmarks["a"] if side == "b" else landmarks["b"]
         dst_points = list(dst_points.values())
         closest = (np.mean(np.square(src_points - dst_points),
