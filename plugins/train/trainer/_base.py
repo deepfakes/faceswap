@@ -12,12 +12,14 @@
 """
 
 import logging
+import os
 import time
 
 import cv2
 import numpy as np
 
 from lib.training_data import TrainingDataGenerator, stack_images
+from lib.utils import get_folder, get_image_paths
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -38,12 +40,9 @@ class TrainerBase():
             transform_kwargs=transform_kwargs,
             training_opts=self.model.training_opts)
 
-        self.images_a = generator.minibatch_ab(images["a"],
-                                               self.batch_size,
-                                               "a")
-        self.images_b = generator.minibatch_ab(images["b"],
-                                               self.batch_size,
-                                               "b")
+        self.images_a = generator.minibatch_ab(images["a"], self.batch_size, "a")
+        self.images_b = generator.minibatch_ab(images["b"], self.batch_size, "b")
+        self.timelapse = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -76,7 +75,7 @@ class TrainerBase():
                                                                          loss_b),
               end='\r')
 
-    def train_one_step(self, viewer):
+    def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch
 
             Items should come out as: (warped, target [, mask])
@@ -99,9 +98,12 @@ class TrainerBase():
             target_a, target_b = train_a[1], train_b[1]
             if use_mask:
                 target_a, target_b = target_a[0], target_b[0]
-            sample_a, sample_b = self.compile_samples(target_a, target_b)
+            sample_a, sample_b = self.compile_samples(target_a, target_b, self.batch_size)
             viewer(self.show_sample(sample_a, sample_b),
                    "Training - 'S': Save Now. 'ENTER': Save and Quit")
+
+        if timelapse_kwargs is not None:
+            self.do_timelapse(timelapse_kwargs)
 
     def compile_mask(self, train_a, train_b):
         """ Compile the mask into training data """
@@ -113,17 +115,61 @@ class TrainerBase():
             sides.append(side)
         return sides[0], sides[1]
 
-    def compile_samples(self, target_a, target_b):
+    def compile_samples(self, target_a, target_b, batch_size):
         """ Training samples to display in the viewer """
         num_images = self.model.training_opts.get("preview_images", 14)
-        num_images = min(self.batch_size, num_images)
+        num_images = min(batch_size, num_images)
         logger.debug("Compiling samples: %s", num_images)
         return target_a[0:num_images], target_b[0:num_images]
+
+    def do_timelapse(self, timelapse_kwargs):
+        """ Perform timelapse """
+        logger.debug("Creating timelapse")
+        if not self.timelapse:
+            self.timelapse = self.set_timelapse(**timelapse_kwargs)
+        train_a = next(self.timelapse["images_a"])
+        train_b = next(self.timelapse["images_b"])
+
+        sample_a, sample_b = self.compile_samples(train_a[1],
+                                                  train_b[1],
+                                                  self.timelapse["batch_size"])
+        image = self.show_sample(sample_a, sample_b)
+        filename = os.path.join(self.timelapse["output_dir"], str(int(time.time())) + ".png")
+
+        cv2.imwrite(filename, image)  # pylint: disable=no-member
+        logger.debug("Created timelapse: '%s'", filename)
+
+    def set_timelapse(self, input_a=None, input_b=None, output=None):
+        """ Set the timelapse dictionary """
+        logger.debug("Setting timelapse: (input_a: '%s', input_b: '%s', output: '%s')",
+                     input_a, input_b, output)
+        timelapse = dict()
+        files_a = get_image_paths(input_a)
+        files_b = get_image_paths(input_b)
+        batch_size = min(len(files_a),
+                         len(files_b),
+                         self.model.training_opts.get("preview_images", 14))
+        generator = TrainingDataGenerator(
+            transform_kwargs={"rotation_range": 0, "zoom_range": 0, "shift_range": 0,
+                              "random_flip": 0, "zoom": self.model.image_shape[0] // 64,
+                              "coverage": 160, "scale": 5},
+            training_opts=self.model.training_opts)
+
+        if output is None:
+            output = get_folder(os.path.join(str(self.model.model_dir), "timelapse"))
+        timelapse["output_dir"] = str(output)
+        timelapse["images_a"] = generator.minibatch_ab(files_a[:batch_size], batch_size, "a",
+                                                       do_shuffle=False)
+        timelapse["images_b"] = generator.minibatch_ab(files_b[:batch_size], batch_size, "b",
+                                                       do_shuffle=False)
+        timelapse["batch_size"] = batch_size
+
+        logger.debug("Set timelapse: %s", timelapse)
+        return timelapse
 
     def show_sample(self, test_a, test_b):
         """ Display preview data """
         logger.debug("Compiling sample")
-
         scale = self.model.image_shape[0] / test_a.shape[1]
         if scale != 1.0:
             feed_a, feed_b = self.resize_sample(scale, test_a, test_b)

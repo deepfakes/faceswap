@@ -13,8 +13,7 @@ from keras.backend.tensorflow_backend import set_session
 
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.utils import (get_folder, get_image_paths, set_system_verbosity,
-                       Timelapse)
+from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -25,32 +24,38 @@ class Train():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self.args = arguments
+        self.timelapse = self.set_timelapse()
         self.images = self.get_images()
         self.stop = False
         self.save_now = False
         self.preview_buffer = dict()
         self.lock = Lock()
 
-        # this is so that you can enter case insensitive values for trainer
-        trainer_name = self.args.trainer
-        self.trainer_name = trainer_name
-        self.timelapse = None
+        self.trainer_name = self.args.trainer
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
-        """ Call the training process object """
-        logger.debug("Starting Training Process")
-        logger.info("Training data directory: %s", self.args.model_dir)
-        set_system_verbosity()
-        thread = self.start_thread()
+    def set_timelapse(self):
+        """ Set timelapse paths if requested """
+        if (not self.args.timelapse_input_a and
+                not self.args.timelapse_input_b and
+                not self.args.timelapse_output):
+            return None
+        if not self.args.timelapse_input_a or not self.args.timelapse_input_b:
+            raise ValueError("To enable the timelapse, you have to supply "
+                             "all the parameters (--timelapse-input-A and "
+                             "--timelapse-input-B).")
 
-        if self.args.preview:
-            err = self.monitor_preview(thread)
-        else:
-            err = self.monitor_console(thread)
+        for folder in (self.args.timelapse_input_a,
+                       self.args.timelapse_input_b,
+                       self.args.timelapse_output):
+            if folder is not None and not os.path.isdir(folder):
+                raise ValueError("The Timelapse path '{}' does not exist".format(folder))
 
-        self.end_thread(thread, err)
-        logger.debug("Completed Training Process")
+        kwargs = {"input_a": self.args.timelapse_input_a,
+                  "input_b": self.args.timelapse_input_b,
+                  "output": self.args.timelapse_output}
+        logger.debug("Timelapse enabled: %s", kwargs)
+        return kwargs
 
     def get_images(self):
         """ Check the image dirs exist, contain images and return the image
@@ -73,6 +78,21 @@ class Train():
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
                                              for key, val in images.items()])
         return images
+
+    def process(self):
+        """ Call the training process object """
+        logger.debug("Starting Training Process")
+        logger.info("Training data directory: %s", self.args.model_dir)
+        set_system_verbosity()
+        thread = self.start_thread()
+
+        if self.args.preview:
+            err = self.monitor_preview(thread)
+        else:
+            err = self.monitor_console(thread)
+
+        self.end_thread(thread, err)
+        logger.debug("Completed Training Process")
 
     def start_thread(self):
         """ Put the training process in a thread so we can keep control """
@@ -111,14 +131,6 @@ class Train():
 
             model = self.load_model()
             trainer = self.load_trainer(model)
-
-            # TODO Move timelapse out of utils
-            self.timelapse = Timelapse.create_timelapse(
-                self.args.timelapse_input_a,
-                self.args.timelapse_input_b,
-                self.args.timelapse_output,
-                trainer)
-
             self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
@@ -147,8 +159,7 @@ class Train():
         trainer = PluginLoader.get_trainer(model.trainer)
         trainer = trainer(model,
                           self.images,
-                          self.args.batch_size,
-                          self.args.perceptual_loss)
+                          self.args.batch_size)
         logger.debug("Loaded Trainer")
         return trainer
 
@@ -159,10 +170,8 @@ class Train():
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self.args.save_interval == 0
             viewer = self.show if save_iteration or self.save_now else None
-            if save_iteration and self.timelapse is not None:
-                logger.trace("Updating Timelapse: (iteration: %s", iteration)
-                self.timelapse.work()
-            trainer.train_one_step(viewer)
+            timelapse = self.timelapse if save_iteration else None
+            trainer.train_one_step(viewer, timelapse)
             if self.stop:
                 logger.debug("Stop received. Terminating")
                 break

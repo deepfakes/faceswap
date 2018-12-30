@@ -711,11 +711,6 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Writes the training result to a file "
                                       "even on preview mode"})
-        argument_list.append({"opts": ("-pl", "--use-perceptual-loss"),
-                              "action": "store_true",
-                              "dest": "perceptual_loss",
-                              "default": False,
-                              "help": "Use perceptual loss while training"})
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",
