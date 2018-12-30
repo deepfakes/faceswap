@@ -251,7 +251,7 @@ class OptionControl():
 
     def build_one_control(self, frame, controlvars, choices, sysbrowser):
         """ Build and place the option controls """
-        logger.debug("Build control: (controlvars: %s, choices: %s, sysbrowser: '%s'",
+        logger.debug("Build control: (controlvars: %s, choices: %s, sysbrowser: %s",
                      controlvars, choices, sysbrowser)
         control, control_title, default, helptext = controlvars
         default = default if default is not None else ""
@@ -315,9 +315,9 @@ class OptionControl():
             img = Images().icons[browser]
             action = getattr(self, "ask_" + browser)
             filetypes = self.option.get("filetypes", "default")
-            fileopn = ttk.Button(frame, image=img,
-                                 command=lambda cmd=action: cmd(filepath,
-                                                                filetypes))
+            fileopn = ttk.Button(frame,
+                                 image=img,
+                                 command=lambda cmd=action: cmd(filepath, filetypes))
             fileopn.pack(padx=(0, 5), side=tk.RIGHT)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, filetypes)
