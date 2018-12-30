@@ -10,7 +10,6 @@ from lib.Serializer import JSONSerializer
 import tools.cli as ToolsCli
 from .utils import FileHandler, Images
 
-# TODO Fix the bug that breaks GUI if timeshift isn't the last option in it's group
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -73,7 +72,7 @@ class CliOptions():
             logger.debug("Processing: (classname: '%s')", classname)
             command = self.format_command_name(classname)
             options = self.get_cli_arguments(cli_source, classname, command)
-            self.process_options(options)
+            options = self.process_options(options)
             logger.debug("Processed: (classname: '%s', command: '%s', options: %s)",
                          classname, command, options)
             subopts[command] = options
@@ -83,14 +82,16 @@ class CliOptions():
     def get_cli_arguments(cli_source, classname, command):
         """ Extract the options from the main and tools cli files """
         meth = getattr(cli_source, classname)(None, command)
-        return meth.global_arguments + meth.argument_list + meth.optional_arguments
+        return meth.argument_list + meth.optional_arguments + meth.global_arguments
 
     def process_options(self, command_options):
         """ Process the options for a single command """
+        final_options = list()
         for opt in command_options:
             logger.trace("Processing: %s", opt)
             if opt.get("help", "") == SUPPRESS:
-                command_options.remove(opt)
+                logger.trace("Skipping suppressed option: %s", opt)
+                continue
             ctl, sysbrowser, filetypes, action_option = self.set_control(opt)
             opt["control_title"] = self.set_control_title(
                 opt.get("opts", ""))
@@ -98,7 +99,9 @@ class CliOptions():
             opt["filesystem_browser"] = sysbrowser
             opt["filetypes"] = filetypes
             opt["action_option"] = action_option
+            final_options.append(opt)
             logger.trace("Processed: %s", opt)
+        return final_options
 
     @staticmethod
     def set_control_title(opts):
@@ -152,7 +155,7 @@ class CliOptions():
         actions = {item["opts"][0]: item["value"]
                    for item in self.gen_command_options(command)}
         for opt in self.gen_command_options(command):
-            if opt["filesystem_browser"] == "context":
+            if opt["filesystem_browser"] == ["context"]:
                 opt["action_option"] = actions[opt["action_option"]]
 
     def gen_command_options(self, command):
