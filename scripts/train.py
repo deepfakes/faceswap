@@ -6,6 +6,7 @@ import os
 import sys
 
 from threading import Lock
+from time import sleep
 
 import cv2
 import tensorflow as tf
@@ -123,6 +124,7 @@ class Train():
     def training(self):
         """ The training process to be run inside a thread """
         try:
+            sleep(1)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
             logger.info("Loading data, this may take a while...")
 
@@ -189,11 +191,11 @@ class Train():
     def monitor_preview(self, thread):
         """ Generate the preview window and wait for keyboard input """
         logger.debug("Launching Preview Monitor")
-        logger.info("==================================================================")
-        logger.info(" Using live preview")
-        logger.info(" Press 'ENTER' on the preview window to save and quit")
-        logger.info(" Press 'S' on the preview window to save model weights immediately")
-        logger.info("==================================================================")
+        logger.info("R|=====================================================================")
+        logger.info("R|- Using live preview                                                -")
+        logger.info("R|- Press 'ENTER' on the preview window to save and quit              -")
+        logger.info("R|- Press 'S' on the preview window to save model weights immediately -")
+        logger.info("R|=====================================================================")
         err = False
         while True:
             try:
@@ -226,11 +228,11 @@ class Train():
             NB: A custom function needs to be used for this because
                 input() blocks """
         logger.debug("Launching Console Monitor")
-        logger.info("============================================")
-        logger.info(" Starting")
-        logger.info(" Press 'ENTER' to save and quit")
-        logger.info(" Press 'S' to save model weights immediately")
-        logger.info("============================================")
+        logger.info("R|===============================================")
+        logger.info("R|- Starting                                    -")
+        logger.info("R|- Press 'ENTER' to save and quit              -")
+        logger.info("R|- Press 'S' to save model weights immediately -")
+        logger.info("R|===============================================")
         keypress = KBHit()
         err = False
         while True:

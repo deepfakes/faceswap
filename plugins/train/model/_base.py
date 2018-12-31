@@ -226,7 +226,7 @@ class ModelBase():
         """ Verbose log the model summaries """
         for name, nnmeta in self.networks.items():
             logger.verbose("%s Summary:", name.title())
-            nnmeta.network.summary(print_fn=logger.verbose)
+            nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
 
 
 class NNMeta():

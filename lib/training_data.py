@@ -2,7 +2,6 @@
 """ Process training data for model training """
 
 import logging
-import os
 import uuid
 
 from hashlib import sha1
@@ -103,13 +102,13 @@ class TrainingDataGenerator():
         landmarks = self.training_opts.get("landmarks", None)
         landmarks = self.get_landmarks(filename, image, side, landmarks) if landmarks else None
 
-        image = self.color_adjust(image)
+        image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)
 
         if not landmarks:
             retval = self.processing.random_warp(image)
         else:
-            image = self.add_alpha_channel(image)
+            image = self.processing.add_alpha_channel(image)
             warped_img, target_img, mask_image = self.processing.random_warp_landmarks(
                 image,
                 landmarks[0],
@@ -132,7 +131,8 @@ class TrainingDataGenerator():
         try:
             src_points = landmarks[side][lm_key]
         except KeyError:
-            raise Exception("Landmarks not found for hash: '{}' file: '{}'".format(lm_key, filename))
+            raise Exception("Landmarks not found for hash: '{}' file: '{}'".format(lm_key,
+                                                                                   filename))
         dst_points = landmarks["a"] if side == "b" else landmarks["b"]
         dst_points = list(dst_points.values())
         closest = (np.mean(np.square(src_points - dst_points),
@@ -141,23 +141,6 @@ class TrainingDataGenerator():
         retval = src_points, dst_points[closest]
         logger.trace("Returning: (src_points: %s, dst_points: %s)", retval[0], retval[1])
         return retval
-
-    @staticmethod
-    def color_adjust(img):
-        """ Color adjust RGB image """
-        logger.trace("Color adjusting image")
-        return img / 255.0
-
-    @staticmethod
-    def add_alpha_channel(image):
-        """ Add an alpha channel to the image """
-        logger.trace("Add alpha channel to image")
-        ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
-        ch_a = np.ones(ch_b.shape, dtype=ch_b.dtype) * 50
-        image_bgra = cv2.merge(  # pylint: disable=no-member
-            (ch_b, ch_g, ch_r, ch_a))
-        logger.trace("Added alpha channel to image")
-        return image_bgra
 
 
 class ImageManipulation():
@@ -187,6 +170,23 @@ class ImageManipulation():
         self.coverage = coverage
         self.scale = scale
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def add_alpha_channel(image):
+        """ Add an alpha channel to the image """
+        logger.trace("Add alpha channel to image")
+        ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
+        ch_a = np.ones(ch_b.shape, dtype=ch_b.dtype) * 50
+        image_bgra = cv2.merge(  # pylint: disable=no-member
+            (ch_b, ch_g, ch_r, ch_a))
+        logger.trace("Added alpha channel to image")
+        return image_bgra
+
+    @staticmethod
+    def color_adjust(img):
+        """ Color adjust RGB image """
+        logger.trace("Color adjusting image")
+        return img / 255.0
 
     def random_transform(self, image):
         """ Randomly transform an image """
@@ -221,58 +221,53 @@ class ImageManipulation():
         mapx = np.broadcast_to(range_, (self.scale, self.scale))
         mapy = mapx.T
 
-        mapx = mapx + np.random.normal(size=(self.scale, self.scale),
-                                       scale=self.scale)
-        mapy = mapy + np.random.normal(size=(self.scale, self.scale),
-                                       scale=self.scale)
+        mapx = mapx + np.random.normal(size=(self.scale, self.scale), scale=self.scale)
+        mapy = mapy + np.random.normal(size=(self.scale, self.scale), scale=self.scale)
 
         interp_mapx = cv2.resize(  # pylint: disable=no-member
-            mapx, (80 * self.zoom, 80 * self.zoom)
-            )[8 * self.zoom:72 * self.zoom,
-              8 * self.zoom:72 * self.zoom].astype('float32')
+            mapx, (80 * self.zoom, 80 * self.zoom))[8 * self.zoom:72 * self.zoom,
+                                                    8 * self.zoom:72 * self.zoom].astype('float32')
         interp_mapy = cv2.resize(  # pylint: disable=no-member
-            mapy, (80 * self.zoom, 80 * self.zoom)
-            )[8 * self.zoom:72 * self.zoom,
-              8 * self.zoom:72 * self.zoom].astype('float32')
+            mapy, (80 * self.zoom, 80 * self.zoom))[8 * self.zoom:72 * self.zoom,
+                                                    8 * self.zoom:72 * self.zoom].astype('float32')
 
         warped_image = cv2.remap(  # pylint: disable=no-member
-            image,
-            interp_mapx,
-            interp_mapy,
-            cv2.INTER_LINEAR)  # pylint: disable=no-member
+            image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)  # pylint: disable=no-member
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
         dst_points = np.mgrid[0:65 * self.zoom:16 * self.zoom,
-                              0:65 * self.zoom:16 * self.zoom].T.reshape(-1,
-                                                                         2)
+                              0:65 * self.zoom:16 * self.zoom].T.reshape(-1, 2)
 
         mat = umeyama(src_points, dst_points, True)[0:2]
-        target_image = cv2.warpAffine(image,  # pylint: disable=no-member
-                                      mat,
-                                      (64 * self.zoom, 64 * self.zoom))
+        target_image = cv2.warpAffine(  # pylint: disable=no-member
+            image, mat, (64 * self.zoom, 64 * self.zoom))
 
         logger.trace("Randomly warped image")
         return warped_image, target_image
 
-    # TODO Unfix variables
-    def random_warp_landmarks(self, image, src_points, dst_points):
-        """ get warped image, target image and target mask """
-        # pylint: disable=no-member
+    @staticmethod
+    def random_warp_landmarks(image, src_points, dst_points):
+        """ get warped image, target image and target mask
+            From DFAKER plugin """
         logger.trace("Randomly warping landmarks")
+        size = image.shape[0]
+        h_size = size // 2
+        q_size = size // 4
+        pad = q_size // 8
+        p_mx = size - 1
+        p_hf = h_size - 1
 
-        edge_anchors = [(0, 0), (0, 255), (255, 255), (255, 0),
-                        (127, 0), (127, 255), (255, 127), (0, 127)]
-        grid_x, grid_y = np.mgrid[0:255:256j, 0:255:256j]
+        edge_anchors = [(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
+                        (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]
+        grid_x, grid_y = np.mgrid[0:p_mx:complex(size), 0:p_mx:complex(size)]
 
         source = src_points
         destination = (dst_points.copy().astype("float") +
-                       np.random.normal(size=(dst_points.shape),
-                                        scale=2))
+                       np.random.normal(size=(dst_points.shape), scale=2))
         destination = destination.astype("uint8")
 
-        face_core = cv2.convexHull(np.concatenate([source[17:],
-                                                   destination[17:]],
-                                                  axis=0).astype(int))
+        face_core = cv2.convexHull(np.concatenate(  # pylint: disable=no-member
+            [source[17:], destination[17:]], axis=0).astype(int))
 
         source = [(pty, ptx) for ptx, pty in source] + edge_anchors
         destination = [(pty, ptx) for ptx, pty in destination] + edge_anchors
@@ -282,7 +277,9 @@ class ImageManipulation():
             for idx, (pty, ptx) in enumerate(fpl):
                 if idx > 17:
                     break
-                elif cv2.pointPolygonTest(face_core, (pty, ptx), False) >= 0:
+                elif cv2.pointPolygonTest(face_core,  # pylint: disable=no-member
+                                          (pty, ptx),
+                                          False) >= 0:
                     indicies_to_remove.add(idx)
 
         for idx in sorted(indicies_to_remove, reverse=True):
@@ -293,31 +290,31 @@ class ImageManipulation():
                           source,
                           (grid_x, grid_y),
                           method="linear")
-        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(256, 256)
-        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(256, 256)
+        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size)
+        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size)
         map_x_32 = map_x.astype('float32')
         map_y_32 = map_y.astype('float32')
 
-        warped = cv2.remap(image[:, :, :3],
+        warped = cv2.remap(image[:, :, :3],  # pylint: disable=no-member
                            map_x_32,
                            map_y_32,
-                           cv2.INTER_LINEAR,
-                           cv2.BORDER_TRANSPARENT)
-        target_mask = image[:, :, 3].reshape((256, 256, 1))
+                           cv2.INTER_LINEAR,  # pylint: disable=no-member
+                           cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
+        target_mask = image[:, :, 3].reshape((size, size, 1))
         target_image = image[:, :, :3]
 
-        warped = cv2.resize(warped[128 - 120:128 + 120,
-                                   128 - 120:128 + 120, :],
-                            (64, 64),
-                            cv2.INTER_AREA)
-        target_image = cv2.resize(target_image[128 - 120:128 + 120,
-                                               128 - 120:128 + 120, :],
-                                  (64 * 2, 64 * 2),
-                                  cv2.INTER_AREA)
-        target_mask = cv2.resize(target_mask[128 - 120:128 + 120,
-                                             128 - 120:128 + 120, :],
-                                 (64 * 2, 64 * 2),
-                                 cv2.INTER_AREA).reshape((64 * 2, 64 * 2, 1))
+        warped = cv2.resize(  # pylint: disable=no-member
+            warped[pad:size - pad, pad:size - pad, :],
+            (q_size, q_size),
+            cv2.INTER_AREA)  # pylint: disable=no-member
+        target_image = cv2.resize(  # pylint: disable=no-member
+            target_image[pad:size - pad, pad:size - pad, :],
+            (q_size * 2, q_size * 2),
+            cv2.INTER_AREA)  # pylint: disable=no-member
+        target_mask = cv2.resize(  # pylint: disable=no-member
+            target_mask[pad:size - pad, pad:size - pad, :],
+            (q_size * 2, q_size * 2),
+            cv2.INTER_AREA).reshape((q_size * 2, q_size * 2, 1))  # pylint: disable=no-member
 
         logger.trace("Randomly warped image")
         return warped, target_image, target_mask
