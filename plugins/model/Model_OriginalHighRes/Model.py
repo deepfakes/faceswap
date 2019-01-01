@@ -1,5 +1,5 @@
 # Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
-# Based on https://github.com/iperov/DeepFaceLab a better 128x Decoder idea, K.function impl
+# Based on https://github.com/iperov/DeepFaceLab a better 128x Decoder idea
 # Based on the https://github.com/shaoanlu/faceswap-GAN repo res_block chain and IN
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
@@ -40,7 +40,6 @@ else:
 mswindows = sys.platform=="win32"
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-mswindows = sys.platform=="win32"
 
 _kern_init = RandomNormal(0, 0.02)
 
@@ -48,7 +47,7 @@ _kern_init = RandomNormal(0, 0.02)
 # basic encoder for this model type
 # new, balanced encoder they way I meant it to be; more memory consuming
 # high resolution tensors optimized encoder: 176x and on
-EncoderType = enum.Enum('EncoderType', 'ORIGINAL STANDARD HIGHRES')
+EncoderType = enum.Enum('EncoderType', 'ORIGINAL STANDARD STANDARD_RC4 HIGHRES')
 
 MODEL_CFG_FN = 'faceswap.ini'
 
@@ -299,6 +298,60 @@ class Model():
             x = cls.upscale(cls.DECODER_B_COMPLEXITY // 4)(x)
             
             x = cls.res_block(x, cls.DECODER_B_COMPLEXITY // 4)
+            
+            x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+            
+            return KerasModel(inpt, x)        
+        
+        return Encoder(cls.IMAGE_SHAPE), Decoder_A(), Decoder_B()
+    
+    @classmethod      
+    def build_standard_rc4(cls):                        
+        def Encoder(input_shape):
+            impt = Input(shape=input_shape)
+                    
+            x = cls.conv(cls.ENCODER_COMPLEXITY, use_instance_norm=True)(impt)
+            x = cls.conv(cls.ENCODER_COMPLEXITY * 2, use_instance_norm=True)(x)
+            x = cls.conv(cls.ENCODER_COMPLEXITY * 4)(x)
+            x = cls.conv(cls.ENCODER_COMPLEXITY * 6)(x)
+            x = cls.conv(cls.ENCODER_COMPLEXITY * 8)(x)
+            
+            dense_shape = cls.IMAGE_SHAPE[0] // 16         
+            x = Dense(cls.ENCODER_DIM, kernel_initializer=_kern_init)(Flatten()(x))
+            x = Dense(dense_shape * dense_shape * 512, kernel_initializer=_kern_init)(x)
+            x = Reshape((dense_shape, dense_shape, 512))(x)
+                            
+            return KerasModel(impt, x)             
+    
+        def Decoder_A():       
+            decoder_shape = cls.IMAGE_SHAPE[0]//8        
+            inpt = Input(shape=(decoder_shape, decoder_shape, 512))
+            
+            x = inpt
+            x = cls.upscale(cls.DECODER_A_COMPLEXITY)(x)
+            x = SpatialDropout2D(0.25)(x)
+            x = cls.upscale(cls.DECODER_A_COMPLEXITY)(x)
+            x = SpatialDropout2D(0.25)(x)
+            x = cls.upscale(cls.DECODER_A_COMPLEXITY // 2)(x)
+            x = SpatialDropout2D(0.125)(x)
+            x = cls.upscale(cls.DECODER_A_COMPLEXITY // 4)(x)
+            
+            x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
+            
+            return KerasModel(inpt, x)    
+    
+        def Decoder_B():       
+            decoder_shape = cls.IMAGE_SHAPE[0] // 8                    
+            inpt = Input(shape=(decoder_shape, decoder_shape, cls.DECODER_B_COMPLEXITY))
+            
+            x = inpt
+            x = cls.upscale(512)(x)            
+            x = cls.res_block(x, 512)              
+            x = cls.upscale(512)(x)                    
+            x = cls.res_block(x, 512)                     
+            x = cls.upscale(256)(x)                    
+            x = cls.res_block(x, 256)                
+            x = cls.upscale(128)(x)                        
             
             x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
             

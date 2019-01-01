@@ -50,7 +50,12 @@ class Trainer():
                 end='\r')         
 
         if viewer is not None:
-            viewer(self.show_sample(target_A[0:8], target_B[0:8]), "training using {}, bs={}".format(self.model, self.batch_size))
+            viewer(self.show_sample(target_A[0:8], target_B[0:8]), 
+                   'Training using {}, ae: {}, enc dim/compl: {}/{}, img size: {}, batch sz: {}'
+                   .format(self.model.model_name, self.model.encoder_name, 
+                           self.model.ENCODER_DIM, self.model.ENCODER_COMPLEXITY, 
+                           "x".join([str(v) for v in self.model.IMAGE_SHAPE[:2]]), 
+                           self.batch_size))
             
 
     def show_sample(self, test_A, test_B):
