@@ -245,7 +245,7 @@ class Images(metaclass=Singleton):
             logger.debug("No preview to display")
             self.previewoutput = None
             return
-        # Get penultimate file so we don't accidently
+        # Get penultimate file so we don't accidentally
         # load a file that is being saved
         show_file = sorted(imagefiles, key=os.path.getctime)[-2]
         img = Image.open(show_file)

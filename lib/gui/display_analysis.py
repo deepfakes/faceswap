@@ -283,7 +283,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 
 class SessionPopUp(tk.Toplevel):
-    """ Pop up for detailed grap/stats for selected session """
+    """ Pop up for detailed graph/stats for selected session """
     def __init__(self, data, session_id):
         tk.Toplevel.__init__(self)
 
@@ -327,7 +327,7 @@ class SessionPopUp(tk.Toplevel):
         return leftframe, rightframe
 
     def opts_build(self, frame):
-        """ Options in options to the optsframe """
+        """ Build Options into the options frame """
         self.opts_combobox(frame)
         self.opts_checkbuttons(frame)
         self.opts_entry(frame)

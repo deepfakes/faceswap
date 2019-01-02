@@ -172,7 +172,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def lines_sort(self, keys):
         """ Sort the data keys into consistent order
-            and set line colourmap and line width """
+            and set line color map and line width """
         raw_lines = list()
         sorted_lines = list()
         for key in sorted(keys):
@@ -206,7 +206,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         return groupsize
 
     def lines_style(self, lines, groupsize):
-        """ Set the colourmap and linewidth for each group """
+        """ Set the color map and line width for each group """
         groups = int(len(lines) / groupsize)
         colours = self.lines_create_colors(groupsize, groups)
         for idx, item in enumerate(lines):
@@ -215,7 +215,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         return lines
 
     def lines_create_colors(self, groupsize, groups):
-        """ Create the colours """
+        """ Create the colors """
         colours = list()
         for i in range(1, groups + 1):
             for colour in self.colourmaps[0:groupsize]:
@@ -261,7 +261,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
         """ Change the animation update interval based on how
             many iterations have been
             There's no point calculating a graph over thousands of
-            points of data when the change will be miniscule """
+            points of data when the change will be minuscule """
         if iterations > 30000:
             speed = 60000           # 1 min updates
         elif iterations > 20000:

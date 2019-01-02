@@ -53,7 +53,7 @@ class AlignmentData(Alignments):
         self.set_destination_format(destination_format)
 
     def set_destination_format(self, destination_format):
-        """ Standardise the destination format to the correct extension """
+        """ Standardize the destination format to the correct extension """
         extensions = {".json": "json",
                       ".p": "pickle",
                       ".yml": "yaml",

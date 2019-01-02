@@ -28,16 +28,17 @@ class PluginLoader():
     @staticmethod
     def get_model(name):
         """ Return requested model plugin """
-        return PluginLoader._import("Model", "Model_{0}".format(name))
+        return PluginLoader._import("train.model", name)
 
     @staticmethod
     def get_trainer(name):
         """ Return requested trainer plugin """
-        return PluginLoader._import("Trainer", "Model_{0}".format(name))
+        return PluginLoader._import("train.trainer", name)
 
     @staticmethod
     def _import(attr, name):
         """ Import the plugin's module """
+        name = name.replace("-", "_")
         ttl = attr.split(".")[-1].title()
         logger.info("Loading %s from %s plugin...", ttl, name.title())
         attr = "model" if attr == "Trainer" else attr.lower()
@@ -48,11 +49,11 @@ class PluginLoader():
     @staticmethod
     def get_available_models():
         """ Return a list of available models """
-        models = ()
-        modelpath = os.path.join(os.path.dirname(__file__), "model")
-        for modeldir in next(os.walk(modelpath))[1]:
-            if modeldir[0:6].lower() == 'model_':
-                models += (modeldir[6:],)
+        modelpath = os.path.join(os.path.dirname(__file__), "train", "model")
+        models = sorted(item.name.replace(".py", "").replace("_", "-")
+                        for item in os.scandir(modelpath)
+                        if not item.name.startswith("_")
+                        and item.name.endswith(".py"))
         return models
 
     @staticmethod
