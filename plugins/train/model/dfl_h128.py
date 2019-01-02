@@ -8,9 +8,10 @@ from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import conv, upscale
-from .original import logger, Model as OriginalModel
+from .original import get_config, logger, Model as OriginalModel
 
-# TODO Check whether using DFL Loss function rather than DFaker makes a difference
+# TODO Implement DFL loss function (currently using dfaker)
+# TODO Get Mask working
 
 
 class Model(OriginalModel):
@@ -18,11 +19,23 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+        config = get_config(self.__module__.split(".")[-1])
+
         kwargs["image_shape"] = (128, 128, 3)
-        kwargs["encoder_dim"] = 256 if self.config["lowmem"] else 512
+        kwargs["encoder_dim"] = 256 if config["lowmem"] else 512
 
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_training_data(self):
+        """ Set the dictionary for training """
+        logger.debug("Setting training data")
+        training_opts = dict()
+        training_opts["use_mask"] = True
+        training_opts["remove_alpha"] = True
+        training_opts["preview_images"] = 10
+        logger.debug("Set training data: %s", training_opts)
+        return training_opts
 
     def initialize(self):
         """ Initialize DFL H128 model """
@@ -36,7 +49,6 @@ class Model(OriginalModel):
         ae_a = KerasModel(
             [inp_a, mask_a],
             self.networks["decoder_a"].network(self.networks["encoder"].network(inp_a)))
-
         ae_b = KerasModel(
             [inp_b, mask_b],
             self.networks["decoder_b"].network(self.networks["encoder"].network(inp_b)))

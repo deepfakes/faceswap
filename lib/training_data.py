@@ -105,20 +105,20 @@ class TrainingDataGenerator():
         image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)
 
-        if not landmarks:
-            retval = self.processing.random_warp(image)
-        else:
+        mask = None
+        if self.training_opts.get("use_mask", False):
             image = self.processing.add_alpha_channel(image)
-            warped_img, target_img, mask_image = self.processing.random_warp_landmarks(
-                image,
-                landmarks[0],
-                landmarks[1])
-            if np.random.random() < 0.5:
-                warped_img = warped_img[:, ::-1]
-                target_img = target_img[:, ::-1]
-                mask_image = mask_image[:, ::-1]
+            mask = image[:, :, 3].reshape((image.shape[0], image.shape[1], 1))
 
-            retval = warped_img, target_img, mask_image
+        if not landmarks:
+            processed = self.processing.random_warp(image, mask)
+        else:
+            processed = self.processing.random_warp_landmarks(image,
+                                                              mask,
+                                                              landmarks[0],
+                                                              landmarks[1])
+
+        retval = self.processing.do_random_flip(processed)
         logger.trace("Processed face: (filename: '%s', side: '%s'", filename, side)
         return retval
 
@@ -150,7 +150,7 @@ class ImageManipulation():
         """ rotation_range: Used for random transform
             zoom_range: Used for random transform
             shift_range: Used for random transform
-            random_flip: Used for random transform
+            random_flip: Float between 0 and 1. Chance to flip the image
             zoom: Used for random transform and random warp
             coverage: Used for random warp
             scale: Used for random warp
@@ -205,12 +205,10 @@ class ImageManipulation():
             image, mat, (width, height),
             borderMode=cv2.BORDER_REPLICATE)  # pylint: disable=no-member
 
-        if np.random.random() < self.random_flip:
-            result = result[:, ::-1]
         logger.trace("Randomly transformed image")
         return result
 
-    def random_warp(self, image):
+    def random_warp(self, image, mask):
         """ get pair of random warped images from aligned face image """
         logger.trace("Randomly warping image")
         height, width = image.shape[0:2]
@@ -242,20 +240,23 @@ class ImageManipulation():
         target_image = cv2.warpAffine(  # pylint: disable=no-member
             image, mat, (64 * self.zoom, 64 * self.zoom))
 
-        logger.trace("Randomly warped image")
-        return warped_image, target_image
+        if mask is None:
+            retval = warped_image, target_image
+        else:
+            target_mask = cv2.warpAffine(  # pylint: disable=no-member
+                mask, mat, (64 * self.zoom, 64 * self.zoom))
+            retval = warped_image, target_image, target_mask
 
-    @staticmethod
-    def random_warp_landmarks(image, src_points, dst_points):
+        logger.trace("Randomly warped image")
+        return retval
+
+    def random_warp_landmarks(self, image, mask, src_points, dst_points):
         """ get warped image, target image and target mask
             From DFAKER plugin """
         logger.trace("Randomly warping landmarks")
         size = image.shape[0]
-        h_size = size // 2
-        q_size = size // 4
-        pad = q_size // 8
         p_mx = size - 1
-        p_hf = h_size - 1
+        p_hf = (size // 2) - 1
 
         edge_anchors = [(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
                         (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]
@@ -295,29 +296,47 @@ class ImageManipulation():
         map_x_32 = map_x.astype('float32')
         map_y_32 = map_y.astype('float32')
 
-        warped = cv2.remap(image[:, :, :3],  # pylint: disable=no-member
-                           map_x_32,
-                           map_y_32,
-                           cv2.INTER_LINEAR,  # pylint: disable=no-member
-                           cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
-        target_mask = image[:, :, 3].reshape((size, size, 1))
+        warped_image = cv2.remap(image[:, :, :3],  # pylint: disable=no-member
+                                 map_x_32,
+                                 map_y_32,
+                                 cv2.INTER_LINEAR,  # pylint: disable=no-member
+                                 cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         target_image = image[:, :, :3]
 
-        warped = cv2.resize(  # pylint: disable=no-member
-            warped[pad:size - pad, pad:size - pad, :],
-            (q_size, q_size),
+        pad_lt = (64 * self.zoom) - (60 * self.zoom)
+        pad_rb = (64 * self.zoom) + (60 * self.zoom)
+
+        warped_image = cv2.resize(  # pylint: disable=no-member
+            warped_image[pad_lt:pad_rb, pad_lt:pad_rb, :],
+            (64, 64),
             cv2.INTER_AREA)  # pylint: disable=no-member
         target_image = cv2.resize(  # pylint: disable=no-member
-            target_image[pad:size - pad, pad:size - pad, :],
-            (q_size * 2, q_size * 2),
+            target_image[pad_lt:pad_rb, pad_lt:pad_rb, :],
+            (64 * self.zoom, 64 * self.zoom),
             cv2.INTER_AREA)  # pylint: disable=no-member
-        target_mask = cv2.resize(  # pylint: disable=no-member
-            target_mask[pad:size - pad, pad:size - pad, :],
-            (q_size * 2, q_size * 2),
-            cv2.INTER_AREA).reshape((q_size * 2, q_size * 2, 1))  # pylint: disable=no-member
-
+        if mask is None:
+            retval = warped_image, target_image
+        else:
+            target_mask = cv2.resize(  # pylint: disable=no-member
+                mask[pad_lt:pad_rb, pad_lt:pad_rb, :],
+                (64 * self.zoom, 64 * self.zoom),
+                cv2.INTER_AREA)  # pylint: disable=no-member
+            target_mask = target_mask.reshape((64 * self.zoom, 64 * self.zoom, 1))
+            retval = warped_image, target_image, target_mask
         logger.trace("Randomly warped image")
-        return warped, target_image, target_mask
+        return retval
+
+    def do_random_flip(self, images):
+        """ Perform flip on images if random number is within threshold """
+        logger.trace("Randomly flipping image")
+        if np.random.random() < self.random_flip:
+            logger.trace("Flip within threshold. Flipping")
+            retval = [image[:, ::-1] for image in images]
+        else:
+            logger.trace("Flip outside threshold. Not Flipping")
+            retval = images
+        logger.trace("Randomly flipped image")
+        return retval
 
 
 def stack_images(images):

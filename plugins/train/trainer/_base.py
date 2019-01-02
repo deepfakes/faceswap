@@ -8,6 +8,7 @@
         use_alignments: Set to true if the model uses an alignments file (default: False)
         serializer:     format that alignments data is serialized in
         use_mask:       Set to true if the model uses a mask (default: False)
+        remove_alpha:   Remove the alpha channel from the image before passing to predictor
         preview_images: Number of preview images to display (default: 14)
 """
 
@@ -27,17 +28,17 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class TrainerBase():
     """ Base Trainer """
 
-    def __init__(self, model, images, batch_size, *args):
-        logger.debug("Initializing %s: (model: '%s', batch_size: %s, args: %s, ",
-                     self.__class__.__name__, model, batch_size, args)
+    def __init__(self, model, images, batch_size):
+        logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
+                     self.__class__.__name__, model, batch_size)
         self.batch_size = batch_size
         self.model = model
         self.images = images
         self.process_training_opts()
-        transform_kwargs = self.process_transform_kwargs()
+        self.transform_kwargs = self.process_transform_kwargs()
 
         generator = TrainingDataGenerator(
-            transform_kwargs=transform_kwargs,
+            transform_kwargs=self.transform_kwargs,
             training_opts=self.model.training_opts)
 
         self.images_a = generator.minibatch_ab(images["a"], self.batch_size, "a")
@@ -69,10 +70,16 @@ class TrainerBase():
 
     def print_loss(self, loss_a, loss_b):
         """ Override for specific model loss formatting """
-        print("[{0}] [#{1:05d}] loss_A: {2:.5f}, loss_B: {3:.5f}".format(self.timestamp,
-                                                                         self.model.iterations,
-                                                                         loss_a,
-                                                                         loss_b),
+        loss = [loss_a, loss_b]
+        for idx, side in enumerate(loss):
+            if isinstance(side, list):
+                loss[idx] = " | ".join(["{:.5f}".format(loss) for loss in loss_a])
+            else:
+                loss[idx] = "{:.5f}".format(loss)
+        print("[{0}] [#{1:05d}] loss_A: {2}, loss_B: {3}".format(self.timestamp,
+                                                                 self.model.iterations,
+                                                                 loss[0],
+                                                                 loss[1]),
               end='\r')
 
     def train_one_step(self, viewer, timelapse_kwargs):
@@ -84,14 +91,13 @@ class TrainerBase():
         use_mask = self.model.training_opts.get("use_mask", False)
         train_a = next(self.images_a)
         train_b = next(self.images_b)
-
         if use_mask:
             train_a, train_b = self.compile_mask(train_a, train_b)
 
         loss_a = self.model.predictors["a"].train_on_batch(*train_a)
         loss_b = self.model.predictors["b"].train_on_batch(*train_b)
 
-        self.model._iterations += 1
+        self.model.state.iterations += 1
         self.print_loss(loss_a, loss_b)
 
         if viewer is not None:
@@ -111,7 +117,14 @@ class TrainerBase():
         sides = list()
         for train in (train_a, train_b):
             mask = train[-1]
-            side = [[train[idx], mask] for idx in range(len(train) - 1)]
+            if self.model.training_opts.get("remove_alpha", False):
+                mask = np.expand_dims(mask, -1)
+            side = list()
+            for idx in range(len(train) - 1):
+                image = train[idx]
+                if self.model.training_opts.get("remove_alpha", False):
+                    image = image[..., 0:3]
+                side.append([image, mask])
             sides.append(side)
         return sides[0], sides[1]
 
@@ -134,7 +147,7 @@ class TrainerBase():
                                                   train_b[1],
                                                   self.timelapse["batch_size"])
         image = self.show_sample(sample_a, sample_b)
-        filename = os.path.join(self.timelapse["output_dir"], str(int(time.time())) + ".png")
+        filename = os.path.join(self.timelapse["output_dir"], str(int(time.time())) + ".jpg")
 
         cv2.imwrite(filename, image)  # pylint: disable=no-member
         logger.debug("Created timelapse: '%s'", filename)
@@ -151,8 +164,9 @@ class TrainerBase():
                          self.model.training_opts.get("preview_images", 14))
         generator = TrainingDataGenerator(
             transform_kwargs={"rotation_range": 0, "zoom_range": 0, "shift_range": 0,
-                              "random_flip": 0, "zoom": self.model.image_shape[0] // 64,
-                              "coverage": 160, "scale": 5},
+                              "random_flip": 0, "zoom": self.transform_kwargs["zoom"],
+                              "coverage": self.transform_kwargs["coverage"],
+                              "scale": self.transform_kwargs["scale"]},
             training_opts=self.model.training_opts)
 
         if output is None:
@@ -178,10 +192,16 @@ class TrainerBase():
 
         if self.model.training_opts.get("use_mask", False):
             mask = np.zeros(test_a.shape[:3] + (1, ), float)
+            if self.model.training_opts.get("remove_alpha", False):
+                test_a = test_a[..., 0:3]
+                test_b = test_b[..., 0:3]
+                feed_a = feed_a[..., 0:3]
+                feed_b = feed_b[..., 0:3]
             feed_a = [feed_a, mask]
             feed_b = [feed_b, mask]
 
         preds = self.get_predictions(feed_a, feed_b)
+
         figure_a = np.stack([test_a, preds["a_a"], preds["b_a"], ], axis=1)
         figure_b = np.stack([test_b, preds["b_b"], preds["a_b"], ], axis=1)
 

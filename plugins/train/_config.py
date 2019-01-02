@@ -24,6 +24,16 @@ class Config(FaceswapConfig):
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
 
+        # << ORIGINAL MODEL OPTIONS >> #
+        section = "original"
+        self.add_section(title=section,
+                         info="Original Faceswap Model")
+        self.add_item(
+            section=section, title="lowmem", datatype=bool, default=False,
+            info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
+                 "with a changed lowmem mode are not compatible with each other."
+                 "\nChoose from: True, False")
+
         # << ORIGINAL HIRES MODEL OPTIONS >> #
         section = "original_hires"
         self.add_section(title=section,

@@ -56,6 +56,8 @@ class FaceswapConfig():
             if sect not in self.config.sections():
                 continue
             for key in self.config[sect]:
+                if key.startswith(("#", "\n")):  # Skip comments
+                    continue
                 conf[key] = self.get(sect, key)
         return conf
 

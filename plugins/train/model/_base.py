@@ -19,13 +19,18 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+def get_config(model_name):
+    """ Return the config for the requested model """
+    return Config(model_name).config_dict
+
+
 class ModelBase():
     """ Base class that all models should inherit from """
     def __init__(self, model_dir, gpus, image_shape=None, encoder_dim=None, trainer="original"):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, image_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      image_shape, encoder_dim)
-        self.config = Config(self.__module__.split(".")[-1]).config_dict
+        self.config = get_config(self.__module__.split(".")[-1])
         self.model_dir = model_dir
         self.gpus = gpus
         self.image_shape = image_shape
@@ -37,8 +42,7 @@ class ModelBase():
         self.name = self.set_model_name()
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
-        self.serializer = Serializer.get_serializer("json")
-        self._iterations = self.load_state()
+        self.state = State(self.model_dir, self.base_filename)
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
         self.training_opts = self.set_training_data()
@@ -72,8 +76,7 @@ class ModelBase():
     def add_network(self, network_type, side, network):
         """ Add a NNMeta object """
         logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
-        resolution = self.image_shape[0]
-        filename = "{}_{}_{}".format(self.name, resolution, network_type.lower())
+        filename = "{}_{}".format(self.base_filename, network_type.lower())
         name = network_type.lower()
         if side:
             filename += "_{}".format(side.upper())
@@ -138,47 +141,14 @@ class ModelBase():
 
     @property
     def iterations(self):
-        "Get current training epoch number"
-        return self._iterations
+        "Get current training iteration number"
+        return self.state.iterations
 
-    def load_state(self):
-        """ Load epoch number from state file """
-        logger.debug("Loading State")
-        iterations = 0
-        try:
-            with open(self.state_filename(), "rb") as inp:
-                state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                # TODO Remove this backwards compatibility fix to get iterations from epoch_no
-                iterations = state.get("epoch_no", None)
-                iterations = state["iterations"] if iterations is None else iterations
-        except IOError as err:
-            logger.warning("No existing training info found. Generating.")
-            logger.debug("IOError: %s", str(err))
-            iterations = 0
-        except JSONDecodeError as err:
-            logger.debug("JSONDecodeError: %s:", str(err))
-            iterations = 0
-        logger.debug("Loaded State: (iterations: %s)", iterations)
-        return iterations
-
-    def save_state(self):
-        """ Save epoch number to state file """
-        logger.debug("Saving State")
-        try:
-            with open(self.state_filename(), "wb") as out:
-                state = {"iterations": self.iterations}
-                state_json = self.serializer.marshal(state)
-                out.write(state_json.encode("utf-8"))
-        except IOError as err:
-            logger.error("Unable to save model state: %s", str(err.strerror))
-        logger.debug("Saved State")
-
-    def state_filename(self):
-        """ Return full filepath for this models state file """
-        filename = "{}_state.{}".format(self.name, self.serializer.ext)
-        retval = str(self.model_dir / filename)
-        logger.debug(retval)
-        return retval
+    @property
+    def base_filename(self):
+        """ Base filename for model and state files """
+        resolution = self.image_shape[0]
+        return "{}_{}_dim{}".format(self.name, resolution, self.encoder_dim)
 
     def map_weights(self, swapped):
         """ Map the weights for A/B side models for swapping """
@@ -220,7 +190,7 @@ class ModelBase():
         # Put in a line break to avoid jumbled console
         print("\n")
         logger.info("saved model weights")
-        self.save_state()
+        self.state.save()
 
     def log_summary(self):
         """ Verbose log the model summaries """
@@ -274,3 +244,44 @@ class NNMeta():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
+
+
+class State():
+    """ Class to hold the model's current state """
+    def __init__(self, model_dir, base_filename):
+        self.serializer = Serializer.get_serializer("json")
+        filename = "{}_state.{}".format(base_filename, self.serializer.ext)
+        self.filename = str(model_dir / filename)
+        self.iterations = self.load()
+
+    def load(self):
+        """ Load epoch number from state file """
+        logger.debug("Loading State")
+        iterations = 0
+        try:
+            with open(self.filename, "rb") as inp:
+                state = self.serializer.unmarshal(inp.read().decode("utf-8"))
+                # TODO Remove this backwards compatibility fix to get iterations from epoch_no
+                iterations = state.get("epoch_no", None)
+                iterations = state["iterations"] if iterations is None else iterations
+        except IOError as err:
+            logger.warning("No existing training info found. Generating.")
+            logger.debug("IOError: %s", str(err))
+            iterations = 0
+        except JSONDecodeError as err:
+            logger.debug("JSONDecodeError: %s:", str(err))
+            iterations = 0
+        logger.debug("Loaded State: (iterations: %s)", iterations)
+        return iterations
+
+    def save(self):
+        """ Save epoch number to state file """
+        logger.debug("Saving State")
+        try:
+            with open(self.filename, "wb") as out:
+                state = {"iterations": self.iterations}
+                state_json = self.serializer.marshal(state)
+                out.write(state_json.encode("utf-8"))
+        except IOError as err:
+            logger.error("Unable to save model state: %s", str(err.strerror))
+        logger.debug("Saved State")

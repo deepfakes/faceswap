@@ -167,7 +167,7 @@ class Train():
 
     def run_training_cycle(self, model, trainer):
         """ Perform the training cycle """
-        logger.debug("Runnng Training Cycle")
+        logger.debug("Running Training Cycle")
         for iteration in range(0, self.args.iterations):
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self.args.save_interval == 0

@@ -8,7 +8,7 @@ from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import conv, Conv2D, upscale
-from ._base import ModelBase, logger
+from ._base import get_config, ModelBase, logger
 
 
 class Model(ModelBase):
@@ -16,10 +16,12 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+
         if "image_shape" not in kwargs:
             kwargs["image_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
-            kwargs["encoder_dim"] = 1024
+            config = get_config(self.__module__.split(".")[-1])
+            kwargs["encoder_dim"] = 512 if config["lowmem"] else 1024
 
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -54,7 +56,8 @@ class Model(ModelBase):
         var_x = conv(128)(var_x)
         var_x = conv(256)(var_x)
         var_x = conv(512)(var_x)
-        var_x = conv(1024)(var_x)
+        if not self.config.get("lowmem", False):
+            var_x = conv(1024)(var_x)
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(4 * 4 * 1024)(var_x)
         var_x = Reshape((4, 4, 1024))(var_x)
