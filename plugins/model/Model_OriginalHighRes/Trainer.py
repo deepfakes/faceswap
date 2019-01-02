@@ -22,7 +22,8 @@ class Trainer():
         from timeit import default_timer as clock
         self._clock = clock
         
-        generator = TrainingDataGenerator(self.random_transform_args, 160, 5, zoom=self.model.IMAGE_SHAPE[0]//64)        
+        sample_size = max(self.model.input_shape[0], self.model.output_shape[0])
+        generator = TrainingDataGenerator(self.random_transform_args, 160, 5, zoom=sample_size // 64)        
         
         self.images_A = generator.minibatchAB(fn_A, self.batch_size)
         self.images_B = generator.minibatchAB(fn_B, self.batch_size)

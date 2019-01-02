@@ -4,14 +4,13 @@
 # source : https://github.com/shaoanlu/faceswap-GAN/blob/master/FaceSwap_GAN_v2_sz128_train.ipynbtemp/faceswap_GAN_keras.ipynb
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import configparser
 import enum
 from json import JSONDecodeError
 import logging
 import os
 import sys
-import configparser
 import warnings
-
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 from keras.initializers import RandomNormal
@@ -88,8 +87,8 @@ class Model():
     def initModel(self):
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
                         
-        input_A_bgr = Input(shape=self.IMAGE_SHAPE)
-        input_B_bgr = Input(shape=self.IMAGE_SHAPE)        
+        input_A_bgr = Input(shape=self.input_shape)
+        input_B_bgr = Input(shape=self.input_shape)        
         
         rec_A_bgr = self.decoder_A(self.encoder(input_A_bgr))
         rec_B_bgr = self.decoder_B(self.encoder(input_B_bgr))                   
@@ -97,14 +96,14 @@ class Model():
         if self.USE_DSSIM:
             from plugins.Model_OriginalHighRes.dssim import DSSIMObjective
             loss_func = DSSIMObjective()
-            print('Using DSSIM loss ..', flush=True)
+            logger.info('Using DSSIM loss ..')
         else:
             loss_func = 'mean_absolute_error'
             
         if self.USE_SUBPIXEL:
             from plugins.Model_OriginalHighRes.subpixel import SubPixelUpscaling
-            self.upscale = self.upscale_sub
-            print('Using subpixel upscaling ..', flush=True)            
+            self.upscale = self.upscale_sub            
+            logger.info('Using subpixel upscaling ..')       
         
         self.autoencoder_A = KerasModel(input_A_bgr, rec_A_bgr)
         self.autoencoder_B = KerasModel(input_B_bgr, rec_B_bgr)   
@@ -284,7 +283,6 @@ class Model():
             
             return KerasModel(inpt, x)    
     
-
         def Decoder_B():       
             decoder_shape = cls.IMAGE_SHAPE[0] // 8        
             inpt = Input(shape=(decoder_shape, decoder_shape, cls.DECODER_B_COMPLEXITY))
@@ -324,7 +322,7 @@ class Model():
             return KerasModel(impt, x)             
     
         def Decoder_A():       
-            decoder_shape = cls.IMAGE_SHAPE[0]//8        
+            decoder_shape = cls.IMAGE_SHAPE[0] // 16       
             inpt = Input(shape=(decoder_shape, decoder_shape, 512))
             
             x = inpt
@@ -333,7 +331,7 @@ class Model():
             x = cls.upscale(cls.DECODER_A_COMPLEXITY)(x)
             x = SpatialDropout2D(0.25)(x)
             x = cls.upscale(cls.DECODER_A_COMPLEXITY // 2)(x)
-            x = SpatialDropout2D(0.125)(x)
+#            x = SpatialDropout2D(0.125)(x)
             x = cls.upscale(cls.DECODER_A_COMPLEXITY // 4)(x)
             
             x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(x)
@@ -341,7 +339,7 @@ class Model():
             return KerasModel(inpt, x)    
     
         def Decoder_B():       
-            decoder_shape = cls.IMAGE_SHAPE[0] // 8                    
+            decoder_shape = cls.IMAGE_SHAPE[0] // 16                    
             inpt = Input(shape=(decoder_shape, decoder_shape, cls.DECODER_B_COMPLEXITY))
             
             x = inpt
@@ -446,10 +444,10 @@ class Model():
             if e.errno==errno.ENOENT:
                 logger.info('No training info found.')
             else:
-                logger.error('Error loading training info: %s', e.strerror)
+                logger.warning('Error loading training info: %s', e.strerror)
             self._state = { self.encoder_name : self._new_state() }            
         except JSONDecodeError as e:
-            logger.error('Error loading training info: %s', e.msg)
+            logger.warning('Error loading training info: %s', e.msg)
             self._state = { self.encoder_name : self._new_state() }
             
         return self._state        
@@ -524,6 +522,16 @@ class Model():
         cls.DECODER_A_COMPLEXITY = cfg.getint('DECODER_A_COMPLEXITY')
         cls.USE_DSSIM = cfg.getboolean('USE_DSSIM')
         cls.USE_SUBPIXEL = cfg.getboolean('USE_SUBPIXEL')
+        cls._input_shape = cls.IMAGE_SHAPE
+        cls._output_shape = cls.IMAGE_SHAPE
+    
+    @property    
+    def input_shape(self):
+        return self._input_shape
+    
+    @property
+    def output_shape(self):
+        return self._output_shape    
 
     def _new_state(self):       
         state = {'epoch_no' : 0,                 
