@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+
+# TODO Remove 'remove_alpha'. Hack in there until masks properly implemented
+# TODO Remove 'use_alignments'? If using mask then alignments must be provided
 """ Base Trainer Class for Faceswap
 
     Trainers should be inherited from this class.
