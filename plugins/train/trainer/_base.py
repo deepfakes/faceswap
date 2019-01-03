@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 
 
-# TODO Remove 'remove_alpha'. Hack in there until masks properly implemented
-# TODO Remove 'use_alignments'? If using mask then alignments must be provided
 """ Base Trainer Class for Faceswap
 
     Trainers should be inherited from this class.
 
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
-        use_alignments: Set to true if the model uses an alignments file (default: False)
         serializer:     format that alignments data is serialized in
-        use_mask:       Set to true if the model uses a mask (default: False)
-        remove_alpha:   Remove the alpha channel from the image before passing to predictor
+        mask_type:      Type of mask to use. See lib.model.masks for valid mask names
+        full_face:      Set to True if training should use full face
         preview_images: Number of preview images to display (default: 14)
 """
 
@@ -23,6 +20,8 @@ import time
 import cv2
 import numpy as np
 
+from lib.alignments import Alignments
+from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
 from lib.utils import get_folder, get_image_paths
 
@@ -38,6 +37,7 @@ class TrainerBase():
         self.batch_size = batch_size
         self.model = model
         self.images = images
+        self.use_mask = False
         self.process_training_opts()
         self.transform_kwargs = self.process_transform_kwargs()
 
@@ -55,18 +55,16 @@ class TrainerBase():
         """ Standardised timestamp for loss reporting """
         return time.strftime("%H:%M:%S")
 
-    def process_training_opts(self):
-        """ Override for processing model specific training options """
-        raise NotImplementedError
-
     def process_transform_kwargs(self):
         """ Override for specific image manipulation kwargs
             See lib.training_data.ImageManipulation() for valid kwargs"""
+        warped_zoom = self.model.image_shape[0] // 64
+        target_zoom = warped_zoom
         transform_kwargs = {"rotation_range": 10,
                             "zoom_range": 0.05,
                             "shift_range": 0.05,
                             "random_flip": 0.4,
-                            "zoom": self.model.image_shape[0] // 64,
+                            "zoom": (warped_zoom, target_zoom),
                             "coverage": 160,
                             "scale": 5}
         logger.debug(transform_kwargs)
@@ -77,14 +75,21 @@ class TrainerBase():
         loss = [loss_a, loss_b]
         for idx, side in enumerate(loss):
             if isinstance(side, list):
-                loss[idx] = " | ".join(["{:.5f}".format(loss) for loss in loss_a])
+                loss[idx] = " | ".join(["{:.5f}".format(loss_side) for loss_side in side])
             else:
-                loss[idx] = "{:.5f}".format(loss)
+                loss[idx] = "{:.5f}".format(side)
         print("[{0}] [#{1:05d}] loss_A: {2}, loss_B: {3}".format(self.timestamp,
                                                                  self.model.iterations,
                                                                  loss[0],
                                                                  loss[1]),
               end='\r')
+
+    def process_training_opts(self):
+        """ Override for processing model specific training options """
+        logger.debug(self.model.training_opts)
+        if self.model.training_opts.get("mask_type", None):
+            self.use_mask = True
+            Landmarks(self.images, self.model).get_alignments()
 
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch
@@ -92,10 +97,9 @@ class TrainerBase():
             Items should come out as: (warped, target [, mask])
         """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
-        use_mask = self.model.training_opts.get("use_mask", False)
         train_a = next(self.images_a)
         train_b = next(self.images_b)
-        if use_mask:
+        if self.use_mask:
             train_a, train_b = self.compile_mask(train_a, train_b)
 
         loss_a = self.model.predictors["a"].train_on_batch(*train_a)
@@ -106,7 +110,7 @@ class TrainerBase():
 
         if viewer is not None:
             target_a, target_b = train_a[1], train_b[1]
-            if use_mask:
+            if self.use_mask:
                 target_a, target_b = target_a[0], target_b[0]
             sample_a, sample_b = self.compile_samples(target_a, target_b, self.batch_size)
             viewer(self.show_sample(sample_a, sample_b),
@@ -121,13 +125,9 @@ class TrainerBase():
         sides = list()
         for train in (train_a, train_b):
             mask = train[-1]
-            if self.model.training_opts.get("remove_alpha", False):
-                mask = np.expand_dims(mask, -1)
             side = list()
             for idx in range(len(train) - 1):
                 image = train[idx]
-                if self.model.training_opts.get("remove_alpha", False):
-                    image = image[..., 0:3]
                 side.append([image, mask])
             sides.append(side)
         return sides[0], sides[1]
@@ -194,13 +194,8 @@ class TrainerBase():
         else:
             feed_a, feed_b = test_a, test_b
 
-        if self.model.training_opts.get("use_mask", False):
+        if self.use_mask:
             mask = np.zeros(test_a.shape[:3] + (1, ), float)
-            if self.model.training_opts.get("remove_alpha", False):
-                test_a = test_a[..., 0:3]
-                test_b = test_b[..., 0:3]
-                feed_a = feed_a[..., 0:3]
-                feed_b = feed_b[..., 0:3]
             feed_a = [feed_a, mask]
             feed_b = [feed_b, mask]
 
@@ -258,3 +253,40 @@ class TrainerBase():
                 preds[key] = val[0]
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
+
+
+class Landmarks():
+    """ Set Landmarks for training into the model's training options"""
+    def __init__(self, images, model):
+        logger.debug("Initializing %s: (model: '%s')", self.__class__.__name__, model)
+        self.images = images
+        self.model = model
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def get_alignments(self):
+        """ Obtain the landmarks for each faceset """
+        landmarks = dict()
+        for side in "a", "b":
+            size = cv2.imread(self.images[side][0]).shape[0]  # pylint: disable=no-member
+            image_folder = os.path.dirname(self.images[side][0])
+            alignments = Alignments(
+                image_folder,
+                filename="alignments",
+                serializer=self.model.training_opts.get("serializer", "json"))
+            landmarks[side] = self.transform_landmarks(alignments, size)
+        self.model.training_opts["landmarks"] = landmarks
+
+    @staticmethod
+    def transform_landmarks(alignments, size):
+        """ For each face transform landmarks and return """
+        landmarks = dict()
+        for _, faces, _, _ in alignments.yield_faces():
+            for face in faces:
+                detected_face = DetectedFace()
+                detected_face.from_alignment(face)
+                detected_face.load_aligned(None,
+                                           size=size,
+                                           padding=48,
+                                           align_eyes=False)
+                landmarks[detected_face.hash] = detected_face.aligned_landmarks
+        return landmarks

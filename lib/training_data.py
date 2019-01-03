@@ -11,12 +11,15 @@ import cv2
 import numpy as np
 from scipy.interpolate import griddata
 
+from lib.model import masks
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
-from lib.model.masks import dfaker_mask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# TODO Add source, dest points to random warp half and ability to
+# not have landmarks to random warp full
 
 
 class TrainingDataGenerator():
@@ -27,8 +30,21 @@ class TrainingDataGenerator():
                      {key: val for key, val in training_opts.items() if key != "landmarks"})
         self.batchsize = 0
         self.training_opts = training_opts
+        self.full_face = self.training_opts.get("full_face", False)
+        self.mask_function = self.set_mask_function()
         self.processing = ImageManipulation(**transform_kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_mask_function(self):
+        """ Set the mask function to use if using mask """
+        mask_type = self.training_opts.get("mask_type", None)
+        if mask_type:
+            logger.debug("Mask type: '%s'", mask_type)
+            mask_func = getattr(masks, mask_type)
+        else:
+            mask_func = None
+        logger.debug("Mask function: %s", mask_func)
+        return mask_func
 
     def minibatch_ab(self, images, batchsize, side, do_shuffle=True):
         """ Keep a queue filled to 8x Batch Size """
@@ -94,32 +110,29 @@ class TrainingDataGenerator():
 
     def process_face(self, filename, side):
         """ Load an image and perform transformation and warping """
-        logger.trace("Process face: (filename: '%s', side: '%s'", filename, side)
+        logger.trace("Process face: (filename: '%s', side: '%s')", filename, side)
         try:
             image = cv2.imread(filename)  # pylint: disable=no-member
         except TypeError:
             raise Exception("Error while reading image", filename)
 
-        landmarks = self.training_opts.get("landmarks", None)
-        src_pts = self.get_landmarks(filename,
-                                     image,
-                                     side,
-                                     landmarks) if landmarks else None
-
-        if self.training_opts.get("use_mask", False):
-            image = dfaker_mask(src_pts, self.processing.coverage, image)
+        if self.mask_function:
+            landmarks = self.training_opts["landmarks"]
+            src_pts = self.get_landmarks(filename, image, side, landmarks)
+            image = self.mask_function(src_pts, image, coverage=self.processing.coverage)
 
         image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)
 
-        if landmarks:
+        if self.full_face:
             dst_pts = self.get_closest_match(filename, side, landmarks, src_pts)
-            processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
+            processed = self.processing.random_warp_full_face(image, src_pts, dst_pts)
         else:
             processed = self.processing.random_warp(image)
 
         retval = self.processing.do_random_flip(processed)
-        logger.trace("Processed face: (filename: '%s', side: '%s'", filename, side)
+        logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
+                     filename, side, [img.shape for img in retval])
         return retval
 
     @staticmethod
@@ -153,7 +166,7 @@ class TrainingDataGenerator():
 class ImageManipulation():
     """ Manipulations to be performed on training images """
     def __init__(self, rotation_range=10, zoom_range=0.05, shift_range=0.05, random_flip=0.4,
-                 zoom=1, coverage=160, scale=5):
+                 zoom=(1, 1), coverage=160, scale=5):
         """ rotation_range: Used for random transform
             zoom_range: Used for random transform
             shift_range: Used for random transform
@@ -184,6 +197,16 @@ class ImageManipulation():
         logger.trace("Color adjusting image")
         return img / 255.0
 
+    @staticmethod
+    def seperate_mask(image):
+        """ Return the image and the mask from a 4 channel image """
+        mask = None
+        if image.shape[2] == 4:
+            logger.trace("Image contains mask")
+            mask = image[:, :, 3].reshape((image.shape[0], image.shape[1], 1))
+            image = image[:, :, :3]
+        return image, mask
+
     def random_transform(self, image):
         """ Randomly transform an image """
         logger.trace("Randomly transforming image")
@@ -204,9 +227,10 @@ class ImageManipulation():
         logger.trace("Randomly transformed image")
         return result
 
-    def random_warp(self, image):
+    def random_warp(self, image, src_points=None, dst_points=None):
         """ get pair of random warped images from aligned face image """
         logger.trace("Randomly warping image")
+        image, mask = self.seperate_mask(image)
         height, width = image.shape[0:2]
         assert height == width and height % 2 == 0
 
@@ -219,31 +243,45 @@ class ImageManipulation():
         mapy = mapy + np.random.normal(size=(self.scale, self.scale), scale=self.scale)
 
         interp_mapx = cv2.resize(  # pylint: disable=no-member
-            mapx, (80 * self.zoom, 80 * self.zoom))[8 * self.zoom:72 * self.zoom,
-                                                    8 * self.zoom:72 * self.zoom].astype('float32')
+            mapx, (80 * self.zoom[0],
+                   80 * self.zoom[0]))[8 * self.zoom[0]:72 * self.zoom[0],
+                                       8 * self.zoom[0]:72 * self.zoom[0]].astype('float32')
         interp_mapy = cv2.resize(  # pylint: disable=no-member
-            mapy, (80 * self.zoom, 80 * self.zoom))[8 * self.zoom:72 * self.zoom,
-                                                    8 * self.zoom:72 * self.zoom].astype('float32')
+            mapy, (80 * self.zoom[0],
+                   80 * self.zoom[0]))[8 * self.zoom[0]:72 * self.zoom[0],
+                                       8 * self.zoom[0]:72 * self.zoom[0]].astype('float32')
 
         warped_image = cv2.remap(  # pylint: disable=no-member
             image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)  # pylint: disable=no-member
+        logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
-        dst_points = np.mgrid[0:65 * self.zoom:16 * self.zoom,
-                              0:65 * self.zoom:16 * self.zoom].T.reshape(-1, 2)
+        dst_points = np.mgrid[0:65 * self.zoom[0]:16 * self.zoom[0],
+                              0:65 * self.zoom[0]:16 * self.zoom[0]].T.reshape(-1, 2)
 
         mat = umeyama(src_points, dst_points, True)[0:2]
         target_image = cv2.warpAffine(  # pylint: disable=no-member
-            image, mat, (64 * self.zoom, 64 * self.zoom))
+            image, mat, (64 * self.zoom[1], 64 * self.zoom[1]))
+        logger.trace("Target image shape: %s", target_image.shape)
 
-        retval = warped_image, target_image
+        retval = [warped_image, target_image]
+
+        if mask is not None:
+            target_mask = cv2.warpAffine(  # pylint: disable=no-member
+                mask, mat, (64 * self.zoom[1], 64 * self.zoom[1]))
+            target_mask = target_mask.reshape((64 * self.zoom[1], 64 * self.zoom[1], 1))
+            logger.trace("Target mask shape: %s", target_mask.shape)
+
+            retval.append(target_mask)
+
         logger.trace("Randomly warped image")
         return retval
 
-    def random_warp_landmarks(self, image, src_points, dst_points):
+    def random_warp_full_face(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
             From DFAKER plugin """
         logger.trace("Randomly warping landmarks")
+        image, mask = self.seperate_mask(image)
         size = image.shape[0]
         p_mx = size - 1
         p_hf = (size // 2) - 1
@@ -286,36 +324,39 @@ class ImageManipulation():
         map_x_32 = map_x.astype('float32')
         map_y_32 = map_y.astype('float32')
 
-        warped_image = cv2.remap(image[:, :, :3],  # pylint: disable=no-member
+        warped_image = cv2.remap(image,  # pylint: disable=no-member
                                  map_x_32,
                                  map_y_32,
                                  cv2.INTER_LINEAR,  # pylint: disable=no-member
                                  cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
-        target_image = image[:, :, :3]
-        target_mask = None
-        if image.shape[2] == 4:
-            target_mask = image[:, :, 3].reshape((image.shape[0], image.shape[1], 1))
+        target_image = image
 
-        pad_lt = (64 * self.zoom) - (60 * self.zoom)
-        pad_rb = (64 * self.zoom) + (60 * self.zoom)
+        pad_lt = size // 32  # 8px on a 256px image
+        pad_rb = size - pad_lt
 
         warped_image = cv2.resize(  # pylint: disable=no-member
             warped_image[pad_lt:pad_rb, pad_lt:pad_rb, :],
-            (64, 64),
+            (64 * self.zoom[0], 64 * self.zoom[0]),
             cv2.INTER_AREA)  # pylint: disable=no-member
+        logger.trace("Warped image shape: %s", warped_image.shape)
         target_image = cv2.resize(  # pylint: disable=no-member
             target_image[pad_lt:pad_rb, pad_lt:pad_rb, :],
-            (64 * self.zoom, 64 * self.zoom),
+            (64 * self.zoom[1], 64 * self.zoom[1]),
             cv2.INTER_AREA)  # pylint: disable=no-member
-        if target_mask is None:
-            retval = warped_image, target_image
-        else:
+        logger.trace("Target image shape: %s", target_image.shape)
+
+        retval = [warped_image, target_image]
+
+        if mask is not None:
             target_mask = cv2.resize(  # pylint: disable=no-member
-                target_mask[pad_lt:pad_rb, pad_lt:pad_rb, :],
-                (64 * self.zoom, 64 * self.zoom),
+                mask[pad_lt:pad_rb, pad_lt:pad_rb, :],
+                (64 * self.zoom[1], 64 * self.zoom[1]),
                 cv2.INTER_AREA)  # pylint: disable=no-member
-            target_mask = target_mask.reshape((64 * self.zoom, 64 * self.zoom, 1))
-            retval = warped_image, target_image, target_mask
+            target_mask = target_mask.reshape((64 * self.zoom[1], 64 * self.zoom[1], 1))
+            logger.trace("Target mask shape: %s", target_mask.shape)
+
+            retval.append(target_mask)
+
         logger.trace("Randomly warped image")
         return retval
 

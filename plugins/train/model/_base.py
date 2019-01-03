@@ -9,6 +9,7 @@ import os
 import sys
 
 from json import JSONDecodeError
+from keras import losses
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 
@@ -125,7 +126,7 @@ class ModelBase():
         if self.config["dssim_loss"]:
             loss_func = DSSIMObjective()
         else:
-            loss_func = "mean_absolute_error"
+            loss_func = losses.mean_absolute_error
         logger.debug(loss_func)
         return loss_func
 

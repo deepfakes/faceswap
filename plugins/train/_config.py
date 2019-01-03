@@ -82,6 +82,10 @@ class Config(FaceswapConfig):
                  "be named 'alignments.<file extension>' (eg. "
                  "alignments.json)."
                  "\nChoose from: 'json', 'pickle' or 'yaml'")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="dfaker",
+            info="The mask to be used for training."
+                 "\nChoose from: 'dfaker' or 'dfl_full'")
 
         # << DFL MODEL OPTIONS >> #
         section = "dfl_h128"
@@ -92,6 +96,17 @@ class Config(FaceswapConfig):
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other."
                  "\nChoose from: True, False")
+        self.add_item(
+            section=section, title="alignments_format", datatype=str, default="json",
+            info="DFL-H128 model requires the alignments for your training "
+                 "images to be avalaible within the FACES folder.\nIt should "
+                 "be named 'alignments.<file extension>' (eg. "
+                 "alignments.json)."
+                 "\nChoose from: 'json', 'pickle' or 'yaml'")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="dfl_full",
+            info="The mask to be used for training."
+                 "\nChoose from: 'dfaker' or 'dfl_full'")
 
         # << GAN MODEL OPTIONS >> #
         section = "gan_v2_2"
