@@ -50,6 +50,13 @@ class Convert():
         padding = int(self.enlargement*size)
         mat = mat * (size - 2 * padding)
         mat[:, 2] += padding
+        
+        x_scale = sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
+        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / 
+                  ( x_scale )
+        avg_scale = ( x_scale + y_scale ) * 0.5
+        self.interpolator = cv2.INTER_CUBIC if avg_scale > 1.0 else cv2.INTER_AREA
+        self.inverse_interpolator = cv2.INTER_AREA if avg_scale > 1.0 else cv2.INTER_CUBIC
             
         new_face = self.get_new_face(image, mat, size)
         image_mask = self.get_image_mask(image, mat, image_size, new_face,
@@ -59,7 +66,8 @@ class Convert():
         return patched_face
 
     def get_new_face(self, image, mat, size):
-        face = cv2.warpAffine(image.astype('float32'), mat, (size, size))
+        face = cv2.warpAffine(image.astype('float32'), mat, (size, size),
+                              flags = self.interpolator)
         face = numpy.expand_dims(face, 0)
         numpy.clip(face, 0.0, 255.0, out=face)
         new_face = None
@@ -89,7 +97,7 @@ class Convert():
             face_src = numpy.ones(new_face.shape, dtype='float32')
             image_mask = cv2.warpAffine(face_src, mat, image_size,
                                         flags = cv2.WARP_INVERSE_MAP |
-                                                cv2.INTER_NEAREST,
+                                                inverse_interpolator,
                                         borderMode = cv2.BORDER_CONSTANT,
                                         borderValue = 0.0)
                                         
@@ -130,7 +138,8 @@ class Convert():
         # bug / issues with transparent border not working
         # test further , cleanup mask replace for now
         new_image = cv2.warpAffine(new_face, mat, image_size,
-                                   flags = cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC,
+                                   flags = cv2.WARP_INVERSE_MAP | 
+                                           inverse_interpolator,
                                    borderMode = cv2.BORDER_CONSTANT,
                                    borderValue = (-1.0,-1.0,-1.0))
                                    
