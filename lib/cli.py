@@ -589,7 +589,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "eyebrow horizontally at the default scale. "
                                       "0 spans from eyebrow to eyebrow"
                                       "3/64 spans from temple to temple",
-                                      "6/64 spans form ear to ear",
+                                      "6/64 spans from ear to ear",
                                       "12/64 is a mugshot"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               # lowercase this, because it's just a
