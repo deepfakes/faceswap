@@ -35,7 +35,12 @@ class Convert():
             e_size = (int(abs(self.erosion_size)),int(abs(self.erosion_size)))
             self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                             e_size)
-            
+        '''                                                    
+        from plugins.train._config import Config
+        config = Config(model_name).config_dict
+        config['image_size']
+        '''
+        
     def patch_image(self, image, face_detected, size):
         image_size = image.shape[1], image.shape[0]
         mat = get_align_mat(face_detected,size,False).reshape(2, 3)
@@ -51,13 +56,7 @@ class Convert():
         mat = mat * (size - 2 * padding)
         mat[:, 2] += padding
         
-        x_scale = sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
-        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / 
-                  ( x_scale )
-        avg_scale = ( x_scale + y_scale ) * 0.5
-        self.interpolator = cv2.INTER_CUBIC if avg_scale > 1.0 else cv2.INTER_AREA
-        self.inverse_interpolator = cv2.INTER_AREA if avg_scale > 1.0 else cv2.INTER_CUBIC
-            
+        self.interpolator , self.inverse_interpolator = get_matrix_scaling(mat)
         new_face = self.get_new_face(image, mat, size)
         image_mask = self.get_image_mask(image, mat, image_size, new_face,
                                          face_detected.landmarks_as_xy)
@@ -65,6 +64,16 @@ class Convert():
         
         return patched_face
 
+    def get_matrix_scaling(self, mat)
+        x_scale = sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
+        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / 
+                  ( x_scale )
+        avg_scale = ( x_scale + y_scale ) * 0.5
+        interpolator = cv2.INTER_CUBIC if avg_scale > 1.0 else cv2.INTER_AREA
+        inverse_interpolator = cv2.INTER_AREA if avg_scale > 1.0 else cv2.INTER_CUBIC
+        
+        return interpolator, inverse_interpolator
+        
     def get_new_face(self, image, mat, size):
         face = cv2.warpAffine(image.astype('float32'), mat, (size, size),
                               flags = self.interpolator)
