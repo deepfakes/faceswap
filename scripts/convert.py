@@ -15,6 +15,7 @@ from lib.faces_detect import DetectedFace
 from lib.multithreading import BackgroundGenerator, SpawnProcess
 from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
+from plugins.train._config import Config
 
 from plugins.plugin_loader import PluginLoader
 
@@ -120,11 +121,13 @@ class Convert():
         """ Load the requested converter for conversion """
         args = self.args
         conv = args.converter
-
+        config = Config(self.args.trainer).config_dict
+        
         converter = PluginLoader.get_converter(conv)(
             model.converter(False),
             trainer=args.trainer,
             blur_size=args.blur_size,
+            enlargement_scale=args.enlargement_scale
             seamless_clone=args.seamless_clone,
             sharpen_image=args.sharpen_image,
             mask_type=args.mask_type,
@@ -132,7 +135,8 @@ class Convert():
             match_histogram=args.match_histogram,
             smooth_mask=args.smooth_mask,
             avg_color_adjust=args.avg_color_adjust,
-            draw_transparent=args.draw_transparent)
+            draw_transparent=args.draw_transparent,
+            input_size=config['input_size'])
 
         return converter
 
@@ -210,25 +214,12 @@ class Convert():
 
             if not skip:
                 for face in faces:
-                    image = self.convert_one_face(converter, image, face)
+                    image = converter.patch_image(image,face)
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
-
-    def convert_one_face(self, converter, image, face):
-        """ Perform the conversion on the given frame for a single face """
-        # TODO: This switch between 64 and 128 is a hack for now.
-        # We should have a separate cli option for size
-        size = 128 if (self.args.trainer.strip().lower()
-                       in ('gan128', 'originalhighres')) else 64
-
-        image = converter.patch_image(image,
-                                      face,
-                                      size)
-        return image
-
 
 class OptionalActions():
     """ Process the optional actions for convert """

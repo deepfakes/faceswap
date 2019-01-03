@@ -18,10 +18,11 @@ class Convert():
                  blur_size=2, seamless_clone=False, mask_type="facehullandrect",
                  erosion_kernel_size=0, match_histogram=False, sharpen_image=None,
                  draw_transparent=False, avg_color_adjust=False, enlargement_scale = 0.0,
-                 **kwargs):
+                 input_size=64,**kwargs):
         self.encoder = encoder
         self.trainer = trainer
         self.blur_size = blur_size
+        self.input_size = input_size
         self.enlargement_scale = enlargement_scale
         self.sharpen_image = sharpen_image
         self.match_histogram = match_histogram
@@ -35,15 +36,10 @@ class Convert():
             e_size = (int(abs(self.erosion_size)),int(abs(self.erosion_size)))
             self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                             e_size)
-        '''                                                    
-        from plugins.train._config import Config
-        config = Config(model_name).config_dict
-        config['image_size']
-        '''
         
-    def patch_image(self, image, face_detected, size):
+    def patch_image(self, image, face_detected):
         image_size = image.shape[1], image.shape[0]
-        mat = get_align_mat(face_detected,size,False).reshape(2, 3)
+        mat = get_align_mat(face_detected,self.input_size,False).reshape(2, 3)
         
         # insert Field of View Logic here to modify alignment mat
         # test various enlargment factors to umeyama's standard face
@@ -52,15 +48,16 @@ class Convert():
         #enlargement_scale = 3/64  @ temples  .. coverage = 180 test more
         #enlargement_scale = 6/64  @ ears     .. coverage = 200 test more
         #enlargement_scale = 12/64  @ mugshot  .. coverage = 220
-        padding = int(self.enlargement*size)
-        mat = mat * (size - 2 * padding)
+        padding = int(self.enlargement*self.input_size)
+        mat = mat * (self.input_size - 2 * padding)
         mat[:, 2] += padding
         
         self.interpolator , self.inverse_interpolator = get_matrix_scaling(mat)
-        new_face = self.get_new_face(image, mat, size)
+        new_face = self.get_new_face(image, mat, self.input_size)
         image_mask = self.get_image_mask(image, mat, image_size, new_face,
                                          face_detected.landmarks_as_xy)
-        patched_face = self.apply_new_face(image, mat, size, image_size, new_face, image_mask)
+        patched_face = self.apply_new_face(image, mat, self.input_size,
+                                           image_size, new_face, image_mask)
         
         return patched_face
 
