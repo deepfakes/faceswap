@@ -97,7 +97,7 @@ class Convert():
         numpy.nan_to_num(image_mask, copy=False)
         numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
         if self.erosion_size != 0:
-            if self.erosion_size < 1:
+            if self.erosion_size < 1.0:
                 mask_radius = numpy.sqrt(numpy.sum(image_mask)) / 2
                 percent_erode = max(1,int(abs(self.erosion_size * mask_radius)))
                 self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
