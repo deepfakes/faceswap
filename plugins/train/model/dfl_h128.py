@@ -10,8 +10,6 @@ from keras.models import Model as KerasModel
 from lib.model.nn_blocks import conv, upscale
 from .original import get_config, logger, Model as OriginalModel
 
-# TODO Implement DFL loss function (currently using dfaker)
-
 
 class Model(OriginalModel):
     """ Low Memory version of Original Faceswap Model """

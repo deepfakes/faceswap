@@ -22,7 +22,7 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
+                 "May increase overall quality.\nChoose from: True, False")
 
         # << ORIGINAL MODEL OPTIONS >> #
         section = "original"
@@ -86,6 +86,14 @@ class Config(FaceswapConfig):
             section=section, title="mask_type", datatype=str, default="dfaker",
             info="The mask to be used for training."
                  "\nChoose from: 'dfaker' or 'dfl_full'")
+        self.add_item(
+            section=section, title="dssim_mask_loss", datatype=bool, default=True,
+            info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
+                 "May increase overall quality.\nChoose from: True, False")
+        self.add_item(
+            section=section, title="penalized_mask_loss", datatype=bool, default=True,
+            info="Use Penalized loss for Mask. Can stack with DSSIM.\n"
+                 "May increase overall quality.\nChoose from: True, False")
 
         # << DFL MODEL OPTIONS >> #
         section = "dfl_h128"
@@ -107,6 +115,14 @@ class Config(FaceswapConfig):
             section=section, title="mask_type", datatype=str, default="dfl_full",
             info="The mask to be used for training."
                  "\nChoose from: 'dfaker' or 'dfl_full'")
+        self.add_item(
+            section=section, title="dssim_mask_loss", datatype=bool, default=True,
+            info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
+                 "May increase overall quality.\nChoose from: True, False")
+        self.add_item(
+            section=section, title="penalized_mask_loss", datatype=bool, default=True,
+            info="Use Penalized loss for Mask. Can stack with DSSIM.\n"
+                 "May increase overall quality.\nChoose from: True, False")
 
         # << GAN MODEL OPTIONS >> #
         section = "gan_v2_2"

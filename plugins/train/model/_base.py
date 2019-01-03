@@ -115,8 +115,9 @@ class ModelBase():
         for side, model in self.predictors.items():
             if self.masks:
                 mask = self.masks[0] if side == "a" else self.masks[1]
+                mask_loss_func = self.mask_loss_function(mask, side)
                 model.compile(optimizer=optimizer,
-                              loss=[PenalizedLoss(mask, loss_func), "mse"])
+                              loss=[mask_loss_func, loss_func])
             else:
                 model.compile(optimizer=optimizer, loss=loss_func)
         logger.debug("Compiled Predictors")
@@ -124,11 +125,33 @@ class ModelBase():
     def loss_function(self):
         """ Set the loss function """
         if self.config["dssim_loss"]:
+            logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:
+            logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
         logger.debug(loss_func)
         return loss_func
+
+    def mask_loss_function(self, mask, side):
+        """ Set the loss function for masks
+            Side is input so we only log once """
+        if self.config.get("dssim_mask_loss", False):
+            if side == "a":
+                logger.verbose("Using DSSIM Loss for mask")
+            mask_loss_func = DSSIMObjective()
+        else:
+            if side == "a":
+                logger.verbose("Using Mean Absolute Error Loss for mask")
+            mask_loss_func = losses.mean_absolute_error
+
+        if self.config.get("penalized_mask_loss", False):
+            if side == "a":
+                logger.verbose("Using Penalized Loss for mask")
+            mask_loss_func = PenalizedLoss(mask, mask_loss_func)
+
+        logger.debug(mask_loss_func)
+        return mask_loss_func
 
     def converter(self, swap):
         """ Converter for autoencoder models """
