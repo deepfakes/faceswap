@@ -27,14 +27,14 @@ def get_config(model_name):
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, image_shape=None, encoder_dim=None, trainer="original"):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, image_shape: %s, "
+    def __init__(self, model_dir, gpus, input_shape=None, encoder_dim=None, trainer="original"):
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, input_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
-                     image_shape, encoder_dim)
+                     input_shape, encoder_dim)
         self.config = get_config(self.__module__.split(".")[-1])
         self.model_dir = model_dir
         self.gpus = gpus
-        self.image_shape = image_shape
+        self.input_shape = input_shape
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
@@ -148,7 +148,7 @@ class ModelBase():
     @property
     def base_filename(self):
         """ Base filename for model and state files """
-        resolution = self.image_shape[0]
+        resolution = self.input_shape[0]
         return "{}_{}_dim{}".format(self.name, resolution, self.encoder_dim)
 
     def map_weights(self, swapped):

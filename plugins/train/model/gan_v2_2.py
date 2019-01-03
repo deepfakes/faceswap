@@ -39,8 +39,8 @@ class Model(OriginalModel):
         self.enc_num_chans_out = 256 if self.model_capacity == "light" else 512
         self.loss_funcs = dict()
 
-        resolution = self.config.get("GAN_2-2", "resolution")
-        kwargs["image_shape"] = (resolution, resolution, 3)
+        input_size = self.config.get("GAN_2-2", "input_size")
+        kwargs["input_shape"] = (input_size, input_size, 3)
         kwargs["trainer"] = "gan_v2_2"
         super().__init__(*args, **kwargs)
 
@@ -57,7 +57,7 @@ class Model(OriginalModel):
     def initialize(self):
         """ Initialize GAN model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.image_shape)  # dummy input tensor
+        inp = Input(shape=self.input_shape)  # dummy input tensor
 
         ae_a = KerasModel(
             inp,
@@ -80,7 +80,7 @@ class Model(OriginalModel):
 
     def encoder(self):
         """ Build the GAN Encoder """
-        input_size = self.image_shape[0]
+        input_size = self.input_shape[0]
         coef = 2 if self.model_capacity == "light" else 1
         latent_dim = 2048 if (self.model_capacity == "light" and input_size > 64) else 1024
         activ_map_size = input_size
@@ -119,7 +119,7 @@ class Model(OriginalModel):
     def decoder(self):
         """ Build the GAN Decoder """
         input_size = 8
-        output_size = self.image_shape[0]
+        output_size = self.input_shape[0]
 
         coef = 2 if self.model_capacity == "light" else 1
         upscale_block = upscale_nn if self.model_capacity == "light" else upscale_ps
@@ -154,7 +154,7 @@ class Model(OriginalModel):
 
     def discriminator(self):
         """ Build the GAN Discriminator """
-        input_size = self.image_shape[0]
+        input_size = self.input_shape[0]
         activ_map_size = input_size
         use_norm = False if self.norm == 'none' else True
 
@@ -208,8 +208,8 @@ class Model(OriginalModel):
         variables["distorted_input"] = distorted_input
         variables["fake_output"] = fake_output
         variables["alpha"] = alpha
-        variables["real"] = Input(shape=self.image_shape)
-        variables["mask_eyes"] = Input(shape=self.image_shape)
+        variables["real"] = Input(shape=self.input_shape)
+        variables["mask_eyes"] = Input(shape=self.input_shape)
         return variables
 
     def build_standard_loss(self, loss_weights, variables):

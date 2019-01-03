@@ -16,7 +16,7 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-        kwargs["image_shape"] = (64, 64, 3)
+        kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
         kwargs["trainer"] = "dfaker"
         super().__init__(*args, **kwargs)
@@ -36,10 +36,10 @@ class Model(OriginalModel):
     def initialize(self):
         """ Initialize Dfaker model """
         logger.debug("Initializing model")
-        mask_shape = (self.image_shape[0] * 2, self.image_shape[1] * 2, 1)
-        inp_a = Input(shape=self.image_shape)
+        mask_shape = (self.input_shape[0] * 2, self.input_shape[1] * 2, 1)
+        inp_a = Input(shape=self.input_shape)
         mask_a = Input(shape=mask_shape)
-        inp_b = Input(shape=self.image_shape)
+        inp_b = Input(shape=self.input_shape)
         mask_b = Input(shape=mask_shape)
 
         ae_a = KerasModel(
