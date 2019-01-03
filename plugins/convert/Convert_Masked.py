@@ -17,10 +17,12 @@ class Convert():
     def __init__(self, encoder, trainer,
                  blur_size=2, seamless_clone=False, mask_type="facehullandrect",
                  erosion_kernel_size=0, match_histogram=False, sharpen_image=None,
-                 draw_transparent=False, avg_color_adjust=False, **kwargs):
+                 draw_transparent=False, avg_color_adjust=False, enlargement_scale = 0.0,
+                 **kwargs):
         self.encoder = encoder
         self.trainer = trainer
         self.blur_size = blur_size
+        self.enlargement_scale = enlargement_scale
         self.sharpen_image = sharpen_image
         self.match_histogram = match_histogram
         self.mask_type = mask_type.lower()
@@ -41,11 +43,11 @@ class Convert():
         # insert Field of View Logic here to modify alignment mat
         # test various enlargment factors to umeyama's standard face
         
-        enlargement_factor = 0      # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
-        #enlargement_factor = 12/256  @ temples  .. coverage = 180 test more
-        #enlargement_factor = 24/256  @ ears     .. coverage = 200 test more
-        #enlargement_factor = 48/256  @ mugshot  .. coverage = 220
-        padding = int(enlargement_factor*size)
+        self.enlargement_scale = 0.0      # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
+        #enlargement_scale = 3/64  @ temples  .. coverage = 180 test more
+        #enlargement_scale = 6/64  @ ears     .. coverage = 200 test more
+        #enlargement_scale = 12/64  @ mugshot  .. coverage = 220
+        padding = int(self.enlargement*size)
         mat = mat * (size - 2 * padding)
         mat[:, 2] += padding
             
@@ -64,6 +66,8 @@ class Convert():
         mask = None
         
         if 'GAN' in self.trainer:
+            # change code to align with new GAN code
+            '''
             normalized_face = face / 255.0 * 2.0 - 1.0
             fake_output = self.encoder(normalized_face)
             if "128" in self.trainer:
@@ -72,6 +76,7 @@ class Convert():
             new_face = fake_output[:, :, :, 1:]
             new_face = mask * new_face + (1.0 - mask) * normalized_face
             new_face = (new_face[0] + 1.0) / 2.0
+            '''
         else:
             normalized_face = face / 255.0
             new_face = self.encoder(normalized_face)[0]

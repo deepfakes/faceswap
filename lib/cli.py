@@ -561,7 +561,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
-                              "default": 2,
+                              "default": 2.0,
                               "help": "Blur size for smoothing the transition "
                                       "between the swapped face and the "
                                       "background image(Masked converter only)"
@@ -570,7 +570,7 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
                               "dest": "erosion_kernel_size",
                               "type": float,
-                              "default": None,
+                              "default": 0.0,
                               "help": "Erosion kernel size. Positive values "
                                       "apply erosion which reduces the edge "
                                       "of the swapped face. Negative values "
@@ -579,6 +579,18 @@ class ConvertArgs(ExtractConvertArgs):
                                       "(Masked converter only)"
                                       "integer values will erode x pixels,"
                                       "fractions will erode x% of the face area"})
+        argument_list.append({"opts": ("-es", "--enlargment-scale"),
+                              "type": float,
+                              "dest": "enlargment_scale",
+                              "default": 0.0,
+                              "help": "Input images to the model are cropped to "
+                                      "a central square that spans from eyebrow "
+                                      "to chin cleft vertically and eyebrow to "
+                                      "eyebrow horizontally at the default scale. "
+                                      "0 spans from eyebrow to eyebrow"
+                                      "3/64 spans from temple to temple",
+                                      "6/64 spans form ear to ear",
+                                      "12/64 is a mugshot"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               # lowercase this, because it's just a
                               # string later on.
