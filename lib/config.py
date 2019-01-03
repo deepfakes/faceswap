@@ -203,6 +203,7 @@ class FaceswapConfig():
                                         opt["helptext"],
                                         new_config)
         self.config = new_config
+        self.config.optionxform = str
         self.save_config()
         logger.debug("Updated config")
 

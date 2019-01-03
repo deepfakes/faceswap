@@ -46,7 +46,6 @@ class Model(ModelBase):
             inp,
             self.networks["decoder_b"].network(self.networks["encoder"].network(inp)))
         self.add_predictors(ae_a, ae_b)
-
         logger.debug("Initialized model")
 
     def encoder(self):

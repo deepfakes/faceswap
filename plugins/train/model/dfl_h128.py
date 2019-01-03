@@ -11,7 +11,6 @@ from lib.model.nn_blocks import conv, upscale
 from .original import get_config, logger, Model as OriginalModel
 
 # TODO Implement DFL loss function (currently using dfaker)
-# TODO Get Mask working
 
 
 class Model(OriginalModel):
@@ -31,8 +30,7 @@ class Model(OriginalModel):
         """ Set the dictionary for training """
         logger.debug("Setting training data")
         training_opts = dict()
-        training_opts["use_mask"] = True
-        training_opts["remove_alpha"] = True
+        training_opts["mask_type"] = self.config["mask_type"]
         training_opts["preview_images"] = 10
         logger.debug("Set training data: %s", training_opts)
         return training_opts

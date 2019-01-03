@@ -26,10 +26,9 @@ class Model(OriginalModel):
         """ Set the dictionary for training """
         logger.debug("Setting training data")
         training_opts = dict()
-        serializer = self.config["alignments_format"]
-        training_opts["serializer"] = serializer
-        training_opts["use_mask"] = True
-        training_opts["use_alignments"] = True
+        training_opts["serializer"] = self.config["alignments_format"]
+        training_opts["mask_type"] = self.config["mask_type"]
+        training_opts["full_face"] = True
         training_opts["preview_images"] = 10
         logger.debug("Set training data: %s", training_opts)
         return training_opts
