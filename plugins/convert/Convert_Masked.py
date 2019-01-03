@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Convert():
     def __init__(self, encoder, trainer,
-                 blur_size=0, seamless_clone=False, mask_type="facehullandrect",
+                 blur_size=2, seamless_clone=False, mask_type="facehullandrect",
                  erosion_kernel_size=0, match_histogram=False, sharpen_image=None,
                  draw_transparent=False, avg_color_adjust=False, **kwargs):
         self.encoder = encoder
