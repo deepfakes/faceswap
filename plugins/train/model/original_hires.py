@@ -17,13 +17,13 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-        kwargs["image_shape"] = (128, 128, 3)
+        kwargs["input_shape"] = (128, 128, 3)
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def encoder(self):
         """ Original HiRes Encoder """
-        input_ = Input(shape=self.image_shape)
+        input_ = Input(shape=self.input_shape)
         var_x = input_
         var_x = conv(128)(var_x)
         var_x = conv_sep(256)(var_x)

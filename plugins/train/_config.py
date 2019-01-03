@@ -18,7 +18,6 @@ class Config(FaceswapConfig):
         section = "global"
         self.add_section(title=section,
                          info="Options that apply to all models")
-
         self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
@@ -33,13 +32,19 @@ class Config(FaceswapConfig):
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other."
                  "\nChoose from: True, False")
+        self.add_item(
+            section=section, title="input_size", datatype=int, default=64,
+            info="Resolution (in pixels) of the image to train on.\n"
+                 "BE AWARE Larger resolution will dramatically increase"
+                 "VRAM requirements.\n"
+                 "Make sure your resolution is divisible by 64 "
+                 "(e.g. 64, 128, 256 etc.)")
 
         # << ORIGINAL HIRES MODEL OPTIONS >> #
         section = "original_hires"
         self.add_section(title=section,
                          info="Higher resolution version of the Original "
                               "Model")
-
         self.add_item(
             section=section, title="encoder_type", datatype=str, default="ORIGINAL",
             info="Encoder type to use. Choose from:\n"
@@ -50,10 +55,6 @@ class Config(FaceswapConfig):
             section=section, title="nodes", datatype=int, default=1024,
             info="Number of nodes for decoder. Don't change this unless you "
                  "know what you are doing!")
-        self.add_item(
-            section=section, title="image_size", datatype=int, default=128,
-            info="Number of pixels for face width and height. Don't change "
-                 "this unless you know what you are doing!")
         self.add_item(
             section=section, title="complexity_encoder", datatype=int, default=128,
             info="Encoder Convolution Layer Complexity. sensible ranges: "
@@ -69,12 +70,25 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Might increase upscaling quality at cost of VRAM")
+        self.add_item(
+            section=section, title="input_size", datatype=int, default=128,
+            info="Resolution (in pixels) of the image to train on.\n"
+                 "BE AWARE Larger resolution will dramatically increase"
+                 "VRAM requirements.\n"
+                 "Make sure your resolution is divisible by 64 "
+                 "(e.g. 64, 128, 256 etc.)")
 
         # << DFAKER MODEL OPTIONS >> #
         section = "dfaker"
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
-
+        self.add_item(
+            section=section, title="input_size", datatype=int, default=64,
+            info="Resolution (in pixels) of the image to train on.\n"
+                 "BE AWARE Larger resolution will dramatically increase"
+                 "VRAM requirements.\n"
+                 "Make sure your resolution is divisible by 64 "
+                 "(e.g. 64, 128, 256 etc.)")
         self.add_item(
             section=section, title="alignments_format", datatype=str, default="json",
             info="Dfaker model requires the alignments for your training "
@@ -112,6 +126,13 @@ class Config(FaceswapConfig):
                  "alignments.json)."
                  "\nChoose from: 'json', 'pickle' or 'yaml'")
         self.add_item(
+            section=section, title="input_size", datatype=int, default=128,
+            info="Resolution (in pixels) of the image to train on.\n"
+                 "BE AWARE Larger resolution will dramatically increase"
+                 "VRAM requirements.\n"
+                 "Make sure your resolution is divisible by 64 "
+                 "(e.g. 64, 128, 256 etc.)")
+        self.add_item(
             section=section, title="mask_type", datatype=str, default="dfl_full",
             info="The mask to be used for training."
                  "\nChoose from: 'dfaker' or 'dfl_full'")
@@ -129,13 +150,13 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="GAN v2.2. Model (Adapted from "
                               "https://github.com/shaoanlu/faceswap-GAN)")
-
         # Main Options
         self.add_item(
-            section=section, title="resolution", datatype=int, default=64,
+            section=section, title="input_size", datatype=int, default=64,
             info="Resolution (in pixels) of the image to train on.\n"
                  "BE AWARE Larger resolution will dramatically increase"
-                 "VRAM requirements.\nMake sure your resolution is divisible by 64 "
+                 "VRAM requirements.\n"
+                 "Make sure your resolution is divisible by 64 "
                  "(e.g. 64, 128, 256 etc.)")
         self.add_item(
             section=section, title="use_self_attention", datatype=bool, default=True,

@@ -14,7 +14,7 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-        kwargs["image_shape"] = (64, 64, 3)
+        kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -32,7 +32,7 @@ class Model(ModelBase):
     def initialize(self):
         """ Initialize IAE model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.image_shape)
+        inp = Input(shape=self.input_shape)
         decoder = self.networks["decoder"].network
         encoder = self.networks["encoder"].network
         inter_a = self.networks["inter_a"].network
@@ -49,7 +49,7 @@ class Model(ModelBase):
 
     def encoder(self):
         """ Encoder Network """
-        input_ = Input(shape=self.image_shape)
+        input_ = Input(shape=self.input_shape)
         var_x = input_
         var_x = conv(128)(var_x)
         var_x = conv(256)(var_x)

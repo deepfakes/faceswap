@@ -17,8 +17,8 @@ class Model(ModelBase):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
-        if "image_shape" not in kwargs:
-            kwargs["image_shape"] = (64, 64, 3)
+        if "input_shape" not in kwargs:
+            kwargs["input_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
             config = get_config(self.__module__.split(".")[-1])
             kwargs["encoder_dim"] = 512 if config["lowmem"] else 1024
@@ -37,7 +37,7 @@ class Model(ModelBase):
     def initialize(self):
         """ Initialize original model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.image_shape)
+        inp = Input(shape=self.input_shape)
 
         ae_a = KerasModel(
             inp,
@@ -50,7 +50,7 @@ class Model(ModelBase):
 
     def encoder(self):
         """ Encoder Network """
-        input_ = Input(shape=self.image_shape)
+        input_ = Input(shape=self.input_shape)
         var_x = input_
         var_x = conv(128)(var_x)
         var_x = conv(256)(var_x)
