@@ -41,10 +41,10 @@ class Convert():
         # insert Field of View Logic here to modify alignment mat
         # test various enlargment factors to umeyama's standard face
         
-        enlargement_factor = 0      # @ eyebrow ends
-        #enlargement_factor = 12/256
-        #enlargement_factor = 24/256  @ ears    .. coverage = 180 test more
-        #enlargement_factor = 48/256  @ mugshot .. coverage = 220
+        enlargement_factor = 0      # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
+        #enlargement_factor = 12/256  @ temples  .. coverage = 180 test more
+        #enlargement_factor = 24/256  @ ears     .. coverage = 200 test more
+        #enlargement_factor = 48/256  @ mugshot  .. coverage = 220
         padding = int(enlargement_factor*size)
         mat = mat * (size - 2 * padding)
         mat[:, 2] += padding
