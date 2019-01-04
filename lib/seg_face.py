@@ -26,17 +26,20 @@ class Mask():
         
         image_dataset = self.dataset_setup(image_file_list, batch_size)
         image_generator = self.minibatches(image_dataset)
-        
+        i=0
         for batches in range(num_of_batches):
             batch_of_images = next(image_generator)    
             batch_of_results = model.predict_on_batch(batch_of_images)
+            print('model run finished')
             batch_of_masks = batch_of_results.argmax(axis=3).astype('uint8')
             batch_of_masks = numpy.expand_dims(batch_of_masks, axis=-1)
             mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
-            resized_masks = [cv2.resize(mask, image_size, cv2.INTER_NEAREST) for mask in mask_list]
-            print('here')
-            for i, mask in enumerate(resized_masks):
-               cv2.imwrite(str(image_directory) + 'mask-' + str(i) + '.png', mask)
+            resized_masks = [cv2.resize(mask, (256,256), cv2.INTER_NEAREST) for mask in mask_list]
+            for mask in resized_masks:
+                if i < len(image_file_list):
+                    p = pathlib.Path(image_file_list[i])
+                    cv2.imwrite(str(image_directory) + ' mask-' + str(p.stem) + '.png', mask)
+                    i += 1
            
     def get_image_paths(self, directory):
         image_extensions = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
@@ -105,17 +108,17 @@ class Mask():
         return image
 
     def postprocessing(self, mask):
-        print(mask.shape)
-        print(mask.dtype)
-        mask = self.select_largest_segment(mask)
+        
+        #mask = self.select_largest_segment(mask)
         mask = self.fill_holes(mask)
         mask = self.smooth_flaws(mask)
-        mask = self.select_largest_segment(mask)
+        #mask = self.select_largest_segment(mask)
         mask = self.fill_holes(mask)
         
         return mask
 
     def select_largest_segment(self, mask):
+        mask
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
         num_labels, labels, stats, centroids = results
         segments_ranked_by_area = numpy.argsort(stats[:,-1])[::-1]
@@ -127,7 +130,6 @@ class Mask():
         kernel_size = int(smooth_kernel_radius * 2 + 1)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                            (kernel_size, kernel_size))
-        
         for i in range(smooth_iterations):
             cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
                              iterations=smooth_iterations)
@@ -296,4 +298,4 @@ class Mask():
 
     
 if __name__ == '__main__':
-    Mask().run()
+    Mask()
