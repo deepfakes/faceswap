@@ -3,7 +3,6 @@ from keras.models import Model
 from keras import layers
 import keras.backend as K
 import numpy
-
 import cv2
 import gc
 import pathlib
@@ -43,28 +42,18 @@ def process_images(self, batch):
                          batch.shape[2], batch.shape[3]),
                          dtype=numpy.float32)
     for i, image in enumerate(batch):
-        # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
-        # input images should be cropped like this for best results
-
-        # resize to 500x500 pixels
-        # subtract channel mean
-        # put in N,C,H,W tensor format
-        image_size = image.shape[0],image.shape[1]
-        interpolator = cv2.INTER_CUBIC if image.shape[0] / 500 > 1.0 else cv2.INTER_AREA
-        image = cv2.resize(image, (500,500), interpolator)
-        image -= numpy.average(image, axis=(0,1))
-        image = image.transpose((2,0,1))
-        image = numpy.expand_dims(image, 0)
         
+        image = self.preprocessing(image)
         
         #  INSERT CODE TO ACTUALLY RUN KERAS MODEL HERE
+        #  IT SHOULD RETURN THE VARIABLE model_results
         
-        
-        mask = net.blobs['score'].data[0].argmax(axis=0)
-        mask = postprocessing(mask)
+        mask = model_results.argmax(axis=0)
+        mask = self.postprocessing(mask)
         mask = cv2.resize(mask, image_size, cv2.INTER_NEAREST)
-    
-    return image, mask
+        masks[i] = mask
+        
+    return masks
 
 def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255])
     image[mask>128] = int(color * alpha + image * ( 1 - alpha )
@@ -72,12 +61,28 @@ def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255])
     
     return image
 
+def preprocessing(self, image):
+    # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
+    # input images should be cropped like this for best results
+
+    # resize to 500x500 pixels
+    # subtract channel mean
+    # put in N,C,H,W tensor format
+    image_size = image.shape[0],image.shape[1]
+    interpolator = cv2.INTER_CUBIC if image.shape[0] / 500 > 1.0 else cv2.INTER_AREA
+    image = cv2.resize(image, (500,500), interpolator)
+    image -= numpy.average(image, axis=(0,1))
+    image = image.transpose((2,0,1))
+    image = numpy.expand_dims(image, 0)
+    
+    return image
+
 def postprocessing(self, mask):
-    mask = select_largest_segment(mask)
-    mask = fill_holes(mask)
-    mask = smooth_flaws(mask)
-    mask = select_largest_segment(mask)
-    mask = fill_holes(mask)
+    mask = self.select_largest_segment(mask)
+    mask = self.fill_holes(mask)
+    mask = self.smooth_flaws(mask)
+    mask = self.select_largest_segment(mask)
+    mask = self.fill_holes(mask)
     
     return mask
 
