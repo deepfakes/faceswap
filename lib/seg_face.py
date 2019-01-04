@@ -92,7 +92,7 @@ class Mask():
         while True:
             # Iterate through the dataset entire batches at a time 
             # Call the process_images function on each batch
-            yield from (self.process_images(batch.astype('float32')) for batch in memmapped_images[:])
+            yield from (self.process_images(batch) for batch in memmapped_images[:])
             
     def process_images(self, batch):
         images = numpy.empty((batch.shape[0], 500, 500, batch.shape[3]),
@@ -109,6 +109,7 @@ class Mask():
     def preprocessing(self, image):
         # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
         # input images should be cropped like this for best results
+        # add redetection and landmark routine
 
         # resize to 500x500 pixels
         # subtract channel mean
@@ -122,17 +123,14 @@ class Mask():
         return image
 
     def postprocessing(self, mask):
-        
+        mask[mask!=0] = 255
         #mask = self.select_largest_segment(mask)
-        mask = self.fill_holes(mask)
         mask = self.smooth_flaws(mask)
-        #mask = self.select_largest_segment(mask)
         mask = self.fill_holes(mask)
         
         return mask
 
     def select_largest_segment(self, mask):
-        mask
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
         num_labels, labels, stats, centroids = results
         segments_ranked_by_area = numpy.argsort(stats[:,-1])[::-1]
@@ -153,7 +151,6 @@ class Mask():
         return mask
         
     def fill_holes(self, mask):
-        mask[mask!=0] = 255
         holes = mask.copy()
         cv2.floodFill(holes, None, (0, 0), 255)
         holes = cv2.bitwise_not(holes)
