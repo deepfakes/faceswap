@@ -30,11 +30,8 @@ class Mask():
         for batches in range(num_of_batches):
             batch_of_images = next(image_generator)    
             batch_of_results = model.predict_on_batch(batch_of_images)
-            
-            batch_of_masks = batch_of_results.argmax(axis=3)
-            #batch_of_masks = batch_of_masks.transpose((0,2,3,1))
-            print(batch_of_masks)
-            print(batch_of_masks.shape)
+            batch_of_masks = batch_of_results.argmax(axis=3).astype('uint8')
+            batch_of_masks = numpy.expand_dims(batch_of_masks, axis=-1)
             mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
             resized_masks = [cv2.resize(mask, image_size, cv2.INTER_NEAREST) for mask in mask_list]
             print('here')
@@ -99,17 +96,17 @@ class Mask():
 
         # resize to 500x500 pixels
         # subtract channel mean
-        # put in N,C,H,W tensor format
         image_size = image.shape[0],image.shape[1]
         interpolator = cv2.INTER_CUBIC if image.shape[0] / 500 > 1.0 else cv2.INTER_AREA
         image = cv2.resize(image, (500,500), interpolator)
         image -= numpy.average(image, axis=(0,1))
-        #image = image.transpose((2,0,1))
         image = numpy.expand_dims(image, 0)
         
         return image
 
     def postprocessing(self, mask):
+        print(mask.shape)
+        print(mask.dtype)
         mask = self.select_largest_segment(mask)
         mask = self.fill_holes(mask)
         mask = self.smooth_flaws(mask)
@@ -121,7 +118,7 @@ class Mask():
     def select_largest_segment(self, mask):
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
         num_labels, labels, stats, centroids = results
-        segments_ranked_by_area = np.argsort(stats[:,-1])[::-1]
+        segments_ranked_by_area = numpy.argsort(stats[:,-1])[::-1]
         mask[labels != segments_ranked_by_area[0,0]] = 0
         
         return mask
