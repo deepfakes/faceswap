@@ -8,6 +8,27 @@ import gc
 import pathlib
 from .utils import BackgroundGenerator
 
+def main(self):
+    weight_file = str(pathlib.Path('face_seg_model.h5')
+    file_list = 'load all files in directory'
+    model = mask_model(weight_file)
+    
+    image_dataset = self.dataset_setup(file_list, batch_size)
+    image_generator = self.minibatches(image_dataset)
+    
+    for batches in num_of_batches:
+        batch_of_images = next(image_generator)    
+        batch_of_results = model.predict_on_batch(batch_of_images)
+        
+        batch_of_masks = batch_of_results.argmax(axis=1)
+        batch_of_masks = batch_of_masks.transpose((0,2,3,1))
+        
+        mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
+        resized_masks = [cv2.resize(mask, image_size, cv2.INTER_NEAREST) for mask in mask_list]
+        
+        for i, mask in enumerate(resized_masks):
+           cv2.imwrite('mask-' + str(i) + '.png', mask)
+           
 def dataset_setup(self, image_list, batch_size):
     # create a .npy file in  image folder 
     # the .npy memmapped dataset has dimensions (batch_num,batch_size,256,256,3)
@@ -38,22 +59,12 @@ def generate(self, memmapped_images):
         yield from (self.process_images(batch) for batch in memmapped_images[:])
         
 def process_images(self, batch):
-    masks = numpy.empty((batch.shape[0], batch.shape[1],
-                         batch.shape[2], batch.shape[3]),
-                         dtype=numpy.float32)
+    images = numpy.empty((batch.shape[0], batch.shape[1],
+                          batch.shape[2], batch.shape[3]),
+                          dtype=numpy.float32)
     for i, image in enumerate(batch):
-        
-        image = self.preprocessing(image)
-        
-        #  INSERT CODE TO ACTUALLY RUN KERAS MODEL HERE
-        #  IT SHOULD RETURN THE VARIABLE model_results
-        
-        mask = model_results.argmax(axis=0)
-        mask = self.postprocessing(mask)
-        mask = cv2.resize(mask, image_size, cv2.INTER_NEAREST)
-        masks[i] = mask
-        
-    return masks
+        images[i] = self.preprocessing(image)
+    return images
 
 def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255])
     image[mask>128] = int(color * alpha + image * ( 1 - alpha )
