@@ -5,15 +5,18 @@ import keras.backend as K
 import numpy
 import cv2
 import gc
+import os
 import pathlib
 from .utils import BackgroundGenerator
 
 def main(self):
-    weight_file = str(pathlib.Path('face_seg_model.h5')
-    file_list = 'load all files in directory'
+    weight_file = pathlib.Path('/data/face_seg_model.h5')
+    image_directory = pathlib.Path('/data/images')
+    image_file_list = get_image_paths(image_directory)
     model = mask_model(weight_file)
+    batch_size = 64
     
-    image_dataset = self.dataset_setup(file_list, batch_size)
+    image_dataset = self.dataset_setup(image_file_list, batch_size)
     image_generator = self.minibatches(image_dataset)
     
     for batches in num_of_batches:
@@ -27,8 +30,19 @@ def main(self):
         resized_masks = [cv2.resize(mask, image_size, cv2.INTER_NEAREST) for mask in mask_list]
         
         for i, mask in enumerate(resized_masks):
-           cv2.imwrite('mask-' + str(i) + '.png', mask)
+           cv2.imwrite(str(image_directory) + 'mask-' + str(i) + '.png', mask)
            
+def get_image_paths(directory):
+    image_extensions = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
+    dir_contents = list()
+    dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
+
+    for chkfile in dir_scanned:
+        if any([chkfile.name.lower().endswith(ext) for ext in image_extensions]):
+            dir_contents.append(chkfile.path)
+            
+    return dir_contents
+    
 def dataset_setup(self, image_list, batch_size):
     # create a .npy file in  image folder 
     # the .npy memmapped dataset has dimensions (batch_num,batch_size,256,256,3)
