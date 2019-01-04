@@ -102,31 +102,14 @@ def smooth_flaws(self, mask, smooth_iterations=1, smooth_kernel_radius=2):
     return mask
     
 def fill_holes(self, mask):
-    #min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(mask)
     mask[mask!=0] = 255
     holes = mask.copy()
     cv2.floodFill(holes, None, (0, 0), 255)
-    
-    
-    
     holes = cv2.bitwise_not(holes)
-    filled_holes = cv2.bitwise_or(mask, holes)
-
-    # display masked image
-    masked_img = cv2.bitwise_and(img, img, mask=mask)
-    masked_img_with_alpha = cv2.merge([img, img, img, mask])
-    cv2.imwrite('masked.png', masked_img)
-    cv2.imwrite('masked_transparent.png', masked_img_with_alpha)
+    filled_mask = cv2.bitwise_or(mask, holes)
     
-    '''
-    for all pixels in mask
-    {
-        if (holes pixel == 0)
-            mask same pixel = 255
-    }
-    '''
-        
-        
+    return filled_mask
+    
 def load_weights_from_file(weight_file):
     try:
         weights_dict = numpy.load(weight_file).item()
