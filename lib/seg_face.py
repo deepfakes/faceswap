@@ -10,16 +10,16 @@ import pathlib
 from .utils import BackgroundGenerator
 
 def dataset_setup(self, image_list, batch_size):
-    # create a .npy file in each image folder 
-    # the .npy memmapped image dataset has dimensions (batch_num,batch_size,256,256,3)
-    # iterate through the images and load them into the .npy dataset using opencv
-    # floor & mod operators to load (batchsize) number of images before incrementing the (batchnum)
-    filename_list=[]
+    # create a .npy file in  image folder 
+    # the .npy memmapped dataset has dimensions (batch_num,batch_size,256,256,3)
+    # iterate/load images them into the .npy dataset using opencv
     length = len(image_list)
     extra = 0 if (length % batch_size) == 0 else 1
     batch_num = length // batch_size + extra
     filename = str(pathlib.Path(image_list[0]).parents[0].joinpath(('Images_Batched(' + str(batch_size) + ').npy')))
-    dataset = numpy.lib.format.open_memmap(filename, mode='w+', dtype=numpy.uint8, shape=(batch_num,batch_size,256,256,3))
+    dataset=numpy.lib.format.open_memmap(filename, mode='w+',
+                                         dtype=numpy.uint8,
+                                         shape=(batch_num,batch_size,256,256,3))
     for i, image_array in enumerate((cv2.imread(image_file) for image_file in image_list)):
         dataset[(i-1)//batch_size, (i-1)%batch_size] = image_array
     del dataset
@@ -29,20 +29,19 @@ def dataset_setup(self, image_list, batch_size):
     
 def minibatches(self, filename):
     # create a generator that iterates over a memmapped image dataset
-    # memmap loads chunks of files at a time, allowing access to files larger than sys memory
-    # use more HDD space & RAM, but I/O training time is improved vs. individual cv2 imreads
     memmapped_images = numpy.load(filename, mmap_mode='r+')
-    yield from BackgroundGenerator(self.generate(memmapped_images), 1).iterator()
+    yield from BackgroundGenerator(self.generate(memmapped_images),1).iterator()
     
 def generate(self, memmapped_images):
     while True:
         # Iterate through the dataset entire batches at a time 
         # Call the process_images function on each batch
-        # Yield batches of warped and ground truth images
         yield from (self.process_images(batch) for batch in memmapped_images[:])
         
 def process_images(self, batch):
-    masks = numpy.empty((batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]), dtype=numpy.float32)
+    masks = numpy.empty((batch.shape[0], batch.shape[1],
+                         batch.shape[2], batch.shape[3]),
+                         dtype=numpy.float32)
     for i, image in enumerate(batch):
         # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
         # input images should be cropped like this for best results
@@ -83,7 +82,8 @@ def postprocessing(self, mask):
     return mask
 
 def select_largest_segment(self, mask):
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+    results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+    num_labels, labels, stats, centroids = results
     segments_ranked_by_area = np.argsort(stats[:,-1])[::-1]
     mask[labels != segments_ranked_by_area[0,0]] = 0
     
@@ -91,7 +91,8 @@ def select_largest_segment(self, mask):
     
 def smooth_flaws(self, mask, smooth_iterations=1, smooth_kernel_radius=2):
     kernel_size = int(smooth_kernel_radius * 2 + 1)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
+                                       (kernel_size, kernel_size))
     
     for i in xrange(smooth_iterations):
         cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
@@ -128,14 +129,16 @@ def set_layer_weights(model, weights_dict):
                     current_layer_parameters.append(cur_dict['scale'])
                 if 'bias' in cur_dict:
                     current_layer_parameters.append(cur_dict['bias'])
-                current_layer_parameters.extend([cur_dict['mean'], cur_dict['var']])
+                current_layer_parameters.extend([cur_dict['mean'],
+                                                cur_dict['var']])
             elif layer.__class__.__name__ == "Scale":
                 if 'scale' in cur_dict:
                     current_layer_parameters.append(cur_dict['scale'])
                 if 'bias' in cur_dict:
                     current_layer_parameters.append(cur_dict['bias'])
             elif layer.__class__.__name__ == "SeparableConv2D":
-                current_layer_parameters = [cur_dict['depthwise_filter'], cur_dict['pointwise_filter']]
+                current_layer_parameters = [cur_dict['depthwise_filter'],
+                                            cur_dict['pointwise_filter']]
                 if 'bias' in cur_dict:
                     current_layer_parameters.append(cur_dict['bias'])
             else:
@@ -225,7 +228,8 @@ def mask_model(weight_file = None):
     
 def convolution(weights_dict, name, input, group, conv_type, filters=None, **kwargs):
     if not conv_type.startswith('layer'):
-        layer = keras.applications.mobilenet.DepthwiseConv2D(name=name, **kwargs)(input)
+        layer = keras.applications.mobilenet.DepthwiseConv2D(name=name,
+                                                             **kwargs)(input)
         return layer
 
     grouped_channels = int(filters / group)
