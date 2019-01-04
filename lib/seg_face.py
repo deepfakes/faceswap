@@ -109,10 +109,12 @@ class Mask():
     def preprocessing(self, image):
         # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
         # input images should be cropped like this for best results
-        # add redetection and landmark routine
+        
 
         # resize to 500x500 pixels
         # subtract channel mean
+        
+        # add redetection and landmark routine
         image_size = image.shape[0],image.shape[1]
         interpolator = cv2.INTER_CUBIC if image.shape[0] / 500 > 1.0 else cv2.INTER_AREA
         image = cv2.resize(image, (500,500), interpolator)
@@ -121,7 +123,26 @@ class Mask():
         image = numpy.expand_dims(image, 0)
         
         return image
-
+    
+    def crop_standarization(self,image,landmarks):
+        
+        (box_x, box_y), (w, h), rect_angle = cv2.boundingRect(landmarks)
+        w, h = max(w, h), max(w, h)
+        M = cv2.moments(landmarks)
+        center_x = int(M["m10"] / M["m00"])
+        center_y = int(M["m01"] / M["m00"])
+        
+        w = w * 1.2 + abs(box_x - center_x)
+        h = h * 1.2 + abs(box_y - center_x)
+        
+        xmin = int(max(0, box_x - w / 2.0))
+        ymin = int(max(0, box_y - h / 2.0))
+        xmax = int(min(image.shape[1], box_x + w / 2.0))
+        ymax = int(min(image.shape[0], box_y + h / 2.0))
+        rect = slice(ymin,ymax),slice(xmin,xmax)
+        
+        return rect
+        
     def postprocessing(self, mask):
         mask[mask!=0] = 255
         #mask = self.select_largest_segment(mask)
