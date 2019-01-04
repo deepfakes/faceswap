@@ -73,8 +73,9 @@ class FaceswapConfig():
             func = self.config.getfloat
         else:
             func = self.config.get
-        logger.debug("Getting item for type: '%s'", datatype)
-        return func(section, option)
+        retval = func(section, option)
+        logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
+        return retval
 
     def get_config_file(self):
         """ Return the config file from the calling folder """

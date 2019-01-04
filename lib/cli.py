@@ -406,38 +406,6 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n\tresource intensive, but less accurate."
                     "\n'fan': Face Alignment Network. Best aligner."
                     "\n\tGPU heavy."})
-        argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
-                              "type": int,
-                              "dest": "mtcnn_minsize",
-                              "default": 20,
-                              "help": "The minimum size of a face to be "
-                                      "accepted. Lower values use "
-                                      "significantly more VRAM. Minimum "
-                                      "value is 10. Default is 20 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-mtth", "--mtcnn-threshold"),
-                              "nargs": "+",
-                              "type": str,
-                              "dest": "mtcnn_threshold",
-                              "default": ["0.6", "0.7", "0.7"],
-                              "help": "R|Three step threshold for face "
-                                      "detection. Should be\nthree decimal "
-                                      "numbers each less than 1. Eg:\n"
-                                      "'--mtcnn-threshold 0.6 0.7 0.7'.\n"
-                                      "1st stage: obtains face candidates.\n"
-                                      "2nd stage: refinement of face "
-                                      "candidates.\n3rd stage: further "
-                                      "refinement of face candidates.\n"
-                                      "Default is 0.6 0.7 0.7 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-mtsc", "--mtcnn-scalefactor"),
-                              "type": float,
-                              "dest": "mtcnn_scalefactor",
-                              "default": 0.709,
-                              "help": "The scale factor for the image "
-                                      "pyramid. Should be a decimal number "
-                                      "less than one. Default is 0.709 "
-                                      "(MTCNN detector only)"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",

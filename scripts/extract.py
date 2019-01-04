@@ -353,11 +353,6 @@ class Plugins():
         kwargs = {"in_queue": queue_manager.get_queue("load"),
                   "out_queue": out_queue}
 
-        if self.args.detector == "mtcnn":
-            mtcnn_kwargs = self.detector.validate_kwargs(
-                self.get_mtcnn_kwargs())
-            kwargs["mtcnn_kwargs"] = mtcnn_kwargs
-
         mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
         self.process_detect = mp_func(self.detector.run, **kwargs)
 
@@ -380,14 +375,6 @@ class Plugins():
             logger.info("Waiting for Detector... Time out in %s minutes", mins)
 
         logger.debug("Launched Detector")
-
-    def get_mtcnn_kwargs(self):
-        """ Add the mtcnn arguments into a kwargs dictionary """
-        mtcnn_threshold = [float(thr.strip())
-                           for thr in self.args.mtcnn_threshold]
-        return {"minsize": self.args.mtcnn_minsize,
-                "threshold": mtcnn_threshold,
-                "factor": self.args.mtcnn_scalefactor}
 
     def detect_faces(self, extract_pass="detect"):
         """ Detect faces from in an image """
