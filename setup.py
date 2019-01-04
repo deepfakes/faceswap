@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import platform
+import warnings
 
 from subprocess import CalledProcessError, run, PIPE, Popen
 

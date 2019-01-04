@@ -212,3 +212,28 @@ def safe_shutdown():
     while not queue_manager._log_queue.empty():  # pylint: disable=protected-access
         continue
     queue_manager.manager.shutdown()
+
+def fft_convolve2d(image, kernel):
+    """ 2D convolution, using FFT"""
+
+    def pad_to_power(arr, kernel):
+        next_power = NextPowerOfTwo(np.max(arr.shape))
+        next_size = np.power(2, next_power)
+        y_deficit, x_deficit, _ = next_size - arr.shape
+        a_deficit, b_deficit, _ = next_size - arr.shape
+        image = np.pad(arr, ((y_deficit,0),(x_deficit,0)), mode='constant')
+        kernel = np.pad(arr, ((a_deficit,0),(b_deficit,0)), mode='constant')
+
+        return image, kernel
+
+    padded_image, padded_kernel = pad_to_power(image, kernel)
+    fr = np.fft.fft2(padded_image)
+    fr2 = np.fft.fft2(np.flipud(np.fliplr(padded_kernel)))
+    m,n = fr.shape
+    cc = np.real(np.fft.ifft2(fr * fr2))
+    cc = np.roll(cc, -m/2+1, axis=0)
+    cc = np.roll(cc, -n/2+1, axis=1)
+
+    return cc
+
+

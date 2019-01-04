@@ -167,7 +167,7 @@ class MediaLoader():
         """ Load a requested frame from video """
         frame = os.path.splitext(filename)[0]
         logger.trace("Loading video frame: '%s'", frame)
-        frame_no = int(frame[frame.rfind("_") + 1:]) - 1
+        frame_no = int(frame[frame.rfind("_") + 1:])
         self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
         _, image = self.vid_cap.read()
         return image
@@ -201,10 +201,8 @@ class Faces(MediaLoader):
 
     def load_items(self):
         """ Load the face names into dictionary """
-        faces = dict()
-        for face in self.file_list_sorted:
-            faces.setdefault(face["face_hash"], list()).append((face["face_name"],
-                                                                face["face_extension"]))
+        faces = {face["face_hash"]: (face["face_name"], face["face_extension"])
+                 for face in self.file_list_sorted}
         logger.trace(faces)
         return faces
 
@@ -221,6 +219,7 @@ class Frames(MediaLoader):
 
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
+        logger.info("Loading file list from %s", self.folder)
         iterator = self.process_video if self.vid_cap else self.process_frames
         for item in iterator():
             yield item
@@ -274,11 +273,12 @@ class Frames(MediaLoader):
 class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
-    def __init__(self, frames, alignments, size=256, align_eyes=False):
-        logger.trace("Initializing %s: (size: %s, align_eyes: %s)",
-                     self.__class__.__name__, size, align_eyes)
+    def __init__(self, frames, alignments, size=256,
+                 padding=48, align_eyes=False):
+        logger.trace("Initializing %s: (size: %s, padding: %s, align_eyes: %s)",
+                     self.__class__.__name__, size, padding, align_eyes)
         self.size = size
-        self.padding = int(size * 0.1875)
+        self.padding = padding
         self.align_eyes = align_eyes
         self.alignments = alignments
         self.frames = frames
@@ -308,7 +308,10 @@ class ExtractedFaces():
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        face.load_aligned(image, size=self.size, align_eyes=self.align_eyes)
+        face.load_aligned(image,
+                          size=self.size,
+                          padding=self.padding,
+                          align_eyes=self.align_eyes)
         return face
 
     def get_faces_in_frame(self, frame, update=False):
