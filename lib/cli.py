@@ -103,6 +103,39 @@ class ScriptExecutor():
             safe_shutdown()
 
 
+class Slider(argparse.Action):
+    """ Adds support for the GUI slider
+
+        An additional option 'min_max' must be provided containing tuple of min and max accepted
+        values.
+
+        'rounding' sets the decimal places for floats or the step interval for ints.
+        """
+    def __init__(self, option_strings, dest, nargs=None, min_max=None, rounding=None, **kwargs):
+        if nargs is not None:
+            raise ValueError("nargs not allowed")
+        super().__init__(option_strings, dest, **kwargs)
+        self.min_max = min_max
+        self.rounding = rounding
+
+    def _get_kwargs(self):
+        names = ["option_strings",
+                 "dest",
+                 "nargs",
+                 "const",
+                 "default",
+                 "type",
+                 "choices",
+                 "help",
+                 "metavar",
+                 "min_max",  # Tuple containing min and max values of scale
+                 "rounding"]  # Decimal places to round floats to or step interval for ints
+        return [(name, getattr(self, name)) for name in names]
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        pass
+
+
 class FullPaths(argparse.Action):
     """ Expand user- and relative-paths """
     # pylint: disable=too-few-public-methods
@@ -124,26 +157,23 @@ class FileFullPaths(FullPaths):
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
     # pylint: disable=too-few-public-methods
-    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
-                 **kwargs):
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None, **kwargs):
         super(FileFullPaths, self).__init__(option_strings, dest, **kwargs)
         if nargs is not None:
             raise ValueError("nargs not allowed")
         self.filetypes = filetypes
 
     def _get_kwargs(self):
-        names = [
-            "option_strings",
-            "dest",
-            "nargs",
-            "const",
-            "default",
-            "type",
-            "choices",
-            "help",
-            "metavar",
-            "filetypes"
-        ]
+        names = ["option_strings",
+                 "dest",
+                 "nargs",
+                 "const",
+                 "default",
+                 "type",
+                 "choices",
+                 "help",
+                 "metavar",
+                 "filetypes"]
         return [(name, getattr(self, name)) for name in names]
 
 
@@ -185,19 +215,17 @@ class ContextFullPaths(FileFullPaths):
         self.filetypes = filetypes
 
     def _get_kwargs(self):
-        names = [
-            "option_strings",
-            "dest",
-            "nargs",
-            "const",
-            "default",
-            "type",
-            "choices",
-            "help",
-            "metavar",
-            "filetypes",
-            "action_option"
-        ]
+        names = ["option_strings",
+                 "dest",
+                 "nargs",
+                 "const",
+                 "default",
+                 "type",
+                 "choices",
+                 "help",
+                 "metavar",
+                 "filetypes",
+                 "action_option"]
         return [(name, getattr(self, name)) for name in names]
 
 
@@ -335,11 +363,14 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
+                              "action": Slider,
+                              "min_max": (0.01, 0.99),
+                              "rounding": 2,
                               "type": float,
                               "dest": "ref_threshold",
                               "default": 0.6,
-                              "help": "Threshold for positive face "
-                                      "recognition"})
+                              "help": "Threshold for positive face recognition. For use with "
+                                      "nfilter or filter. Lower values are stricter."})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "type": str,
                               "dest": "nfilter",
@@ -419,13 +450,15 @@ class ExtractArgs(ExtractConvertArgs):
                                       "exactly what angles to check"})
         argument_list.append({"opts": ("-bt", "--blur-threshold"),
                               "type": float,
+                              "action": Slider,
+                              "min_max": (0.0, 100.0),
+                              "rounding": 1,
                               "dest": "blur_thresh",
-                              "default": None,
-                              "help": "Automatically discard images blurrier "
-                                      "than the specified threshold. "
-                                      "Discarded images are moved into a "
-                                      "\"blurry\" sub-folder. Lower values "
-                                      "allow more blur"})
+                              "default": 0.0,
+                              "help": "Automatically discard images blurrier than the specified "
+                                      "threshold. Discarded images are moved into a \"blurry\" "
+                                      "sub-folder. Lower values allow more blur. Set to 0.0 to "
+                                      "turn off."})
         argument_list.append({"opts": ("-mp", "--multiprocess"),
                               "action": "store_true",
                               "default": False,
@@ -437,7 +470,10 @@ class ExtractArgs(ExtractConvertArgs):
                                       "otherwise this is automatic."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (128, 512),
                               "default": 256,
+                              "rounding": 64,
                               "help": "The output size of extracted faces. "
                                       "Make sure that the model you intend "
                                       "to train supports your required "
@@ -473,13 +509,15 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-si", "--save-interval"),
                               "dest": "save_interval",
                               "type": int,
-                              "default": None,
-                              "help": "Automatically save the alignments file "
-                                      "after a set amount of frames. Will "
-                                      "only save at the end of extracting by "
-                                      "default. WARNING: Don't interrupt the "
-                                      "script when writing the file because "
-                                      "it might get corrupted."})
+                              "action": Slider,
+                              "min_max": (0, 1000),
+                              "rounding": 10,
+                              "default": 0,
+                              "help": "Automatically save the alignments file after a set amount "
+                                      "of frames. Will only save at the end of extracting by "
+                                      "default. WARNING: Don't interrupt the script when writing "
+                                      "the file because it might get corrupted. Set to 0 to turn "
+                                      "off"})
         return argument_list
 
 
@@ -525,12 +563,18 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (0, 256),
+                              "rounding": 1,
                               "default": 2,
                               "help": "Blur size. (Masked converter only)"})
         argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
                               "dest": "erosion_kernel_size",
                               "type": int,
-                              "default": None,
+                              "action": Slider,
+                              "min_max": (-100, 100),
+                              "rounding": 1,
+                              "default": 0,
                               "help": "Erosion kernel size. Positive values "
                                       "apply erosion which reduces the edge "
                                       "of the swapped face. Negative values "
@@ -556,6 +600,9 @@ class ConvertArgs(ExtractConvertArgs):
                                       "(Masked converter only)"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (1, 10),
+                              "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
@@ -643,6 +690,9 @@ class TrainArgs(FaceSwapArgs):
                                       "Defaults to 'model'"})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (10, 1000),
+                              "rounding": 10,
                               "dest": "save_interval",
                               "default": 100,
                               "help": "Sets the number of iterations before "
@@ -656,15 +706,24 @@ class TrainArgs(FaceSwapArgs):
                                       "VRAM"})
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (2, 2048),
+                              "rounding": 2,
                               "default": 64,
                               "help": "Batch size, as a power of 2 "
                                       "(64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (0, 10000000),
+                              "rounding": 1000,
                               "default": 1000000,
                               "help": "Length of training in iterations"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (1, 10),
+                              "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for training"})
         argument_list.append({"opts": ("-p", "--preview"),

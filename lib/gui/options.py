@@ -93,8 +93,7 @@ class CliOptions():
                 logger.trace("Skipping suppressed option: %s", opt)
                 continue
             ctl, sysbrowser, filetypes, action_option = self.set_control(opt)
-            opt["control_title"] = self.set_control_title(
-                opt.get("opts", ""))
+            opt["control_title"] = self.set_control_title(opt.get("opts", ""))
             opt["control"] = ctl
             opt["filesystem_browser"] = sysbrowser
             opt["filetypes"] = filetypes
@@ -126,6 +125,8 @@ class CliOptions():
             sysbrowser, filetypes = self.set_sysbrowser(action,
                                                         filetypes,
                                                         action_option)
+        elif option.get("min_max", None):
+            ctl = ttk.Scale
         elif option.get("choices", "") != "":
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":

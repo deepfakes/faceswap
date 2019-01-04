@@ -2,7 +2,7 @@
 """ Command Line Arguments for tools """
 from lib.cli import FaceSwapArgs
 from lib.cli import (ContextFullPaths, DirFullPaths,
-                     FileFullPaths, SaveFileFullPaths)
+                     FileFullPaths, SaveFileFullPaths, Slider)
 from lib.utils import _image_extensions
 
 
@@ -405,6 +405,9 @@ class SortArgs(FaceSwapArgs):
                                       "Default: hist"})
 
         argument_list.append({"opts": ('-t', '--ref_threshold'),
+                              "action": Slider,
+                              "min_max": (-1.0, 10.0),
+                              "rounding": 2,
                               "type": float,
                               "dest": 'min_threshold',
                               "default": -1.0,
@@ -429,6 +432,9 @@ class SortArgs(FaceSwapArgs):
                                       "hist 0.3"})
 
         argument_list.append({"opts": ('-b', '--bins'),
+                              "action": Slider,
+                              "min_max": (1, 100),
+                              "rounding": 1,
                               "type": int,
                               "dest": 'num_bins',
                               "default": 5,
