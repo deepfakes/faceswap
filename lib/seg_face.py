@@ -67,64 +67,64 @@ def process_images(self, batch):
     
     return image, mask
 
-    def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255])
-        image[mask>128] = int(color * alpha + image * ( 1 - alpha )
-        #image[:,:,:3][mask>128] = int(color * alpha + image * ( 1 - alpha )
-        
-        return image
-
-    def postprocessing(self, mask):
-        mask = select_largest_segment(mask)
-        mask = fill_holes(mask)
-        mask = smooth_flaws(mask)
-        mask = select_largest_segment(mask)
-        mask = fill_holes(mask)
-        
-        return mask
+def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255])
+    image[mask>128] = int(color * alpha + image * ( 1 - alpha )
+    #image[:,:,:3][mask>128] = int(color * alpha + image * ( 1 - alpha )
     
-    def select_largest_segment(self, mask):
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
-        segments_ranked_by_area = np.argsort(stats[:,-1])[::-1]
-        mask[labels != segments_ranked_by_area[0,0]] = 0
-        
-        return mask
-        
-	def smooth_flaws(self, mask, smooth_iterations=1, smooth_kernel_radius=2):
-        kernel_size = int(smooth_kernel_radius * 2 + 1)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-        
-        for i in xrange(smooth_iterations):
-            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
-                             iterations=smooth_iterations)
-            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
-                             iterations=smooth_iterations)
-        
-        return mask
-        
-    def fill_holes(self, mask):
-		#min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(mask)
-        mask[mask!=0] = 255
-		holes = mask.copy()
-		cv2.floodFill(holes, None, (0, 0), 255)
-        
-        
-        
-        holes = cv2.bitwise_not(holes)
-        filled_holes = cv2.bitwise_or(mask, holes)
+    return image
 
-        # display masked image
-        masked_img = cv2.bitwise_and(img, img, mask=mask)
-        masked_img_with_alpha = cv2.merge([img, img, img, mask])
-        cv2.imwrite('masked.png', masked_img)
-        cv2.imwrite('masked_transparent.png', masked_img_with_alpha)
-        
-        '''
-        for all pixels in mask
-        {
-            if (holes pixel == 0)
-                mask same pixel = 255
-        }
-        '''
+def postprocessing(self, mask):
+    mask = select_largest_segment(mask)
+    mask = fill_holes(mask)
+    mask = smooth_flaws(mask)
+    mask = select_largest_segment(mask)
+    mask = fill_holes(mask)
+    
+    return mask
+
+def select_largest_segment(self, mask):
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+    segments_ranked_by_area = np.argsort(stats[:,-1])[::-1]
+    mask[labels != segments_ranked_by_area[0,0]] = 0
+    
+    return mask
+    
+def smooth_flaws(self, mask, smooth_iterations=1, smooth_kernel_radius=2):
+    kernel_size = int(smooth_kernel_radius * 2 + 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    
+    for i in xrange(smooth_iterations):
+        cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
+                         iterations=smooth_iterations)
+        cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
+                         iterations=smooth_iterations)
+    
+    return mask
+    
+def fill_holes(self, mask):
+    #min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(mask)
+    mask[mask!=0] = 255
+    holes = mask.copy()
+    cv2.floodFill(holes, None, (0, 0), 255)
+    
+    
+    
+    holes = cv2.bitwise_not(holes)
+    filled_holes = cv2.bitwise_or(mask, holes)
+
+    # display masked image
+    masked_img = cv2.bitwise_and(img, img, mask=mask)
+    masked_img_with_alpha = cv2.merge([img, img, img, mask])
+    cv2.imwrite('masked.png', masked_img)
+    cv2.imwrite('masked_transparent.png', masked_img_with_alpha)
+    
+    '''
+    for all pixels in mask
+    {
+        if (holes pixel == 0)
+            mask same pixel = 255
+    }
+    '''
         
         
 def load_weights_from_file(weight_file):
