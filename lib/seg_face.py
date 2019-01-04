@@ -13,35 +13,45 @@ from multithreading import BackgroundGenerator
 
 class Mask():
     def __init__(self):
+        image_size = (256,256)
+        batch_size = 16
         
         #weight_file = pathlib.Path('C:/data/edfb3bac7e774b609fbae1d6ffb68e3d.npy')
         #model = mask_model(weight_file)
         
         model = load_model('C:/data/face_seg_model.h5')
+        print('\n' + 'Model loaded')
         
-
-        image_directory = pathlib.Path('C:/data/images')
+        image_directory = pathlib.Path('C:/data/images/')
         image_file_list = self.get_image_paths(image_directory) 
-        batch_size = 16
         num_of_batches = len(image_file_list) // batch_size + 1
+        image_dataset = self.dataset_setup(image_file_list, image_size, batch_size)
+        print('\n' + 'Image dataset loaded')
         
-        image_dataset = self.dataset_setup(image_file_list, batch_size)
         image_generator = self.minibatches(image_dataset)
+        print('\n' + 'Image generator created')
+        
+        print('\n' + 'Predicting batches of images in model')
         i=0
-        for batches in range(num_of_batches):
+        for num, batches in enumerate(range(num_of_batches)):
             batch_of_images = next(image_generator)    
             batch_of_results = model.predict_on_batch(batch_of_images)
-            print('model run finished')
+            print('   --- Batch number ' + num + ': ---')
+            print('       - model run complete')
             batch_of_masks = batch_of_results.argmax(axis=3).astype('uint8')
             batch_of_masks = numpy.clip(batch_of_masks,0,1)
             batch_of_masks = numpy.expand_dims(batch_of_masks, axis=-1)
             mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
-            resized_masks = [cv2.resize(mask, (256,256), cv2.INTER_NEAREST) for mask in mask_list]
+            resized_masks = [cv2.resize(mask, image_size, cv2.INTER_NEAREST) for mask in mask_list]
+            print('       - postprocessing complete')
             for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
                     cv2.imwrite(str(image_directory) + ' mask-' + str(p.stem) + '.png', mask)
                     i += 1
+            print('       - masks saved to directory')
+            
+         print('\n' + 'Mask generation complete')
            
     def get_image_paths(self, directory):
         image_extensions = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
@@ -54,7 +64,7 @@ class Mask():
                 
         return dir_contents
         
-    def dataset_setup(self, image_list, batch_size):
+    def dataset_setup(self, image_list, image_size, batch_size):
         # create a .npy file in  image folder 
         # the .npy memmapped dataset has dimensions (batch_num,batch_size,256,256,3)
         # iterate/load images them into the .npy dataset using opencv
@@ -64,7 +74,8 @@ class Mask():
         filename = str(pathlib.Path(image_list[0]).parents[0].joinpath(('Images_Batched(' + str(batch_size) + ').npy')))
         dataset=numpy.lib.format.open_memmap(filename, mode='w+',
                                              dtype=numpy.uint8,
-                                             shape=(batch_num,batch_size,256,256,3))
+                                             shape=(batch_num,batch_size,
+                                                    image_size[0],image_size[1],3))
         for i, image_array in enumerate((cv2.imread(image_file) for image_file in image_list)):
             dataset[(i-1)//batch_size, (i-1)%batch_size] = image_array
         del dataset
