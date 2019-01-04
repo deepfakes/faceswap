@@ -2,18 +2,139 @@ import keras
 from keras.models import Model
 from keras import layers
 import keras.backend as K
-import numpy as np
+import numpy
 
+import cv2
+import gc
+import pathlib
+from .utils import BackgroundGenerator
 
+def dataset_setup(self, image_list, batch_size):
+    # create a .npy file in each image folder 
+    # the .npy memmapped image dataset has dimensions (batch_num,batch_size,256,256,3)
+    # iterate through the images and load them into the .npy dataset using opencv
+    # floor & mod operators to load (batchsize) number of images before incrementing the (batchnum)
+    filename_list=[]
+    length = len(image_list)
+    extra = 0 if (length % batch_size) == 0 else 1
+    batch_num = length // batch_size + extra
+    filename = str(pathlib.Path(image_list[0]).parents[0].joinpath(('Images_Batched(' + str(batch_size) + ').npy')))
+    dataset = numpy.lib.format.open_memmap(filename, mode='w+', dtype=numpy.uint8, shape=(batch_num,batch_size,256,256,3))
+    for i, image_array in enumerate((cv2.imread(image_file) for image_file in image_list)):
+        dataset[(i-1)//batch_size, (i-1)%batch_size] = image_array
+    del dataset
+    gc.collect()
+    
+    return filename
+    
+def minibatches(self, filename):
+    # create a generator that iterates over a memmapped image dataset
+    # memmap loads chunks of files at a time, allowing access to files larger than sys memory
+    # use more HDD space & RAM, but I/O training time is improved vs. individual cv2 imreads
+    memmapped_images = numpy.load(filename, mmap_mode='r+')
+    yield from BackgroundGenerator(self.generate(memmapped_images), 1).iterator()
+    
+def generate(self, memmapped_images):
+    while True:
+        # Iterate through the dataset entire batches at a time 
+        # Call the process_images function on each batch
+        # Yield batches of warped and ground truth images
+        yield from (self.process_images(batch) for batch in memmapped_images[:])
+        
+def process_images(self, batch):
+    masks = numpy.empty((batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]), dtype=numpy.float32)
+    for i, image in enumerate(batch):
+        # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
+        # input images should be cropped like this for best results
+
+        # resize to 500x500 pixels
+        # subtract channel mean
+        # put in N,C,H,W tensor format
+        image_size = image.shape[0],image.shape[1]
+        interpolator = cv2.INTER_CUBIC if image.shape[0] / 500 > 1.0 else cv2.INTER_AREA
+        image = cv2.resize(image, (500,500), interpolator)
+        image -= numpy.average(image, axis=(0,1))
+        image = image.transpose((2,0,1))
+        image = numpy.expand_dims(image, 0)
+        
+        
+        #  INSERT CODE TO ACTUALLY RUN KERAS MODEL HERE
+        
+        
+        mask = net.blobs['score'].data[0].argmax(axis=0)
+        mask = postprocessing(mask)
+        mask = cv2.resize(mask, image_size, cv2.INTER_NEAREST)
+    
+    return image, mask
+
+    def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255])
+        image[mask>128] = int(color * alpha + image * ( 1 - alpha )
+        #image[:,:,:3][mask>128] = int(color * alpha + image * ( 1 - alpha )
+        
+        return image
+
+    def postprocessing(self, mask):
+        mask = select_largest_segment(mask)
+        mask = fill_holes(mask)
+        mask = smooth_flaws(mask)
+        mask = select_largest_segment(mask)
+        mask = fill_holes(mask)
+        
+        return mask
+    
+    def select_largest_segment(self, mask):
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+        segments_ranked_by_area = np.argsort(stats[:,-1])[::-1]
+        mask[labels != segments_ranked_by_area[0,0]] = 0
+        
+        return mask
+        
+	def smooth_flaws(self, mask, smooth_iterations=1, smooth_kernel_radius=2):
+        kernel_size = int(smooth_kernel_radius * 2 + 1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        
+        for i in xrange(smooth_iterations):
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
+                             iterations=smooth_iterations)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
+                             iterations=smooth_iterations)
+        
+        return mask
+        
+    def fill_holes(self, mask):
+		#min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(mask)
+        mask[mask!=0] = 255
+		holes = mask.copy()
+		cv2.floodFill(holes, None, (0, 0), 255)
+        
+        
+        
+        holes = cv2.bitwise_not(holes)
+        filled_holes = cv2.bitwise_or(mask, holes)
+
+        # display masked image
+        masked_img = cv2.bitwise_and(img, img, mask=mask)
+        masked_img_with_alpha = cv2.merge([img, img, img, mask])
+        cv2.imwrite('masked.png', masked_img)
+        cv2.imwrite('masked_transparent.png', masked_img_with_alpha)
+        
+        '''
+        for all pixels in mask
+        {
+            if (holes pixel == 0)
+                mask same pixel = 255
+        }
+        '''
+        
+        
 def load_weights_from_file(weight_file):
     try:
-        weights_dict = np.load(weight_file).item()
+        weights_dict = numpy.load(weight_file).item()
     except:
-        weights_dict = np.load(weight_file, encoding='bytes').item()
-
+        weights_dict = numpy.load(weight_file, encoding='bytes').item()
+        
     return weights_dict
-
-
+    
 def set_layer_weights(model, weights_dict):
     for layer in model.layers:
         if layer.name in weights_dict:
@@ -35,16 +156,14 @@ def set_layer_weights(model, weights_dict):
                 if 'bias' in cur_dict:
                     current_layer_parameters.append(cur_dict['bias'])
             else:
-                # rot weights
                 current_layer_parameters = [cur_dict['weights']]
                 if 'bias' in cur_dict:
                     current_layer_parameters.append(cur_dict['bias'])
             model.get_layer(layer.name).set_weights(current_layer_parameters)
-
+            
     return model
-
-
-def KitModel(weight_file = None):
+    
+def mask_model(weight_file = None):
     weights_dict = load_weights_from_file(weight_file) if not weight_file == None else None
         
     input           = layers.Input(name = 'input', shape = (500, 500, 3,) )
@@ -120,7 +239,7 @@ def KitModel(weight_file = None):
     
     set_layer_weights(model, weights_dict)
     return model
-
+    
 def convolution(weights_dict, name, input, group, conv_type, filters=None, **kwargs):
     if not conv_type.startswith('layer'):
         layer = keras.applications.mobilenet.DepthwiseConv2D(name=name, **kwargs)(input)
@@ -136,8 +255,8 @@ def convolution(weights_dict, name, input, group, conv_type, filters=None, **kwa
 
     weight_groups = list()
     if not weights_dict == None:
-        w = np.array(weights_dict[name]['weights'])
-        weight_groups = np.split(w, indices_or_sections=group, axis=-1)
+        w = numpy.array(weights_dict[name]['weights'])
+        weight_groups = numpy.split(w, indices_or_sections=group, axis=-1)
 
     for c in range(group):
         x = layers.Lambda(lambda z: z[:, :, :, c * grouped_channels:(c + 1) * grouped_channels])(input)
@@ -153,3 +272,4 @@ def convolution(weights_dict, name, input, group, conv_type, filters=None, **kwa
         b = K.variable(weights_dict[name]['bias'], name = name + "_bias")
         layer = layer + b
     return layer
+    
