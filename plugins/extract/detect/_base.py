@@ -18,6 +18,7 @@ from io import StringIO
 
 import cv2
 import dlib
+from math import sqrt
 
 from lib.gpu_stats import GPUStats
 from lib.utils import rotate_landmarks
@@ -38,9 +39,6 @@ class Detector():
         # The input and output queues for the plugin.
         # See lib.queue_manager.QueueManager for getting queues
         self.queues = {"in": None, "out": None}
-
-        # Scaling factor for image. Plugin dependent
-        self.scale = 1.0
 
         #  Path to model if required
         self.model_path = self.set_model_path()
@@ -125,8 +123,8 @@ class Detector():
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def compile_detection_image(self, image, is_square, scale_up):
         """ Compile the detection image """
-        self.set_scale(image, is_square=is_square, scale_up=scale_up)
-        return self.set_detect_image(image)
+        scale = self.set_scale(image, is_square=is_square, scale_up=scale_up)
+        return [self.set_detect_image(image, scale), scale]
 
     def set_scale(self, image, is_square=False, scale_up=False):
         """ Set the scale factor for incoming image """
@@ -144,23 +142,25 @@ class Detector():
             target = self.target
 
         if scale_up or target < source:
-            self.scale = target / source
+            scale = sqrt(target / source)
         else:
-            self.scale = 1.0
-        logger.trace("Detector scale: %s", self.scale)
+            scale = 1.0
+        logger.trace("Detector scale: %s", scale)
+        
+        return scale
 
-    def set_detect_image(self, input_image):
+    def set_detect_image(self, input_image, scale):
         """ Convert the image to RGB and scale """
         # pylint: disable=no-member
         image = input_image[:, :, ::-1].copy()
-        if self.scale == 1.0:
+        if scale == 1.0:
             return image
 
         height, width = image.shape[:2]
-        interpln = cv2.INTER_LINEAR if self.scale > 1.0 else cv2.INTER_AREA
-        dims = (int(width * self.scale), int(height * self.scale))
+        interpln = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA
+        dims = (int(width * scale), int(height * scale))
 
-        if self.scale < 1.0:
+        if scale < 1.0:
             logger.verbose("Resizing image from %sx%s to %s.",
                            width, height, "x".join(str(i) for i in dims))
 
