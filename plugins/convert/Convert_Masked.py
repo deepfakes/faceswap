@@ -31,7 +31,7 @@ class Convert():
         self.erosion_kernel_size = erosion_kernel_size
         self.seamless_clone = False if draw_transparent else seamless_clone
         self.erosion_size = 0 if erosion_kernel_size is None else erosion_kernel_size
-        if self.erosion_size >= 1:
+        if abs(self.erosion_size) >= 1:
             e_size = (int(abs(self.erosion_size)),int(abs(self.erosion_size)))
             self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                             e_size)
@@ -48,15 +48,15 @@ class Convert():
         # insert Field of View Logic here to modify alignment mat
         # test various enlargment factors to umeyama's standard face
         
-        self.enlargement_scale = 0.0      # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
-        #enlargement_scale = 3/64  @ temples  .. coverage = 180 test more
-        #enlargement_scale = 6/64  @ ears     .. coverage = 200 test more
-        #enlargement_scale = 12/64  @ mugshot  .. coverage = 220
-        padding = int(self.enlargement*size)
+        self.enlargement_scale = 3.0/64.0     # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
+        #enlargement_scale = 3.0/64.0  @ temples  .. coverage = 180 test more
+        #enlargement_scale = 6.0/64.0  @ ears     .. coverage = 200 test more
+        #enlargement_scale = 12.0/64.0  @ mugshot  .. coverage = 220
+        padding = int(self.enlargement_scale*size)
         mat = mat * (size - 2 * padding)
         mat[:, 2] += padding
         
-        self.interpolator , self.inverse_interpolator = get_matrix_scaling(mat)
+        self.interpolator , self.inverse_interpolator = self.get_matrix_scaling(mat)
         new_face = self.get_new_face(image, mat, size)
         image_mask = self.get_image_mask(image, mat, image_size, new_face,
                                          face_detected.landmarks_as_xy)
@@ -64,10 +64,9 @@ class Convert():
         
         return patched_face
 
-    def get_matrix_scaling(self, mat)
-        x_scale = sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
-        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / 
-                  ( x_scale )
+    def get_matrix_scaling(self, mat):
+        x_scale = numpy.sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
+        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / x_scale 
         avg_scale = ( x_scale + y_scale ) * 0.5
         interpolator = cv2.INTER_CUBIC if avg_scale > 1.0 else cv2.INTER_AREA
         inverse_interpolator = cv2.INTER_AREA if avg_scale > 1.0 else cv2.INTER_CUBIC
@@ -106,7 +105,7 @@ class Convert():
             face_src = numpy.ones(new_face.shape, dtype='float32')
             image_mask = cv2.warpAffine(face_src, mat, image_size,
                                         flags = cv2.WARP_INVERSE_MAP |
-                                                inverse_interpolator,
+                                                self.inverse_interpolator,
                                         borderMode = cv2.BORDER_CONSTANT,
                                         borderValue = 0.0)
                                         
@@ -114,7 +113,7 @@ class Convert():
             hull_mask = numpy.zeros(image.shape, dtype='float32')
             hull = cv2.convexHull(numpy.array(landmarks).reshape((-1, 2)))
             cv2.fillConvexPoly(hull_mask, hull, (1.0, 1.0, 1.0), lineType = cv2.LINE_AA)
-            image_mask = image_mask * hull_mask if 'and' in self.mask_type else hull_mask
+            image_mask = image_mask * hull_mask if self.mask_type == 'facehullandrec' else hull_mask
         
         numpy.nan_to_num(image_mask, copy=False)
         numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
@@ -148,7 +147,7 @@ class Convert():
         # test further , cleanup mask replace for now
         new_image = cv2.warpAffine(new_face, mat, image_size,
                                    flags = cv2.WARP_INVERSE_MAP | 
-                                           inverse_interpolator,
+                                           self.inverse_interpolator,
                                    borderMode = cv2.BORDER_CONSTANT,
                                    borderValue = (-1.0,-1.0,-1.0))
                                    
@@ -196,8 +195,8 @@ class Convert():
                                              mask,
                                              cv2.NORMAL_CLONE)
         else:
-            foreground = image_mask * new_image
-            background = ( 1.0 - image_mask ) * image.astype('float32')
+            foreground = image_mask * 255.0 #new_image
+            background = ( 1.0 - 0.0 ) * image.astype('float32')
             outimage = foreground + background
         
         numpy.clip(outimage, 0.0, 255.0, out=outimage)
