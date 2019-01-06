@@ -60,10 +60,10 @@ class Align(Aligner):
                 break
             image = item["image"][:, :, ::-1].copy()
 
-            logger.trace("Algning faces")
+            logger.trace("Aligning faces")
             try:
                 item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
-                logger.trace("Algned faces: %s", item["landmarks"])
+                logger.trace("Aligned faces: %s", item["landmarks"])
             except ValueError as err:
                 logger.warning("Image '%s' could not be processed. This may be due to corrupted "
                                "data: %s", item["filename"], str(err))

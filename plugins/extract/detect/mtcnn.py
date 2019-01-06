@@ -136,7 +136,7 @@ class Detect(Detector):
             if item == "EOF":
                 break
             logger.trace("Detecting faces: '%s'", item["filename"])
-            detect_image = self.compile_detection_image(item["image"], False, False)
+            [detect_image, scale] = self.compile_detection_image(item["image"], False, False)
 
             for angle in self.rotation:
                 current_image, rotmat = self.rotate_image(detect_image, angle)
@@ -146,13 +146,13 @@ class Detect(Detector):
                 if faces.any():
                     break
 
-            detected_faces = self.process_output(faces, points, rotmat)
+            detected_faces = self.process_output(faces, points, rotmat, scale)
             item["detected_faces"] = detected_faces
             self.finalize(item)
 
         logger.debug("Thread Completed Detect")
 
-    def process_output(self, faces, points, rotation_matrix):
+    def process_output(self, faces, points, rotation_matrix, scale):
         """ Compile found faces for output """
         logger.trace("Processing Output: (faces: %s, points: %s, rotation_matrix: %s)",
                      faces, points, rotation_matrix)
@@ -164,10 +164,10 @@ class Detect(Detector):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
         detected = [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(face.left() / self.scale),
-            int(face.top() / self.scale),
-            int(face.right() / self.scale),
-            int(face.bottom() / self.scale))
+            int(face.left() / scale),
+            int(face.top() / scale),
+            int(face.right() / scale),
+            int(face.bottom() / scale))
                     for face in faces]
         logger.trace("Processed Output: %s", detected)
         return detected
