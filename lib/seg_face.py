@@ -13,15 +13,15 @@ from multithreading import BackgroundGenerator
 
 class Mask():
     def __init__(self):
-        image_size = (300,300)
+        image_size = (256,256)
         batch_size = 24
-        weight_file = pathlib.Path(r'C:\data\face_seg_300\converted_caffe_IR.npy')
-        image_directory = pathlib.Path(r'C:\data\occluded images\300')
+        image_directory = pathlib.Path('C:\data\images')
         
-        model = self.mask_model(weight_file)
+        #weight_file = pathlib.Path(r'C:\data\face_seg_300\converted_caffe_IR.npy')
+        #model = self.mask_model(weight_file)
+        #model.save('C:/data/face_seg_300/converted_model.h5')
         
-        #model = load_model('C:/data/face_seg_300/converted_model.h5')
-        model.summary()
+        model = load_model('C:/data/face_seg_300/converted_model.h5')
         print('\n' + 'Model loaded')
         
         image_file_list = self.get_image_paths(image_directory) 
@@ -51,7 +51,7 @@ class Mask():
             #for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
-                    cv2.imwrite(str(image_directory) + '\mask-' + str(p.stem) + '.png', mask)
+                    cv2.imwrite(str(image_directory) + r'\mask\ ' + str(p.stem) + '.png', mask)
                     i += 1
             print('       - masks saved to directory')
             
@@ -109,19 +109,13 @@ class Mask():
         image_batch += numpy.array((104.00698793,116.66876762,122.67891434))
         mask_batch = numpy.repeat(mask_batch, 3, axis=-1)
         mask_batch *= image_batch
-        # image[:,:,:3][mask>128] = int(color * alpha + image * ( 1 - alpha )
         image_batch = numpy.concatenate((image_batch, mask_batch),axis = 2)
         return image_batch.astype('uint8')
 
     def preprocessing(self, image):
         # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
+        
         # input images should be cropped like this for best results
-        
-
-        # resize to 500x500 pixels
-        # subtract channel mean
-        
-        # add redetection and landmark routine
         image_size = image.shape[0],image.shape[1]
         if image.shape[0] != 300:
             interpolator = cv2.INTER_CUBIC if image.shape[0] / 300 > 1.0 else cv2.INTER_AREA
@@ -186,9 +180,6 @@ class Mask():
         black_background[central] = mask
         cv2.floodFill(black_background, None, (0, 0), 1.0)
         mask[black_background[central]==0.0] = 1.0
-        
-        #holes = cv2.bitwise_not(black_background[central])
-        #filled_mask = cv2.bitwise_or(mask, holes)
         
         return mask
         
@@ -286,7 +277,6 @@ class Mask():
         conv3_1      = convolution(weights_dict, name='conv3_1', input=pool2, group=1, conv_type='layers.Conv2D', filters=256, kernel_size=(3, 3), activation='relu', padding='same')
         conv3_2      = convolution(weights_dict, name='conv3_2', input=conv3_1, group=1, conv_type='layers.Conv2D', filters=256, kernel_size=(3, 3), activation='relu', padding='same')
         conv3_3      = convolution(weights_dict, name='conv3_3', input=conv3_2, group=1, conv_type='layers.Conv2D', filters=256, kernel_size=(3, 3), activation='relu', padding='same')
-        #pool3_pad    = layers.ZeroPadding2D(padding = ((1,0), (1,0)))(conv3_3)
         pool3        = layers.MaxPooling2D(name = 'pool3', pool_size = (2, 2), strides = (2, 2), padding='same')(conv3_3)
         
         conv4_1      = convolution(weights_dict, name='conv4_1', input=pool3, group=1, conv_type='layers.Conv2D', filters=512, kernel_size=(3, 3), activation='relu', padding='same')
