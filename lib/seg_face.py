@@ -14,12 +14,13 @@ from multithreading import BackgroundGenerator
 class Mask():
     def __init__(self):
         image_size = (256,256)
-        batch_size = 16
+        batch_size = 24
         
-        #weight_file = pathlib.Path('C:/data/edfb3bac7e774b609fbae1d6ffb68e3d.npy')
-        #model = mask_model(weight_file)
+        weight_file = pathlib.Path('C:/data/face_seg_300/converted_caffe_IR.npy')
+        model = self.mask_model(weight_file)
         
-        model = load_model('C:/data/face_seg_model.h5')
+        #model = load_model('C:/data/face_seg_300/converted_model.h5')
+        model.summary()
         print('\n' + 'Model loaded')
         
         image_directory = pathlib.Path('C:/data/images/')
@@ -36,22 +37,26 @@ class Mask():
         for num, batches in enumerate(range(num_of_batches)):
             batch_of_images = next(image_generator)    
             batch_of_results = model.predict_on_batch(batch_of_images)
-            print('   --- Batch number ' + num + ': ---')
+            print('   --- Batch number ' + str(num) + ': ---')
             print('       - model run complete')
-            batch_of_masks = batch_of_results.argmax(axis=3).astype('uint8')
-            batch_of_masks = numpy.clip(batch_of_masks,0,1)
+            batch_of_masks = batch_of_results.argmax(axis=3)
+            batch_of_masks = numpy.clip(batch_of_masks,0.0,1.0)
             batch_of_masks = numpy.expand_dims(batch_of_masks, axis=-1)
+            batch_of_masks = numpy.repeat(batch_of_masks, 3, axis=-1)
             mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
-            resized_masks = [cv2.resize(mask, image_size, cv2.INTER_NEAREST) for mask in mask_list]
+            resized_masks = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
+            blended = self.blend_image_and_mask(batch_of_images,batch_of_masks)
             print('       - postprocessing complete')
-            for mask in resized_masks:
+            
+            for mask in blended:
+            #for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
                     cv2.imwrite(str(image_directory) + ' mask-' + str(p.stem) + '.png', mask)
                     i += 1
             print('       - masks saved to directory')
             
-         print('\n' + 'Mask generation complete')
+        print('\n' + 'Mask generation complete')
            
     def get_image_paths(self, directory):
         image_extensions = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
@@ -73,7 +78,7 @@ class Mask():
         batch_num = length // batch_size + extra
         filename = str(pathlib.Path(image_list[0]).parents[0].joinpath(('Images_Batched(' + str(batch_size) + ').npy')))
         dataset=numpy.lib.format.open_memmap(filename, mode='w+',
-                                             dtype=numpy.uint8,
+                                             dtype='uint8',
                                              shape=(batch_num,batch_size,
                                                     image_size[0],image_size[1],3))
         for i, image_array in enumerate((cv2.imread(image_file) for image_file in image_list)):
@@ -92,19 +97,21 @@ class Mask():
         while True:
             # Iterate through the dataset entire batches at a time 
             # Call the process_images function on each batch
-            yield from (self.process_images(batch) for batch in memmapped_images[:])
+            yield from (self.process_images(batch.astype('float32')) for batch in memmapped_images[:])
             
     def process_images(self, batch):
-        images = numpy.empty((batch.shape[0], 500, 500, batch.shape[3]),
+        images = numpy.empty((batch.shape[0], 300, 300, batch.shape[3]),
                               dtype='float32')
         for i, image in enumerate(batch):
             images[i] = self.preprocessing(image)
         return images
 
-    def blend_image_and_mask(self, image, mask, alpha, color=[0,0,255]):
-        image[mask>128] = int(color * alpha + image * ( 1 - alpha ))
+    def blend_image_and_mask(self, image_batch, mask_batch, alpha=0.5, color=(0.0,0.0,127.5)):
+        image_batch += numpy.array((104.00698793,116.66876762,122.67891434))
+        mask_batch *= image_batch
         # image[:,:,:3][mask>128] = int(color * alpha + image * ( 1 - alpha )
-        return image
+        image_batch = numpy.concatenate((image_batch, mask_batch),axis = 2)
+        return image_batch.astype('uint8')
 
     def preprocessing(self, image):
         # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
@@ -116,8 +123,9 @@ class Mask():
         
         # add redetection and landmark routine
         image_size = image.shape[0],image.shape[1]
-        interpolator = cv2.INTER_CUBIC if image.shape[0] / 500 > 1.0 else cv2.INTER_AREA
-        image = cv2.resize(image, (500,500), interpolator)
+        if image.shape[0] != 300:
+            interpolator = cv2.INTER_CUBIC if image.shape[0] / 300 > 1.0 else cv2.INTER_AREA
+            image = cv2.resize(image, (300,300), interpolator)
         image -= numpy.array((104.00698793,116.66876762,122.67891434))
         #image -= numpy.average(image, axis=(0,1))
         image = numpy.expand_dims(image, 0)
@@ -144,10 +152,10 @@ class Mask():
         return rect
         
     def postprocessing(self, mask):
-        mask[mask!=0] = 255
+        mask[mask!=0.0] = 1.0
         #mask = self.select_largest_segment(mask)
-        mask = self.smooth_flaws(mask)
-        mask = self.fill_holes(mask)
+        #mask = self.smooth_contours(mask)
+        #mask = self.fill_holes(mask)
         
         return mask
 
@@ -155,11 +163,11 @@ class Mask():
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
         num_labels, labels, stats, centroids = results
         segments_ranked_by_area = numpy.argsort(stats[:,-1])[::-1]
-        mask[labels != segments_ranked_by_area[0,0]] = 0
+        mask[labels != segments_ranked_by_area[0,0]] = 0.0
         
         return mask
         
-    def smooth_flaws(self, mask, smooth_iterations=1, smooth_kernel_radius=2):
+    def smooth_contours(self, mask, smooth_iterations=2, smooth_kernel_radius=2):
         kernel_size = int(smooth_kernel_radius * 2 + 1)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                            (kernel_size, kernel_size))
@@ -173,13 +181,16 @@ class Mask():
         
     def fill_holes(self, mask):
         holes = mask.copy()
-        cv2.floodFill(holes, None, (0, 0), 255)
+        cv2.floodFill(holes, None, (0, 0), 1.0)
+        cv2.floodFill(holes, None, (300, 0), 1.0)
+        cv2.floodFill(holes, None, (0, 300), 1.0)
+        cv2.floodFill(holes, None, (300, 300), 1.0)
         holes = cv2.bitwise_not(holes)
         filled_mask = cv2.bitwise_or(mask, holes)
         
         return filled_mask
         
-    def mask_model(weight_file = None):
+    def mask_model(self, weight_file = None):
     
         # handles grouped convolutions
         def convolution(weights_dict, name, input, group, conv_type, filters=None, **kwargs):
@@ -258,7 +269,9 @@ class Mask():
                     
             return model
 
-        input        = layers.Input(name = 'input', shape = (500, 500, 3,) )
+        weights_dict = load_weights_from_file(weight_file)
+        
+        input        = layers.Input(name = 'input', shape = (300, 300, 3,) )
         input_c      = layers.ZeroPadding2D(padding = ((100, 100), (100, 100)))(input)
         conv1_1      = convolution(weights_dict, name='conv1_1', input=input_c, group=1, conv_type='layers.Conv2D', filters=64, kernel_size=(3, 3), activation='relu')
         conv1_2      = convolution(weights_dict, name='conv1_2', input=conv1_1, group=1, conv_type='layers.Conv2D', filters=64, kernel_size=(3, 3), activation='relu', padding='same')
@@ -271,6 +284,7 @@ class Mask():
         conv3_1      = convolution(weights_dict, name='conv3_1', input=pool2, group=1, conv_type='layers.Conv2D', filters=256, kernel_size=(3, 3), activation='relu', padding='same')
         conv3_2      = convolution(weights_dict, name='conv3_2', input=conv3_1, group=1, conv_type='layers.Conv2D', filters=256, kernel_size=(3, 3), activation='relu', padding='same')
         conv3_3      = convolution(weights_dict, name='conv3_3', input=conv3_2, group=1, conv_type='layers.Conv2D', filters=256, kernel_size=(3, 3), activation='relu', padding='same')
+        #pool3_pad    = layers.ZeroPadding2D(padding = ((1,0), (1,0)))(conv3_3)
         pool3        = layers.MaxPooling2D(name = 'pool3', pool_size = (2, 2), strides = (2, 2), padding='same')(conv3_3)
         
         conv4_1      = convolution(weights_dict, name='conv4_1', input=pool3, group=1, conv_type='layers.Conv2D', filters=512, kernel_size=(3, 3), activation='relu', padding='same')
@@ -290,23 +304,23 @@ class Mask():
         
         scale_pool3  = layers.Lambda(lambda x: x * 0.0001, name='scale_pool3')(pool3)
         scale_pool4  = layers.Lambda(lambda x: x * 0.01, name='scale_pool4')(pool4)
-        score_pool3  = convolution(weights_dict, name='score_pool3', input=scale_pool3, group=1, conv_type='layers.Conv2D', filters=21, kernel_size=(1, 1))
-        score_pool4  = convolution(weights_dict, name='score_pool4', input=scale_pool4, group=1, conv_type='layers.Conv2D', filters=21, kernel_size=(1, 1))
-        score_pool3c = layers.Cropping2D(cropping=((9, 9), (9, 9)), name='score_pool3c')(score_pool3)
-        score_pool4c = layers.Cropping2D(cropping=((5, 5), (5, 5)), name='score_pool4c')(score_pool4)
+        score_pool3_r  = convolution(weights_dict, name='score_pool3_r', input=scale_pool3, group=1, conv_type='layers.Conv2D', filters=2, kernel_size=(1, 1))
+        score_pool4_r  = convolution(weights_dict, name='score_pool4_r', input=scale_pool4, group=1, conv_type='layers.Conv2D', filters=2, kernel_size=(1, 1))
+        score_pool3c = layers.Cropping2D(cropping=((9, 8), (9, 8)), name='score_pool3c')(score_pool3_r)
+        score_pool4c = layers.Cropping2D(cropping=((5, 5), (5, 5)), name='score_pool4c')(score_pool4_r)
         
-        score_fr     = convolution(weights_dict, name='score_fr', input=drop7, group=1, conv_type='layers.Conv2D', filters=21, kernel_size=(1, 1))
-        upscore2     = convolution(weights_dict, name='upscore2', input=score_fr, group=1, conv_type='layers.Conv2DTranspose', filters=21, kernel_size=(4, 4), strides=(2, 2), use_bias=False)
-        fuse_pool4   = layers.add(name = 'fuse_pool4', inputs = [upscore2, score_pool4c])
+        score_fr_r     = convolution(weights_dict, name='score_fr_r', input=drop7, group=1, conv_type='layers.Conv2D', filters=2, kernel_size=(1, 1))
+        upscore2_r   = convolution(weights_dict, name='upscore2_r', input=score_fr_r, group=1, conv_type='layers.Conv2DTranspose', filters=2, kernel_size=(4, 4), strides=(2, 2), use_bias=False)
+        fuse_pool4   = layers.add(name = 'fuse_pool4', inputs = [upscore2_r, score_pool4c])
         
-        upscore_pool4= convolution(weights_dict, name='upscore_pool4', input=fuse_pool4, group=1, conv_type='layers.Conv2DTranspose', filters=21, kernel_size=(4, 4), strides=(2, 2), use_bias=False)
-        fuse_pool3   = layers.add(name = 'fuse_pool3', inputs = [upscore_pool4, score_pool3c])
-        upscore8     = convolution(weights_dict, name='upscore8', input=fuse_pool3, group=1, conv_type='layers.Conv2DTranspose', filters=21, kernel_size=(16, 16), strides=(8, 8), use_bias=False)
-        score        = layers.Cropping2D(cropping=((31, 31), (31, 31)), name='score')(upscore8)
+        upscore_pool4_r= convolution(weights_dict, name='upscore_pool4_r', input=fuse_pool4, group=1, conv_type='layers.Conv2DTranspose', filters=2, kernel_size=(4, 4), strides=(2, 2), use_bias=False)
+        
+        fuse_pool3   = layers.add(name = 'fuse_pool3', inputs = [upscore_pool4_r, score_pool3c])
+        upscore8_r     = convolution(weights_dict, name='upscore8_r', input=fuse_pool3, group=1, conv_type='layers.Conv2DTranspose', filters=2, kernel_size=(16, 16), strides=(8, 8), use_bias=False)
+        score        = layers.Cropping2D(cropping=((31, 45), (31, 45)), name='score')(upscore8_r)
         
         model        = Model(inputs = [input], outputs = [score], name = 'face_seg_fcn_vgg16')
         
-        weights_dict = load_weights_from_file(weight_file)
         set_layer_weights(model, weights_dict)
         
         return model
