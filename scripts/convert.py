@@ -153,9 +153,6 @@ class Convert():
             else:
                 detected_faces = self.alignments_faces(frame, image)
 
-            if not detected_faces:
-                continue
-
             faces_count = len(detected_faces)
             if faces_count != 0:
                 # Post processing requires a dict with "detected_faces" key
