@@ -17,6 +17,7 @@ import dlib
 
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator
+from lib.logger import get_loglevel
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -90,7 +91,7 @@ def backup_file(directory, filename):
         os.rename(origfile, backupfile)
 
 
-def set_system_verbosity():
+def set_system_verbosity(loglevel):
     """ Set the verbosity level of tensorflow and suppresses
         future and deprecation warnings from any modules
         From:
@@ -101,7 +102,8 @@ def set_system_verbosity():
         2 - filter out WARNING logs
         3 - filter out ERROR logs  """
 
-    loglevel = "2" if logger.getEffectiveLevel() > 15 else "0"
+    numeric_level = get_loglevel(loglevel)
+    loglevel = "2" if numeric_level > 15 else "0"
     logger.debug("System Verbosity level: %s", loglevel)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
