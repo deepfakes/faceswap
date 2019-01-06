@@ -13,17 +13,17 @@ from multithreading import BackgroundGenerator
 
 class Mask():
     def __init__(self):
-        image_size = (256,256)
+        image_size = (300,300)
         batch_size = 24
+        weight_file = pathlib.Path(r'C:\data\face_seg_300\converted_caffe_IR.npy')
+        image_directory = pathlib.Path(r'C:\data\occluded images\300')
         
-        weight_file = pathlib.Path('C:/data/face_seg_300/converted_caffe_IR.npy')
         model = self.mask_model(weight_file)
         
         #model = load_model('C:/data/face_seg_300/converted_model.h5')
         model.summary()
         print('\n' + 'Model loaded')
         
-        image_directory = pathlib.Path('C:/data/images/')
         image_file_list = self.get_image_paths(image_directory) 
         num_of_batches = len(image_file_list) // batch_size + 1
         image_dataset = self.dataset_setup(image_file_list, image_size, batch_size)
@@ -39,10 +39,9 @@ class Mask():
             batch_of_results = model.predict_on_batch(batch_of_images)
             print('   --- Batch number ' + str(num) + ': ---')
             print('       - model run complete')
-            batch_of_masks = batch_of_results.argmax(axis=3)
+            batch_of_masks = batch_of_results.argmax(axis=3).astype('float32')
             batch_of_masks = numpy.clip(batch_of_masks,0.0,1.0)
             batch_of_masks = numpy.expand_dims(batch_of_masks, axis=-1)
-            batch_of_masks = numpy.repeat(batch_of_masks, 3, axis=-1)
             mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
             resized_masks = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
             blended = self.blend_image_and_mask(batch_of_images,batch_of_masks)
@@ -52,7 +51,7 @@ class Mask():
             #for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
-                    cv2.imwrite(str(image_directory) + ' mask-' + str(p.stem) + '.png', mask)
+                    cv2.imwrite(str(image_directory) + '\mask-' + str(p.stem) + '.png', mask)
                     i += 1
             print('       - masks saved to directory')
             
@@ -108,6 +107,7 @@ class Mask():
 
     def blend_image_and_mask(self, image_batch, mask_batch, alpha=0.5, color=(0.0,0.0,127.5)):
         image_batch += numpy.array((104.00698793,116.66876762,122.67891434))
+        mask_batch = numpy.repeat(mask_batch, 3, axis=-1)
         mask_batch *= image_batch
         # image[:,:,:3][mask>128] = int(color * alpha + image * ( 1 - alpha )
         image_batch = numpy.concatenate((image_batch, mask_batch),axis = 2)
@@ -152,10 +152,10 @@ class Mask():
         return rect
         
     def postprocessing(self, mask):
-        mask[mask!=0.0] = 1.0
-        #mask = self.select_largest_segment(mask)
+        #mask[mask!=0.0] = 1.0
+        mask = self.fill_holes(mask)
         #mask = self.smooth_contours(mask)
-        #mask = self.fill_holes(mask)
+        #mask = self.select_largest_segment(mask)
         
         return mask
 
@@ -180,15 +180,17 @@ class Mask():
         return mask
         
     def fill_holes(self, mask):
-        holes = mask.copy()
-        cv2.floodFill(holes, None, (0, 0), 1.0)
-        cv2.floodFill(holes, None, (300, 0), 1.0)
-        cv2.floodFill(holes, None, (0, 300), 1.0)
-        cv2.floodFill(holes, None, (300, 300), 1.0)
-        holes = cv2.bitwise_not(holes)
-        filled_mask = cv2.bitwise_or(mask, holes)
+        black_background = numpy.zeros((mask.shape[0]+4,mask.shape[1]+4,
+                                       mask.shape[2]), dtype = 'float32')
+        central = slice(2,-2), slice(2,-2)
+        black_background[central] = mask
+        cv2.floodFill(black_background, None, (0, 0), 1.0)
+        mask[black_background[central]==0.0] = 1.0
         
-        return filled_mask
+        #holes = cv2.bitwise_not(black_background[central])
+        #filled_mask = cv2.bitwise_or(mask, holes)
+        
+        return mask
         
     def mask_model(self, weight_file = None):
     
