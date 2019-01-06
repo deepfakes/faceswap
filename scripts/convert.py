@@ -47,7 +47,7 @@ class Convert():
 
             Note: GAN prediction outputs a mask + an image, while other
             predicts only an image. """
-        Utils.set_verbosity()
+        Utils.set_verbosity(self.args.loglevel)
 
         if not self.alignments.have_alignments_file:
             self.load_extractor()

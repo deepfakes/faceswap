@@ -11,7 +11,7 @@ class Alignments():
     """ Perform tasks relating to alignments file """
     def __init__(self, arguments):
         self.args = arguments
-        set_system_verbosity()
+        set_system_verbosity(self.args.loglevel)
 
         dest_format = self.get_dest_format()
         self.alignments = AlignmentData(self.args.alignments_file, dest_format)
