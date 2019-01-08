@@ -43,6 +43,8 @@ class ModelBase():
         self.name = self.set_model_name()
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
+        self.metrics = dict()  # Metrics for model
+        self.history = dict()  # Loss history for each save iteration
         self.state = State(self.model_dir, self.base_filename)
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
@@ -120,7 +122,10 @@ class ModelBase():
                               loss=[mask_loss_func, loss_func])
             else:
                 model.compile(optimizer=optimizer, loss=loss_func)
-        logger.debug("Compiled Predictors")
+
+            self.metrics[side] = model.metrics_names
+            self.history[side] = [list() for _ in range(len(self.metrics[side]))]
+        logger.debug("Compiled Predictors. Metrics: %s", self.metrics)
 
     def loss_function(self):
         """ Set the loss function """
@@ -208,13 +213,60 @@ class ModelBase():
     def save_weights(self):
         """ Backup and save the weights files """
         logger.debug("Backing up and saving weights")
+        should_backup = self.get_save_averages()
         for network in self.networks.values():
-            network.backup_weights()
+            if should_backup:
+                network.backup_weights()
             network.save_weights()
         # Put in a line break to avoid jumbled console
         print("\n")
         logger.info("saved model weights")
         self.state.save()
+
+    def get_save_averages(self):
+        """ Return the loss averages since last save and reset historical losses """
+        logger.debug("Getting Average loss since last save")
+        avgs = dict()
+        backup = False
+
+        for side in ("a", "b"):
+            hist_losses = self.history[side]
+            if not all(hist_losses):
+                break
+
+            avg = [sum(loss) / len(loss) for loss in hist_losses]
+            self.history[side] = [list() for _ in range(len(self.metrics[side]))]
+
+            avg_key = "avg_{}".format(side)
+            if not self.history.get(avg_key, None):
+                logger.debug("Setting initial historical average for '%s': %s", avg_key, avg)
+                self.history[avg_key] = avg
+
+            logger.debug("Lowest Average loss: (%s: %s)", side, self.history[avg_key])
+
+            backup = self.check_loss_drop(side, avg)
+            if not backup:
+                break
+            avgs[side] = avg
+
+        logger.debug("Average loss since last save: %s", avgs)
+        if backup:  # Update lowest loss values to the history
+            for side in ("a", "b"):
+                avg = avgs[side]
+                avg_key = "avg_{}".format(side)
+                logger.debug("Updating historical average for '%s': %s", avg_key, avg)
+                self.history[avg_key] = avg
+
+        logger.debug("Backing up: %s", backup)
+
+        return backup
+
+    def check_loss_drop(self, side, averages):
+        """ Check whether all loss has dropped since lowest loss """
+        for idx, loss in enumerate(averages):
+            if loss > self.history[side][idx]:
+                return False
+        return True
 
     def log_summary(self):
         """ Verbose log the model summaries """

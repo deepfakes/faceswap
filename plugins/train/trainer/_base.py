@@ -58,7 +58,7 @@ class TrainerBase():
     def process_transform_kwargs(self):
         """ Override for specific image manipulation kwargs
             See lib.training_data.ImageManipulation() for valid kwargs"""
-        warped_zoom = self.model.image_shape[0] // 64
+        warped_zoom = self.model.input_shape[0] // 64
         target_zoom = warped_zoom
         transform_kwargs = {"rotation_range": 10,
                             "zoom_range": 0.05,
@@ -70,18 +70,17 @@ class TrainerBase():
         logger.debug(transform_kwargs)
         return transform_kwargs
 
-    def print_loss(self, loss_a, loss_b):
+    def print_loss(self, loss):
         """ Override for specific model loss formatting """
-        loss = [loss_a, loss_b]
-        for idx, side in enumerate(loss):
-            if isinstance(side, list):
-                loss[idx] = " | ".join(["{:.5f}".format(loss_side) for loss_side in side])
-            else:
-                loss[idx] = "{:.5f}".format(side)
-        print("[{0}] [#{1:05d}] loss_A: {2}, loss_B: {3}".format(self.timestamp,
+        output = list()
+        for side in sorted(list(loss.keys())):
+            display = ", ".join(["{}: {:.5f}".format(self.model.metrics[side][idx], this_loss)
+                                 for idx, this_loss in enumerate(loss[side])])
+            output.append(display)
+        print("[{}] [#{:05d}] loss_A: ({}), loss_B: ({})".format(self.timestamp,
                                                                  self.model.iterations,
-                                                                 loss[0],
-                                                                 loss[1]),
+                                                                 output[0],
+                                                                 output[1]),
               end='\r')
 
     def process_training_opts(self):
@@ -97,19 +96,23 @@ class TrainerBase():
             Items should come out as: (warped, target [, mask])
         """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
-        train_a = next(self.images_a)
-        train_b = next(self.images_b)
-        if self.use_mask:
-            train_a, train_b = self.compile_mask(train_a, train_b)
-
-        loss_a = self.model.predictors["a"].train_on_batch(*train_a)
-        loss_b = self.model.predictors["b"].train_on_batch(*train_b)
+        loss = dict()
+        train = dict()
+        for side in ("a", "b"):
+            images = getattr(self, "images_{}".format(side))
+            train[side] = next(images)
+            if self.use_mask:
+                train[side] = self.compile_mask(train[side])
+            side_loss = self.model.predictors[side].train_on_batch(*train[side])
+            side_loss = side_loss if isinstance(side_loss, list) else [side_loss]
+            loss[side] = side_loss
 
         self.model.state.iterations += 1
-        self.print_loss(loss_a, loss_b)
+        self.store_history(loss)
+        self.print_loss(loss)
 
         if viewer is not None:
-            target_a, target_b = train_a[1], train_b[1]
+            target_a, target_b = train["a"][1], train["b"][1]
             if self.use_mask:
                 target_a, target_b = target_a[0], target_b[0]
             sample_a, sample_b = self.compile_samples(target_a, target_b, self.batch_size)
@@ -119,18 +122,23 @@ class TrainerBase():
         if timelapse_kwargs is not None:
             self.do_timelapse(timelapse_kwargs)
 
-    def compile_mask(self, train_a, train_b):
+    def compile_mask(self, train):
         """ Compile the mask into training data """
         logger.trace("Compiling Mask: (iteration: %s)", self.model.iterations)
-        sides = list()
-        for train in (train_a, train_b):
-            mask = train[-1]
-            side = list()
-            for idx in range(len(train) - 1):
-                image = train[idx]
-                side.append([image, mask])
-            sides.append(side)
-        return sides[0], sides[1]
+        mask = train[-1]
+        retval = list()
+        for idx in range(len(train) - 1):
+            image = train[idx]
+            retval.append([image, mask])
+        return retval
+
+    def store_history(self, loss):
+        """ Store the history of this step """
+        logger.trace("Updating loss history")
+        for side in ("a", "b"):
+            for idx, val in enumerate(loss[side]):
+                self.model.history[side][idx].append(val)
+        logger.trace("Updated loss history")
 
     def compile_samples(self, target_a, target_b, batch_size):
         """ Training samples to display in the viewer """
@@ -188,7 +196,7 @@ class TrainerBase():
     def show_sample(self, test_a, test_b):
         """ Display preview data """
         logger.debug("Compiling sample")
-        scale = self.model.image_shape[0] / test_a.shape[1]
+        scale = self.model.input_shape[0] / test_a.shape[1]
         if scale != 1.0:
             feed_a, feed_b = self.resize_sample(scale, test_a, test_b)
         else:
@@ -225,16 +233,16 @@ class TrainerBase():
                      scale, test_a.shape, test_b.shape)
         interpn = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA  # pylint: disable=no-member
         resized_a = [cv2.resize(img,  # pylint: disable=no-member
-                                self.model.image_shape[:2],
+                                self.model.input_shape[:2],
                                 interpn)
                      for img in test_a]
         resized_b = [cv2.resize(img,  # pylint: disable=no-member
-                                self.model.image_shape[:2],
+                                self.model.input_shape[:2],
                                 interpn)
                      for img in test_b]
 
-        feed_a = np.array(resized_a).reshape((-1, ) + self.model.image_shape)
-        feed_b = np.array(resized_b).reshape((-1, ) + self.model.image_shape)
+        feed_a = np.array(resized_a).reshape((-1, ) + self.model.input_shape)
+        feed_b = np.array(resized_b).reshape((-1, ) + self.model.input_shape)
         logger.debug("Resized sample: (test_a: %s test_b: %s)", feed_a.shape, feed_b.shape)
         return feed_a, feed_b
 

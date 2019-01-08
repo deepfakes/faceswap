@@ -20,7 +20,7 @@ class Model(ModelBase):
         if "input_shape" not in kwargs:
             kwargs["input_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
-            config = get_config(self.__module__.split(".")[-1])
+            config = get_config(".".join(self.__module__.split(".")[-2:]))
             kwargs["encoder_dim"] = 512 if config["lowmem"] else 1024
 
         super().__init__(*args, **kwargs)
