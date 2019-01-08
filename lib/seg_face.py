@@ -5,11 +5,11 @@ import keras.backend as K
 import numpy
 import cv2
 import os,sys,inspect,gc,pathlib
+import pydensecrf
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir) 
 from multithreading import BackgroundGenerator
-
 
 class Mask():
     def __init__(self):
@@ -21,16 +21,108 @@ class Mask():
         #model = self.mask_model(weight_file)
         #model.save('C:/data/face_seg_300/converted_model.h5')
         
+        '''
+        batch = BackgroundGenerator(self.prepare_images(), 1)
+
+        for item in batch.iterator():
+            self.convert(converter, item)
+            
+        def prepare_images(self):
+        """ Prepare the images for conversion """
+        filename = ""
+        for filename in tqdm(self.images.input_images,
+                             total=self.images.images_found,
+                             file=sys.stdout):
+
+            if (self.args.discard_frames and
+                    self.opts.check_skipframe(filename) == "discard"):
+                continue
+
+            frame = os.path.basename(filename)
+            if self.extract_faces:
+                convert_item = self.detect_faces(filename)
+            else:
+                convert_item = self.alignments_faces(filename, frame)
+
+            if not convert_item:
+                continue
+            image, detected_faces = convert_item
+
+            faces_count = len(detected_faces)
+            if faces_count != 0:
+                # Post processing requires a dict with "detected_faces" key
+                self.post_process.do_actions(
+                    {"detected_faces": detected_faces})
+                self.faces_count += faces_count
+
+            if faces_count > 1:
+                self.verify_output = True
+                logger.verbose("Found more than one face in "
+                               "an image! '%s'", frame)
+
+            yield filename, image, detected_faces
+
+            
+        def alignments_faces(self, filename, frame):
+        """ Get the face from alignments file """
+        if not self.check_alignments(frame):
+            return None
+
+        faces = self.alignments.get_faces_in_frame(frame)
+        image = self.images.load_one_image(filename)
+        detected_faces = list()
+
+        for rawface in faces:
+            face = DetectedFace()
+            face.from_alignment(rawface, image=image)
+            detected_faces.append(face)
+        return image, detected_faces
+
+        def check_alignments(self, frame):
+            """ If we have no alignments for this image, skip it """
+            have_alignments = self.alignments.frame_exists(frame)
+            if not have_alignments:
+                tqdm.write("No alignment found for {}, "
+                           "skipping".format(frame))
+            return have_alignments
+            
+            
+                def convert(self, converter, item):
+            """ Apply the conversion transferring faces onto frames """
+            try:
+                filename, image, faces = item
+                skip = self.opts.check_skipframe(filename)
+
+                if not skip:
+                    for face in faces:
+                        image = self.convert_one_face(converter, image, face)
+                    filename = str(self.output_dir / Path(filename).name)
+                    cv2.imwrite(filename, image)  # pylint: disable=no-member
+            except Exception as err:
+                logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
+                raise
+
+        def convert_one_face(self, converter, image, face):
+            """ Perform the conversion on the given frame for a single face """
+            # TODO: This switch between 64 and 128 is a hack for now.
+            # We should have a separate cli option for size
+            size = 128 if (self.args.trainer.strip().lower()
+                           in ('gan128', 'originalhighres')) else 64
+
+            image = converter.patch_image(image,
+                                          face,
+                                          size)
+            return image
+        '''
+        
         model = load_model('C:/data/face_seg_300/converted_model.h5')
         print('\n' + 'Model loaded')
         
         image_file_list = self.get_image_paths(image_directory) 
         num_of_batches = len(image_file_list) // batch_size + 1
         image_dataset = self.dataset_setup(image_file_list, image_size, batch_size)
-        print('\n' + 'Image dataset loaded')
-        
         image_generator = self.minibatches(image_dataset)
-        print('\n' + 'Image generator created')
+        print('\n' + 'Image dataset & generator loaded')
         
         print('\n' + 'Predicting batches of images in model')
         i=0
@@ -39,11 +131,8 @@ class Mask():
             batch_of_results = model.predict_on_batch(batch_of_images)
             print('   --- Batch number ' + str(num) + ': ---')
             print('       - model run complete')
-            batch_of_masks = batch_of_results.argmax(axis=3).astype('float32')
-            batch_of_masks = numpy.clip(batch_of_masks,0.0,1.0)
-            batch_of_masks = numpy.expand_dims(batch_of_masks, axis=-1)
-            mask_list = [self.postprocessing(mask) for mask in batch_of_masks]
-            resized_masks = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
+            
+            batch_of_masks = self.postprocessing(batch_of_results, batch_of_images, image_size)
             blended = self.blend_image_and_mask(batch_of_images,batch_of_masks)
             print('       - postprocessing complete')
             
@@ -114,8 +203,8 @@ class Mask():
 
     def preprocessing(self, image):
         # https://github.com/YuvalNirkin/find_face_landmarks/blob/master/interfaces/matlab/bbox_from_landmarks.m
-        
         # input images should be cropped like this for best results
+        
         image_size = image.shape[0],image.shape[1]
         if image.shape[0] != 300:
             interpolator = cv2.INTER_CUBIC if image.shape[0] / 300 > 1.0 else cv2.INTER_AREA
@@ -127,7 +216,6 @@ class Mask():
         return image
     
     def crop_standarization(self,image,landmarks):
-        
         (box_x, box_y), (w, h), rect_angle = cv2.boundingRect(landmarks)
         w, h = max(w, h), max(w, h)
         M = cv2.moments(landmarks)
@@ -145,13 +233,20 @@ class Mask():
         
         return rect
         
-    def postprocessing(self, mask):
-        #mask[mask!=0.0] = 1.0
-        mask = self.fill_holes(mask)
-        #mask = self.smooth_contours(mask)
-        #mask = self.select_largest_segment(mask)
+    def postprocessing(self, batch_of_results,batch_of_images, image_size):
+        batches = zip(batch_of_results,batch_of_images)
+        mask_list = [self.dense_crf(mask,image) for mask, image in batches]
+        mask_list = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
+        resized_batch = numpy.stack(mask_list,axis=0)
+        resized_batch = resized_batch.argmax(axis=3).astype('float32')
+        resized_batch = numpy.clip(resized_batch,0.0,1.0)
+        resized_batch = numpy.expand_dims(resized_batch, axis=-1)
+        #resized_batch[resized_batch!=0.0] = 1.0
+        resized_batch = self.fill_holes(resized_batch)
+        #resized_batch = self.smooth_contours(resized_batch)
+        #resized_batch = self.select_largest_segment(resized_batch)
         
-        return mask
+        return resized_batch
 
     def select_largest_segment(self, mask):
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
@@ -182,6 +277,53 @@ class Mask():
         mask[black_background[central]==0.0] = 1.0
         
         return mask
+
+    def dense_crf(self, probs, img, n_iters=10, 
+                  sxy_gaussian=(1, 1), compat_gaussian=4,
+                  kernel_gaussian=pydensecrf.densecrf.DIAG_KERNEL,
+                  normalisation_gaussian=pydensecrf.densecrf.NORMALIZE_SYMMETRIC,
+                  sxy_bilateral=(50, 50), compat_bilateral=5,
+                  srgb_bilateral=(12, 12, 12),
+                  kernel_bilateral=pydensecrf.densecrf.DIAG_KERNEL,
+                  normalisation_bilateral=pydensecrf.densecrf.NORMALIZE_SYMMETRIC):
+        """DenseCRF over unnormalised predictions.
+           More details on the arguments at https://github.com/lucasb-eyer/pydensecrf.
+        
+        Args:
+          probs: class probabilities per pixel.
+          img: if given, the pairwise bilateral potential on raw RGB values will be computed.
+          n_iters: number of iterations of MAP inference.
+          sxy_gaussian: standard deviations for the location component of the colour-independent term.
+          compat_gaussian: label compatibilities for the colour-independent term (can be a number, a 1D array, or a 2D array).
+          kernel_gaussian: kernel precision matrix for the colour-independent term (can take values CONST_KERNEL, DIAG_KERNEL, or FULL_KERNEL).
+          normalisation_gaussian: normalisation for the colour-independent term (possible values are NO_NORMALIZATION, NORMALIZE_BEFORE, NORMALIZE_AFTER, NORMALIZE_SYMMETRIC).
+          sxy_bilateral: standard deviations for the location component of the colour-dependent term.
+          compat_bilateral: label compatibilities for the colour-dependent term (can be a number, a 1D array, or a 2D array).
+          srgb_bilateral: standard deviations for the colour component of the colour-dependent term.
+          kernel_bilateral: kernel precision matrix for the colour-dependent term (can take values CONST_KERNEL, DIAG_KERNEL, or FULL_KERNEL).
+          normalisation_bilateral: normalisation for the colour-dependent term (possible values are NO_NORMALIZATION, NORMALIZE_BEFORE, NORMALIZE_AFTER, NORMALIZE_SYMMETRIC).
+          
+        Returns:
+          Refined predictions after MAP inference.
+        """
+        h, w, _ = probs.shape
+        
+        probs = probs.transpose(2, 0, 1).copy(order='C') # Need a contiguous array.
+        
+        d = pydensecrf.densecrf.DenseCRF2D(w, h, n_classes) # Define DenseCRF model.
+        U = -np.log(probs) # Unary potential.
+        U = U.reshape((n_classes, -1)) # Needs to be flat.
+        d.setUnaryEnergy(U)
+        d.addPairwiseGaussian(sxy=sxy_gaussian, compat=compat_gaussian,
+                              kernel=kernel_gaussian, normalization=normalisation_gaussian)
+        assert(img.shape[0:2] == (h, w)), "The image height and width must coincide with dimensions of the logits."
+        d.addPairwiseBilateral(sxy=sxy_bilateral, compat=compat_bilateral,
+                               kernel=kernel_bilateral, normalization=normalisation_bilateral,
+                               srgb=srgb_bilateral, rgbim=img)
+        Q = d.inference(n_iters)
+        preds = np.array(Q, dtype=np.float32).reshape((n_classes, h, w)).transpose(1, 2, 0)
+        return preds
+
         
     def mask_model(self, weight_file = None):
     

@@ -207,28 +207,21 @@ class Convert():
         try:
             filename, image, faces = item
             skip = self.opts.check_skipframe(filename)
+            
+            
+            # new refactor has config.image_size option
+            size = 128 if (self.args.trainer.strip().lower()
+               in ('gan128', 'originalhighres')) else 64
 
             if not skip:
                 for face in faces:
-                    image = self.convert_one_face(converter, image, face)
+                    image = converter.patch_image(image,face,size)
+                    
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
-
-    def convert_one_face(self, converter, image, face):
-        """ Perform the conversion on the given frame for a single face """
-        # TODO: This switch between 64 and 128 is a hack for now.
-        # We should have a separate cli option for size
-        size = 128 if (self.args.trainer.strip().lower()
-                       in ('gan128', 'originalhighres')) else 64
-
-        image = converter.patch_image(image,
-                                      face,
-                                      size)
-        return image
-
 
 class OptionalActions():
     """ Process the optional actions for convert """
