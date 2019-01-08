@@ -16,10 +16,10 @@ class Mask():
         image_size = (256,256)
         batch_size = 24
         image_directory = pathlib.Path('C:\data\images')
+        model_file = 'C:/data/face_seg_300/converted_model.h5'
         
         #weight_file = pathlib.Path(r'C:\data\face_seg_300\converted_caffe_IR.npy')
-        #model = self.mask_model(weight_file)
-        #model.save('C:/data/face_seg_300/converted_model.h5')
+        #model = self.parse_model_weights(weight_file, model_file=model_file)
         
         '''
         batch = BackgroundGenerator(self.prepare_images(), 1)
@@ -115,7 +115,7 @@ class Mask():
             return image
         '''
         
-        model = load_model('C:/data/face_seg_300/converted_model.h5')
+        model = load_model(model_file)
         print('\n' + 'Model loaded')
         
         image_file_list = self.get_image_paths(image_directory) 
@@ -325,7 +325,7 @@ class Mask():
         return preds
 
         
-    def mask_model(self, weight_file = None):
+    def parse_model_weights(self, weight_file, model_file):
     
         # handles grouped convolutions
         def convolution(weights_dict, name, input, group, conv_type, filters=None, **kwargs):
@@ -456,6 +456,7 @@ class Mask():
         model        = Model(inputs = [input], outputs = [score], name = 'face_seg_fcn_vgg16')
         
         set_layer_weights(model, weights_dict)
+        model.save(model_file)
         
         return model
         
