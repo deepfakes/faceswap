@@ -31,7 +31,7 @@ class ModelBase():
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, input_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      input_shape, encoder_dim)
-        self.config = get_config(self.__module__.split(".")[-1])
+        self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         self.model_dir = model_dir
         self.gpus = gpus
         self.input_shape = input_shape
@@ -124,7 +124,7 @@ class ModelBase():
 
     def loss_function(self):
         """ Set the loss function """
-        if self.config["dssim_loss"]:
+        if self.config.get("dssim_loss", False):
             logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:

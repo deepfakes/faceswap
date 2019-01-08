@@ -13,6 +13,16 @@ from PIL import Image, ImageTk
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+def set_slider_rounding(value, var, d_type, round_to, min_max):
+    """ Set the underlying variable to correct number based on slider rounding """
+    if d_type == float:
+        var.set(round(float(value), round_to))
+    else:
+        steps = range(min_max[0], min_max[1] + round_to, round_to)
+        value = min(steps, key=lambda x: abs(x - int(float(value))))
+        var.set(value)
+
+
 class Singleton(type):
     """ Instigate a singleton.
     From: https://stackoverflow.com/questions/6760685

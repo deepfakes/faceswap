@@ -103,7 +103,7 @@ class ScriptExecutor():
             safe_shutdown()
 
 
-class Slider(argparse.Action):
+class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
     """ Adds support for the GUI slider
 
         An additional option 'min_max' must be provided containing tuple of min and max accepted
@@ -136,9 +136,8 @@ class Slider(argparse.Action):
         pass
 
 
-class FullPaths(argparse.Action):
+class FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
     """ Expand user- and relative-paths """
-    # pylint: disable=too-few-public-methods
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
             os.path.expanduser(values)))
@@ -177,7 +176,7 @@ class FileFullPaths(FullPaths):
         return [(name, getattr(self, name)) for name in names]
 
 
-class DirOrFileFullPaths(FileFullPaths):
+class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     """ Class that the gui uses to determine that the input can take a folder or a filename.
         Inherits functionality from FileFullPaths
         Has the effect of giving the user 2 Open Dialogue buttons in the gui """
@@ -474,11 +473,9 @@ class ExtractArgs(ExtractConvertArgs):
                               "min_max": (128, 512),
                               "default": 256,
                               "rounding": 64,
-                              "help": "The output size of extracted faces. "
-                                      "Make sure that the model you intend "
-                                      "to train supports your required "
-                                      "size. This will only need to be "
-                                      "changed for hi-res models."})
+                              "help": "The output size of extracted faces. Make sure that the "
+                                      "model you intend to train supports your required size. "
+                                      "This will only need to be changed for hi-res models."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
@@ -575,12 +572,10 @@ class ConvertArgs(ExtractConvertArgs):
                               "min_max": (-100, 100),
                               "rounding": 1,
                               "default": 0,
-                              "help": "Erosion kernel size. Positive values "
-                                      "apply erosion which reduces the edge "
-                                      "of the swapped face. Negative values "
-                                      "apply dilation which allows the "
-                                      "swapped face to cover more space. "
-                                      "(Masked converter only)"})
+                              "help": "Erosion kernel size. Positive values apply erosion which "
+                                      "reduces the edge of the swapped face. Negative values "
+                                      "apply dilation which allows the swapped face to cover more "
+                                      "space. (Masked converter only)"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               "type": str.lower,
                               "dest": "mask_type",
@@ -695,8 +690,7 @@ class TrainArgs(FaceSwapArgs):
                               "rounding": 10,
                               "dest": "save_interval",
                               "default": 100,
-                              "help": "Sets the number of iterations before "
-                                      "saving the model"})
+                              "help": "Sets the number of iterations before saving the model"})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
@@ -707,18 +701,17 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "action": Slider,
-                              "min_max": (2, 2048),
+                              "min_max": (2, 256),
                               "rounding": 2,
                               "default": 64,
-                              "help": "Batch size, as a power of 2 "
-                                      "(64, 128, 256, etc)"})
+                              "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
                               "action": Slider,
-                              "min_max": (0, 10000000),
-                              "rounding": 1000,
+                              "min_max": (0, 5000000),
+                              "rounding": 20000,
                               "default": 1000000,
-                              "help": "Length of training in iterations"})
+                              "help": "Length of training in iterations."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
