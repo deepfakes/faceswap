@@ -37,7 +37,7 @@ class Train():
     def process(self):
         """ Call the training process object """
         logger.info("Training data directory: %s", self.args.model_dir)
-        set_system_verbosity()
+        set_system_verbosity(self.args.loglevel)
         thread = self.start_thread()
 
         if self.args.preview:
