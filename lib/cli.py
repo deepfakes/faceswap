@@ -567,14 +567,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "of the swapped face. Negative values "
                                       "apply dilation which allows the "
                                       "swapped face to cover more space. "
-                                      "(Masked converter only)"
-                                      "integer values will erode x pixels,"
-                                      "fractions will erode x% of the face area"})
-        argument_list.append({"opts": ("-es", "--enlargment-scale"),
-                              "type": float,
-                              "dest": "enlargment_scale",
-                                      "6/64 spans from ear to ear"
-                                      "12/64 is a mugshot"})
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               # lowercase this, because it's just a
                               # string later on.
@@ -631,11 +624,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Use histogram matching. "
                                       "(Masked converter only)"})
-        argument_list.append({"opts": ("-sm", "--smooth-mask"),
-                              "action": "store_true",
-                              "dest": "smooth_mask",
-                              "default": False,
-                              "help": "Smooth mask (Adjust converter only)"})
+        argument_list.append({"opts": ("-es", "--enlargment-scale"),
                               "type": float,
                               "dest": "enlargment_scale",
                               "default": 0.0,
