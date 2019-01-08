@@ -1,9 +1,19 @@
+#!/usr/bin/env python3
+""" Normaliztion methods for faceswap.py
+    Code from:
+        shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
+
 from keras.engine import Layer, InputSpec
 from keras import initializers, regularizers, constraints
 from keras import backend as K
 from keras.utils.generic_utils import get_custom_objects
 
-import numpy as np
+
+def to_list(inp):
+    """ Convert to list """
+    if not isinstance(inp, (list, tuple)):
+        return [inp]
+    return list(inp)
 
 
 class InstanceNormalization(Layer):
@@ -41,7 +51,8 @@ class InstanceNormalization(Layer):
         Same shape as input.
     # References
         - [Layer Normalization](https://arxiv.org/abs/1607.06450)
-        - [Instance Normalization: The Missing Ingredient for Fast Stylization](https://arxiv.org/abs/1607.08022)
+        - [Instance Normalization: The Missing Ingredient for Fast
+                                   Stylization](https://arxiv.org/abs/1607.08022)
     """
     def __init__(self,
                  axis=None,
@@ -55,6 +66,8 @@ class InstanceNormalization(Layer):
                  beta_constraint=None,
                  gamma_constraint=None,
                  **kwargs):
+        self.beta = None
+        self.gamma = None
         super(InstanceNormalization, self).__init__(**kwargs)
         self.supports_masking = True
         self.axis = axis
@@ -105,7 +118,7 @@ class InstanceNormalization(Layer):
         input_shape = K.int_shape(inputs)
         reduction_axes = list(range(0, len(input_shape)))
 
-        if (self.axis is not None):
+        if self.axis is not None:
             del reduction_axes[self.axis]
 
         del reduction_axes[0]
@@ -142,4 +155,130 @@ class InstanceNormalization(Layer):
         base_config = super(InstanceNormalization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+
 get_custom_objects().update({'InstanceNormalization': InstanceNormalization})
+
+
+class GroupNormalization(Layer):
+    """ Group Normalization
+        from: shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
+
+    def __init__(self, axis=-1,
+                 gamma_init='one', beta_init='zero',
+                 gamma_regularizer=None, beta_regularizer=None,
+                 epsilon=1e-6,
+                 group=32,
+                 data_format=None,
+                 **kwargs):
+        self.beta = None
+        self.gamma = None
+        super(GroupNormalization, self).__init__(**kwargs)
+
+        self.axis = to_list(axis)
+        self.gamma_init = initializers.get(gamma_init)
+        self.beta_init = initializers.get(beta_init)
+        self.gamma_regularizer = regularizers.get(gamma_regularizer)
+        self.beta_regularizer = regularizers.get(beta_regularizer)
+        self.epsilon = epsilon
+        self.group = group
+        self.data_format = K.normalize_data_format(data_format)
+
+        self.supports_masking = True
+
+    def build(self, input_shape):
+        self.input_spec = [InputSpec(shape=input_shape)]
+        shape = [1 for _ in input_shape]
+        if self.data_format == 'channels_last':
+            channel_axis = -1
+            shape[channel_axis] = input_shape[channel_axis]
+        elif self.data_format == 'channels_first':
+            channel_axis = 1
+            shape[channel_axis] = input_shape[channel_axis]
+        # for i in self.axis:
+        #    shape[i] = input_shape[i]
+        self.gamma = self.add_weight(shape=shape,
+                                     initializer=self.gamma_init,
+                                     regularizer=self.gamma_regularizer,
+                                     name='gamma')
+        self.beta = self.add_weight(shape=shape,
+                                    initializer=self.beta_init,
+                                    regularizer=self.beta_regularizer,
+                                    name='beta')
+        self.built = True
+
+    def call(self, inputs, mask=None):
+        input_shape = K.int_shape(inputs)
+        if len(input_shape) != 4 and len(input_shape) != 2:
+            raise ValueError('Inputs should have rank ' +
+                             str(4) + " or " + str(2) +
+                             '; Received input shape:', str(input_shape))
+
+        if len(input_shape) == 4:
+            if self.data_format == 'channels_last':
+                batch_size, height, width, channels = input_shape
+                if batch_size is None:
+                    batch_size = -1
+
+                if channels < self.group:
+                    raise ValueError('Input channels should be larger than group size' +
+                                     '; Received input channels: ' + str(channels) +
+                                     '; Group size: ' + str(self.group))
+
+                var_x = K.reshape(inputs, (batch_size,
+                                           height,
+                                           width,
+                                           self.group,
+                                           channels // self.group))
+                mean = K.mean(var_x, axis=[1, 2, 4], keepdims=True)
+                std = K.sqrt(K.var(var_x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
+                var_x = (var_x - mean) / std
+
+                var_x = K.reshape(var_x, (batch_size, height, width, channels))
+                retval = self.gamma * var_x + self.beta
+            elif self.data_format == 'channels_first':
+                batch_size, channels, height, width = input_shape
+                if batch_size is None:
+                    batch_size = -1
+
+                if channels < self.group:
+                    raise ValueError('Input channels should be larger than group size' +
+                                     '; Received input channels: ' + str(channels) +
+                                     '; Group size: ' + str(self.group))
+
+                var_x = K.reshape(inputs, (batch_size,
+                                           self.group,
+                                           channels // self.group,
+                                           height,
+                                           width))
+                mean = K.mean(var_x, axis=[2, 3, 4], keepdims=True)
+                std = K.sqrt(K.var(var_x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
+                var_x = (var_x - mean) / std
+
+                var_x = K.reshape(var_x, (batch_size, channels, height, width))
+                retval = self.gamma * var_x + self.beta
+
+        elif len(input_shape) == 2:
+            reduction_axes = list(range(0, len(input_shape)))
+            del reduction_axes[0]
+            batch_size, _ = input_shape
+            if batch_size is None:
+                batch_size = -1
+
+            mean = K.mean(inputs, keepdims=True)
+            std = K.sqrt(K.var(inputs, keepdims=True) + self.epsilon)
+            var_x = (inputs - mean) / std
+
+            retval = self.gamma * var_x + self.beta
+        return retval
+
+
+    def get_config(self):
+        config = {'epsilon': self.epsilon,
+                  'axis': self.axis,
+                  'gamma_init': initializers.serialize(self.gamma_init),
+                  'beta_init': initializers.serialize(self.beta_init),
+                  'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
+                  'beta_regularizer': regularizers.serialize(self.gamma_regularizer),
+                  'group': self.group}
+        base_config = super(GroupNormalization, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))

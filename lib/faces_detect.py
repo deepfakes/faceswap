@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 import logging
+from hashlib import sha256
 
 from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
 from lib.aligner import Extract as AlignerExtract, get_align_mat

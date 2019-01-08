@@ -7,12 +7,12 @@ from tkinter import ttk
 
 from .options import Config
 from .tooltip import Tooltip
-from .utils import ContextMenu, Images, FileHandler
+from .utils import ContextMenu, Images, FileHandler, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class CommandNotebook(ttk.Notebook):
+class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent, cli_options, tk_vars, scaling_factor):
@@ -65,7 +65,7 @@ class CommandNotebook(ttk.Notebook):
             Tooltip(btnact, text=hlp, wraplength=200)
 
 
-class CommandTab(ttk.Frame):
+class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent, category, command):
@@ -100,7 +100,7 @@ class CommandTab(ttk.Frame):
         logger.debug("Added frame seperator")
 
 
-class OptionsFrame(ttk.Frame):
+class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Options Frame - Holds the Options for each command """
 
     def __init__(self, parent):
@@ -207,6 +207,7 @@ class OptionControl():
         if ctl == ttk.Checkbutton:
             dflt = self.option.get("default", False)
         choices = self.option["choices"] if ctl == ttk.Combobox else None
+        min_max = self.option["min_max"] if ctl == ttk.Scale else None
 
         ctlframe = self.build_one_control_frame()
 
@@ -217,6 +218,7 @@ class OptionControl():
         self.option["value"] = self.build_one_control(ctlframe,
                                                       ctlvars,
                                                       choices,
+                                                      min_max,
                                                       sysbrowser)
         logger.debug("Built option control")
 
@@ -249,18 +251,17 @@ class OptionControl():
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         logger.debug("Built control label: '%s'", control_title)
 
-    def build_one_control(self, frame, controlvars, choices, sysbrowser):
+    def build_one_control(self, frame, controlvars, choices, min_max, sysbrowser):
         """ Build and place the option controls """
-        logger.debug("Build control: (controlvars: %s, choices: %s, sysbrowser: '%s'",
-                     controlvars, choices, sysbrowser)
+        logger.debug("Build control: (controlvars: %s, choices: %s, min_max: %s, sysbrowser: %s",
+                     controlvars, choices, min_max, sysbrowser)
         control, control_title, default, helptext = controlvars
         default = default if default is not None else ""
 
-        var = tk.BooleanVar(
-            frame) if control == ttk.Checkbutton else tk.StringVar(frame)
+        var = tk.BooleanVar(frame) if control == ttk.Checkbutton else tk.StringVar(frame)
         var.set(default)
 
-        if sysbrowser is not None:
+        if sysbrowser:
             self.add_browser_buttons(frame, sysbrowser, var)
 
         if control == ttk.Checkbutton:
@@ -268,6 +269,12 @@ class OptionControl():
                                            control_title,
                                            var,
                                            helptext)
+        elif control == ttk.Scale:
+            self.slider_control(control,
+                                frame,
+                                var,
+                                min_max,
+                                helptext)
         else:
             self.control_to_optionsframe(control,
                                          frame,
@@ -292,6 +299,29 @@ class OptionControl():
         Tooltip(ctl, text=helptext, wraplength=200)
         logger.debug("Added control checkframe: '%s'", control_title)
 
+    def slider_control(self, control, frame, tk_var, min_max, helptext):
+        """ A slider control with corresponding Entry box """
+        logger.debug("Add slider control to Options Frame: %s", control)
+        d_type = self.option.get("type", float)
+        rnd = self.option.get("rounding", 2) if d_type == float else self.option.get("rounding", 1)
+
+        tbox = ttk.Entry(frame, width=8, textvariable=tk_var, justify=tk.RIGHT)
+        tbox.pack(padx=(0, 5), side=tk.RIGHT)
+        ctl = control(
+            frame,
+            variable=tk_var,
+            command=lambda val, var=tk_var, dt=d_type, rn=rnd, mm=min_max:
+            set_slider_rounding(val, var, dt, rn, mm))
+        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
+        rc_menu = ContextMenu(ctl)
+        rc_menu.cm_bind()
+        ctl["from_"] = min_max[0]
+        ctl["to"] = min_max[1]
+
+        Tooltip(ctl, text=helptext, wraplength=720)
+        Tooltip(tbox, text=helptext, wraplength=720)
+        logger.debug("Added slider control to Options Frame: %s", control)
+
     @staticmethod
     def control_to_optionsframe(control, frame, var, choices, helptext):
         """ Standard non-check buttons sit in the main options frame """
@@ -303,7 +333,6 @@ class OptionControl():
         if control == ttk.Combobox:
             logger.debug("Adding combo choices: %s", choices)
             ctl["values"] = [choice for choice in choices]
-
         Tooltip(ctl, text=helptext, wraplength=720)
         logger.debug("Added control to Options Frame: %s", control)
 
@@ -311,15 +340,16 @@ class OptionControl():
         """ Add correct file browser button for control """
         logger.debug("Adding browser buttons: (sysbrowser: '%s', filepath: '%s'",
                      sysbrowser, filepath)
-        img = Images().icons[sysbrowser]
-        action = getattr(self, "ask_" + sysbrowser)
-        filetypes = self.option.get("filetypes", "default")
-        fileopn = ttk.Button(frame, image=img,
-                             command=lambda cmd=action: cmd(filepath,
-                                                            filetypes))
-        fileopn.pack(padx=(0, 5), side=tk.RIGHT)
-        logger.debug("Added browser buttons: (action: %s, filetypes: %s",
-                     action, filetypes)
+        for browser in sysbrowser:
+            img = Images().icons[browser]
+            action = getattr(self, "ask_" + browser)
+            filetypes = self.option.get("filetypes", "default")
+            fileopn = ttk.Button(frame,
+                                 image=img,
+                                 command=lambda cmd=action: cmd(filepath, filetypes))
+            fileopn.pack(padx=(0, 5), side=tk.RIGHT)
+            logger.debug("Added browser buttons: (action: %s, filetypes: %s",
+                         action, filetypes)
 
     @staticmethod
     def ask_folder(filepath, filetypes=None):
@@ -369,7 +399,7 @@ class OptionControl():
             filepath.set(filename)
 
 
-class ActionFrame(ttk.Frame):
+class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """Action Frame - Displays action controls for the command tab """
 
     def __init__(self, parent):
