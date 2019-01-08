@@ -551,13 +551,13 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": "Masked",
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
-                              "type": int,
-                              "default": 2,
+                              "type": float,
+                              "default": 2.0,
                               "help": "Blur size. (Masked converter only)"})
         argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
                               "dest": "erosion_kernel_size",
-                              "type": int,
-                              "default": None,
+                              "type": float,
+                              "default": 0.0,
                               "help": "Erosion kernel size. Positive values "
                                       "apply erosion which reduces the edge "
                                       "of the swapped face. Negative values "
@@ -620,11 +620,18 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Use histogram matching. "
                                       "(Masked converter only)"})
-        argument_list.append({"opts": ("-sm", "--smooth-mask"),
-                              "action": "store_true",
-                              "dest": "smooth_mask",
-                              "default": False,
-                              "help": "Smooth mask (Adjust converter only)"})
+        argument_list.append({"opts": ("-es", "--enlargment-scale"),
+                              "type": float,
+                              "dest": "enlargment_scale",
+                              "default": 0.0,
+                              "help": "Input images to the model are cropped to "
+                                      "a central square that spans from eyebrow "
+                                      "to chin cleft vertically and eyebrow to "
+                                      "eyebrow horizontally at the default scale. "
+                                      "0 spans from eyebrow to eyebrow"
+                                      "3/64 spans from temple to temple"
+                                      "6/64 spans from ear to ear"
+                                      "12/64 is a mugshot"})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",
