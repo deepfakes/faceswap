@@ -130,9 +130,9 @@ class Convert():
             mask_type=args.mask_type,
             erosion_kernel_size=args.erosion_kernel_size,
             match_histogram=args.match_histogram,
-            smooth_mask=args.smooth_mask,
             avg_color_adjust=args.avg_color_adjust,
-            draw_transparent=args.draw_transparent)
+            draw_transparent=args.draw_transparent,
+            enlargement_scale=args.enlargement_scale)
 
         return converter
 
