@@ -178,7 +178,7 @@ class Convert():
     def alignments_faces(self, frame, image):
         """ Get the face from alignments file """
         if not self.check_alignments(frame):
-            return None
+            return list()
 
         faces = self.alignments.get_faces_in_frame(frame)
         detected_faces = list()
