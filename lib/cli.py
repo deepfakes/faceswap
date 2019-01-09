@@ -133,7 +133,7 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
         return [(name, getattr(self, name)) for name in names]
 
     def __call__(self, parser, namespace, values, option_string=None):
-        pass
+        setattr(namespace, self.dest, values)
 
 
 class FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
@@ -703,6 +703,7 @@ class TrainArgs(FaceSwapArgs):
                               "action": Slider,
                               "min_max": (2, 256),
                               "rounding": 2,
+                              "dest": "batch_size",
                               "default": 64,
                               "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),

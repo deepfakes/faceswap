@@ -224,49 +224,59 @@ class ModelBase():
         self.state.save()
 
     def get_save_averages(self):
-        """ Return the loss averages since last save and reset historical losses """
+        """ Return the loss averages since last save and reset historical losses
+
+            This protects against model corruption by only backing up the model
+            if any of the loss values have fallen.
+            TODO This is not a perfect system. If the model corrupts on save_iteration - 1
+            then model may still backup
+        """
         logger.debug("Getting Average loss since last save")
         avgs = dict()
-        backup = False
+        backup = list()
 
         for side in ("a", "b"):
             hist_losses = self.history[side]
             if not all(hist_losses):
                 break
 
-            avg = [sum(loss) / len(loss) for loss in hist_losses]
+            avgs[side] = [sum(loss) / len(loss) for loss in hist_losses]
             self.history[side] = [list() for _ in range(len(self.metrics[side]))]
 
             avg_key = "avg_{}".format(side)
             if not self.history.get(avg_key, None):
-                logger.debug("Setting initial historical average for '%s': %s", avg_key, avg)
-                self.history[avg_key] = avg
+                logger.debug("Setting initial save iteration loss average for '%s': %s",
+                             avg_key, avgs[side])
+                self.history[avg_key] = avgs[side]
+                continue
 
-            logger.debug("Lowest Average loss: (%s: %s)", side, self.history[avg_key])
+            backup.append(self.check_loss_drop(avg_key, avgs[side]))
 
-            backup = self.check_loss_drop(side, avg)
-            if not backup:
-                break
-            avgs[side] = avg
-
+        logger.debug("Lowest save iteration loss average: {avg_a: %s, avg_b: %s)",
+                     self.history.get("avg_a", None), self.history.get("avg_b", None))
         logger.debug("Average loss since last save: %s", avgs)
-        if backup:  # Update lowest loss values to the history
+        if any(backup):  # Update lowest loss values to the history
             for side in ("a", "b"):
-                avg = avgs[side]
                 avg_key = "avg_{}".format(side)
-                logger.debug("Updating historical average for '%s': %s", avg_key, avg)
-                self.history[avg_key] = avg
-
+                if avgs[side] < self.history[avg_key]:
+                    logger.debug("Updating lowest save iteration average for '%s': %s",
+                                 avg_key, avgs[side])
+                    self.history[avg_key] = avgs[side]
+            backup = True
+        else:
+            backup = False
         logger.debug("Backing up: %s", backup)
 
         return backup
 
-    def check_loss_drop(self, side, averages):
+    def check_loss_drop(self, avg_key, averages):
         """ Check whether all loss has dropped since lowest loss """
         for idx, loss in enumerate(averages):
-            if loss > self.history[side][idx]:
-                return False
-        return True
+            if loss < self.history[avg_key][idx]:
+                logger.debug("Loss for '%s' has dropped", avg_key)
+                return True
+        logger.debug("Loss for '%s' has not dropped", avg_key)
+        return False
 
     def log_summary(self):
         """ Verbose log the model summaries """

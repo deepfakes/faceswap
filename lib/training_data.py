@@ -2,7 +2,6 @@
 """ Process training data for model training """
 
 import logging
-import uuid
 
 from hashlib import sha1
 from random import shuffle
@@ -51,7 +50,7 @@ class TrainingDataGenerator():
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s)",
                      len(images), batchsize, side, do_shuffle)
         self.batchsize = batchsize
-        q_name = str(uuid.uuid4())
+        q_name = "train_{}".format(side)
         q_size = batchsize * 8
         # Don't use a multiprocessing queue because sometimes the MP Manager borks on numpy arrays
         queue_manager.add_queue(q_name, maxsize=q_size, multiprocessing_queue=False)
