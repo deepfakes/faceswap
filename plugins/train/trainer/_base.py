@@ -74,14 +74,13 @@ class TrainerBase():
         """ Override for specific model loss formatting """
         output = list()
         for side in sorted(list(loss.keys())):
-            display = ", ".join(["{}: {:.5f}".format(self.model.metrics[side][idx], this_loss)
+            display = ", ".join(["{}_{}: {:.5f}".format(self.model.loss_names[side][idx],
+                                                        side.capitalize(),
+                                                        this_loss)
                                  for idx, this_loss in enumerate(loss[side])])
             output.append(display)
-        print("[{}] [#{:05d}] loss_A: ({}), loss_B: ({})".format(self.timestamp,
-                                                                 self.model.iterations,
-                                                                 output[0],
-                                                                 output[1]),
-              end='\r')
+        print("[{}] [#{:05d}] {}, {}".format(
+            self.timestamp, self.model.iterations, output[0], output[1]), end='\r')
 
     def process_training_opts(self):
         """ Override for processing model specific training options """

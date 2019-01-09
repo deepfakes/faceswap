@@ -43,7 +43,7 @@ class ModelBase():
         self.name = self.set_model_name()
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
-        self.metrics = dict()  # Metrics for model
+        self.loss_names = dict()  # Loss names for model
         self.history = dict()  # Loss history for each save iteration
         self.state = State(self.model_dir, self.base_filename)
         # Training information specific to the model should be placed in this
@@ -113,28 +113,30 @@ class ModelBase():
         logger.debug("Compiling Predictors")
         self.convert_multi_gpu()
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        loss_func = self.loss_function()
+
         for side, model in self.predictors.items():
+            loss_funcs = [self.loss_function(side)]
             if self.masks:
                 mask = self.masks[0] if side == "a" else self.masks[1]
-                mask_loss_func = self.mask_loss_function(mask, side)
-                model.compile(optimizer=optimizer,
-                              loss=[mask_loss_func, loss_func])
-            else:
-                model.compile(optimizer=optimizer, loss=loss_func)
+                loss_funcs.insert(0, self.mask_loss_function(mask, side))
+            model.compile(optimizer=optimizer, loss=loss_funcs)
 
-            self.metrics[side] = model.metrics_names
-            self.history[side] = [list() for _ in range(len(self.metrics[side]))]
-        logger.debug("Compiled Predictors. Metrics: %s", self.metrics)
+            if len(self.loss_names[side]) > 1:
+                self.loss_names[side].insert(0, "total_loss")
+            self.history[side] = [list() for _ in range(len(self.loss_names[side]))]
+        logger.debug("Compiled Predictors. Losses: %s", self.loss_names)
 
-    def loss_function(self):
+    def loss_function(self, side):
         """ Set the loss function """
         if self.config.get("dssim_loss", False):
-            logger.verbose("Using DSSIM Loss")
+            if side == "a":
+                logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:
-            logger.verbose("Using Mean Absolute Error Loss")
+            if side == "a":
+                logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
+        self.loss_names[side] = ["loss"]
         logger.debug(loss_func)
         return loss_func
 
@@ -155,6 +157,7 @@ class ModelBase():
                 logger.verbose("Using Penalized Loss for mask")
             mask_loss_func = PenalizedLoss(mask, mask_loss_func)
 
+        self.loss_names[side].insert(0, "mask_loss")
         logger.debug(mask_loss_func)
         return mask_loss_func
 
@@ -241,7 +244,7 @@ class ModelBase():
                 break
 
             avgs[side] = [sum(loss) / len(loss) for loss in hist_losses]
-            self.history[side] = [list() for _ in range(len(self.metrics[side]))]
+            self.history[side] = [list() for _ in range(len(self.loss_names[side]))]
 
             avg_key = "avg_{}".format(side)
             if not self.history.get(avg_key, None):
