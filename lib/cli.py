@@ -302,6 +302,13 @@ class FaceSwapArgs():
                                     "unless you need to file an error report. Be "
                                     "careful with TRACE as it will generate a lot "
                                     "of data"})
+        # This is a hidden argument to indicate that the GUI is being used,
+        # so the preview window should be redirected Accordingly
+        global_args.append({"opts": ("-gui", "--gui"),
+                            "action": "store_true",
+                            "dest": "redirect_gui",
+                            "default": False,
+                            "help": argparse.SUPPRESS})
         return global_args
 
     @staticmethod
@@ -768,13 +775,6 @@ class TrainArgs(FaceSwapArgs):
                                       "If the input folders are supplied but "
                                       "no output folder, it will default to "
                                       "your model folder /timelapse/"})
-        # This is a hidden argument to indicate that the GUI is being used,
-        # so the preview window should be redirected Accordingly
-        argument_list.append({"opts": ("-gui", "--gui"),
-                              "action": "store_true",
-                              "dest": "redirect_gui",
-                              "default": False,
-                              "help": argparse.SUPPRESS})
         return argument_list
 
 

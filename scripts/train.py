@@ -240,7 +240,7 @@ class Train():
         logger.info("R|- Press 'ENTER' to save and quit              -")
         logger.info("R|- Press 'S' to save model weights immediately -")
         logger.info("R|===============================================")
-        keypress = KBHit()
+        keypress = KBHit(is_gui=self.args.redirect_gui)
         err = False
         while True:
             try:
