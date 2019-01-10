@@ -75,13 +75,13 @@ class FileHandler():
                           "rotate": "filename",
                           "slice": "filename"},
                 "output": {"extract": "dir",
-                           "gen-vid": "save",
+                           "gen-vid": "savefilename",
                            "get-fps": "nothing",
                            "get-info": "nothing",
-                           "mux-audio": "save",
-                           "rescale": "save",
-                           "rotate": "save",
-                           "slice": "save"}
+                           "mux-audio": "savefilename",
+                           "rescale": "savefilename",
+                           "rotate": "savefilename",
+                           "slice": "savefilename"}
             }
         }
         self.defaults = self.set_defaults()
