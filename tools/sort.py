@@ -82,14 +82,14 @@ class Sort():
         self.sort_process()
 
     @staticmethod
-    def launch_aligner():
+    def launch_aligner(loglevel):
         """ Load the aligner plugin to retrieve landmarks """
         out_queue = queue_manager.get_queue("out")
         kwargs = {"in_queue": queue_manager.get_queue("in"),
                   "out_queue": out_queue}
 
         for plugin in ("fan", "dlib"):
-            aligner = PluginLoader.get_aligner(plugin)()
+            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
             process = SpawnProcess(aligner.run, **kwargs)
             event = process.event
             process.start()
@@ -126,12 +126,14 @@ class Sort():
         return {"image": image,
                 "detected_faces": [face]}
 
-    def get_landmarks(self, filename):
-        """ Get landmarks for current image """
+    @staticmethod
+    def get_landmarks(filename):
+        """ Extract the face from a frame (If not alignments file found) """
         image = cv2.imread(filename)
-        queue_manager.get_queue("in").put(self.alignment_dict(image))
+        queue_manager.get_queue("in").put(Sort.alignment_dict(image))
         face = queue_manager.get_queue("out").get()
-        return face["detected_faces"][0].landmarksXY
+        landmarks = face["landmarks"][0]
+        return landmarks
 
     def sort_process(self):
         """
@@ -231,6 +233,7 @@ class Sort():
                         [img_list[i][1]],
                         [img_list[j][1]])
                 except:
+                    logger.info("except")
                     pass
 
             img_list[i][2] = score_total
@@ -241,7 +244,7 @@ class Sort():
 
     def sort_face_cnn(self):
         """ Sort by CNN similarity """
-        self.launch_aligner()
+        self.launch_aligner(self.args.loglevel)
         input_dir = self.args.input_dir
 
         logger.info("Sorting by face-cnn similarity...")
@@ -276,7 +279,7 @@ class Sort():
 
     def sort_face_cnn_dissim(self):
         """ Sort by CNN dissimilarity """
-        self.launch_aligner()
+        self.launch_aligner(self.args.loglevel)
         input_dir = self.args.input_dir
 
         logger.info("Sorting by face-cnn dissimilarity...")
@@ -311,7 +314,7 @@ class Sort():
 
     def sort_face_yaw(self):
         """ Sort by yaw of face """
-        self.launch_aligner()
+        self.launch_aligner(self.args.loglevel)
         input_dir = self.args.input_dir
 
         img_list = []

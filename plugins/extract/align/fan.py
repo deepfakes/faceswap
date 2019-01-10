@@ -77,6 +77,7 @@ class Align(Aligner):
         logger.trace("Processing landmarks")
         retval = list()
         for detected_face in detected_faces:
+            detected_face = self.convert_to_dlib_rectangle(detected_face)
             center, scale = self.get_center_scale(detected_face)
             aligned_image = self.align_image(image, center, scale)
             landmarks = self.predict_landmarks(aligned_image, center, scale)

@@ -25,6 +25,7 @@ from io import StringIO
 
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
+from lib.faces_detect import DetectedFace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -89,7 +90,8 @@ class Aligner():
         try:
             self.align(*args, **kwargs)
         except Exception:  # pylint: disable=broad-except
-            logger.error("Caught exception in child process: %s", os.getpid())
+            var = traceback.format_exc()
+            logger.error("Caught exception in child process: %s, message: ", os.getpid(), var)
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             exception = {"exception": (os.getpid(), tb_buffer)}
@@ -109,6 +111,21 @@ class Aligner():
                                       if key != "image"})
         self.queues["out"].put((output))
 
+    # <<< DLIB RECTANGLE METHODS >>> #
+    @staticmethod
+    def is_faces_detect_face(d_rectangle):
+        """ Return whether the passed in object is
+            a dlib.mmod_rectangle """
+        return isinstance(
+            d_rectangle,
+            DetectedFace)  # pylint: disable=c-extension-no-member
+
+    def convert_to_dlib_rectangle(self, d_rect):
+        """ Convert detected mmod_rects to dlib_rectangle """
+        if self.is_faces_detect_face(d_rect):
+            return d_rect.to_dlib_rect()
+        return d_rect
+        
     # <<< MISC METHODS >>> #
     @staticmethod
     def get_vram_free():
