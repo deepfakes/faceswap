@@ -39,26 +39,27 @@ class Convert():
         
     def patch_image(self, image, face_detected, size):
         image_size = image.shape[1], image.shape[0]
-        mat = get_align_mat(face_detected,self.input_size,False)
         image = image.astype('float32')
+        training_size = 256
+		align_eyes = False
+        coverage = 160
+		
+        mat = get_align_mat(face_detected, training_size, align_eyes)
+        padding = (training_size - coverage ) // 2
+        crop = slice(padding, training_size - padding)
+        matrix = mat * (training_size - 2 * padding)
+        matrix[:, 2] += padding
         
-        # insert Field of View Logic here to modify alignment mat
-        # test various enlargment factors to umeyama's standard face
-        
-
-        self.enlargement_scale = 3.0/64.0     # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
-        #enlargement_scale = 3.0/64.0  @ temples  .. coverage = 180 test more
-        #enlargement_scale = 6.0/64.0  @ ears     .. coverage = 200 test more
-        #enlargement_scale = 12.0/64.0  @ mugshot  .. coverage = 220
-        padding = int(self.enlargement_scale*size)
-        mat = mat * (size - 2 * padding)
-        mat[:, 2] += padding
-        
-        self.interpolator , self.inv_interpolator = self.get_matrix_scaling(mat)
-        new_face = self.get_new_face(image, mat, size)
-        image_mask = self.get_image_mask(image, mat, image_size, new_face,
+        interpolators = self.get_matrix_scaling(matrix)
+        new_face = self.get_new_face(image, matrix, training_size,
+									 encoder_size, interpolators)
+									 
+        image_mask = self.get_image_mask(matrix, image_size,
+										 training_size,  new_face,
+										 interpolators,
                                          face_detected.landmarks_as_xy)
-        patched_face = self.apply_new_face(image, mat, self.input_size,
+										 
+        patched_face = self.apply_new_face(image, matrix, training_size,
                                            image_size, new_face, image_mask)
         
         return patched_face
@@ -72,67 +73,82 @@ class Convert():
         
         return interpolator, inverse_interpolator
         
-    def get_new_face(self, image, mat, size):
-        face = cv2.warpAffine(image,mat,(size, size),flags = self.interpolator)
-        face = numpy.expand_dims(face, 0)
-        numpy.clip(face, 0.0, 255.0, out=face)
-        new_face = None
-        mask = None
+    def get_new_face(self, image, mat, training_size, encoder_size, interpolators):
+        src_face = cv2.warpAffine(image, mat,
+							  (training_size, training_size),
+							  flags = interpolators[0])
+		coverage_face = src_face[crop, crop]
+        coverage_face = cv2.resize(coverage_face,
+								   (encoder_size, encoder_size),
+								   interpolation=interpolators[0])
+        coverage_face = numpy.expand_dims(coverage_face, 0)
+        numpy.clip(coverage_face / 255.0, 0.0, 1.0, out=norm_face)
         
         if 'GAN' in self.trainer:
             # change code to align with new GAN code
-            '''
-            normalized_face = face / 255.0 * 2.0 - 1.0
-            fake_output = self.encoder(normalized_face)
-            if "128" in self.trainer:
-                fake_output = fake_output[0]
-            mask = fake_output[:, :, :, :1]
-            new_face = fake_output[:, :, :, 1:]
-            new_face = mask * new_face + (1.0 - mask) * normalized_face
-            new_face = (new_face[0] + 1.0) / 2.0
-            '''
+			print('error')
         else:
-            normalized_face = face / 255.0
-            new_face = self.encoder(normalized_face)[0]
-            
+            new_face = self.encoder(norm_face)[0]
+			
+		new_face = cv2.resize(new_face,(training_face_size - padding * 2, training_face_size - padding * 2),interpolation=cv2.INTER_CUBIC)
+			
         numpy.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
         return new_face
 
-    def get_image_mask(self, image, mat, image_size, new_face, landmarks):
-        if 'rect' in self.mask_type:
-            face_src = numpy.ones_like(new_face)
-            image_mask = cv2.warpAffine(face_src, mat, image_size,
-                                        flags = cv2.WARP_INVERSE_MAP |
-                                                self.inv_interpolator,
-                                        borderMode = cv2.BORDER_CONSTANT,
-                                        borderValue = 0.0)
+    def get_image_mask(self, mat, image_size, training_size, new_face, inv_interpolator, landmarks):
+        
+		mask = numpy.ones((image_size, image_size, 3),dtype='float32')
+
+		if 'cnn' == self.mask_type:
+			# Insert FCn-VGG16 segmentation mask model here
+			
+		if 'dfaker' == self.mask_type:
+			mask = numpy.zeros((training_face_size, training_face_size,3), dtype='float32')
+			area = padding + coverage // 15
+			central_core = slice(area, -area)
+			mask[central_core, central_core,:] = 1.0
+			mask = cv2.GaussianBlur(mask, (21, 21), 10)
+			cv2.warpAffine(ones, mat, image_size, mask,
+                           flags = cv2.WARP_INVERSE_MAP | interpolators[1],
+                           borderMode = cv2.BORDER_CONSTANT, borderValue = 0.0)
+		
+		if 'rect' in self.mask_type:
+            ones = numpy.ones((training_size, training_size, 3), dtype='float32')
+			mask = numpy.zeros((image_size, image_size, 3),dtype='float32')
+            cv2.warpAffine(ones, mat, image_size, mask,
+                           flags = cv2.WARP_INVERSE_MAP | interpolators[1],
+                           borderMode = cv2.BORDER_CONSTANT, borderValue = 0.0)
                                         
-        if 'hull' in self.mask_type:
-            hull_mask = numpy.zeros_like(image)
+        if 'facehull' in self.mask_type:
+            hull_mask = numpy.zeros((image_size, image_size, 3),dtype='float32')
             hull = cv2.convexHull(numpy.array(landmarks).reshape((-1, 2)))
             cv2.fillConvexPoly(hull_mask, hull, (1.0, 1.0, 1.0), lineType = cv2.LINE_AA)
-            image_mask = hull_mask if self.mask_type == 'facehullandrect' else hull_mask    
-
-        numpy.nan_to_num(image_mask, copy=False)
-        numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
+            mask *= hull_mask
+		
+		if 'ellipse' in self.mask_type:
+			e = cv2.fitEllipse(mask)
+			cv2.ellipse(mask, box=e, color=(1.0,1.0,1.0), thickness=-1)
+		
+        numpy.nan_to_num(mask, copy=False)
+        numpy.clip(mask, 0.0, 1.0, out=mask)
+		
         if self.erosion_size != 0:
             if abs(self.erosion_size) < 1.0:
-                mask_radius = numpy.sqrt(numpy.sum(image_mask)) / 2
+                mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
                 percent_erode = max(1,int(abs(self.erosion_size * mask_radius)))
                 self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                                 (percent_erode,
                                                                 percent_erode))
-            args = {'src':image_mask, 'kernel':self.erosion_kernel, 'iterations':1}
-            image_mask = cv2.erode(**args) if self.erosion_size > 0 else cv2.dilate(**args)
+            args = {'src':mask, 'kernel':self.erosion_kernel, 'iterations':1}
+            mask = cv2.erode(**args) if self.erosion_size > 0 else cv2.dilate(**args)
             
         if self.blur_size != 0:
             if self.blur_size < 1.0:
-                mask_radius = numpy.sqrt(numpy.sum(image_mask)) / 2
+                mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
                 self.blur_size = max(1,int(self.blur_size * mask_radius))
-            image_mask = cv2.blur(image_mask, (int(self.blur_size),int(self.blur_size)))
+            mask = cv2.blur(mask, (int(self.blur_size),int(self.blur_size)))
             
-        numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
-        return image_mask
+        return numpy.clip(mask, 0.0, 1.0, out=mask)
         
     def apply_new_face(self, image, mat, size, image_size, new_face, image_mask):
         outimage = None
@@ -149,7 +165,7 @@ class Convert():
         # paste onto previous image in place
         new_image = cv2.warpAffine(new_face, mat, image_size,
                                    flags = cv2.WARP_INVERSE_MAP | 
-                                           self.inv_interpolator,
+                                           interpolators[1],
                                    borderMode = cv2.BORDER_CONSTANT,
                                    borderValue = (-1.0,-1.0,-1.0))
                                    
@@ -235,6 +251,6 @@ class Convert():
         #new_pixels = numpy.interp(source_CDF, template_CDF, bins)
         #source = new_pixels[source.ravel()].astype('float32').reshape(source.shape)
         
-        flat_new_image = numpy.interp(source.ravel(),bins,template_CDF*255.0)
+        flat_new_image = numpy.interp(source.ravel(), bins, template_CDF*255.0)
         
         return new_image.reshape(source.shape) # source

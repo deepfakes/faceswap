@@ -584,17 +584,23 @@ class ConvertArgs(ExtractConvertArgs):
                               "rounding": 0.1,
                               "default": 0.0,
                               "help": "Erosion kernel size. Positive values "
-                                      "apply erosion which reduces the edge "
-                                      "of the swapped face. Negative values "
-                                      "apply dilation which allows the "
-                                      "swapped face to cover more space. "})
+                                      "apply erosion which reduces the size "
+                                      "of the swapped area. Negative values "
+                                      "apply dilation which increases the "
+                                      "swapped area. Abs values >1 use pixels "
+									  ". Fractions will erode/dilate that % "
+									  " of the mask area"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               "type": str.lower,
                               "dest": "mask_type",
                               "choices": ["rect",
+										  "dfaker",
                                           "facehull",
-                                          "facehullandrect"],
-                              "default": "facehullandrect",
+										  "rect_ellipse"
+                                          "facehull_rect",
+										  "facehull_ellipse",
+										  "cnn"],
+                              "default": "facehull_rect",
                               "help": "Mask to use to replace faces. "})
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
@@ -637,12 +643,16 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
-                              "help": "Use cv2's seamless clone. "})
+                              "help": "Use cv2's seamless clone function to "
+									  " do something amazing"})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
-                              "help": "Use histogram matching. "})
+                              "help": "Adjust the histogram of each color "
+								      "channel in the swapped reconstruction "
+									  "to equal the histogram of the masked "
+									  "area in the orginal image"})
         argument_list.append({"opts": ("-es", "--enlargment-scale"),
                               "type": float,
                               "dest": "enlargement_scale",
@@ -651,15 +661,18 @@ class ConvertArgs(ExtractConvertArgs):
                                       "a central square that spans from eyebrow "
                                       "to chin cleft vertically and eyebrow to "
                                       "eyebrow horizontally at the default scale. "
-                                      "0 spans from eyebrow to eyebrow"
-                                      "3/64 spans from temple to temple"
-                                      "6/64 spans from ear to ear"
-                                      "12/64 is a mugshot"})
+                                      "0 spans from eyebrow to eyebrow, "
+                                      "3/64 spans from temple to temple, "
+                                      "6/64 spans from ear to ear, "
+                                      "12/64 is a mugshot "})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",
                               "default": False,
-                              "help": "Average color adjust. "})
+                              "help": "Adjust the mean of each color channel "
+							          " in the swapped reconstruction to "
+									  "equal the mean of the masked area in "
+									  "the orginal image"})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",
