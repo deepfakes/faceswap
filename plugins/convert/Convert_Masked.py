@@ -181,29 +181,25 @@ class Convert():
                                               image_mask)
                                               
         if self.seamless_clone:
-            unitMask = numpy.rint(numpy.clip(image_mask * 365, 0.0, 255.0)).astype('uint8')
-            logger.info(unitMask.shape)
-            logger.info(image.shape)
-            maxregion = numpy.argwhere(unitMask == 255)
-            if maxregion.size > 0:
-                miny, minx = maxregion.min(axis=0)[:2]
-                maxy, maxx = maxregion.max(axis=0)[:2]
-                lenx = maxx - minx
-                leny = maxy - miny
-                mask = int(minx + (lenx // 2)),  int(miny + (leny // 2))
-                outimage = cv2.seamlessClone(numpy.rint(new_image).astype('uint8'),
-                                             image,
-                                             unitMask,
-                                             mask,
-                                             cv2.NORMAL_CLONE)
+			https://www.learnopencv.com/seamless-cloning-using-opencv-python-cpp/
+            region = numpy.argwhere(image_mask != 0)
+			unitMask = image_mask[region] = 1
+            if region.size > 0:
+                x_center, y_center = region.mean(axis=0)
+                cv2.seamlessClone(numpy.rint(new_image).astype('uint8'),
+                                  image,
+                                  unitMask,
+                                  (x_center, y_center),
+								  blended,
+                                  cv2.MIXED_CLONE)
         else:
             foreground = image_mask * new_image #new_image
             background = ( 1.0 - image_mask ) * image
-            outimage = foreground + background
+            blended = foreground + background
         
-        numpy.clip(outimage, 0.0, 255.0, out=outimage)
+        numpy.clip(blended, 0.0, 255.0, out=blended)
 
-        return numpy.rint(outimage).astype('uint8')
+        return numpy.rint(blended).astype('uint8')
         
     def color_hist_match(self, source, target, mask):
         for channel in [0,1,2]:
