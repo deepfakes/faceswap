@@ -133,10 +133,13 @@ class Convert():
             mask_type=args.mask_type,
             erosion_kernel_size=args.erosion_kernel_size,
             match_histogram=args.match_histogram,
-            smooth_mask=args.smooth_mask,
             avg_color_adjust=args.avg_color_adjust,
             draw_transparent=args.draw_transparent,
+<<<<<<< HEAD
             input_size=config['input_size'])
+=======
+            enlargement_scale=args.enlargement_scale)
+>>>>>>> 26eaf8eead852c4a174e4f65d8dee8f4fc048b01
 
         return converter
 
@@ -211,10 +214,20 @@ class Convert():
         try:
             filename, image, faces = item
             skip = self.opts.check_skipframe(filename)
+            
+            
+            # new refactor has config.image_size option
+            size = 128 if (self.args.trainer.strip().lower()
+               in ('gan128', 'originalhighres')) else 64
 
             if not skip:
                 for face in faces:
+<<<<<<< HEAD
                     image = converter.patch_image(image,face)
+=======
+                    image = converter.patch_image(image,face,size)
+                    
+>>>>>>> 26eaf8eead852c4a174e4f65d8dee8f4fc048b01
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:

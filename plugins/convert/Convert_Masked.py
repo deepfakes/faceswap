@@ -32,7 +32,7 @@ class Convert():
         self.erosion_kernel_size = erosion_kernel_size
         self.seamless_clone = False if draw_transparent else seamless_clone
         self.erosion_size = 0 if erosion_kernel_size is None else erosion_kernel_size
-        if self.erosion_size >= 1:
+        if abs(self.erosion_size) >= 1:
             e_size = (int(abs(self.erosion_size)),int(abs(self.erosion_size)))
             self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                             e_size)
@@ -40,20 +40,22 @@ class Convert():
     def patch_image(self, image, face_detected):
         image_size = image.shape[1], image.shape[0]
         mat = get_align_mat(face_detected,self.input_size,False).reshape(2, 3)
+		image = image.astype('float32')
         
         # insert Field of View Logic here to modify alignment mat
         # test various enlargment factors to umeyama's standard face
         
-        self.enlargement_scale = 0.0      # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
-        #enlargement_scale = 3/64  @ temples  .. coverage = 180 test more
-        #enlargement_scale = 6/64  @ ears     .. coverage = 200 test more
-        #enlargement_scale = 12/64  @ mugshot  .. coverage = 220
-        padding = int(self.enlargement*self.input_size)
-        mat = mat * (self.input_size - 2 * padding)
+
+        self.enlargement_scale = 3.0/64.0     # @ eyebrows .. coverage = 160 ~ could have accuracy gains here...!
+        #enlargement_scale = 3.0/64.0  @ temples  .. coverage = 180 test more
+        #enlargement_scale = 6.0/64.0  @ ears     .. coverage = 200 test more
+        #enlargement_scale = 12.0/64.0  @ mugshot  .. coverage = 220
+        padding = int(self.enlargement_scale*size)
+        mat = mat * (size - 2 * padding)
         mat[:, 2] += padding
         
-        self.interpolator , self.inverse_interpolator = get_matrix_scaling(mat)
-        new_face = self.get_new_face(image, mat, self.input_size)
+        self.interpolator , self.inv_interpolator = self.get_matrix_scaling(mat)
+        new_face = self.get_new_face(image, mat, size)
         image_mask = self.get_image_mask(image, mat, image_size, new_face,
                                          face_detected.landmarks_as_xy)
         patched_face = self.apply_new_face(image, mat, self.input_size,
@@ -61,10 +63,9 @@ class Convert():
         
         return patched_face
 
-    def get_matrix_scaling(self, mat)
-        x_scale = sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
-        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / 
-                  ( x_scale )
+    def get_matrix_scaling(self, mat):
+        x_scale = numpy.sqrt(mat[0,0]*mat[0,0] + mat[0,1]*mat[0,1])
+        y_scale = ( mat[0,0] * mat[1,1] - mat[0,1] * mat[1,0] ) / x_scale 
         avg_scale = ( x_scale + y_scale ) * 0.5
         interpolator = cv2.INTER_CUBIC if avg_scale > 1.0 else cv2.INTER_AREA
         inverse_interpolator = cv2.INTER_AREA if avg_scale > 1.0 else cv2.INTER_CUBIC
@@ -72,8 +73,7 @@ class Convert():
         return interpolator, inverse_interpolator
         
     def get_new_face(self, image, mat, size):
-        face = cv2.warpAffine(image.astype('float32'), mat, (size, size),
-                              flags = self.interpolator)
+        face = cv2.warpAffine(image,mat,(size, size),flags = self.interpolator)
         face = numpy.expand_dims(face, 0)
         numpy.clip(face, 0.0, 255.0, out=face)
         new_face = None
@@ -100,18 +100,18 @@ class Convert():
 
     def get_image_mask(self, image, mat, image_size, new_face, landmarks):
         if 'rect' in self.mask_type:
-            face_src = numpy.ones(new_face.shape, dtype='float32')
+            face_src = numpy.ones_like(new_face)
             image_mask = cv2.warpAffine(face_src, mat, image_size,
                                         flags = cv2.WARP_INVERSE_MAP |
-                                                inverse_interpolator,
+                                                self.inv_interpolator,
                                         borderMode = cv2.BORDER_CONSTANT,
                                         borderValue = 0.0)
                                         
         if 'hull' in self.mask_type:
-            hull_mask = numpy.zeros(image.shape, dtype='float32')
+            hull_mask = numpy.zeros_like(image)
             hull = cv2.convexHull(numpy.array(landmarks).reshape((-1, 2)))
             cv2.fillConvexPoly(hull_mask, hull, (1.0, 1.0, 1.0), lineType = cv2.LINE_AA)
-            image_mask = image_mask * hull_mask if 'and' in self.mask_type else hull_mask
+            image_mask = image_mask * hull_mask if self.mask_type == 'facehullandrec' else hull_mask
         
         numpy.nan_to_num(image_mask, copy=False)
         numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
@@ -137,15 +137,19 @@ class Convert():
     def apply_new_face(self, image, mat, size, image_size, new_face, image_mask):
         outimage = None
         if self.draw_transparent:
-            new_face = add_alpha_channel(new_face, 100)
-            image_mask = add_alpha_channel(image_mask, 100)
-            image = numpy.zeros((image_size[1],image_size[0], 4), dtype='uint8')
+			alpha = numpy.full((image_size[1],image_size[0],1), 
+							   255.0,
+							   dtype='float32')
+            new_face = numpy.concatenate(new_face, alpha, axis=2)
+            image_mask = numpy.concatenate(image_mask, alpha, axis=2)
+            image = numpy.zeros((image_size[1],image_size[0], 4), dtype='float32')
         
         # bug / issues with transparent border not working
         # test further , cleanup mask replace for now
+		# paste onto previous image in place
         new_image = cv2.warpAffine(new_face, mat, image_size,
                                    flags = cv2.WARP_INVERSE_MAP | 
-                                           inverse_interpolator,
+                                           self.inv_interpolator,
                                    borderMode = cv2.BORDER_CONSTANT,
                                    borderValue = (-1.0,-1.0,-1.0))
                                    
@@ -177,7 +181,7 @@ class Convert():
                                               image_mask)
                                               
         if self.seamless_clone:
-            unitMask = numpy.clip(image_mask * 365, 0, 255).astype('uint8')
+            unitMask = numpy.rint(numpy.clip(image_mask * 365, 0.0, 255.0), dtype='uint8')
             logger.info(unitMask.shape)
             logger.info(image.shape)
             maxregion = numpy.argwhere(unitMask == 255)
@@ -187,18 +191,19 @@ class Convert():
                 lenx = maxx - minx
                 leny = maxy - miny
                 mask = int(minx + (lenx // 2)),  int(miny + (leny // 2))
-                outimage = cv2.seamlessClone(new_image.astype('uint8'),
+                outimage = cv2.seamlessClone(numpy.rint(new_image, dtype='uint8'),
                                              image,
                                              unitMask,
                                              mask,
                                              cv2.NORMAL_CLONE)
         else:
-            foreground = image_mask * new_image
-            background = ( 1.0 - image_mask ) * image.astype('float32')
+            foreground = image_mask * 255.0 #new_image
+            background = ( 1.0 - 0.0 ) * image
             outimage = foreground + background
         
         numpy.clip(outimage, 0.0, 255.0, out=outimage)
-        return outimage.astype('uint8')
+		
+        return numpy.rint(outimage, dtype = 'uint8')
         
     def color_hist_match(self, source, target, mask):
         for channel in [0,1,2]:
@@ -208,13 +213,12 @@ class Convert():
         return source
         
     def hist_match(self, source, template, mask=None):
-        # Code borrowed from:
-        # https://stackoverflow.com/questions/32655686/histogram-matching-of-two-images-in-python-2-x
         if mask is not None:
             source = source * mask
             template = template * mask
         
-        outshape = source.shape
+		'''
+		outshape = source.shape
         source = source.ravel()
         template = template.ravel()
         s_values, bin_idx, s_counts = numpy.unique(source,
@@ -223,9 +227,18 @@ class Convert():
         t_values, t_counts = numpy.unique(template, return_counts=True)
         s_quants = numpy.cumsum(s_counts, dtype='float32')
         t_quants = numpy.cumsum(t_counts, dtype='float32')
-        s_quants /= s_quants[-1]
-        t_quants /= t_quants[-1]
-        interp_t_values = numpy.interp(s_quants, t_quants, t_values).astype('float32')
-        source = interp_t_values[bin_idx].reshape(outshape)
+        s_quants /= s_quants[-1]  # cdf
+        t_quants /= t_quants[-1]  # cdf
+		interp_s_values = numpy.interp(s_quants, t_quants, t_values)
+		#source = interp_s_values[bin_idx].reshape(outshape)
+		'''
+		
+		bins = numpy.arange(256)
+		#source_CDF, _ = np.histogram(source, bins=bins, density=True)
+		template_CDF, _ = np.histogram(template, bins=bins, density=True)
+        #new_pixels = numpy.interp(source_CDF, template_CDF, bins)
+        #source = new_pixels[source.ravel()].astype('float32').reshape(source.shape)
+		
+		flat_new_image = numpy.interp(source.ravel(),bins,template_CDF*255.0)
         
-        return source
+        return new_image.reshape(source.shape) # source

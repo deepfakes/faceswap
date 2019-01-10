@@ -147,13 +147,6 @@ class FileFullPaths(FullPaths):
         return [(name, getattr(self, name)) for name in names]
 
 
-class DirOrFileFullPaths(FileFullPaths):
-    """ Class that the gui uses to determine that the input can take a folder or a filename.
-        Inherits functionality from FileFullPaths
-        Has the effect of giving the user 2 Open Dialogue buttons in the gui """
-    pass
-
-
 class SaveFileFullPaths(FileFullPaths):
     """
     Class that gui uses to determine if you need to save a file.
@@ -313,14 +306,12 @@ class ExtractConvertArgs(FaceSwapArgs):
         argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ("-i", "--input-dir"),
-                              "action": DirOrFileFullPaths,
-                              "filetypes": "video",
+                              "action": DirFullPaths,
                               "dest": "input_dir",
                               "default": "input",
-                              "help": "Input directory or video. Either a "
-                                      "directory containing the image files "
-                                      "you wish to process or path to a "
-                                      "video file. Defaults to 'input'"})
+                              "help": "Input directory. A directory "
+                                      "containing the files you wish to "
+                                      "process. Defaults to 'input'"})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",
@@ -576,21 +567,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "of the swapped face. Negative values "
                                       "apply dilation which allows the "
                                       "swapped face to cover more space. "
-                                      "(Masked converter only)"
-                                      "integer values will erode x pixels,"
-                                      "fractions will erode x% of the face area"})
-        argument_list.append({"opts": ("-es", "--enlargment-scale"),
-                              "type": float,
-                              "dest": "enlargment_scale",
-                              "default": 0.0,
-                              "help": "Input images to the model are cropped to "
-                                      "a central square that spans from eyebrow "
-                                      "to chin cleft vertically and eyebrow to "
-                                      "eyebrow horizontally at the default scale. "
-                                      "0 spans from eyebrow to eyebrow"
-                                      "3/64 spans from temple to temple",
-                                      "6/64 spans from ear to ear",
-                                      "12/64 is a mugshot"})
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               # lowercase this, because it's just a
                               # string later on.
@@ -647,11 +624,18 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Use histogram matching. "
                                       "(Masked converter only)"})
-        argument_list.append({"opts": ("-sm", "--smooth-mask"),
-                              "action": "store_true",
-                              "dest": "smooth_mask",
-                              "default": False,
-                              "help": "Smooth mask (Adjust converter only)"})
+        argument_list.append({"opts": ("-es", "--enlargment-scale"),
+                              "type": float,
+                              "dest": "enlargment_scale",
+                              "default": 0.0,
+                              "help": "Input images to the model are cropped to "
+                                      "a central square that spans from eyebrow "
+                                      "to chin cleft vertically and eyebrow to "
+                                      "eyebrow horizontally at the default scale. "
+                                      "0 spans from eyebrow to eyebrow"
+                                      "3/64 spans from temple to temple"
+                                      "6/64 spans from ear to ear"
+                                      "12/64 is a mugshot"})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",
