@@ -104,17 +104,12 @@ class Convert():
 
     def load_model(self):
         """ Load the model requested for conversion """
-        model_name = self.args.trainer
+        logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        num_gpus = self.args.gpus
+        model = PluginLoader.get_model(self.args.trainer)(model_dir,self.args.gpus)
 
-        model = PluginLoader.get_model(model_name)(model_dir, num_gpus)
-
-        if not model.load(self.args.swap_model):
-            logger.error("Model Not Found! A valid model "
-                         "must be provided to continue!")
-            exit(1)
-
+        model.load_weights(swapped=False)
+        logger.debug("Loaded Model")
         return model
 
     def load_converter(self, model):
@@ -127,19 +122,15 @@ class Convert():
             model.converter(False),
             trainer=args.trainer,
             blur_size=args.blur_size,
-            enlargement_scale=args.enlargement_scale
+            enlargement_scale=args.enlargement_scale,
             seamless_clone=args.seamless_clone,
             sharpen_image=args.sharpen_image,
             mask_type=args.mask_type,
             erosion_kernel_size=args.erosion_kernel_size,
             match_histogram=args.match_histogram,
             avg_color_adjust=args.avg_color_adjust,
-            draw_transparent=args.draw_transparent,
-<<<<<<< HEAD
-            input_size=config['input_size'])
-=======
-            enlargement_scale=args.enlargement_scale)
->>>>>>> 26eaf8eead852c4a174e4f65d8dee8f4fc048b01
+            draw_transparent=args.draw_transparent)
+            #input_size=config['input_size'])
 
         return converter
 
@@ -220,12 +211,7 @@ class Convert():
 
             if not skip:
                 for face in faces:
-<<<<<<< HEAD
-                    image = converter.patch_image(image,face)
-=======
-                    image = converter.patch_image(image,face,size)
-                    
->>>>>>> 26eaf8eead852c4a174e4f65d8dee8f4fc048b01
+                    image = converter.patch_image(image,face,size)              
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
