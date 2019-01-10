@@ -27,11 +27,12 @@ class Convert():
         coverage = 160
         training_face_size = 256
         image_size = frame.shape[1], frame.shape[0]
-        padding = 48 # (training_face_size - coverage ) // 2
+        padding = (training_face_size - coverage ) // 2
         crop = slice(padding, training_face_size - padding)
         
+        #mat = umeyama(np.array(face.landmarks_as_xy[17:]),LANDMARKS_2D,True)[0:2]
         mat = get_align_mat(detected_face, training_face_size,False)
-        matrix = mat * (encoder_size - 2 * padding)
+        matrix = mat * (training_face_size - 2 * padding)
         matrix[:, 2] += padding
         src_face = cv2.warpAffine(frame.astype('float32'), matrix, (training_face_size, training_face_size))
             
@@ -42,25 +43,26 @@ class Convert():
         new_face = self.encoder(process_face)[0]
         numpy.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
         new_face = cv2.resize(new_face,(training_face_size - padding * 2, training_face_size - padding * 2),interpolation=cv2.INTER_CUBIC)
-        #src_face[crop, crop] = new_face
-
+        src_face[crop, crop] = new_face
+        
+        new_mask = frame.copy().astype('float32')
         new_image = frame.copy().astype('float32')
         cv2.warpAffine(src_face, matrix, image_size, new_image,
                        flags=cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC,
                        borderMode=cv2.BORDER_TRANSPARENT)
-
-        mask = numpy.zeros((training_face_size, training_face_size,3), dtype='float32')
-        central_core = slice(padding * 2 + coverage // 15,-coverage // 15 - padding * 2)
-        mask[central_core, central_core] = 1.0
-        n_mask = cv2.GaussianBlur(mask, (15, 15), 10)
         
-        starter = frame.copy().astype('float32')
-        cv2.warpAffine(n_mask, matrix, image_size, starter,
+        mask = numpy.zeros((training_face_size, training_face_size,3), dtype='float32')
+        area = padding + coverage // 15
+        central_core = slice(area, -area)
+        mask[central_core, central_core,:] = 1.0
+        mask = cv2.GaussianBlur(mask, (21, 21), 10)
+                
+        cv2.warpAffine(mask, matrix, image_size, new_mask,
                                 flags = cv2.WARP_INVERSE_MAP | cv2.INTER_CUBIC,
                                 borderMode = cv2.BORDER_CONSTANT,
                                 borderValue = 0.0)
                                                                             
-        frame = starter * new_image #+ (1 - mask) * frame
-        return frame
+        frame = new_mask * new_image + (1 - new_mask) * frame
+        return new_mask * 255
 
 
