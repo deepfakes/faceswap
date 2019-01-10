@@ -561,7 +561,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Select the trainer that was used to "
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
-                              "type": str.lower,
+                              "type": str,
                               "choices": ("Masked", "Adjust"),
                               "default": "Masked",
                               "help": "Converter to use"})
@@ -643,7 +643,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Use histogram matching. "})
         argument_list.append({"opts": ("-es", "--enlargment-scale"),
                               "type": float,
-                              "dest": "enlargment_scale",
+                              "dest": "enlargement_scale",
                               "default": 0.0,
                               "help": "Input images to the model are cropped to "
                                       "a central square that spans from eyebrow "
