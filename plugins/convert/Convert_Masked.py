@@ -122,7 +122,7 @@ class Convert():
         numpy.nan_to_num(image_mask, copy=False)
         numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
         if self.erosion_size != 0:
-            if self.erosion_size < 1.0:
+            if abs(self.erosion_size) < 1.0:
                 mask_radius = numpy.sqrt(numpy.sum(image_mask)) / 2
                 percent_erode = max(1,int(abs(self.erosion_size * mask_radius)))
                 self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
@@ -135,7 +135,7 @@ class Convert():
             if self.blur_size < 1.0:
                 mask_radius = numpy.sqrt(numpy.sum(image_mask)) / 2
                 self.blur_size = max(1,int(self.blur_size * mask_radius))
-            image_mask = cv2.blur(image_mask, (self.blur_size,self.blur_size))
+            image_mask = cv2.blur(image_mask, (int(self.blur_size),int(self.blur_size)))
             
         numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
         return image_mask
@@ -187,7 +187,7 @@ class Convert():
                                               image_mask)
                                               
         if self.seamless_clone:
-            unitMask = numpy.rint(numpy.clip(image_mask * 365, 0.0, 255.0), dtype='uint8')
+            unitMask = numpy.rint(numpy.clip(image_mask * 365, 0.0, 255.0)).astype('uint8')
             logger.info(unitMask.shape)
             logger.info(image.shape)
             maxregion = numpy.argwhere(unitMask == 255)
@@ -197,19 +197,19 @@ class Convert():
                 lenx = maxx - minx
                 leny = maxy - miny
                 mask = int(minx + (lenx // 2)),  int(miny + (leny // 2))
-                outimage = cv2.seamlessClone(numpy.rint(new_image, dtype='uint8'),
+                outimage = cv2.seamlessClone(numpy.rint(new_image).astype('uint8'),
                                              image,
                                              unitMask,
                                              mask,
                                              cv2.NORMAL_CLONE)
         else:
-            foreground = image_mask * 255.0 #new_image
-            background = ( 1.0 - 0.0 ) * image
+            foreground = image_mask * new_image #new_image
+            background = ( 1.0 - image_mask ) * image
             outimage = foreground + background
         
         numpy.clip(outimage, 0.0, 255.0, out=outimage)
 
-        return numpy.rint(outimage, dtype = 'uint8')
+        return numpy.rint(outimage).astype('uint8')
         
     def color_hist_match(self, source, target, mask):
         for channel in [0,1,2]:
