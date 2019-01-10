@@ -158,11 +158,11 @@ class Convert():
                        
         if self.sharpen_image is not None:
             numpy.clip(new_image, 0.0, 255.0, out=new_image)
-            if self.sharpen_image == "bsharpen":
+            if self.sharpen_image == "box_filter":
                 kernel = numpy.ones((3, 3)) * (-1)
                 kernel[1, 1] = 9
                 new_image = cv2.filter2D(new_image, -1, kernel)
-            elif self.sharpen_image == "gsharpen":
+            elif self.sharpen_image == "gaussian_filter":
                 blur = cv2.GaussianBlur(new_image, (0, 0), 3.0)
                 new_image = cv2.addWeighted(new_image, 1.5, blur, -0.5, 0, new_image)
         

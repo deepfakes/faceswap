@@ -599,10 +599,12 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
-                              "choices": ["bsharpen", "gsharpen"],
+                              "choices": ["box_filter", "gaussian_filter"],
                               "default": None,
-                              "help": "Use Sharpen Image. bsharpen for Box "
-                                      "Blur, gsharpen for Gaussian Blur "})
+                              "help": "Sharpen the masked facial region of "
+                                      "the converted images. Choice of filter "
+									  "to use in sharpening process -- box" 
+									  "fileter or gaussian filter."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
