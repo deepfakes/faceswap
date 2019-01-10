@@ -47,7 +47,7 @@ class Convert():
 
             Note: GAN prediction outputs a mask + an image, while other
             predicts only an image. """
-        Utils.set_verbosity()
+        Utils.set_verbosity(self.args.loglevel)
 
         if not self.alignments.have_alignments_file:
             self.load_extractor()
@@ -153,9 +153,6 @@ class Convert():
             else:
                 detected_faces = self.alignments_faces(frame, image)
 
-            if not detected_faces:
-                continue
-
             faces_count = len(detected_faces)
             if faces_count != 0:
                 # Post processing requires a dict with "detected_faces" key
@@ -181,7 +178,7 @@ class Convert():
     def alignments_faces(self, frame, image):
         """ Get the face from alignments file """
         if not self.check_alignments(frame):
-            return None
+            return list()
 
         faces = self.alignments.get_faces_in_frame(frame)
         detected_faces = list()

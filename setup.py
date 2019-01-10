@@ -354,7 +354,7 @@ def check_cuda_windows():
     global CUDA_VERSION, CUDA_PATH
     cuda_keys = [key
                  for key in os.environ.keys()
-                 if key.lower().startswith("cuda") and key.lower() != "cuda_path"]
+                 if key.lower().startswith("cuda_path_v") and key.lower() != "cuda_path"]
     if not cuda_keys:
         out_error("CUDA not found. See "
                   "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cuda "

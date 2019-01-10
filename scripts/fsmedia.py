@@ -26,9 +26,9 @@ class Utils():
         object """
 
     @staticmethod
-    def set_verbosity():
+    def set_verbosity(loglevel):
         """ Set the system output verbosity """
-        set_system_verbosity()
+        set_system_verbosity(loglevel)
 
     @staticmethod
     def finalize(images_found, num_faces_detected, verify_output):

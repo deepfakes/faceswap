@@ -42,7 +42,7 @@ class Extract():
     def process(self):
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
-        Utils.set_verbosity()
+        Utils.set_verbosity(self.args.loglevel)
 #        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
