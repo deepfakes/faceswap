@@ -14,6 +14,7 @@ from keras.backend.tensorflow_backend import set_session
 
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
+from lib.queue_manager import queue_manager
 from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
 from plugins.plugin_loader import PluginLoader
 
@@ -86,6 +87,7 @@ class Train():
         logger.info("Training data directory: %s", self.args.model_dir)
         set_system_verbosity()
         thread = self.start_thread()
+        # queue_manager.debug_monitor(1)
 
         if self.args.preview:
             err = self.monitor_preview(thread)
@@ -168,10 +170,15 @@ class Train():
     def run_training_cycle(self, model, trainer):
         """ Perform the training cycle """
         logger.debug("Running Training Cycle")
+        if self.args.write_image or self.args.redirect_gui or self.args.preview:
+            display_func = self.show
+        else:
+            display_func = None
+
         for iteration in range(0, self.args.iterations):
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self.args.save_interval == 0
-            viewer = self.show if save_iteration or self.save_now else None
+            viewer = display_func if save_iteration or self.save_now else None
             timelapse = self.timelapse if save_iteration else None
             trainer.train_one_step(viewer, timelapse)
             if self.stop:
@@ -233,7 +240,7 @@ class Train():
         logger.info("R|- Press 'ENTER' to save and quit              -")
         logger.info("R|- Press 'S' to save model weights immediately -")
         logger.info("R|===============================================")
-        keypress = KBHit()
+        keypress = KBHit(is_gui=self.args.redirect_gui)
         err = False
         while True:
             try:

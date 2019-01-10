@@ -43,6 +43,8 @@ class ModelBase():
         self.name = self.set_model_name()
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
+        self.loss_names = dict()  # Loss names for model
+        self.history = dict()  # Loss history for each save iteration
         self.state = State(self.model_dir, self.base_filename)
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
@@ -130,6 +132,30 @@ class ModelBase():
         else:
             logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
+
+        for side, model in self.predictors.items():
+            loss_funcs = [self.loss_function(side)]
+            if self.masks:
+                mask = self.masks[0] if side == "a" else self.masks[1]
+                loss_funcs.insert(0, self.mask_loss_function(mask, side))
+            model.compile(optimizer=optimizer, loss=loss_funcs)
+
+            if len(self.loss_names[side]) > 1:
+                self.loss_names[side].insert(0, "total_loss")
+            self.history[side] = [list() for _ in range(len(self.loss_names[side]))]
+        logger.debug("Compiled Predictors. Losses: %s", self.loss_names)
+
+    def loss_function(self, side):
+        """ Set the loss function """
+        if self.config.get("dssim_loss", False):
+            if side == "a":
+                logger.verbose("Using DSSIM Loss")
+            loss_func = DSSIMObjective()
+        else:
+            if side == "a":
+                logger.verbose("Using Mean Absolute Error Loss")
+            loss_func = losses.mean_absolute_error
+        self.loss_names[side] = ["loss"]
         logger.debug(loss_func)
         return loss_func
 
@@ -150,6 +176,7 @@ class ModelBase():
                 logger.verbose("Using Penalized Loss for mask")
             mask_loss_func = PenalizedLoss(mask, mask_loss_func)
 
+        self.loss_names[side].insert(0, "mask_loss")
         logger.debug(mask_loss_func)
         return mask_loss_func
 
@@ -208,13 +235,70 @@ class ModelBase():
     def save_weights(self):
         """ Backup and save the weights files """
         logger.debug("Backing up and saving weights")
+        should_backup = self.get_save_averages()
         for network in self.networks.values():
-            network.backup_weights()
+            if should_backup:
+                network.backup_weights()
             network.save_weights()
         # Put in a line break to avoid jumbled console
         print("\n")
         logger.info("saved model weights")
         self.state.save()
+
+    def get_save_averages(self):
+        """ Return the loss averages since last save and reset historical losses
+
+            This protects against model corruption by only backing up the model
+            if any of the loss values have fallen.
+            TODO This is not a perfect system. If the model corrupts on save_iteration - 1
+            then model may still backup
+        """
+        logger.debug("Getting Average loss since last save")
+        avgs = dict()
+        backup = list()
+
+        for side in ("a", "b"):
+            hist_losses = self.history[side]
+            if not all(hist_losses):
+                break
+
+            avgs[side] = [sum(loss) / len(loss) for loss in hist_losses]
+            self.history[side] = [list() for _ in range(len(self.loss_names[side]))]
+
+            avg_key = "avg_{}".format(side)
+            if not self.history.get(avg_key, None):
+                logger.debug("Setting initial save iteration loss average for '%s': %s",
+                             avg_key, avgs[side])
+                self.history[avg_key] = avgs[side]
+                continue
+
+            backup.append(self.check_loss_drop(avg_key, avgs[side]))
+
+        logger.debug("Lowest save iteration loss average: {avg_a: %s, avg_b: %s)",
+                     self.history.get("avg_a", None), self.history.get("avg_b", None))
+        logger.debug("Average loss since last save: %s", avgs)
+        if any(backup):  # Update lowest loss values to the history
+            for side in ("a", "b"):
+                avg_key = "avg_{}".format(side)
+                if avgs[side] < self.history[avg_key]:
+                    logger.debug("Updating lowest save iteration average for '%s': %s",
+                                 avg_key, avgs[side])
+                    self.history[avg_key] = avgs[side]
+            backup = True
+        else:
+            backup = False
+        logger.debug("Backing up: %s", backup)
+
+        return backup
+
+    def check_loss_drop(self, avg_key, averages):
+        """ Check whether all loss has dropped since lowest loss """
+        for idx, loss in enumerate(averages):
+            if loss < self.history[avg_key][idx]:
+                logger.debug("Loss for '%s' has dropped", avg_key)
+                return True
+        logger.debug("Loss for '%s' has not dropped", avg_key)
+        return False
 
     def log_summary(self):
         """ Verbose log the model summaries """

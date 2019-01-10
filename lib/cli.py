@@ -133,7 +133,7 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
         return [(name, getattr(self, name)) for name in names]
 
     def __call__(self, parser, namespace, values, option_string=None):
-        pass
+        setattr(namespace, self.dest, values)
 
 
 class FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
@@ -302,6 +302,13 @@ class FaceSwapArgs():
                                     "unless you need to file an error report. Be "
                                     "careful with TRACE as it will generate a lot "
                                     "of data"})
+        # This is a hidden argument to indicate that the GUI is being used,
+        # so the preview window should be redirected Accordingly
+        global_args.append({"opts": ("-gui", "--gui"),
+                            "action": "store_true",
+                            "dest": "redirect_gui",
+                            "default": False,
+                            "help": argparse.SUPPRESS})
         return global_args
 
     @staticmethod
@@ -559,39 +566,28 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": "Masked",
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
-<<<<<<< HEAD
                               "type": float,
+                              "action": Slider,
+                              "min_max": (0.0, 256.0),
+                              "rounding": 0.1,
                               "default": 2.0,
-                              "help": "Blur size. (Masked converter only)"})
+                              "help": "Blur size for smoothing the transition "
+                                      "between the swapped face and the "
+                                      "background image. Integer values will blur "
+                                      "x pixels, fractions will blur x% of the "
+                                      "face area"})
         argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
                               "dest": "erosion_kernel_size",
                               "type": float,
+                              "action": Slider,
+                              "min_max": (-100.0, 100.0),
+                              "rounding": 0.1,
                               "default": 0.0,
                               "help": "Erosion kernel size. Positive values "
                                       "apply erosion which reduces the edge "
                                       "of the swapped face. Negative values "
                                       "apply dilation which allows the "
-                                      "swapped face to cover more space. "
-                                      "(Masked converter only)"})
-=======
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (0, 256),
-                              "rounding": 1,
-                              "default": 2,
-                              "help": "Blur size. (Masked converter only)"})
-        argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
-                              "dest": "erosion_kernel_size",
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (-100, 100),
-                              "rounding": 1,
-                              "default": 0,
-                              "help": "Erosion kernel size. Positive values apply erosion which "
-                                      "reduces the edge of the swapped face. Negative values "
-                                      "apply dilation which allows the swapped face to cover more "
-                                      "space. (Masked converter only)"})
->>>>>>> train_refactor
+                                      "swapped face to cover more space. "})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               "type": str.lower,
                               "dest": "mask_type",
@@ -726,6 +722,7 @@ class TrainArgs(FaceSwapArgs):
                               "action": Slider,
                               "min_max": (2, 256),
                               "rounding": 2,
+                              "dest": "batch_size",
                               "default": 64,
                               "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),
@@ -790,13 +787,6 @@ class TrainArgs(FaceSwapArgs):
                                       "If the input folders are supplied but "
                                       "no output folder, it will default to "
                                       "your model folder /timelapse/"})
-        # This is a hidden argument to indicate that the GUI is being used,
-        # so the preview window should be redirected Accordingly
-        argument_list.append({"opts": ("-gui", "--gui"),
-                              "action": "store_true",
-                              "dest": "redirect_gui",
-                              "default": False,
-                              "help": argparse.SUPPRESS})
         return argument_list
 
 

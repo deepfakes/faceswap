@@ -32,9 +32,11 @@ else:
 
 class KBHit:
     """ Creates a KBHit object that you can call to do various keyboard things. """
-    def __init__(self):
-        if os.name == "nt":
-            pass
+
+    def __init__(self, is_gui=False):
+        self.is_gui = is_gui
+        if os.name == "nt" or self.is_gui:
+           pass
         else:
             # Save the terminal settings
             self.file_desc = sys.stdin.fileno()
@@ -50,7 +52,7 @@ class KBHit:
 
     def set_normal_term(self):
         """ Resets to normal terminal.  On Windows this is a no-op. """
-        if os.name == "nt":
+        if os.name == "nt" or self.is_gui:
             pass
         else:
             termios.tcsetattr(self.file_desc, termios.TCSAFLUSH, self.old_term)
