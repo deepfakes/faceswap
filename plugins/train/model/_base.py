@@ -102,8 +102,7 @@ class ModelBase():
         """ Convert models to multi-gpu if requested """
         if self.gpus > 1:
             for side in self.predictors.keys():
-                logger.debug("Converting to multi-gpu: '%s_%s'",
-                             self.predictors[side].network_type, side)
+                logger.debug("Converting to multi-gpu: side %s", side.capitalize())
                 model = multi_gpu_model(self.predictors[side], self.gpus)
                 self.predictors[side] = model
             logger.debug("Converted to multi-gpu: %s", self.predictors)
