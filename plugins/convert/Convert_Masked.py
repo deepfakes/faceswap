@@ -39,7 +39,7 @@ class Convert():
         
     def patch_image(self, image, face_detected, size):
         image_size = image.shape[1], image.shape[0]
-        mat = get_align_mat(face_detected,self.input_size,False).reshape(2, 3)
+        mat = get_align_mat(face_detected,self.input_size,False)
         image = image.astype('float32')
         
         # insert Field of View Logic here to modify alignment mat
@@ -111,14 +111,8 @@ class Convert():
             hull_mask = numpy.zeros_like(image)
             hull = cv2.convexHull(numpy.array(landmarks).reshape((-1, 2)))
             cv2.fillConvexPoly(hull_mask, hull, (1.0, 1.0, 1.0), lineType = cv2.LINE_AA)
-            image_mask = hull_mask
-        
-        if self.mask_type == 'facehullandrect':
-            image_mask = image_mask * hull_mask 
-        
+            image_mask = hull_mask if self.mask_type == 'facehullandrect' else hull_mask    
 
-        
-        
         numpy.nan_to_num(image_mask, copy=False)
         numpy.clip(image_mask, 0.0, 1.0, out=image_mask)
         if self.erosion_size != 0:
