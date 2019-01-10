@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-""" Tools for manipulating the alignments seralized file """
-# TODO merge alignments
+""" Tools for manipulating the alignments serialized file """
 
 import logging
 import os
@@ -33,7 +32,7 @@ class Check():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_source_dir(self, arguments):
-        """ Set the correct source dir """
+        """ Set the correct source folder """
         if hasattr(arguments, "faces_dir") and arguments.faces_dir:
             self.type = "faces"
             source_dir = arguments.faces_dir
@@ -195,7 +194,7 @@ class Check():
             os.rename(src, dst)
 
     def move_faces(self, output_folder, items_output):
-        """ Make additional subdirs for each face that appears
+        """ Make additional subfolders for each face that appears
             Enables easier manual sorting """
         logger.info("Moving %s faces(s) to '%s'", len(items_output), output_folder)
         for frame, idx in items_output:
@@ -224,7 +223,11 @@ class Draw():
         """ Set the output folder path """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "drawn_landmarks_{}".format(now)
-        output_folder = os.path.join(self.frames.folder, folder_name)
+        if self.frames.vid_cap:
+            dest_folder = os.path.split(self.frames.folder)[0]
+        else:
+            dest_folder = self.frames.folder
+        output_folder = os.path.join(dest_folder, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
         return output_folder
@@ -799,19 +802,19 @@ class Spatial():
                     "alignments -j extract -a %s -fr <path_to_frames_dir> -fc "
                     "<output_folder>", self.arguments.alignments_file)
 
-    # define shape normalization utility functions
+    # Define shape normalization utility functions
     @staticmethod
     def normalize_shapes(shapes_im_coords):
         """ Normalize a 2D or 3D shape """
         logger.debug("Normalize shapes")
         (num_pts, num_dims, _) = shapes_im_coords.shape
 
-        # calc mean coords and subtract from shapes
+        # Calculate mean coordinates and subtract from shapes
         mean_coords = shapes_im_coords.mean(axis=0)
         shapes_centered = np.zeros(shapes_im_coords.shape)
         shapes_centered = shapes_im_coords - np.tile(mean_coords, [num_pts, 1, 1])
 
-        # calc scale factors and divide shapes
+        # Calculate scale factors and divide shapes
         scale_factors = np.sqrt((shapes_centered**2).sum(axis=1)).mean(axis=0)
         shapes_normalized = np.zeros(shapes_centered.shape)
         shapes_normalized = shapes_centered / np.tile(scale_factors, [num_pts, num_dims, 1])
@@ -850,12 +853,12 @@ class Spatial():
             landmarks = np.array(val[0]["landmarksXY"]).reshape(68, 2, 1)
             start = end
             end = start + landmarks.shape[2]
-            # store in one big array
+            # Store in one big array
             landmarks_all[:, :, start:end] = landmarks
-            # make sure we keep track of the mapping to the original frame
+            # Make sure we keep track of the mapping to the original frame
             self.mappings[start] = key
 
-        # normalize shapes
+        # Normalize shapes
         normalized_shape = self.normalize_shapes(landmarks_all)
         self.normalized["landmarks"] = normalized_shape[0]
         self.normalized["scale_factors"] = normalized_shape[1]
@@ -881,15 +884,15 @@ class Spatial():
             (project and reconstruct) """
         logger.debug("Spatially Filter")
         landmarks_norm = self.normalized["landmarks"]
-        # convert to matrix form
+        # Convert to matrix form
         landmarks_norm_table = np.reshape(landmarks_norm, [68 * 2, landmarks_norm.shape[2]]).T
-        # project onto shapes model and reconstruct
+        # Project onto shapes model and reconstruct
         landmarks_norm_table_rec = self.shapes_model.inverse_transform(
             self.shapes_model.transform(landmarks_norm_table))
-        # convert back to shapes (numKeypoint, num_dims, numFrames)
+        # Convert back to shapes (numKeypoint, num_dims, numFrames)
         landmarks_norm_rec = np.reshape(landmarks_norm_table_rec.T,
                                         [68, 2, landmarks_norm.shape[2]])
-        # transform back to image coords
+        # Transform back to image coords
         retval = self.normalized_to_original(landmarks_norm_rec,
                                              self.normalized["scale_factors"],
                                              self.normalized["mean_coords"])

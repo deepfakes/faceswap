@@ -13,6 +13,16 @@ from PIL import Image, ImageTk
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+def set_slider_rounding(value, var, d_type, round_to, min_max):
+    """ Set the underlying variable to correct number based on slider rounding """
+    if d_type == float:
+        var.set(round(float(value), round_to))
+    else:
+        steps = range(min_max[0], min_max[1] + round_to, round_to)
+        value = min(steps, key=lambda x: abs(x - int(float(value))))
+        var.set(value)
+
+
 class Singleton(type):
     """ Instigate a singleton.
     From: https://stackoverflow.com/questions/6760685
@@ -228,34 +238,34 @@ class Images(metaclass=Singleton):
     @staticmethod
     def get_images(imgpath):
         """ Get the images stored within the given directory """
-        logger.debug("Getting images: '%s'", imgpath)
+        logger.trace("Getting images: '%s'", imgpath)
         if not os.path.isdir(imgpath):
             logger.debug("Folder does not exist")
             return None
         files = [os.path.join(imgpath, f)
                  for f in os.listdir(imgpath) if f.endswith((".png", ".jpg"))]
-        logger.debug("Image files: %s", files)
+        logger.trace("Image files: %s", files)
         return files
 
     def load_latest_preview(self):
         """ Load the latest preview image for extract and convert """
-        logger.debug("Loading preview image")
+        logger.trace("Loading preview image")
         imagefiles = self.get_images(self.pathoutput)
         if not imagefiles or len(imagefiles) == 1:
             logger.debug("No preview to display")
             self.previewoutput = None
             return
-        # Get penultimate file so we don't accidently
+        # Get penultimate file so we don't accidentally
         # load a file that is being saved
         show_file = sorted(imagefiles, key=os.path.getctime)[-2]
         img = Image.open(show_file)
         img.thumbnail((768, 432))
-        logger.debug("Displaying preview: '%s'", show_file)
+        logger.trace("Displaying preview: '%s'", show_file)
         self.previewoutput = (img, ImageTk.PhotoImage(img))
 
     def load_training_preview(self):
         """ Load the training preview images """
-        logger.debug("Loading Training preview images")
+        logger.trace("Loading Training preview images")
         imagefiles = self.get_images(self.pathpreview)
         modified = None
         if not imagefiles:
@@ -268,7 +278,7 @@ class Images(metaclass=Singleton):
             name = os.path.splitext(name)[0]
             name = name[name.rfind("_") + 1:].title()
             try:
-                logger.debug("Displaying preview: '%s'", img)
+                logger.trace("Displaying preview: '%s'", img)
                 size = self.get_current_size(name)
                 self.previewtrain[name] = [Image.open(img), None, modified]
                 self.resize_image(name, size)
@@ -288,20 +298,20 @@ class Images(metaclass=Singleton):
 
     def get_current_size(self, name):
         """ Return the size of the currently displayed image """
-        logger.debug("Getting size: '%s'", name)
+        logger.trace("Getting size: '%s'", name)
         if not self.previewtrain.get(name, None):
             return None
         img = self.previewtrain[name][1]
         if not img:
             return None
-        logger.debug("Got size: (name: '%s', width: '%s', height: '%s')",
+        logger.trace("Got size: (name: '%s', width: '%s', height: '%s')",
                      name, img.width(), img.height())
         return img.width(), img.height()
 
     def resize_image(self, name, framesize):
         """ Resize the training preview image
             based on the passed in frame size """
-        logger.debug("Resizing image: (name: '%s', framesize: %s", name, framesize)
+        logger.trace("Resizing image: (name: '%s', framesize: %s", name, framesize)
         displayimg = self.previewtrain[name][0]
         if framesize:
             frameratio = float(framesize[0]) / float(framesize[1])
@@ -313,7 +323,7 @@ class Images(metaclass=Singleton):
             else:
                 scale = framesize[1] / float(displayimg.size[1])
                 size = (int(displayimg.size[0] * scale), framesize[1])
-            logger.debug("Scaling: (scale: %s, size: %s", scale, size)
+            logger.trace("Scaling: (scale: %s, size: %s", scale, size)
 
             # Hacky fix to force a reload if it happens to find corrupted
             # data, probably due to reading the image whilst it is partially

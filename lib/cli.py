@@ -103,9 +103,41 @@ class ScriptExecutor():
             safe_shutdown()
 
 
-class FullPaths(argparse.Action):
+class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
+    """ Adds support for the GUI slider
+
+        An additional option 'min_max' must be provided containing tuple of min and max accepted
+        values.
+
+        'rounding' sets the decimal places for floats or the step interval for ints.
+        """
+    def __init__(self, option_strings, dest, nargs=None, min_max=None, rounding=None, **kwargs):
+        if nargs is not None:
+            raise ValueError("nargs not allowed")
+        super().__init__(option_strings, dest, **kwargs)
+        self.min_max = min_max
+        self.rounding = rounding
+
+    def _get_kwargs(self):
+        names = ["option_strings",
+                 "dest",
+                 "nargs",
+                 "const",
+                 "default",
+                 "type",
+                 "choices",
+                 "help",
+                 "metavar",
+                 "min_max",  # Tuple containing min and max values of scale
+                 "rounding"]  # Decimal places to round floats to or step interval for ints
+        return [(name, getattr(self, name)) for name in names]
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+
+
+class FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
     """ Expand user- and relative-paths """
-    # pylint: disable=too-few-public-methods
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
             os.path.expanduser(values)))
@@ -124,27 +156,31 @@ class FileFullPaths(FullPaths):
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
     # pylint: disable=too-few-public-methods
-    def __init__(self, option_strings, dest, nargs=None, filetypes=None,
-                 **kwargs):
+    def __init__(self, option_strings, dest, nargs=None, filetypes=None, **kwargs):
         super(FileFullPaths, self).__init__(option_strings, dest, **kwargs)
         if nargs is not None:
             raise ValueError("nargs not allowed")
         self.filetypes = filetypes
 
     def _get_kwargs(self):
-        names = [
-            "option_strings",
-            "dest",
-            "nargs",
-            "const",
-            "default",
-            "type",
-            "choices",
-            "help",
-            "metavar",
-            "filetypes"
-        ]
+        names = ["option_strings",
+                 "dest",
+                 "nargs",
+                 "const",
+                 "default",
+                 "type",
+                 "choices",
+                 "help",
+                 "metavar",
+                 "filetypes"]
         return [(name, getattr(self, name)) for name in names]
+
+
+class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
+    """ Class that the gui uses to determine that the input can take a folder or a filename.
+        Inherits functionality from FileFullPaths
+        Has the effect of giving the user 2 Open Dialogue buttons in the gui """
+    pass
 
 
 class SaveFileFullPaths(FileFullPaths):
@@ -178,19 +214,17 @@ class ContextFullPaths(FileFullPaths):
         self.filetypes = filetypes
 
     def _get_kwargs(self):
-        names = [
-            "option_strings",
-            "dest",
-            "nargs",
-            "const",
-            "default",
-            "type",
-            "choices",
-            "help",
-            "metavar",
-            "filetypes",
-            "action_option"
-        ]
+        names = ["option_strings",
+                 "dest",
+                 "nargs",
+                 "const",
+                 "default",
+                 "type",
+                 "choices",
+                 "help",
+                 "metavar",
+                 "filetypes",
+                 "action_option"]
         return [(name, getattr(self, name)) for name in names]
 
 
@@ -268,6 +302,13 @@ class FaceSwapArgs():
                                     "unless you need to file an error report. Be "
                                     "careful with TRACE as it will generate a lot "
                                     "of data"})
+        # This is a hidden argument to indicate that the GUI is being used,
+        # so the preview window should be redirected Accordingly
+        global_args.append({"opts": ("-gui", "--gui"),
+                            "action": "store_true",
+                            "dest": "redirect_gui",
+                            "default": False,
+                            "help": argparse.SUPPRESS})
         return global_args
 
     @staticmethod
@@ -306,12 +347,14 @@ class ExtractConvertArgs(FaceSwapArgs):
         argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ("-i", "--input-dir"),
-                              "action": DirFullPaths,
+                              "action": DirOrFileFullPaths,
+                              "filetypes": "video",
                               "dest": "input_dir",
                               "default": "input",
-                              "help": "Input directory. A directory "
-                                      "containing the files you wish to "
-                                      "process. Defaults to 'input'"})
+                              "help": "Input directory or video. Either a "
+                                      "directory containing the image files "
+                                      "you wish to process or path to a "
+                                      "video file. Defaults to 'input'"})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",
@@ -326,11 +369,14 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
         argument_list.append({"opts": ("-l", "--ref_threshold"),
+                              "action": Slider,
+                              "min_max": (0.01, 0.99),
+                              "rounding": 2,
                               "type": float,
                               "dest": "ref_threshold",
                               "default": 0.6,
-                              "help": "Threshold for positive face "
-                                      "recognition"})
+                              "help": "Threshold for positive face recognition. For use with "
+                                      "nfilter or filter. Lower values are stricter."})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "type": str,
                               "dest": "nfilter",
@@ -373,7 +419,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "fallback."})
         argument_list.append({
             "opts": ("-D", "--detector"),
-            "type": str,
+            "type": str.lower,
             "choices":  PluginLoader.get_available_extractors(
                 "detect"),
             "default": "mtcnn",
@@ -388,7 +434,7 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n\talignment to dlib"})
         argument_list.append({
             "opts": ("-A", "--aligner"),
-            "type": str,
+            "type": str.lower,
             "choices": PluginLoader.get_available_extractors(
                 "align"),
             "default": "fan",
@@ -397,38 +443,6 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n\tresource intensive, but less accurate."
                     "\n'fan': Face Alignment Network. Best aligner."
                     "\n\tGPU heavy."})
-        argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
-                              "type": int,
-                              "dest": "mtcnn_minsize",
-                              "default": 20,
-                              "help": "The minimum size of a face to be "
-                                      "accepted. Lower values use "
-                                      "significantly more VRAM. Minimum "
-                                      "value is 10. Default is 20 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-mtth", "--mtcnn-threshold"),
-                              "nargs": "+",
-                              "type": str,
-                              "dest": "mtcnn_threshold",
-                              "default": ["0.6", "0.7", "0.7"],
-                              "help": "R|Three step threshold for face "
-                                      "detection. Should be\nthree decimal "
-                                      "numbers each less than 1. Eg:\n"
-                                      "'--mtcnn-threshold 0.6 0.7 0.7'.\n"
-                                      "1st stage: obtains face candidates.\n"
-                                      "2nd stage: refinement of face "
-                                      "candidates.\n3rd stage: further "
-                                      "refinement of face candidates.\n"
-                                      "Default is 0.6 0.7 0.7 "
-                                      "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-mtsc", "--mtcnn-scalefactor"),
-                              "type": float,
-                              "dest": "mtcnn_scalefactor",
-                              "default": 0.709,
-                              "help": "The scale factor for the image "
-                                      "pyramid. Should be a decimal number "
-                                      "less than one. Default is 0.709 "
-                                      "(MTCNN detector only)"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -442,13 +456,15 @@ class ExtractArgs(ExtractConvertArgs):
                                       "exactly what angles to check"})
         argument_list.append({"opts": ("-bt", "--blur-threshold"),
                               "type": float,
+                              "action": Slider,
+                              "min_max": (0.0, 100.0),
+                              "rounding": 1,
                               "dest": "blur_thresh",
-                              "default": None,
-                              "help": "Automatically discard images blurrier "
-                                      "than the specified threshold. "
-                                      "Discarded images are moved into a "
-                                      "\"blurry\" sub-folder. Lower values "
-                                      "allow more blur"})
+                              "default": 0.0,
+                              "help": "Automatically discard images blurrier than the specified "
+                                      "threshold. Discarded images are moved into a \"blurry\" "
+                                      "sub-folder. Lower values allow more blur. Set to 0.0 to "
+                                      "turn off."})
         argument_list.append({"opts": ("-mp", "--multiprocess"),
                               "action": "store_true",
                               "default": False,
@@ -460,12 +476,13 @@ class ExtractArgs(ExtractConvertArgs):
                                       "otherwise this is automatic."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (128, 512),
                               "default": 256,
-                              "help": "The output size of extracted faces. "
-                                      "Make sure that the model you intend "
-                                      "to train supports your required "
-                                      "size. This will only need to be "
-                                      "changed for hi-res models."})
+                              "rounding": 64,
+                              "help": "The output size of extracted faces. Make sure that the "
+                                      "model you intend to train supports your required size. "
+                                      "This will only need to be changed for hi-res models."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
@@ -496,13 +513,15 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-si", "--save-interval"),
                               "dest": "save_interval",
                               "type": int,
-                              "default": None,
-                              "help": "Automatically save the alignments file "
-                                      "after a set amount of frames. Will "
-                                      "only save at the end of extracting by "
-                                      "default. WARNING: Don't interrupt the "
-                                      "script when writing the file because "
-                                      "it might get corrupted."})
+                              "action": Slider,
+                              "min_max": (0, 1000),
+                              "rounding": 10,
+                              "default": 0,
+                              "help": "Automatically save the alignments file after a set amount "
+                                      "of frames. Will only save at the end of extracting by "
+                                      "default. WARNING: Don't interrupt the script when writing "
+                                      "the file because it might get corrupted. Set to 0 to turn "
+                                      "off"})
         return argument_list
 
 
@@ -536,59 +555,59 @@ class ConvertArgs(ExtractConvertArgs):
                                       "specified, all faces will be "
                                       "converted"})
         argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str,
-                              # case sensitive because this is used to
-                              # load a plug-in.
+                              "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "help": "Select the trainer that was used to "
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
-                              "type": str,
-                              # case sensitive because this is used
-                              # to load a plugin.
+                              "type": str.lower,
                               "choices": ("Masked", "Adjust"),
                               "default": "Masked",
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
+                              "action": Slider,
+                              "min_max": (0.0, 256.0),
+                              "rounding": 0.1,
                               "default": 2.0,
                               "help": "Blur size for smoothing the transition "
                                       "between the swapped face and the "
-                                      "background image(Masked converter only)"
-                                      "integer values will blur x pixels,"
-                                      "fractions will blur x% of the face area"})
+                                      "background image. Integer values will blur "
+                                      "x pixels, fractions will blur x% of the "
+                                      "face area"})
         argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
                               "dest": "erosion_kernel_size",
                               "type": float,
+                              "action": Slider,
+                              "min_max": (-100.0, 100.0),
+                              "rounding": 0.1,
                               "default": 0.0,
                               "help": "Erosion kernel size. Positive values "
                                       "apply erosion which reduces the edge "
                                       "of the swapped face. Negative values "
                                       "apply dilation which allows the "
-                                      "swapped face to cover more space. "
-                                      "(Masked converter only)"})
+                                      "swapped face to cover more space. "})
         argument_list.append({"opts": ("-M", "--mask-type"),
-                              # lowercase this, because it's just a
-                              # string later on.
                               "type": str.lower,
                               "dest": "mask_type",
                               "choices": ["rect",
                                           "facehull",
                                           "facehullandrect"],
                               "default": "facehullandrect",
-                              "help": "Mask to use to replace faces. "
-                                      "(Masked converter only)"})
+                              "help": "Mask to use to replace faces. "})
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
                               "choices": ["bsharpen", "gsharpen"],
                               "default": None,
                               "help": "Use Sharpen Image. bsharpen for Box "
-                                      "Blur, gsharpen for Gaussian Blur "
-                                      "(Masked converter only)"})
+                                      "Blur, gsharpen for Gaussian Blur "})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (1, 10),
+                              "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
@@ -616,14 +635,12 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
-                              "help": "Use cv2's seamless clone. "
-                                      "(Masked converter only)"})
+                              "help": "Use cv2's seamless clone. "})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
-                              "help": "Use histogram matching. "
-                                      "(Masked converter only)"})
+                              "help": "Use histogram matching. "})
         argument_list.append({"opts": ("-es", "--enlargment-scale"),
                               "type": float,
                               "dest": "enlargment_scale",
@@ -640,8 +657,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "avg_color_adjust",
                               "default": False,
-                              "help": "Average color adjust. "
-                                      "(Adjust converter only)"})
+                              "help": "Average color adjust. "})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",
@@ -662,15 +678,15 @@ class TrainArgs(FaceSwapArgs):
         argument_list = list()
         argument_list.append({"opts": ("-A", "--input-A"),
                               "action": DirFullPaths,
-                              "dest": "input_A",
-                              "default": "input_A",
+                              "dest": "input_a",
+                              "default": "input_a",
                               "help": "Input directory. A directory "
                                       "containing training images for face A. "
                                       "Defaults to 'input'"})
         argument_list.append({"opts": ("-B", "--input-B"),
                               "action": DirFullPaths,
-                              "dest": "input_B",
-                              "default": "input_B",
+                              "dest": "input_b",
+                              "default": "input_b",
                               "help": "Input directory. A directory "
                                       "containing training images for face B. "
                                       "Defaults to 'input'"})
@@ -683,12 +699,14 @@ class TrainArgs(FaceSwapArgs):
                                       "Defaults to 'model'"})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (10, 1000),
+                              "rounding": 10,
                               "dest": "save_interval",
                               "default": 100,
-                              "help": "Sets the number of iterations before "
-                                      "saving the model"})
+                              "help": "Sets the number of iterations before saving the model"})
         argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str,
+                              "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "help": "Select which trainer to use, Use "
@@ -696,15 +714,24 @@ class TrainArgs(FaceSwapArgs):
                                       "VRAM"})
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (2, 256),
+                              "rounding": 2,
+                              "dest": "batch_size",
                               "default": 64,
-                              "help": "Batch size, as a power of 2 "
-                                      "(64, 128, 256, etc)"})
+                              "help": "Batch size, as a power of 2 (64, 128, 256, etc)"})
         argument_list.append({"opts": ("-it", "--iterations"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (0, 5000000),
+                              "rounding": 20000,
                               "default": 1000000,
-                              "help": "Length of training in iterations"})
+                              "help": "Length of training in iterations."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
+                              "action": Slider,
+                              "min_max": (1, 10),
+                              "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for training"})
         argument_list.append({"opts": ("-p", "--preview"),
@@ -719,11 +746,6 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Writes the training result to a file "
                                       "even on preview mode"})
-        argument_list.append({"opts": ("-pl", "--use-perceptual-loss"),
-                              "action": "store_true",
-                              "dest": "perceptual_loss",
-                              "default": False,
-                              "help": "Use perceptual loss while training"})
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",
@@ -732,7 +754,7 @@ class TrainArgs(FaceSwapArgs):
                                       "to spare memory on some configs"})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
-                              "dest": "timelapse_input_A",
+                              "dest": "timelapse_input_a",
                               "default": None,
                               "help": "For if you want a timelapse: "
                                       "The input folder for the timelapse. "
@@ -743,7 +765,7 @@ class TrainArgs(FaceSwapArgs):
                                       "--timelapse-input-B parameter."})
         argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
                               "action": DirFullPaths,
-                              "dest": "timelapse_input_B",
+                              "dest": "timelapse_input_b",
                               "default": None,
                               "help": "For if you want a timelapse: "
                                       "The input folder for the timelapse. "
@@ -760,13 +782,6 @@ class TrainArgs(FaceSwapArgs):
                                       "If the input folders are supplied but "
                                       "no output folder, it will default to "
                                       "your model folder /timelapse/"})
-        # This is a hidden argument to indicate that the GUI is being used,
-        # so the preview window should be redirected Accordingly
-        argument_list.append({"opts": ("-gui", "--gui"),
-                              "action": "store_true",
-                              "dest": "redirect_gui",
-                              "default": False,
-                              "help": argparse.SUPPRESS})
         return argument_list
 
 

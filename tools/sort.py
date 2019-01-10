@@ -47,7 +47,7 @@ class Sort():
 
         # Assigning default threshold values based on grouping method
         if (self.args.final_process == "folders"
-                and self.args.min_threshold == -1.0):
+                and self.args.min_threshold < 0.0):
             method = self.args.group_method.lower()
             if method == 'face':
                 self.args.min_threshold = 0.6
@@ -162,7 +162,7 @@ class Sort():
         input_dir = self.args.input_dir
 
         logger.info("Sorting by blur...")
-        img_list = [[img, self.estimate_blur(cv2.imread(img))]
+        img_list = [[img, self.estimate_blur(img)]
                     for img in
                     tqdm(self.find_images(input_dir),
                          desc="Loading",
@@ -756,13 +756,16 @@ class Sort():
         return result
 
     @staticmethod
-    def estimate_blur(image):
-        """ Estimate the amount of blur an image has """
-        if image.ndim == 3:
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        blur_map = cv2.Laplacian(image, cv2.CV_64F)
-        score = np.var(blur_map)
+    def estimate_blur(image_file):
+        """
+        Estimate the amount of blur an image has
+        with the variance of the Laplacian.
+        Normalize by pixel number to offset the effect
+        of image size on pixel gradients & variance
+        """
+        image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
+        blur_map = cv2.Laplacian(image, cv2.CV_32F)
+        score = np.var(blur_map) / np.sqrt(image.shape[0] * image.shape[1])
         return score
 
     @staticmethod

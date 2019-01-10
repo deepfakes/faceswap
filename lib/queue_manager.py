@@ -8,7 +8,7 @@ import logging
 import multiprocessing as mp
 import threading
 
-from queue import Empty as QueueEmpty  # pylint: disable=unused-import; # noqa
+from queue import Queue, Empty as QueueEmpty  # pylint: disable=unused-import; # noqa
 from time import sleep
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -34,7 +34,7 @@ class QueueManager():
         self._log_queue = self.manager.Queue()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def add_queue(self, name, maxsize=0):
+    def add_queue(self, name, maxsize=0, multiprocessing_queue=True):
         """ Add a queue to the manager
 
             Adds an event "shutdown" to the queue that can be used to indicate
@@ -43,7 +43,12 @@ class QueueManager():
         logger.debug("QueueManager adding: (name: '%s', maxsize: %s)", name, maxsize)
         if name in self.queues.keys():
             raise ValueError("Queue '{}' already exists.".format(name))
-        queue = self.manager.Queue(maxsize=maxsize)
+
+        if multiprocessing_queue:
+            queue = self.manager.Queue(maxsize=maxsize)
+        else:
+            queue = Queue(maxsize=maxsize)
+
         setattr(queue, "shutdown", self.shutdown)
         self.queues[name] = queue
         logger.debug("QueueManager added: (name: '%s')", name)
