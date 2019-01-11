@@ -135,8 +135,7 @@ class TrainerBase():
         """ Store the history of this step """
         logger.trace("Updating loss history")
         for side in ("a", "b"):
-            for idx, val in enumerate(loss[side]):
-                self.model.history[side][idx].append(val)
+            self.model.history[side].append(loss[side][0])  # Either only loss or total loss
         logger.trace("Updated loss history")
 
     def compile_samples(self, target_a, target_b, batch_size):

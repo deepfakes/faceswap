@@ -44,7 +44,7 @@ class ModelBase():
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.loss_names = dict()  # Loss names for model
-        self.history = dict()  # Loss history for each save iteration
+        self.history = dict()  # Loss history per save iteration)
         self.state = State(self.model_dir, self.base_filename)
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
@@ -122,7 +122,7 @@ class ModelBase():
 
             if len(self.loss_names[side]) > 1:
                 self.loss_names[side].insert(0, "total_loss")
-            self.history[side] = [list() for _ in range(len(self.loss_names[side]))]
+            self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", self.loss_names)
 
     def loss_function(self, side):
@@ -194,6 +194,12 @@ class ModelBase():
         logger.debug("Mapped weights: (weights_map: %s)", weights_map)
         return weights_map
 
+    def log_summary(self):
+        """ Verbose log the model summaries """
+        for name, nnmeta in self.networks.items():
+            logger.verbose("%s Summary:", name.title())
+            nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
+
     def load_weights(self, swapped):
         """ Load weights from the weights file """
         logger.debug("Load weights: (swapped: %s)", swapped)
@@ -233,15 +239,16 @@ class ModelBase():
         """
         logger.debug("Getting Average loss since last save")
         avgs = dict()
-        backup = list()
+        backup = True
 
         for side in ("a", "b"):
-            hist_losses = self.history[side]
-            if not all(hist_losses):
+            hist_loss = self.history[side]
+            if not hist_loss:
+                backup = False
                 break
 
-            avgs[side] = [sum(loss) / len(loss) for loss in hist_losses]
-            self.history[side] = [list() for _ in range(len(self.loss_names[side]))]
+            avgs[side] = sum(hist_loss) / len(hist_loss)
+            self.history[side] = list()
 
             avg_key = "avg_{}".format(side)
             if not self.history.get(avg_key, None):
@@ -250,39 +257,30 @@ class ModelBase():
                 self.history[avg_key] = avgs[side]
                 continue
 
-            backup.append(self.check_loss_drop(avg_key, avgs[side]))
+            if backup:
+                backup = self.check_loss_drop(avg_key, avgs[side])
 
-        logger.debug("Lowest save iteration loss average: {avg_a: %s, avg_b: %s)",
+        logger.debug("Lowest historical save iteration loss average: {avg_a: %s, avg_b: %s)",
                      self.history.get("avg_a", None), self.history.get("avg_b", None))
         logger.debug("Average loss since last save: %s", avgs)
-        if any(backup):  # Update lowest loss values to the history
+
+        if backup:  # Update lowest loss values to the history
             for side in ("a", "b"):
                 avg_key = "avg_{}".format(side)
-                if avgs[side] < self.history[avg_key]:
-                    logger.debug("Updating lowest save iteration average for '%s': %s",
-                                 avg_key, avgs[side])
-                    self.history[avg_key] = avgs[side]
-            backup = True
-        else:
-            backup = False
-        logger.debug("Backing up: %s", backup)
+                logger.debug("Updating lowest save iteration average for '%s': %s",
+                             avg_key, avgs[side])
+                self.history[avg_key] = avgs[side]
 
+        logger.debug("Backing up: %s", backup)
         return backup
 
-    def check_loss_drop(self, avg_key, averages):
-        """ Check whether all loss has dropped since lowest loss """
-        for idx, loss in enumerate(averages):
-            if loss < self.history[avg_key][idx]:
-                logger.debug("Loss for '%s' has dropped", avg_key)
-                return True
+    def check_loss_drop(self, avg_key, avg):
+        """ Check whether total loss has dropped since lowest loss """
+        if avg < self.history[avg_key]:
+            logger.debug("Loss for '%s' has dropped", avg_key)
+            return True
         logger.debug("Loss for '%s' has not dropped", avg_key)
         return False
-
-    def log_summary(self):
-        """ Verbose log the model summaries """
-        for name, nnmeta in self.networks.items():
-            logger.verbose("%s Summary:", name.title())
-            nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
 
 
 class NNMeta():
