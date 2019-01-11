@@ -41,9 +41,9 @@ class Convert():
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256
-		align_eyes = False
+        align_eyes = False
         coverage = 160
-		
+        
         mat = get_align_mat(face_detected, training_size, align_eyes)
         padding = (training_size - coverage ) // 2
         crop = slice(padding, training_size - padding)
@@ -52,13 +52,13 @@ class Convert():
         
         interpolators = self.get_matrix_scaling(matrix)
         new_face = self.get_new_face(image, matrix, training_size,
-									 encoder_size, interpolators)
-									 
+                                     encoder_size, interpolators)
+                                     
         image_mask = self.get_image_mask(matrix, image_size,
-										 training_size,  new_face,
-										 interpolators,
+                                         training_size,  new_face,
+                                         interpolators,
                                          face_detected.landmarks_as_xy)
-										 
+                                         
         patched_face = self.apply_new_face(image, matrix, training_size,
                                            image_size, new_face, image_mask)
         
@@ -75,46 +75,46 @@ class Convert():
         
     def get_new_face(self, image, mat, training_size, encoder_size, interpolators):
         src_face = cv2.warpAffine(image, mat,
-							  (training_size, training_size),
-							  flags = interpolators[0])
-		coverage_face = src_face[crop, crop]
+                              (training_size, training_size),
+                              flags = interpolators[0])
+        coverage_face = src_face[crop, crop]
         coverage_face = cv2.resize(coverage_face,
-								   (encoder_size, encoder_size),
-								   interpolation=interpolators[0])
+                                   (encoder_size, encoder_size),
+                                   interpolation=interpolators[0])
         coverage_face = numpy.expand_dims(coverage_face, 0)
         numpy.clip(coverage_face / 255.0, 0.0, 1.0, out=norm_face)
         
         if 'GAN' in self.trainer:
             # change code to align with new GAN code
-			print('error')
+            print('error')
         else:
             new_face = self.encoder(norm_face)[0]
-			
-		new_face = cv2.resize(new_face,(training_face_size - padding * 2, training_face_size - padding * 2),interpolation=cv2.INTER_CUBIC)
-			
+            
+        new_face = cv2.resize(new_face,(training_face_size - padding * 2, training_face_size - padding * 2),interpolation=cv2.INTER_CUBIC)
+            
         numpy.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
         return new_face
 
     def get_image_mask(self, mat, image_size, training_size, new_face, inv_interpolator, landmarks):
         
-		mask = numpy.ones((image_size, image_size, 3),dtype='float32')
+        mask = numpy.ones((image_size, image_size, 3),dtype='float32')
 
-		if 'cnn' == self.mask_type:
-			# Insert FCn-VGG16 segmentation mask model here
-			
-		if 'dfaker' == self.mask_type:
-			mask = numpy.zeros((training_face_size, training_face_size,3), dtype='float32')
-			area = padding + coverage // 15
-			central_core = slice(area, -area)
-			mask[central_core, central_core,:] = 1.0
-			mask = cv2.GaussianBlur(mask, (21, 21), 10)
-			cv2.warpAffine(ones, mat, image_size, mask,
+        if 'cnn' == self.mask_type:
+            # Insert FCn-VGG16 segmentation mask model here
+            
+        if 'dfaker' == self.mask_type:
+            mask = numpy.zeros((training_face_size, training_face_size,3), dtype='float32')
+            area = padding + coverage // 15
+            central_core = slice(area, -area)
+            mask[central_core, central_core,:] = 1.0
+            mask = cv2.GaussianBlur(mask, (21, 21), 10)
+            cv2.warpAffine(ones, mat, image_size, mask,
                            flags = cv2.WARP_INVERSE_MAP | interpolators[1],
                            borderMode = cv2.BORDER_CONSTANT, borderValue = 0.0)
-		
-		if 'rect' in self.mask_type:
+        
+        if 'rect' in self.mask_type:
             ones = numpy.ones((training_size, training_size, 3), dtype='float32')
-			mask = numpy.zeros((image_size, image_size, 3),dtype='float32')
+            mask = numpy.zeros((image_size, image_size, 3),dtype='float32')
             cv2.warpAffine(ones, mat, image_size, mask,
                            flags = cv2.WARP_INVERSE_MAP | interpolators[1],
                            borderMode = cv2.BORDER_CONSTANT, borderValue = 0.0)
@@ -124,14 +124,14 @@ class Convert():
             hull = cv2.convexHull(numpy.array(landmarks).reshape((-1, 2)))
             cv2.fillConvexPoly(hull_mask, hull, (1.0, 1.0, 1.0), lineType = cv2.LINE_AA)
             mask *= hull_mask
-		
-		if 'ellipse' in self.mask_type:
-			e = cv2.fitEllipse(mask)
-			cv2.ellipse(mask, box=e, color=(1.0,1.0,1.0), thickness=-1)
-		
+        
+        if 'ellipse' in self.mask_type:
+            e = cv2.fitEllipse(mask)
+            cv2.ellipse(mask, box=e, color=(1.0,1.0,1.0), thickness=-1)
+        
         numpy.nan_to_num(mask, copy=False)
         numpy.clip(mask, 0.0, 1.0, out=mask)
-		
+        
         if self.erosion_size != 0:
             if abs(self.erosion_size) < 1.0:
                 mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
@@ -198,14 +198,14 @@ class Convert():
                                               
         if self.seamless_clone:
             region = numpy.argwhere(image_mask != 0)
-			unitMask = image_mask[region] = 1
+            unitMask = image_mask[region] = 1
             if region.size > 0:
                 x_center, y_center = region.mean(axis=0)
                 cv2.seamlessClone(numpy.rint(new_image).astype('uint8'),
                                   image,
                                   unitMask,
                                   (x_center, y_center),
-								  blended,
+                                  blended,
                                   cv2.MIXED_CLONE)
         else:
             foreground = image_mask * new_image #new_image
