@@ -15,6 +15,7 @@ import numpy as np
 import dlib
 
 from lib.faces_detect import DetectedFace
+from lib.training_data import TrainingDataGenerator
 from lib.logger import get_loglevel
 
 
@@ -74,6 +75,19 @@ def hash_encode_image(image, extension):
     f_hash = sha1(
         cv2.imdecode(img, cv2.IMREAD_UNCHANGED)).hexdigest()  # pylint: disable=no-member
     return f_hash, img
+
+
+def backup_file(directory, filename):
+    """ Backup a given file by appending .bk to the end """
+    logger.trace("Backing up: '%s'", filename)
+    origfile = os.path.join(directory, filename)
+    backupfile = origfile + '.bk'
+    if os.path.exists(backupfile):
+        logger.trace("Removing existing file: '%s'", backup_file)
+        os.remove(backupfile)
+    if os.path.exists(origfile):
+        logger.trace("Renaming: '%s' to '%s'", origfile, backup_file)
+        os.rename(origfile, backupfile)
 
 
 def set_system_verbosity(loglevel):
