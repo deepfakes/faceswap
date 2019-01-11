@@ -3,7 +3,6 @@
 
 Faceswap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
 
- 
 - [Manifesto](#manifesto)
 - [How To setup and run the project](#how-to-setup-and-run-the-project)
   - [Overview](#overview)
@@ -11,8 +10,7 @@ Faceswap is a tool that utilizes deep learning to recognize and swap faces in pi
   - [Train](#train)
   - [Convert](#convert)
   - [GUI](#gui)
-- [General notes:](#general-notes)
-- [Training Data](#training-data)
+  - [General notes:](#general-notes)
 - [Help I need support!](#help-i-need-support)
   - [Discord Server](#discord-server)
   - [Faceswap-Playground](#faceswap-playground)
@@ -29,6 +27,7 @@ Faceswap is a tool that utilizes deep learning to recognize and swap faces in pi
   - [What if /u/deepfakes feels bad about that?](#what-if-udeepfakes-feels-bad-about-that)
 - [About machine learning](#about-machine-learning)
   - [How does a computer know how to recognise/shape a faces? How does machine learning work? What is a neural network?](#how-does-a-computer-know-how-to-recogniseshape-a-faces-how-does-machine-learning-work-what-is-a-neural-network)
+
 ---
 ## Manifesto
 
@@ -80,11 +79,6 @@ Alternatively you can run the GUI by running `python faceswap.py gui`
 
 NB: there is a conversion tool for video. This can be accessed by running `python tools.py effmpeg -h`. Alternatively you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to video.
 
-## Training Data
-A pre-trained model is not required, but you can download the following pre-trained Cage/Trump training model:
-
-**Whole project with training images and trained model (~300MB):**
-https://anonfile.com/p7w3m0d5be/face-swap.zip or [click here to download](https://anonfile.com/p7w3m0d5be/face-swap.zip)
 
 **Some tips:**
 
