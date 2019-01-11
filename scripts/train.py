@@ -85,7 +85,7 @@ class Train():
         """ Call the training process object """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self.args.model_dir)
-        set_system_verbosity()
+        set_system_verbosity(self.args.loglevel)
         thread = self.start_thread()
         # queue_manager.debug_monitor(1)
 

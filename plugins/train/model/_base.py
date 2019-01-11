@@ -217,13 +217,11 @@ class ModelBase():
         logger.debug("Backing up and saving weights")
         should_backup = self.get_save_averages()
         for network in self.networks.values():
-            if should_backup:
-                network.backup_weights()
-            network.save_weights()
+            network.save_weights(should_backup=should_backup)
+        self.state.save(should_backup)
         # Put in a line break to avoid jumbled console
         print("\n")
         logger.info("saved model weights")
-        self.state.save()
 
     def get_save_averages(self):
         """ Return the loss averages since last save and reset historical losses
@@ -317,9 +315,11 @@ class NNMeta():
         logger.debug("Loading weights: '%s'", fullpath)
         self.network.load_weights(fullpath)
 
-    def save_weights(self, fullpath=None):
+    def save_weights(self, fullpath=None, should_backup=False):
         """ Load model weights """
         fullpath = fullpath if fullpath else self.filename
+        if should_backup:
+            self.backup_weights(fullpath=fullpath)
         logger.debug("Saving weights: '%s'", fullpath)
         self.network.save_weights(fullpath)
 
@@ -362,9 +362,11 @@ class State():
         logger.debug("Loaded State: (iterations: %s)", iterations)
         return iterations
 
-    def save(self):
-        """ Save epoch number to state file """
+    def save(self, should_backup=False):
+        """ Save iteration number to state file """
         logger.debug("Saving State")
+        if should_backup:
+            self.backup()
         try:
             with open(self.filename, "wb") as out:
                 state = {"iterations": self.iterations}
@@ -373,3 +375,13 @@ class State():
         except IOError as err:
             logger.error("Unable to save model state: %s", str(err.strerror))
         logger.debug("Saved State")
+
+    def backup(self):
+        """ Backup state file """
+        origfile = self.filename
+        backupfile = origfile + ".bk"
+        logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
+        if os.path.exists(backupfile):
+            os.remove(backupfile)
+        if os.path.exists(origfile):
+            os.rename(origfile, backupfile)
