@@ -197,7 +197,6 @@ class Convert():
                                               image_mask)
                                               
         if self.seamless_clone:
-			https://www.learnopencv.com/seamless-cloning-using-opencv-python-cpp/
             region = numpy.argwhere(image_mask != 0)
 			unitMask = image_mask[region] = 1
             if region.size > 0:
@@ -253,4 +252,4 @@ class Convert():
         
         flat_new_image = numpy.interp(source.ravel(), bins, template_CDF*255.0)
         
-        return new_image.reshape(source.shape) # source
+        return flat_new_image.reshape(source.shape) # source
