@@ -3,6 +3,7 @@
     Based on the dfaker model: https://github.com/dfaker """
 
 
+from keras.initializers import RandomNormal
 from keras.layers import Input
 from keras.models import Model as KerasModel
 
@@ -19,6 +20,7 @@ class Model(OriginalModel):
         kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
         kwargs["trainer"] = "dfaker"
+        self.kernel_initializer = RandomNormal(0, 0.02)
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -53,19 +55,18 @@ class Model(OriginalModel):
         self.masks = [mask_a, mask_b]
         logger.debug("Initialized model")
 
-    @staticmethod
-    def decoder():
+    def decoder(self):
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
         inp_x = input_
         inp_y = input_
 
         inp_x = upscale(512)(inp_x)
-        inp_x = res_block(inp_x, 512)
+        inp_x = res_block(inp_x, 512, kernel_initializer=self.kernel_initializer)
         inp_x = upscale(256)(inp_x)
-        inp_x = res_block(inp_x, 256)
+        inp_x = res_block(inp_x, 256, kernel_initializer=self.kernel_initializer)
         inp_x = upscale(128)(inp_x)
-        inp_x = res_block(inp_x, 128)
+        inp_x = res_block(inp_x, 128, kernel_initializer=self.kernel_initializer)
         inp_x = upscale(64)(inp_x)
         inp_x = Conv2D(3,
                        kernel_size=5,

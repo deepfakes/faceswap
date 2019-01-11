@@ -8,57 +8,64 @@
 import tensorflow as tf
 import keras.backend as K
 
-from keras.initializers import RandomNormal
 from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, regularizers,
                           Permute, Reshape, SeparableConv2D, Softmax, UpSampling2D)
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 
-from .layers import PixelShuffler, Scale
+from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
 
 
 # <<< Original Model Blocks >>> #
 
-def conv(filters):
+def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
     """ Convolution Layer"""
     def block(inp):
         var_x = Conv2D(filters,
-                       kernel_size=5,
-                       strides=2,
-                       padding='same')(inp)
+                       kernel_size=kernel_size,
+                       strides=strides,
+                       padding='same',
+                       **kwargs)(inp)
+        if use_instance_norm:
+            var_x = InstanceNormalization()(var_x)
         var_x = LeakyReLU(0.1)(var_x)
         return var_x
     return block
 
 
-def upscale(filters):
+def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
     """ Upscale Layer """
     def block(inp):
-        var_x = Conv2D(filters * 4, kernel_size=3, padding='same')(inp)
+        var_x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same', **kwargs)(inp)
+        if use_instance_norm:
+            var_x = InstanceNormalization()(var_x)
         var_x = LeakyReLU(0.1)(var_x)
-        var_x = PixelShuffler()(var_x)
+        if use_subpixel:
+            var_x = SubPixelUpscaling()(var_x)
+        else:
+            var_x = PixelShuffler()(var_x)
         return var_x
     return block
 
 
 # <<< DFaker Model Blocks >>> #
 
-def res_block(inp, filters):
+def res_block(inp, filters, kernel_size=3, **kwargs):
     """ Residual block """
-    conv_init = RandomNormal(0, 0.02)
+    var_x = inp
     var_x = Conv2D(filters,
-                   kernel_size=3,
-                   kernel_initializer=conv_init,
+                   kernel_size=kernel_size,
                    use_bias=False,
-                   padding="same")(inp)
+                   padding="same",
+                   **kwargs)(var_x)
     var_x = LeakyReLU(alpha=0.2)(var_x)
     var_x = Conv2D(filters,
-                   kernel_size=3,
-                   kernel_initializer=conv_init,
+                   kernel_size=kernel_size,
                    use_bias=False,
-                   padding="same")(var_x)
+                   padding="same",
+                   **kwargs)(var_x)
     var_x = Add()([var_x, inp])
     var_x = LeakyReLU(alpha=0.2)(var_x)
     return var_x

@@ -33,7 +33,7 @@ class Config(FaceswapConfig):
                  "May increase overall quality.")
         self.add_item(
             section=section, title="input_size", datatype=int, default=64, rounding=64,
-            min_max=(64, 1024),
+            min_max=(64, 512),
             info="Resolution (in pixels) of the image to train on.\n"
                  "BE AWARE Larger resolution will dramatically increase"
                  "VRAM requirements.\n"
@@ -46,16 +46,13 @@ class Config(FaceswapConfig):
                          info="Higher resolution version of the Original "
                               "Model")
         self.add_item(
+            section=section, title="lowmem", datatype=bool, default=False,
+            info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
+                 "with a changed lowmem mode are not compatible with each other.")
+        self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
-        self.add_item(
-            section=section, title="encoder_type", datatype=str, default="ORIGINAL",
-            choices=["ORIGINAL", "STANDARD", "HIGHRES"],
-            info="Encoder type to use.\n"
-                 "ORIGINAL: Basic encoder for this model type\n"
-                 "STANDARD: New, balanced encoder. More memory consuming\n"
-                 "HIGHRES: High resolution tensors optimized encoder: 176x+")
         self.add_item(
             section=section, title="nodes", datatype=int, default=1024, rounding=64,
             min_max=(512, 4096),
@@ -81,7 +78,7 @@ class Config(FaceswapConfig):
             info="Might increase upscaling quality at cost of VRAM")
         self.add_item(
             section=section, title="input_size", datatype=int, default=128,
-            rounding=64, min_max=(64, 1024),
+            rounding=64, min_max=(64, 512),
             info="Resolution (in pixels) of the image to train on.\n"
                  "BE AWARE Larger resolution will dramatically increase"
                  "VRAM requirements.\n"
@@ -94,7 +91,7 @@ class Config(FaceswapConfig):
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
         self.add_item(
             section=section, title="input_size", datatype=int, default=64, rounding=64,
-            min_max=(64, 1024),
+            min_max=(64, 512),
             info="Resolution (in pixels) of the image to train on.\n"
                  "BE AWARE Larger resolution will dramatically increase"
                  "VRAM requirements.\n"
@@ -138,7 +135,7 @@ class Config(FaceswapConfig):
                  "alignments.json).")
         self.add_item(
             section=section, title="input_size", datatype=int, default=128,
-            rounding=64, min_max=(64, 1024),
+            rounding=64, min_max=(64, 512),
             info="Resolution (in pixels) of the image to train on.\n"
                  "BE AWARE Larger resolution will dramatically increase"
                  "VRAM requirements.\n"
