@@ -122,11 +122,11 @@ class Convert():
             model.converter(False),
             trainer=args.trainer,
             blur_size=args.blur_size,
-            enlargement_scale=args.enlargement_scale,
+            coverage=args.coverage,
             seamless_clone=args.seamless_clone,
             sharpen_image=args.sharpen_image,
             mask_type=args.mask_type,
-            erosion_kernel_size=args.erosion_kernel_size,
+            erosion_size=args.erosion_size,
             match_histogram=args.match_histogram,
             avg_color_adjust=args.avg_color_adjust,
             draw_transparent=args.draw_transparent)
