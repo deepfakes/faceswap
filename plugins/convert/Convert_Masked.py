@@ -37,7 +37,7 @@ class Convert():
             self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                             e_size)
         
-    def patch_image(self, image, face_detected, size):
+    def patch_image(self, image, face_detected, encoder_size):
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256
@@ -51,7 +51,8 @@ class Convert():
         matrix[:, 2] += padding
         
         interpolators = self.get_matrix_scaling(matrix)
-        new_face = self.get_new_face(image, matrix, training_size,
+        
+        new_face = self.get_new_face(image, matrix, crop, padding, training_size,
                                      encoder_size, interpolators)
                                      
         image_mask = self.get_image_mask(matrix, image_size,
@@ -73,7 +74,7 @@ class Convert():
         
         return interpolator, inverse_interpolator
         
-    def get_new_face(self, image, mat, training_size, encoder_size, interpolators):
+    def get_new_face(self, image, mat, crop, padding, training_size, encoder_size, interpolators):
         src_face = cv2.warpAffine(image, mat,
                               (training_size, training_size),
                               flags = interpolators[0])
@@ -82,18 +83,20 @@ class Convert():
                                    (encoder_size, encoder_size),
                                    interpolation=interpolators[0])
         coverage_face = numpy.expand_dims(coverage_face, 0)
-        numpy.clip(coverage_face / 255.0, 0.0, 1.0, out=norm_face)
+        numpy.clip(coverage_face / 255.0, 0.0, 1.0, out=coverage_face)
         
         if 'GAN' in self.trainer:
             # change code to align with new GAN code
             print('error')
         else:
-            new_face = self.encoder(norm_face)[0]
+            new_face = self.encoder(coverage_face)[0]
             
-        new_face = cv2.resize(new_face,(training_face_size - padding * 2, training_face_size - padding * 2),interpolation=cv2.INTER_CUBIC)
+        new_face = cv2.resize(new_face,(training_size - padding * 2, training_size - padding * 2),interpolation=cv2.INTER_CUBIC)
             
         numpy.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
         return new_face
+        
+        ## need to resize
 
     def get_image_mask(self, mat, image_size, training_size, new_face, inv_interpolator, landmarks):
         
@@ -101,6 +104,7 @@ class Convert():
 
         if 'cnn' == self.mask_type:
             # Insert FCn-VGG16 segmentation mask model here
+            self.mask_type = 'cnn'
             
         if 'dfaker' == self.mask_type:
             mask = numpy.zeros((training_face_size, training_face_size,3), dtype='float32')
@@ -204,7 +208,7 @@ class Convert():
                 cv2.seamlessClone(numpy.rint(new_image).astype('uint8'),
                                   image,
                                   unitMask,
-                                  (x_center, y_center),
+                                  (y_center, x_center),
                                   blended,
                                   cv2.MIXED_CLONE)
         else:
