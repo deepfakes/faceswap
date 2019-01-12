@@ -258,7 +258,7 @@ class ImageManipulation():
         dst_points = np.mgrid[0:65 * self.zoom[0]:16 * self.zoom[0],
                               0:65 * self.zoom[0]:16 * self.zoom[0]].T.reshape(-1, 2)
 
-        mat = umeyama(src_points, dst_points, True)[0:2]
+        mat = umeyama(src_points, True, dst_points)[0:2]
         target_image = cv2.warpAffine(  # pylint: disable=no-member
             image, mat, (64 * self.zoom[1], 64 * self.zoom[1]))
         logger.trace("Target image shape: %s", target_image.shape)
