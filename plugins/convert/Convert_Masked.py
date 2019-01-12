@@ -160,12 +160,11 @@ class Convert():
         
     def apply_fixes(self, image, new_image, image_mask, image_size):
     
-        masked = new_image * image_mask
+        masked = new_image #* image_mask
         
         if self.draw_transparent:
-            alpha = numpy.full((image_size[1],image_size[0],1), 
-                               255.0,
-                               dtype='float32')
+            alpha = numpy.full((image_size[1],image_size[0],1),
+                               255.0, dtype='float32')
             new_image = numpy.concatenate(new_image, alpha, axis=2)
             image_mask = numpy.concatenate(image_mask, alpha, axis=2)
             image = numpy.concatenate(image, alpha, axis=2)
@@ -182,27 +181,39 @@ class Convert():
         
         if self.avg_color_adjust:
             for iterations in [0,1]:
+                '''
                 numpy.clip(masked, 0.0, 255.0, out=masked)
                 old_avgs = numpy.average(image * image_mask, axis=(0,1))
-                new_avgs = numpy.average(masked, axis=(0,1))
+                new_avgs = numpy.average(masked * image_mask, axis=(0,1))
                 diff = old_avgs - new_avgs
-                masked = masked + diff  
+                masked = masked + diff
+                '''
+                numpy.clip(masked, 0.0, 255.0, out=masked)
+                diff = image - masked
+                avg_diff = numpy.sum(diff * image_mask, axis=(0,1))
+                adjustment = avg_diff / numpy.sum(image_mask, axis=(0,1))
+                masked = masked + adjustment
                 
         if self.match_histogram:
             numpy.clip(masked, 0.0, 255.0, out=masked)
             masked = self.color_hist_match(masked, image, image_mask)
                                               
         if self.seamless_clone:
-            #indices = numpy.argwhere(image_mask != 0)
-            indices = numpy.nonzero(image_mask)
-            x_center = numpy.mean(indices[1], dtype='uint8')
-            y_center = numpy.mean(indices[0], dtype='uint8')
-            print('here')
+            h, w, _ = image.shape
+            h = h // 2
+            w = w // 2
+            pads = (h, w)
+            y_indices, x_indices, _ = numpy.nonzero(image_mask)
+            x_center = int(numpy.rint(numpy.average(x_indices) + w))
+            y_center = int(numpy.rint(numpy.average(y_indices) + h))
+            padded = numpy.pad(image, (pads, pads,(0,0)), 'constant', constant_values=0)
+            image_mask[image_mask != 0] = 255
             blended = cv2.seamlessClone(masked.astype('uint8'),
-                                        image.astype('uint8'),
+                                        padded.astype('uint8'),
                                         image_mask.astype('uint8'),
                                         (x_center, y_center),
                                         cv2.MIXED_CLONE)
+            #blended = blended[h:-h, w:-w,:]
         else:
             foreground = masked * image_mask
             background = image * ( 1.0 - image_mask )

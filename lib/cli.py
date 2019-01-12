@@ -562,7 +562,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "type": str,
-                              "choices": ("Masked", "Adjust"),
+                              "choices": ("Masked"),
                               "default": "Masked",
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
