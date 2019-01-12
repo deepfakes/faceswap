@@ -52,8 +52,8 @@ def umeyama(src, estimate_scale, dst=None):
     .. [1] "Least-squares estimation of transformation parameters between two
             point patterns", Shinji Umeyama, PAMI 1991, DOI: 10.1109/34.88573
     """
-
-    dst = np.stack([MEAN_FACE_X, MEAN_FACE_Y], axis=1)
+    if dst is None:
+        dst = np.stack([MEAN_FACE_X, MEAN_FACE_Y], axis=1)
 
     num = src.shape[0]
     dim = src.shape[1]
