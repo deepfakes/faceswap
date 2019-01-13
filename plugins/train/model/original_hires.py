@@ -9,7 +9,7 @@ from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import conv, res_block, upscale
-from .original import get_config, logger, Model as OriginalModel
+from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
@@ -18,9 +18,8 @@ class Model(OriginalModel):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
-        config = get_config(".".join(self.__module__.split(".")[-2:]))
-        kwargs["input_shape"] = (config["input_size"], config["input_size"], 3)
-        kwargs["encoder_dim"] = config["nodes"]
+        kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
+        kwargs["encoder_dim"] = self.config["nodes"]
         self.kernel_initializer = RandomNormal(0, 0.02)
 
         super().__init__(*args, **kwargs)

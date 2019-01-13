@@ -8,7 +8,7 @@ from keras.layers.convolutional import Conv2D
 from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import conv, upscale
-from .original import get_config, logger, Model as OriginalModel
+from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
@@ -16,10 +16,9 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-        config = get_config(".".join(self.__module__.split(".")[-2:]))
 
-        kwargs["input_shape"] = (config["input_size"], config["input_size"], 3)
-        kwargs["encoder_dim"] = 256 if config["lowmem"] else 512
+        kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
+        kwargs["encoder_dim"] = 256 if self.config["lowmem"] else 512
 
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -54,6 +53,8 @@ class Model(OriginalModel):
     def encoder(self):
         """ DFL H128 Encoder """
         input_ = Input(shape=self.input_shape)
+        use_subpixel = self.config["subpixel_upscaling"]
+
         var_x = input_
         var_x = conv(128)(var_x)
         var_x = conv(256)(var_x)
@@ -62,16 +63,18 @@ class Model(OriginalModel):
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
         var_x = Reshape((8, 8, self.encoder_dim))(var_x)
-        var_x = upscale(self.encoder_dim)(var_x)
+        var_x = upscale(self.encoder_dim, use_subpixel=use_subpixel)(var_x)
         return KerasModel(input_, var_x)
 
     def decoder(self):
         """ DFL H128 Decoder """
         input_ = Input(shape=(16, 16, self.encoder_dim))
+        use_subpixel = self.config["subpixel_upscaling"]
+
         var = input_
-        var = upscale(self.encoder_dim)(var)
-        var = upscale(self.encoder_dim // 2)(var)
-        var = upscale(self.encoder_dim // 4)(var)
+        var = upscale(self.encoder_dim, use_subpixel=use_subpixel)(var)
+        var = upscale(self.encoder_dim // 2, use_subpixel=use_subpixel)(var)
+        var = upscale(self.encoder_dim // 4, use_subpixel=use_subpixel)(var)
 
         # Face
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var)

@@ -32,6 +32,10 @@ class Config(FaceswapConfig):
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
         self.add_item(
+            section=section, title="subpixel_upscaling", datatype=bool, default=False,
+            info="Use subpixel upscaling rather than pixel shuffler.\n"
+                 "Might increase upscaling quality at cost of VRAM")
+        self.add_item(
             section=section, title="input_size", datatype=int, default=64, rounding=64,
             min_max=(64, 512),
             info="Resolution (in pixels) of the image to train on.\n"
@@ -75,7 +79,8 @@ class Config(FaceswapConfig):
                  "ORIGINAL encoders")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Might increase upscaling quality at cost of VRAM")
+            info="Use subpixel upscaling rather than pixel shuffler.\n"
+                 "Might increase upscaling quality at cost of VRAM")
         self.add_item(
             section=section, title="input_size", datatype=int, default=128,
             rounding=64, min_max=(64, 512),
@@ -100,6 +105,10 @@ class Config(FaceswapConfig):
             section=section, title="mask_type", datatype=str, default="dfaker",
             choices=["dfaker", "dfl_full"],
             info="The mask to be used for training.")
+        self.add_item(
+            section=section, title="subpixel_upscaling", datatype=bool, default=False,
+            info="Use subpixel upscaling rather than pixel shuffler.\n"
+                 "Might increase upscaling quality at cost of VRAM")
         self.add_item(
             section=section, title="dssim_mask_loss", datatype=bool, default=True,
             info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
@@ -137,6 +146,10 @@ class Config(FaceswapConfig):
             section=section, title="mask_type", datatype=str, default="dfl_full",
             choices=["dfaker", "dfl_full"],
             info="The mask to be used for training.")
+        self.add_item(
+            section=section, title="subpixel_upscaling", datatype=bool, default=False,
+            info="Use subpixel upscaling rather than pixel shuffler.\n"
+                 "Might increase upscaling quality at cost of VRAM")
         self.add_item(
             section=section, title="dssim_mask_loss", datatype=bool, default=True,
             info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"

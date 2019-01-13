@@ -19,11 +19,7 @@ from lib.model.losses import DSSIMObjective, PenalizedLoss
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-def get_config(model_name):
-    """ Return the config for the requested model """
-    return Config(model_name).config_dict
+_CONFIG = None
 
 
 class ModelBase():
@@ -32,7 +28,6 @@ class ModelBase():
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, input_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      input_shape, encoder_dim)
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         self.model_dir = model_dir
         self.gpus = gpus
         self.input_shape = input_shape
@@ -52,6 +47,16 @@ class ModelBase():
 
         self.build()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
+
+    @property
+    def config(self):
+        """ Return config dict for current plugin """
+        global _CONFIG  # pylint: disable=global-statement
+        if not _CONFIG:
+            model_name = ".".join(self.__module__.split(".")[-2:])
+            logger.debug("Loading config for: %s", model_name)
+            _CONFIG = Config(model_name).config_dict
+        return _CONFIG
 
     def set_training_data(self):  # pylint: disable=no-self-use
         """ Override to set model specific training data """
@@ -348,6 +353,7 @@ class State():
         self.filename = str(model_dir / filename)
         self.iterations = 0
         self.models = dict()
+        self.config = dict()
         self.load()
 
     def load(self):
@@ -361,6 +367,7 @@ class State():
                 self.iterations = state.get("epoch_no", None)
                 self.iterations = state["iterations"] if iterations is None else iterations
                 self.models = state.get("models", dict())
+                self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
         except IOError as err:
@@ -377,7 +384,8 @@ class State():
         try:
             with open(self.filename, "wb") as out:
                 state = {"iterations": self.iterations,
-                         "models": self.models}
+                         "models": self.models,
+                         "config": _CONFIG}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))
         except IOError as err:
