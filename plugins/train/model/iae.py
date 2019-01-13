@@ -24,8 +24,8 @@ class Model(ModelBase):
         logger.debug("Adding networks")
         self.add_network("encoder", None, self.encoder())
         self.add_network("decoder", None, self.decoder())
-        self.add_network("inter", "A", self.intermediate())
-        self.add_network("inter", "B", self.intermediate())
+        self.add_network("inter", "a", self.intermediate())
+        self.add_network("inter", "b", self.intermediate())
         self.add_network("inter", None, self.intermediate())
         logger.debug("Added networks")
 
@@ -43,7 +43,8 @@ class Model(ModelBase):
                                       inter_both(encoder(inp))]))
         ae_b = decoder(Concatenate()([inter_b(encoder(inp)),
                                       inter_both(encoder(inp))]))
-        self.add_predictors(KerasModel(inp, ae_a), KerasModel(inp, ae_b))
+        self.add_predictor("a", KerasModel(inp, ae_a))
+        self.add_predictor("b", KerasModel(inp, ae_b))
 
         logger.debug("Initialized model")
 

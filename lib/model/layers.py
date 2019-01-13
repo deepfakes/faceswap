@@ -6,6 +6,9 @@
 
 from __future__ import absolute_import
 
+import sys
+import inspect
+
 import tensorflow as tf
 import keras.backend as K
 
@@ -261,4 +264,7 @@ class SubPixelUpscaling(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-get_custom_objects().update({"SubPixelUpscaling": SubPixelUpscaling})
+# Update layers into Keras custom objects
+for name, obj in inspect.getmembers(sys.modules[__name__]):
+    if inspect.isclass(obj) and obj.__module__ == __name__:
+        get_custom_objects().update({name: obj})

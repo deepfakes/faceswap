@@ -3,6 +3,9 @@
     Code from:
         shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
 
+import sys
+import inspect
+
 from keras.engine import Layer, InputSpec
 from keras import initializers, regularizers, constraints
 from keras import backend as K
@@ -156,9 +159,6 @@ class InstanceNormalization(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-get_custom_objects().update({'InstanceNormalization': InstanceNormalization})
-
-
 class GroupNormalization(Layer):
     """ Group Normalization
         from: shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
@@ -271,7 +271,6 @@ class GroupNormalization(Layer):
             retval = self.gamma * var_x + self.beta
         return retval
 
-
     def get_config(self):
         config = {'epsilon': self.epsilon,
                   'axis': self.axis,
@@ -282,3 +281,9 @@ class GroupNormalization(Layer):
                   'group': self.group}
         base_config = super(GroupNormalization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+# Update normalizations into Keras custom objects
+for name, obj in inspect.getmembers(sys.modules[__name__]):
+    if inspect.isclass(obj) and obj.__module__ == __name__:
+        get_custom_objects().update({name: obj})

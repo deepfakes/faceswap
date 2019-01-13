@@ -15,7 +15,6 @@ import numpy as np
 import dlib
 
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator
 from lib.logger import get_loglevel
 
 

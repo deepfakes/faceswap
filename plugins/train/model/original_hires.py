@@ -29,8 +29,8 @@ class Model(OriginalModel):
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")
-        self.add_network("decoder", "A", self.decoder_a())
-        self.add_network("decoder", "B", self.decoder_b())
+        self.add_network("decoder", "a", self.decoder_a())
+        self.add_network("decoder", "b", self.decoder_b())
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 

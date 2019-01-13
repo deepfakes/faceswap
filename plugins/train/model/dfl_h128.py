@@ -18,11 +18,18 @@ class Model(OriginalModel):
                      self.__class__.__name__, args, kwargs)
         config = get_config(".".join(self.__module__.split(".")[-2:]))
 
-        kwargs["input_shape"] = (128, 128, 3)
+        kwargs["input_shape"] = (config["input_size"], config["input_size"], 3)
         kwargs["encoder_dim"] = 256 if config["lowmem"] else 512
 
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_masks(self):
+        """ Mask shapes for dfaker """
+        mask_shape = self.input_shape[:2] + (1, )
+        mask_a = Input(shape=mask_shape)
+        mask_b = Input(shape=mask_shape)
+        return {"a": mask_a, "b": mask_b}
 
     def set_training_data(self):
         """ Set the dictionary for training """
@@ -36,21 +43,18 @@ class Model(OriginalModel):
     def initialize(self):
         """ Initialize DFL H128 model """
         logger.debug("Initializing model")
-        mask_shape = self.input_shape[:2] + (1, )
         inp_a = Input(shape=self.input_shape)
-        mask_a = Input(shape=mask_shape)
         inp_b = Input(shape=self.input_shape)
-        mask_b = Input(shape=mask_shape)
 
         ae_a = KerasModel(
-            [inp_a, mask_a],
+            [inp_a, self.masks["a"]],
             self.networks["decoder_a"].network(self.networks["encoder"].network(inp_a)))
         ae_b = KerasModel(
-            [inp_b, mask_b],
+            [inp_b, self.masks["b"]],
             self.networks["decoder_b"].network(self.networks["encoder"].network(inp_b)))
 
-        self.add_predictors(ae_a, ae_b)
-        self.masks = [mask_a, mask_b]
+        self.add_predictor("a", ae_a)
+        self.add_predictor("b", ae_b)
         logger.debug("Initialized model")
 
     def encoder(self):

@@ -90,14 +90,6 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
         self.add_item(
-            section=section, title="input_size", datatype=int, default=64, rounding=64,
-            min_max=(64, 512),
-            info="Resolution (in pixels) of the image to train on.\n"
-                 "BE AWARE Larger resolution will dramatically increase"
-                 "VRAM requirements.\n"
-                 "Make sure your resolution is divisible by 64 "
-                 "(e.g. 64, 128, 256 etc.)")
-        self.add_item(
             section=section, title="alignments_format", datatype=str, default="json",
             choices=["json", "yaml", "pickle"],
             info="Dfaker model requires the alignments for your training "

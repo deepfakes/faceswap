@@ -10,8 +10,9 @@ import sys
 
 from json import JSONDecodeError
 from keras import losses
+from keras.models import load_model, model_from_json
 from keras.optimizers import Adam
-from keras.utils import multi_gpu_model
+from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.losses import DSSIMObjective, PenalizedLoss
@@ -38,31 +39,40 @@ class ModelBase():
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        self.masks = None  # List of masks to be set if masks are used
-
         self.name = self.set_model_name()
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.loss_names = dict()  # Loss names for model
         self.history = dict()  # Loss history per save iteration)
-        self.state = State(self.model_dir, self.base_filename)
+        self.state = State(self.model_dir, self.name)
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
         self.training_opts = self.set_training_data()
+        self.masks = self.set_masks()
 
-        self.add_networks()
-        self.initialize()
-        self.log_summary()
-        self.compile_predictors()
+        self.build()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
-    def set_training_data(self):
+    def set_training_data(self):  # pylint: disable=no-self-use
         """ Override to set model specific training data """
         return dict()
 
+    def set_masks(self):  # pylint: disable=no-self-use
+        """ Override to set model specific masks """
+        return dict()
+
+    def build(self):
+        """ Build the model. Override for custom build methods """
+        self.add_networks()
+        self.load_models(swapped=False)
+        if not self.predictors:
+            self.initialize()
+        self.log_summary()
+        self.compile_predictors()
+        self.state.add_models(self.predictors)
+
     def initialize(self):
-        """ Override for Model Specific Initialization
-            Must list of masks if used or None if not """
+        """ Override for Model Specific Initialization """
         raise NotImplementedError
 
     def add_networks(self):
@@ -79,45 +89,33 @@ class ModelBase():
     def add_network(self, network_type, side, network):
         """ Add a NNMeta object """
         logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
-        filename = "{}_{}".format(self.base_filename, network_type.lower())
+        filename = "{}_{}".format(self.name, network_type.lower())
         name = network_type.lower()
         if side:
+            side = side.lower()
             filename += "_{}".format(side.upper())
-            name += "_{}".format(side.lower())
+            name += "_{}".format(side)
         filename += ".h5"
         logger.debug("name: '%s', filename: '%s'", name, filename)
-        self.networks["{}".format(name)] = NNMeta(str(self.model_dir / filename),
-                                                  network_type,
-                                                  side,
-                                                  network)
+        self.networks[name] = NNMeta(str(self.model_dir / filename), network_type, side, network)
 
-    def add_predictors(self, model_a, model_b):
-        """ Add the predictors to the predictors dictionary """
-        logger.debug("Adding predictors: (model_a: %s, model_b: %s)", model_a, model_b)
-        self.predictors["a"] = model_a
-        self.predictors["b"] = model_b
-        logger.debug("Added predictors: %s", self.predictors)
-
-    def convert_multi_gpu(self):
-        """ Convert models to multi-gpu if requested """
+    def add_predictor(self, side, model):
+        """ Add a predictor to the predictors dictionary """
+        logger.debug("Adding predictor: (side: '%s', model: %s)", side, model)
         if self.gpus > 1:
-            for side in self.predictors.keys():
-                logger.debug("Converting to multi-gpu: side %s", side.capitalize())
-                model = multi_gpu_model(self.predictors[side], self.gpus)
-                self.predictors[side] = model
-            logger.debug("Converted to multi-gpu: %s", self.predictors)
+            logger.debug("Converting to multi-gpu: side %s", side)
+            model = multi_gpu_model(model, self.gpus)
+        self.predictors[side] = model
 
     def compile_predictors(self):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        self.convert_multi_gpu()
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
             loss_funcs = [self.loss_function(side)]
             if self.masks:
-                mask = self.masks[0] if side == "a" else self.masks[1]
-                loss_funcs.insert(0, self.mask_loss_function(mask, side))
+                loss_funcs.insert(0, self.mask_loss_function(self.masks[side], side))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(self.loss_names[side]) > 1:
@@ -175,59 +173,58 @@ class ModelBase():
         "Get current training iteration number"
         return self.state.iterations
 
-    @property
-    def base_filename(self):
-        """ Base filename for model and state files """
-        resolution = self.input_shape[0]
-        return "{}_{}_dim{}".format(self.name, resolution, self.encoder_dim)
-
-    def map_weights(self, swapped):
-        """ Map the weights for A/B side models for swapping """
-        logger.debug("Map weights: (swapped: %s)", swapped)
-        weights_map = {"A": dict(), "B": dict()}
-        side_a, side_b = ("A", "B") if not swapped else ("B", "A")
+    def map_models(self, swapped):
+        """ Map the models for A/B side for swapping """
+        logger.debug("Map models: (swapped: %s)", swapped)
+        models_map = {"a": dict(), "b": dict()}
+        sides = ("a", "b") if not swapped else ("b", "a")
         for network in self.networks.values():
-            if network.side == side_a:
-                weights_map["A"][network.type] = network.filename
-            if network.side == side_b:
-                weights_map["B"][network.type] = network.filename
-        logger.debug("Mapped weights: (weights_map: %s)", weights_map)
-        return weights_map
+            if network.side == sides[0]:
+                models_map["a"][network.type] = network.filename
+            if network.side == sides[1]:
+                models_map["b"][network.type] = network.filename
+        logger.debug("Mapped models: (models_map: %s)", models_map)
+        return models_map
 
     def log_summary(self):
         """ Verbose log the model summaries """
-        for name, nnmeta in self.networks.items():
-            logger.verbose("%s Summary:", name.title())
-            nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
+        for side in sorted(list(self.predictors.keys())):
+            logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
+            self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
+            for name, nnmeta in self.networks.items():
+                if nnmeta.side is not None and nnmeta.side != side:
+                    continue
+                logger.verbose("%s:", name.title())
+                nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
 
-    def load_weights(self, swapped):
-        """ Load weights from the weights file """
-        logger.debug("Load weights: (swapped: %s)", swapped)
-        weights_mapping = self.map_weights(swapped)
-        try:
-            for network in self.networks.values():
-                if not network.side:
-                    network.load_weights()
-                else:
-                    network.load_weights(
-                        weights_mapping[network.side][network.type])
-            logger.info("loaded model weights")
-            return True
-        except Exception as err:
-            logger.warning("Failed loading existing training data. Generating new weights")
-            logger.debug("Exception: %s", str(err))
-            return False
+    def load_models(self, swapped):
+        """ Load models from file """
+        logger.debug("Load model: (swapped: %s)", swapped)
+        model_mapping = self.map_models(swapped)
+        for network in self.networks.values():
+            if not network.side:
+                is_loaded = network.load()
+            else:
+                is_loaded = network.load(model_mapping[network.side][network.type])
+            if not is_loaded:
+                return is_loaded
+        if self.state.models:
+            logger.debug("Loading predictors from state file: '%s'", self.state.filename)
+            self.predictors = {side: model_from_json(model)
+                               for side, model in self.state.models.items()}
+        logger.info("loaded model")
+        return is_loaded
 
-    def save_weights(self):
-        """ Backup and save the weights files """
-        logger.debug("Backing up and saving weights")
+    def save_models(self):
+        """ Backup and save the models """
+        logger.debug("Backing up and saving models")
         should_backup = self.get_save_averages()
         for network in self.networks.values():
-            network.save_weights(should_backup=should_backup)
+            network.save(should_backup=should_backup)
         self.state.save(should_backup)
         # Put in a line break to avoid jumbled console
         print("\n")
-        logger.info("saved model weights")
+        logger.info("saved models")
 
     def get_save_averages(self):
         """ Return the loss averages since last save and reset historical losses
@@ -286,8 +283,7 @@ class ModelBase():
 class NNMeta():
     """ Class to hold a neural network and it's meta data
 
-    filename:   The full path and filename of the weights file for
-                this network.
+    filename:   The full path and filename of the model file for this network.
     type:       The type of network. For networks that can be swapped
                 The type should be identical for the corresponding
                 A and B networks, and should be unique for every A/B pair.
@@ -302,27 +298,35 @@ class NNMeta():
                      "network: %s", self.__class__.__name__, filename, network_type,
                      side, network)
         self.filename = filename
-        self.type = network_type
+        self.type = network_type.lower()
         self.side = side
         self.network = network
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_weights(self, fullpath=None):
-        """ Load model weights """
-        fullpath = fullpath if fullpath else self.filename
-        logger.debug("Loading weights: '%s'", fullpath)
-        self.network.load_weights(fullpath)
+    def load(self, fullpath=None):
+        """ Load model """
 
-    def save_weights(self, fullpath=None, should_backup=False):
-        """ Load model weights """
+        fullpath = fullpath if fullpath else self.filename
+        logger.debug("Loading model: '%s'", fullpath)
+        try:
+            network = load_model(self.filename, custom_objects=get_custom_objects())
+        except Exception as err:  # pylint: disable=broad-except
+            logger.warning("Failed loading existing training data. Generating new models")
+            logger.debug("Exception: %s", str(err))
+            return False
+        self.network = network  # Update network with saved model
+        return True
+
+    def save(self, fullpath=None, should_backup=False):
+        """ Save model """
         fullpath = fullpath if fullpath else self.filename
         if should_backup:
-            self.backup_weights(fullpath=fullpath)
-        logger.debug("Saving weights: '%s'", fullpath)
-        self.network.save_weights(fullpath)
+            self.backup(fullpath=fullpath)
+        logger.debug("Saving model: '%s'", fullpath)
+        self.network.save(fullpath)
 
-    def backup_weights(self, fullpath=None):
-        """ Backup Model Weights """
+    def backup(self, fullpath=None):
+        """ Backup Model """
         origfile = fullpath if fullpath else self.filename
         backupfile = origfile + ".bk"
         logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
@@ -333,12 +337,14 @@ class NNMeta():
 
 
 class State():
-    """ Class to hold the model's current state """
-    def __init__(self, model_dir, base_filename):
+    """ Class to hold the model's current state and autoencoder structure """
+    def __init__(self, model_dir, model_name):
         self.serializer = Serializer.get_serializer("json")
-        filename = "{}_state.{}".format(base_filename, self.serializer.ext)
+        filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
-        self.iterations = self.load()
+        self.iterations = 0
+        self.models = dict()
+        self.load()
 
     def load(self):
         """ Load epoch number from state file """
@@ -348,17 +354,15 @@ class State():
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
                 # TODO Remove this backwards compatibility fix to get iterations from epoch_no
-                iterations = state.get("epoch_no", None)
-                iterations = state["iterations"] if iterations is None else iterations
+                self.iterations = state.get("epoch_no", None)
+                self.iterations = state["iterations"] if iterations is None else iterations
+                self.models = state.get("models", dict())
+                logger.debug("Loaded state: %s", state)
         except IOError as err:
-            logger.warning("No existing training info found. Generating.")
+            logger.warning("No existing state file found. Generating.")
             logger.debug("IOError: %s", str(err))
-            iterations = 0
         except JSONDecodeError as err:
             logger.debug("JSONDecodeError: %s:", str(err))
-            iterations = 0
-        logger.debug("Loaded State: (iterations: %s)", iterations)
-        return iterations
 
     def save(self, should_backup=False):
         """ Save iteration number to state file """
@@ -367,7 +371,8 @@ class State():
             self.backup()
         try:
             with open(self.filename, "wb") as out:
-                state = {"iterations": self.iterations}
+                state = {"iterations": self.iterations,
+                         "models": self.models}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))
         except IOError as err:
@@ -383,3 +388,9 @@ class State():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
+
+    def add_models(self, models):
+        """ Add the auto encoders to the state file """
+        for side, model in models.items():
+            self.models[side] = model.to_json()
+            logger.debug("Added autoencoder models to state file. Side: %s", side)

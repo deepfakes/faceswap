@@ -139,7 +139,7 @@ class Train():
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.save_weights()
+                model.save_models()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
             exit(0)
@@ -153,7 +153,6 @@ class Train():
         model = PluginLoader.get_model(self.trainer_name)(model_dir,
                                                           self.args.gpus)
 
-        model.load_weights(swapped=False)
         logger.debug("Loaded Model")
         return model
 
@@ -186,13 +185,13 @@ class Train():
                 break
             elif save_iteration:
                 logger.trace("Save Iteration: (iteration: %s", iteration)
-                model.save_weights()
+                model.save_models()
             elif self.save_now:
                 logger.trace("Save Requested: (iteration: %s", iteration)
-                model.save_weights()
+                model.save_models()
                 self.save_now = False
         logger.debug("Training cycle complete")
-        model.save_weights()
+        model.save_models()
         self.stop = True
 
     def monitor_preview(self, thread):

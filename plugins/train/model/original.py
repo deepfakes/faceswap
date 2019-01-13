@@ -29,8 +29,8 @@ class Model(ModelBase):
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")
-        self.add_network("decoder", "A", self.decoder())
-        self.add_network("decoder", "B", self.decoder())
+        self.add_network("decoder", "a", self.decoder())
+        self.add_network("decoder", "b", self.decoder())
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
@@ -39,13 +39,11 @@ class Model(ModelBase):
         logger.debug("Initializing model")
         inp = Input(shape=self.input_shape)
 
-        ae_a = KerasModel(
-            inp,
-            self.networks["decoder_a"].network(self.networks["encoder"].network(inp)))
-        ae_b = KerasModel(
-            inp,
-            self.networks["decoder_b"].network(self.networks["encoder"].network(inp)))
-        self.add_predictors(ae_a, ae_b)
+        for side in ("a", "b"):
+            logger.debug("Adding Autoencoder. Side: %s", side)
+            decoder = self.networks["decoder_{}".format(side)].network
+            autoencoder = KerasModel(inp, decoder(self.networks["encoder"].network(inp)))
+            self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):
