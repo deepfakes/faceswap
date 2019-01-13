@@ -115,12 +115,23 @@ class Convert():
                 maxy, maxx = maxregion.max(axis=0)[:2]
                 lenx = maxx - minx
                 leny = maxy - miny
-                masky = int(minx + (lenx // 2))
-                maskx = int(miny + (leny // 2))
+                maskx = int(minx + (lenx // 2))
+                masky = int(miny + (leny // 2))
+                
+                crop, xmin, xmax, ymin, ymax, cx, cy = self.cal_crop(new_image, 
+                                                                     base_image, 
+                                                                     maskx, 
+                                                                     masky)
+                if crop:
+                    new_image = new_image[ymin:ymax+1, xmin:xmax+1]
+                    unitMask = unitMask[ymin:ymax+1, xmin:xmax+1]
+                    maskx = maskx - cx
+                    masky = masky - cy
+                
                 outimage = cv2.seamlessClone(new_image.astype(numpy.uint8),
                                              base_image.astype(numpy.uint8),
                                              unitMask,
-                                             (masky, maskx),
+                                             (maskx, masky),
                                              cv2.NORMAL_CLONE)
                 return outimage
 
@@ -129,6 +140,51 @@ class Convert():
         outimage = cv2.add(foreground, background)
 
         return outimage
+
+    def cal_crop(self, src, desc, centerx, centery):
+        crop = False
+        
+        src_w = src.shape[1]
+        src_h = src.shape[0]
+        desc_w = desc.shape[1]
+        desc_h = desc.shape[0]
+        
+        w_left = src_w // 2 - 1
+        h_up = src_h // 2 - 1
+        w_right = src_w - w_left
+        h_down = src_h - h_up
+        
+        
+        xmin = 0
+        ymin = 0
+        xmax = src_w-1
+        ymax = src_h-1
+        
+        cxshift = 0 
+        cyshift = 0
+        
+        if centerx - w_left < 0:
+            crop = True
+            xmin = - (centerx - w_left)
+            cxshift = cxshift + (centerx - w_left)//2
+            
+        if centery - h_up < 0:
+            crop = True
+            ymin = - (centery - h_up)
+            cyshift = cyshift + (centery - h_up)//2
+        
+        if centerx + w_right > desc_w - 1:
+            crop = True
+            xmax = xmax - ((centerx + w_right) - (desc_w - 1))
+            cxshift = cxshift + ((centerx + w_right) - (desc_w - 1))//2
+            
+        if centery + h_down > desc_h - 1:
+            crop = True
+            ymax = ymax - ((centery + h_down) - (desc_h - 1))
+            cyshift = cyshift + ((centery + h_down) - (desc_h - 1))//2
+        
+    
+        return crop, xmin, xmax, ymin, ymax, cxshift, cyshift
 
     def hist_match(self, source, template, mask=None):
         # Code borrowed from:
