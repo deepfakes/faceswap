@@ -108,7 +108,7 @@ class Convert():
         model_dir = get_folder(self.args.model_dir)
         model = PluginLoader.get_model(self.args.trainer)(model_dir,self.args.gpus)
 
-        model.load_weights(swapped=False)
+        model.load_weights(swapped=self.args.swap_model)
         logger.debug("Loaded Model")
         return model
 

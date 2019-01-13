@@ -218,10 +218,10 @@ class Convert():
                                         insertion_mask,
                                         (x_center, y_center),
                                         cv2.NORMAL_CLONE)
-            #blended = blended[h:-h, w:-w,:]
+            blended = blended[h:-h, w:-w,:]
         else:
             foreground = masked * image_mask
-            background = image * ( 1.0 - image_mask )
+            background = image * ( 1.0 - image_mask)
             blended = foreground + background
         
         numpy.clip(blended, 0.0, 255.0, out=blended)
