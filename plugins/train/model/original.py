@@ -34,7 +34,7 @@ class Model(ModelBase):
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
-    def initialize(self):
+    def build_autoencoders(self):
         """ Initialize original model """
         logger.debug("Initializing model")
         inp = Input(shape=self.input_shape)

@@ -66,13 +66,17 @@ class ModelBase():
         self.add_networks()
         self.load_models(swapped=False)
         if not self.predictors:
-            self.initialize()
+            self.build_autoencoders()
         self.log_summary()
         self.compile_predictors()
         self.state.add_models(self.predictors)
 
-    def initialize(self):
-        """ Override for Model Specific Initialization """
+    def build_autoencoders(self):
+        """ Override for Model Specific autoencoder builds
+            NB: This code will not be run if a model definition is
+                loaded from file, so make sure nothing is set in here
+                that is required for saved models
+        """
         raise NotImplementedError
 
     def add_networks(self):
@@ -357,7 +361,8 @@ class State():
                 self.iterations = state.get("epoch_no", None)
                 self.iterations = state["iterations"] if iterations is None else iterations
                 self.models = state.get("models", dict())
-                logger.debug("Loaded state: %s", state)
+                logger.debug("Loaded state: %s", {key: val for key, val in state.items()
+                                                  if key != "models"})
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
             logger.debug("IOError: %s", str(err))

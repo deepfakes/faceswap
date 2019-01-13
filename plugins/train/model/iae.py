@@ -29,23 +29,19 @@ class Model(ModelBase):
         self.add_network("inter", None, self.intermediate())
         logger.debug("Added networks")
 
-    def initialize(self):
+    def build_autoencoders(self):
         """ Initialize IAE model """
         logger.debug("Initializing model")
         inp = Input(shape=self.input_shape)
+
         decoder = self.networks["decoder"].network
         encoder = self.networks["encoder"].network
-        inter_a = self.networks["inter_a"].network
-        inter_b = self.networks["inter_b"].network
         inter_both = self.networks["inter"].network
-
-        ae_a = decoder(Concatenate()([inter_a(encoder(inp)),
-                                      inter_both(encoder(inp))]))
-        ae_b = decoder(Concatenate()([inter_b(encoder(inp)),
-                                      inter_both(encoder(inp))]))
-        self.add_predictor("a", KerasModel(inp, ae_a))
-        self.add_predictor("b", KerasModel(inp, ae_b))
-
+        for side in ("a", "b"):
+            inter_side = self.networks["inter_{}".format(side)].network
+            autoencoder = decoder(Concatenate()([inter_side(encoder(inp)),
+                                                 inter_both(encoder(inp))]))
+            self.add_predictor(side, KerasModel(inp, autoencoder))
         logger.debug("Initialized model")
 
     def encoder(self):

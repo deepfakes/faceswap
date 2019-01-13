@@ -40,21 +40,15 @@ class Model(OriginalModel):
         logger.debug("Set training data: %s", training_opts)
         return training_opts
 
-    def initialize(self):
+    def build_autoencoders(self):
         """ Initialize DFL H128 model """
         logger.debug("Initializing model")
-        inp_a = Input(shape=self.input_shape)
-        inp_b = Input(shape=self.input_shape)
-
-        ae_a = KerasModel(
-            [inp_a, self.masks["a"]],
-            self.networks["decoder_a"].network(self.networks["encoder"].network(inp_a)))
-        ae_b = KerasModel(
-            [inp_b, self.masks["b"]],
-            self.networks["decoder_b"].network(self.networks["encoder"].network(inp_b)))
-
-        self.add_predictor("a", ae_a)
-        self.add_predictor("b", ae_b)
+        for side in ("a", "b"):
+            inp = Input(shape=self.input_shape)
+            mask = self.masks[side]
+            decoder = self.networks["decoder_{}".format(side)].network
+            autoencoder = KerasModel([inp, mask], decoder(self.networks["encoder"].network(inp)))
+            self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):
