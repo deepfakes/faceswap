@@ -115,8 +115,8 @@ class Convert():
                 maxy, maxx = maxregion.max(axis=0)[:2]
                 lenx = maxx - minx
                 leny = maxy - miny
-                masky = int(minx + (lenx // 2))
-                maskx = int(miny + (leny // 2))
+                maskx = int(minx + (lenx // 2))
+                masky = int(miny + (leny // 2))
                 
                 crop, xmin, xmax, ymin, ymax, cx, cy = self.cal_crop(new_image, 
                                                                      base_image, 
