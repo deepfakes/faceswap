@@ -104,7 +104,8 @@ class Convert():
 
         if 'cnn' == self.mask_type:
             # Insert FCN-VGG16 segmentation mask model here
-            self.mask_type = 'cnn'
+            print('cnn not incorporated, using facehull instead')
+            self.mask_type = 'facehull'
             
         if 'smoothed' == self.mask_type:
             ones = numpy.zeros((training_size, training_size, 3), dtype='float32')
