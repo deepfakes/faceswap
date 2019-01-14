@@ -251,7 +251,7 @@ class TrainerBase():
         preds["a_a"] = self.model.predictors["a"].predict(feed_a)
         preds["b_a"] = self.model.predictors["b"].predict(feed_a)
         preds["a_b"] = self.model.predictors["a"].predict(feed_b)
-        preds["b_b"] = self.model.predictors["b"].predict(feed_a)
+        preds["b_b"] = self.model.predictors["b"].predict(feed_b)
 
         # Get the returned image from predictors that emit multiple items
         if not isinstance(preds["a_a"], np.ndarray):
