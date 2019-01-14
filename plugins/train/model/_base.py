@@ -10,7 +10,7 @@ import sys
 
 from json import JSONDecodeError
 from keras import losses
-from keras.models import load_model, model_from_json
+from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
@@ -43,7 +43,6 @@ class ModelBase():
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
         self.training_opts = self.set_training_data()
-        self.masks = self.set_masks()
 
         self.build()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
@@ -62,26 +61,16 @@ class ModelBase():
         """ Override to set model specific training data """
         return dict()
 
-    def set_masks(self):  # pylint: disable=no-self-use
-        """ Override to set model specific masks """
-        return dict()
-
     def build(self):
         """ Build the model. Override for custom build methods """
         self.add_networks()
         self.load_models(swapped=False)
-        if not self.predictors:
-            self.build_autoencoders()
+        self.build_autoencoders()
         self.log_summary()
         self.compile_predictors()
-        self.state.add_models(self.predictors)
 
     def build_autoencoders(self):
-        """ Override for Model Specific autoencoder builds
-            NB: This code will not be run if a model definition is
-                loaded from file, so make sure nothing is set in here
-                that is required for saved models
-        """
+        """ Override for Model Specific autoencoder builds """
         raise NotImplementedError
 
     def add_networks(self):
@@ -115,6 +104,16 @@ class ModelBase():
             logger.debug("Converting to multi-gpu: side %s", side)
             model = multi_gpu_model(model, self.gpus)
         self.predictors[side] = model
+        self.store_shapes(side, model)
+
+    def store_shapes(self, side, model):
+        """ Store the input and output shapes to state """
+        logger.debug("Adding shapes to state: (side: '%s'", side)
+        inp = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        output = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.outputs}
+        self.state.inputs[side] = inp
+        self.state.outputs[side] = output
+        logger.debug("Added shapes:(side: '%s', input: %s, output: %s", side, inp, output)
 
     def compile_predictors(self):
         """ Compile the predictors """
@@ -123,8 +122,11 @@ class ModelBase():
 
         for side, model in self.predictors.items():
             loss_funcs = [self.loss_function(side)]
-            if self.masks:
-                loss_funcs.insert(0, self.mask_loss_function(self.masks[side], side))
+            mask_name = [key for key in self.state.inputs[side].keys()
+                         if key.startswith("mask")]
+            if mask_name:
+                mask = [inp for inp in model.inputs if inp.name == mask_name[0]][0]
+                loss_funcs.insert(0, self.mask_loss_function(mask, side))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(self.loss_names[side]) > 1:
@@ -216,12 +218,9 @@ class ModelBase():
             else:
                 is_loaded = network.load(model_mapping[network.side][network.type])
             if not is_loaded:
-                return is_loaded
-        if self.state.models:
-            logger.debug("Loading predictors from state file: '%s'", self.state.filename)
-            self.predictors = {side: model_from_json(model)
-                               for side, model in self.state.models.items()}
-        logger.info("loaded model")
+                break
+        if is_loaded:
+            logger.info("loaded model")
         return is_loaded
 
     def save_models(self):
@@ -310,6 +309,7 @@ class NNMeta():
         self.type = network_type.lower()
         self.side = side
         self.network = network
+        self.network.name = self.type
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def load(self, fullpath=None):
@@ -324,6 +324,7 @@ class NNMeta():
             logger.debug("Exception: %s", str(err))
             return False
         self.network = network  # Update network with saved model
+        self.network.name = self.type
         return True
 
     def save(self, fullpath=None, should_backup=False):
@@ -352,21 +353,20 @@ class State():
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
         self.iterations = 0
-        self.models = dict()
+        self.inputs = dict()
+        self.outputs = dict()
         self.config = dict()
         self.load()
 
     def load(self):
         """ Load epoch number from state file """
         logger.debug("Loading State")
-        iterations = 0
         try:
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                # TODO Remove this backwards compatibility fix to get iterations from epoch_no
-                self.iterations = state.get("epoch_no", None)
-                self.iterations = state["iterations"] if iterations is None else iterations
-                self.models = state.get("models", dict())
+                self.iterations = state.get("iterations", 0)
+                self.inputs = state.get("inputs", dict())
+                self.outputs = state.get("outputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
@@ -384,7 +384,8 @@ class State():
         try:
             with open(self.filename, "wb") as out:
                 state = {"iterations": self.iterations,
-                         "models": self.models,
+                         "inputs": self.inputs,
+                         "outputs": self.outputs,
                          "config": _CONFIG}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))
@@ -401,9 +402,3 @@ class State():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
-
-    def add_models(self, models):
-        """ Add the auto encoders to the state file """
-        for side, model in models.items():
-            self.models[side] = model.to_json()
-            logger.debug("Added autoencoder models to state file. Side: %s", side)

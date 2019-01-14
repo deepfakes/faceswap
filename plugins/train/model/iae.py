@@ -32,16 +32,18 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize IAE model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.input_shape)
+        inp = Input(shape=self.input_shape, name="face")
 
         decoder = self.networks["decoder"].network
         encoder = self.networks["encoder"].network
         inter_both = self.networks["inter"].network
         for side in ("a", "b"):
             inter_side = self.networks["inter_{}".format(side)].network
-            autoencoder = decoder(Concatenate()([inter_side(encoder(inp)),
-                                                 inter_both(encoder(inp))]))
-            self.add_predictor(side, KerasModel(inp, autoencoder))
+            output = decoder(Concatenate()([inter_side(encoder(inp)),
+                                            inter_both(encoder(inp))]))
+
+            autoencoder = KerasModel(inp, output)
+            self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):

@@ -24,13 +24,6 @@ class Model(OriginalModel):
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_masks(self):
-        """ Mask shapes for dfaker """
-        mask_shape = (self.input_shape[0] * 2, self.input_shape[1] * 2, 1)
-        mask_a = Input(shape=mask_shape)
-        mask_b = Input(shape=mask_shape)
-        return {"a": mask_a, "b": mask_b}
-
     def set_training_data(self):
         """ Set the dictionary for training """
         logger.debug("Setting training data")
@@ -45,11 +38,13 @@ class Model(OriginalModel):
     def build_autoencoders(self):
         """ Initialize Dfaker model """
         logger.debug("Initializing model")
+        mask_shape = (self.input_shape[0] * 2, self.input_shape[1] * 2, 1)
         for side in ("a", "b"):
-            inp = Input(shape=self.input_shape)
-            mask = self.masks[side]
+            inp = [Input(shape=self.input_shape, name="face"),
+                   Input(shape=mask_shape, name="mask")]
             decoder = self.networks["decoder_{}".format(side)].network
-            autoencoder = KerasModel([inp, mask], decoder(self.networks["encoder"].network(inp)))
+            output = decoder(self.networks["encoder"].network(inp[0]))
+            autoencoder = KerasModel(inp, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 

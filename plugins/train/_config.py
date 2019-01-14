@@ -70,13 +70,11 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="complexity_decoder_a", datatype=int, default=384,
             rounding=16, min_max=(64, 1024),
-            info="Decoder A Complexity. Only applicable for STANDARD and "
-                 "ORIGINAL encoders")
+            info="Decoder A Complexity.")
         self.add_item(
             section=section, title="complexity_decoder_b", datatype=int, default=512,
             rounding=16, min_max=(64, 1024),
-            info="Decoder B Complexity. Only applicable for STANDARD and "
-                 "ORIGINAL encoders")
+            info="Decoder B Complexity.")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Use subpixel upscaling rather than pixel shuffler.\n"
