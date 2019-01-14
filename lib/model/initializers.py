@@ -60,4 +60,4 @@ class ICNR_init(Initializer):
         return x
 
     def get_config(self):
-        return {'scale': self.value, 'initializer': self.initializer}
+        return {'scale': self.scale, 'initializer': self.initializer}
