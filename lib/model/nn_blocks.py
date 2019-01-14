@@ -13,10 +13,10 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-
+from keras.initializers import he_normal
 from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
-
+from .initializers import ICNR_init
 
 # <<< Original Model Blocks >>> #
 
@@ -38,7 +38,11 @@ def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
 def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
     """ Upscale Layer """
     def block(inp):
-        var_x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same', **kwargs)(inp)
+        var_x = Conv2D(filters * 4,
+                       kernel_size=kernel_size,
+                       padding='same',
+                       kernel_initializer=ICNR_init(initializer=he_normal(), scale=2),
+                       **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
         var_x = LeakyReLU(0.1)(var_x)
