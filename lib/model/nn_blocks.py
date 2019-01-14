@@ -13,7 +13,7 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-
+from keras.initializers import he_uniform
 from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
 
@@ -27,6 +27,7 @@ def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
                        kernel_size=kernel_size,
                        strides=strides,
                        padding='same',
+                       kernel_initializer=he_uniform(),
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
@@ -38,7 +39,11 @@ def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
 def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
     """ Upscale Layer """
     def block(inp):
-        var_x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same', **kwargs)(inp)
+        var_x = Conv2D(filters * 4,
+                       kernel_size=kernel_size,
+                       padding='same',
+                       kernel_initializer=he_uniform(),
+                       **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
         var_x = LeakyReLU(0.1)(var_x)
@@ -59,11 +64,13 @@ def res_block(inp, filters, kernel_size=3, **kwargs):
                    kernel_size=kernel_size,
                    use_bias=False,
                    padding="same",
+                   kernel_initializer=he_uniform(),
                    **kwargs)(var_x)
     var_x = LeakyReLU(alpha=0.2)(var_x)
     var_x = Conv2D(filters,
                    kernel_size=kernel_size,
                    use_bias=False,
+                   kernel_initializer=he_uniform(),
                    padding="same",
                    **kwargs)(var_x)
     var_x = Add()([var_x, inp])
@@ -79,6 +86,7 @@ def conv_sep(filters):
         var_x = SeparableConv2D(filters,
                                 kernel_size=5,
                                 strides=2,
+                                kernel_initializer=he_uniform(),
                                 padding='same')(inp)
         var_x = Activation("relu")(var_x)
         return var_x
