@@ -3,8 +3,12 @@
     Initializers from:
         shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
 
+
+import sys
+import inspect
 import tensorflow as tf
-from keras.initializers import Initializer
+from keras import initializers
+from keras.utils.generic_utils import get_custom_objects
 
 
 def icnr_keras(shape, dtype=None):
@@ -27,7 +31,7 @@ def icnr_keras(shape, dtype=None):
     
     
     
-class ICNR_init(Initializer):
+class ICNR_init(initializers.Initializer):
     '''
     ICNR initializer for checkerboard artifact free sub pixel convolution
 
@@ -60,4 +64,13 @@ class ICNR_init(Initializer):
         return x
 
     def get_config(self):
-        return {'scale': self.scale, 'initializer': self.initializer}
+        config = {'scale': self.scale,
+                  'initializer': initializers.serialize(self.initializer)
+                  }
+        base_config = super(ICNR_init, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+        
+# Update initializers into Keras custom objects
+for name, obj in inspect.getmembers(sys.modules[__name__]):
+    if inspect.isclass(obj) and obj.__module__ == __name__:
+        get_custom_objects().update({name: obj})
