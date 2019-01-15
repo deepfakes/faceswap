@@ -88,6 +88,21 @@ class Config(FaceswapConfig):
                  "Make sure your resolution is divisible by 64 "
                  "(e.g. 64, 128, 256 etc.)")
 
+        # << ORIGINAL HIRES MODEL OPTIONS >> #
+        section = "model.original_villain"
+        self.add_section(title=section,
+                         info="A Higher resolution version of the Original "
+                              "Model by VillainGuy.\n"
+                              "Extremely VRAM heavy. Full model requires 9GB+")
+        self.add_item(
+            section=section, title="lowmem", datatype=bool, default=False,
+            info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
+                 "with a changed lowmem mode are not compatible with each other.")
+        self.add_item(
+            section=section, title="dssim_loss", datatype=bool, default=False,
+            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
+                 "May increase overall quality.")
+
         # << DFAKER MODEL OPTIONS >> #
         section = "model.dfaker"
         self.add_section(title=section,

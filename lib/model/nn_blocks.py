@@ -73,13 +73,14 @@ def res_block(inp, filters, kernel_size=3, **kwargs):
 
 # <<< OriginalHiRes Blocks >>> #
 
-def conv_sep(filters):
+def conv_sep(filters, kernel_size=5, strides=2, **kwargs):
     """ Seperable Convolution Layer """
     def block(inp):
         var_x = SeparableConv2D(filters,
-                                kernel_size=5,
-                                strides=2,
-                                padding='same')(inp)
+                                kernel_size=kernel_size,
+                                strides=strides,
+                                padding='same',
+                                **kwargs)(inp)
         var_x = Activation("relu")(var_x)
         return var_x
     return block
