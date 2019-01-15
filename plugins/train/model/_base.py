@@ -33,13 +33,16 @@ class ModelBase():
         self.input_shape = input_shape
         self.encoder_dim = encoder_dim
         self.trainer = trainer
-
         self.name = self.set_model_name()
+
+        self.state = State(self.model_dir, self.name)
+        self.load_input_shape()
+
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.loss_names = dict()  # Loss names for model
         self.history = dict()  # Loss history per save iteration)
-        self.state = State(self.model_dir, self.name)
+
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
         self.training_opts = self.set_training_data()
@@ -70,7 +73,14 @@ class ModelBase():
         self.compile_predictors()
 
     def build_autoencoders(self):
-        """ Override for Model Specific autoencoder builds """
+        """ Override for Model Specific autoencoder builds
+
+            NB! ENSURE YOU NAME YOUR INPUTS. At least the following input names
+            are expected:
+                face (the input for image)
+                mask (the input for mask if it is used)
+
+        """
         raise NotImplementedError
 
     def add_networks(self):
@@ -83,6 +93,20 @@ class ModelBase():
         retval = os.path.splitext(basename)[0].lower()
         logger.debug("model name: '%s'", retval)
         return retval
+
+    def load_input_shape(self):
+        """ Load the input shape from state file if it exists """
+        logger.debug("Loading Input Shape from State file")
+        if not self.state.inputs:
+            logger.debug("No input shapes saved. Using model config")
+            return
+        if not self.state.face_shapes:
+            logger.warning("Input shapes stored in State file, but no matches for 'face'."
+                           "Using model config")
+            return
+        input_shape = self.state.face_shapes[0]
+        logger.debug("Setting input shape from state file: %s", input_shape)
+        self.input_shape = input_shape
 
     def add_network(self, network_type, side, network):
         """ Add a NNMeta object """
@@ -104,16 +128,18 @@ class ModelBase():
             logger.debug("Converting to multi-gpu: side %s", side)
             model = multi_gpu_model(model, self.gpus)
         self.predictors[side] = model
-        self.store_shapes(side, model)
+        if not self.state.inputs:
+            self.store_input_shapes(model)
 
-    def store_shapes(self, side, model):
+    def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
-        logger.debug("Adding shapes to state: (side: '%s'", side)
-        inp = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
-        output = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.outputs}
-        self.state.inputs[side] = inp
-        self.state.outputs[side] = output
-        logger.debug("Added shapes:(side: '%s', input: %s, output: %s", side, inp, output)
+        logger.debug("Adding input shapes to state for model")
+        inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        if not any(inp for inp in inputs.keys() if inp.startswith("face")):
+            raise ValueError("No input named 'face' was found. Check your input naming. "
+                             "Current input names: {}".format(inputs))
+        self.state.inputs = inputs
+        logger.debug("Added input shapes: %s", self.state.inputs)
 
     def compile_predictors(self):
         """ Compile the predictors """
@@ -122,7 +148,7 @@ class ModelBase():
 
         for side, model in self.predictors.items():
             loss_funcs = [self.loss_function(side)]
-            mask_name = [key for key in self.state.inputs[side].keys()
+            mask_name = [key for key in self.state.inputs.keys()
                          if key.startswith("mask")]
             if mask_name:
                 mask = [inp for inp in model.inputs if inp.name == mask_name[0]][0]
@@ -354,9 +380,18 @@ class State():
         self.filename = str(model_dir / filename)
         self.iterations = 0
         self.inputs = dict()
-        self.outputs = dict()
         self.config = dict()
         self.load()
+
+    @property
+    def face_shapes(self):
+        """ Return a list of stored face shape inputs """
+        return [tuple(val) for key, val in self.inputs.items() if key.startswith("face")]
+
+    @property
+    def mask_shapes(self):
+        """ Return a list of stored mask shape inputs """
+        return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
     def load(self):
         """ Load epoch number from state file """
@@ -366,7 +401,6 @@ class State():
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
                 self.iterations = state.get("iterations", 0)
                 self.inputs = state.get("inputs", dict())
-                self.outputs = state.get("outputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
@@ -385,7 +419,6 @@ class State():
             with open(self.filename, "wb") as out:
                 state = {"iterations": self.iterations,
                          "inputs": self.inputs,
-                         "outputs": self.outputs,
                          "config": _CONFIG}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))
