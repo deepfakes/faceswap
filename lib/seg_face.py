@@ -40,8 +40,8 @@ class Mask():
             print('   --- Batch number ' + str(num) + ': ---')
             print('       - model run complete')
             
-            batch_of_masks = self.postprocessing(batch_of_results, batch_of_images, image_size)
-            blended = self.blend_image_and_mask(batch_of_images,batch_of_masks)
+            masks, images = self.postprocessing(batch_of_results, batch_of_images, image_size, conservative=False)
+            blended = self.blend_image_and_mask(masks, images)
             print('       - postprocessing complete')
             
             if not os.path.exists(mask_directory):
@@ -51,7 +51,7 @@ class Mask():
             #for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
-                    cv2.imwrite(str(mask_directory) + '/' + str(p.stem) + '.png', mask)
+                    cv2.imwrite(str(mask_directory) + '/' + str(p.stem) + '.png', mask, [cv2.IMWRITE_PNG_COMPRESSION,3])
                     i += 1
             print('       - masks saved to directory')
             
@@ -105,7 +105,7 @@ class Mask():
             images[i] = self.preprocessing(image)
         return images
 
-    def blend_image_and_mask(self, image_batch, mask_batch, alpha=0.5, color=(0.0,0.0,127.5)):
+    def blend_image_and_mask(self, mask_batch, image_batch, alpha=0.5, color=(0.0,0.0,127.5)):
         image_batch += numpy.array((104.00698793,116.66876762,122.67891434))
         mask_batch = numpy.repeat(mask_batch, 3, axis=-1)
         mask_batch *= image_batch
@@ -144,25 +144,28 @@ class Mask():
         
         return rect
         
-    def postprocessing(self, batch_of_results,batch_of_images, image_size):
-        batches = zip(batch_of_results,batch_of_images)
-        resized_batch = batch_of_results
-         #mask_list = [self.dense_crf(mask,image) for mask, image in batches]
-         #mask_list = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
-         #resized_batch = numpy.stack(mask_list,axis=0)
-        resized_batch = resized_batch.argmax(axis=3).astype('float32')
-        resized_batch = numpy.clip(resized_batch,0.0,1.0)
-        batch = numpy.expand_dims(resized_batch, axis=-1)
+    def postprocessing(self, masks,images, image_size, conservative):
+        if conservative:
+            masks[:,:,:,0][masks[:,:,:,1]<0.5] = 1.0
+        masks = masks.argmax(axis=3).astype('float32')
+        masks = numpy.expand_dims(masks, axis=-1)
+
+         #batches = zip(batch_of_results,batch_of_images)
+         #masks_list = [self.dense_crf(masks,image) for masks, image in batches]
+         #resized_batch = numpy.stack(masks_list,axis=0)
         #resized_batch[resized_batch!=0.0] = 1.0
-        batch = numpy.pad(batch, ((0,0),(3, 3), (3, 3),(0, 0)), 'constant', constant_values=0)
-        batch = [self.fill_holes(image) for image in batch]
-        batch = numpy.stack([self.smooth_contours(image) for image in batch])
-        batch = numpy.expand_dims(batch, axis=-1)
-        batch = batch[:,3:-3,3:-3,:]
+        masks = numpy.pad(masks, ((0,0),(12, 12), (12, 12),(0, 0)), 'constant', constant_values=0)
+        masks = [self.fill_holes(mask) for mask in masks]
+        masks = numpy.stack([self.smooth_contours(mask) for mask in masks])
+        masks = numpy.expand_dims(masks, axis=-1)
+        masks = masks[:,12:-12,12:-12,:]
+        masks = numpy.stack([cv2.resize(mask, image_size, cv2.INTER_AREA) for mask in masks])
+        masks = numpy.expand_dims(masks, axis=-1)
+        images = numpy.stack([cv2.resize(img, image_size, cv2.INTER_AREA) for img in images])
         #batch = self.select_largest_segment(batch)
         #batch = numpy.stack(lists)
 
-        return batch
+        return masks, images
 
     def select_largest_segment(self, mask):
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
@@ -172,27 +175,22 @@ class Mask():
         
         return mask
         
-    def smooth_contours(self, mask, smooth_iterations=2, smooth_kernel_radius=2):
+    def smooth_contours(self, mask, smooth_iterations=6, smooth_kernel_radius=2):
         k_size = int(smooth_kernel_radius * 2 + 1)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k_size, k_size))
 
-        for i in range(smooth_iterations):
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
+        #for i in range(smooth_iterations):
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
                              iterations=smooth_iterations)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
                              iterations=smooth_iterations)
 
         return mask
         
     def fill_holes(self, mask):
-        #black = numpy.zeros((mask.shape[0]+4,mask.shape[1]+4,
-        #                     mask.shape[2]), dtype = 'float32')
-        black = mask.copy()                               
-        #central = slice(2,-2), slice(2,-2)
-        #black_[central] = mask
-        cv2.floodFill(black, None, (0, 0), 1.0)
-        #mask[black[central]==0.0] = 1.0
-        mask[black==0.0] = 1.0
+        black = mask.copy()
+        cv2.floodFill(black, None, (0, 0), 1)
+        mask[black==0.0] = 1
         
         return mask
     '''
