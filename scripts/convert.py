@@ -44,7 +44,7 @@ class Convert():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
-        """ Original & LowMem models go with Adjust or Masked converter
+        """ Original & LowMem models go with converter
 
             Note: GAN prediction outputs a mask + an image, while other
             predicts only an image. """

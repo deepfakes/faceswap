@@ -562,8 +562,8 @@ class ConvertArgs(ExtractConvertArgs):
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "type": str,
-                              "choices": ("Masked"),
-                              "default": "Masked",
+                              "choices": PluginLoader.get_available_converters(),
+                              "default": "masked",
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
