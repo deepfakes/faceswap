@@ -51,7 +51,7 @@ class Mask():
             #for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
-                    cv2.imwrite(str(mask_directory) + str(p.stem) + '.png', mask)
+                    cv2.imwrite(str(mask_directory) + '/' + str(p.stem) + '.png', mask)
                     i += 1
             print('       - masks saved to directory')
             
@@ -152,14 +152,17 @@ class Mask():
          #resized_batch = numpy.stack(mask_list,axis=0)
         resized_batch = resized_batch.argmax(axis=3).astype('float32')
         resized_batch = numpy.clip(resized_batch,0.0,1.0)
-        resized_batch = numpy.expand_dims(resized_batch, axis=-1)
+        batch = numpy.expand_dims(resized_batch, axis=-1)
         #resized_batch[resized_batch!=0.0] = 1.0
-        lists = [ self.fill_holes(image) for image in resized_batch]
-        #resized_batch = self.smooth_contours(resized_batch)
-        #resized_batch = self.select_largest_segment(resized_batch)
-        resized_batch = numpy.stack(lists)
-        
-        return resized_batch
+        batch = numpy.pad(batch, ((0,0),(3, 3), (3, 3),(0, 0)), 'constant', constant_values=0)
+        batch = [self.fill_holes(image) for image in batch]
+        batch = numpy.stack([self.smooth_contours(image) for image in batch])
+        batch = numpy.expand_dims(batch, axis=-1)
+        batch = batch[:,3:-3,3:-3,:]
+        #batch = self.select_largest_segment(batch)
+        #batch = numpy.stack(lists)
+
+        return batch
 
     def select_largest_segment(self, mask):
         results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
@@ -170,24 +173,26 @@ class Mask():
         return mask
         
     def smooth_contours(self, mask, smooth_iterations=2, smooth_kernel_radius=2):
-        kernel_size = int(smooth_kernel_radius * 2 + 1)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                           (kernel_size, kernel_size))
+        k_size = int(smooth_kernel_radius * 2 + 1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k_size, k_size))
+
         for i in range(smooth_iterations):
-            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
                              iterations=smooth_iterations)
-            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, anchor=(-1, -1),
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, anchor=(-1, -1),
                              iterations=smooth_iterations)
-        
+
         return mask
         
     def fill_holes(self, mask):
-        black_background = numpy.zeros((mask.shape[0]+4,mask.shape[1]+4,
-                                       mask.shape[2]), dtype = 'float32')
-        central = slice(2,-2), slice(2,-2)
-        black_background[central] = mask
-        cv2.floodFill(black_background, None, (0, 0), 1.0)
-        mask[black_background[central]==0.0] = 1.0
+        #black = numpy.zeros((mask.shape[0]+4,mask.shape[1]+4,
+        #                     mask.shape[2]), dtype = 'float32')
+        black = mask.copy()                               
+        #central = slice(2,-2), slice(2,-2)
+        #black_[central] = mask
+        cv2.floodFill(black, None, (0, 0), 1.0)
+        #mask[black[central]==0.0] = 1.0
+        mask[black==0.0] = 1.0
         
         return mask
     '''
