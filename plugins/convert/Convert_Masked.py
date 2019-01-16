@@ -182,13 +182,6 @@ class Convert():
         
         if self.avg_color_adjust:
             for iterations in [0,1]:
-                '''
-                numpy.clip(masked, 0.0, 255.0, out=masked)
-                old_avgs = numpy.average(image * image_mask, axis=(0,1))
-                new_avgs = numpy.average(masked * image_mask, axis=(0,1))
-                diff = old_avgs - new_avgs
-                masked = masked + diff
-                '''
                 numpy.clip(masked, 0.0, 255.0, out=masked)
                 diff = image - masked
                 avg_diff = numpy.sum(diff * image_mask, axis=(0,1))
@@ -237,7 +230,7 @@ class Convert():
         return source
         
     def hist_match(self, source, template, image_mask):
-        '''
+        
         outshape = source.shape
         source = source.ravel()
         template = template.ravel()
@@ -251,15 +244,11 @@ class Convert():
         t_quants /= t_quants[-1]  # cdf
         interp_s_values = numpy.interp(s_quants, t_quants, t_values)
         source = interp_s_values[bin_idx].reshape(outshape)
-        '''
-        bins = numpy.arange(256.0) #+1
-        print('source', numpy.max(source), numpy.min(source))
-        print('template', numpy.max(template), numpy.min(template))
-        #source_CDF, _ = numpy.histogram(source, bins=bins, range=[0,256], density=True, weights=image_mask)
-        template_CDF, _ = numpy.histogram(template, bins=bins, density=True) # weights=image_mask) 
-        #print(source_CDF, template_CDF)
-        #new_pixels = numpy.interp(source_CDF, template_CDF, bins[:-1])
-        #source = new_pixels[source.astype('uint8').ravel()].reshape(source.shape)
-        flat_new_image = numpy.interp(source.ravel(), bins[:-1], template_CDF) * 255.0
         
-        return flat_new_image.reshape(source.shape) * 255.0# source
+        '''
+        bins = numpy.arange(256)
+        template_CDF, _ = numpy.histogram(template, bins=bins, density=True)
+        flat_new_image = numpy.interp(source.ravel(), bins[:-1], template_CDF) * 255.0
+        return flat_new_image.reshape(source.shape) * 255.0
+        '''
+        return source
