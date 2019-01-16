@@ -25,12 +25,9 @@ class Model(OriginalModel):
 
     def set_training_data(self):
         """ Set the dictionary for training """
-        logger.debug("Setting training data")
-        training_opts = dict()
-        training_opts["mask_type"] = self.config["mask_type"]
-        training_opts["preview_images"] = 10
-        logger.debug("Set training data: %s", training_opts)
-        return training_opts
+        self.training_opts["mask_type"] = self.config["mask_type"]
+        self.training_opts["preview_images"] = 10
+        super().set_training_data()
 
     def build_autoencoders(self):
         """ Initialize DFL H128 model """

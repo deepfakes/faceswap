@@ -31,6 +31,7 @@ class ModelBase():
         self.model_dir = model_dir
         self.gpus = gpus
         self.input_shape = input_shape
+        self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
         self.name = self.set_model_name()
@@ -45,7 +46,8 @@ class ModelBase():
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
-        self.training_opts = self.set_training_data()
+        self.training_opts = dict()
+        self.set_training_data()
 
         self.build()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
@@ -60,9 +62,14 @@ class ModelBase():
             _CONFIG = Config(model_name).config_dict
         return _CONFIG
 
-    def set_training_data(self):  # pylint: disable=no-self-use
-        """ Override to set model specific training data """
-        return dict()
+    def set_training_data(self):
+        """ Override to set model specific training data.
+
+            super() this method for default coverage ratio
+            otherwise be sure to add a ratio """
+        logger.debug("Setting training data")
+        self.training_opts["coverage_ratio"] = 0.625
+        logger.debug("Set training data: %s", self.training_opts)
 
     def build(self):
         """ Build the model. Override for custom build methods """
@@ -130,6 +137,8 @@ class ModelBase():
         self.predictors[side] = model
         if not self.state.inputs:
             self.store_input_shapes(model)
+        if not self.output_shape:
+            self.set_output_shape(model)
 
     def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
@@ -140,6 +149,15 @@ class ModelBase():
                              "Current input names: {}".format(inputs))
         self.state.inputs = inputs
         logger.debug("Added input shapes: %s", self.state.inputs)
+
+    def set_output_shape(self, model):
+        """ Set the output shape for use in training and convert """
+        logger.debug("Setting output shape")
+        out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
+        if not out:
+            raise ValueError("No outputs found! Check your model.")
+        self.output_shape = tuple(out[0])
+        logger.debug("Added output shape: %s", self.output_shape)
 
     def compile_predictors(self):
         """ Compile the predictors """

@@ -26,11 +26,8 @@ class Model(OriginalModel):
 
     def set_training_data(self):
         """ Set the dictionary for training """
-        logger.debug("Setting training data")
-        training_opts = dict()
-        training_opts["preview_images"] = 10
-        logger.debug("Set training data: %s", training_opts)
-        return training_opts
+        self.training_opts["preview_images"] = 10
+        super().set_training_data()
 
     def encoder(self):
         """ Encoder Network """

@@ -105,7 +105,7 @@ def set_system_verbosity(loglevel):
     logger.debug("System Verbosity level: %s", loglevel)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
-        for warncat in (FutureWarning, DeprecationWarning):
+        for warncat in (FutureWarning, DeprecationWarning, UserWarning):
             warnings.simplefilter(action='ignore', category=warncat)
 
 

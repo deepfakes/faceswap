@@ -19,21 +19,17 @@ class Model(OriginalModel):
                      self.__class__.__name__, args, kwargs)
         kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
-        kwargs["trainer"] = "dfaker"
         self.kernel_initializer = RandomNormal(0, 0.02)
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_training_data(self):
         """ Set the dictionary for training """
-        logger.debug("Setting training data")
-        training_opts = dict()
-        training_opts["serializer"] = self.config["alignments_format"]
-        training_opts["mask_type"] = self.config["mask_type"]
-        training_opts["full_face"] = True
-        training_opts["preview_images"] = 10
-        logger.debug("Set training data: %s", training_opts)
-        return training_opts
+        self.training_opts["serializer"] = self.config["alignments_format"]
+        self.training_opts["mask_type"] = self.config["mask_type"]
+        self.training_opts["full_face"] = True
+        self.training_opts["preview_images"] = 10
+        super().set_training_data()
 
     def build_autoencoders(self):
         """ Initialize Dfaker model """
