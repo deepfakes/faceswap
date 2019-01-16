@@ -60,13 +60,8 @@ class TrainerBase():
             See lib.training_data.ImageManipulation() for valid kwargs"""
         warped_zoom = self.model.input_shape[0] // 64
         target_zoom = warped_zoom
-        transform_kwargs = {"rotation_range": 10,
-                            "zoom_range": 0.05,
-                            "shift_range": 0.05,
-                            "random_flip": 0.4,
-                            "zoom": (warped_zoom, target_zoom),
-                            "coverage": 160,
-                            "scale": 5}
+        transform_kwargs = {"zoom": (warped_zoom, target_zoom),
+                            "coverage_ratio": 0.625}
         logger.debug(transform_kwargs)
         return transform_kwargs
 
@@ -173,10 +168,8 @@ class TrainerBase():
                          len(files_b),
                          self.model.training_opts.get("preview_images", 14))
         generator = TrainingDataGenerator(
-            transform_kwargs={"rotation_range": 0, "zoom_range": 0, "shift_range": 0,
-                              "random_flip": 0, "zoom": self.transform_kwargs["zoom"],
-                              "coverage": self.transform_kwargs["coverage"],
-                              "scale": self.transform_kwargs["scale"]},
+            transform_kwargs={"zoom": self.transform_kwargs["zoom"],
+                              "coverage_ratio": self.transform_kwargs["coverage_ratio"]},
             training_opts=self.model.training_opts)
 
         if output is None:

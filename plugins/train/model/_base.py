@@ -148,11 +148,9 @@ class ModelBase():
 
         for side, model in self.predictors.items():
             loss_funcs = [self.loss_function(side)]
-            mask_name = [key for key in self.state.inputs.keys()
-                         if key.startswith("mask")]
-            if mask_name:
-                mask = [inp for inp in model.inputs if inp.name == mask_name[0]][0]
-                loss_funcs.insert(0, self.mask_loss_function(mask, side))
+            mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
+            if mask:
+                loss_funcs.insert(0, self.mask_loss_function(mask[0], side))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(self.loss_names[side]) > 1:

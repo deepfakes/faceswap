@@ -118,7 +118,9 @@ class TrainingDataGenerator():
         if self.mask_function:
             landmarks = self.training_opts["landmarks"]
             src_pts = self.get_landmarks(filename, image, side, landmarks)
-            image = self.mask_function(src_pts, image, coverage=self.processing.coverage)
+            image = self.mask_function(src_pts,
+                                       image,
+                                       coverage=self.processing.get_coverage(image))
 
         image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)
@@ -164,8 +166,7 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, rotation_range=10, zoom_range=0.05, shift_range=0.05, random_flip=0.4,
-                 zoom=(1, 1), coverage=160, scale=5):
+    def __init__(self, zoom=(1, 1), coverage_ratio=0.625):
         """ rotation_range: Used for random transform
             zoom_range: Used for random transform
             shift_range: Used for random transform
@@ -174,20 +175,18 @@ class ImageManipulation():
             coverage: Used for random warp
             scale: Used for random warp
         """
-        logger.debug("Initializing %s: (rotation_range: %s, zoom_range: %s, shift_range: %s, "
-                     "random_flip: %s, zoom: %s, coverage: %s, scale: %s)",
-                     self.__class__.__name__, rotation_range, zoom_range, shift_range, random_flip,
-                     zoom, coverage, scale)
+        logger.debug("Initializing %s: (zoom: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, zoom, coverage_ratio)
         # Transform args
-        self.rotation_range = rotation_range
-        self.zoom_range = zoom_range
-        self.shift_range = shift_range
-        self.random_flip = random_flip
+        self.rotation_range = 10  # Range to randomly rotate the image by
+        self.zoom_range = 0.05  # Range to randomly zoom the image by
+        self.shift_range = 0.05  # Range to randomly shift the image by
+        self.random_flip = 0.49  # Chance to flip the image left > right
         # Transform and Warp args
         self.zoom = zoom
         # Warp args
-        self.coverage = coverage
-        self.scale = scale
+        self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
+        self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -206,6 +205,12 @@ class ImageManipulation():
             image = image[:, :, :3]
         return image, mask
 
+    def get_coverage(self, image):
+        """ Return coverage value for given image """
+        coverage = int(image.shape[0] * self.coverage_ratio)
+        logger.trace(coverage)
+        return coverage
+    
     def random_transform(self, image):
         """ Randomly transform an image """
         logger.trace("Randomly transforming image")
@@ -231,10 +236,11 @@ class ImageManipulation():
         logger.trace("Randomly warping image")
         image, mask = self.seperate_mask(image)
         height, width = image.shape[0:2]
+        coverage = self.get_coverage(image)
         assert height == width and height % 2 == 0
 
-        range_ = np.linspace(height // 2 - self.coverage // 2,
-                             height // 2 + self.coverage // 2, self.scale)
+        range_ = np.linspace(height // 2 - coverage // 2,
+                             height // 2 + coverage // 2, self.scale)
         mapx = np.broadcast_to(range_, (self.scale, self.scale))
         mapy = mapx.T
 
