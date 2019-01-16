@@ -82,7 +82,7 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup(arguments.loglevel, self.command)
+        log_setup(arguments.loglevel, arguments.logfile, self.command)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         try:
             script = self.import_script()
@@ -298,10 +298,17 @@ class FaceSwapArgs():
                             "dest": "loglevel",
                             "default": "INFO",
                             "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
-                            "help": "Log level. Stick with INFO or VERBOSE "
-                                    "unless you need to file an error report. Be "
-                                    "careful with TRACE as it will generate a lot "
-                                    "of data"})
+                            "help": "Log level. Stick with INFO or VERBOSE unless you need to "
+                                    "file an error report. Be careful with TRACE as it will "
+                                    "generate a lot of data"})
+        global_args.append({"opts": ("-LF", "--logfile"),
+                            "action": FileFullPaths,
+                            "filetypes": 'log',
+                            "type": str,
+                            "dest": "logfile",
+                            "help": "Path to store the logfile. Leave blank to store in the "
+                                    "faceswap folder",
+                            "default": None})
         # This is a hidden argument to indicate that the GUI is being used,
         # so the preview window should be redirected Accordingly
         global_args.append({"opts": ("-gui", "--gui"),
