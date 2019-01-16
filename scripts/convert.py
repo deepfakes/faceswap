@@ -15,8 +15,6 @@ from lib.faces_detect import DetectedFace
 from lib.multithreading import BackgroundGenerator, SpawnProcess
 from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
-from plugins.train._config import Config
-
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -106,9 +104,7 @@ class Convert():
         """ Load the model requested for conversion """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.args.trainer)(model_dir,self.args.gpus)
-
-        model.load_weights(swapped=self.args.swap_model)
+        model = PluginLoader.get_model(self.args.trainer)(model_dir, self.args.gpus, predict=True)
         logger.debug("Loaded Model")
         return model
 
@@ -116,10 +112,9 @@ class Convert():
         """ Load the requested converter for conversion """
         args = self.args
         conv = args.converter
-        config = Config(self.args.trainer).config_dict
-        
+
         converter = PluginLoader.get_converter(conv)(
-            model.converter(False),
+            model.converter(args.swap_model),
             trainer=args.trainer,
             blur_size=args.blur_size,
             coverage=args.coverage,
@@ -129,8 +124,8 @@ class Convert():
             erosion_size=args.erosion_size,
             match_histogram=args.match_histogram,
             avg_color_adjust=args.avg_color_adjust,
-            draw_transparent=args.draw_transparent)
-            #input_size=config['input_size'])
+            draw_transparent=args.draw_transparent,
+            input_size=model.input_shape[0])
 
         return converter
 
@@ -200,20 +195,16 @@ class Convert():
         try:
             filename, image, faces = item
             skip = self.opts.check_skipframe(filename)
-            
-            
-            # new refactor has config.image_size option
-            size = 128 if (self.args.trainer.strip().lower()
-               in ('gan128', 'originalhighres')) else 64
 
             if not skip:
                 for face in faces:
-                    image = converter.patch_image(image,face,size)              
+                    image = converter.patch_image(image, face)
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
+
 
 class OptionalActions():
     """ Process the optional actions for convert """

@@ -24,10 +24,12 @@ _CONFIG = None
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, input_shape=None, encoder_dim=None, trainer="original"):
+    def __init__(self, model_dir, gpus,
+                 input_shape=None, encoder_dim=None, trainer="original", predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, input_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      input_shape, encoder_dim)
+        self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
         self.input_shape = input_shape
@@ -179,11 +181,11 @@ class ModelBase():
     def loss_function(self, side):
         """ Set the loss function """
         if self.config.get("dssim_loss", False):
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
         self.loss_names[side] = ["loss"]
@@ -194,16 +196,16 @@ class ModelBase():
         """ Set the loss function for masks
             Side is input so we only log once """
         if self.config.get("dssim_mask_loss", False):
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using DSSIM Loss for mask")
             mask_loss_func = DSSIMObjective()
         else:
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using Mean Absolute Error Loss for mask")
             mask_loss_func = losses.mean_absolute_error
 
         if self.config.get("penalized_mask_loss", False):
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using Penalized Loss for mask")
             mask_loss_func = PenalizedLoss(mask, mask_loss_func)
 
@@ -241,6 +243,8 @@ class ModelBase():
 
     def log_summary(self):
         """ Verbose log the model summaries """
+        if self.predict:
+            return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
             self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
@@ -256,9 +260,10 @@ class ModelBase():
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:
-                is_loaded = network.load()
+                is_loaded = network.load(predict=self.predict)
             else:
-                is_loaded = network.load(model_mapping[network.side][network.type])
+                is_loaded = network.load(fullpath=model_mapping[network.side][network.type],
+                                         predict=self.predict)
             if not is_loaded:
                 break
         if is_loaded:
@@ -354,14 +359,26 @@ class NNMeta():
         self.network.name = self.type
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load(self, fullpath=None):
+    def load(self, fullpath=None, predict=False):
         """ Load model """
 
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Loading model: '%s'", fullpath)
         try:
             network = load_model(self.filename, custom_objects=get_custom_objects())
+        except ValueError as err:
+            if str(err).lower().startswith("cannot create group in read only mode"):
+                self.convert_legacy_weights()
+                return True
+            if predict:
+                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
+            logger.warning("Failed loading existing training data. Generating new models")
+            logger.debug("Exception: %s", str(err))
+            return False
+
         except Exception as err:  # pylint: disable=broad-except
+            if predict:
+                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
@@ -386,6 +403,13 @@ class NNMeta():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
+
+    def convert_legacy_weights(self):
+        """ Convert legacy weights files to hold the model topology """
+        logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
+        self.network.load_weights(self.filename)
+        self.save(should_backup=False)
+        self.network.name = self.type
 
 
 class State():

@@ -568,7 +568,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Select the trainer that was used to "
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
-                              "type": str,
+                              "type": str.lower,
                               "choices": PluginLoader.get_available_converters(),
                               "default": "masked",
                               "help": "Converter to use"})
@@ -582,7 +582,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "transition between the swapped face and "
                                       "the background image. Integer values "
                                       "will blur x pixels, fractions will blur "
-                                      "that % of the face area radius"})
+                                      "that %% of the face area radius"})
         argument_list.append({"opts": ("-e", "--erosion-size"),
                               "dest": "erosion_size",
                               "type": float,
@@ -595,7 +595,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "of the swapped area. Negative values "
                                       "apply dilation which increases the "
                                       "swapped area. Abs values >1 use pixels "
-                                      ". Fractions will erode/dilate that % "
+                                      ". Fractions will erode/dilate that %% "
                                       " of the mask area radius"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               "type": str.lower,
@@ -615,7 +615,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": None,
                               "help": "Sharpen the masked facial region of "
                                       "the converted images. Choice of filter "
-                                      "to use in sharpening process -- box" 
+                                      "to use in sharpening process -- box"
                                       "filter or gaussian filter."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
