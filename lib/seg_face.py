@@ -5,7 +5,7 @@ import keras.backend as K
 import numpy
 import cv2
 import os,sys,inspect,gc,pathlib
-import pydensecrf
+#import pydensecrf
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir) 
@@ -16,7 +16,8 @@ class Mask():
     def __init__(self):
         image_size = (256,256)
         batch_size = 24
-        image_directory = pathlib.Path('C:\data\images')
+        image_directory = pathlib.Path('D:/ML_Data/trump/')
+        mask_directory = pathlib.Path('D:/ML_Data/trump/masks/')
         model_file = 'C:/data/face_seg_300/converted_model.h5'
         
         #weight_file = pathlib.Path(r'C:\data\face_seg_300\converted_caffe_IR.npy')
@@ -43,11 +44,14 @@ class Mask():
             blended = self.blend_image_and_mask(batch_of_images,batch_of_masks)
             print('       - postprocessing complete')
             
+            if not os.path.exists(mask_directory):
+                os.makedirs(mask_directory)
+                
             for mask in blended:
             #for mask in resized_masks:
                 if i < len(image_file_list):
                     p = pathlib.Path(image_file_list[i])
-                    cv2.imwrite(str(image_directory) + r'\mask\ ' + str(p.stem) + '.png', mask)
+                    cv2.imwrite(str(mask_directory) + str(p.stem) + '.png', mask)
                     i += 1
             print('       - masks saved to directory')
             
@@ -142,16 +146,18 @@ class Mask():
         
     def postprocessing(self, batch_of_results,batch_of_images, image_size):
         batches = zip(batch_of_results,batch_of_images)
-        mask_list = [self.dense_crf(mask,image) for mask, image in batches]
-        mask_list = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
-        resized_batch = numpy.stack(mask_list,axis=0)
+        resized_batch = batch_of_results
+         #mask_list = [self.dense_crf(mask,image) for mask, image in batches]
+         #mask_list = [cv2.resize(mask, image_size, cv2.INTER_CUBIC) for mask in mask_list]
+         #resized_batch = numpy.stack(mask_list,axis=0)
         resized_batch = resized_batch.argmax(axis=3).astype('float32')
         resized_batch = numpy.clip(resized_batch,0.0,1.0)
         resized_batch = numpy.expand_dims(resized_batch, axis=-1)
         #resized_batch[resized_batch!=0.0] = 1.0
-        resized_batch = self.fill_holes(resized_batch)
+        lists = [ self.fill_holes(image) for image in resized_batch]
         #resized_batch = self.smooth_contours(resized_batch)
         #resized_batch = self.select_largest_segment(resized_batch)
+        resized_batch = numpy.stack(lists)
         
         return resized_batch
 
@@ -184,7 +190,7 @@ class Mask():
         mask[black_background[central]==0.0] = 1.0
         
         return mask
-
+    '''
     def dense_crf(self, probs, img, n_iters=10, 
                   sxy_gaussian=(1, 1), compat_gaussian=4,
                   kernel_gaussian=pydensecrf.densecrf.DIAG_KERNEL,
@@ -230,6 +236,6 @@ class Mask():
         Q = d.inference(n_iters)
         preds = np.array(Q, dtype=np.float32).reshape((n_classes, h, w)).transpose(1, 2, 0)
         return preds
-
+    '''
 if __name__ == '__main__':
     Mask()
