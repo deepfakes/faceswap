@@ -38,7 +38,7 @@ class Convert():
                                                             e_size)
         
     def patch_image(self, image, face_detected, encoder_size):
-        image_size = image.shape[1], image.shape[0]  #width,height
+        image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256
         align_eyes = False
@@ -227,6 +227,7 @@ class Convert():
             source[:, :, channel] = self.hist_match(source[:, :, channel],
                                                     target[:, :, channel],
                                                     image_mask[:, :, channel])
+        #source = numpy.stack([self.hist_match(source[:,:,c],target[:,:,c],image_mask[:,:,c]) for c in [0,1,2], axis=2)                                            
         return source
         
     def hist_match(self, source, template, image_mask):
