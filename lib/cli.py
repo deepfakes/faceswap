@@ -568,45 +568,55 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Select the trainer that was used to "
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
-                              "type": str.lower,
-                              "choices": ("Masked", "Adjust"),
-                              "default": "Masked",
+                              "type": str,
+                              "choices": PluginLoader.get_available_converters(),
+                              "default": "masked",
                               "help": "Converter to use"})
         argument_list.append({"opts": ("-b", "--blur-size"),
-                              "type": int,
+                              "type": float,
                               "action": Slider,
-                              "min_max": (0, 256),
-                              "rounding": 1,
-                              "default": 2,
-                              "help": "Blur size. (Masked converter only)"})
-        argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
-                              "dest": "erosion_kernel_size",
-                              "type": int,
+                              "min_max": (0.0, 256.0),
+                              "rounding": 0.1,
+                              "default": 2.0,
+                              "help": "Blur kernel size for smoothing the "
+                                      "transition between the swapped face and "
+                                      "the background image. Integer values "
+                                      "will blur x pixels, fractions will blur "
+                                      "that % of the face area radius"})
+        argument_list.append({"opts": ("-e", "--erosion-size"),
+                              "dest": "erosion_size",
+                              "type": float,
                               "action": Slider,
-                              "min_max": (-100, 100),
-                              "rounding": 1,
-                              "default": 0,
-                              "help": "Erosion kernel size. Positive values apply erosion which "
-                                      "reduces the edge of the swapped face. Negative values "
-                                      "apply dilation which allows the swapped face to cover more "
-                                      "space. (Masked converter only)"})
+                              "min_max": (-100.0, 100.0),
+                              "rounding": 0.1,
+                              "default": 0.0,
+                              "help": "Erosion kernel size. Positive values "
+                                      "apply erosion which reduces the size "
+                                      "of the swapped area. Negative values "
+                                      "apply dilation which increases the "
+                                      "swapped area. Abs values >1 use pixels "
+                                      ". Fractions will erode/dilate that % "
+                                      " of the mask area radius"})
         argument_list.append({"opts": ("-M", "--mask-type"),
                               "type": str.lower,
                               "dest": "mask_type",
                               "choices": ["rect",
+                                          "ellipse",
+                                          "smoothed",
                                           "facehull",
-                                          "facehullandrect"],
-                              "default": "facehullandrect",
-                              "help": "Mask to use to replace faces. "
-                                      "(Masked converter only)"})
+                                          "facehull_rect",
+                                          "cnn"],
+                              "default": "facehull_rect",
+                              "help": "Mask to use to replace faces. "})
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
-                              "choices": ["bsharpen", "gsharpen"],
+                              "choices": ["box_filter", "gaussian_filter"],
                               "default": None,
-                              "help": "Use Sharpen Image. bsharpen for Box "
-                                      "Blur, gsharpen for Gaussian Blur "
-                                      "(Masked converter only)"})
+                              "help": "Sharpen the masked facial region of "
+                                      "the converted images. Choice of filter "
+                                      "to use in sharpening process -- box" 
+                                      "filter or gaussian filter."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
@@ -639,25 +649,36 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
-                              "help": "Use cv2's seamless clone. "
-                                      "(Masked converter only)"})
+                              "help": "Use cv2's seamless clone function to "
+                                      " do something amazing"})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
-                              "help": "Use histogram matching. "
-                                      "(Masked converter only)"})
-        argument_list.append({"opts": ("-sm", "--smooth-mask"),
-                              "action": "store_true",
-                              "dest": "smooth_mask",
-                              "default": False,
-                              "help": "Smooth mask (Adjust converter only)"})
+                              "help": "Adjust the histogram of each color "
+                                      "channel in the swapped reconstruction "
+                                      "to equal the histogram of the masked "
+                                      "area in the orginal image"})
+        argument_list.append({"opts": ("-cov", "--coverage"),
+                              "type": int,
+                              "dest": "coverage",
+                              "default": 160,
+                              "help": "Input images to the model are cropped to "
+                                      "a central square that spans from eyebrow "
+                                      "to chin cleft vertically and eyebrow to "
+                                      "eyebrow horizontally at the default scale. "
+                                      "160 spans from eyebrow to eyebrow, "
+                                      "180 spans from temple to temple, "
+                                      "220 spans from ear to ear, "
+                                      "220 is a mugshot "})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",
                               "default": False,
-                              "help": "Average color adjust. "
-                                      "(Adjust converter only)"})
+                              "help": "Adjust the mean of each color channel "
+                                      " in the swapped reconstruction to "
+                                      "equal the mean of the masked area in "
+                                      "the orginal image"})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",
