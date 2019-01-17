@@ -180,16 +180,15 @@ class Convert():
             y_indices, x_indices, _ = numpy.nonzero(image_mask)
             y_crop = slice(numpy.min(y_indices), numpy.max(y_indices))
             x_crop = slice(numpy.min(x_indices), numpy.max(x_indices))
-            y_center = (numpy.max(y_indices) + numpy.min(y_indices)) // 2 + h
-            x_center = (numpy.max(x_indices) + numpy.min(x_indices)) // 2 + w
+            y_center = int(numpy.rint( (numpy.max(y_indices) + numpy.min(y_indices)) / 2 ) + h)
+            x_center = int(numpy.rint( (numpy.max(x_indices) + numpy.min(x_indices)) / 2 ) + w)
 
             insertion = numpy.uint8(masked[y_crop, x_crop, :])
             insertion_mask = numpy.uint8(image_mask[y_crop, x_crop, :])
             insertion_mask[insertion_mask != 0] = 255
             padded = numpy.pad(image,
                                ((h, h), (w, w), (0, 0)),
-                               'constant',
-                               constant_values=0).astype('uint8')
+                               'constant').astype('uint8')
             blended = cv2.seamlessClone(insertion,
                                         padded,
                                         insertion_mask,
