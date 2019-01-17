@@ -40,8 +40,9 @@ class Convert():
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256  # TODO make this changeable based on extract/train settings
+        training_coverage = 160 # TODO make this changeable based on extract/train settings
         coverage = int(self.coverage_ratio * training_size)
-        padding = (training_size - coverage) // 2
+        padding = (training_size - training_coverage) // 2
         logger.trace("image_size: %s, training_size: %s, coverage: %s, padding: %s",
                      image_size, training_size, coverage, padding)
 
@@ -200,7 +201,11 @@ class Convert():
             x_crop = slice(np.min(x_indices), np.max(x_indices))
             y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2) + h)
             x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2) + w)
-
+            '''
+            # test with average of centroid rather than the h /2 , w/2 center
+            y_center = int(np.rint(np.average(y_indices) + h)
+            x_center = int(np.rint(np.average(x_indices) + w)
+            '''
             insertion = np.uint8(masked[y_crop, x_crop, :])
             insertion_mask = np.uint8(image_mask[y_crop, x_crop, :])
             insertion_mask[insertion_mask != 0] = 255
