@@ -572,6 +572,33 @@ class ConvertArgs(ExtractConvertArgs):
                               "choices": PluginLoader.get_available_converters(),
                               "default": "masked",
                               "help": "Converter to use"})
+        argument_list.append({"opts": ("-M", "--mask-type"),
+                              "type": str.lower,
+                              "dest": "mask_type",
+                              "choices": ["rect",
+                                          "ellipse",
+                                          "smoothed",
+                                          "facehull",
+                                          "facehull_rect",
+                                          "cnn"],
+                              "default": "facehull_rect",
+                              "help": "Mask to use to replace faces. "})
+        argument_list.append({"opts": ("-cov", "--coverage"),
+                              "type": float,
+                              "dest": "coverage",
+                              "action": Slider,
+                              "min_max": (0.5, 1.0),
+                              "rounding": 0.0625,
+                              "default": .625,
+                              "help": "Input images to the model are cropped to "
+                                      "a central square that spans from eyebrow "
+                                      "to chin cleft vertically and eyebrow to "
+                                      "eyebrow horizontally at the default scale. "
+                                      "0.625 spans from eyebrow to eyebrow, "
+                                      "0.750 spans from temple to temple, "
+                                      "0.875 spans from ear to ear, "
+                                      "1.000 is a mugshot -- WARNING: Best left "
+                                      "at default value of 0.625"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
                               "action": Slider,
@@ -597,17 +624,13 @@ class ConvertArgs(ExtractConvertArgs):
                                       "swapped area. Abs values >1 use pixels "
                                       ". Fractions will erode/dilate that %% "
                                       " of the mask area radius"})
-        argument_list.append({"opts": ("-M", "--mask-type"),
-                              "type": str.lower,
-                              "dest": "mask_type",
-                              "choices": ["rect",
-                                          "ellipse",
-                                          "smoothed",
-                                          "facehull",
-                                          "facehull_rect",
-                                          "cnn"],
-                              "default": "facehull_rect",
-                              "help": "Mask to use to replace faces. "})
+        argument_list.append({"opts": ("-g", "--gpus"),
+                              "type": int,
+                              "action": Slider,
+                              "min_max": (1, 10),
+                              "rounding": 1,
+                              "default": 1,
+                              "help": "Number of GPUs to use for conversion"})
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
@@ -617,13 +640,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       "the converted images. Choice of filter "
                                       "to use in sharpening process -- box"
                                       "filter or gaussian filter."})
-        argument_list.append({"opts": ("-g", "--gpus"),
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (1, 10),
-                              "rounding": 1,
-                              "default": 1,
-                              "help": "Number of GPUs to use for conversion"})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,
@@ -659,18 +675,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       "channel in the swapped reconstruction "
                                       "to equal the histogram of the masked "
                                       "area in the orginal image"})
-        argument_list.append({"opts": ("-cov", "--coverage"),
-                              "type": int,
-                              "dest": "coverage",
-                              "default": 160,
-                              "help": "Input images to the model are cropped to "
-                                      "a central square that spans from eyebrow "
-                                      "to chin cleft vertically and eyebrow to "
-                                      "eyebrow horizontally at the default scale. "
-                                      "160 spans from eyebrow to eyebrow, "
-                                      "180 spans from temple to temple, "
-                                      "220 spans from ear to ear, "
-                                      "220 is a mugshot "})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",

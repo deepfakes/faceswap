@@ -17,13 +17,13 @@ class Convert():
     def __init__(self, encoder, trainer,
                  blur_size=2, seamless_clone=False, mask_type="facehullandrect",
                  erosion_size=0, match_histogram=False, sharpen_image=None,
-                 draw_transparent=False, avg_color_adjust=False, coverage=160,
+                 draw_transparent=False, avg_color_adjust=False, coverage=.625,
                  input_size=64, **kwargs):
         self.encoder = encoder
         self.trainer = trainer
         self.blur_size = blur_size
         self.input_size = input_size
-        self.coverage = coverage
+        self.coverage = int(coverage * 256)
         self.sharpen_image = sharpen_image
         self.match_histogram = match_histogram
         self.mask_type = mask_type.lower()
@@ -40,19 +40,17 @@ class Convert():
         image = image.astype('float32')
         training_size = 256
         align_eyes = False
-        coverage = 160
-        padding = (training_size - coverage) // 2
-        self.mask = Mask(self.mask_type, image_size, training_size, padding)
-
+        padding = (training_size - 160) // 2
+        self.crop = slice((training_size - self.coverage) // 2, training_size-(training_size - self.coverage) // 2)
+        self.mask = Mask(self.mask_type, image_size, training_size, padding, self.crop)
         mat = get_align_mat(face_detected, training_size, align_eyes)
 
-        crop = slice(padding, training_size - padding)
         matrix = mat * (training_size - 2 * padding)
         matrix[:, 2] += padding
 
         interpolators = self.get_matrix_scaling(matrix)
 
-        new_image = self.get_new_image(image, matrix, crop, padding, training_size,
+        new_image = self.get_new_image(image, matrix, training_size,
                                        image_size, interpolators)
 
         image_mask = self.get_image_mask(matrix, interpolators, face_detected.landmarks_as_xy)
@@ -70,10 +68,10 @@ class Convert():
 
         return interpolator, inverse_interpolator
 
-    def get_new_image(self, image, mat, crop, padding, training_size, image_size, interpolators):
+    def get_new_image(self, image, mat, training_size, image_size, interpolators):
         src_face = cv2.warpAffine(image, mat, (training_size, training_size),
                                   flags=interpolators[0])
-        coverage_face = src_face[crop, crop]
+        coverage_face = src_face[self.crop, self.crop]
         coverage_face = cv2.resize(coverage_face, (self.input_size, self.input_size),
                                    interpolation=interpolators[0])
         coverage_face = numpy.expand_dims(coverage_face, 0)
@@ -86,10 +84,10 @@ class Convert():
             new_face = self.encoder(coverage_face)[0]
 
         new_face = cv2.resize(new_face,
-                              (training_size - padding * 2, training_size - padding * 2),
+                              (self.coverage, self.coverage),
                               interpolation=cv2.INTER_CUBIC)
         numpy.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
-        src_face[crop, crop] = new_face
+        src_face[self.crop, self.crop] = new_face
 
         background = image.copy()
         new_image = cv2.warpAffine(src_face, mat, image_size, background,
@@ -243,7 +241,7 @@ class Convert():
 class Mask():
     """ Return the requested mask """
 
-    def __init__(self, mask_type, image_size, training_size, padding):
+    def __init__(self, mask_type, image_size, training_size, padding, crop):
         """ Set requested mask """
         logger.debug("Initializing %s: (mask_type: '%s', image_size: %s, training_size: %s, "
                      "padding: %s)", self.__class__.__name__, mask_type, image_size,
@@ -253,6 +251,7 @@ class Mask():
         self.training_size = training_size
         self.padding = padding
         self.mask_type = mask_type
+        self.crop = crop
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -276,9 +275,9 @@ class Mask():
         logger.trace("Getting mask")
         interpolator = kwargs["interpolators"][1]
         ones = numpy.zeros((self.training_size, self.training_size, 3), dtype='float32')
-        area = self.padding + (self.training_size - 2 * self.padding) // 15
-        central_core = slice(area, -area)
-        ones[central_core, central_core, :] = 1.0
+        #area = self.padding + (self.training_size - 2 * self.padding) // 15
+        #central_core = slice(area, -area)
+        ones[self.crop, self.crop] = 1.0
         ones = cv2.GaussianBlur(ones, (25, 25), 10)  # pylint: disable=no-member
 
         mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
@@ -296,10 +295,9 @@ class Mask():
         logger.trace("Getting mask")
         interpolator = kwargs["interpolators"][1]
         ones = numpy.zeros((self.training_size, self.training_size, 3), dtype='float32')
-        central_core = slice(self.padding, -self.padding)
-        ones[central_core, central_core] = 1.0
-
         mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        #central_core = slice(self.padding, -self.padding)
+        ones[self.crop, self.crop] = 1.0
         cv2.warpAffine(ones,  # pylint: disable=no-member
                        kwargs["matrix"],
                        self.image_size,
@@ -312,7 +310,30 @@ class Mask():
     def facehull(self, **kwargs):
         """ Facehull Mask """
         logger.trace("Getting mask")
-        mask = numpy.ones((self.image_size[1], self.image_size[0], 3), dtype="float32")
+        mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        hull = cv2.convexHull(  # pylint: disable=no-member
+            numpy.array(kwargs["landmarks"]).reshape((-1, 2)))
+        cv2.fillConvexPoly(mask,  # pylint: disable=no-member
+                           hull,
+                           (1.0, 1.0, 1.0),
+                           lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        return mask
+        
+    def facehull_rect(self, **kwargs):
+        """ Facehull Rect Mask """
+        logger.trace("Getting mask")
+        interpolator = kwargs["interpolators"][1]
+        ones = numpy.zeros((self.training_size, self.training_size, 3), dtype='float32')
+        mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        #central_core = slice(self.padding, -self.padding)
+        ones[self.crop, self.crop] = 1.0
+        cv2.warpAffine(ones,  # pylint: disable=no-member
+                       kwargs["matrix"],
+                       self.image_size,
+                       mask,
+                       flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
+                       borderMode=cv2.BORDER_CONSTANT,  # pylint: disable=no-member
+                       borderValue=0.0)
         hull_mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
         hull = cv2.convexHull(  # pylint: disable=no-member
             numpy.array(kwargs["landmarks"]).reshape((-1, 2)))
