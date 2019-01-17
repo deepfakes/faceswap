@@ -42,8 +42,7 @@ class Convert():
         align_eyes = False
         coverage = 160
         padding = (training_size - coverage) // 2
-        if not self.mask:
-            self.mask = Mask(self.mask_type, image_size, training_size, padding)
+        self.mask = Mask(self.mask_type, image_size, training_size, padding)
 
         mat = get_align_mat(face_detected, training_size, align_eyes)
 
