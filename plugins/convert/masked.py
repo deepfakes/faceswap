@@ -6,11 +6,10 @@
 import logging
 import cv2
 import numpy
-numpy.set_printoptions(threshold=numpy.nan)
 
 from lib.aligner import get_align_mat
-from lib.utils import add_alpha_channel
 
+numpy.set_printoptions(threshold=numpy.nan)
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -32,20 +31,22 @@ class Convert():
         self.avg_color_adjust = avg_color_adjust
         self.erosion_size = erosion_size
         self.seamless_clone = False if draw_transparent else seamless_clone
-        if abs(self.erosion_size) >= 1:
-            e_size = (int(abs(self.erosion_size)), int(abs(self.erosion_size)))
-            self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                                            e_size)
+
+        self.mask = None
 
     def patch_image(self, image, face_detected):
+        """ Patch the image """
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256
         align_eyes = False
         coverage = 160
+        padding = (training_size - coverage) // 2
+        if not self.mask:
+            self.mask = Mask(self.mask_type, image_size, training_size, padding)
 
         mat = get_align_mat(face_detected, training_size, align_eyes)
-        padding = (training_size - coverage) // 2
+
         crop = slice(padding, training_size - padding)
         matrix = mat * (training_size - 2 * padding)
         matrix[:, 2] += padding
@@ -55,9 +56,7 @@ class Convert():
         new_image = self.get_new_image(image, matrix, crop, padding, training_size,
                                        image_size, interpolators)
 
-        image_mask = self.get_image_mask(matrix, image_size, padding,
-                                         training_size, interpolators,
-                                         face_detected.landmarks_as_xy)
+        image_mask = self.get_image_mask(matrix, interpolators, face_detected.landmarks_as_xy)
 
         patched_face = self.apply_fixes(image, new_image, image_mask, image_size)
 
@@ -83,7 +82,7 @@ class Convert():
 
         if 'GAN' in self.trainer:
             # change code to align with new GAN code
-            print('error')
+            raise ValueError("GAN not implemented")
         else:
             new_face = self.encoder(coverage_face)[0]
 
@@ -99,69 +98,52 @@ class Convert():
                                    borderMode=cv2.BORDER_TRANSPARENT)
         return new_image
 
-    def get_image_mask(self, mat, image_size, padding, training_size, interpolators, landmarks):
-
-        mask = numpy.ones((image_size[1], image_size[0], 3), dtype='float32')
-
-        if 'cnn' == self.mask_type:
-            # Insert FCN-VGG16 segmentation mask model here
-            print('cnn not incorporated, using facehull instead')
-            self.mask_type = 'facehull'
-
-        if 'smoothed' == self.mask_type:
-            ones = numpy.zeros((training_size, training_size, 3), dtype='float32')
-            area = padding + (training_size - 2 * padding) // 15
-            central_core = slice(area, -area)
-            ones[central_core, central_core, :] = 1.0
-            ones = cv2.GaussianBlur(ones, (25, 25), 10)
-            mask = numpy.zeros((image_size[1], image_size[0], 3), dtype='float32')
-            cv2.warpAffine(ones, mat, image_size, mask,
-                           flags=cv2.WARP_INVERSE_MAP | interpolators[1],
-                           borderMode=cv2.BORDER_CONSTANT, borderValue=0.0)
-
-        if 'rect' in self.mask_type:
-            ones = numpy.zeros((training_size, training_size, 3), dtype='float32')
-            central_core = slice(padding, -padding)
-            ones[central_core, central_core] = 1.0
-            mask = numpy.zeros((image_size[1], image_size[0], 3), dtype='float32')
-            cv2.warpAffine(ones, mat, image_size, mask,
-                           flags=cv2.WARP_INVERSE_MAP | interpolators[1],
-                           borderMode=cv2.BORDER_CONSTANT, borderValue=0.0)
-
-        if 'facehull' in self.mask_type:
-            hull_mask = numpy.zeros((image_size[1], image_size[0], 3), dtype='float32')
-            hull = cv2.convexHull(numpy.array(landmarks).reshape((-1, 2)))
-            cv2.fillConvexPoly(hull_mask, hull, (1.0, 1.0, 1.0), lineType=cv2.LINE_AA)
-            mask *= hull_mask
-
-        if 'ellipse' in self.mask_type:
-            mask = numpy.zeros((image_size[1], image_size[0], 3), dtype='float32')
-            e = cv2.fitEllipse(numpy.array(landmarks).reshape((-1, 2)))
-            cv2.ellipse(mask, box=e, color=(1.0, 1.0, 1.0), thickness=-1)
-
-        numpy.nan_to_num(mask, copy=False)
-        numpy.clip(mask, 0.0, 1.0, out=mask)
-
+    def get_image_mask(self, mat, interpolators, landmarks):
+        """ Get the image mask """
+        mask = self.mask.get_mask(mat, interpolators, landmarks)
         if self.erosion_size != 0:
-            if abs(self.erosion_size) < 1.0:
-                mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
-                percent_erode = max(1, int(abs(self.erosion_size * mask_radius)))
-                self.erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                                                (percent_erode,
-                                                                 percent_erode))
-            args = {'src': mask, 'kernel': self.erosion_kernel, 'iterations': 1}
-            mask = cv2.erode(**args) if self.erosion_size > 0 else cv2.dilate(**args)
+            kwargs = {'src': mask,
+                      'kernel': self.set_erosion_kernel(mask),
+                      'iterations': 1}
+            if self.erosion_size > 0:
+                mask = cv2.erode(**kwargs)  # pylint: disable=no-member
+            else:
+                mask = cv2.dilate(**kwargs)  # pylint: disable=no-member
 
         if self.blur_size != 0:
-            if self.blur_size < 1.0:
-                mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
-                self.blur_size = max(1, int(self.blur_size * mask_radius))
-            mask = cv2.blur(mask, (int(self.blur_size), int(self.blur_size)))
+            blur_size = self.set_blur_size(mask)
+            mask = cv2.blur(mask, (blur_size, blur_size))  # pylint: disable=no-member
 
         return numpy.clip(mask, 0.0, 1.0, out=mask)
 
-    def apply_fixes(self, image, new_image, image_mask, image_size):
+    def set_erosion_kernel(self, mask):
+        """ Set the erosion kernel """
+        if abs(self.erosion_size) < 1.0:
+            mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
+            percent_erode = max(1, int(abs(self.erosion_size * mask_radius)))
+            erosion_kernel = cv2.getStructuringElement(  # pylint: disable=no-member
+                cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
+                (percent_erode, percent_erode))
+        else:
+            e_size = (int(abs(self.erosion_size)), int(abs(self.erosion_size)))
+            erosion_kernel = cv2.getStructuringElement(  # pylint: disable=no-member
+                cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
+                e_size)
+        logger.trace("erosion_kernel: %s", erosion_kernel)
+        return erosion_kernel
 
+    def set_blur_size(self, mask):
+        """ Set the blur size to absolute or percentage """
+        if self.blur_size < 1.0:
+            mask_radius = numpy.sqrt(numpy.sum(mask)) / 2
+            blur_size = max(1, int(self.blur_size * mask_radius))
+        else:
+            blur_size = self.blur_size
+        logger.trace("blur_size: %s", int(blur_size))
+        return int(blur_size)
+
+    def apply_fixes(self, image, new_image, image_mask, image_size):
+        """ Apply fixes """
         masked = new_image  # * image_mask
 
         if self.draw_transparent:
@@ -257,3 +239,107 @@ class Convert():
         return flat_new_image.reshape(source.shape) * 255.0
         '''
         return source
+
+
+class Mask():
+    """ Return the requested mask """
+
+    def __init__(self, mask_type, image_size, training_size, padding):
+        """ Set requested mask """
+        logger.debug("Initializing %s: (mask_type: '%s', image_size: %s, training_size: %s, "
+                     "padding: %s)", self.__class__.__name__, mask_type, image_size,
+                     training_size, padding)
+
+        self.image_size = image_size
+        self.training_size = training_size
+        self.padding = padding
+        self.mask_type = mask_type
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def get_mask(self, matrix, interpolators, landmarks):
+        """ Return a face mask """
+        kwargs = {"matrix": matrix,
+                  "interpolators": interpolators,
+                  "landmarks": landmarks}
+        mask = getattr(self, self.mask_type)(**kwargs)
+        mask = self.finalize_mask(mask)
+        return mask
+
+    def cnn(self, **kwargs):
+        """ CNN Mask """
+        # Insert FCN-VGG16 segmentation mask model here
+        logger.info("cnn not incorporated, using facehull instead")
+        return self.facehull(**kwargs)
+
+    def smoothed(self, **kwargs):
+        """ Smoothed Mask """
+        logger.trace("Getting mask")
+        interpolator = kwargs["interpolators"][1]
+        ones = numpy.zeros((self.training_size, self.training_size, 3), dtype='float32')
+        area = self.padding + (self.training_size - 2 * self.padding) // 15
+        central_core = slice(area, -area)
+        ones[central_core, central_core, :] = 1.0
+        ones = cv2.GaussianBlur(ones, (25, 25), 10)  # pylint: disable=no-member
+
+        mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        cv2.warpAffine(ones,  # pylint: disable=no-member
+                       kwargs["matrix"],
+                       self.image_size,
+                       mask,
+                       flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
+                       borderMode=cv2.BORDER_CONSTANT,  # pylint: disable=no-member
+                       borderValue=0.0)
+        return mask
+
+    def rect(self, **kwargs):
+        """ Rect Mask """
+        logger.trace("Getting mask")
+        interpolator = kwargs["interpolators"][1]
+        ones = numpy.zeros((self.training_size, self.training_size, 3), dtype='float32')
+        central_core = slice(self.padding, -self.padding)
+        ones[central_core, central_core] = 1.0
+
+        mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        cv2.warpAffine(ones,  # pylint: disable=no-member
+                       kwargs["matrix"],
+                       self.image_size,
+                       mask,
+                       flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
+                       borderMode=cv2.BORDER_CONSTANT,  # pylint: disable=no-member
+                       borderValue=0.0)
+        return mask
+
+    def facehull(self, **kwargs):
+        """ Facehull Mask """
+        logger.trace("Getting mask")
+        mask = numpy.ones((self.image_size[1], self.image_size[0], 3), dtype="float32")
+        hull_mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        hull = cv2.convexHull(  # pylint: disable=no-member
+            numpy.array(kwargs["landmarks"]).reshape((-1, 2)))
+        cv2.fillConvexPoly(hull_mask,  # pylint: disable=no-member
+                           hull,
+                           (1.0, 1.0, 1.0),
+                           lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        mask *= hull_mask
+        return mask
+
+    def ellipse(self, **kwargs):
+        """ Ellipse Mask """
+        logger.trace("Getting mask")
+        mask = numpy.zeros((self.image_size[1], self.image_size[0], 3), dtype='float32')
+        ell = cv2.fitEllipse(  # pylint: disable=no-member
+            numpy.array(kwargs["landmarks"]).reshape((-1, 2)))
+        cv2.ellipse(mask,  # pylint: disable=no-member
+                    box=ell,
+                    color=(1.0, 1.0, 1.0),
+                    thickness=-1)
+        return mask
+
+    @staticmethod
+    def finalize_mask(mask):
+        """ Finalize the mask """
+        logger.trace("Finalizing mask")
+        numpy.nan_to_num(mask, copy=False)
+        numpy.clip(mask, 0.0, 1.0, out=mask)
+        return mask

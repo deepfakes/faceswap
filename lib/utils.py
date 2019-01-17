@@ -109,28 +109,6 @@ def set_system_verbosity(loglevel):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
-def add_alpha_channel(image, intensity=100):
-    """ Add an alpha channel to an image
-
-        intensity: The opacity of the alpha channel between 0 and 100
-                   100 = transparent,
-                   0 = solid  """
-    logger.trace("Adding alpha channel: intensity: %s", intensity)
-    assert 0 <= intensity <= 100, "Invalid intensity supplied"
-    intensity = (255.0 / 100.0) * intensity
-
-    d_type = image.dtype
-    image = image.astype("float32")
-
-    ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
-    ch_a = np.ones(ch_b.shape, dtype="float32") * intensity
-
-    image_bgra = cv2.merge(  # pylint: disable=no-member
-        (ch_b, ch_g, ch_r, ch_a))
-    logger.trace("Added alpha channel", intensity)
-    return image_bgra.astype(d_type)
-
-
 def rotate_landmarks(face, rotation_matrix):
     # pylint: disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces
