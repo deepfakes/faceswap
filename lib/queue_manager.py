@@ -6,6 +6,7 @@
 
 import logging
 import multiprocessing as mp
+import sys
 import threading
 
 from queue import Empty as QueueEmpty  # pylint: disable=unused-import; # noqa
@@ -31,7 +32,9 @@ class QueueManager():
             self.manager = mp
         self.shutdown = self.manager.Event()
         self.queues = dict()
-        self._log_queue = self.manager.Queue()
+        # Despite launching a subprocess, the scripts still want to access the same logging
+        # queue as the GUI, so make sure the GUI gets it's own queue
+        self._log_queue = self.manager.Queue() if "gui" not in sys.argv else mp.Queue()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_queue(self, name, maxsize=0):
