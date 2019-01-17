@@ -603,8 +603,8 @@ class ConvertArgs(ExtractConvertArgs):
                               "type": float,
                               "action": Slider,
                               "min_max": (0.0, 256.0),
-                              "rounding": 0.1,
-                              "default": 2.0,
+                              "rounding": 0.05,
+                              "default": 0.2,
                               "help": "Blur kernel size for smoothing the "
                                       "transition between the swapped face and "
                                       "the background image. Integer values "
@@ -615,7 +615,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "type": float,
                               "action": Slider,
                               "min_max": (-100.0, 100.0),
-                              "rounding": 0.1,
+                              "rounding": 0.05,
                               "default": 0.0,
                               "help": "Erosion kernel size. Positive values "
                                       "apply erosion which reduces the size "
