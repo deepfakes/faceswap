@@ -666,7 +666,8 @@ class ConvertArgs(ExtractConvertArgs):
                               "dest": "seamless_clone",
                               "default": False,
                               "help": "Use cv2's seamless clone function to "
-                                      " do something amazing"})
+                                      "remove extreme gradients at the mask "
+                                      "seam by smoothing colors."})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
