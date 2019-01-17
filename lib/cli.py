@@ -572,17 +572,28 @@ class ConvertArgs(ExtractConvertArgs):
                               "choices": PluginLoader.get_available_converters(),
                               "default": "masked",
                               "help": "Converter to use"})
-        argument_list.append({"opts": ("-M", "--mask-type"),
-                              "type": str.lower,
-                              "dest": "mask_type",
-                              "choices": ["rect",
-                                          "ellipse",
-                                          "smoothed",
-                                          "facehull",
-                                          "facehull_rect",
-                                          "cnn"],
-                              "default": "facehull_rect",
-                              "help": "Mask to use to replace faces. "})
+        argument_list.append({
+            "opts": ("-M", "--mask-type"),
+            "type": str.lower,
+            "dest": "mask_type",
+            "choices": ["rect",
+                        "ellipse",
+                        "smoothed",
+                        "facehull",
+                        "facehull_rect",
+                        # "dfaker",
+                        "dfl",
+                        "cnn"],
+            "default": "facehull_rect",
+            "help": "R|Mask to use to replace faces."
+                    "\nrect: Rectangle around face."
+                    "\nellipse: Oval around face."
+                    "\nsmoothed: Rectangle around face with smoothing."
+                    "\nfacehull: Face cutout based on landmarks."
+                    "\nfacehull_rect: Rectangle around faces with facehull"
+                    "\n\tbetween the edges of the face and the background."
+                    "\ndfl: A Face Hull mask from DeepFaceLabs."
+                    "\ncnn: Not yet implemented"})
         argument_list.append({"opts": ("-cov", "--coverage"),
                               "type": float,
                               "dest": "coverage",
