@@ -38,8 +38,9 @@ class Convert():
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256  # TODO make this changeable based on extract/train settings
+        training_coverage = 160 # TODO make this changeable based on extract/train settings
         coverage = int(self.coverage_ratio * training_size)
-        padding = (training_size - coverage) // 2
+        padding = (training_size - training_coverage) // 2
         logger.trace("image_size: %s, training_size: %s, coverage: %s, padding: %s",
                      image_size, training_size, coverage, padding)
 
