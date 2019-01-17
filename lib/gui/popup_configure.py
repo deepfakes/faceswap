@@ -36,6 +36,7 @@ class ConfigurePlugins(tk.Toplevel):
         self.page_frame = ttk.Frame(self)
         self.page_frame.pack(fill=tk.BOTH, expand=True)
 
+        self.plugin_info = dict()
         self.config_dict_gui = self.get_config()
         self.build()
         self.update()
@@ -61,6 +62,7 @@ class ConfigurePlugins(tk.Toplevel):
             conf.setdefault(category, dict())[section] = options
             for key in options.keys():
                 if key == "helptext":
+                    self.plugin_info[section] = options[key]
                     continue
                 options[key]["value"] = self.config.config_dict.get(key, options[key]["default"])
         logger.debug("Formatted Config for GUI: %s", conf)
@@ -90,12 +92,16 @@ class ConfigurePlugins(tk.Toplevel):
             page = ttk.Notebook(container)
             page.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             for plugin in plugins:
-                frame = ConfigFrame(page, self.config_dict_gui[category][plugin])
+                frame = ConfigFrame(page,
+                                    self.config_dict_gui[category][plugin],
+                                    self.plugin_info[plugin])
                 title = plugin[plugin.rfind(".") + 1:]
                 title = title.replace("_", " ").title()
                 page.add(frame, text=title)
         else:
-            page = ConfigFrame(container, self.config_dict_gui[category][plugins[0]])
+            page = ConfigFrame(container,
+                               self.config_dict_gui[category][plugins[0]],
+                               self.plugin_info[plugin])
 
         logger.debug("Built plugin config page: '%s'", category)
 
@@ -141,12 +147,13 @@ class ConfigurePlugins(tk.Toplevel):
 class ConfigFrame(ttk.Frame):
     """ Config Frame - Holds the Options for config """
 
-    def __init__(self, parent, options):
+    def __init__(self, parent, options, plugin_info):
         logger.debug("Initializing %s", self.__class__.__name__)
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.options = options
+        self.plugin_info = plugin_info
 
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -163,6 +170,7 @@ class ConfigFrame(ttk.Frame):
         self.add_scrollbar()
         self.canvas.bind("<Configure>", self.resize_frame)
 
+        self.add_info()
         for key, val in self.options.items():
             if key == "helptext":
                 continue
@@ -188,6 +196,21 @@ class ConfigFrame(ttk.Frame):
         canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
         logger.debug("Resized Config Frame")
+
+    def add_info(self):
+        """ Plugin information """
+        info_frame = ttk.Frame(self.optsframe)
+        info_frame.pack(fill=tk.X, expand=True)
+        text = self.plugin_info
+        lbl = ttk.Label(info_frame,
+                        text=text,
+                        anchor=tk.CENTER,
+                        justify=tk.CENTER,
+                        background="#feffe8",
+                        borderwidth=1,
+                        relief=tk.SOLID,
+                        padding=3)
+        lbl.pack(padx=5, pady=(10, 5), side=tk.TOP)
 
 
 class OptionControl():

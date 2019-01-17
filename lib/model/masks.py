@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 
 from lib.umeyama import umeyama
-from lib.aligner import LANDMARKS_2D
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -21,7 +20,7 @@ def dfaker(landmarks, face, **kwargs):
     logger.trace("face_shape: %s, coverage: %s, landmarks: %s", face.shape, coverage, landmarks)
     size = face.shape[0] - 1
 
-    mat = umeyama(landmarks[17:], LANDMARKS_2D, True)[0:2]
+    mat = umeyama(landmarks[17:], True)[0:2]
     mat = np.array(mat.ravel()).reshape(2, 3)
     mat = mat * coverage
     mat[:, 2] += 42

@@ -90,6 +90,9 @@ class Aligner():
             self.align(*args, **kwargs)
         except Exception:  # pylint: disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
+            # Display traceback if in initialization stage 
+            if not self.init.is_set():
+                logger.exception("Traceback:")
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             exception = {"exception": (os.getpid(), tb_buffer)}
