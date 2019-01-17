@@ -200,7 +200,11 @@ class Convert():
             x_crop = slice(numpy.min(x_indices), numpy.max(x_indices))
             y_center = int(numpy.rint((numpy.max(y_indices) + numpy.min(y_indices)) / 2) + h)
             x_center = int(numpy.rint((numpy.max(x_indices) + numpy.min(x_indices)) / 2) + w)
-
+            '''
+            # test with average of centroid rather than the h /2 , w/2 center
+            y_center = int(numpy.rint(numpy.average(y_indices) + h)
+            x_center = int(numpy.rint(numpy.average(x_indices) + w)
+            '''
             insertion = numpy.uint8(masked[y_crop, x_crop, :])
             insertion_mask = numpy.uint8(image_mask[y_crop, x_crop, :])
             insertion_mask[insertion_mask != 0] = 255
