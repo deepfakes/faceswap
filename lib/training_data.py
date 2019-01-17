@@ -23,15 +23,18 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, transform_kwargs, training_opts=dict()):
-        logger.debug("Initializing %s: (transform_kwargs: %s, training_opts: %s)",
-                     self.__class__.__name__, transform_kwargs,
+    def __init__(self, model_input_size, model_output_size, training_opts):
+        logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
+                     "training_opts: %s)",
+                     self.__class__.__name__, model_input_size, model_output_size,
                      {key: val for key, val in training_opts.items() if key != "landmarks"})
         self.batchsize = 0
         self.training_opts = training_opts
         self.full_face = self.training_opts.get("full_face", False)
         self.mask_function = self.set_mask_function()
-        self.processing = ImageManipulation(**transform_kwargs)
+        self.processing = ImageManipulation(model_input_size,
+                                            model_output_size,
+                                            training_opts.get("coverage_ratio", 0.625))
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_mask_function(self):
@@ -118,7 +121,9 @@ class TrainingDataGenerator():
         if self.mask_function:
             landmarks = self.training_opts["landmarks"]
             src_pts = self.get_landmarks(filename, image, side, landmarks)
-            image = self.mask_function(src_pts, image, coverage=self.processing.coverage)
+            image = self.mask_function(src_pts,
+                                       image,
+                                       coverage=self.processing.get_coverage(image))
 
         image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)
@@ -164,30 +169,24 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, rotation_range=10, zoom_range=0.05, shift_range=0.05, random_flip=0.4,
-                 zoom=(1, 1), coverage=160, scale=5):
-        """ rotation_range: Used for random transform
-            zoom_range: Used for random transform
-            shift_range: Used for random transform
-            random_flip: Float between 0 and 1. Chance to flip the image
-            zoom: Used for random transform and random warp
-            coverage: Used for random warp
-            scale: Used for random warp
+    def __init__(self, input_size, output_size, coverage_ratio=0.625):
+        """ input_size: Size of the face input into the model
+            output_size: Size of the face that comes out of the modell
+            coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
-        logger.debug("Initializing %s: (rotation_range: %s, zoom_range: %s, shift_range: %s, "
-                     "random_flip: %s, zoom: %s, coverage: %s, scale: %s)",
-                     self.__class__.__name__, rotation_range, zoom_range, shift_range, random_flip,
-                     zoom, coverage, scale)
+        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, input_size, output_size, coverage_ratio)
         # Transform args
-        self.rotation_range = rotation_range
-        self.zoom_range = zoom_range
-        self.shift_range = shift_range
-        self.random_flip = random_flip
+        self.rotation_range = 10  # Range to randomly rotate the image by
+        self.zoom_range = 0.05  # Range to randomly zoom the image by
+        self.shift_range = 0.05  # Range to randomly shift the image by
+        self.random_flip = 0.49  # Chance to flip the image left > right
         # Transform and Warp args
-        self.zoom = zoom
+        self.zoom_source = input_size // 64
+        self.zoom_target = output_size // 64
         # Warp args
-        self.coverage = coverage
-        self.scale = scale
+        self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
+        self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -205,6 +204,12 @@ class ImageManipulation():
             mask = image[:, :, 3].reshape((image.shape[0], image.shape[1], 1))
             image = image[:, :, :3]
         return image, mask
+
+    def get_coverage(self, image):
+        """ Return coverage value for given image """
+        coverage = int(image.shape[0] * self.coverage_ratio)
+        logger.trace(coverage)
+        return coverage
 
     def random_transform(self, image):
         """ Randomly transform an image """
@@ -231,10 +236,11 @@ class ImageManipulation():
         logger.trace("Randomly warping image")
         image, mask = self.seperate_mask(image)
         height, width = image.shape[0:2]
+        coverage = self.get_coverage(image)
         assert height == width and height % 2 == 0
 
-        range_ = np.linspace(height // 2 - self.coverage // 2,
-                             height // 2 + self.coverage // 2, self.scale)
+        range_ = np.linspace(height // 2 - coverage // 2,
+                             height // 2 + coverage // 2, self.scale)
         mapx = np.broadcast_to(range_, (self.scale, self.scale))
         mapy = mapx.T
 
@@ -242,33 +248,35 @@ class ImageManipulation():
         mapy = mapy + np.random.normal(size=(self.scale, self.scale), scale=self.scale)
 
         interp_mapx = cv2.resize(  # pylint: disable=no-member
-            mapx, (80 * self.zoom[0],
-                   80 * self.zoom[0]))[8 * self.zoom[0]:72 * self.zoom[0],
-                                       8 * self.zoom[0]:72 * self.zoom[0]].astype('float32')
+            mapx, (80 * self.zoom_source,
+                   80 * self.zoom_source))[
+                       8 * self.zoom_source:72 * self.zoom_source,
+                       8 * self.zoom_source:72 * self.zoom_source].astype('float32')
         interp_mapy = cv2.resize(  # pylint: disable=no-member
-            mapy, (80 * self.zoom[0],
-                   80 * self.zoom[0]))[8 * self.zoom[0]:72 * self.zoom[0],
-                                       8 * self.zoom[0]:72 * self.zoom[0]].astype('float32')
+            mapy, (80 * self.zoom_source,
+                   80 * self.zoom_source))[
+                       8 * self.zoom_source:72 * self.zoom_source,
+                       8 * self.zoom_source:72 * self.zoom_source].astype('float32')
 
         warped_image = cv2.remap(  # pylint: disable=no-member
             image, interp_mapx, interp_mapy, cv2.INTER_LINEAR)  # pylint: disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
-        dst_points = np.mgrid[0:65 * self.zoom[0]:16 * self.zoom[0],
-                              0:65 * self.zoom[0]:16 * self.zoom[0]].T.reshape(-1, 2)
+        dst_points = np.mgrid[0:65 * self.zoom_source:16 * self.zoom_source,
+                              0:65 * self.zoom_source:16 * self.zoom_source].T.reshape(-1, 2)
 
-        mat = umeyama(src_points, dst_points, True)[0:2]
+        mat = umeyama(src_points, True, dst_points)[0:2]
         target_image = cv2.warpAffine(  # pylint: disable=no-member
-            image, mat, (64 * self.zoom[1], 64 * self.zoom[1]))
+            image, mat, (64 * self.zoom_target, 64 * self.zoom_target))
         logger.trace("Target image shape: %s", target_image.shape)
 
         retval = [warped_image, target_image]
 
         if mask is not None:
             target_mask = cv2.warpAffine(  # pylint: disable=no-member
-                mask, mat, (64 * self.zoom[1], 64 * self.zoom[1]))
-            target_mask = target_mask.reshape((64 * self.zoom[1], 64 * self.zoom[1], 1))
+                mask, mat, (64 * self.zoom_target, 64 * self.zoom_target))
+            target_mask = target_mask.reshape((64 * self.zoom_target, 64 * self.zoom_target, 1))
             logger.trace("Target mask shape: %s", target_mask.shape)
 
             retval.append(target_mask)
@@ -335,12 +343,12 @@ class ImageManipulation():
 
         warped_image = cv2.resize(  # pylint: disable=no-member
             warped_image[pad_lt:pad_rb, pad_lt:pad_rb, :],
-            (64 * self.zoom[0], 64 * self.zoom[0]),
+            (64 * self.zoom_source, 64 * self.zoom_source),
             cv2.INTER_AREA)  # pylint: disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
         target_image = cv2.resize(  # pylint: disable=no-member
             target_image[pad_lt:pad_rb, pad_lt:pad_rb, :],
-            (64 * self.zoom[1], 64 * self.zoom[1]),
+            (64 * self.zoom_target, 64 * self.zoom_target),
             cv2.INTER_AREA)  # pylint: disable=no-member
         logger.trace("Target image shape: %s", target_image.shape)
 
@@ -349,9 +357,9 @@ class ImageManipulation():
         if mask is not None:
             target_mask = cv2.resize(  # pylint: disable=no-member
                 mask[pad_lt:pad_rb, pad_lt:pad_rb, :],
-                (64 * self.zoom[1], 64 * self.zoom[1]),
+                (64 * self.zoom_target, 64 * self.zoom_target),
                 cv2.INTER_AREA)  # pylint: disable=no-member
-            target_mask = target_mask.reshape((64 * self.zoom[1], 64 * self.zoom[1], 1))
+            target_mask = target_mask.reshape((64 * self.zoom_target, 64 * self.zoom_target, 1))
             logger.trace("Target mask shape: %s", target_mask.shape)
 
             retval.append(target_mask)

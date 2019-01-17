@@ -10,7 +10,7 @@ import sys
 
 from json import JSONDecodeError
 from keras import losses
-from keras.models import load_model, model_from_json
+from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
@@ -24,26 +24,32 @@ _CONFIG = None
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, input_shape=None, encoder_dim=None, trainer="original"):
+    def __init__(self, model_dir, gpus,
+                 input_shape=None, encoder_dim=None, trainer="original", predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, input_shape: %s, "
                      "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      input_shape, encoder_dim)
+        self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
         self.input_shape = input_shape
+        self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
-
         self.name = self.set_model_name()
+
+        self.state = State(self.model_dir, self.name)
+        self.load_input_shape()
+
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.loss_names = dict()  # Loss names for model
         self.history = dict()  # Loss history per save iteration)
-        self.state = State(self.model_dir, self.name)
+
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
-        self.training_opts = self.set_training_data()
-        self.masks = self.set_masks()
+        self.training_opts = dict()
+        self.set_training_data()
 
         self.build()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
@@ -58,29 +64,31 @@ class ModelBase():
             _CONFIG = Config(model_name).config_dict
         return _CONFIG
 
-    def set_training_data(self):  # pylint: disable=no-self-use
-        """ Override to set model specific training data """
-        return dict()
+    def set_training_data(self):
+        """ Override to set model specific training data.
 
-    def set_masks(self):  # pylint: disable=no-self-use
-        """ Override to set model specific masks """
-        return dict()
+            super() this method for default coverage ratio
+            otherwise be sure to add a ratio """
+        logger.debug("Setting training data")
+        self.training_opts["coverage_ratio"] = 0.625
+        logger.debug("Set training data: %s", self.training_opts)
 
     def build(self):
         """ Build the model. Override for custom build methods """
         self.add_networks()
         self.load_models(swapped=False)
-        if not self.predictors:
-            self.build_autoencoders()
+        self.build_autoencoders()
         self.log_summary()
         self.compile_predictors()
-        self.state.add_models(self.predictors)
 
     def build_autoencoders(self):
         """ Override for Model Specific autoencoder builds
-            NB: This code will not be run if a model definition is
-                loaded from file, so make sure nothing is set in here
-                that is required for saved models
+
+            NB! ENSURE YOU NAME YOUR INPUTS. At least the following input names
+            are expected:
+                face (the input for image)
+                mask (the input for mask if it is used)
+
         """
         raise NotImplementedError
 
@@ -94,6 +102,20 @@ class ModelBase():
         retval = os.path.splitext(basename)[0].lower()
         logger.debug("model name: '%s'", retval)
         return retval
+
+    def load_input_shape(self):
+        """ Load the input shape from state file if it exists """
+        logger.debug("Loading Input Shape from State file")
+        if not self.state.inputs:
+            logger.debug("No input shapes saved. Using model config")
+            return
+        if not self.state.face_shapes:
+            logger.warning("Input shapes stored in State file, but no matches for 'face'."
+                           "Using model config")
+            return
+        input_shape = self.state.face_shapes[0]
+        logger.debug("Setting input shape from state file: %s", input_shape)
+        self.input_shape = input_shape
 
     def add_network(self, network_type, side, network):
         """ Add a NNMeta object """
@@ -115,6 +137,29 @@ class ModelBase():
             logger.debug("Converting to multi-gpu: side %s", side)
             model = multi_gpu_model(model, self.gpus)
         self.predictors[side] = model
+        if not self.state.inputs:
+            self.store_input_shapes(model)
+        if not self.output_shape:
+            self.set_output_shape(model)
+
+    def store_input_shapes(self, model):
+        """ Store the input and output shapes to state """
+        logger.debug("Adding input shapes to state for model")
+        inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        if not any(inp for inp in inputs.keys() if inp.startswith("face")):
+            raise ValueError("No input named 'face' was found. Check your input naming. "
+                             "Current input names: {}".format(inputs))
+        self.state.inputs = inputs
+        logger.debug("Added input shapes: %s", self.state.inputs)
+
+    def set_output_shape(self, model):
+        """ Set the output shape for use in training and convert """
+        logger.debug("Setting output shape")
+        out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
+        if not out:
+            raise ValueError("No outputs found! Check your model.")
+        self.output_shape = tuple(out[0])
+        logger.debug("Added output shape: %s", self.output_shape)
 
     def compile_predictors(self):
         """ Compile the predictors """
@@ -123,8 +168,9 @@ class ModelBase():
 
         for side, model in self.predictors.items():
             loss_funcs = [self.loss_function(side)]
-            if self.masks:
-                loss_funcs.insert(0, self.mask_loss_function(self.masks[side], side))
+            mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
+            if mask:
+                loss_funcs.insert(0, self.mask_loss_function(mask[0], side))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(self.loss_names[side]) > 1:
@@ -135,11 +181,11 @@ class ModelBase():
     def loss_function(self, side):
         """ Set the loss function """
         if self.config.get("dssim_loss", False):
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
         self.loss_names[side] = ["loss"]
@@ -150,16 +196,16 @@ class ModelBase():
         """ Set the loss function for masks
             Side is input so we only log once """
         if self.config.get("dssim_mask_loss", False):
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using DSSIM Loss for mask")
             mask_loss_func = DSSIMObjective()
         else:
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using Mean Absolute Error Loss for mask")
             mask_loss_func = losses.mean_absolute_error
 
         if self.config.get("penalized_mask_loss", False):
-            if side == "a":
+            if side == "a" and not self.predict:
                 logger.verbose("Using Penalized Loss for mask")
             mask_loss_func = PenalizedLoss(mask, mask_loss_func)
 
@@ -197,6 +243,8 @@ class ModelBase():
 
     def log_summary(self):
         """ Verbose log the model summaries """
+        if self.predict:
+            return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
             self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
@@ -212,16 +260,14 @@ class ModelBase():
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:
-                is_loaded = network.load()
+                is_loaded = network.load(predict=self.predict)
             else:
-                is_loaded = network.load(model_mapping[network.side][network.type])
+                is_loaded = network.load(fullpath=model_mapping[network.side][network.type],
+                                         predict=self.predict)
             if not is_loaded:
-                return is_loaded
-        if self.state.models:
-            logger.debug("Loading predictors from state file: '%s'", self.state.filename)
-            self.predictors = {side: model_from_json(model)
-                               for side, model in self.state.models.items()}
-        logger.info("loaded model")
+                break
+        if is_loaded:
+            logger.info("loaded model")
         return is_loaded
 
     def save_models(self):
@@ -310,20 +356,34 @@ class NNMeta():
         self.type = network_type.lower()
         self.side = side
         self.network = network
+        self.network.name = self.type
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load(self, fullpath=None):
+    def load(self, fullpath=None, predict=False):
         """ Load model """
 
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Loading model: '%s'", fullpath)
         try:
             network = load_model(self.filename, custom_objects=get_custom_objects())
+        except ValueError as err:
+            if str(err).lower().startswith("cannot create group in read only mode"):
+                self.convert_legacy_weights()
+                return True
+            if predict:
+                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
+            logger.warning("Failed loading existing training data. Generating new models")
+            logger.debug("Exception: %s", str(err))
+            return False
+
         except Exception as err:  # pylint: disable=broad-except
+            if predict:
+                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
         self.network = network  # Update network with saved model
+        self.network.name = self.type
         return True
 
     def save(self, fullpath=None, should_backup=False):
@@ -344,6 +404,13 @@ class NNMeta():
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
 
+    def convert_legacy_weights(self):
+        """ Convert legacy weights files to hold the model topology """
+        logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
+        self.network.load_weights(self.filename)
+        self.save(should_backup=False)
+        self.network.name = self.type
+
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
@@ -352,21 +419,28 @@ class State():
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
         self.iterations = 0
-        self.models = dict()
+        self.inputs = dict()
         self.config = dict()
         self.load()
+
+    @property
+    def face_shapes(self):
+        """ Return a list of stored face shape inputs """
+        return [tuple(val) for key, val in self.inputs.items() if key.startswith("face")]
+
+    @property
+    def mask_shapes(self):
+        """ Return a list of stored mask shape inputs """
+        return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
     def load(self):
         """ Load epoch number from state file """
         logger.debug("Loading State")
-        iterations = 0
         try:
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                # TODO Remove this backwards compatibility fix to get iterations from epoch_no
-                self.iterations = state.get("epoch_no", None)
-                self.iterations = state["iterations"] if iterations is None else iterations
-                self.models = state.get("models", dict())
+                self.iterations = state.get("iterations", 0)
+                self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
@@ -384,7 +458,7 @@ class State():
         try:
             with open(self.filename, "wb") as out:
                 state = {"iterations": self.iterations,
-                         "models": self.models,
+                         "inputs": self.inputs,
                          "config": _CONFIG}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))
@@ -401,9 +475,3 @@ class State():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
-
-    def add_models(self, models):
-        """ Add the auto encoders to the state file """
-        for side, model in models.items():
-            self.models[side] = model.to_json()
-            logger.debug("Added autoencoder models to state file. Side: %s", side)

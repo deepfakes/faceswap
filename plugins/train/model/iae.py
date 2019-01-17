@@ -32,16 +32,18 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize IAE model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.input_shape)
+        inp = Input(shape=self.input_shape, name="face")
 
         decoder = self.networks["decoder"].network
         encoder = self.networks["encoder"].network
         inter_both = self.networks["inter"].network
         for side in ("a", "b"):
             inter_side = self.networks["inter_{}".format(side)].network
-            autoencoder = decoder(Concatenate()([inter_side(encoder(inp)),
-                                                 inter_both(encoder(inp))]))
-            self.add_predictor(side, KerasModel(inp, autoencoder))
+            output = decoder(Concatenate()([inter_side(encoder(inp)),
+                                            inter_both(encoder(inp))]))
+
+            autoencoder = KerasModel(inp, output)
+            self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):
@@ -66,11 +68,12 @@ class Model(ModelBase):
 
     def decoder(self):
         """ Decoder Network """
+        subpixel = self.config["subpixel_upscaling"]
         input_ = Input(shape=(4, 4, self.encoder_dim))
         var_x = input_
-        var_x = upscale(512)(var_x)
-        var_x = upscale(256)(var_x)
-        var_x = upscale(128)(var_x)
-        var_x = upscale(64)(var_x)
+        var_x = upscale(512, use_subpixel=subpixel)(var_x)
+        var_x = upscale(256, use_subpixel=subpixel)(var_x)
+        var_x = upscale(128, use_subpixel=subpixel)(var_x)
+        var_x = upscale(64, use_subpixel=subpixel)(var_x)
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
         return KerasModel(input_, var_x)

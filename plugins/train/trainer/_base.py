@@ -39,12 +39,8 @@ class TrainerBase():
         self.images = images
         self.use_mask = False
         self.process_training_opts()
-        self.transform_kwargs = self.process_transform_kwargs()
 
-        generator = TrainingDataGenerator(
-            transform_kwargs=self.transform_kwargs,
-            training_opts=self.model.training_opts)
-
+        generator = self.load_generator()
         self.images_a = generator.minibatch_ab(images["a"], self.batch_size, "a")
         self.images_b = generator.minibatch_ab(images["b"], self.batch_size, "b")
         self.timelapse = None
@@ -55,20 +51,13 @@ class TrainerBase():
         """ Standardised timestamp for loss reporting """
         return time.strftime("%H:%M:%S")
 
-    def process_transform_kwargs(self):
-        """ Override for specific image manipulation kwargs
-            See lib.training_data.ImageManipulation() for valid kwargs"""
-        warped_zoom = self.model.input_shape[0] // 64
-        target_zoom = warped_zoom
-        transform_kwargs = {"rotation_range": 10,
-                            "zoom_range": 0.05,
-                            "shift_range": 0.05,
-                            "random_flip": 0.4,
-                            "zoom": (warped_zoom, target_zoom),
-                            "coverage": 160,
-                            "scale": 5}
-        logger.debug(transform_kwargs)
-        return transform_kwargs
+    def load_generator(self):
+        """ Pass arguments to TrainingDataGenerator and return object """
+        input_size = self.model.input_shape[0]
+        output_size = self.model.output_shape[0]
+        logger.debug("input_size: %s, output_size: %s", input_size, output_size)
+        generator = TrainingDataGenerator(input_size, output_size, self.model.training_opts)
+        return generator
 
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
@@ -172,13 +161,7 @@ class TrainerBase():
         batch_size = min(len(files_a),
                          len(files_b),
                          self.model.training_opts.get("preview_images", 14))
-        generator = TrainingDataGenerator(
-            transform_kwargs={"rotation_range": 0, "zoom_range": 0, "shift_range": 0,
-                              "random_flip": 0, "zoom": self.transform_kwargs["zoom"],
-                              "coverage": self.transform_kwargs["coverage"],
-                              "scale": self.transform_kwargs["scale"]},
-            training_opts=self.model.training_opts)
-
+        generator = self.load_generator()
         if output is None:
             output = get_folder(os.path.join(str(self.model.model_dir), "timelapse"))
         timelapse["output_dir"] = str(output)

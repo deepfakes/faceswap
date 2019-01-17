@@ -36,12 +36,13 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize original model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.input_shape)
+        inp = Input(shape=self.input_shape, name="face")
 
         for side in ("a", "b"):
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
-            autoencoder = KerasModel(inp, decoder(self.networks["encoder"].network(inp)))
+            output = decoder(self.networks["encoder"].network(inp))
+            autoencoder = KerasModel(inp, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 

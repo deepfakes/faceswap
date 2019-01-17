@@ -17,36 +17,28 @@ class Model(OriginalModel):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
-        kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
+        kwargs["input_shape"] = (128, 128, 3)
         kwargs["encoder_dim"] = 256 if self.config["lowmem"] else 512
 
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_masks(self):
-        """ Mask shapes for dfaker """
-        mask_shape = self.input_shape[:2] + (1, )
-        mask_a = Input(shape=mask_shape)
-        mask_b = Input(shape=mask_shape)
-        return {"a": mask_a, "b": mask_b}
-
     def set_training_data(self):
         """ Set the dictionary for training """
-        logger.debug("Setting training data")
-        training_opts = dict()
-        training_opts["mask_type"] = self.config["mask_type"]
-        training_opts["preview_images"] = 10
-        logger.debug("Set training data: %s", training_opts)
-        return training_opts
+        self.training_opts["mask_type"] = self.config["mask_type"]
+        self.training_opts["preview_images"] = 10
+        super().set_training_data()
 
     def build_autoencoders(self):
         """ Initialize DFL H128 model """
         logger.debug("Initializing model")
+        mask_shape = self.input_shape[:2] + (1, )
         for side in ("a", "b"):
-            inp = Input(shape=self.input_shape)
-            mask = self.masks[side]
+            inp = [Input(shape=self.input_shape, name="face"),
+                   Input(shape=mask_shape, name="mask")]
             decoder = self.networks["decoder_{}".format(side)].network
-            autoencoder = KerasModel([inp, mask], decoder(self.networks["encoder"].network(inp)))
+            output = decoder(self.networks["encoder"].network(inp[0]))
+            autoencoder = KerasModel(inp, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
