@@ -45,17 +45,15 @@ class FileHandler():
                                          ("Pickle", "*.p"),
                                          ("YAML", "*.yaml"),
                                          all_files),
-                          "config": (("Faceswap config files", "*.fsw"),
-                                     all_files),
-                          "csv": (("Comma separated values", "*.csv"),
-                                  all_files),
+                          "config": (("Faceswap config files", "*.fsw"), all_files),
+                          "csv": (("Comma separated values", "*.csv"), all_files),
                           "image": (("Bitmap", "*.bmp"),
                                     ("JPG", "*.jpeg", "*.jpg"),
                                     ("PNG", "*.png"),
                                     ("TIFF", "*.tif", "*.tiff"),
                                     all_files),
-                          "session": (("Faceswap session files", "*.fss"),
-                                      all_files),
+                          "log": (("Log files", "*.log"), all_files),
+                          "session": (("Faceswap session files", "*.fss"), all_files),
                           "video": (("Audio Video Interleave", "*.avi"),
                                     ("Flash Video", "*.flv"),
                                     ("Matroska", "*.mkv"),
@@ -75,13 +73,13 @@ class FileHandler():
                           "rotate": "filename",
                           "slice": "filename"},
                 "output": {"extract": "dir",
-                           "gen-vid": "save",
+                           "gen-vid": "savefilename",
                            "get-fps": "nothing",
                            "get-info": "nothing",
-                           "mux-audio": "save",
-                           "rescale": "save",
-                           "rotate": "save",
-                           "slice": "save"}
+                           "mux-audio": "savefilename",
+                           "rescale": "savefilename",
+                           "rotate": "savefilename",
+                           "slice": "savefilename"}
             }
         }
         self.defaults = self.set_defaults()
@@ -331,7 +329,7 @@ class Images(metaclass=Singleton):
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
 
-class ContextMenu(tk.Menu):
+class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
     """ Pop up menu """
     def __init__(self, widget):
         logger.debug("Initializing %s: (widget_class: '%s')",

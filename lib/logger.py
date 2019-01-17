@@ -68,7 +68,7 @@ def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
     rootlogger.setLevel(loglevel)
 
 
-def log_setup(loglevel, command):
+def log_setup(loglevel, logfile, command):
     """ initial log set up. """
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
@@ -76,7 +76,7 @@ def log_setup(loglevel, command):
     log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
-    f_handler = file_handler(numeric_loglevel, log_format, command)
+    f_handler = file_handler(numeric_loglevel, logfile, log_format, command)
     s_handler = stream_handler(numeric_loglevel)
     c_handler = crash_handler(log_format)
 
@@ -86,11 +86,15 @@ def log_setup(loglevel, command):
     logging.info("Log level set to: %s", loglevel.upper())
 
 
-def file_handler(loglevel, log_format, command):
+def file_handler(loglevel, logfile, log_format, command):
     """ Add a logging rotating file handler """
-    filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
-    # Windows has issues sharing the log file with subprocesses, so log GUI seperately
-    filename += "_gui.log" if command == "gui" else ".log"
+    if logfile is not None:
+        filename = logfile
+    else:
+        filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
+        # Windows has issues sharing the log file with subprocesses, so log GUI seperately
+        filename += "_gui.log" if command == "gui" else ".log"
+
     should_rotate = os.path.isfile(filename)
     log_file = RotatingFileHandler(filename, backupCount=1)
     if should_rotate:
