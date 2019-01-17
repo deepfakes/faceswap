@@ -43,7 +43,7 @@ class PreviewExtract(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler("dir").retfile
+        location = FileHandler("dir", None).retfile
         if not location:
             return
         filename = "extract_convert_preview"
@@ -56,7 +56,7 @@ class PreviewExtract(DisplayOptionalPage):
         print("Saved preview to {}".format(filename))
 
 
-class PreviewTrain(DisplayOptionalPage):
+class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Training preview image(s) """
 
     def display_item_set(self):
@@ -92,14 +92,14 @@ class PreviewTrain(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler("dir").retfile
+        location = FileHandler("dir", None).retfile
         if not location:
             return
         for preview in self.subnotebook.children.values():
             preview.save_preview(location)
 
 
-class PreviewTrainCanvas(ttk.Frame):
+class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Canvas to hold a training preview image """
     def __init__(self, parent, previewname):
         ttk.Frame.__init__(self, parent)
@@ -141,7 +141,7 @@ class PreviewTrainCanvas(ttk.Frame):
         print("Saved preview to {}".format(filename))
 
 
-class GraphDisplay(DisplayOptionalPage):
+class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
 
     def display_item_set(self):
@@ -178,7 +178,7 @@ class GraphDisplay(DisplayOptionalPage):
 
     def save_items(self):
         """ Open save dialogue and save graphs """
-        graphlocation = FileHandler("dir").retfile
+        graphlocation = FileHandler("dir", None).retfile
         if not graphlocation:
             return
         for graph in self.subnotebook.children.values():

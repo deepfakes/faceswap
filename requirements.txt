@@ -1,16 +1,18 @@
+tqdm
+psutil
 pathlib==1.0.1
 scandir==1.7
-h5py==2.8.0
-Keras==2.2.0
-opencv-python==3.4.1.15
+opencv-python
 scikit-image
-face_recognition
-cmake
-dlib
-tqdm
+scikit-learn
 matplotlib==2.2.2
 ffmpy==0.2.2
 nvidia-ml-py3
+h5py==2.8.0
+Keras==2.2.4
+cmake
+dlib
+face_recognition
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,

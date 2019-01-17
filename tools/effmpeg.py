@@ -8,6 +8,7 @@ Created on 2018-03-16 15:14
 # TODO: integrate preview into gui window
 # TODO: add preview support when muxing audio
 #       -> figure out if ffmpeg | ffplay would work on windows and mac
+import logging
 import os
 import sys
 import subprocess
@@ -25,8 +26,10 @@ if sys.version_info[0] < 3:
 if sys.version_info[0] == 3 and sys.version_info[1] < 2:
     raise Exception("This program requires at least python3.2")
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-class DataItem(object):
+
+class DataItem():
     """
     A simple class used for storing the media data items and directories that
     Effmpeg uses for 'input', 'output' and 'ref_vid'.
@@ -201,9 +204,9 @@ class Effmpeg(object):
                                  "{}".format(self.ref_vid.path))
         elif self.args.action in self._actions_can_use_ref_video:
             if self.ref_vid.is_type("none"):
-                print("Warning: no reference video was supplied, even though "
-                      "one may be used with the chosen action. If this is "
-                      "intentional then ignore this warning.", file=sys.stderr)
+                logger.warning("Warning: no reference video was supplied, even though "
+                               "one may be used with the chosen action. If this is "
+                               "intentional then ignore this warning.")
 
         # Process start and duration arguments
         self.start = self.parse_time(self.args.start)
@@ -248,8 +251,8 @@ class Effmpeg(object):
             try:
                 int(self.args.degrees)
             except ValueError as ve:
-                print("You have entered an invalid value for degrees: "
-                      "{}".format(self.args.degrees), file=sys.stderr)
+                logger.error("You have entered an invalid value for degrees: %s",
+                             self.args.degrees)
                 exit(1)
 
         # Set executable based on whether previewing or not
@@ -329,7 +332,7 @@ class Effmpeg(object):
         _fps = ff.run(stdout=subprocess.PIPE)[0].decode("utf-8")
         _fps = _fps.strip()
         if print_:
-            print("Video fps:", _fps)
+            logger.info("Video fps: %s", _fps)
         else:
             return _fps
 
@@ -341,7 +344,7 @@ class Effmpeg(object):
         out = ff.run(stdout=subprocess.PIPE,
                      stderr=subprocess.STDOUT)[0].decode('utf-8')
         if print_:
-            print(out)
+            logger.info(out)
         else:
             return out
 
@@ -399,7 +402,7 @@ class Effmpeg(object):
 
     @staticmethod
     def slice(input_=None, output=None, start=None, duration=None,
-              preview=None, exe=None,  **kwargs):
+              preview=None, exe=None, **kwargs):
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
         _output_opts = "-t " + duration + " "
@@ -547,4 +550,3 @@ if __name__ == "__main__":
     PARSER.set_defaults(func=bad_args)
     ARGUMENTS = PARSER.parse_args()
     ARGUMENTS.func(ARGUMENTS)
-

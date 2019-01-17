@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """ Command Line Arguments """
 import argparse
-from importlib import import_module
+import logging
 import os
 import platform
 import sys
 
-from plugins.PluginLoader import PluginLoader
+from importlib import import_module
+
+from lib.logger import crash_log, log_setup
+from lib.utils import safe_shutdown
+from plugins.plugin_loader import PluginLoader
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class ScriptExecutor(object):
+class ScriptExecutor():
     """ Loads the relevant script modules and executes the script.
         This class is initialised in each of the argparsers for the relevant
         command, then execute script is called within their set_default
@@ -47,20 +53,20 @@ class ScriptExecutor(object):
             traceback errors to console """
 
         try:
-            import tkinter
+            # pylint: disable=unused-variable
+            import tkinter  # noqa pylint: disable=unused-import
         except ImportError:
-            print(
+            logger.warning(
                 "It looks like TkInter isn't installed for your OS, so "
                 "the GUI has been disabled. To enable the GUI please "
-                "install the TkInter application.\n\n"
-                "You can try:\n"
-                "  Windows/macOS:      Install ActiveTcl Community "
-                "Edition from "
-                "www.activestate.com\n"
-                "  Ubuntu/Mint/Debian: sudo apt install python3-tk\n"
-                "  Arch:               sudo pacman -S tk\n"
-                "  CentOS/Redhat:      sudo yum install tkinter\n"
-                "  Fedora:             sudo dnf install python3-tkinter\n")
+                "install the TkInter application. You can try:")
+            logger.info("Anaconda: conda install tk")
+            logger.info("Windows/macOS: Install ActiveTcl Community Edition from "
+                        "http://www.activestate.com")
+            logger.info("Ubuntu/Mint/Debian: sudo apt install python3-tk")
+            logger.info("Arch: sudo pacman -S tk")
+            logger.info("CentOS/Redhat: sudo yum install tkinter")
+            logger.info("Fedora: sudo dnf install python3-tkinter")
             exit(1)
 
     @staticmethod
@@ -68,21 +74,38 @@ class ScriptExecutor(object):
         """ Check whether there is a display to output the GUI. If running on
             Windows then assume not running in headless mode """
         if not os.environ.get("DISPLAY", None) and os.name != "nt":
-            print("No display detected. GUI mode has been disabled.")
+            logger.warning("No display detected. GUI mode has been disabled.")
             if platform.system() == "Darwin":
-                print("macOS users need to install XQuartz. "
-                      "See https://support.apple.com/en-gb/HT201341")
+                logger.info("macOS users need to install XQuartz. "
+                            "See https://support.apple.com/en-gb/HT201341")
             exit(1)
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        script = self.import_script()
-        process = script(arguments)
-        process.process()
+        log_setup(arguments.loglevel, arguments.logfile, self.command)
+        logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
+        try:
+            script = self.import_script()
+            process = script(arguments)
+            process.process()
+        except KeyboardInterrupt:  # pylint: disable=try-except-raise
+            raise
+        except SystemExit:
+            pass
+        except Exception:  # pylint: disable=broad-except
+            crash_file = crash_log()
+            logger.exception("Got Exception on main handler:")
+            logger.critical("An unexpected crash has occurred. Crash report written to %s. "
+                            "Please verify you are running the latest version of faceswap "
+                            "before reporting", crash_file)
+
+        finally:
+            safe_shutdown()
 
 
 class FullPaths(argparse.Action):
     """ Expand user- and relative-paths """
+    # pylint: disable=too-few-public-methods
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, os.path.abspath(
             os.path.expanduser(values)))
@@ -90,6 +113,7 @@ class FullPaths(argparse.Action):
 
 class DirFullPaths(FullPaths):
     """ Class that gui uses to determine if you need to open a directory """
+    # pylint: disable=too-few-public-methods,unnecessary-pass
     pass
 
 
@@ -99,6 +123,7 @@ class FileFullPaths(FullPaths):
 
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
+    # pylint: disable=too-few-public-methods
     def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  **kwargs):
         super(FileFullPaths, self).__init__(option_strings, dest, **kwargs)
@@ -122,12 +147,20 @@ class FileFullPaths(FullPaths):
         return [(name, getattr(self, name)) for name in names]
 
 
+class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
+    """ Class that the gui uses to determine that the input can take a folder or a filename.
+        Inherits functionality from FileFullPaths
+        Has the effect of giving the user 2 Open Dialogue buttons in the gui """
+    pass
+
+
 class SaveFileFullPaths(FileFullPaths):
     """
     Class that gui uses to determine if you need to save a file.
 
     see lib/gui/utils.py FileHandler for current GUI filetypes
     """
+    # pylint: disable=too-few-public-methods,unnecessary-pass
     pass
 
 
@@ -141,6 +174,7 @@ class ContextFullPaths(FileFullPaths):
 
     Bespoke actions are then set in lib/gui/utils.py FileHandler
     """
+    # pylint: disable=too-few-public-methods, too-many-arguments
     def __init__(self, option_strings, dest, nargs=None, filetypes=None,
                  action_option=None, **kwargs):
         if nargs is not None:
@@ -192,13 +226,14 @@ class SmartFormatter(argparse.HelpFormatter):
         return argparse.HelpFormatter._split_lines(self, text, width)
 
 
-class FaceSwapArgs(object):
+class FaceSwapArgs():
     """ Faceswap argument parser functions that are universal
         to all commands. Should be the parent function of all
         subsequent argparsers """
     def __init__(self, subparser, command,
                  description="default", subparsers=None):
 
+        self.global_arguments = self.get_global_arguments()
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
         if not subparser:
@@ -227,6 +262,29 @@ class FaceSwapArgs(object):
         return argument_list
 
     @staticmethod
+    def get_global_arguments():
+        """ Arguments that are used in ALL parts of Faceswap
+            DO NOT override this """
+        global_args = list()
+        global_args.append({"opts": ("-L", "--loglevel"),
+                            "type": str.upper,
+                            "dest": "loglevel",
+                            "default": "INFO",
+                            "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
+                            "help": "Log level. Stick with INFO or VERBOSE unless you need to "
+                                    "file an error report. Be careful with TRACE as it will "
+                                    "generate a lot of data"})
+        global_args.append({"opts": ("-LF", "--logfile"),
+                            "action": FileFullPaths,
+                            "filetypes": 'log',
+                            "type": str,
+                            "dest": "logfile",
+                            "help": "Path to store the logfile. Leave blank to store in the "
+                                    "faceswap folder",
+                            "default": None})
+        return global_args
+
+    @staticmethod
     def create_parser(subparser, command, description):
         """ Create the parser for the selected command """
         parser = subparser.add_parser(
@@ -240,7 +298,8 @@ class FaceSwapArgs(object):
 
     def add_arguments(self):
         """ Parse the arguments passed in from argparse """
-        for option in self.argument_list + self.optional_arguments:
+        options = self.global_arguments + self.argument_list + self.optional_arguments
+        for option in options:
             args = option["opts"]
             kwargs = {key: option[key]
                       for key in option.keys() if key != "opts"}
@@ -261,12 +320,14 @@ class ExtractConvertArgs(FaceSwapArgs):
         argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ("-i", "--input-dir"),
-                              "action": DirFullPaths,
+                              "action": DirOrFileFullPaths,
+                              "filetypes": "video",
                               "dest": "input_dir",
                               "default": "input",
-                              "help": "Input directory. A directory "
-                                      "containing the files you wish to "
-                                      "process. Defaults to 'input'"})
+                              "help": "Input directory or video. Either a "
+                                      "directory containing the image files "
+                                      "you wish to process or path to a "
+                                      "video file. Defaults to 'input'"})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",
@@ -274,12 +335,49 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "help": "Output directory. This is where the "
                                       "converted files will be stored. "
                                       "Defaults to 'output'"})
-        argument_list.append({"opts": ("--alignments", ),
+        argument_list.append({"opts": ("-al", "--alignments"),
                               "action": FileFullPaths,
                               "filetypes": 'alignments',
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
+        argument_list.append({"opts": ("-l", "--ref_threshold"),
+                              "type": float,
+                              "dest": "ref_threshold",
+                              "default": 0.6,
+                              "help": "Threshold for positive face "
+                                      "recognition"})
+        argument_list.append({"opts": ("-n", "--nfilter"),
+                              "type": str,
+                              "dest": "nfilter",
+                              "nargs": "+",
+                              "default": None,
+                              "help": "Reference image for the persons you do "
+                                      "not want to process. Should be a front "
+                                      "portrait. Multiple images can be added "
+                                      "space separated"})
+        argument_list.append({"opts": ("-f", "--filter"),
+                              "type": str,
+                              "dest": "filter",
+                              "nargs": "+",
+                              "default": None,
+                              "help": "Reference images for the person you "
+                                      "want to process. Should be a front "
+                                      "portrait. Multiple images can be added "
+                                      "space separated"})
+        return argument_list
+
+
+class ExtractArgs(ExtractConvertArgs):
+    """ Class to parse the command line arguments for extraction.
+        Inherits base options from ExtractConvertArgs where arguments
+        that are used for both extract and convert should be placed """
+
+    @staticmethod
+    def get_optional_arguments():
+        """ Put the arguments in a list so that they are accessible from both
+        argparse and gui """
+        argument_list = []
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
                               "dest": "serializer",
@@ -289,26 +387,32 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "yaml is chosen and not available, then "
                                       "json will be used as the default "
                                       "fallback."})
-        argument_list.append({"opts": ("-D", "--detector"),
-                              "type": str,
-                              # case sensitive because this is used to load a
-                              # plugin.
-                              "choices": ("dlib-hog", "dlib-cnn",
-                                          "dlib-all", "mtcnn"),
-                              "default": "mtcnn",
-                              "help": "R|Detector to use.\n'dlib-hog': uses "
-                                      "least resources, but is the least\n\t"
-                                      "reliable.\n'dlib-cnn': faster than "
-                                      "mtcnn but detects fewer faces\n\tand "
-                                      "fewer false positives.\n'dlib-all': "
-                                      "attempts to find faces using "
-                                      "dlib-cnn,\n\tif none are found, "
-                                      "attempts to find faces\n\tusing "
-                                      "dlib-hog.\n'mtcnn': slower than dlib, "
-                                      "but uses fewer resources\n\twhilst "
-                                      "detecting more faces and more false\n\t"
-                                      "positives. Has superior alignment to "
-                                      "dlib"})
+        argument_list.append({
+            "opts": ("-D", "--detector"),
+            "type": str,
+            "choices":  PluginLoader.get_available_extractors(
+                "detect"),
+            "default": "mtcnn",
+            "help": "R|Detector to use."
+                    "\n'dlib-hog': uses least resources, but is the"
+                    "\n\tleast reliable."
+                    "\n'dlib-cnn': faster than mtcnn but detects"
+                    "\n\tfewer faces and fewer false positives."
+                    "\n'mtcnn': slower than dlib, but uses fewer"
+                    "\n\tresources whilst detecting more faces and"
+                    "\n\tmore false positives. Has superior"
+                    "\n\talignment to dlib"})
+        argument_list.append({
+            "opts": ("-A", "--aligner"),
+            "type": str,
+            "choices": PluginLoader.get_available_extractors(
+                "align"),
+            "default": "fan",
+            "help": "R|Aligner to use."
+                    "\n'dlib': Dlib Pose Predictor. Faster, less "
+                    "\n\tresource intensive, but less accurate."
+                    "\n'fan': Face Alignment Network. Best aligner."
+                    "\n\tGPU heavy."})
         argument_list.append({"opts": ("-mtms", "--mtcnn-minsize"),
                               "type": int,
                               "dest": "mtcnn_minsize",
@@ -341,48 +445,6 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "pyramid. Should be a decimal number "
                                       "less than one. Default is 0.709 "
                                       "(MTCNN detector only)"})
-        argument_list.append({"opts": ("-l", "--ref_threshold"),
-                              "type": float,
-                              "dest": "ref_threshold",
-                              "default": 0.6,
-                              "help": "Threshold for positive face "
-                                      "recognition"})
-        argument_list.append({"opts": ("-n", "--nfilter"),
-                              "type": str,
-                              "dest": "nfilter",
-                              "nargs": "+",
-                              "default": None,
-                              "help": "Reference image for the persons you do "
-                                      "not want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
-        argument_list.append({"opts": ("-f", "--filter"),
-                              "type": str,
-                              "dest": "filter",
-                              "nargs": "+",
-                              "default": None,
-                              "help": "Reference images for the person you "
-                                      "want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
-        return argument_list
-
-
-class ExtractArgs(ExtractConvertArgs):
-    """ Class to parse the command line arguments for extraction.
-        Inherits base options from ExtractConvertArgs where arguments
-        that are used for both extract and convert should be placed """
-
-    @staticmethod
-    def get_optional_arguments():
-        """ Put the arguments in a list so that they are accessible from both
-        argparse and gui """
-        argument_list = []
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -395,7 +457,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "pass in a list of numbers to enumerate "
                                       "exactly what angles to check"})
         argument_list.append({"opts": ("-bt", "--blur-threshold"),
-                              "type": int,
+                              "type": float,
                               "dest": "blur_thresh",
                               "default": None,
                               "help": "Automatically discard images blurrier "
@@ -406,14 +468,34 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-mp", "--multiprocess"),
                               "action": "store_true",
                               "default": False,
-                              "help": "Run extraction on all available "
-                                      "cores. (CPU only)"})
+                              "help": "Run extraction in parallel. Offers "
+                                      "speed up for some extractor/detector "
+                                      "combinations, less so for others. "
+                                      "Only has an effect if both the "
+                                      "aligner and detector use the GPU, "
+                                      "otherwise this is automatic."})
+        argument_list.append({"opts": ("-sz", "--size"),
+                              "type": int,
+                              "default": 256,
+                              "help": "The output size of extracted faces. "
+                                      "Make sure that the model you intend "
+                                      "to train supports your required "
+                                      "size. This will only need to be "
+                                      "changed for hi-res models."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
                               "default": False,
                               "help": "Skips frames that have already been "
-                                      "extracted"})
+                                      "extracted and exist in the alignments "
+                                      "file"})
+        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
+                              "action": "store_true",
+                              "dest": "skip_faces",
+                              "default": False,
+                              "help": "Skip frames that already have "
+                                      "detected faces in the alignments "
+                                      "file"})
         argument_list.append({"opts": ("-dl", "--debug-landmarks"),
                               "action": "store_true",
                               "dest": "debug_landmarks",
@@ -432,8 +514,8 @@ class ExtractArgs(ExtractConvertArgs):
                               "type": int,
                               "default": None,
                               "help": "Automatically save the alignments file "
-                                      "after a set amount of frames. Will only "
-                                      "save at the end of extracting by "
+                                      "after a set amount of frames. Will "
+                                      "only save at the end of extracting by "
                                       "default. WARNING: Don't interrupt the "
                                       "script when writing the file because "
                                       "it might get corrupted."})
@@ -557,14 +639,21 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-sm", "--smooth-mask"),
                               "action": "store_true",
                               "dest": "smooth_mask",
-                              "default": True,
+                              "default": False,
                               "help": "Smooth mask (Adjust converter only)"})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",
-                              "default": True,
+                              "default": False,
                               "help": "Average color adjust. "
                                       "(Adjust converter only)"})
+        argument_list.append({"opts": ("-dt", "--draw-transparent"),
+                              "action": "store_true",
+                              "dest": "draw_transparent",
+                              "default": False,
+                              "help": "Place the swapped face on a "
+                                      "transparent layer rather than the "
+                                      "original frame."})
         return argument_list
 
 
@@ -646,11 +735,36 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Sets allow_growth option of Tensorflow "
                                       "to spare memory on some configs"})
-        argument_list.append({"opts": ("-v", "--verbose"),
-                              "action": "store_true",
-                              "dest": "verbose",
-                              "default": False,
-                              "help": "Show verbose output"})
+        argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_input_A",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain faces of A "
+                                      "which will be converted for the "
+                                      "timelapse. You must supply a "
+                                      "--timelapse-output and a "
+                                      "--timelapse-input-B parameter."})
+        argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_input_B",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain faces of B "
+                                      "which will be converted for the "
+                                      "timelapse. You must supply a "
+                                      "--timelapse-output and a "
+                                      "--timelapse-input-A parameter."})
+        argument_list.append({"opts": ("-to", "--timelapse-output"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_output",
+                              "default": None,
+                              "help": "The output folder for the timelapse. "
+                                      "If the input folders are supplied but "
+                                      "no output folder, it will default to "
+                                      "your model folder /timelapse/"})
         # This is a hidden argument to indicate that the GUI is being used,
         # so the preview window should be redirected Accordingly
         argument_list.append({"opts": ("-gui", "--gui"),

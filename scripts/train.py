@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ The script to run the training process of faceswap """
 
+import logging
 import os
 import sys
 import threading
@@ -9,11 +10,14 @@ import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
-from lib.utils import get_folder, get_image_paths, set_system_verbosity
-from plugins.PluginLoader import PluginLoader
+from lib.utils import (get_folder, get_image_paths, set_system_verbosity,
+                       Timelapse)
+from plugins.plugin_loader import PluginLoader
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Train(object):
+class Train():
     """ The training process.  """
     def __init__(self, arguments):
         self.args = arguments
@@ -25,13 +29,15 @@ class Train(object):
 
         # this is so that you can enter case insensitive values for trainer
         trainer_name = self.args.trainer
-        self.trainer_name = "LowMem" if trainer_name.lower() == "lowmem" else trainer_name
+        self.trainer_name = trainer_name
+        if trainer_name.lower() == "lowmem":
+            self.trainer_name = "LowMem"
+        self.timelapse = None
 
     def process(self):
         """ Call the training process object """
-        print("Training data directory: {}".format(self.args.model_dir))
-        lvl = '0' if self.args.verbose else '2'
-        set_system_verbosity(lvl)
+        logger.info("Training data directory: %s", self.args.model_dir)
+        set_system_verbosity(self.args.loglevel)
         thread = self.start_thread()
 
         if self.args.preview:
@@ -47,16 +53,16 @@ class Train(object):
         images = []
         for image_dir in [self.args.input_A, self.args.input_B]:
             if not os.path.isdir(image_dir):
-                print('Error: {} does not exist'.format(image_dir))
+                logger.error("Error: '%s' does not exist", image_dir)
                 exit(1)
 
             if not os.listdir(image_dir):
-                print('Error: {} contains no images'.format(image_dir))
+                logger.error("Error: '%s' contains no images", image_dir)
                 exit(1)
 
             images.append(get_image_paths(image_dir))
-        print("Model A Directory: {}".format(self.args.input_A))
-        print("Model B Directory: {}".format(self.args.input_B))
+        logger.info("Model A Directory: %s", self.args.input_A)
+        logger.info("Model B Directory: %s", self.args.input_B)
         return images
 
     def start_thread(self):
@@ -67,10 +73,10 @@ class Train(object):
 
     def end_thread(self, thread):
         """ On termination output message and join thread back to main """
-        print("Exit requested! The trainer will complete its current cycle, "
-              "save the models and quit (it can take up a couple of seconds "
-              "depending on your training speed). If you want to kill it now, "
-              "press Ctrl + c")
+        logger.info("Exit requested! The trainer will complete its current cycle, "
+                    "save the models and quit (it can take up a couple of seconds "
+                    "depending on your training speed). If you want to kill it now, "
+                    "press Ctrl + c")
         self.stop = True
         thread.join()
         sys.stdout.flush()
@@ -78,7 +84,7 @@ class Train(object):
     def process_thread(self):
         """ The training process to be run inside a thread """
         try:
-            print("Loading data, this may take a while...")
+            logger.info("Loading data, this may take a while...")
 
             if self.args.allow_growth:
                 self.set_tf_allow_growth()
@@ -86,12 +92,18 @@ class Train(object):
             model = self.load_model()
             trainer = self.load_trainer(model)
 
+            self.timelapse = Timelapse.create_timelapse(
+                self.args.timelapse_input_A,
+                self.args.timelapse_input_B,
+                self.args.timelapse_output,
+                trainer)
+
             self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
                 model.save_weights()
             except KeyboardInterrupt:
-                print("Saving model weights has been cancelled!")
+                logger.info("Saving model weights has been cancelled!")
             exit(0)
         except Exception as err:
             raise err
@@ -99,7 +111,8 @@ class Train(object):
     def load_model(self):
         """ Load the model requested for training """
         model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.trainer_name)(model_dir, self.args.gpus)
+        model = PluginLoader.get_model(self.trainer_name)(model_dir,
+                                                          self.args.gpus)
 
         model.load(swapped=False)
         return model
@@ -121,6 +134,8 @@ class Train(object):
         for iteration in range(0, self.args.iterations):
             save_iteration = iteration % self.args.save_interval == 0
             viewer = self.show if save_iteration or self.save_now else None
+            if save_iteration and self.timelapse is not None:
+                self.timelapse.work()
             trainer.train_one_step(iteration, viewer)
             if self.stop:
                 break
@@ -134,10 +149,10 @@ class Train(object):
 
     def monitor_preview(self):
         """ Generate the preview window and wait for keyboard input """
-        print("Using live preview.\n"
-              "Press 'ENTER' on the preview window to save and quit.\n"
-              "Press 'S' on the preview window to save model weights "
-              "immediately")
+        logger.info("Using live preview.\n"
+                    "Press 'ENTER' on the preview window to save and quit.\n"
+                    "Press 'S' on the preview window to save model weights "
+                    "immediately")
         while True:
             try:
                 with self.lock:
@@ -160,11 +175,11 @@ class Train(object):
         # TODO: how to catch a specific key instead of Enter?
         # there isn't a good multiplatform solution:
         # https://stackoverflow.com/questions/3523174
-        # TODO: Find a way to interrupt input() if the target iterations are reached.
-        # At the moment, setting a target iteration and using the -p flag is
-        # the only guaranteed way to exit the training loop on hitting target
-        # iterations.
-        print("Starting. Press 'ENTER' to stop training and save model")
+        # TODO: Find a way to interrupt input() if the target iterations are
+        # reached. At the moment, setting a target iteration and using the -p
+        # flag is the only guaranteed way to exit the training loop on
+        # hitting target iterations.
+        logger.info("Starting. Press 'ENTER' to stop training and save model")
         try:
             input()
         except KeyboardInterrupt:
@@ -188,11 +203,12 @@ class Train(object):
                 cv2.imwrite(imgfile, image)
             if self.args.redirect_gui:
                 img = ".gui_preview_{}.jpg".format(name)
-                imgfile = os.path.join(scriptpath, "lib", "gui", ".cache", "preview", img)
+                imgfile = os.path.join(scriptpath, "lib", "gui",
+                                       ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)
             if self.args.preview:
                 with self.lock:
                     self.preview_buffer[name] = image
         except Exception as err:
-            print("could not preview sample")
+            logging.error("could not preview sample")
             raise err
