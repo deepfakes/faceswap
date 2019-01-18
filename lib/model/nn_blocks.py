@@ -36,17 +36,18 @@ def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
     return block
 
 
-def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
+def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, use_ICNR=False, **kwargs):
     """ Upscale Layer """
     def block(inp):
+        if use_ICNR:
+            kernel=ICNR_init(initializer=he_uniform(), scale=2),
+        else:
+            kernel=he_uniform()
+            
         var_x = Conv2D(filters * 4,
                        kernel_size=kernel_size,
                        padding='same',
-<<<<<<< HEAD
-                       kernel_initializer=ICNR_init(initializer=he_uniform(), scale=2),
-=======
-                       kernel_initializer=he_uniform(),
->>>>>>> Default-Initializer
+                       kernel_initializer=kernel,
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
@@ -88,17 +89,10 @@ def conv_sep(filters, kernel_size=5, strides=2, **kwargs):
     """ Seperable Convolution Layer """
     def block(inp):
         var_x = SeparableConv2D(filters,
-<<<<<<< HEAD
                                 kernel_size=5,
                                 strides=2,
                                 kernel_initializer=he_uniform(),
                                 padding='same')(inp)
-=======
-                                kernel_size=kernel_size,
-                                strides=strides,
-                                padding='same',
-                                **kwargs)(inp)
->>>>>>> train_refactor
         var_x = Activation("relu")(var_x)
         return var_x
     return block
