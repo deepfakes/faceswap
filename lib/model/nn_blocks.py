@@ -92,7 +92,8 @@ def conv_sep(filters, kernel_size=5, strides=2, **kwargs):
                                 kernel_size=kernel_size,
                                 strides=strides,
                                 kernel_initializer=he_uniform(),
-                                padding='same')(inp)
+                                padding='same',
+                                **kwargs)(inp)
         var_x = Activation("relu")(var_x)
         return var_x
     return block
