@@ -34,7 +34,7 @@ class TrainingDataGenerator():
         self.mask_function = self.set_mask_function()
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
-                                            training_opts.get("coverage_ratio", 0.625))
+                                            training_opts.get("coverage_ratio", 0.75))
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_mask_function(self):
