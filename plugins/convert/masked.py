@@ -209,16 +209,22 @@ class Convert():
             #insertion = np.uint8(masked[y_crop, x_crop, :])
             #insertion_mask = np.uint8(image_mask[y_crop, x_crop, :])
             #insertion_mask[insertion_mask != 0] = 255
-            padded = np.pad(frame,((h, h), (w, w), (0, 0)), 'constant')
-            blended = cv2.seamlessClone(masked.astype('uint8'),
-                                        padded.astype('uint8'),
-                                        image_mask.astype('uint8'),
+            insert      =     np.pad(masked,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
+            prior       =      np.pad(frame,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
+            insert_mask = np.pad(image_mask,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
+            print(insert.shape,prior.shape,insert_mask.shape)
+            
+            blended = cv2.seamlessClone(insert,
+                                        prior,
+                                        insert_mask,
                                         (x_center, y_center),
                                         cv2.NORMAL_CLONE)
+            print('now')
             blended = blended[h:-h, w:-w, :]
+            
         else:
-            foreground = masked #* image_mask
-            background = frame * (1.0 - 1.0 ) #image_mask)
+            foreground = masked * image_mask
+            background = frame * (1.0 - image_mask)
             blended = foreground + background
 
         np.clip(blended, 0.0, 255.0, out=blended)
