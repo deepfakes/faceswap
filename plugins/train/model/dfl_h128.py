@@ -26,7 +26,6 @@ class Model(OriginalModel):
     def set_training_data(self):
         """ Set the dictionary for training """
         self.training_opts["mask_type"] = self.config["mask_type"]
-        self.training_opts["preview_images"] = 10
         super().set_training_data()
 
     def build_autoencoders(self):
@@ -48,14 +47,14 @@ class Model(OriginalModel):
         use_subpixel = self.config["subpixel_upscaling"]
 
         var_x = input_
-        var_x = conv(128)(var_x)
-        var_x = conv(256)(var_x)
-        var_x = conv(512)(var_x)
-        var_x = conv(1024)(var_x)
+        var_x = conv(var_x, 128)
+        var_x = conv(var_x, 256)
+        var_x = conv(var_x, 512)
+        var_x = conv(var_x, 1024)
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
         var_x = Reshape((8, 8, self.encoder_dim))(var_x)
-        var_x = upscale(self.encoder_dim, use_subpixel=use_subpixel)(var_x)
+        var_x = upscale(var_x, self.encoder_dim, use_subpixel=use_subpixel)
         return KerasModel(input_, var_x)
 
     def decoder(self):
@@ -64,9 +63,9 @@ class Model(OriginalModel):
         use_subpixel = self.config["subpixel_upscaling"]
 
         var = input_
-        var = upscale(self.encoder_dim, use_subpixel=use_subpixel)(var)
-        var = upscale(self.encoder_dim // 2, use_subpixel=use_subpixel)(var)
-        var = upscale(self.encoder_dim // 4, use_subpixel=use_subpixel)(var)
+        var = upscale(var, self.encoder_dim, use_subpixel=use_subpixel)
+        var = upscale(var, self.encoder_dim // 2, use_subpixel=use_subpixel)
+        var = upscale(var, self.encoder_dim // 4, use_subpixel=use_subpixel)
 
         # Face
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var)

@@ -71,6 +71,14 @@ class ModelBase():
             otherwise be sure to add a ratio """
         logger.debug("Setting training data")
         self.training_opts["coverage_ratio"] = 0.625
+        if self.input_shape[0] < 128:
+            self.training_opts["preview_images"] = 14
+        elif self.input_shape[0] < 192:
+            self.training_opts["preview_images"] = 10
+        elif self.input_shape[0] < 256:
+            self.training_opts["preview_images"] = 8
+        else:
+            self.training_opts["preview_images"] = 6
         logger.debug("Set training data: %s", self.training_opts)
 
     def build(self):

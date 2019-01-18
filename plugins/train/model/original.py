@@ -52,15 +52,15 @@ class Model(ModelBase):
         use_subpixel = self.config["subpixel_upscaling"]
 
         var_x = input_
-        var_x = conv(128)(var_x)
-        var_x = conv(256)(var_x)
-        var_x = conv(512)(var_x)
+        var_x = conv(var_x, 128)
+        var_x = conv(var_x, 256)
+        var_x = conv(var_x, 512)
         if not self.config.get("lowmem", False):
-            var_x = conv(1024)(var_x)
+            var_x = conv(var_x, 1024)
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(4 * 4 * 1024)(var_x)
         var_x = Reshape((4, 4, 1024))(var_x)
-        var_x = upscale(512, use_subpixel=use_subpixel)(var_x)
+        var_x = upscale(var_x, 512, use_subpixel=use_subpixel)
         return KerasModel(input_, var_x)
 
     def decoder(self):
@@ -69,8 +69,8 @@ class Model(ModelBase):
         use_subpixel = self.config["subpixel_upscaling"]
 
         var_x = input_
-        var_x = upscale(256, use_subpixel=use_subpixel)(var_x)
-        var_x = upscale(128, use_subpixel=use_subpixel)(var_x)
-        var_x = upscale(64, use_subpixel=use_subpixel)(var_x)
+        var_x = upscale(var_x, 256, use_subpixel=use_subpixel)
+        var_x = upscale(var_x, 128, use_subpixel=use_subpixel)
+        var_x = upscale(var_x, 64, use_subpixel=use_subpixel)
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
         return KerasModel(input_, var_x)

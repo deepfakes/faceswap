@@ -25,6 +25,7 @@ from io import StringIO
 
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
+from lib.faces_detect import DetectedFace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
