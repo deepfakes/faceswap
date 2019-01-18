@@ -98,7 +98,7 @@ def file_handler(loglevel, logfile, log_format, command):
         filename = logfile
     else:
         filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
-        # Windows has issues sharing the log file with subprocesses, so log GUI seperately
+        # Windows has issues sharing the log file with subprocesses, so log GUI separately
         filename += "_gui.log" if command == "gui" else ".log"
 
     should_rotate = os.path.isfile(filename)

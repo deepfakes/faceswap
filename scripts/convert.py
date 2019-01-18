@@ -110,21 +110,10 @@ class Convert():
 
     def load_converter(self, model):
         """ Load the requested converter for conversion """
-        args = self.args
-        conv = args.converter
-
+        conv = self.args.converter
         converter = PluginLoader.get_converter(conv)(
-            model.converter(args.swap_model),
-            trainer=args.trainer,
-            blur_size=args.blur_size,
-            coverage=args.coverage,
-            seamless_clone=args.seamless_clone,
-            sharpen_image=args.sharpen_image,
-            mask_type=args.mask_type,
-            erosion_size=args.erosion_size,
-            match_histogram=args.match_histogram,
-            avg_color_adjust=args.avg_color_adjust,
-            draw_transparent=args.draw_transparent,
+            model.converter(self.args.swap_model),
+            arguments=self.args,
             input_size=model.input_shape[0])
 
         return converter

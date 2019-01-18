@@ -28,7 +28,6 @@ class Model(OriginalModel):
         self.training_opts["serializer"] = self.config["alignments_format"]
         self.training_opts["mask_type"] = self.config["mask_type"]
         self.training_opts["full_face"] = True
-        self.training_opts["preview_images"] = 10
         super().set_training_data()
 
     def build_autoencoders(self):
@@ -52,22 +51,22 @@ class Model(OriginalModel):
         inp_x = input_
         inp_y = input_
 
-        inp_x = upscale(512, use_subpixel=use_subpixel)(inp_x)
+        inp_x = upscale(inp_x, 512, use_subpixel=use_subpixel)
         inp_x = res_block(inp_x, 512, kernel_initializer=self.kernel_initializer)
-        inp_x = upscale(256, use_subpixel=use_subpixel)(inp_x)
+        inp_x = upscale(inp_x, 256, use_subpixel=use_subpixel)
         inp_x = res_block(inp_x, 256, kernel_initializer=self.kernel_initializer)
-        inp_x = upscale(128, use_subpixel=use_subpixel)(inp_x)
+        inp_x = upscale(inp_x, 128, use_subpixel=use_subpixel)
         inp_x = res_block(inp_x, 128, kernel_initializer=self.kernel_initializer)
-        inp_x = upscale(64, use_subpixel=use_subpixel)(inp_x)
+        inp_x = upscale(inp_x, 64, use_subpixel=use_subpixel)
         inp_x = Conv2D(3,
                        kernel_size=5,
                        padding='same',
                        activation='sigmoid')(inp_x)
 
-        inp_y = upscale(512, use_subpixel=use_subpixel)(inp_y)
-        inp_y = upscale(256, use_subpixel=use_subpixel)(inp_y)
-        inp_y = upscale(128, use_subpixel=use_subpixel)(inp_y)
-        inp_y = upscale(64, use_subpixel=use_subpixel)(inp_y)
+        inp_y = upscale(inp_y, 512, use_subpixel=use_subpixel)
+        inp_y = upscale(inp_y, 256, use_subpixel=use_subpixel)
+        inp_y = upscale(inp_y, 128, use_subpixel=use_subpixel)
+        inp_y = upscale(inp_y, 64, use_subpixel=use_subpixel)
         inp_y = Conv2D(1,
                        kernel_size=5,
                        padding='same',
