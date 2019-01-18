@@ -159,7 +159,7 @@ class Convert():
         logger.trace("blur_size: %s", int(blur_size))
         return int(blur_size)
 
-    def apply_fixes(self, image, new_image, image_mask, image_size):
+    def apply_fixes(self, frame, new_image, image_mask, image_size):
         """ Apply fixes """
         masked = new_image  # * image_mask
 
@@ -167,7 +167,7 @@ class Convert():
             alpha = np.full((image_size[1], image_size[0], 1), 255.0, dtype='float32')
             new_image = np.concatenate(new_image, alpha, axis=2)
             image_mask = np.concatenate(image_mask, alpha, axis=2)
-            image = np.concatenate(image, alpha, axis=2)
+            frame = np.concatenate(frame, alpha, axis=2)
 
         if self.sharpen_image is not None:
             np.clip(masked, 0.0, 255.0, out=masked)
@@ -182,17 +182,17 @@ class Convert():
         if self.avg_color_adjust:
             for _ in [0, 1]:
                 np.clip(masked, 0.0, 255.0, out=masked)
-                diff = image - masked
+                diff = frame - masked
                 avg_diff = np.sum(diff * image_mask, axis=(0, 1))
                 adjustment = avg_diff / np.sum(image_mask, axis=(0, 1))
                 masked = masked + adjustment
 
         if self.match_histogram:
             np.clip(masked, 0.0, 255.0, out=masked)
-            masked = self.color_hist_match(masked, image, image_mask)
+            masked = self.color_hist_match(masked, frame, image_mask)
 
         if self.seamless_clone:
-            h, w, _ = image.shape
+            h, w, _ = frame.shape
             h = h // 2
             w = w // 2
 
@@ -206,56 +206,57 @@ class Convert():
             y_center = int(np.rint(np.average(y_indices) + h)
             x_center = int(np.rint(np.average(x_indices) + w)
             '''
-            insertion = np.uint8(masked[y_crop, x_crop, :])
-            insertion_mask = np.uint8(image_mask[y_crop, x_crop, :])
-            insertion_mask[insertion_mask != 0] = 255
-            padded = np.pad(image, ((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
-            blended = cv2.seamlessClone(insertion,
-                                        padded,
-                                        insertion_mask,
+            #insertion = np.uint8(masked[y_crop, x_crop, :])
+            #insertion_mask = np.uint8(image_mask[y_crop, x_crop, :])
+            #insertion_mask[insertion_mask != 0] = 255
+            padded = np.pad(frame,((h, h), (w, w), (0, 0)), 'constant')
+            blended = cv2.seamlessClone(masked.astype('uint8'),
+                                        padded.astype('uint8'),
+                                        image_mask.astype('uint8'),
                                         (x_center, y_center),
                                         cv2.NORMAL_CLONE)
             blended = blended[h:-h, w:-w, :]
         else:
-            foreground = masked * image_mask
-            background = image * (1.0 - image_mask)
+            foreground = masked #* image_mask
+            background = frame * (1.0 - 1.0 ) #image_mask)
             blended = foreground + background
 
         np.clip(blended, 0.0, 255.0, out=blended)
 
         return np.rint(blended).astype('uint8')
 
-    def color_hist_match(self, source, target, image_mask):
+    def color_hist_match(self, new, frame, image_mask):
         for channel in [0, 1, 2]:
-            source[:, :, channel] = self.hist_match(source[:, :, channel],
-                                                    target[:, :, channel],
+            new[:, :, channel] = self.hist_match(new[:, :, channel],
+                                                    frame[:, :, channel],
                                                     image_mask[:, :, channel])
         # source = np.stack([self.hist_match(source[:,:,c], target[:,:,c],image_mask[:,:,c])
         #                      for c in [0,1,2]],
         #                     axis=2)
-        return source
+        return new
 
-    def hist_match(self, source, template, image_mask):
+    def hist_match(self, new, frame, image_mask):
 
-        outshape = source.shape
-        source = source.ravel()
-        template = template.ravel()
-        s_values, bin_idx, s_counts = np.unique(source, return_inverse=True, return_counts=True)
-        t_values, t_counts = np.unique(template, return_counts=True)
+        mask_indices = np.nonzero(image_mask)
+        m_new = new[mask_indices].ravel()
+        m_frame = frame[mask_indices].ravel()
+        s_values, bin_idx, s_counts = np.unique(m_new, return_inverse=True, return_counts=True)
+        t_values, t_counts = np.unique(m_frame, return_counts=True)
         s_quants = np.cumsum(s_counts, dtype='float32')
         t_quants = np.cumsum(t_counts, dtype='float32')
         s_quants /= s_quants[-1]  # cdf
         t_quants /= t_quants[-1]  # cdf
         interp_s_values = np.interp(s_quants, t_quants, t_values)
-        source = interp_s_values[bin_idx].reshape(outshape)
+        new.put(mask_indices, interp_s_values[bin_idx])
 
         '''
         bins = np.arange(256)
-        template_CDF, _ = np.histogram(template, bins=bins, density=True)
-        flat_new_image = np.interp(source.ravel(), bins[:-1], template_CDF) * 255.0
-        return flat_new_image.reshape(source.shape) * 255.0
+        template_CDF, _ = np.histogram(m_frame, bins=bins, density=True)
+        flat_new_image = np.interp(m_source.ravel(), bins[:-1], template_CDF) * 255.0
+        return flat_new_image.reshape(m_source.shape) * 255.0
         '''
-        return source
+        
+        return new
 
 
 class Mask():
