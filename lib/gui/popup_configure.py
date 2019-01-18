@@ -57,6 +57,7 @@ class ConfigurePlugins(tk.Toplevel):
         logger.debug("Formatting Config for GUI")
         conf = dict()
         for section in self.config.config.sections():
+            self.config.section = section
             category = section.split(".")[0]
             options = self.config.defaults[section]
             conf.setdefault(category, dict())[section] = options
