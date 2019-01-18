@@ -27,6 +27,7 @@ def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
                        kernel_size=kernel_size,
                        strides=strides,
                        padding='same',
+                       kernel_initializer=he_uniform(),
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
@@ -41,7 +42,11 @@ def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False,
         var_x = Conv2D(filters * 4,
                        kernel_size=kernel_size,
                        padding='same',
+<<<<<<< HEAD
                        kernel_initializer=ICNR_init(initializer=he_uniform(), scale=2),
+=======
+                       kernel_initializer=he_uniform(),
+>>>>>>> Default-Initializer
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
@@ -63,11 +68,13 @@ def res_block(inp, filters, kernel_size=3, **kwargs):
                    kernel_size=kernel_size,
                    use_bias=False,
                    padding="same",
+                   kernel_initializer=he_uniform(),
                    **kwargs)(var_x)
     var_x = LeakyReLU(alpha=0.2)(var_x)
     var_x = Conv2D(filters,
                    kernel_size=kernel_size,
                    use_bias=False,
+                   kernel_initializer=he_uniform(),
                    padding="same",
                    **kwargs)(var_x)
     var_x = Add()([var_x, inp])
@@ -81,10 +88,17 @@ def conv_sep(filters, kernel_size=5, strides=2, **kwargs):
     """ Seperable Convolution Layer """
     def block(inp):
         var_x = SeparableConv2D(filters,
+<<<<<<< HEAD
+                                kernel_size=5,
+                                strides=2,
+                                kernel_initializer=he_uniform(),
+                                padding='same')(inp)
+=======
                                 kernel_size=kernel_size,
                                 strides=strides,
                                 padding='same',
                                 **kwargs)(inp)
+>>>>>>> train_refactor
         var_x = Activation("relu")(var_x)
         return var_x
     return block
