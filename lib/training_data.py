@@ -105,7 +105,8 @@ class TrainingDataGenerator():
                         batch.append(list())
                     batch[idx].append(image)
             batch = [np.float32(image) for image in batch]
-            logger.trace("Yielding batch: (size: %s, queue:  '%s'", len(batch), q_name)
+            logger.trace("Yielding batch: (size: %s, item shape: %s, queue:  '%s'",
+                         len(batch), batch[0].shape, q_name)
             yield batch
         logger.debug("Finished minibatch generator for queue: '%s'", q_name)
         load_thread.join()
@@ -123,6 +124,7 @@ class TrainingDataGenerator():
             src_pts = self.get_landmarks(filename, image, side, landmarks)
             image = self.mask_function(src_pts,
                                        image,
+                                       channels=4,
                                        coverage=self.processing.get_coverage(image))
 
         image = self.processing.color_adjust(image)
@@ -196,7 +198,7 @@ class ImageManipulation():
         return img / 255.0
 
     @staticmethod
-    def seperate_mask(image):
+    def separate_mask(image):
         """ Return the image and the mask from a 4 channel image """
         mask = None
         if image.shape[2] == 4:
@@ -234,7 +236,7 @@ class ImageManipulation():
     def random_warp(self, image, src_points=None, dst_points=None):
         """ get pair of random warped images from aligned face image """
         logger.trace("Randomly warping image")
-        image, mask = self.seperate_mask(image)
+        image, mask = self.separate_mask(image)
         height, width = image.shape[0:2]
         coverage = self.get_coverage(image)
         assert height == width and height % 2 == 0
@@ -288,7 +290,7 @@ class ImageManipulation():
         """ get warped image, target image and target mask
             From DFAKER plugin """
         logger.trace("Randomly warping landmarks")
-        image, mask = self.seperate_mask(image)
+        image, mask = self.separate_mask(image)
         size = image.shape[0]
         p_mx = size - 1
         p_hf = (size // 2) - 1

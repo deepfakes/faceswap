@@ -25,11 +25,6 @@ class Model(OriginalModel):
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_training_data(self):
-        """ Set the dictionary for training """
-        self.training_opts["preview_images"] = 10
-        super().set_training_data()
-
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")

@@ -180,7 +180,7 @@ class Images():
 
     def load_disk_frames(self):
         """ Load frames from disk """
-        logger.debug("Input is Seperate Frames. Loading images")
+        logger.debug("Input is separate Frames. Loading images")
         for filename in self.input_images:
             logger.trace("Loading image: '%s'", filename)
             try:

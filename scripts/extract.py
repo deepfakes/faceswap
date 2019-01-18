@@ -259,7 +259,7 @@ class Plugins():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_parallel_processing(self):
-        """ Set whether to run detect and align together or seperately """
+        """ Set whether to run detect and align together or separately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
         gpu_stats = GPUStats()

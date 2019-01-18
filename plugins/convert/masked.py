@@ -40,7 +40,7 @@ class Convert():
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         training_size = 256  # TODO make this changeable based on extract/train settings
-        training_coverage = 160 # TODO make this changeable based on extract/train settings
+        training_coverage = 160  # TODO make this changeable based on extract/train settings
         coverage = int(self.coverage_ratio * training_size)
         padding = (training_size - training_coverage) // 2
         logger.trace("image_size: %s, training_size: %s, coverage: %s, padding: %s",
@@ -174,10 +174,15 @@ class Convert():
             if self.sharpen_image == "box_filter":
                 kernel = np.ones((3, 3)) * (-1)
                 kernel[1, 1] = 9
-                masked = cv2.filter2D(masked, -1, kernel)
+                masked = cv2.filter2D(masked, -1, kernel)  # pylint: disable=no-member
             elif self.sharpen_image == "gaussian_filter":
-                blur = cv2.GaussianBlur(masked, (0, 0), 3.0)
-                masked = cv2.addWeighted(masked, 1.5, blur, -0.5, 0, masked)
+                blur = cv2.GaussianBlur(masked, (0, 0), 3.0)  # pylint: disable=no-member
+                masked = cv2.addWeighted(masked,  # pylint: disable=no-member
+                                         1.5,
+                                         blur,
+                                         -0.5,
+                                         0,
+                                         masked)
 
         if self.avg_color_adjust:
             for _ in [0, 1]:
@@ -201,7 +206,7 @@ class Convert():
             x_crop = slice(np.min(x_indices), np.max(x_indices))
             y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2) + h)
             x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2) + w)
-            
+
             '''
             # test with average of centroid rather than the h /2 , w/2 center
             y_center = int(np.rint(np.average(y_indices) + h)
@@ -212,16 +217,16 @@ class Convert():
             insertion_mask = image_mask[y_crop, x_crop, :]
             insertion_mask[insertion_mask != 0] = 255
             insertion_mask = insertion_mask.astype('uint8')
-            
-            prior = np.pad(frame,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
 
-            blended = cv2.seamlessClone(insertion,
+            prior = np.pad(frame, ((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
+
+            blended = cv2.seamlessClone(insertion,  # pylint: disable=no-member
                                         prior,
                                         insertion_mask,
                                         (x_center, y_center),
-                                        cv2.NORMAL_CLONE)
+                                        cv2.NORMAL_CLONE)  # pylint: disable=no-member
             blended = blended[h:-h, w:-w, :]
-            
+
         else:
             foreground = masked * image_mask
             background = frame * (1.0 - image_mask)
@@ -234,8 +239,8 @@ class Convert():
     def color_hist_match(self, new, frame, image_mask):
         for channel in [0, 1, 2]:
             new[:, :, channel] = self.hist_match(new[:, :, channel],
-                                                    frame[:, :, channel],
-                                                    image_mask[:, :, channel])
+                                                 frame[:, :, channel],
+                                                 image_mask[:, :, channel])
         # source = np.stack([self.hist_match(source[:,:,c], target[:,:,c],image_mask[:,:,c])
         #                      for c in [0,1,2]],
         #                     axis=2)
@@ -261,7 +266,7 @@ class Convert():
         flat_new_image = np.interp(m_source.ravel(), bins[:-1], template_CDF) * 255.0
         return flat_new_image.reshape(m_source.shape) * 255.0
         '''
-        
+
         return new
 
 
@@ -292,6 +297,12 @@ class Mask():
         logger.trace("kwargs: %s", kwargs)
         mask = getattr(self, self.mask_type)(**kwargs)
         mask = self.finalize_mask(mask)
+# TODO Remove this debug code
+#        while True:
+#            cv2.imshow("test", mask)
+#            key = cv2.waitKey()
+#            if key:
+#                exit(0)
         logger.trace("mask shape: %s", mask.shape)
         return mask
 
@@ -342,20 +353,16 @@ class Mask():
         """ DFaker Mask """
         logger.trace("Getting mask")
         dummy = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
-        mask = dfl_full(kwargs["landmarks"], dummy)[:, :, 3]
-        mask = mask.reshape((kwargs["image_size"][1], kwargs["image_size"][0], 1))
-        mask = np.tile(mask, 3)
+        mask = dfl_full(kwargs["landmarks"], dummy, channels=3)
         return mask
 
-#  TODO: Mask for dfaker comes out all black. Either I'm an idiot or dfaker mask code is wrong
+#    # TODO: Mask for dfaker comes out all black. Either I'm an idiot or dfaker mask code is wrong
 #    def dfaker(self, **kwargs):
 #        """ DFaker Mask """
 #        logger.trace("Getting mask")
 #        landmarks = np.array(kwargs["landmarks"])
 #        dummy = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
-#        mask = dfaker(landmarks, dummy, coverage=self.coverage)
-#        mask = mask[:, :, 3].reshape((kwargs["image_size"][1], kwargs["image_size"][0], 1))
-#        mask = np.tile(mask, 3)
+#        mask = dfaker(landmarks, dummy, channel=3, coverage=self.coverage)
 #        return mask
 
     def facehull(self, **kwargs):

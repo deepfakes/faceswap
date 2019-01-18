@@ -28,7 +28,6 @@ class Model(OriginalModel):
         self.training_opts["serializer"] = self.config["alignments_format"]
         self.training_opts["mask_type"] = self.config["mask_type"]
         self.training_opts["full_face"] = True
-        self.training_opts["preview_images"] = 10
         super().set_training_data()
 
     def build_autoencoders(self):

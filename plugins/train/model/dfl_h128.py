@@ -26,7 +26,6 @@ class Model(OriginalModel):
     def set_training_data(self):
         """ Set the dictionary for training """
         self.training_opts["mask_type"] = self.config["mask_type"]
-        self.training_opts["preview_images"] = 10
         super().set_training_data()
 
     def build_autoencoders(self):
