@@ -201,25 +201,25 @@ class Convert():
             x_crop = slice(np.min(x_indices), np.max(x_indices))
             y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2) + h)
             x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2) + w)
+            
             '''
             # test with average of centroid rather than the h /2 , w/2 center
             y_center = int(np.rint(np.average(y_indices) + h)
             x_center = int(np.rint(np.average(x_indices) + w)
             '''
-            #insertion = np.uint8(masked[y_crop, x_crop, :])
-            #insertion_mask = np.uint8(image_mask[y_crop, x_crop, :])
-            #insertion_mask[insertion_mask != 0] = 255
-            insert      =     np.pad(masked,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
-            prior       =      np.pad(frame,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
-            insert_mask = np.pad(image_mask,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
-            print(insert.shape,prior.shape,insert_mask.shape)
+
+            insertion = np.rint(masked[y_crop, x_crop, :]).astype('uint8')
+            insertion_mask = image_mask[y_crop, x_crop, :]
+            insertion_mask[insertion_mask != 0] = 255
+            insertion_mask = insertion_mask.astype('uint8')
             
-            blended = cv2.seamlessClone(insert,
+            prior = np.pad(frame,((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
+
+            blended = cv2.seamlessClone(insertion,
                                         prior,
-                                        insert_mask,
+                                        insertion_mask,
                                         (x_center, y_center),
                                         cv2.NORMAL_CLONE)
-            print('now')
             blended = blended[h:-h, w:-w, :]
             
         else:
