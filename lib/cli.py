@@ -615,7 +615,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": Slider,
                               "min_max": (0.0, 256.0),
                               "rounding": 0.05,
-                              "default": 0.2,
+                              "default": 0.1,
                               "help": "Blur kernel size for smoothing the "
                                       "transition between the swapped face and "
                                       "the background image. Integer values "
