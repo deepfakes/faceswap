@@ -89,8 +89,8 @@ def conv_sep(filters, kernel_size=5, strides=2, **kwargs):
     """ Seperable Convolution Layer """
     def block(inp):
         var_x = SeparableConv2D(filters,
-                                kernel_size=5,
-                                strides=2,
+                                kernel_size=kernel_size,
+                                strides=strides,
                                 kernel_initializer=he_uniform(),
                                 padding='same')(inp)
         var_x = Activation("relu")(var_x)
