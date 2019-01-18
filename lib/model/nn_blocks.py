@@ -20,34 +20,30 @@ from .normalization import GroupNormalization, InstanceNormalization
 
 # <<< Original Model Blocks >>> #
 
-def conv(filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
+def conv(inp, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
     """ Convolution Layer"""
-    def block(inp):
-        var_x = Conv2D(filters,
-                       kernel_size=kernel_size,
-                       strides=strides,
-                       padding='same',
-                       **kwargs)(inp)
-        if use_instance_norm:
-            var_x = InstanceNormalization()(var_x)
-        var_x = LeakyReLU(0.1)(var_x)
-        return var_x
-    return block
+    var_x = Conv2D(filters,
+                   kernel_size=kernel_size,
+                   strides=strides,
+                   padding='same',
+                   **kwargs)(inp)
+    if use_instance_norm:
+        var_x = InstanceNormalization()(var_x)
+    var_x = LeakyReLU(0.1)(var_x)
+    return var_x
 
 
-def upscale(filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
+def upscale(inp, filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
     """ Upscale Layer """
-    def block(inp):
-        var_x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same', **kwargs)(inp)
-        if use_instance_norm:
-            var_x = InstanceNormalization()(var_x)
-        var_x = LeakyReLU(0.1)(var_x)
-        if use_subpixel:
-            var_x = SubPixelUpscaling()(var_x)
-        else:
-            var_x = PixelShuffler()(var_x)
-        return var_x
-    return block
+    var_x = Conv2D(filters * 4, kernel_size=kernel_size, padding='same', **kwargs)(inp)
+    if use_instance_norm:
+        var_x = InstanceNormalization()(var_x)
+    var_x = LeakyReLU(0.1)(var_x)
+    if use_subpixel:
+        var_x = SubPixelUpscaling()(var_x)
+    else:
+        var_x = PixelShuffler()(var_x)
+    return var_x
 
 
 # <<< DFaker Model Blocks >>> #
@@ -73,17 +69,15 @@ def res_block(inp, filters, kernel_size=3, **kwargs):
 
 # <<< OriginalHiRes Blocks >>> #
 
-def conv_sep(filters, kernel_size=5, strides=2, **kwargs):
+def conv_sep(inp, filters, kernel_size=5, strides=2, **kwargs):
     """ Seperable Convolution Layer """
-    def block(inp):
-        var_x = SeparableConv2D(filters,
-                                kernel_size=kernel_size,
-                                strides=strides,
-                                padding='same',
-                                **kwargs)(inp)
-        var_x = Activation("relu")(var_x)
-        return var_x
-    return block
+    var_x = SeparableConv2D(filters,
+                            kernel_size=kernel_size,
+                            strides=strides,
+                            padding='same',
+                            **kwargs)(inp)
+    var_x = Activation("relu")(var_x)
+    return var_x
 
 
 # <<< GAN V2.2 Blocks >>> #
