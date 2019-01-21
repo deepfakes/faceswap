@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Convert():
     """ Swap a source face with a target """
-    def __init__(self, encoder, arguments, input_size=64):
+    def __init__(self, encoder, input_mask_shape, arguments, input_size=64):
         logger.debug("Initializing %s: (encoder: '%s', arguments: %s, input_size: %s)",
                      self.__class__.__name__, encoder, arguments, input_size)
         self.encoder = encoder
         self.input_size = input_size
+        self.input_mask_shape = input_mask_shape
         self.blur_size = arguments.blur_size
         self.erosion_size = arguments.erosion_size
         self.draw_transparent = arguments.draw_transparent
@@ -97,7 +98,16 @@ class Convert():
         coverage_face = np.expand_dims(coverage_face, 0)
         np.clip(coverage_face / 255.0, 0.0, 1.0, out=coverage_face)
 
-        new_face = self.encoder(coverage_face)[0]
+        if self.input_mask_shape:
+            mask = np.zeros(self.input_mask_shape, np.float32)
+            mask = np.expand_dims(mask, 0)
+            feed = [coverage_face, mask]
+        else:
+            feed = [coverage_face]
+        logger.trace("Input shapes: %s", [item.shape for item in feed])
+        new_face = self.encoder(feed)[0]
+        logger.trace("Output shape: %s", new_face.shape)
+        # TODO Fix std::bad_alloc here
 
         new_face = cv2.resize(new_face,  # pylint: disable=no-member
                               (coverage, coverage),
