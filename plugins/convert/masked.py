@@ -20,7 +20,7 @@ class Convert():
                      self.__class__.__name__, encoder, arguments, input_size)
         self.encoder = encoder
         self.input_size = input_size
-        self.input_mask_shape = input_mask_shape
+        self.input_mask_shape = input_mask_shape[0] if input_mask_shape else None
         self.blur_size = arguments.blur_size
         self.erosion_size = arguments.erosion_size
         self.draw_transparent = arguments.draw_transparent

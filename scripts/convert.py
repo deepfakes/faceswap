@@ -113,7 +113,7 @@ class Convert():
         conv = self.args.converter
         converter = PluginLoader.get_converter(conv)(
             model.converter(self.args.swap_model),
-            input_mask_shape=model.state.mask_shapes[0],
+            input_mask_shape=model.state.mask_shapes,
             arguments=self.args,
             input_size=model.input_shape[0])
 
