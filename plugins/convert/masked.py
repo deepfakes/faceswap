@@ -106,8 +106,8 @@ class Convert():
             feed = [coverage_face]
         logger.trace("Input shapes: %s", [item.shape for item in feed])
         new_face = self.encoder(feed)[0]
+        new_face = new_face.squeeze()
         logger.trace("Output shape: %s", new_face.shape)
-        # TODO Fix std::bad_alloc here
 
         new_face = cv2.resize(new_face,  # pylint: disable=no-member
                               (coverage, coverage),
