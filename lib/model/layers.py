@@ -16,6 +16,7 @@ from keras.engine import InputSpec, Layer
 from keras.utils import conv_utils
 from keras.utils.generic_utils import get_custom_objects
 from keras import initializers
+from keras.layers import ZeroPadding2D
 
 
 class PixelShuffler(Layer):
@@ -263,6 +264,13 @@ class SubPixelUpscaling(Layer):
         base_config = super(SubPixelUpscaling, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+class ReflectionPadding2D(ZeroPadding2D):
+    def call(self, x, mask=None):
+        pattern = [[0, 0],
+                   [self.padding[0][0], self.padding[0][1]],
+                   [self.padding[1][0], self.padding[1][1]],
+                   [0, 0]]
+        return tf.pad(x, pattern, mode='REFLECT')
 
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):

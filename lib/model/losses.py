@@ -364,3 +364,481 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
     return loss_g
 
 # <<< END: from Shoanlu GAN >>> #
+
+
+def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
+    '''
+    generalized function used to return a large variety of mathematical loss functions
+    primary benefit is smooth, differentiable version of L1 loss
+
+    Barron, J. A More General Robust Loss Function
+    https://arxiv.org/pdf/1701.03077.pdf
+    
+    Parameters:
+        a: penalty factor. larger number give larger weight to large deviations
+        c: scale factor used to adjust to the input scale (i.e. inputs of mean 1e-4 or 256 )
+
+    Return:
+        a loss value from the results of function(y_pred - y_true)
+    
+    Example:
+        a=1.0, x>>c , c=1.0/255.0 will give a smoothly differentiable version of L1 / MAE loss
+        a=1.999999 (lim as a->2), c=1.0/255.0 will give L2 / RMSE loss
+    '''
+    x = y_pred - y_true
+    loss = (K.abs(2.0-a)/a) * ( K.pow( K.pow(x/c, 2.0)/K.abs(2.0-a) + 1.0 , (a/2.0)) - 1.0 )
+    return K.mean(loss, axis=-1) * c
+    
+    
+def staircase_loss(y_true, y_pred, a = 16.0, c=1.0/255.0):
+    h = c
+    w = c
+    x = K.clip(K.abs(y_true - y_pred) - 0.5 * c, 0.0, 1.0)
+    loss = h*( K.tanh(a*((x/w)-tf.floor(x/w)-0.5)) / ( 2.0*K.tanh(a/2.0) ) + 0.5 + tf.floor(x/w)) 
+    loss += 1e-10
+    return K.mean(loss, axis=-1)
+    
+    
+def gradient_loss(y_true, y_pred):
+    '''
+    Calculates the first and second order gradient difference between pixels of an image in the x and y dimensions.
+    These gradients are then compared between the ground truth and the predicted image and the difference is taken.
+    The difference used is a smooth L1 norm ( approximate to MAE but differable at zero )
+    When used as a loss, its minimization will result in predicted images approaching the same level of sharpness
+    / blurriness as the ground truth.
+    
+    TV+TV2 Regularization with Nonconvex Sparseness-Inducing Penalty for Image Restoration, Chengwu Lu & Hua Huang, 2014
+    (http://downloads.hindawi.com/journals/mpe/2014/790547.pdf)
+
+    Parameters:
+        y_true: The predicted frames at each scale.
+        y_true: The ground truth frames at each scale
+        
+    Return:
+        The GD loss.
+    '''
+
+    assert 4 == K.ndim(y_true)
+    y_true.set_shape([None,80,80,3])
+    y_pred.set_shape([None,80,80,3])
+    TV_weight = 1.0
+    TV2_weight = 1.0
+    loss = 0.0
+    
+    def diff_x(X):
+        Xleft = X[:, :, 1, :] - X[:, :, 0, :]
+        Xinner = tf.unstack(X[:, :, 2:, :] - X[:, :, :-2, :], axis=2)
+        Xright = X[:, :, -1, :] - X[:, :, -2, :]
+        Xout = [Xleft] + Xinner + [Xright]
+        Xout = tf.stack(Xout,axis=2)
+        return Xout * 0.5
+
+    def diff_y(X):
+        Xtop = X[:, 1, :, :] - X[:, 0, :, :]
+        Xinner = tf.unstack(X[:, 2:, :, :] - X[:, :-2, :, :], axis=1)
+        Xbot = X[:, -1, :, :] - X[:, -2, :, :]
+        Xout = [Xtop] + Xinner + [Xbot]
+        Xout = tf.stack(Xout,axis=1)
+        return Xout * 0.5
+
+    def diff_xx(X):
+        Xleft = X[:, :, 1, :] + X[:, :, 0, :]
+        Xinner = tf.unstack(X[:, :, 2:, :] + X[:, :, :-2, :], axis=2)
+        Xright = X[:, :, -1, :] + X[:, :, -2, :]
+        Xout = [Xleft] + Xinner + [Xright]
+        Xout = tf.stack(Xout,axis=2)
+        return Xout - 2.0 * X
+
+    def diff_yy(X):
+        Xtop = X[:, 1, :, :] + X[:, 0, :, :]
+        Xinner = tf.unstack(X[:, 2:, :, :] + X[:, :-2, :, :], axis=1)
+        Xbot = X[:, -1, :, :] + X[:, -2, :, :]
+        Xout = [Xtop] + Xinner + [Xbot]
+        Xout = tf.stack(Xout,axis=1)
+        return Xout - 2.0 * X
+
+    def diff_xy(X):
+        #xout1
+        top_left = X[:, 1, 1, :]+X[:, 0, 0, :]
+        inner_left = tf.unstack(X[:, 2:, 1, :]+X[:, :-2, 0, :], axis=1)
+        bot_left = X[:, -1, 1, :]+X[:, -2, 0, :]
+        X_left = [top_left] + inner_left + [bot_left]
+        X_left = tf.stack(X_left, axis=1)
+     
+        top_mid = X[:, 1, 2:, :]+X[:, 0, :-2, :]     
+        mid_mid = tf.unstack(X[:, 2:, 2:, :]+X[:, :-2, :-2, :], axis=1) 
+        bot_mid = X[:, -1, 2:, :]+X[:, -2, :-2, :]
+        X_mid = [top_mid] + mid_mid + [bot_mid]
+        X_mid = tf.stack(X_mid, axis=1)
+        
+        top_right = X[:, 1, -1, :]+X[:, 0, -2, :]
+        inner_right = tf.unstack(X[:, 2:, -1, :]+X[:, :-2, -2, :], axis=1)     
+        bot_right = X[:, -1, -1, :]+X[:, -2, -2, :]
+        X_right = [top_right] + inner_right + [bot_right]
+        X_right = tf.stack(X_right, axis=1)
+
+        X_mid = tf.unstack(X_mid, axis=2)
+        Xout1 = [X_left] + X_mid + [X_right]
+        Xout1 = tf.stack(Xout1, axis=2)
+
+        #Xout2
+        top_left = X[:, 0, 1, :]+X[:, 1, 0, :]
+        inner_left = tf.unstack(X[:, :-2, 1, :]+X[:, 2:, 0, :], axis=1)
+        bot_left = X[:, -2, 1, :]+X[:, -1, 0, :]
+        X_left = [top_left] + inner_left + [bot_left]
+        X_left = tf.stack(X_left, axis=1)
+
+        top_mid = X[:, 0, 2:, :]+X[:, 1, :-2, :]
+        mid_mid = tf.unstack(X[:, :-2, 2:, :]+X[:, 2:, :-2, :], axis=1)
+        bot_mid = X[:, -2, 2:, :]+X[:, -1, :-2, :]
+        X_mid = [top_mid] + mid_mid + [bot_mid]
+        X_mid = tf.stack(X_mid, axis=1)
+        
+        top_right = X[:, 0, -1, :]+X[:, 1, -2, :]
+        inner_right = tf.unstack(X[:, :-2, -1, :]+X[:, 2:, -2, :], axis=1)
+        bot_right = X[:, -2, -1, :]+X[:, -1, -2, :]
+        X_right = [top_right] + inner_right + [bot_right]
+        X_right = tf.stack(X_right, axis=1)
+
+        X_mid = tf.unstack(X_mid, axis=2)
+        Xout2 = [X_left] + X_mid + [X_right]
+        Xout2 = tf.stack(Xout2, axis=2)
+        
+        return (Xout1 - Xout2) * 0.25
+     
+    loss += TV_weight * ( generalized_loss_function(diff_x(y_true), diff_x(y_pred), a=1.999999) +
+                          generalized_loss_function(diff_y(y_true), diff_y(y_pred), a=1.999999) )
+    
+    loss += TV2_weight * ( generalized_loss_function(diff_xx(y_true), diff_xx(y_pred), a=1.999999) +
+                           generalized_loss_function(diff_yy(y_true), diff_yy(y_pred), a=1.999999) +
+                           2.0 * generalized_loss_function(diff_xy(y_true), diff_xy(y_pred), a=1.999999) )
+
+    return loss / ( TV_weight + TV2_weight )
+    
+    
+def scharr_edges(image, magnitude):
+    '''
+    Returns a tensor holding modified Scharr edge maps.
+    Arguments:
+    image: Image tensor with shape [batch_size, h, w, d] and type float32.
+    The image(s) must be 2x2 or larger.
+    magnitude: Boolean to determine if the edge magnitude or edge direction is returned
+    Returns:
+    Tensor holding edge maps for each channel. Returns a tensor with shape
+    [batch_size, h, w, d, 2] where the last two dimensions hold [[dy[0], dx[0]],
+    [dy[1], dx[1]], ..., [dy[d-1], dx[d-1]]] calculated using the Scharr filter.
+    '''
+    
+    # Define vertical and horizontal Scharr filters.
+    static_image_shape = image.get_shape()
+    image_shape = tf.shape(image)
+    '''
+    #modified 3x3 Scharr
+    kernels = [[[-17.0, -61.0, -17.0], [0.0, 0.0, 0.0], [17.0, 61.0, 17.0]],
+             [[-17.0, 0.0, 17.0], [-61.0, 0.0, 61.0], [-17.0, 0.0, 17.0]]]
+    '''
+    # 5x5 Scharr
+    kernels = [[[-1.0, -2.0, -3.0, -2.0, -1.0], [-1.0, -2.0, -6.0, -2.0, -1.0], [0.0, 0.0, 0.0, 0.0, 0.0], [1.0, 2.0, 6.0, 2.0, 1.0], [1.0, 2.0, 3.0, 2.0, 1.0]],
+             [[-1.0, -1.0, 0.0, 1.0, 1.0], [-2.0, -2.0, 0.0, 2.0, 2.0], [-3.0, -6.0, 0.0, 6.0, 3.0], [-2.0, -2.0, 0.0, 2.0, 2.0], [-1.0, -1.0, 0.0, 1.0, 1.0]]]
+    num_kernels = len(kernels)
+    kernels = numpy.transpose(numpy.asarray(kernels), (1, 2, 0))
+    kernels = numpy.expand_dims(kernels, -2) / numpy.sum(numpy.abs(kernels))
+    kernels_tf = tf.constant(kernels, dtype=image.dtype)
+    kernels_tf = tf.tile(kernels_tf, [1, 1, image_shape[-1], 1], name='scharr_filters')
+
+    # Use depth-wise convolution to calculate edge maps per channel.
+    pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
+    padded = tf.pad(image, pad_sizes, mode='REFLECT')
+
+    # Output tensor has shape [batch_size, h, w, d * num_kernels].
+    strides = [1, 1, 1, 1]
+    output = tf.nn.depthwise_conv2d(padded, kernels_tf, strides, 'VALID')
+
+    # Reshape to [batch_size, h, w, d, num_kernels].
+    shape = tf.concat([image_shape, [num_kernels]], 0)
+    output = tf.reshape(output, shape=shape)
+    output.set_shape(static_image_shape.concatenate([num_kernels]))
+    
+    if magnitude: # magnitude of edges
+        output = tf.sqrt(tf.reduce_sum(tf.square(output),axis=-1))
+    else: # direction of edges
+        output = tf.atan(tf.squeeze(tf.div(output[:,:,:,:,0]/output[:,:,:,:,1])))
+        
+    return output
+    
+    
+def gmsd_loss(y_true,y_pred):
+    '''
+    Improved image quality metric over MS-SSIM with easier calc
+    http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
+    https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
+    '''
+    true_edge_mag = scharr_edges(y_true,True)
+    pred_edge_mag = scharr_edges(y_pred,True)
+    c = 0.002
+    upper = 2.0 * tf.multiply(true_edge_mag,pred_edge_mag) + c
+    lower = tf.square(true_edge_mag) + tf.square(pred_edge_mag) + c
+    GMS = tf.div(upper,lower)
+    _mean, _var = tf.nn.moments(GMS, axes=[1,2], keep_dims=True)
+    GMSD = tf.reduce_mean(tf.sqrt(_var), axis=-1) # single metric value per image in tensor [?,1,1]
+    return K.tile(GMSD,[1,64,64])  # need to expand to [?,height,width] dimensions for Keras ... modify to not be hard-coded
+    
+    
+def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.2726)):
+    '''
+    Computes the MS-SSIM between img1 and img2.
+    This function assumes that `img1` and `img2` are image batches, i.e. the last
+    three dimensions are [height, width, channels].
+    Note: The true SSIM is only defined on grayscale.  This function does not
+    perform any colorspace transform.  (If input is already YUV, then it will
+    compute YUV SSIM average.)
+    Original paper: Wang, Zhou, Eero P. Simoncelli, and Alan C. Bovik. "Multiscale
+    structural similarity for image quality assessment." Signals, Systems and
+    Computers, 2004.
+    Arguments:
+    img1: First image batch.
+    img2: Second image batch. Must have the same rank as img1.
+    max_val: The dynamic range of the images (i.e., the difference between the
+      maximum the and minimum allowed values).
+    power_factors: Iterable of weights for each of the scales. The number of
+      scales used is the length of the list. Index 0 is the unscaled
+      resolution's weight and each increasing scale corresponds to the image
+      being downsampled by 2.  Defaults to (0.0448, 0.2856, 0.3001, 0.2363,
+      0.1333), which are the values obtained in the original paper.
+    Returns:
+    A tensor containing an MS-SSIM value for each image in batch.  The values
+    are in range [0, 1].  Returns a tensor with shape:
+    broadcast(img1.shape[:-3], img2.shape[:-3]).
+    '''
+
+    def _verify_compatible_image_shapes(img1, img2):
+        '''
+        Checks if two image tensors are compatible for applying SSIM or PSNR.
+        This function checks if two sets of images have ranks at least 3, and if the
+        last three dimensions match.
+        Args:
+        img1: Tensor containing the first image batch.
+        img2: Tensor containing the second image batch.
+        Returns:
+        A tuple containing: the first tensor shape, the second tensor shape, and a
+        list of control_flow_ops.Assert() ops implementing the checks.
+        Raises:
+        ValueError: When static shape check fails.
+        '''
+        shape1 = img1.get_shape().with_rank_at_least(3)
+        shape2 = img2.get_shape().with_rank_at_least(3)
+        shape1[-3:].assert_is_compatible_with(shape2[-3:])
+
+        if shape1.ndims is not None and shape2.ndims is not None:
+            for dim1, dim2 in zip(reversed(shape1[:-3]), reversed(shape2[:-3])):
+                if not (dim1 == 1 or dim2 == 1 or dim1.is_compatible_with(dim2)):
+                    raise ValueError('Two images are not compatible: %s and %s' % (shape1, shape2))
+
+        # Now assign shape tensors.
+        shape1, shape2 = tf.shape_n([img1, img2])
+
+        # TODO(sjhwang): Check if shape1[:-3] and shape2[:-3] are broadcastable.
+        checks = []
+        checks.append(tf.Assert(tf.greater_equal(tf.size(shape1), 3),[shape1, shape2], summarize=10))
+        checks.append(tf.Assert(tf.reduce_all(tf.equal(shape1[-3:], shape2[-3:])),[shape1, shape2], summarize=10))
+        
+        return shape1, shape2, checks
+
+    def _ssim_per_channel(img1, img2, max_val=1.0):
+        '''
+        Computes SSIM index between img1 and img2 per color channel.
+        This function matches the standard SSIM implementation from:
+        Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004). Image
+        quality assessment: from error visibility to structural similarity. IEEE
+        transactions on image processing.
+        Details:
+        - 11x11 Gaussian filter of width 1.5 is used.
+        - k1 = 0.01, k2 = 0.03 as in the original paper.
+        Args:
+        img1: First image batch.
+        img2: Second image batch.
+        max_val: The dynamic range of the images (i.e., the difference between the
+          maximum the and minimum allowed values).
+        Returns:
+        A pair of tensors containing and channel-wise SSIM and contrast-structure
+        values. The shape is [..., channels].
+        '''
+        
+        def _fspecial_gauss(size, sigma):
+            '''
+            Function to mimic the 'fspecial' gaussian MATLAB function.
+            '''
+            size = tf.convert_to_tensor(size, 'int32')
+            sigma = tf.convert_to_tensor(sigma)
+
+            coords = tf.cast(tf.range(size), sigma.dtype)
+            coords -= tf.cast(size - 1, sigma.dtype) / 2.0
+
+            g = tf.square(coords)
+            g *= -0.5 / tf.square(sigma)
+
+            g = tf.reshape(g, shape=[1, -1]) + tf.reshape(g, shape=[-1, 1])
+            g = tf.reshape(g, shape=[1, -1])  # For tf.nn.softmax().
+            g = tf.nn.softmax(g)
+            return tf.reshape(g, shape=[size, size, 1, 1])
+
+        def _ssim_helper(x, y, max_val, kernel, compensation=1.0):
+            '''
+            Helper function for computing SSIM.
+            SSIM estimates covariances with weighted sums.  The default parameters
+            use a biased estimate of the covariance:
+            Suppose `reducer` is a weighted sum, then the mean estimators are
+            \mu_x = \sum_i w_i x_i,
+            \mu_y = \sum_i w_i y_i,
+            where w_i's are the weighted-sum weights, and covariance estimator is
+            cov_{xy} = \sum_i w_i (x_i - \mu_x) (y_i - \mu_y)
+            with assumption \sum_i w_i = 1. This covariance estimator is biased, since
+            E[cov_{xy}] = (1 - \sum_i w_i ^ 2) Cov(X, Y).
+            For SSIM measure with unbiased covariance estimators, pass as `compensation`
+            argument (1 - \sum_i w_i ^ 2).
+            Arguments:
+            x: First set of images.
+            y: Second set of images.
+            reducer: Function that computes 'local' averages from set of images.
+              For non-covolutional version, this is usually tf.reduce_mean(x, [1, 2]),
+              and for convolutional version, this is usually tf.nn.avg_pool or
+              tf.nn.conv2d with weighted-sum kernel.
+            max_val: The dynamic range (i.e., the difference between the maximum
+              possible allowed value and the minimum allowed value).
+            compensation: Compensation factor. See above.
+            Returns:
+            A pair containing the luminance measure, and the contrast-structure measure.
+            '''
+
+            def reducer(x, kernel):
+                shape = tf.shape(x)
+                x = tf.reshape(x, shape=tf.concat([[-1], shape[-3:]], 0))
+                y = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
+                return tf.reshape(y, tf.concat([shape[:-3],tf.shape(y)[1:]], 0))
+
+            _SSIM_K1 = 0.01
+            _SSIM_K2 = 0.03
+        
+            c1 = (_SSIM_K1 * max_val) ** 2
+            c2 = (_SSIM_K2 * max_val) ** 2
+
+            # SSIM luminance measure is
+            # (2 * mu_x * mu_y + c1) / (mu_x ** 2 + mu_y ** 2 + c1).
+            mean0 = reducer(x, kernel)
+            mean1 = reducer(y, kernel)
+            num0 = mean0 * mean1 * 2.0
+            den0 = tf.square(mean0) + tf.square(mean1)
+            luminance = (num0 + c1) / (den0 + c1)
+
+            # SSIM contrast-structure measure is
+            #   (2 * cov_{xy} + c2) / (cov_{xx} + cov_{yy} + c2).
+            # Note that `reducer` is a weighted sum with weight w_k, \sum_i w_i = 1, then
+            #   cov_{xy} = \sum_i w_i (x_i - \mu_x) (y_i - \mu_y)
+            #          = \sum_i w_i x_i y_i - (\sum_i w_i x_i) (\sum_j w_j y_j).
+            num1 = reducer(x * y, kernel) * 2.0
+            den1 = reducer(tf.square(x) + tf.square(y), kernel)
+            c2 *= compensation
+            cs = (num1 - num0 + c2) / (den1 - den0 + c2)
+
+            # SSIM score is the product of the luminance and contrast-structure measures.
+            return luminance, cs
+        
+        filter_size = tf.constant(9, dtype='int32')  # changed from 11 to 9 due 
+        filter_sigma = tf.constant(1.5, dtype=img1.dtype)
+
+        shape1, shape2 = tf.shape_n([img1, img2])
+        checks = [tf.Assert(tf.reduce_all(tf.greater_equal(shape1[-3:-1], filter_size)),[shape1, filter_size], summarize=8),
+                  tf.Assert(tf.reduce_all(tf.greater_equal(shape2[-3:-1], filter_size)),[shape2, filter_size], summarize=8)]
+
+        # Enforce the check to run before computation.
+        with tf.control_dependencies(checks):
+            img1 = tf.identity(img1)
+            
+        # TODO(sjhwang): Try to cache kernels and compensation factor.
+        kernel = _fspecial_gauss(filter_size, filter_sigma)
+        kernel = tf.tile(kernel, multiples=[1, 1, shape1[-1], 1])
+        
+        # The correct compensation factor is `1.0 - tf.reduce_sum(tf.square(kernel))`,
+        # but to match MATLAB implementation of MS-SSIM, we use 1.0 instead.
+        compensation = 1.0
+
+        # TODO(sjhwang): Try FFT.
+        # TODO(sjhwang): Gaussian kernel is separable in space. Consider applying
+        #   1-by-n and n-by-1 Gaussain filters instead of an n-by-n filter.
+        
+        luminance, cs = _ssim_helper(img1, img2, max_val, kernel, compensation)
+        
+        # Average over the second and the third from the last: height, width.
+        axes = tf.constant([-3, -2], dtype='int32')
+        ssim_val = tf.reduce_mean(luminance * cs, axes)
+        cs = tf.reduce_mean(cs, axes)
+        return ssim_val, cs
+
+    def do_pad(images, remainder):
+        padding = tf.expand_dims(remainder, -1)
+        padding = tf.pad(padding, [[1, 0], [1, 0]])
+        return [tf.pad(x, padding, mode='SYMMETRIC') for x in images]
+
+    # Shape checking.
+    shape1 = img1.get_shape().with_rank_at_least(3)
+    shape2 = img2.get_shape().with_rank_at_least(3)
+    shape1[-3:].merge_with(shape2[-3:])
+
+    with tf.name_scope(None, 'MS-SSIM', [img1, img2]):
+        shape1, shape2, checks = _verify_compatible_image_shapes(img1, img2)
+    with tf.control_dependencies(checks):
+        img1 = tf.identity(img1)
+
+    # Need to convert the images to float32.  Scale max_val accordingly so that
+    # SSIM is computed correctly.
+    max_val = tf.cast(max_val, img1.dtype)
+    max_val = tf.image.convert_image_dtype(max_val, 'float32')
+    img1 = tf.image.convert_image_dtype(img1, 'float32')
+    img2 = tf.image.convert_image_dtype(img2, 'float32')
+
+    imgs = [img1, img2]
+    shapes = [shape1, shape2]
+
+    # img1 and img2 are assumed to be a (multi-dimensional) batch of
+    # 3-dimensional images (height, width, channels). `heads` contain the batch
+    # dimensions, and `tails` contain the image dimensions.
+    heads = [s[:-3] for s in shapes]
+    tails = [s[-3:] for s in shapes]
+
+    divisor = [1, 2, 2, 1]
+    divisor_tensor = tf.constant(divisor[1:], dtype='int32')
+
+    mcs = []
+    for k in range(len(power_factors)):
+          with tf.name_scope(None, 'Scale%d' % k, imgs):
+            if k > 0:
+              # Avg pool takes rank 4 tensors. Flatten leading dimensions.
+              flat_imgs = [tf.reshape(x, tf.concat([[-1], t], 0)) for x, t in zip(imgs, tails)]
+
+              remainder = tails[0] % divisor_tensor
+              need_padding = tf.reduce_any(tf.not_equal(remainder, 0))
+              padded = tf.cond(need_padding,lambda: do_pad(flat_imgs, remainder),
+                                            lambda: flat_imgs)
+
+              downscaled = [tf.nn.avg_pool(x, ksize=divisor, strides=divisor, padding='VALID')
+                            for x in padded]
+              tails = [x[1:] for x in tf.shape_n(downscaled)]
+              imgs = [tf.reshape(x, tf.concat([h, t], 0)) for x, h, t in zip(downscaled, heads, tails)]
+
+            # Overwrite previous ssim value since we only need the last one.
+            ssim_per_channel, cs = _ssim_per_channel(*imgs, max_val=max_val)
+            mcs.append(tf.nn.relu(cs))
+
+    # Remove the cs score for the last scale. In the MS-SSIM calculation,
+    # we use the l(p) at the highest scale. l(p) * cs(p) is ssim(p).
+    mcs.pop()  # Remove the cs score for the last scale.
+    mcs_and_ssim = tf.stack(mcs + [tf.nn.relu(ssim_per_channel)],axis=-1)
+    # Take weighted geometric mean across the scale axis.
+    ms_ssim = tf.reduce_prod(tf.pow(mcs_and_ssim, power_factors),[-1])
+
+    return tf.reduce_mean(ms_ssim, [-1])  # Avg over color channels.
+    
+    
+def ms_ssim_loss(y_true,y_pred):
+    MSSSIM = K.expand_dims(K.expand_dims(1.0 - ms_ssim(y_true, y_pred),axis=-1), axis=-1)
+    return K.tile(MSSSIM,[1,64,64]) # need to expand to [1,height,width] dimensions for Keras ... modify to not be hard-coded
