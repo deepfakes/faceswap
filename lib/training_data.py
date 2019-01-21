@@ -105,8 +105,8 @@ class TrainingDataGenerator():
                         batch.append(list())
                     batch[idx].append(image)
             batch = [np.float32(image) for image in batch]
-            logger.trace("Yielding batch: (size: %s, item shape: %s, queue:  '%s'",
-                         len(batch), batch[0].shape, q_name)
+            logger.trace("Yielding batch: (size: %s, item shapes: %s, queue:  '%s'",
+                         len(batch), [item.shape for item in batch], q_name)
             yield batch
         logger.debug("Finished minibatch generator for queue: '%s'", q_name)
         load_thread.join()
