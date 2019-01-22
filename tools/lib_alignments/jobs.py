@@ -296,13 +296,15 @@ class Extract():
         err = None
         if not self.faces_dir:
             err = "ERROR: Output faces folder not provided."
-        elif os.path.isdir(self.faces_dir):
-            err = "ERROR: Folder already exists at {}".format(self.faces_dir)
+        elif not os.path.isdir(self.faces_dir):
+            logger.debug("Creating folder: '%s'", self.faces_dir)
+            os.makedirs(self.faces_dir)
+        elif os.listdir(self.faces_dir):
+            err = "ERROR: Output faces folder should be empty: '{}'".format(self.faces_dir)
         if err:
             logger.error(err)
             exit(0)
         logger.verbose("Creating output folder at '%s'", self.faces_dir)
-        os.makedirs(self.faces_dir)
 
     def export_faces(self):
         """ Export the faces """
