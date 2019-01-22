@@ -29,9 +29,15 @@ class Model(OriginalModel):
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")
-        self.add_network("decoder", "a", self.decoder_a())
-        self.add_network("decoder", "b", self.decoder_b())
-        self.add_network("encoder", None, self.encoder())
+        if not self.lowmem:
+            self.add_network("decoder", "a", self.decoder_a())
+            self.add_network("decoder", "b", self.decoder_b())
+            self.add_network("encoder", None, self.encoder())
+        else:
+            self.add_network("decoder", "a", self.decoder_a_lowmem())
+            self.add_network("decoder", "b", self.decoder_b_lowmem())
+            self.add_network("encoder", None, self.encoder_lowmem())
+                        
         logger.debug("Added networks")
 
     def encoder(self):
@@ -39,88 +45,142 @@ class Model(OriginalModel):
         kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
         dense_shape = self.input_shape[0] // 16
         input_ = Input(shape=self.input_shape)
-
-        if self.lowmem:
-            encoder_complexity = 128
-            dense_dim = 384
-        else:
-            encoder_complexity = self.config["complexity_encoder"]
-            dense_dim = 512
-
+        
+        encoder_complexity = self.config["complexity_encoder"]
+        
         var_x = input_
-        if self.lowmem:
-            var_x = conv(var_x, encoder_complexity, **kwargs)
-            var_x = conv(var_x, encoder_complexity * 2, **kwargs)
-        else:
-            var_x = conv(var_x, encoder_complexity, use_instance_norm=True, **kwargs)
-            var_x = conv(var_x, encoder_complexity * 2, use_instance_norm=True, **kwargs)
+
+        var_x = conv(var_x, encoder_complexity, use_instance_norm=True, **kwargs)
+        var_x = conv(var_x, encoder_complexity * 2, use_instance_norm=True, **kwargs)
         var_x = conv(var_x, encoder_complexity * 4, **kwargs)
         var_x = conv(var_x, encoder_complexity * 6, **kwargs)
         var_x = conv(var_x, encoder_complexity * 8, **kwargs)
 
         var_x = Dense(self.encoder_dim,
                       kernel_initializer=self.kernel_initializer)(Flatten()(var_x))
-        var_x = Dense(dense_shape * dense_shape * dense_dim,
+        var_x = Dense(dense_shape * dense_shape * 512,
                       kernel_initializer=self.kernel_initializer)(var_x)
-        var_x = Reshape((dense_shape, dense_shape, dense_dim))(var_x)
+        var_x = Reshape((dense_shape, dense_shape, 512))(var_x)
         return KerasModel(input_, var_x)
-
+    
     def decoder_a(self):
         """ Decoder for side A """
         kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
         use_subpixel = self.config["subpixel_upscaling"]
         decoder_shape = self.input_shape[0] // 16
 
-        if self.lowmem:
-            decoder_complexity = 256
-            inp_dim = 384
-        else:
-            decoder_complexity = self.config["complexity_decoder_a"]
-            inp_dim = 512
-        input_ = Input(shape=(decoder_shape, decoder_shape, inp_dim))
+        decoder_complexity_a = self.config["complexity_decoder_a"]
+                
+        input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
         var_x = input_
-        if self.lowmem:
-            var_x = upscale(var_x, inp_dim, use_subpixel=use_subpixel, **kwargs)
-        else:
-            var_x = upscale(var_x, decoder_complexity, use_subpixel=use_subpixel, **kwargs)
+        var_x = upscale(var_x, decoder_complexity_a, use_subpixel=use_subpixel, **kwargs)
         var_x = SpatialDropout2D(0.25)(var_x)
-        var_x = upscale(var_x, decoder_complexity, use_subpixel=use_subpixel, **kwargs)
-        if self.lowmem:
-            var_x = SpatialDropout2D(0.15)(var_x)
-        else:
-            var_x = SpatialDropout2D(0.25)(var_x)
-        var_x = upscale(var_x, decoder_complexity // 2, use_subpixel=use_subpixel, **kwargs)
-        var_x = upscale(var_x, decoder_complexity // 4, use_subpixel=use_subpixel, **kwargs)
+        
+        var_x = upscale(var_x, decoder_complexity_a, use_subpixel=use_subpixel, **kwargs)        
+        var_x = SpatialDropout2D(0.15)(var_x)
+                        
+        var_x = upscale(var_x, decoder_complexity_a // 2, use_subpixel=use_subpixel, **kwargs)
+        
+        var_x = upscale(var_x, decoder_complexity_a // 4, use_subpixel=use_subpixel, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
-        return KerasModel(input_, var_x)
-
+        return KerasModel(input_, var_x)    
+    
     def decoder_b(self):
         """ Decoder for side B """
         kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
         decoder_shape = self.input_shape[0] // 16
         use_subpixel = self.config["subpixel_upscaling"]
 
-        if self.lowmem:
-            inp_dim = 384
-            dec_dim = 384
-        else:
-            inp_dim = self.config["complexity_decoder_b"]
-            dec_dim = 512
-        input_ = Input(shape=(decoder_shape, decoder_shape, inp_dim))
+        decoder_complexity_b = self.config["complexity_decoder_b"]
+        
+        input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
         var_x = input_
-        var_x = upscale(var_x, dec_dim, use_subpixel=use_subpixel, **kwargs)
-        if not self.lowmem:
-            var_x = res_block(var_x, dec_dim, kernel_initializer=self.kernel_initializer)
-        var_x = upscale(var_x, dec_dim, use_subpixel=use_subpixel, **kwargs)
-        if not self.lowmem:
-            var_x = res_block(var_x, dec_dim, kernel_initializer=self.kernel_initializer)
-        var_x = upscale(var_x, dec_dim // 2, use_subpixel=use_subpixel, **kwargs)
-        if not self.lowmem:
-            var_x = res_block(var_x, dec_dim // 2, kernel_initializer=self.kernel_initializer)
-        var_x = upscale(var_x, dec_dim // 4, use_subpixel=use_subpixel, **kwargs)
+        
+        var_x = upscale(var_x, 512, use_subpixel=use_subpixel, **kwargs)                     
+        var_x = res_block(var_x, 512, kernel_initializer=self.kernel_initializer)        
+        
+        var_x = upscale(var_x, decoder_complexity_b, use_subpixel=use_subpixel, **kwargs)                    
+        var_x = res_block(var_x, decoder_complexity_b, kernel_initializer=self.kernel_initializer)
+                
+        var_x = upscale(var_x, decoder_complexity_b // 2, use_subpixel=use_subpixel, **kwargs)            
+        var_x = res_block(var_x, decoder_complexity_b // 2, kernel_initializer=self.kernel_initializer)
+                
+        var_x = upscale(var_x, decoder_complexity_b // 4, use_subpixel=use_subpixel, **kwargs)
+
+        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        return KerasModel(input_, var_x)    
+    
+    def encoder_lowmem(self):
+        """ Original HiRes Encoder """
+        kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
+        dense_shape = self.input_shape[0] // 16
+        input_ = Input(shape=self.input_shape)
+
+        encoder_complexity = 128
+
+        var_x = input_
+        
+        var_x = conv(var_x, encoder_complexity, **kwargs) 
+        var_x = conv(var_x, encoder_complexity * 2, **kwargs)
+        var_x = conv(var_x, encoder_complexity * 4, **kwargs)
+        var_x = conv(var_x, encoder_complexity * 6, **kwargs)
+        var_x = conv(var_x, encoder_complexity * 8, **kwargs)
+
+        var_x = Dense(self.encoder_dim,
+                      kernel_initializer=self.kernel_initializer)(Flatten()(var_x))
+        var_x = Dense(dense_shape * dense_shape * 384,
+                      kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = Reshape((dense_shape, dense_shape, 384))(var_x)
+        
+        return KerasModel(input_, var_x)    
+
+    def decoder_a_lowmem(self):
+        """ Decoder for side A """
+        kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
+        use_subpixel = self.config["subpixel_upscaling"]
+        decoder_shape = self.input_shape[0] // 16
+        
+        decoder_complexity = 320
+                
+        input_ = Input(shape=(decoder_shape, decoder_shape, 384))
+
+        var_x = input_
+       
+        var_x = upscale(var_x, 384, use_subpixel=use_subpixel, **kwargs)       
+        var_x = SpatialDropout2D(0.25)(var_x)
+        
+        var_x = upscale(var_x, decoder_complexity, use_subpixel=use_subpixel, **kwargs)        
+        var_x = SpatialDropout2D(0.15)(var_x)
+                
+        var_x = upscale(var_x, decoder_complexity // 2, use_subpixel=use_subpixel, **kwargs)
+        
+        var_x = upscale(var_x, decoder_complexity // 4, use_subpixel=use_subpixel, **kwargs)
+
+        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        return KerasModel(input_, var_x)
+
+
+    def decoder_b_lowmem(self):
+        """ Decoder for side B """
+        kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
+        decoder_shape = self.input_shape[0] // 16
+        use_subpixel = self.config["subpixel_upscaling"]
+        
+        input_ = Input(shape=(decoder_shape, decoder_shape, 384))
+            
+        decoder_b_complexity = 384        
+
+        var_x = input_
+        var_x = upscale(var_x, 384, use_subpixel=use_subpixel, **kwargs)
+                    
+        var_x = upscale(var_x, decoder_b_complexity, use_subpixel=use_subpixel, **kwargs)
+
+        var_x = upscale(var_x, decoder_b_complexity // 2, use_subpixel=use_subpixel, **kwargs)
+
+        var_x = upscale(var_x, decoder_b_complexity // 4, use_subpixel=use_subpixel, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
         return KerasModel(input_, var_x)
