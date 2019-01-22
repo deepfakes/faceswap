@@ -102,7 +102,7 @@ class ConfigurePlugins(tk.Toplevel):
         else:
             page = ConfigFrame(container,
                                self.config_dict_gui[category][plugins[0]],
-                               self.plugin_info[plugin])
+                               self.plugin_info[plugins[0]])
 
         logger.debug("Built plugin config page: '%s'", category)
 
@@ -145,7 +145,7 @@ class ConfigurePlugins(tk.Toplevel):
         logger.debug("Saved config")
 
 
-class ConfigFrame(ttk.Frame):
+class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Config Frame - Holds the Options for config """
 
     def __init__(self, parent, options, plugin_info):
@@ -187,7 +187,7 @@ class ConfigFrame(ttk.Frame):
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Config Scrollbar")
 
-    def update_scrollbar(self, event):
+    def update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the options frame scrollbar """
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 

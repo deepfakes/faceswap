@@ -15,9 +15,17 @@ class Config(FaceswapConfig):
         """ Set the default values for config """
         logger.debug("Setting defaults")
         # << GLOBAL OPTIONS >> #
-#        section = "global"
-#        self.add_section(title=section,
-#                         info="Options that apply to all models")
+        section = "global"
+        self.add_section(title=section,
+                         info="Options that apply to all models")
+        self.add_item(
+            section=section, title="use_icnr_init", datatype=bool, default=False,
+            info="Use ICNR Kernel Initializer for upscaling.\nThis can help reduce the "
+                 "'checkerboard effect' when upscaling the image.")
+        self.add_item(
+            section=section, title="subpixel_upscaling", datatype=bool, default=False,
+            info="Use subpixel upscaling rather than pixel shuffler.\n"
+                 "Might increase speed at cost of VRAM")
 
         # << DFAKER MODEL OPTIONS >> #
         section = "model.dfaker"
@@ -34,10 +42,6 @@ class Config(FaceswapConfig):
             section=section, title="mask_type", datatype=str, default="dfaker",
             choices=["dfaker", "dfl_full"],
             info="The mask to be used for training.")
-        self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase upscaling quality at cost of VRAM")
         self.add_item(
             section=section, title="dssim_mask_loss", datatype=bool, default=True,
             info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
@@ -68,10 +72,6 @@ class Config(FaceswapConfig):
             choices=["dfaker", "dfl_full"],
             info="The mask to be used for training.")
         self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase upscaling quality at cost of VRAM")
-        self.add_item(
             section=section, title="dssim_mask_loss", datatype=bool, default=True,
             info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
                  "May increase overall quality.")
@@ -89,10 +89,6 @@ class Config(FaceswapConfig):
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
-        self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase upscaling quality at cost of VRAM")
 
         # << ORIGINAL MODEL OPTIONS >> #
         section = "model.original"
@@ -106,10 +102,6 @@ class Config(FaceswapConfig):
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
-        self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase upscaling quality at cost of VRAM")
 
         # << ORIGINAL HIRES MODEL OPTIONS >> #
         section = "model.original_hires"
@@ -142,10 +134,6 @@ class Config(FaceswapConfig):
             section=section, title="complexity_decoder_b", datatype=int, default=512,
             rounding=16, min_max=(64, 1024),
             info="Decoder B Complexity.")
-        self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase upscaling quality at cost of VRAM")
         self.add_item(
             section=section, title="input_size", datatype=int, default=128,
             rounding=64, min_max=(64, 512),
