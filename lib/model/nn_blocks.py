@@ -24,7 +24,6 @@ from .normalization import GroupNormalization, InstanceNormalization
 def conv(inp, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
     """ Convolution Layer"""
     kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
-    print(kwargs)
     var_x = Conv2D(filters,
                    kernel_size=kernel_size,
                    strides=strides,
