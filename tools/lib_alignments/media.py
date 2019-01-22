@@ -219,7 +219,6 @@ class Frames(MediaLoader):
 
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
-        logger.info("Loading file list from %s", self.folder)
         iterator = self.process_video if self.vid_cap else self.process_frames
         for item in iterator():
             yield item
