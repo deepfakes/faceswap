@@ -44,8 +44,8 @@ class Model(OriginalModel):
     def encoder(self):
         """ DFL H128 Encoder """
         input_ = Input(shape=self.input_shape)
-        use_subpixel = self.config["subpixel_upscaling"]
-
+        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
+                  "use_icnr_init": self.config["use_icnr_init"]}
         var_x = input_
         var_x = conv(var_x, 128)
         var_x = conv(var_x, 256)
@@ -54,18 +54,19 @@ class Model(OriginalModel):
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
         var_x = Reshape((8, 8, self.encoder_dim))(var_x)
-        var_x = upscale(var_x, self.encoder_dim, use_subpixel=use_subpixel)
+        var_x = upscale(var_x, self.encoder_dim, **kwargs)
         return KerasModel(input_, var_x)
 
     def decoder(self):
         """ DFL H128 Decoder """
         input_ = Input(shape=(16, 16, self.encoder_dim))
-        use_subpixel = self.config["subpixel_upscaling"]
+        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
+                  "use_icnr_init": self.config["use_icnr_init"]}
 
         var = input_
-        var = upscale(var, self.encoder_dim, use_subpixel=use_subpixel)
-        var = upscale(var, self.encoder_dim // 2, use_subpixel=use_subpixel)
-        var = upscale(var, self.encoder_dim // 4, use_subpixel=use_subpixel)
+        var = upscale(var, self.encoder_dim, **kwargs)
+        var = upscale(var, self.encoder_dim // 2, **kwargs)
+        var = upscale(var, self.encoder_dim // 4, **kwargs)
 
         # Face
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var)

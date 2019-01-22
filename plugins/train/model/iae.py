@@ -68,12 +68,13 @@ class Model(ModelBase):
 
     def decoder(self):
         """ Decoder Network """
-        subpixel = self.config["subpixel_upscaling"]
+        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
+                  "use_icnr_init": self.config["use_icnr_init"]}
         input_ = Input(shape=(4, 4, self.encoder_dim))
         var_x = input_
-        var_x = upscale(var_x, 512, use_subpixel=subpixel)
-        var_x = upscale(var_x, 256, use_subpixel=subpixel)
-        var_x = upscale(var_x, 128, use_subpixel=subpixel)
-        var_x = upscale(var_x, 64, use_subpixel=subpixel)
+        var_x = upscale(var_x, 512, **kwargs)
+        var_x = upscale(var_x, 256, **kwargs)
+        var_x = upscale(var_x, 128, **kwargs)
+        var_x = upscale(var_x, 64, **kwargs)
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
         return KerasModel(input_, var_x)

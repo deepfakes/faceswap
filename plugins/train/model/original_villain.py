@@ -27,6 +27,9 @@ class Model(OriginalModel):
     def encoder(self):
         """ Encoder Network """
         kwargs = {"kernel_initializer": self.kernel_initializer}
+        upscale_kwargs = {"kernel_initializer": self.kernel_initializer,
+                          "use_subpixel": self.config["subpixel_upscaling"],
+                          "use_icnr_init": self.config["use_icnr_init"]}
         input_ = Input(shape=self.input_shape)
         in_conv_filters = self.input_shape[0]
         if self.input_shape[0] > 128:
@@ -53,21 +56,24 @@ class Model(OriginalModel):
         var_x = Dense(self.encoder_dim, **kwargs)(Flatten()(var_x))
         var_x = Dense(dense_shape * dense_shape * 1024, **kwargs)(var_x)
         var_x = Reshape((dense_shape, dense_shape, 1024))(var_x)
-        var_x = upscale(var_x, 512, **kwargs)
+        var_x = upscale(var_x, 512, **upscale_kwargs)
         return KerasModel(input_, var_x)
 
     def decoder(self):
         """ Decoder Network """
         decoder_shape = self.input_shape[0] // 8
         kwargs = {"kernel_initializer": self.kernel_initializer}
+        upscale_kwargs = {"kernel_initializer": self.kernel_initializer,
+                          "use_subpixel": self.config["subpixel_upscaling"],
+                          "use_icnr_init": self.config["use_icnr_init"]}
         input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
         var_x = input_
-        var_x = upscale(var_x, 512, **kwargs)
+        var_x = upscale(var_x, 512, **upscale_kwargs)
         var_x = res_block(var_x, 512, **kwargs)
-        var_x = upscale(var_x, 256, **kwargs)
+        var_x = upscale(var_x, 256, **upscale_kwargs)
         var_x = res_block(var_x, 256, **kwargs)
-        var_x = upscale(var_x, self.input_shape[0], **kwargs)
+        var_x = upscale(var_x, self.input_shape[0], **upscale_kwargs)
         var_x = res_block(var_x, self.input_shape[0], **kwargs)
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
         return KerasModel(input_, var_x)

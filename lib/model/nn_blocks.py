@@ -14,6 +14,7 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 from keras.initializers import he_uniform
+from .initializers import ICNR_init
 from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
 
@@ -35,9 +36,12 @@ def conv(inp, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwar
     return var_x
 
 
-def upscale(inp, filters, kernel_size=3, use_instance_norm=False, use_subpixel=False, **kwargs):
+def upscale(inp, filters, kernel_size=3, use_instance_norm=False,
+            use_subpixel=False, use_icnr_init=False, **kwargs):
     """ Upscale Layer """
     kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
+    if use_icnr_init:
+        kwargs["kernel_initializer"] = ICNR_init(initializer=kwargs["kernel_initializer"])
     var_x = Conv2D(filters * 4,
                    kernel_size=kernel_size,
                    padding='same',
