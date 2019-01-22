@@ -75,6 +75,9 @@ class Extract():
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
+            if image is None or not image.any():
+                logger.warning("Unable to open image. Skipping: '%s'", filename)
+                continue
             imagename = os.path.basename(filename)
             if imagename in self.alignments.data.keys():
                 logger.trace("Skipping image: '%s'", filename)
