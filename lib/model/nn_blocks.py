@@ -88,6 +88,7 @@ class NNBlocks():
                        kernel_size=kernel_size,
                        padding="same",
                        **kwargs)(var_x)
+        var_x = Scale()(var_x)
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
