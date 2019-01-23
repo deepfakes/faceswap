@@ -3,11 +3,9 @@
     Based on https://github.com/iperov/DeepFaceLab
 """
 
-from keras.layers import Dense, Flatten, Input, Reshape
-from keras.layers.convolutional import Conv2D
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
-from lib.model.nn_blocks import conv, upscale
 from .original import logger, Model as OriginalModel
 
 
@@ -44,29 +42,24 @@ class Model(OriginalModel):
     def encoder(self):
         """ DFL H128 Encoder """
         input_ = Input(shape=self.input_shape)
-        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
-                  "use_icnr_init": self.config["use_icnr_init"]}
         var_x = input_
-        var_x = conv(var_x, 128)
-        var_x = conv(var_x, 256)
-        var_x = conv(var_x, 512)
-        var_x = conv(var_x, 1024)
+        var_x = self.blocks.conv(var_x, 128)
+        var_x = self.blocks.conv(var_x, 256)
+        var_x = self.blocks.conv(var_x, 512)
+        var_x = self.blocks.conv(var_x, 1024)
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
         var_x = Reshape((8, 8, self.encoder_dim))(var_x)
-        var_x = upscale(var_x, self.encoder_dim, **kwargs)
+        var_x = self.blocks.upscale(var_x, self.encoder_dim)
         return KerasModel(input_, var_x)
 
     def decoder(self):
         """ DFL H128 Decoder """
         input_ = Input(shape=(16, 16, self.encoder_dim))
-        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
-                  "use_icnr_init": self.config["use_icnr_init"]}
-
         var = input_
-        var = upscale(var, self.encoder_dim, **kwargs)
-        var = upscale(var, self.encoder_dim // 2, **kwargs)
-        var = upscale(var, self.encoder_dim // 4, **kwargs)
+        var = self.blocks.upscale(var, self.encoder_dim)
+        var = self.blocks.upscale(var, self.encoder_dim // 2)
+        var = self.blocks.upscale(var, self.encoder_dim // 4)
 
         # Face
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var)

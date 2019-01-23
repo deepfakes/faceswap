@@ -16,6 +16,7 @@ from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.losses import DSSIMObjective, PenalizedLoss
+from lib.model.nn_blocks import NNBlocks
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -32,6 +33,8 @@ class ModelBase():
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
+        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
+                               use_icnr_init=self.config["use_icnr_init"])
         self.input_shape = input_shape
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim

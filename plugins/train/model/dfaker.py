@@ -4,10 +4,8 @@
 
 
 from keras.initializers import RandomNormal
-from keras.layers import Input
+from keras.layers import Conv2D, Input
 from keras.models import Model as KerasModel
-
-from lib.model.nn_blocks import Conv2D, res_block, upscale
 
 from .original import logger, Model as OriginalModel
 
@@ -46,28 +44,25 @@ class Model(OriginalModel):
     def decoder(self):
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
-        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
-                  "use_icnr_init": self.config["use_icnr_init"]}
-
         inp_x = input_
         inp_y = input_
 
-        inp_x = upscale(inp_x, 512, **kwargs)
-        inp_x = res_block(inp_x, 512, kernel_initializer=self.kernel_initializer)
-        inp_x = upscale(inp_x, 256, **kwargs)
-        inp_x = res_block(inp_x, 256, kernel_initializer=self.kernel_initializer)
-        inp_x = upscale(inp_x, 128, **kwargs)
-        inp_x = res_block(inp_x, 128, kernel_initializer=self.kernel_initializer)
-        inp_x = upscale(inp_x, 64, **kwargs)
+        inp_x = self.blocks.upscale(inp_x, 512)
+        inp_x = self.blocks.res_block(inp_x, 512, kernel_initializer=self.kernel_initializer)
+        inp_x = self.blocks.upscale(inp_x, 256)
+        inp_x = self.blocks.res_block(inp_x, 256, kernel_initializer=self.kernel_initializer)
+        inp_x = self.blocks.upscale(inp_x, 128)
+        inp_x = self.blocks.res_block(inp_x, 128, kernel_initializer=self.kernel_initializer)
+        inp_x = self.blocks.upscale(inp_x, 64)
         inp_x = Conv2D(3,
                        kernel_size=5,
                        padding='same',
                        activation='sigmoid')(inp_x)
 
-        inp_y = upscale(inp_y, 512, **kwargs)
-        inp_y = upscale(inp_y, 256, **kwargs)
-        inp_y = upscale(inp_y, 128, **kwargs)
-        inp_y = upscale(inp_y, 64, **kwargs)
+        inp_y = self.blocks.upscale(inp_y, 512)
+        inp_y = self.blocks.upscale(inp_y, 256)
+        inp_y = self.blocks.upscale(inp_y, 128)
+        inp_y = self.blocks.upscale(inp_y, 64)
         inp_y = Conv2D(1,
                        kernel_size=5,
                        padding='same',

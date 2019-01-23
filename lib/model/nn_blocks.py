@@ -5,6 +5,7 @@
         dfaker: https://github.com/dfaker/df
         shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
 
+import logging
 import tensorflow as tf
 import keras.backend as K
 
@@ -18,79 +19,98 @@ from .initializers import ICNR_init
 from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
 
-
-# <<< Original Model Blocks >>> #
-
-def conv(inp, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
-    """ Convolution Layer"""
-    kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
-    var_x = Conv2D(filters,
-                   kernel_size=kernel_size,
-                   strides=strides,
-                   padding='same',
-                   **kwargs)(inp)
-    if use_instance_norm:
-        var_x = InstanceNormalization()(var_x)
-    var_x = LeakyReLU(0.1)(var_x)
-    return var_x
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def upscale(inp, filters, kernel_size=3, use_instance_norm=False,
-            use_subpixel=False, use_icnr_init=False, **kwargs):
-    """ Upscale Layer """
-    kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
-    if use_icnr_init:
-        kwargs["kernel_initializer"] = ICNR_init(initializer=kwargs["kernel_initializer"])
-    var_x = Conv2D(filters * 4,
-                   kernel_size=kernel_size,
-                   padding='same',
-                   **kwargs)(inp)
-    if use_instance_norm:
-        var_x = InstanceNormalization()(var_x)
-    var_x = LeakyReLU(0.1)(var_x)
-    if use_subpixel:
-        var_x = SubPixelUpscaling()(var_x)
-    else:
-        var_x = PixelShuffler()(var_x)
-    return var_x
+class NNBlocks():
+    """ Blocks to use for creating models """
+    def __init__(self, use_subpixel=False, use_icnr_init=False):
+        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s",
+                     self.__class__.__name__, use_subpixel, use_icnr_init)
+        self.use_subpixel = use_subpixel
+        self.use_icnr_init = use_icnr_init
+        logger.debug("Initialized %s", self.__class__.__name__)
 
+    @staticmethod
+    def update_kwargs(kwargs):
+        """ Set the default kernel initializer to he_uniform() """
+        kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
+        return kwargs
 
-# <<< DFaker Model Blocks >>> #
+    # <<< Original Model Blocks >>> #
+    def conv(self, inp, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
+        """ Convolution Layer"""
+        logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
+                     "kwargs: %s", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
+        kwargs = self.update_kwargs(kwargs)
+        var_x = Conv2D(filters,
+                       kernel_size=kernel_size,
+                       strides=strides,
+                       padding='same',
+                       **kwargs)(inp)
+        if use_instance_norm:
+            var_x = InstanceNormalization()(var_x)
+        var_x = LeakyReLU(0.1)(var_x)
+        return var_x
 
-def res_block(inp, filters, kernel_size=3, **kwargs):
-    """ Residual block """
-    kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
-    var_x = inp
-    var_x = Conv2D(filters,
-                   kernel_size=kernel_size,
-                   use_bias=False,
-                   padding="same",
-                   **kwargs)(var_x)
-    var_x = LeakyReLU(alpha=0.2)(var_x)
-    var_x = Conv2D(filters,
-                   kernel_size=kernel_size,
-                   use_bias=False,
-                   padding="same",
-                   **kwargs)(var_x)
-    var_x = Add()([var_x, inp])
-    var_x = LeakyReLU(alpha=0.2)(var_x)
-    return var_x
+    def upscale(self, inp, filters, kernel_size=3, use_instance_norm=False, **kwargs):
+        """ Upscale Layer """
+        logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s",
+                     inp, filters, kernel_size, use_instance_norm, kwargs)
+        kwargs = self.update_kwargs(kwargs)
+        if self.use_icnr_init:
+            kwargs["kernel_initializer"] = ICNR_init(initializer=kwargs["kernel_initializer"])
+        var_x = Conv2D(filters * 4,
+                       kernel_size=kernel_size,
+                       padding='same',
+                       **kwargs)(inp)
+        if use_instance_norm:
+            var_x = InstanceNormalization()(var_x)
+        var_x = LeakyReLU(0.1)(var_x)
+        if self.use_subpixel:
+            var_x = SubPixelUpscaling()(var_x)
+        else:
+            var_x = PixelShuffler()(var_x)
+        return var_x
 
+    # <<< DFaker Model Blocks >>> #
+    def res_block(self, inp, filters, kernel_size=3, **kwargs):
+        """ Residual block """
+        logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s",
+                     inp, filters, kernel_size, kwargs)
+        kwargs = self.update_kwargs(kwargs)
+        var_x = inp
+        var_x = Conv2D(filters,
+                       kernel_size=kernel_size,
+                       use_bias=False,
+                       padding="same",
+                       **kwargs)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = Conv2D(filters,
+                       kernel_size=kernel_size,
+                       use_bias=False,
+                       padding="same",
+                       **kwargs)(var_x)
+        var_x = Add()([var_x, inp])
+        var_x = LeakyReLU(alpha=0.2)(var_x)
+        return var_x
 
-# <<< OriginalHiRes Blocks >>> #
-
-def conv_sep(inp, filters, kernel_size=5, strides=2, **kwargs):
-    """ Seperable Convolution Layer """
-    kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
-    var_x = SeparableConv2D(filters,
-                            kernel_size=kernel_size,
-                            strides=strides,
-                            padding='same',
-                            **kwargs)(inp)
-    var_x = Activation("relu")(var_x)
-    return var_x
+    # <<< OriginalHiRes Blocks >>> #
+    def conv_sep(self, inp, filters, kernel_size=5, strides=2, **kwargs):
+        """ Seperable Convolution Layer """
+        logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s",
+                     inp, filters, kernel_size, strides, kwargs)
+        kwargs = self.update_kwargs(kwargs)
+        var_x = SeparableConv2D(filters,
+                                kernel_size=kernel_size,
+                                strides=strides,
+                                padding='same',
+                                **kwargs)(inp)
+        var_x = Activation("relu")(var_x)
+        return var_x
 
 # <<< GAN V2.2 Blocks >>> #
+# TODO Merge these into NNBLock class when porting GAN2.2
 
 
 # Gan Constansts:

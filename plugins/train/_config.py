@@ -143,8 +143,8 @@ class Config(FaceswapConfig):
                  "Make sure your resolution is divisible by 64 "
                  "(e.g. 64, 128, 256 etc.)")
 
-        # << ORIGINAL VILLAIN MODEL OPTIONS >> #
-        section = "model.original_villain"
+        # << VILLAIN MODEL OPTIONS >> #
+        section = "model.villain"
         self.add_section(title=section,
                          info="A Higher resolution version of the Original "
                               "Model by VillainGuy.\n"

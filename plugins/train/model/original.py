@@ -3,11 +3,10 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contribs """
 
-from keras.layers import Dense, Flatten, Input, Reshape
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape
 
 from keras.models import Model as KerasModel
 
-from lib.model.nn_blocks import conv, Conv2D, upscale
 from ._base import ModelBase, logger
 
 
@@ -49,28 +48,24 @@ class Model(ModelBase):
     def encoder(self):
         """ Encoder Network """
         input_ = Input(shape=self.input_shape)
-        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
-                  "use_icnr_init": self.config["use_icnr_init"]}
         var_x = input_
-        var_x = conv(var_x, 128)
-        var_x = conv(var_x, 256)
-        var_x = conv(var_x, 512)
+        var_x = self.blocks.conv(var_x, 128)
+        var_x = self.blocks.conv(var_x, 256)
+        var_x = self.blocks.conv(var_x, 512)
         if not self.config.get("lowmem", False):
-            var_x = conv(var_x, 1024)
+            var_x = self.blocks.conv(var_x, 1024)
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(4 * 4 * 1024)(var_x)
         var_x = Reshape((4, 4, 1024))(var_x)
-        var_x = upscale(var_x, 512, **kwargs)
+        var_x = self.blocks.upscale(var_x, 512)
         return KerasModel(input_, var_x)
 
     def decoder(self):
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
-        kwargs = {"use_subpixel": self.config["subpixel_upscaling"],
-                  "use_icnr_init": self.config["use_icnr_init"]}
         var_x = input_
-        var_x = upscale(var_x, 256, **kwargs)
-        var_x = upscale(var_x, 128, **kwargs)
-        var_x = upscale(var_x, 64, **kwargs)
+        var_x = self.blocks.upscale(var_x, 256)
+        var_x = self.blocks.upscale(var_x, 128)
+        var_x = self.blocks.upscale(var_x, 64)
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
         return KerasModel(input_, var_x)
