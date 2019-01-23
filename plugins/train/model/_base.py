@@ -175,7 +175,7 @@ class ModelBase():
     def compile_predictors(self):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
 
         for side, model in self.predictors.items():
             loss_funcs = [self.loss_function(side)]

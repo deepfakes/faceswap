@@ -79,16 +79,13 @@ class NNBlocks():
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s",
                      inp, filters, kernel_size, kwargs)
         kwargs = self.update_kwargs(kwargs)
-        var_x = inp
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
-                       use_bias=False,
                        padding="same",
-                       **kwargs)(var_x)
+                       **kwargs)(inp)
         var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
-                       use_bias=False,
                        padding="same",
                        **kwargs)(var_x)
         var_x = Add()([var_x, inp])
