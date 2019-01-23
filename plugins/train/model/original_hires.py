@@ -48,11 +48,11 @@ class Model(OriginalModel):
 
         var_x = input_
 
-        var_x = self.blocks.conv(var_x, encoder_complexity, **kwargs)
+        var_x = self.blocks.conv(var_x, encoder_complexity, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, encoder_complexity)
-        var_x = self.blocks.conv(var_x, encoder_complexity * 2, **kwargs)
+        var_x = self.blocks.conv(var_x, encoder_complexity * 2, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, encoder_complexity*2)
-        var_x = self.blocks.conv(var_x, encoder_complexity * 4, **kwargs)
+        var_x = self.blocks.conv(var_x, encoder_complexity * 4, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, encoder_complexity*4)
         var_x = self.blocks.conv(var_x, encoder_complexity * 6, **kwargs)
         var_x = self.blocks.conv(var_x, encoder_complexity * 8, **kwargs)
@@ -100,15 +100,15 @@ class Model(OriginalModel):
 
         var_x = input_
 
-        var_x = self.blocks.upscale(var_x, 512, **kwargs)
+        var_x = self.blocks.upscale(var_x, 512, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, 512, kernel_initializer=self.kernel_initializer)
 
-        var_x = self.blocks.upscale(var_x, decoder_complexity_b, **kwargs)
+        var_x = self.blocks.upscale(var_x, decoder_complexity_b, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x,
                                       decoder_complexity_b,
                                       kernel_initializer=self.kernel_initializer)
 
-        var_x = self.blocks.upscale(var_x, decoder_complexity_b // 2, **kwargs)
+        var_x = self.blocks.upscale(var_x, decoder_complexity_b // 2, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x,
                                       decoder_complexity_b // 2,
                                       kernel_initializer=self.kernel_initializer)
