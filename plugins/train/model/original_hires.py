@@ -50,10 +50,13 @@ class Model(OriginalModel):
         
         var_x = input_
 
-        var_x = conv(var_x, encoder_complexity, use_instance_norm=True, **kwargs)
-        var_x = conv(var_x, encoder_complexity * 2, use_instance_norm=True, **kwargs)
+        var_x = conv(var_x, encoder_complexity, **kwargs)
+        var_x = res_block(var_x, encoder_complexity)
+        var_x = conv(var_x, encoder_complexity * 2, **kwargs)
+        var_x = res_block(var_x, encoder_complexity*2)
         var_x = conv(var_x, encoder_complexity * 4, **kwargs)
-        var_x = conv(var_x, encoder_complexity * 6, **kwargs)
+        var_x = res_block(var_x, encoder_complexity*4)
+        var_x = conv(var_x, encoder_complexity * 6, **kwargs)        
         var_x = conv(var_x, encoder_complexity * 8, **kwargs)
 
         var_x = Dense(self.encoder_dim,
@@ -69,12 +72,13 @@ class Model(OriginalModel):
         use_subpixel = self.config["subpixel_upscaling"]
         decoder_shape = self.input_shape[0] // 16
 
-        decoder_complexity_a = self.config["complexity_decoder_a"]
+        #decoder_complexity_a = self.config["complexity_decoder_a"]
+        decoder_complexity_a = 256
                 
         input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
         var_x = input_
-        var_x = upscale(var_x, decoder_complexity_a, use_subpixel=use_subpixel, **kwargs)
+        var_x = upscale(var_x, 384, use_subpixel=use_subpixel, **kwargs)
         var_x = SpatialDropout2D(0.25)(var_x)
         
         var_x = upscale(var_x, decoder_complexity_a, use_subpixel=use_subpixel, **kwargs)        
@@ -93,7 +97,8 @@ class Model(OriginalModel):
         decoder_shape = self.input_shape[0] // 16
         use_subpixel = self.config["subpixel_upscaling"]
 
-        decoder_complexity_b = self.config["complexity_decoder_b"]
+        #decoder_complexity_b = self.config["complexity_decoder_b"]
+        decoder_complexity_b = 384
         
         input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
@@ -149,15 +154,15 @@ class Model(OriginalModel):
 
         var_x = input_
        
-        var_x = upscale(var_x, 384, use_subpixel=use_subpixel, **kwargs)       
+        var_x = upscale(var_x, decoder_complexity, use_subpixel=use_subpixel, **kwargs)       
         var_x = SpatialDropout2D(0.25)(var_x)
         
-        var_x = upscale(var_x, decoder_complexity, use_subpixel=use_subpixel, **kwargs)        
+        var_x = upscale(var_x, decoder_complexity // 2, use_subpixel=use_subpixel, **kwargs)        
         var_x = SpatialDropout2D(0.15)(var_x)
                 
-        var_x = upscale(var_x, decoder_complexity // 2, use_subpixel=use_subpixel, **kwargs)
-        
         var_x = upscale(var_x, decoder_complexity // 4, use_subpixel=use_subpixel, **kwargs)
+        
+        var_x = upscale(var_x, decoder_complexity // 8, use_subpixel=use_subpixel, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
         return KerasModel(input_, var_x)
@@ -174,13 +179,13 @@ class Model(OriginalModel):
         decoder_b_complexity = 384        
 
         var_x = input_
-        var_x = upscale(var_x, 384, use_subpixel=use_subpixel, **kwargs)
-                    
         var_x = upscale(var_x, decoder_b_complexity, use_subpixel=use_subpixel, **kwargs)
-
+                    
         var_x = upscale(var_x, decoder_b_complexity // 2, use_subpixel=use_subpixel, **kwargs)
 
         var_x = upscale(var_x, decoder_b_complexity // 4, use_subpixel=use_subpixel, **kwargs)
+
+        var_x = upscale(var_x, decoder_b_complexity // 8, use_subpixel=use_subpixel, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
         return KerasModel(input_, var_x)
