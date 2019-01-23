@@ -47,11 +47,11 @@ class Model(OriginalModel):
         inp_x = input_
         inp_y = input_
 
-        inp_x = self.blocks.upscale(inp_x, 512)
+        inp_x = self.blocks.upscale(inp_x, 512, res_block_follows=True)
         inp_x = self.blocks.res_block(inp_x, 512, kernel_initializer=self.kernel_initializer)
-        inp_x = self.blocks.upscale(inp_x, 256)
+        inp_x = self.blocks.upscale(inp_x, 256, res_block_follows=True)
         inp_x = self.blocks.res_block(inp_x, 256, kernel_initializer=self.kernel_initializer)
-        inp_x = self.blocks.upscale(inp_x, 128)
+        inp_x = self.blocks.upscale(inp_x, 128, res_block_follows=True)
         inp_x = self.blocks.res_block(inp_x, 128, kernel_initializer=self.kernel_initializer)
         inp_x = self.blocks.upscale(inp_x, 64)
         inp_x = Conv2D(3,
