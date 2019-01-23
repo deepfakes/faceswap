@@ -33,13 +33,13 @@ class Model(OriginalModel):
             in_conv_filters = 128 + (self.input_shape[0] - 128) // 4
         dense_shape = self.input_shape[0] // 16
 
-        var_x = self.blocks.conv(input_, in_conv_filters, **kwargs)
+        var_x = self.blocks.conv(input_, in_conv_filters, res_block_follows=True, **kwargs)
         tmp_x = var_x
         res_cycles = 8 if self.config.get("lowmem", False) else 16
         for _ in range(res_cycles):
             nn_x = self.blocks.res_block(var_x, 128, **kwargs)
             var_x = nn_x
-        var_x = add([var_x, tmp_x])
+        var_x = add([var_x, tmp_x]) # consider adding scale before this layer to scale the residual chain
         var_x = self.blocks.conv(var_x, 128, **kwargs)
         var_x = PixelShuffler()(var_x)
         var_x = self.blocks.conv(var_x, 128, **kwargs)
@@ -63,11 +63,11 @@ class Model(OriginalModel):
         input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
         var_x = input_
-        var_x = self.blocks.upscale(var_x, 512, **kwargs)
+        var_x = self.blocks.upscale(var_x, 512, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, 512, **kwargs)
-        var_x = self.blocks.upscale(var_x, 256, **kwargs)
+        var_x = self.blocks.upscale(var_x, 256, res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, 256, **kwargs)
-        var_x = self.blocks.upscale(var_x, self.input_shape[0], **kwargs)
+        var_x = self.blocks.upscale(var_x, self.input_shape[0], res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, self.input_shape[0], **kwargs)
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
         return KerasModel(input_, var_x)
