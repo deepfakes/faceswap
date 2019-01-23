@@ -201,8 +201,10 @@ class Faces(MediaLoader):
 
     def load_items(self):
         """ Load the face names into dictionary """
-        faces = {face["face_hash"]: (face["face_name"], face["face_extension"])
-                 for face in self.file_list_sorted}
+        faces = dict()
+        for face in self.file_list_sorted:
+            faces.setdefault(face["face_hash"], list()).append((face["face_name"],
+                                                                face["face_extension"]))
         logger.trace(faces)
         return faces
 
