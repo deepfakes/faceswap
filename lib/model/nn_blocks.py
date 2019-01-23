@@ -38,7 +38,7 @@ class NNBlocks():
         return kwargs
 
     # <<< Original Model Blocks >>> #
-    def conv(self, inp, filters, kernel_size=5, strides=2, use_instance_norm=False, **kwargs):
+    def conv(self, inp, filters, kernel_size=5, strides=2, use_instance_norm=False, res_block_follows=False, **kwargs):
         """ Convolution Layer"""
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
                      "kwargs: %s", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
@@ -50,10 +50,11 @@ class NNBlocks():
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
-        var_x = LeakyReLU(0.1)(var_x)
+		if not res_block_follows:
+			var_x = LeakyReLU(0.1)(var_x)
         return var_x
 
-    def upscale(self, inp, filters, kernel_size=3, use_instance_norm=False, **kwargs):
+    def upscale(self, inp, filters, kernel_size=3, use_instance_norm=False, res_block_follows=False, **kwargs):
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
@@ -66,7 +67,8 @@ class NNBlocks():
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
-        var_x = LeakyReLU(0.1)(var_x)
+		if not res_block_follows:
+			var_x = LeakyReLU(0.1)(var_x)
         if self.use_subpixel:
             var_x = SubPixelUpscaling()(var_x)
         else:
@@ -79,10 +81,11 @@ class NNBlocks():
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s",
                      inp, filters, kernel_size, kwargs)
         kwargs = self.update_kwargs(kwargs)
+        var_x = LeakyReLU(alpha=0.2)(inp)
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
                        padding="same",
-                       **kwargs)(inp)
+                       **kwargs)(var_x)
         var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
