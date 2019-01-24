@@ -50,8 +50,8 @@ class NNBlocks():
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
-		if not res_block_follows:
-			var_x = LeakyReLU(0.1)(var_x)
+        if not res_block_follows:
+            var_x = LeakyReLU(0.1)(var_x)
         return var_x
 
     def upscale(self, inp, filters, kernel_size=3, use_instance_norm=False, res_block_follows=False, **kwargs):
@@ -67,8 +67,8 @@ class NNBlocks():
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
-		if not res_block_follows:
-			var_x = LeakyReLU(0.1)(var_x)
+        if not res_block_follows:
+            var_x = LeakyReLU(0.1)(var_x)
         if self.use_subpixel:
             var_x = SubPixelUpscaling()(var_x)
         else:
