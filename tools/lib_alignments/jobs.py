@@ -962,3 +962,58 @@ class Spatial():
             self.alignments.data[frame][0]["landmarksXY"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
+
+
+class UpdateHashes():
+    """ Update hashes in an alignments file """
+    def __init__(self, alignments, arguments):
+        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        self.alignments = alignments
+        self.faces = Faces(arguments.faces_dir).file_list_sorted
+        self.face_hashes = dict()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def process(self):
+        """ Update Face Hashes to the alignments file """
+        logger.info("[UPDATE FACE HASHES]")  # Tidy up cli output
+        self.get_hashes()
+        updated = self.update_hashes()
+        if updated == 0:
+            logger.info("No hashes were updated. Exiting")
+            return
+        self.alignments.save()
+        logger.info("%s frame(s) had their face hashes updated.", updated)
+
+    def get_hashes(self):
+        """ Read the face hashes from the faces """
+        logger.info("Getting original filenames, indexes and hashes...")
+        for face in self.faces:
+            filename = face["face_name"]
+            extension = face["face_extension"]
+            if "_" not in face["face_name"]:
+                logger.warning("Unable to determine index of file. Skipping: '%s'", filename)
+                continue
+            index = filename[filename.rfind("_") + 1:]
+            if not index.isdigit():
+                logger.warning("Unable to determine index of file. Skipping: '%s'", filename)
+                continue
+            orig_frame = filename[:filename.rfind("_")] + extension
+            self.face_hashes.setdefault(orig_frame, dict())[int(index)] = face["face_hash"]
+
+    def update_hashes(self):
+        """ Update hashes to alignments """
+        logger.info("Updating hashes to alignments...")
+        updated = 0
+        for frame, hashes in self.face_hashes.items():
+            if not self.alignments.frame_exists(frame):
+                logger.warning("Frame not found in alignments file. Skipping: '%s'", frame)
+                continue
+            if not self.alignments.frame_has_faces(frame):
+                logger.warning("Frame does not have faces. Skipping: '%s'", frame)
+                continue
+            existing = [face.get("hash", None)
+                        for face in self.alignments.get_faces_in_frame(frame)]
+            if any(hsh not in existing for hsh in list(hashes.values())):
+                self.alignments.add_face_hashes(frame, hashes)
+                updated += 1
+        return updated
