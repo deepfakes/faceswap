@@ -22,8 +22,8 @@ class Model(ModelBase):
         logger.debug("Adding networks")
         self.add_network("encoder", None, self.encoder())
         self.add_network("decoder", None, self.decoder())
-        self.add_network("inter", "a", self.intermediate())
-        self.add_network("inter", "b", self.intermediate())
+        self.add_network("intermediate", "a", self.intermediate())
+        self.add_network("intermediate", "b", self.intermediate())
         self.add_network("inter", None, self.intermediate())
         logger.debug("Added networks")
 
@@ -36,7 +36,7 @@ class Model(ModelBase):
         encoder = self.networks["encoder"].network
         inter_both = self.networks["inter"].network
         for side in ("a", "b"):
-            inter_side = self.networks["inter_{}".format(side)].network
+            inter_side = self.networks["intermediate_{}".format(side)].network
             output = decoder(Concatenate()([inter_side(encoder(inp)),
                                             inter_both(encoder(inp))]))
 
