@@ -259,6 +259,9 @@ class Convert():
     def hist_match(self, new, frame, image_mask):
 
         mask_indices = np.nonzero(image_mask)
+        if len(mask_indices[0])==0:
+            return new
+            
         m_new = new[mask_indices].ravel()
         m_frame = frame[mask_indices].ravel()
         s_values, bin_idx, s_counts = np.unique(m_new, return_inverse=True, return_counts=True)
