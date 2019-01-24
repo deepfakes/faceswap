@@ -2,6 +2,7 @@ tqdm
 psutil
 pathlib==1.0.1
 scandir==1.7
+numpy==1.15.4
 opencv-python
 scikit-image
 scikit-learn
