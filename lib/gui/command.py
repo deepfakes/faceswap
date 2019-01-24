@@ -333,7 +333,7 @@ class OptionControl():
         if control == ttk.Combobox:
             logger.debug("Adding combo choices: %s", choices)
             ctl["values"] = [choice for choice in choices]
-        Tooltip(ctl, text=helptext, wraplength=720)
+        Tooltip(ctl, text=helptext, wraplength=920)
         logger.debug("Added control to Options Frame: %s", control)
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
