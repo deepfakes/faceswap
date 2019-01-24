@@ -158,8 +158,7 @@ class FaceswapControl():
         self.process = None
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
-            "tqdm": re.compile(
-                r"(\d+%|\d+/\d+|\d+:\d+|[\\?](?=[^a-zA-Z])|[\d\.\d\\?]+[a-zA-Z/]+)")}
+            "tqdm": re.compile(r"(\d+%|\d+/\d+|\d+:\d+|[\\?]|[\d\.\d\\?]+[a-zA-Z/]+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def execute_script(self, command, args):
@@ -272,6 +271,10 @@ class FaceswapControl():
         if len(tqdm) != 5:
             logger.trace("Not a tqdm message. Returning False")
             return False
+
+        if "?" in tqdm:
+            logger.trace("tqdm initializing. Skipping")
+            return True
 
         percent = tqdm[0]
         processed = tqdm[1]
