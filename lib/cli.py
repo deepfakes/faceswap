@@ -581,7 +581,6 @@ class ConvertArgs(ExtractConvertArgs):
                         "smoothed",
                         "facehull",
                         "facehull_rect",
-                        # "dfaker",
                         "dfl",
                         "cnn"],
             "default": "facehull_rect",

@@ -11,6 +11,7 @@ from lib.align_eyes import align_eyes as func_align_eyes, FACIAL_LANDMARKS_IDXS
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+
 class Extract():
     """ Based on the original https://www.reddit.com/r/deepfakes/
         code sample + contribs """
@@ -18,8 +19,9 @@ class Extract():
     def extract(self, image, face, size, align_eyes):
         """ Extract a face from an image """
         logger.trace("size: %s. align_eyes: %s", size, align_eyes)
+        padding = int(size * 0.1875)
         alignment = get_align_mat(face, size, align_eyes)
-        extracted = self.transform(image, alignment, size, 48)
+        extracted = self.transform(image, alignment, size, padding)
         logger.trace("Returning face and alignment matrix: (alignment_matrix: %s)", alignment)
         return extracted, alignment
 
@@ -123,7 +125,7 @@ class Extract():
 def get_align_mat(face, size, should_align_eyes):
     """ Return the alignment Matrix """
     logger.trace("size: %s, should_align_eyes: %s", size, should_align_eyes)
-    mat_umeyama = umeyama(np.array(face.landmarks_as_xy[17:]),True)[0:2]
+    mat_umeyama = umeyama(np.array(face.landmarks_as_xy[17:]), True)[0:2]
 
     if should_align_eyes is False:
         return mat_umeyama

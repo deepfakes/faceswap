@@ -7,7 +7,7 @@ import logging
 import cv2
 import numpy as np
 
-from lib.model.masks import dfaker, dfl_full
+from lib.model.masks import dfl_full
 
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -51,7 +51,7 @@ class Convert():
         if not self.mask:  # Init the mask on first image
             self.mask = Mask(self.mask_type, training_size, padding, self.crop, coverage)
 
-        face_detected.load_aligned(None, training_size, padding, align_eyes=False)
+        face_detected.load_aligned(None, size=training_size, align_eyes=False)
         matrix = face_detected.aligned["matrix"] * (training_size - 2 * padding)
         matrix[:, 2] += padding
 
@@ -259,9 +259,9 @@ class Convert():
     def hist_match(self, new, frame, image_mask):
 
         mask_indices = np.nonzero(image_mask)
-        if len(mask_indices[0])==0:
+        if len(mask_indices[0]) == 0:
             return new
-            
+
         m_new = new[mask_indices].ravel()
         m_frame = frame[mask_indices].ravel()
         s_values, bin_idx, s_counts = np.unique(m_new, return_inverse=True, return_counts=True)
@@ -368,15 +368,6 @@ class Mask():
         dummy = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
         mask = dfl_full(kwargs["landmarks"], dummy, channels=3)
         return mask
-
-#    # TODO: Mask for dfaker comes out all black. Either I'm an idiot or dfaker mask code is wrong
-#    def dfaker(self, **kwargs):
-#        """ DFaker Mask """
-#        logger.trace("Getting mask")
-#        landmarks = np.array(kwargs["landmarks"])
-#        dummy = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
-#        mask = dfaker(landmarks, dummy, channel=3, coverage=self.coverage)
-#        return mask
 
     def facehull(self, **kwargs):
         """ Facehull Mask """

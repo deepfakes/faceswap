@@ -25,10 +25,11 @@ def dfaker(landmarks, face, channels=4, **kwargs):
     coverage = kwargs["coverage"]
     logger.trace("face_shape: %s, coverage: %s, landmarks: %s", face.shape, coverage, landmarks)
 
+    padding = (face.shape[0] - coverage) // 2
     mat = umeyama(landmarks[17:], True)[0:2]
     mat = np.array(mat.ravel()).reshape(2, 3)
     mat = mat * coverage
-    mat[:, 2] += 48
+    mat[:, 2] += padding
 
     points = np.array(landmarks).reshape((-1, 2))
     facepoints = np.array(points).reshape((-1, 2))
