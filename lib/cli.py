@@ -595,7 +595,7 @@ class ConvertArgs(ExtractConvertArgs):
                     "\ncnn: Not yet implemented"})
         argument_list.append({"opts": ("-cov", "--coverage"),
                               "type": float,
-                              "dest": "coverage",
+                              "dest": "coverage_ratio",
                               "action": Slider,
                               "min_max": (0.5, 1.0),
                               "rounding": 0.0625,
