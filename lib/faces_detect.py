@@ -102,8 +102,7 @@ class DetectedFace():
         """ No need to load aligned information for all uses of this
             class, so only call this to load the information for easy
             reference to aligned properties for this face """
-        logger.trace("Loading aligned face: (size: %s, padding: %s, align_eyes: %s)",
-                     size, align_eyes)
+        logger.trace("Loading aligned face: (size: %s, align_eyes: %s)", size, align_eyes)
         padding = int(size * 0.1875)
         self.aligned["size"] = size
         self.aligned["padding"] = padding

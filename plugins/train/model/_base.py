@@ -25,11 +25,12 @@ _CONFIG = None
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus,
+    def __init__(self, model_dir, gpus, training_image_size=256,
                  input_shape=None, encoder_dim=None, trainer="original", predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, input_shape: %s, "
-                     "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
-                     input_shape, encoder_dim)
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, "
+                     "training_image_size, %s, input_shape: %s, encoder_dim: %s)",
+                     self.__class__.__name__, model_dir, gpus, training_image_size, input_shape,
+                     encoder_dim)
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
@@ -41,8 +42,8 @@ class ModelBase():
         self.trainer = trainer
         self.name = self.set_model_name()
 
-        self.state = State(self.model_dir, self.name)
-        self.load_input_shape()
+        self.state = State(self.model_dir, self.name, training_image_size)
+        self.load_state_info()
 
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
@@ -114,7 +115,7 @@ class ModelBase():
         logger.debug("model name: '%s'", retval)
         return retval
 
-    def load_input_shape(self):
+    def load_state_info(self):
         """ Load the input shape from state file if it exists """
         logger.debug("Loading Input Shape from State file")
         if not self.state.inputs:
@@ -425,10 +426,11 @@ class NNMeta():
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name):
+    def __init__(self, model_dir, model_name, training_image_size):
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
+        self.training_size = training_image_size
         self.iterations = 0
         self.inputs = dict()
         self.config = dict()
@@ -453,6 +455,7 @@ class State():
                 self.iterations = state.get("iterations", 0)
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
+                self.state = state.get("training_size", 256)
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
         except IOError as err:
@@ -470,6 +473,7 @@ class State():
             with open(self.filename, "wb") as out:
                 state = {"iterations": self.iterations,
                          "inputs": self.inputs,
+                         "training_size": self.training_size,
                          "config": _CONFIG}
                 state_json = self.serializer.marshal(state)
                 out.write(state_json.encode("utf-8"))

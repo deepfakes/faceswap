@@ -15,11 +15,14 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Convert():
     """ Swap a source face with a target """
-    def __init__(self, encoder, input_mask_shape, arguments, input_size=64):
-        logger.debug("Initializing %s: (encoder: '%s', arguments: %s, input_size: %s)",
-                     self.__class__.__name__, encoder, arguments, input_size)
+    def __init__(self, encoder, input_mask_shape, training_image_size, input_size, arguments):
+        logger.debug("Initializing %s: (encoder: '%s', input_mask_shape: %s, "
+                     "training_image_size: %s, input_size: %s, arguments: %s",
+                     self.__class__.__name__, encoder, input_mask_shape, training_image_size,
+                     input_size, arguments)
         self.encoder = encoder
         self.input_size = input_size
+        self.training_size = training_image_size
         self.input_mask_shape = input_mask_shape[0] if input_mask_shape else None
         self.blur_size = arguments.blur_size
         self.erosion_size = arguments.erosion_size
@@ -40,25 +43,26 @@ class Convert():
         logger.trace("Patching image")
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
-        training_size = 256  # TODO make this changeable based on extract/train settings
         training_coverage = 160  # TODO make this changeable based on extract/train settings
-        coverage = int(self.coverage_ratio * training_size)
-        padding = (training_size - training_coverage) // 2
-        logger.trace("image_size: %s, training_size: %s, coverage: %s, padding: %s",
-                     image_size, training_size, coverage, padding)
+        coverage = int(self.coverage_ratio * self.training_size)
+        padding = (self.training_size - training_coverage) // 2
+        logger.trace("image_size: %s, coverage: %s, padding: %s", image_size, coverage, padding)
 
-        self.crop = slice(padding, training_size - padding)
+        self.crop = slice(padding, self.training_size - padding)
         if not self.mask:  # Init the mask on first image
-            self.mask = Mask(self.mask_type, training_size, padding, self.crop, coverage)
+            self.mask = Mask(self.mask_type,
+                             self.training_size,
+                             padding,
+                             self.crop,
+                             coverage)
 
-        face_detected.load_aligned(None, size=training_size, align_eyes=False)
-        matrix = face_detected.aligned["matrix"] * (training_size - 2 * padding)
+        face_detected.load_aligned(None, size=self.training_size, align_eyes=False)
+        matrix = face_detected.aligned["matrix"] * (self.training_size - 2 * padding)
         matrix[:, 2] += padding
 
         interpolators = self.get_matrix_scaling(matrix)
 
-        new_image = self.get_new_image(image, matrix, training_size,
-                                       image_size, interpolators, coverage)
+        new_image = self.get_new_image(image, matrix, image_size, interpolators, coverage)
 
         image_mask = self.get_image_mask(matrix, interpolators, face_detected)
 
@@ -83,13 +87,13 @@ class Convert():
                      interpolator, inverse_interpolator)
         return interpolator, inverse_interpolator
 
-    def get_new_image(self, image, mat, training_size, image_size, interpolators, coverage):
+    def get_new_image(self, image, mat, image_size, interpolators, coverage):
         """ Get the new face from the predictor """
-        logger.trace("mat: %s, training_size: %s, image_size: %s, interpolators: %s, coverage: %s",
-                     mat, training_size, image_size, interpolators, coverage)
+        logger.trace("mat: %s, image_size: %s, interpolators: %s, coverage: %s",
+                     mat, image_size, interpolators, coverage)
         src_face = cv2.warpAffine(image,  # pylint: disable=no-member
                                   mat,
-                                  (training_size, training_size),
+                                  (self.training_size, self.training_size),
                                   flags=interpolators[0])
         coverage_face = src_face[self.crop, self.crop]
         coverage_face = cv2.resize(coverage_face,  # pylint: disable=no-member

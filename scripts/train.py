@@ -81,6 +81,13 @@ class Train():
                                              for key, val in images.items()])
         return images
 
+    def get_image_size(self):
+        """ Get the training set image size for storing in model data """
+        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
+        size = image.shape[0]
+        logger.debug("Training image size: %s", size)
+        return size
+
     def process(self):
         """ Call the training process object """
         logger.debug("Starting Training Process")
@@ -150,9 +157,8 @@ class Train():
         """ Load the model requested for training """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.trainer_name)(model_dir,
-                                                          self.args.gpus)
-
+        image_size = self.get_image_size()
+        model = PluginLoader.get_model(self.trainer_name)(model_dir, self.args.gpus, image_size)
         logger.debug("Loaded Model")
         return model
 

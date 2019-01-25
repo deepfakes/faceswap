@@ -114,8 +114,9 @@ class Convert():
         converter = PluginLoader.get_converter(conv)(
             model.converter(self.args.swap_model),
             input_mask_shape=model.state.mask_shapes,
-            arguments=self.args,
-            input_size=model.input_shape[0])
+            training_image_size=model.state.training_size,
+            input_size=model.input_shape[0],
+            arguments=self.args)
 
         return converter
 
