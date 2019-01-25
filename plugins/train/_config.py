@@ -140,8 +140,9 @@ class Config(FaceswapConfig):
             info="Resolution (in pixels) of the image to train on.\n"
                  "BE AWARE Larger resolution will dramatically increase"
                  "VRAM requirements.\n"
-                 "Make sure your resolution is divisible by 64 "
-                 "(e.g. 64, 128, 256 etc.)")
+                 "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
+                 "NB: Your faceset must be at least 1.6x larger than your required input size.\n"
+                 "    (e.g. 160 is the maximum input size for a 256x256 faceset)")
 
         # << VILLAIN MODEL OPTIONS >> #
         section = "model.villain"

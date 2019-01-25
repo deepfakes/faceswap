@@ -123,6 +123,13 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tdirectory)."
                     "\n'move': Move the discovered items to a sub-folder within the source"
                     "\n\tdirectory."})
+        argument_list.append({"opts": ("-sz", "--size"),
+                              "type": int,
+                              "action": Slider,
+                              "min_max": (128, 512),
+                              "default": 256,
+                              "rounding": 64,
+                              "help": "The output size of extracted faces. (extract only)"})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
