@@ -230,6 +230,7 @@ class OptionControl():
             ctlhelp = ctlhelp[2:].replace("\n\t", " ").replace("\n'", "\n\n'")
         else:
             ctlhelp = " ".join(ctlhelp.split())
+        ctlhelp = ctlhelp.replace("%%", "%")
         ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
         ctlhelp = ctltitle + " - " + ctlhelp
         logger.debug("Formatted control help: (title: '%s', help: '%s'", ctltitle, ctlhelp)

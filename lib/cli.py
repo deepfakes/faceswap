@@ -597,43 +597,38 @@ class ConvertArgs(ExtractConvertArgs):
                               "type": float,
                               "dest": "coverage_ratio",
                               "action": Slider,
-                              "min_max": (0.5, 1.0),
-                              "rounding": 0.0625,
-                              "default": .625,
+                              "min_max": (50.0, 100.0),
+                              "rounding": 1,
+                              "default": 62.5,
                               "help": "Input images to the model are cropped to "
                                       "a central square that spans from eyebrow "
                                       "to chin cleft vertically and eyebrow to "
                                       "eyebrow horizontally at the default scale. "
-                                      "0.625 spans from eyebrow to eyebrow, "
-                                      "0.750 spans from temple to temple, "
-                                      "0.875 spans from ear to ear, "
-                                      "1.000 is a mugshot -- WARNING: Best left "
-                                      "at default value of 0.625"})
+                                      "62.5%% spans from eyebrow to eyebrow, "
+                                      "75.0%% spans from temple to temple, "
+                                      "87.5%% spans from ear to ear, "
+                                      "100.0%% is a mugshot -- WARNING: Best left "
+                                      "at default value of 62.5%%"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
                               "action": Slider,
-                              "min_max": (0.0, 256.0),
-                              "rounding": 0.05,
-                              "default": 0.1,
-                              "help": "Blur kernel size for smoothing the "
-                                      "transition between the swapped face and "
-                                      "the background image. Integer values "
-                                      "will blur x pixels, fractions will blur "
-                                      "that %% of the face area radius"})
+                              "min_max": (0.0, 100.0),
+                              "rounding": 2,
+                              "default": 5.0,
+                              "help": "Blur kernel size as a percentage of the swap area. Smooths "
+                                      "the transition between the swapped face and the background "
+                                      "image."})
         argument_list.append({"opts": ("-e", "--erosion-size"),
                               "dest": "erosion_size",
                               "type": float,
                               "action": Slider,
                               "min_max": (-100.0, 100.0),
-                              "rounding": 0.05,
+                              "rounding": 2,
                               "default": 0.0,
-                              "help": "Erosion kernel size. Positive values "
-                                      "apply erosion which reduces the size "
-                                      "of the swapped area. Negative values "
-                                      "apply dilation which increases the "
-                                      "swapped area. Abs values >1 use pixels "
-                                      ". Fractions will erode/dilate that %% "
-                                      " of the mask area radius"})
+                              "help": "Erosion kernel size as a percentage of the mask radius "
+                                      "area. Positive values apply erosion which reduces the size "
+                                      "of the swapped area. Negative values apply dilation which "
+                                      "increases the swapped area"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,

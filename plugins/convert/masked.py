@@ -34,7 +34,7 @@ class Convert():
         logger.trace("Patching image")
         image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
-        coverage = int(self.args.coverage_ratio * self.training_size)
+        coverage = int((self.args.coverage_ratio / 100) * self.training_size)
         training_coverage = int(self.training_coverage_ratio * self.training_size)
         padding = (self.training_size - training_coverage) // 2
         logger.trace("image_size: %s, coverage: %s, padding: %s", image_size, coverage, padding)
@@ -140,27 +140,20 @@ class Convert():
 
     def set_erosion_kernel(self, mask):
         """ Set the erosion kernel """
-        if abs(self.args.erosion_size) < 1.0:
-            mask_radius = np.sqrt(np.sum(mask)) / 2
-            percent_erode = max(1, int(abs(self.args.erosion_size * mask_radius)))
-            erosion_kernel = cv2.getStructuringElement(  # pylint: disable=no-member
-                cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
-                (percent_erode, percent_erode))
-        else:
-            e_size = (int(abs(self.args.erosion_size)), int(abs(self.args.erosion_size)))
-            erosion_kernel = cv2.getStructuringElement(  # pylint: disable=no-member
-                cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
-                e_size)
-        logger.trace("erosion_kernel: %s", erosion_kernel)
+        erosion_ratio = self.args.erosion_size / 100
+        mask_radius = np.sqrt(np.sum(mask)) / 2
+        percent_erode = max(1, int(abs(erosion_ratio * mask_radius)))
+        erosion_kernel = cv2.getStructuringElement(  # pylint: disable=no-member
+            cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
+            (percent_erode, percent_erode))
+        logger.trace("erosion_kernel shape: %s", erosion_kernel.shape)
         return erosion_kernel
 
     def set_blur_size(self, mask):
         """ Set the blur size to absolute or percentage """
-        if self.args.blur_size < 1.0:
-            mask_radius = np.sqrt(np.sum(mask)) / 2
-            blur_size = max(1, int(self.args.blur_size * mask_radius))
-        else:
-            blur_size = self.args.blur_size
+        blur_ratio = self.args.blur_size / 100
+        mask_radius = np.sqrt(np.sum(mask)) / 2
+        blur_size = max(1, int(blur_ratio * mask_radius))
         logger.trace("blur_size: %s", int(blur_size))
         return int(blur_size)
 
