@@ -8,6 +8,7 @@ import numpy as np
 
 from lib.umeyama import umeyama
 from lib.align_eyes import align_eyes as func_align_eyes, FACIAL_LANDMARKS_IDXS
+from lib.utils import get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -38,8 +39,9 @@ class Extract():
         """ Transform Image """
         logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
+        interpolators = get_matrix_scaling(matrix)
         return cv2.warpAffine(  # pylint: disable=no-member
-            image, matrix, (size, size))
+            image, matrix, (size, size), flags=interpolators[0])
 
     def transform_points(self, points, mat, size, padding=0):
         """ Transform points along matrix """
