@@ -23,6 +23,7 @@ class Model(OriginalModel):
 
     def set_training_data(self):
         """ Set the dictionary for training """
+        self.training_opts["coverage_ratio"] = 1.0
         self.training_opts["serializer"] = self.config["alignments_format"]
         self.training_opts["mask_type"] = self.config["mask_type"]
         self.training_opts["full_face"] = True

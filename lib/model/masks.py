@@ -13,7 +13,7 @@ from lib.umeyama import umeyama
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def dfaker(landmarks, face, channels=4, **kwargs):
+def dfaker(landmarks, face, channels=4):
     """ Dfaker model mask
         Embeds the mask into the face alpha channel
 
@@ -22,10 +22,10 @@ def dfaker(landmarks, face, channels=4, **kwargs):
                 3 - Return a 3 channel mask
                 4 - Return the original image with the mask in the alpha channel
         """
-    coverage = kwargs["coverage"]
+    padding = int(face.shape[0] * 0.1875)
+    coverage = face.shape[0] - (padding * 2)
     logger.trace("face_shape: %s, coverage: %s, landmarks: %s", face.shape, coverage, landmarks)
 
-    padding = (face.shape[0] - coverage) // 2
     mat = umeyama(landmarks[17:], True)[0:2]
     mat = np.array(mat.ravel()).reshape(2, 3)
     mat = mat * coverage
@@ -51,7 +51,7 @@ def dfaker(landmarks, face, channels=4, **kwargs):
     return merge_mask(face, mask, channels)
 
 
-def dfl_full(landmarks, face, channels=4, **kwargs):
+def dfl_full(landmarks, face, channels=4):
     """ DFL Face Full Mask
 
         channels: 1, 3 or 4:

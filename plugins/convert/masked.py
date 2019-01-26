@@ -7,6 +7,7 @@ import logging
 import cv2
 import numpy as np
 
+from lib.aligner import get_matrix_scaling
 from lib.model.masks import dfl_full
 
 np.set_printoptions(threshold=np.nan)
@@ -32,12 +33,11 @@ class Convert():
     def patch_image(self, image, face_detected):
         """ Patch the image """
         logger.trace("Patching image")
-        image_size = image.shape[1], image.shape[0]
         image = image.astype('float32')
         coverage = int((self.args.coverage_ratio / 100) * self.training_size)
         training_coverage = int(self.training_coverage_ratio * self.training_size)
         padding = (self.training_size - training_coverage) // 2
-        logger.trace("image_size: %s, coverage: %s, padding: %s", image_size, coverage, padding)
+        logger.trace("coverage: %s, padding: %s", coverage, padding)
 
         self.crop = slice(padding, self.training_size - padding)
         if not self.mask:  # Init the mask on first image
@@ -47,44 +47,30 @@ class Convert():
                              self.crop,
                              coverage)
 
-        face_detected.load_aligned(None, size=self.training_size, align_eyes=False)
+        face_detected.load_aligned(image, size=self.training_size, align_eyes=False)
         matrix = face_detected.aligned["matrix"] * (self.training_size - 2 * padding)
         matrix[:, 2] += padding
 
-        interpolators = self.get_matrix_scaling(matrix)
+        interpolators = get_matrix_scaling(matrix)
         logger.trace("interpolator: %s, inverse_interpolator: %s",
                      interpolators[0], interpolators[1])
-                     
-        new_image = self.get_new_image(image, matrix, image_size, interpolators, coverage)
+
+        new_image = self.get_new_image(image, face_detected, matrix, interpolators, coverage)
 
         image_mask = self.get_image_mask(matrix, interpolators, face_detected)
 
-        patched_face = self.apply_fixes(image, new_image, image_mask, image_size)
+        patched_face = self.apply_fixes(image,
+                                        new_image,
+                                        image_mask,
+                                        (face_detected.frame_dims[1], face_detected.frame_dims[0]))
 
         logger.trace("Patched image")
         return patched_face
 
-
-    def get_matrix_scaling(self, mat):
-        """ Get the correct interpolator """
-        x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
-        y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
-        avg_scale = (x_scale + y_scale) * 0.5
-        if avg_scale >= 1.0:
-            interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA   # pylint: disable=no-member
-        else:
-            interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC  # pylint: disable=no-member
-        logger.trace("interpolators: %s", interpolators)
-        return interpolators
-    
-    def get_new_image(self, image, mat, image_size, interpolators, coverage):
+    def get_new_image(self, image, detected_face, mat, interpolators, coverage):
         """ Get the new face from the predictor """
-        logger.trace("mat: %s, image_size: %s, interpolators: %s, coverage: %s",
-                     mat, image_size, interpolators, coverage)
-        src_face = cv2.warpAffine(image,  # pylint: disable=no-member
-                                  mat,
-                                  (self.training_size, self.training_size),
-                                  flags=interpolators[0])
+        logger.trace("mat: %s, interpolators: %s, coverage: %s", mat, interpolators, coverage)
+        src_face = detected_face.aligned["face"]
         coverage_face = src_face[self.crop, self.crop]
         coverage_face = cv2.resize(coverage_face,  # pylint: disable=no-member
                                    (self.input_size, self.input_size),
@@ -96,10 +82,10 @@ class Convert():
             mask = np.zeros(self.input_mask_shape, np.float32)
             mask = np.expand_dims(mask, 0)
             feed = [coverage_face, mask]
-            #new_face = self.encoder(feed)[0][0]
+            # new_face = self.encoder(feed)[0][0]
         else:
             feed = [coverage_face]
-            #new_face = self.encoder(feed)[0]
+            # new_face = self.encoder(feed)[0]
         logger.trace("Input shapes: %s", [item.shape for item in feed])
         new_face = self.encoder(feed)[0]
         new_face = new_face.squeeze()
@@ -115,7 +101,7 @@ class Convert():
         new_image = cv2.warpAffine(  # pylint: disable=no-member
             src_face,
             mat,
-            image_size,
+            (detected_face.frame_dims[1], detected_face.frame_dims[0]),
             background,
             flags=cv2.WARP_INVERSE_MAP | interpolators[1],  # pylint: disable=no-member
             borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member

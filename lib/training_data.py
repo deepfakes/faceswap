@@ -124,8 +124,7 @@ class TrainingDataGenerator():
             src_pts = self.get_landmarks(filename, image, side, landmarks)
             image = self.mask_function(src_pts,
                                        image,
-                                       channels=4,
-                                       coverage=self.processing.get_coverage(image))
+                                       channels=4)
 
         image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)

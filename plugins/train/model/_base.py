@@ -74,7 +74,7 @@ class ModelBase():
             super() this method for default coverage ratio
             otherwise be sure to add a ratio """
         logger.debug("Setting training data")
-        self.training_opts["coverage_ratio"] = 0.625
+        self.training_opts["coverage_ratio"] = self.training_opts.get("coverage_ratio", 0.625)
         if self.output_shape[0] < 128:
             self.training_opts["preview_images"] = 14
         elif self.output_shape[0] < 192:
