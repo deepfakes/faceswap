@@ -52,7 +52,9 @@ class Convert():
         matrix[:, 2] += padding
 
         interpolators = self.get_matrix_scaling(matrix)
-
+        logger.trace("interpolator: %s, inverse_interpolator: %s",
+                     interpolators[0], interpolators[1])
+                     
         new_image = self.get_new_image(image, matrix, image_size, interpolators, coverage)
 
         image_mask = self.get_image_mask(matrix, interpolators, face_detected)
@@ -68,15 +70,10 @@ class Convert():
         x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
         y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
         avg_scale = (x_scale + y_scale) * 0.5
-        if avg_scale > 1.0:
-            interpolator = cv2.INTER_CUBIC  # pylint: disable=no-member
-            inverse_interpolator = cv2.INTER_AREA  # pylint: disable=no-member
+        if avg_scale >= 1.0:
+            return cv2.INTER_CUBIC, cv2.INTER_AREA   # pylint: disable=no-member
         else:
-            interpolator = cv2.INTER_AREA  # pylint: disable=no-member
-            inverse_interpolator = cv2.INTER_CUBIC  # pylint: disable=no-member
-        logger.trace("interpolator: %s, inverse_interpolator: %s",
-                     interpolator, inverse_interpolator)
-        return interpolator, inverse_interpolator
+            return cv2.INTER_AREA, cv2.INTER_CUBIC  # pylint: disable=no-member
 
     def get_new_image(self, image, mat, image_size, interpolators, coverage):
         """ Get the new face from the predictor """
