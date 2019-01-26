@@ -96,12 +96,13 @@ class Convert():
             mask = np.zeros(self.input_mask_shape, np.float32)
             mask = np.expand_dims(mask, 0)
             feed = [coverage_face, mask]
-            new_face = self.encoder(feed)[0][0]
+            #new_face = self.encoder(feed)[0][0]
         else:
             feed = [coverage_face]
-            new_face = self.encoder(feed)[0]
+            #new_face = self.encoder(feed)[0]
         logger.trace("Input shapes: %s", [item.shape for item in feed])
-        
+        new_face = self.encoder(feed)[0]
+        new_face = new_face.squeeze()
         logger.trace("Output shape: %s", new_face.shape)
 
         new_face = cv2.resize(new_face,  # pylint: disable=no-member
