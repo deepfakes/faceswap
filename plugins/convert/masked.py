@@ -51,7 +51,7 @@ class Convert():
         matrix = face_detected.aligned["matrix"] * (self.training_size - 2 * padding)
         matrix[:, 2] += padding
 
-        interpolators = get_matrix_scaling(matrix)
+        interpolators = self.get_matrix_scaling(matrix)
         logger.trace("interpolator: %s, inverse_interpolator: %s",
                      interpolators[0], interpolators[1])
                      
@@ -64,8 +64,8 @@ class Convert():
         logger.trace("Patched image")
         return patched_face
 
-    @staticmethod
-    def get_matrix_scaling(mat):
+
+    def get_matrix_scaling(self, mat):
         """ Get the correct interpolator """
         x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
         y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
