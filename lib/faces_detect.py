@@ -3,7 +3,7 @@
 import logging
 
 from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
-from lib.aligner import Extract as AlignerExtract, get_align_mat
+from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -153,3 +153,8 @@ class DetectedFace():
                                                 self.aligned["padding"])
         logger.trace("Returning: %s", mat)
         return mat
+
+    @property
+    def adjusted_interpolators(self):
+        """ Return the interpolator and reverse interpolator for the adjusted matrix """
+        return get_matrix_scaling(self.adjusted_matrix)

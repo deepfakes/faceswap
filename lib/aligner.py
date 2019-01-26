@@ -132,7 +132,7 @@ def get_matrix_scaling(mat):
         interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA   # pylint: disable=no-member
     else:
         interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC  # pylint: disable=no-member
-    logger.trace("interpolators: %s", interpolators)
+    logger.trace("interpolator: %s, inverse interpolator: %s", interpolators[0], interpolators[1])
     return interpolators
 
 
