@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 
 from lib.model.masks import dfl_full
-from lib.utils import get_matrix_scaling
 
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
