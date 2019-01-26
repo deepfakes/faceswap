@@ -728,6 +728,13 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Model directory. This is where the "
                                       "training data will be stored. "
                                       "Defaults to 'model'"})
+        argument_list.append({"opts": ("-t", "--trainer"),
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_models(),
+                              "default": PluginLoader.get_default_model(),
+                              "help": "Select which trainer to use, Use "
+                                      "LowMem for cards with less than 2GB of "
+                                      "VRAM"})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
@@ -736,13 +743,6 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "save_interval",
                               "default": 100,
                               "help": "Sets the number of iterations before saving the model"})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_models(),
-                              "default": PluginLoader.get_default_model(),
-                              "help": "Select which trainer to use, Use "
-                                      "LowMem for cards with less than 2GB of "
-                                      "VRAM"})
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "action": Slider,
