@@ -138,9 +138,9 @@ class Convert():
         """ Set the blur size to absolute or percentage """
         blur_ratio = self.args.blur_size / 100
         mask_radius = np.sqrt(np.sum(mask)) / 2
-        blur_size = max(1, int(blur_ratio * mask_radius))
-        logger.trace("blur_size: %s", int(blur_size))
-        return int(blur_size)
+        blur_size = int(max(1, int(blur_ratio * mask_radius)))
+        logger.trace("blur_size: %s", blur_size)
+        return blur_size
 
     def apply_fixes(self, frame, new_image, image_mask, image_size):
         """ Apply fixes """
