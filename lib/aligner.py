@@ -8,7 +8,6 @@ import numpy as np
 
 from lib.umeyama import umeyama
 from lib.align_eyes import align_eyes as func_align_eyes, FACIAL_LANDMARKS_IDXS
-from lib.utils import get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -39,7 +38,7 @@ class Extract():
         """ Transform Image """
         logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
-        interpolators = get_matrix_scaling(matrix)
+        interpolators = self.get_matrix_scaling(matrix)
         return cv2.warpAffine(  # pylint: disable=no-member
             image, matrix, (size, size), flags=interpolators[0])
 
@@ -67,6 +66,19 @@ class Extract():
         matrix = cv2.invertAffineTransform(matrix)  # pylint: disable=no-member
         logger.trace("Returning: (points: %s, matrix: %s", points, matrix)
         return cv2.transform(points, matrix)  # pylint: disable=no-member
+
+    @staticmethod
+    def get_matrix_scaling(mat):
+        """ Get the correct interpolator """
+        x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
+        y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
+        avg_scale = (x_scale + y_scale) * 0.5
+        if avg_scale >= 1.0:
+            interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA   # pylint: disable=no-member
+        else:
+            interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC  # pylint: disable=no-member
+        logger.trace("interpolators: %s", interpolators)
+        return interpolators
 
     @staticmethod
     def get_feature_mask(aligned_landmarks_68, size,

@@ -65,6 +65,19 @@ class Convert():
         logger.trace("Patched image")
         return patched_face
 
+    @staticmethod
+    def get_matrix_scaling(mat):
+        """ Get the correct interpolator """
+        x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
+        y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
+        avg_scale = (x_scale + y_scale) * 0.5
+        if avg_scale >= 1.0:
+            interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA   # pylint: disable=no-member
+        else:
+            interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC  # pylint: disable=no-member
+        logger.trace("interpolators: %s", interpolators)
+        return interpolators
+    
     def get_new_image(self, image, mat, image_size, interpolators, coverage):
         """ Get the new face from the predictor """
         logger.trace("mat: %s, image_size: %s, interpolators: %s, coverage: %s",
