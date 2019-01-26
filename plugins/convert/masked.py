@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 
 from lib.model.masks import dfl_full
-from lib.utils import get_matrix_scaling
 
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -52,7 +51,7 @@ class Convert():
         matrix = face_detected.aligned["matrix"] * (self.training_size - 2 * padding)
         matrix[:, 2] += padding
 
-        interpolators = get_matrix_scaling(matrix)
+        interpolators = self.get_matrix_scaling(matrix)
         logger.trace("interpolator: %s, inverse_interpolator: %s",
                      interpolators[0], interpolators[1])
                      
@@ -65,8 +64,8 @@ class Convert():
         logger.trace("Patched image")
         return patched_face
 
-    @staticmethod
-    def get_matrix_scaling(mat):
+
+    def get_matrix_scaling(self, mat):
         """ Get the correct interpolator """
         x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
         y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
@@ -97,12 +96,13 @@ class Convert():
             mask = np.zeros(self.input_mask_shape, np.float32)
             mask = np.expand_dims(mask, 0)
             feed = [coverage_face, mask]
-            new_face = self.encoder(feed)[0][0]
+            #new_face = self.encoder(feed)[0][0]
         else:
             feed = [coverage_face]
-            new_face = self.encoder(feed)[0]
+            #new_face = self.encoder(feed)[0]
         logger.trace("Input shapes: %s", [item.shape for item in feed])
-        
+        new_face = self.encoder(feed)[0]
+        new_face = new_face.squeeze()
         logger.trace("Output shape: %s", new_face.shape)
 
         new_face = cv2.resize(new_face,  # pylint: disable=no-member
