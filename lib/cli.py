@@ -593,22 +593,6 @@ class ConvertArgs(ExtractConvertArgs):
                     "\n\tbetween the edges of the face and the background."
                     "\ndfl: A Face Hull mask from DeepFaceLabs."
                     "\ncnn: Not yet implemented"})
-        argument_list.append({"opts": ("-cov", "--coverage"),
-                              "type": float,
-                              "dest": "coverage_ratio",
-                              "action": Slider,
-                              "min_max": (50.0, 100.0),
-                              "rounding": 1,
-                              "default": 62.5,
-                              "help": "Input images to the model are cropped to "
-                                      "a central square that spans from eyebrow "
-                                      "to chin cleft vertically and eyebrow to "
-                                      "eyebrow horizontally at the default scale. "
-                                      "62.5%% spans from eyebrow to eyebrow, "
-                                      "75.0%% spans from temple to temple, "
-                                      "87.5%% spans from ear to ear, "
-                                      "100.0%% is a mugshot -- WARNING: Best left "
-                                      "at default value of 62.5%%"})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
                               "action": Slider,

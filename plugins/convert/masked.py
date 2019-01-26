@@ -23,7 +23,7 @@ class Convert():
         self.args = arguments
         self.input_size = model.input_shape[0]
         self.training_size = model.state.training_size
-        self.training_coverage_ratio = model.training_opts.get("coverage_ratio", 0.625)
+        self.training_coverage_ratio = model.training_opts["coverage_ratio"]
         self.input_mask_shape = model.state.mask_shapes[0] if model.state.mask_shapes else None
 
         self.crop = None
@@ -34,9 +34,8 @@ class Convert():
         """ Patch the image """
         logger.trace("Patching image")
         image = image.astype('float32')
-        coverage = int((self.args.coverage_ratio / 100) * self.training_size)
-        training_coverage = int(self.training_coverage_ratio * self.training_size)
-        padding = (self.training_size - training_coverage) // 2
+        coverage = int(self.training_coverage_ratio * self.training_size)
+        padding = (self.training_size - coverage) // 2
         logger.trace("coverage: %s, padding: %s", coverage, padding)
 
         self.crop = slice(padding, self.training_size - padding)
@@ -44,8 +43,7 @@ class Convert():
             self.mask = Mask(self.args.mask_type,
                              self.training_size,
                              padding,
-                             self.crop,
-                             coverage)
+                             self.crop)
 
         face_detected.load_aligned(image, size=self.training_size, align_eyes=False)
         matrix = face_detected.aligned["matrix"] * (self.training_size - 2 * padding)
@@ -261,17 +259,15 @@ class Convert():
 class Mask():
     """ Return the requested mask """
 
-    def __init__(self, mask_type, training_size, padding, crop, coverage):
+    def __init__(self, mask_type, training_size, padding, crop):
         """ Set requested mask """
-        logger.debug("Initializing %s: (mask_type: '%s', training_size: %s, padding: %s, "
-                     "coverage: %s)",
-                     self.__class__.__name__, mask_type, training_size, padding, coverage)
+        logger.debug("Initializing %s: (mask_type: '%s', training_size: %s, padding: %s)",
+                     self.__class__.__name__, mask_type, training_size, padding)
 
         self.training_size = training_size
         self.padding = padding
         self.mask_type = mask_type
         self.crop = crop
-        self.coverage = coverage
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
