@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from lib.model.masks import dfl_full
+from lib.utils import get_matrix_scaling
 
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -51,7 +52,7 @@ class Convert():
         matrix = face_detected.aligned["matrix"] * (self.training_size - 2 * padding)
         matrix[:, 2] += padding
 
-        interpolators = self.get_matrix_scaling(matrix)
+        interpolators = get_matrix_scaling(matrix)
         logger.trace("interpolator: %s, inverse_interpolator: %s",
                      interpolators[0], interpolators[1])
                      
@@ -63,17 +64,6 @@ class Convert():
 
         logger.trace("Patched image")
         return patched_face
-
-    @staticmethod
-    def get_matrix_scaling(mat):
-        """ Get the correct interpolator """
-        x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
-        y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
-        avg_scale = (x_scale + y_scale) * 0.5
-        if avg_scale >= 1.0:
-            return cv2.INTER_CUBIC, cv2.INTER_AREA   # pylint: disable=no-member
-        else:
-            return cv2.INTER_AREA, cv2.INTER_CUBIC  # pylint: disable=no-member
 
     def get_new_image(self, image, mat, image_size, interpolators, coverage):
         """ Get the new face from the predictor """
