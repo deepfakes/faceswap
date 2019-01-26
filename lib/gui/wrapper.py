@@ -158,7 +158,8 @@ class FaceswapControl():
         self.process = None
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
-            "tqdm": re.compile(r"(\d+%|\d+/\d+|\d+:\d+|[\\?]|[\d\.\d\\?]+[a-zA-Z/]+)")}
+            "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
+                               r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def execute_script(self, command, args):
@@ -267,22 +268,21 @@ class FaceswapControl():
     def capture_tqdm(self, string):
         """ Capture tqdm output for progress bar """
         logger.trace("Capturing tqdm")
-        tqdm = self.consoleregex["tqdm"].findall(string)
-        if len(tqdm) != 5:
-            logger.trace("Not a tqdm message. Returning False")
+        tqdm = self.consoleregex["tqdm"].match(string)
+        if not tqdm:
             return False
-
-        if "?" in tqdm:
+        tqdm = tqdm.groupdict()
+        if any("?" in val for val in tqdm.values()):
             logger.trace("tqdm initializing. Skipping")
             return True
+        processtime = "Elapsed: {}  Remaining: {}".format(tqdm["tme"].split("<")[0],
+                                                          tqdm["tme"].split("<")[1])
+        message = "{}  |  {}  |  {}  |  {}".format(processtime,
+                                                   tqdm["rte"],
+                                                   tqdm["itm"],
+                                                   tqdm["pct"])
 
-        percent = tqdm[0]
-        processed = tqdm[1]
-        processtime = "Elapsed: {}  Remaining: {}".format(tqdm[2], tqdm[3])
-        rate = tqdm[4]
-        message = "{}  |  {}  |  {}  |  {}".format(processtime, rate, processed, percent)
-
-        current, total = processed.split("/")
+        current, total = tqdm["itm"].split("/")
         position = int((float(current) / float(total)) * 1000)
 
         self.statusbar.progress_update(message, position, True)
