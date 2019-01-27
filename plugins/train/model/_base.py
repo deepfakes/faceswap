@@ -25,7 +25,7 @@ _CONFIG = None
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, alignments_paths, training_image_size=256,
+    def __init__(self, model_dir, gpus, alignments_paths=None, training_image_size=256,
                  input_shape=None, encoder_dim=None, trainer="original", predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, "
                      "alignments_paths: %s, training_image_size, %s, input_shape: %s, "
