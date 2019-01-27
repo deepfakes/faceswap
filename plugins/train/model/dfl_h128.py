@@ -21,24 +21,6 @@ class Model(OriginalModel):
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_training_data(self):
-        """ Set the dictionary for training """
-        self.training_opts["mask_type"] = self.config["mask_type"]
-        super().set_training_data()
-
-    def build_autoencoders(self):
-        """ Initialize DFL H128 model """
-        logger.debug("Initializing model")
-        mask_shape = self.input_shape[:2] + (1, )
-        for side in ("a", "b"):
-            inp = [Input(shape=self.input_shape, name="face"),
-                   Input(shape=mask_shape, name="mask")]
-            decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inp[0]))
-            autoencoder = KerasModel(inp, output)
-            self.add_predictor(side, autoencoder)
-        logger.debug("Initialized model")
-
     def encoder(self):
         """ DFL H128 Encoder """
         input_ = Input(shape=self.input_shape)
@@ -63,6 +45,9 @@ class Model(OriginalModel):
 
         # Face
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var)
+        outputs = [var_x]
         # Mask
-        var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var)
-        return KerasModel(input_, [var_x, var_y])
+        if self.config.get("mask_type", None):
+            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var)
+            outputs.append([var_y])
+        return KerasModel(input_, outputs=outputs)

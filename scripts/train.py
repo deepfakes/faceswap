@@ -64,8 +64,8 @@ class Train():
         objects """
         logger.debug("Getting image paths")
         images = dict()
-        for image_group in ("a", "b"):
-            image_dir = getattr(self.args, "input_{}".format(image_group))
+        for side in ("a", "b"):
+            image_dir = getattr(self.args, "input_{}".format(side))
             if not os.path.isdir(image_dir):
                 logger.error("Error: '%s' does not exist", image_dir)
                 exit(1)
@@ -74,19 +74,12 @@ class Train():
                 logger.error("Error: '%s' contains no images", image_dir)
                 exit(1)
 
-            images[image_group] = get_image_paths(image_dir)
+            images[side] = get_image_paths(image_dir)
         logger.info("Model A Directory: %s", self.args.input_a)
         logger.info("Model B Directory: %s", self.args.input_b)
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
                                              for key, val in images.items()])
         return images
-
-    def get_image_size(self):
-        """ Get the training set image size for storing in model data """
-        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
-        size = image.shape[0]
-        logger.debug("Training image size: %s", size)
-        return size
 
     def process(self):
         """ Call the training process object """
@@ -157,10 +150,33 @@ class Train():
         """ Load the model requested for training """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        image_size = self.get_image_size()
-        model = PluginLoader.get_model(self.trainer_name)(model_dir, self.args.gpus, image_size)
+        model = PluginLoader.get_model(self.trainer_name)(model_dir,
+                                                          self.args.gpus,
+                                                          self.alignments_paths,
+                                                          self.image_size)
         logger.debug("Loaded Model")
         return model
+
+    @property
+    def image_size(self):
+        """ Get the training set image size for storing in model data """
+        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
+        size = image.shape[0]
+        logger.debug("Training image size: %s", size)
+        return size
+
+    @property
+    def alignments_paths(self):
+        """ Set the alignments path to input dirs if not provided """
+        alignments_paths = dict()
+        for side in ("a", "b"):
+            alignments_path = getattr(self.args, "alignments_path_{}".format(side))
+            if not alignments_path:
+                image_path = getattr(self.args, "input_{}".format(side))
+                alignments_path = os.path.join(image_path, "alignments.json")
+            alignments_paths[side] = alignments_path
+        logger.debug("Alignments paths: %s", alignments_paths)
+        return alignments_paths
 
     def load_trainer(self, model):
         """ Load the trainer requested for training """

@@ -705,6 +705,26 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Input directory. A directory "
                                       "containing training images for face B. "
                                       "Defaults to 'input'"})
+        argument_list.append({"opts": ("-ala", "--alignments-A"),
+                              "action": FileFullPaths,
+                              "filetypes": 'alignments',
+                              "type": str,
+                              "dest": "alignments_path_a",
+                              "default": None,
+                              "help": "Path to alignments file for training set A. Only required "
+                                      "if you are using a masked model, or using targeted "
+                                      "training. Defaults to <input-A>/alignments.json if not "
+                                      "provided."})
+        argument_list.append({"opts": ("-alb", "--alignments-B"),
+                              "action": FileFullPaths,
+                              "filetypes": 'alignments',
+                              "type": str,
+                              "dest": "alignments_path_b",
+                              "default": None,
+                              "help": "Path to alignments file for training set B. Only required "
+                                      "if you are using a masked model, or using targeted "
+                                      "training. Defaults to <input-B>/alignments.json if not "
+                                      "provided."})
         argument_list.append({"opts": ("-m", "--model-dir"),
                               "action": DirFullPaths,
                               "dest": "model_dir",

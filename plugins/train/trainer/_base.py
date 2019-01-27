@@ -7,9 +7,11 @@
 
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
-        serializer:     format that alignments data is serialized in
-        mask_type:      Type of mask to use. See lib.model.masks for valid mask names
-        full_face:      Set to True if training should use full face
+        alignments:     dict containing paths to alignments files for keys 'a' and 'b'
+        training_size:  Size of the training images
+        coverage_ratio: Ratio of face to be cropped out for training
+        mask_type:      Type of mask to use. See lib.model.masks for valid mask names.
+                        Set to None for not used
         preview_images: Number of preview images to display (default: 14)
 """
 
@@ -60,7 +62,8 @@ class TrainerBase():
         use_mask = False
         if self.model.training_opts.get("mask_type", None):
             use_mask = True
-            Landmarks(self.images, self.model).get_alignments()
+            landmarks = Landmarks(self.model.training_opts).landmarks
+            self.model.training_opts["landmarks"] = landmarks
         return use_mask
 
     def print_loss(self, loss):
@@ -326,33 +329,35 @@ class Timelapse():
 
 class Landmarks():
     """ Set Landmarks for training into the model's training options"""
-    def __init__(self, images, model):
-        logger.debug("Initializing %s: (model: '%s')", self.__class__.__name__, model)
-        self.images = images
-        self.model = model
+    def __init__(self, training_opts):
+        logger.debug("Initializing %s: (training_opts: '%s')",
+                     self.__class__.__name__, training_opts)
+        self.size = training_opts.get("training_size", 256)
+        self.paths = training_opts["alignments"]
+        self.landmarks = self.get_alignments()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_alignments(self):
         """ Obtain the landmarks for each faceset """
         landmarks = dict()
-        for side in "a", "b":
-            size = cv2.imread(self.images[side][0]).shape[0]  # pylint: disable=no-member
-            image_folder = os.path.dirname(self.images[side][0])
+        for side, fullpath in self.paths.items():
+            path, filename = os.path.split(fullpath)
+            filename, extension = os.path.splitext(filename)
+            serializer = extension[1:]
             alignments = Alignments(
-                image_folder,
-                filename="alignments",
-                serializer=self.model.training_opts.get("serializer", "json"))
-            landmarks[side] = self.transform_landmarks(alignments, size)
-        self.model.training_opts["landmarks"] = landmarks
+                path,
+                filename=filename,
+                serializer=serializer)
+            landmarks[side] = self.transform_landmarks(alignments)
+        return landmarks
 
-    @staticmethod
-    def transform_landmarks(alignments, size):
+    def transform_landmarks(self, alignments):
         """ For each face transform landmarks and return """
         landmarks = dict()
         for _, faces, _, _ in alignments.yield_faces():
             for face in faces:
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
-                detected_face.load_aligned(None, size=size, align_eyes=False)
+                detected_face.load_aligned(None, size=self.size, align_eyes=False)
                 landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks

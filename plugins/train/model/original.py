@@ -35,13 +35,16 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize original model """
         logger.debug("Initializing model")
-        inp = Input(shape=self.input_shape, name="face")
+        inputs = [Input(shape=self.input_shape, name="face")]
+        if self.config.get("mask_type", None):
+            mask_shape = (self.input_shape[:2] + (1, ))
+            inputs.append(Input(shape=mask_shape, name="mask"))
 
         for side in ("a", "b"):
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inp))
-            autoencoder = KerasModel(inp, output)
+            output = decoder(self.networks["encoder"].network(inputs[0]))
+            autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
@@ -68,4 +71,13 @@ class Model(ModelBase):
         var_x = self.blocks.upscale(var_x, 128)
         var_x = self.blocks.upscale(var_x, 64)
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
-        return KerasModel(input_, var_x)
+        outputs = [var_x]
+
+        if self.config.get("mask_type", None):
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, 256)
+            var_y = self.blocks.upscale(var_y, 128)
+            var_y = self.blocks.upscale(var_y, 64)
+            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            outputs.append(var_y)
+        return KerasModel(input_, outputs=outputs)

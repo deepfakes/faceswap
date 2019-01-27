@@ -236,7 +236,7 @@ class OptionControl():
         """ Format the help text for tooltips """
         logger.debug("Format control help: '%s'", self.title)
         helptext = self.values.get("helptext", "")
-        helptext = helptext.replace("\n", " ")
+        helptext = helptext.replace("\n\t", "\n  - ").replace("%%", "%")
         helptext = self.title + " - " + helptext
         logger.debug("Formatted control help: (title: '%s', help: '%s'", self.title, helptext)
         return helptext

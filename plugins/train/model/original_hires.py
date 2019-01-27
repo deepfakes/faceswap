@@ -86,7 +86,17 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, decoder_complexity_a // 4, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
-        return KerasModel(input_, var_x)
+        outputs = [var_x]
+
+        if self.config.get("mask_type", None):
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, 384)
+            var_y = self.blocks.upscale(var_y, decoder_complexity_a)
+            var_y = self.blocks.upscale(var_y, decoder_complexity_a // 2)
+            var_y = self.blocks.upscale(var_y, decoder_complexity_a // 4)
+            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            outputs.append(var_y)
+        return KerasModel(input_, outputs=outputs)
 
     def decoder_b(self):
         """ Decoder for side B """
@@ -108,7 +118,9 @@ class Model(OriginalModel):
                                       decoder_complexity_b,
                                       kernel_initializer=self.kernel_initializer)
 
-        var_x = self.blocks.upscale(var_x, decoder_complexity_b // 2, res_block_follows=True, **kwargs)
+        var_x = self.blocks.upscale(var_x, decoder_complexity_b // 2,
+                                    res_block_follows=True,
+                                    **kwargs)
         var_x = self.blocks.res_block(var_x,
                                       decoder_complexity_b // 2,
                                       kernel_initializer=self.kernel_initializer)
@@ -116,7 +128,17 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, decoder_complexity_b // 4, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
-        return KerasModel(input_, var_x)
+        outputs = [var_x]
+
+        if self.config.get("mask_type", None):
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, 512)
+            var_y = self.blocks.upscale(var_y, decoder_complexity_b)
+            var_y = self.blocks.upscale(var_y, decoder_complexity_b // 2)
+            var_y = self.blocks.upscale(var_y, decoder_complexity_b // 4)
+            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            outputs.append(var_y)
+        return KerasModel(input_, outputs=outputs)
 
     def encoder_lowmem(self):
         """ Original HiRes Encoder """
@@ -164,7 +186,17 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, decoder_complexity // 8, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
-        return KerasModel(input_, var_x)
+        outputs = [var_x]
+
+        if self.config.get("mask_type", None):
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, decoder_complexity)
+            var_y = self.blocks.upscale(var_y, decoder_complexity // 2)
+            var_y = self.blocks.upscale(var_y, decoder_complexity // 4)
+            var_y = self.blocks.upscale(var_y, decoder_complexity // 8)
+            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            outputs.append(var_y)
+        return KerasModel(input_, outputs=outputs)
 
     def decoder_b_lowmem(self):
         """ Decoder for side B """
@@ -185,4 +217,14 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, decoder_b_complexity // 8, **kwargs)
 
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
-        return KerasModel(input_, var_x)
+        outputs = [var_x]
+
+        if self.config.get("mask_type", None):
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, decoder_b_complexity)
+            var_y = self.blocks.upscale(var_y, decoder_b_complexity // 2)
+            var_y = self.blocks.upscale(var_y, decoder_b_complexity // 4)
+            var_y = self.blocks.upscale(var_y, decoder_b_complexity // 8)
+            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            outputs.append(var_y)
+        return KerasModel(input_, outputs=outputs)

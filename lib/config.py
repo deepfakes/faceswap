@@ -74,6 +74,8 @@ class FaceswapConfig():
         else:
             func = self.config.get
         retval = func(section, option)
+        if isinstance(retval, str) and retval.lower() == "none":
+            retval = None
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
         return retval
 

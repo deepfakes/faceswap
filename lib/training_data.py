@@ -30,7 +30,7 @@ class TrainingDataGenerator():
                      {key: val for key, val in training_opts.items() if key != "landmarks"})
         self.batchsize = 0
         self.training_opts = training_opts
-        self.full_face = self.training_opts.get("full_face", False)
+        self.full_face = self.training_opts.get("coverage_ratio", 0) == 1.0
         self.mask_function = self.set_mask_function()
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,

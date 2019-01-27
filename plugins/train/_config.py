@@ -7,6 +7,15 @@ from lib.config import FaceswapConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+MASK_TYPES = ["none", "dfaker", "dfl_full"]
+MASK_INFO = "The mask to be used for training. Select none to not use a mask"
+COVERAGE_INFO = ("How much of the extracted image to train on. Generally the model is optimized\n"
+                 "to the default value. Sensible values to use are:"
+                 "\n\t62.5%% spans from eyebrow to eyebrow."
+                 "\n\t75.0%% spans from temple to temple."
+                 "\n\t87.5%% spans from ear to ear."
+                 "\n\t100.0%% is a mugshot.")
+
 
 class Config(FaceswapConfig):
     """ Config File for Models """
@@ -26,30 +35,25 @@ class Config(FaceswapConfig):
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Use subpixel upscaling rather than pixel shuffler.\n"
                  "Might increase speed at cost of VRAM")
+        self.add_item(
+            section=section, title="dssim_mask_loss", datatype=bool, default=True,
+            info="If using a mask, Use DSSIM loss for Mask training rather than Mean Absolute "
+                 "Error\nMay increase overall quality.")
+        self.add_item(
+            section=section, title="penalized_mask_loss", datatype=bool, default=True,
+            info="If using a mask, Use Penalized loss for Mask training. Can stack with DSSIM.\n"
+                 "May increase overall quality.")
 
         # << DFAKER MODEL OPTIONS >> #
         section = "model.dfaker"
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
         self.add_item(
-            section=section, title="alignments_format", datatype=str, default="json",
-            choices=["json", "yaml", "pickle"],
-            info="Dfaker model requires the alignments for your training "
-                 "images to be avalaible within the FACES folder.\nIt should "
-                 "be named 'alignments.<file extension>' (eg. "
-                 "alignments.json).")
-        self.add_item(
             section=section, title="mask_type", datatype=str, default="dfaker",
-            choices=["dfaker", "dfl_full"],
-            info="The mask to be used for training.")
+            choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
-            section=section, title="dssim_mask_loss", datatype=bool, default=True,
-            info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
-        self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="Use Penalized loss for Mask. Can stack with DSSIM.\n"
-                 "May increase overall quality.")
+            section=section, title="coverage", datatype=float, default=100.0, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << DFL MODEL OPTIONS >> #
         section = "model.dfl_h128"
@@ -61,24 +65,11 @@ class Config(FaceswapConfig):
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
         self.add_item(
-            section=section, title="alignments_format", datatype=str, default="json",
-            choices=["json", "yaml", "pickle"],
-            info="DFL-H128 model requires the alignments for your training "
-                 "images to be avalaible within the FACES folder.\nIt should "
-                 "be named 'alignments.<file extension>' (eg. "
-                 "alignments.json).")
-        self.add_item(
             section=section, title="mask_type", datatype=str, default="dfl_full",
-            choices=["dfaker", "dfl_full"],
-            info="The mask to be used for training.")
+            choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
-            section=section, title="dssim_mask_loss", datatype=bool, default=True,
-            info="Use DSSIM loss for Mask rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
-        self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="Use Penalized loss for Mask. Can stack with DSSIM.\n"
-                 "May increase overall quality.")
+            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << IAE MODEL OPTIONS >> #
         section = "model.iae"
@@ -89,6 +80,12 @@ class Config(FaceswapConfig):
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=MASK_TYPES, info=MASK_INFO)
+        self.add_item(
+            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << ORIGINAL MODEL OPTIONS >> #
         section = "model.original"
@@ -102,6 +99,12 @@ class Config(FaceswapConfig):
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=MASK_TYPES, info=MASK_INFO)
+        self.add_item(
+            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << ORIGINAL HIRES MODEL OPTIONS >> #
         section = "model.original_hires"
@@ -116,6 +119,9 @@ class Config(FaceswapConfig):
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
             section=section, title="nodes", datatype=int, default=1024, rounding=64,
             min_max=(512, 4096),
@@ -143,6 +149,9 @@ class Config(FaceswapConfig):
                  "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
                  "NB: Your faceset must be at least 1.6x larger than your required input size.\n"
                  "    (e.g. 160 is the maximum input size for a 256x256 faceset)")
+        self.add_item(
+            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << VILLAIN MODEL OPTIONS >> #
         section = "model.villain"
@@ -158,3 +167,10 @@ class Config(FaceswapConfig):
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=["none", "dfaker", "dfl_full"],
+            info="The mask to be used for training. Select none to not use a mask")
+        self.add_item(
+            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)

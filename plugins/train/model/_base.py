@@ -25,12 +25,12 @@ _CONFIG = None
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, training_image_size=256,
+    def __init__(self, model_dir, gpus, alignments_paths, training_image_size=256,
                  input_shape=None, encoder_dim=None, trainer="original", predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, "
-                     "training_image_size, %s, input_shape: %s, encoder_dim: %s)",
-                     self.__class__.__name__, model_dir, gpus, training_image_size, input_shape,
-                     encoder_dim)
+                     "alignments_paths: %s, training_image_size, %s, input_shape: %s, "
+                     "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
+                     alignments_paths, training_image_size, input_shape, encoder_dim)
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
@@ -40,7 +40,6 @@ class ModelBase():
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
-        self.name = self.set_model_name()
 
         self.state = State(self.model_dir, self.name, training_image_size)
         self.load_state_info()
@@ -52,7 +51,7 @@ class ModelBase():
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
-        self.training_opts = dict()
+        self.training_opts = {"alignments": alignments_paths}
 
         self.build()
         self.set_training_data()
@@ -68,13 +67,23 @@ class ModelBase():
             _CONFIG = Config(model_name).config_dict
         return _CONFIG
 
+    @property
+    def name(self):
+        """ Set the model name based on the subclass """
+        basename = os.path.basename(sys.modules[self.__module__].__file__)
+        retval = os.path.splitext(basename)[0].lower()
+        logger.debug("model name: '%s'", retval)
+        return retval
+
     def set_training_data(self):
         """ Override to set model specific training data.
 
             super() this method for default coverage ratio
             otherwise be sure to add a ratio """
         logger.debug("Setting training data")
-        self.training_opts["coverage_ratio"] = self.training_opts.get("coverage_ratio", 0.625)
+        self.training_opts["training_size"] = self.state.training_size
+        self.training_opts["mask_type"] = self.config.get("mask_type", None)
+        self.training_opts["coverage_ratio"] = self.config.get("coverage", 62.5) / 100
         if self.output_shape[0] < 128:
             self.training_opts["preview_images"] = 14
         elif self.output_shape[0] < 192:
@@ -107,13 +116,6 @@ class ModelBase():
     def add_networks(self):
         """ Override to add neural networks """
         raise NotImplementedError
-
-    def set_model_name(self):
-        """ Set the model name based on the subclass """
-        basename = os.path.basename(sys.modules[self.__module__].__file__)
-        retval = os.path.splitext(basename)[0].lower()
-        logger.debug("model name: '%s'", retval)
-        return retval
 
     def load_state_info(self):
         """ Load the input shape from state file if it exists """
@@ -427,6 +429,9 @@ class NNMeta():
 class State():
     """ Class to hold the model's current state and autoencoder structure """
     def __init__(self, model_dir, model_name, training_image_size):
+        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
+                     "training_image_size: '%s'", self.__class__.__name__, model_dir,
+                     model_name, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
@@ -435,6 +440,7 @@ class State():
         self.inputs = dict()
         self.config = dict()
         self.load()
+        logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
     def face_shapes(self):
@@ -447,8 +453,9 @@ class State():
         return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
     def load(self):
-        """ Load epoch number from state file """
+        """ Load state file """
         logger.debug("Loading State")
+        global _CONFIG  # pylint: disable=global-statement
         try:
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
@@ -458,6 +465,9 @@ class State():
                 self.state = state.get("training_size", 256)
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
+                logger.debug("Replacing config. Old config: %s", _CONFIG)
+                _CONFIG = self.config
+                logger.debug("Replaced config. New config: %s", _CONFIG)
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
             logger.debug("IOError: %s", str(err))

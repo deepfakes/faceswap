@@ -39,7 +39,7 @@ class Model(OriginalModel):
         for _ in range(res_cycles):
             nn_x = self.blocks.res_block(var_x, 128, **kwargs)
             var_x = nn_x
-        var_x = add([var_x, tmp_x]) # consider adding scale before this layer to scale the residual chain
+        var_x = add([var_x, tmp_x])  # consider adding scale before this layer to scale the residual chain
         var_x = self.blocks.conv(var_x, 128, **kwargs)
         var_x = PixelShuffler()(var_x)
         var_x = self.blocks.conv(var_x, 128, **kwargs)
@@ -70,4 +70,13 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, self.input_shape[0], res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, self.input_shape[0], **kwargs)
         var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
-        return KerasModel(input_, var_x)
+        outputs = [var_x]
+
+        if self.config.get("mask_type", None):
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, 512)
+            var_y = self.blocks.upscale(var_y, 256)
+            var_y = self.blocks.upscale(var_y, self.input_shape[0])
+            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            outputs.append(var_y)
+        return KerasModel(input_, outputs=outputs)
