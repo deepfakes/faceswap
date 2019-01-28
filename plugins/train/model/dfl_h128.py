@@ -49,5 +49,5 @@ class Model(OriginalModel):
         # Mask
         if self.config.get("mask_type", None):
             var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var)
-            outputs.append([var_y])
+            outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)
