@@ -769,6 +769,14 @@ class TrainArgs(FaceSwapArgs):
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for training"})
+        argument_list.append({"opts": ("-ps", "--preview-scale"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "preview_scale",
+                              "min_max": (25, 200),
+                              "rounding": 25,
+                              "default": 100,
+                              "help": "Percentage amount to scale the preview by."})
         argument_list.append({"opts": ("-p", "--preview"),
                               "action": "store_true",
                               "dest": "preview",

@@ -128,6 +128,7 @@ class TrainingDataGenerator():
 
         image = self.processing.color_adjust(image)
         image = self.processing.random_transform(image)
+        sample = image.copy()[:, :, :3]
 
         if self.full_face:
             dst_pts = self.get_closest_match(filename, side, landmarks, src_pts)
@@ -135,6 +136,7 @@ class TrainingDataGenerator():
         else:
             processed = self.processing.random_warp(image)
 
+        processed.insert(0, sample)
         retval = self.processing.do_random_flip(processed)
         logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
                      filename, side, [img.shape for img in retval])

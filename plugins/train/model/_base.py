@@ -25,12 +25,21 @@ _CONFIG = None
 
 class ModelBase():
     """ Base class that all models should inherit from """
-    def __init__(self, model_dir, gpus, alignments_paths=None, training_image_size=256,
-                 input_shape=None, encoder_dim=None, trainer="original", predict=False):
+    def __init__(self,
+                 model_dir,
+                 gpus,
+                 training_image_size,
+                 alignments_paths=None,
+                 preview_scale=100,
+                 input_shape=None,
+                 encoder_dim=None,
+                 trainer="original",
+                 predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, "
-                     "alignments_paths: %s, training_image_size, %s, input_shape: %s, "
-                     "encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
-                     alignments_paths, training_image_size, input_shape, encoder_dim)
+                     "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
+                     "input_shape: %s, encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
+                     training_image_size, alignments_paths, preview_scale, input_shape,
+                     encoder_dim)
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
@@ -51,7 +60,8 @@ class ModelBase():
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
-        self.training_opts = {"alignments": alignments_paths}
+        self.training_opts = {"alignments": alignments_paths,
+                              "preview_scaling": preview_scale / 100}
 
         self.build()
         self.set_training_data()
@@ -78,20 +88,12 @@ class ModelBase():
     def set_training_data(self):
         """ Override to set model specific training data.
 
-            super() this method for default coverage ratio
-            otherwise be sure to add a ratio """
+            super() this method for defaults otherwise be sure to add """
         logger.debug("Setting training data")
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["mask_type"] = self.config.get("mask_type", None)
         self.training_opts["coverage_ratio"] = self.config.get("coverage", 62.5) / 100
-        if self.output_shape[0] < 128:
-            self.training_opts["preview_images"] = 14
-        elif self.output_shape[0] < 192:
-            self.training_opts["preview_images"] = 10
-        elif self.output_shape[0] < 256:
-            self.training_opts["preview_images"] = 8
-        else:
-            self.training_opts["preview_images"] = 6
+        self.training_opts["preview_images"] = 14
         logger.debug("Set training data: %s", self.training_opts)
 
     def build(self):

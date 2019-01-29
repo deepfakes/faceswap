@@ -152,8 +152,9 @@ class Train():
         model_dir = get_folder(self.args.model_dir)
         model = PluginLoader.get_model(self.trainer_name)(model_dir,
                                                           self.args.gpus,
-                                                          self.alignments_paths,
-                                                          self.image_size)
+                                                          self.image_size,
+                                                          alignments_paths=self.alignments_paths,
+                                                          preview_scale=self.args.preview_scale)
         logger.debug("Loaded Model")
         return model
 

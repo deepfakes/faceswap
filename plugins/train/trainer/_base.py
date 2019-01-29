@@ -7,12 +7,12 @@
 
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
-        alignments:     dict containing paths to alignments files for keys 'a' and 'b'
-        training_size:  Size of the training images
-        coverage_ratio: Ratio of face to be cropped out for training
-        mask_type:      Type of mask to use. See lib.model.masks for valid mask names.
-                        Set to None for not used
-        preview_images: Number of preview images to display (default: 14)
+        alignments:         dict containing paths to alignments files for keys 'a' and 'b'
+        preview_scaling:    How much to scale the preview out by
+        training_size:      Size of the training images
+        coverage_ratio:     Ratio of face to be cropped out for training
+        mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
+                            Set to None for not used
 """
 
 import logging
@@ -47,8 +47,14 @@ class TrainerBase():
                                        use_mask,
                                        batch_size)
                          for side in images.keys()}
-        self.samples = Samples(self.model, use_mask)
-        self.timelapse = Timelapse(self.model, use_mask, self.batchers)
+        self.samples = Samples(self.model,
+                               use_mask,
+                               self.model.training_opts["coverage_ratio"],
+                               self.model.training_opts["preview_scaling"])
+        self.timelapse = Timelapse(self.model,
+                                   use_mask,
+                                   self.model.training_opts["coverage_ratio"],
+                                   self.batchers)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -119,6 +125,7 @@ class Batcher():
         self.use_mask = use_mask
         self.side = side
         self.target = None
+        self.samples = None
         self.mask = None
 
         self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side)
@@ -136,18 +143,20 @@ class Batcher():
     def train_one_batch(self, is_preview_iteration):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        batch = self.get_next()
-        self.target = batch[1] if is_preview_iteration else None
+        batch = self.get_next(is_preview_iteration)
         loss = self.model.predictors[self.side].train_on_batch(*batch)
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self):
+    def get_next(self, is_preview_iteration):
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
+        self.samples = batch[0] if is_preview_iteration else None
+        batch = batch[1:]   # Remove full size samples from batch
         if self.use_mask:
             batch = self.compile_mask(batch)
+        self.target = batch[1] if is_preview_iteration else None
         return batch
 
     def compile_mask(self, batch):
@@ -160,23 +169,30 @@ class Batcher():
             retval.append([image, mask])
         return retval
 
-    def compile_sample(self, batch_size, images=None):
+    def compile_sample(self, batch_size, samples=None, images=None):
         """ Training samples to display in the viewer """
         num_images = self.model.training_opts.get("preview_images", 14)
         num_images = min(batch_size, num_images)
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images else self.target
+        samples = [samples[0:num_images]] if samples else [self.samples[0:num_images]]
         if self.use_mask:
             retval = [tgt[0:num_images] for tgt in images]
         else:
             retval = [images[0:num_images]]
+        retval = samples + retval
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        batchsize = len(batch)
-        sample = self.compile_sample(batchsize, images=batch[1])
+        batchsize = len(batch)  # TODO Check this is correct
+        samples = batch[0]
+        batch = batch[1:]   # Remove full size samples from batch
+        if self.use_mask:
+            batch = self.compile_mask(batch)
+        images = batch[1]
+        sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -191,12 +207,14 @@ class Batcher():
 
 class Samples():
     """ Display samples for preview and timelapse """
-    def __init__(self, model, use_mask):
-        logger.debug("Initializing %s: model: '%s', use_mask: %s)",
-                     self.__class__.__name__, model, use_mask)
+    def __init__(self, model, use_mask, coverage_ratio, scaling=1.0):
+        logger.debug("Initializing %s: model: '%s', use_mask: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, model, use_mask, coverage_ratio)
         self.model = model
         self.use_mask = use_mask
         self.images = dict()
+        self.coverage_ratio = coverage_ratio
+        self.scaling = scaling
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def show_sample(self):
@@ -204,66 +222,59 @@ class Samples():
         logger.debug("Showing sample")
         feeds = dict()
         figures = dict()
+        headers = dict()
         for side, samples in self.images.items():
-            faces = samples[0]
-            scale = self.model.input_shape[0] / faces[0].shape[1]
-            if scale != 1.0:
-                feeds[side] = self.resize_sample(scale, side, faces)
+            faces = samples[1]
+            if self.model.input_shape[0] / faces.shape[1] != 1.0:
+                feeds[side] = self.resize_sample(side, faces, self.model.input_shape[0])
+                feeds[side] = feeds[side].reshape((-1, ) + self.model.input_shape)
             else:
                 feeds[side] = faces
             if self.use_mask:
-                feeds[side] = [feeds[side], samples[1]]
+                mask = samples[-1]
+                feeds[side] = [feeds[side], mask]
 
         preds = self.get_predictions(feeds["a"], feeds["b"])
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            if self.use_mask:
-                masked = self.create_masked_preview(samples)
-                figures[side] = np.stack([samples[0],
-                                          masked,
-                                          preds["{}_{}".format(side, side)],
-                                          preds["{}_{}".format(other_side, side)], ],
-                                         axis=1)
-            else:
-                figures[side] = np.stack([samples[0],
-                                          preds["{}_{}".format(side, side)],
-                                          preds["{}_{}".format(other_side, side)], ],
-                                         axis=1)
-
+            predictions = [preds["{}_{}".format(side, side)],
+                           preds["{}_{}".format(other_side, side)]]
+            display = self.to_full_frame(side, samples, predictions)
+            headers[side] = self.get_headers(side, other_side, display[0].shape[1])
+            figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
                 figures[side] = np.concatenate([figures[side],
                                                 np.expand_dims(figures[side][0], 0)])
 
-        figure = np.concatenate([figures["a"], figures["b"]], axis=0)
         width = 4
+        side_cols = width // 2
+        if side_cols != 1:
+            headers = self.duplicate_headers(headers, side_cols)
+
+        header = np.concatenate([headers["a"], headers["b"]], axis=1)
+        figure = np.concatenate([figures["a"], figures["b"]], axis=0)
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
+        figure = np.vstack((header, figure))
 
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
 
     @staticmethod
-    def create_masked_preview(previews):
-        """ Add the mask to the faces for masked preview """
-        faces, masks = previews
-        masked = faces * masks + (1.0 - masks)
-        logger.trace("masked.shape: %s", masked.shape)
-        return masked
-
-    def resize_sample(self, scale, side, sample):
+    def resize_sample(side, sample, target_size):
         """ Resize samples where predictor expects different shape from processed image """
-        logger.debug("Resizing sample: (scale: %s, side: '%s', sample: %s",
-                     scale, side, sample.shape)
-        interpn = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA  # pylint: disable=no-member
-        resized = [cv2.resize(img,  # pylint: disable=no-member
-                              self.model.input_shape[:2],
-                              interpn)
-                   for img in sample]
-        feed = np.array(resized).reshape((-1, ) + self.model.input_shape)
-        logger.debug("Resized sample: (side: '%s' shape: %s)", side, feed.shape)
-        return feed
+        scale = target_size / sample.shape[1]
+        logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
+                     side, sample.shape, target_size, scale)
+        interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA  # pylint: disable=no-member
+        retval = np.array([cv2.resize(img,  # pylint: disable=no-member
+                                      (target_size, target_size),
+                                      interpn)
+                           for img in sample])
+        logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
+        return retval
 
     def get_predictions(self, feed_a, feed_b):
         """ Return the sample predictions from the model """
@@ -281,13 +292,146 @@ class Samples():
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
+    def to_full_frame(self, side, samples, predictions):
+        """ Patch the images into the full frame """
+        logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
+                     side, len(samples), [pred.shape for pred in predictions])
+        full, faces = samples[:2]
+        images = [faces] + predictions
+        full_size = full.shape[1]
+        target_size = int(full_size * self.coverage_ratio)
+        if target_size != full_size:
+            frame = self.frame_overlay(full, target_size, (0, 0, 255))
+
+        if self.use_mask:
+            images = self.compile_masked(images, samples[-1])
+        images = [self.resize_sample(side, image, target_size) for image in images]
+        if target_size != full_size:
+            images = [self.overlay_foreground(frame, image) for image in images]
+        if self.scaling != 1.0:
+            new_size = int(full_size * self.scaling)
+            images = [self.resize_sample(side, image, new_size) for image in images]
+        return images
+
+    @staticmethod
+    def frame_overlay(images, target_size, color):
+        """ Add roi frame to a backfround image """
+        logger.debug("full_size: %s, target_size: %s, color: %s",
+                     images.shape[1], target_size, color)
+        new_images = list()
+        full_size = images.shape[1]
+        padding = (full_size - target_size) // 2
+        length = target_size // 4
+        t_l, b_r = (padding, full_size - padding)
+        for img in images:
+            cv2.rectangle(img,  # pylint: disable=no-member
+                          (t_l, t_l),
+                          (t_l + length, t_l + length),
+                          color,
+                          3)
+            cv2.rectangle(img,  # pylint: disable=no-member
+                          (b_r, t_l),
+                          (b_r - length, t_l + length),
+                          color,
+                          3)
+            cv2.rectangle(img,  # pylint: disable=no-member
+                          (b_r, b_r),
+                          (b_r - length,
+                           b_r - length),
+                          color,
+                          3)
+            cv2.rectangle(img,  # pylint: disable=no-member
+                          (t_l, b_r),
+                          (t_l + length, b_r - length),
+                          color,
+                          3)
+            new_images.append(img)
+        retval = np.array(new_images)
+        logger.debug("Overlayed background. Shape: %s", retval.shape)
+        return retval
+
+    @staticmethod
+    def compile_masked(faces, masks):
+        """ Add the mask to the faces for masked preview """
+        retval = list()
+        masks3 = np.tile(1 - np.rint(masks), 3)
+        for mask in masks3:
+            mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
+        for previews in faces:
+            images = np.array([cv2.addWeighted(img, 1.0,  # pylint: disable=no-member
+                                               masks3[idx], 0.3,
+                                               0)
+                               for idx, img in enumerate(previews)])
+            retval.append(images)
+        logger.debug("masked shapes: %s", [faces.shape for faces in retval])
+        return retval
+
+    @staticmethod
+    def overlay_foreground(backgrounds, foregrounds):
+        """ Overlay the training images into the center of the background """
+        offset = (backgrounds.shape[1] - foregrounds.shape[1]) // 2
+        new_images = list()
+        for idx, img in enumerate(backgrounds):
+            img[offset:offset + foregrounds[idx].shape[0],
+                offset:offset + foregrounds[idx].shape[1]] = foregrounds[idx]
+            new_images.append(img)
+        retval = np.array(new_images)
+        logger.debug("Overlayed foreground. Shape: %s", retval.shape)
+        return retval
+
+    def get_headers(self, side, other_side, width):
+        """ Set headers for images """
+        logger.debug("side: '%s', other_side: '%s', width: %s",
+                     side, other_side, width)
+        side = side.upper()
+        other_side = other_side.upper()
+        height = int(64 * self.scaling)
+        total_width = width * 3
+        logger.debug("height: %s, total_width: %s", height, total_width)
+        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+        texts = ["Target {}".format(side),
+                 "{} > {}".format(side, side),
+                 "{} > {}".format(side, other_side)]
+        text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
+                                      font,
+                                      self.scaling,
+                                      1)[0]
+                      for idx in range(len(texts))]
+        text_y = int((height + text_sizes[0][1]) / 2)
+        text_x = [int((width - text_sizes[idx][0]) / 2) + width * idx
+                  for idx in range(len(texts))]
+        logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
+                     texts, text_sizes, text_x, text_y)
+        header_box = np.ones((height, total_width, 3), np.float32)
+        for idx, text in enumerate(texts):
+            cv2.putText(header_box,  # pylint: disable=no-member
+                        text,
+                        (text_x[idx], text_y),
+                        font,
+                        self.scaling,
+                        (0, 0, 0),
+                        1,
+                        lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        logger.debug("header_box.shape: %s", header_box.shape)
+        return header_box
+
+    @staticmethod
+    def duplicate_headers(headers, columns):
+        """ Duplicate headers for the number of columns displayed """
+        for side, header in headers.items():
+            duped = tuple([header for _ in range(columns)])
+            headers[side] = np.concatenate(duped, axis=1)
+            logger.debug("side: %s header.shape: %s", side, header.shape)
+        return headers
+
 
 class Timelapse():
     """ Create the timelapse """
-    def __init__(self, model, use_mask, batchers):
-        logger.debug("Initializing %s: model: %s, use_mask: %s, batchers: '%s')",
-                     self.__class__.__name__, model, use_mask, batchers)
-        self.samples = Samples(model, use_mask)
+    def __init__(self, model, use_mask, coverage_ratio, batchers):
+        logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
+                     "batchers: '%s')", self.__class__.__name__, model, use_mask,
+                     coverage_ratio, batchers)
+        self.samples = Samples(model, use_mask, coverage_ratio)
         self.model = model
         self.batchers = batchers
         self.output_file = None
