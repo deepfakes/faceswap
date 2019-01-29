@@ -202,16 +202,10 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Plugin information """
         info_frame = ttk.Frame(self.optsframe)
         info_frame.pack(fill=tk.X, expand=True)
-        text = self.plugin_info
-        lbl = ttk.Label(info_frame,
-                        text=text,
-                        anchor=tk.CENTER,
-                        justify=tk.CENTER,
-                        background="#feffe8",
-                        borderwidth=1,
-                        relief=tk.SOLID,
-                        padding=3)
-        lbl.pack(padx=5, pady=(10, 5), side=tk.TOP)
+        lbl = ttk.Label(info_frame, text="About:", width=20, anchor=tk.W)
+        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+        info = ttk.Label(info_frame, text=self.plugin_info)
+        info.pack(padx=5, pady=5, fill=tk.X, expand=True)
 
 
 class OptionControl():
