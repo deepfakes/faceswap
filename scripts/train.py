@@ -140,6 +140,7 @@ class Train():
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
                 model.save_models()
+                trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
             exit(0)
@@ -215,6 +216,7 @@ class Train():
                 self.save_now = False
         logger.debug("Training cycle complete")
         model.save_models()
+        trainer.clear_tensorboard()
         self.stop = True
 
     def monitor_preview(self, thread):

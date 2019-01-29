@@ -22,6 +22,8 @@ import time
 import cv2
 import numpy as np
 
+from tensorflow import keras as tf_keras
+
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
@@ -47,6 +49,8 @@ class TrainerBase():
                                        use_mask,
                                        batch_size)
                          for side in images.keys()}
+        self.tensorboard = {side: self.tensorboard_callback(side)
+                            for side in images.keys()}
         self.samples = Samples(self.model,
                                use_mask,
                                self.model.training_opts["coverage_ratio"],
@@ -72,6 +76,18 @@ class TrainerBase():
             self.model.training_opts["landmarks"] = landmarks
         return use_mask
 
+    def tensorboard_callback(self, side):
+        """ Set up tensorboard callback """
+        log_dir = os.path.join(str(self.model.model_dir), "tf_logs_{}".format(side))
+        logger.debug("Setting up TensorBoard Logging. Side: %s", side)
+        tensorboard = tf_keras.callbacks.TensorBoard(log_dir=log_dir,
+                                                     histogram_freq=0,
+                                                     batch_size=self.batch_size,
+                                                     write_graph=True,
+                                                     write_grads=True)
+        tensorboard.set_model(self.model.predictors[side])
+        return tensorboard
+
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
         output = list()
@@ -79,7 +95,7 @@ class TrainerBase():
             display = ", ".join(["{}_{}: {:.5f}".format(self.model.loss_names[side][idx],
                                                         side.capitalize(),
                                                         this_loss)
-                                 for idx, this_loss in enumerate(loss[side])])
+                                 for idx, this_loss in enumerate(self.loss_to_list(loss[side]))])
             output.append(display)
         print("[{}] [#{:05d}] {}, {}".format(
             self.timestamp, self.model.iterations, output[0], output[1]), end='\r')
@@ -98,7 +114,10 @@ class TrainerBase():
                 self.timelapse.get_sample(side, timelapse_kwargs)
 
         self.model.state.iterations += 1
-        self.store_history(loss)
+
+        for side, side_loss in loss.items():
+            self.store_history(side, side_loss)
+            self.log_tensorboard(side, side_loss)
         self.print_loss(loss)
 
         if viewer is not None:
@@ -108,12 +127,32 @@ class TrainerBase():
         if timelapse_kwargs is not None:
             self.timelapse.output_timelapse()
 
-    def store_history(self, loss):
+    @staticmethod
+    def loss_to_list(loss):
+        """ Make sure loss is consistently a list """
+        loss = loss if isinstance(loss, list) else [loss]
+        return loss
+
+    def store_history(self, side, loss):
         """ Store the history of this step """
-        logger.trace("Updating loss history")
-        for side in ("a", "b"):
-            self.model.history[side].append(loss[side][0])  # Either only loss or total loss
-        logger.trace("Updated loss history")
+        logger.trace("Updating loss history: '%s'", side)
+        loss = self.loss_to_list(loss)
+        self.model.history[side].append(loss[0])  # Either only loss or total loss
+        logger.trace("Updated loss history: '%s'", side)
+
+    def log_tensorboard(self, side, loss):
+        """ Log loss to TensorBoard log """
+        logger.trace("Updating TensorBoard log: '%s'", side)
+        logs = {log[0]: log[1]
+                for log in zip(self.model.predictors[side].metrics_names, loss)}
+        self.tensorboard[side].on_epoch_end(self.model.state.iterations, logs)
+        logger.trace("Updated TensorBoard log: '%s'", side)
+
+    def clear_tensorboard(self):
+        """ Indicate training end to Tensorboard """
+        for side, tensorboard in self.tensorboard.items():
+            logger.debug("Ending Tensorboard. Side: '%s'", side)
+            tensorboard.on_train_end(None)
 
 
 class Batcher():
@@ -145,7 +184,6 @@ class Batcher():
         logger.trace("Training one step: (side: %s)", self.side)
         batch = self.get_next(is_preview_iteration)
         loss = self.model.predictors[self.side].train_on_batch(*batch)
-        loss = loss if isinstance(loss, list) else [loss]
         return loss
 
     def get_next(self, is_preview_iteration):
