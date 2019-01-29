@@ -61,22 +61,25 @@ def dfl_full(landmarks, face, channels=4):
         """
     logger.trace("face_shape: %s, landmarks: %s", face.shape, landmarks)
     mask = np.zeros(face.shape[0:2] + (1, ), dtype=np.float32)
-    hull1 = cv2.convexHull(np.concatenate((landmarks[0:17],  # pylint: disable=no-member
-                                           landmarks[48:],
-                                           [landmarks[0]],
-                                           [landmarks[8]],
-                                           [landmarks[16]])))
-    hull2 = cv2.convexHull(np.concatenate((landmarks[27:31],  # pylint: disable=no-member
-                                           [landmarks[33]])))
-    hull3 = cv2.convexHull(np.concatenate((landmarks[17:27],  # pylint: disable=no-member
-                                           [landmarks[0]],
-                                           [landmarks[27]],
-                                           [landmarks[16]],
-                                           [landmarks[33]])))
+    jaw = cv2.convexHull(np.concatenate((  # pylint: disable=no-member
+                                         landmarks[0:17],   # jawline
+                                         landmarks[48:68],  # mouth
+                                         [landmarks[0]],    # temple
+                                         [landmarks[8]],    # chin
+                                         [landmarks[16]]))) # temple
+    nose_ridge = cv2.convexHull(np.concatenate((  # pylint: disable=no-member
+                                                landmarks[27:31],  # nose line
+                                                [landmarks[33]]))) # nose point 
+    eyes = cv2.convexHull(np.concatenate((  # pylint: disable=no-member
+                                          landmarks[17:27],  # eyebrows
+                                          [landmarks[0]],    # temple
+                                          [landmarks[27]],   # nose top
+                                          [landmarks[16]],   # temple
+                                          [landmarks[33]]))) # nose point
 
-    cv2.fillConvexPoly(mask, hull1, (255, 255, 255))  # pylint: disable=no-member
-    cv2.fillConvexPoly(mask, hull2, (255, 255, 255))  # pylint: disable=no-member
-    cv2.fillConvexPoly(mask, hull3, (255, 255, 255))  # pylint: disable=no-member
+    cv2.fillConvexPoly(mask, jaw, (255, 255, 255))  # pylint: disable=no-member
+    cv2.fillConvexPoly(mask, nose_ridge, (255, 255, 255))  # pylint: disable=no-member
+    cv2.fillConvexPoly(mask, eyes, (255, 255, 255))  # pylint: disable=no-member
     return merge_mask(face, mask, channels)
 
 
