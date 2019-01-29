@@ -174,8 +174,8 @@ class Batcher():
         num_images = self.model.training_opts.get("preview_images", 14)
         num_images = min(batch_size, num_images)
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
-        images = images if images else self.target
-        samples = [samples[0:num_images]] if samples else [self.samples[0:num_images]]
+        images = images if images is not None else self.target
+        samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
         if self.use_mask:
             retval = [tgt[0:num_images] for tgt in images]
         else:
@@ -186,9 +186,9 @@ class Batcher():
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        batchsize = len(batch)  # TODO Check this is correct
         samples = batch[0]
         batch = batch[1:]   # Remove full size samples from batch
+        batchsize = len(samples)
         if self.use_mask:
             batch = self.compile_mask(batch)
         images = batch[1]
@@ -201,7 +201,8 @@ class Batcher():
                      self.side, images, batchsize)
         self.timelapse_feed = self.load_generator().minibatch_ab(images[:batchsize],
                                                                  batchsize, self.side,
-                                                                 do_shuffle=False)
+                                                                 do_shuffle=False,
+                                                                 is_timelapse=True)
         logger.debug("Set timelapse feed")
 
 
@@ -449,8 +450,8 @@ class Timelapse():
         """ Set the timelapse output folder """
         logger.debug("Setting up timelapse")
         if output is None:
-            output = get_folder(os.path.join(str(self.model.model_dir), "timelapse"))
-        self.output_file = output
+            output = str(get_folder(os.path.join(str(self.model.model_dir), "timelapse")))
+        self.output_file = str(output)
         logger.debug("Timelapse output set to '%s'", self.output_file)
 
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}

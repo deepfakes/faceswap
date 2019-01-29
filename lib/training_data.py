@@ -49,24 +49,30 @@ class TrainingDataGenerator():
         logger.debug("Mask function: %s", mask_func)
         return mask_func
 
-    def minibatch_ab(self, images, batchsize, side, do_shuffle=True):
+    def minibatch_ab(self, images, batchsize, side, do_shuffle=True, is_timelapse=False):
         """ Keep a queue filled to 8x Batch Size """
-        logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s)",
-                     len(images), batchsize, side, do_shuffle)
+        logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
+                     "is_timelapse: %s)", len(images), batchsize, side, do_shuffle, is_timelapse)
         self.batchsize = batchsize
-        q_name = "train_{}".format(side)
+        q_name = "timelapse_{}".format(side) if is_timelapse else "train_{}".format(side)
         q_size = batchsize * 8
         # Don't use a multiprocessing queue because sometimes the MP Manager borks on numpy arrays
         queue_manager.add_queue(q_name, maxsize=q_size, multiprocessing_queue=False)
-        load_thread = MultiThread(self.load_batches, images, q_name, side, do_shuffle)
+        load_thread = MultiThread(self.load_batches,
+                                  images,
+                                  q_name,
+                                  side,
+                                  is_timelapse,
+                                  do_shuffle)
         load_thread.start()
         logger.debug("Batching to queue: (side: '%s', queue: '%s')", side, q_name)
         return self.minibatch(q_name, load_thread)
 
-    def load_batches(self, images, q_name, side, do_shuffle=True):
+    def load_batches(self, images, q_name, side, is_timelapse, do_shuffle=True):
         """ Load the warped images and target images to queue """
-        logger.debug("Loading batch: (image_count: %s, q_name: '%s', side: '%s'. do_shuffle: %s)",
-                     len(images), q_name, side, do_shuffle)
+        logger.debug("Loading batch: (image_count: %s, q_name: '%s', side: '%s', "
+                     "is_timelapse: %s, do_shuffle: %s)",
+                     len(images), q_name, side, is_timelapse, do_shuffle)
         epoch = 0
         queue = queue_manager.get_queue(q_name)
         self.validate_samples(images)
@@ -75,7 +81,7 @@ class TrainingDataGenerator():
                 shuffle(images)
             for img in images:
                 logger.trace("Putting to batch queue: (q_name: '%s', side: '%s')", q_name, side)
-                queue.put(self.process_face(img, side))
+                queue.put(self.process_face(img, side, is_timelapse))
             epoch += 1
         logger.debug("Finished batching: (epoch: %s, q_name: '%s', side: '%s')",
                      epoch, q_name, side)
@@ -112,9 +118,10 @@ class TrainingDataGenerator():
         logger.debug("Finished minibatch generator for queue: '%s'", q_name)
         load_thread.join()
 
-    def process_face(self, filename, side):
+    def process_face(self, filename, side, is_timelapse):
         """ Load an image and perform transformation and warping """
-        logger.trace("Process face: (filename: '%s', side: '%s')", filename, side)
+        logger.trace("Process face: (filename: '%s', side: '%s', is_timelapse: %s)",
+                     filename, side, is_timelapse)
         try:
             image = cv2.imread(filename)  # pylint: disable=no-member
         except TypeError:
@@ -126,8 +133,10 @@ class TrainingDataGenerator():
             image = self.mask_function(src_pts, image, channels=4)
 
         image = self.processing.color_adjust(image)
-        image = self.processing.random_transform(image)
-        image = self.processing.do_random_flip(image)
+
+        if not is_timelapse:
+            image = self.processing.random_transform(image)
+            image = self.processing.do_random_flip(image)
         sample = image.copy()[:, :, :3]
 
         if self.full_face:
@@ -184,8 +193,6 @@ class ImageManipulation():
         self.shift_range = 0.05  # Range to randomly translate the image by
         self.random_flip = 0.5  # Chance to flip the image horizontally
         # Transform and Warp args
-        self.zoom_source = input_size // 64
-        self.zoom_target = output_size // 64
         self.input_size = input_size
         self.output_size = output_size
         # Warp args
@@ -205,7 +212,7 @@ class ImageManipulation():
         mask = None
         if image.shape[2] == 4:
             logger.trace("Image contains mask")
-            mask = np.expand_dims(image[:, :, -1], axis = 2)
+            mask = np.expand_dims(image[:, :, -1], axis=2)
             image = image[:, :, :3]
         else:
             logger.trace("Image has no mask")
@@ -244,35 +251,35 @@ class ImageManipulation():
         coverage = self.get_coverage(image)
         assert height == width and height % 2 == 0
 
-        #### move to _init as this section is static
+        # TODO move to _init as this section is static
         range_ = np.linspace(height // 2 - coverage // 2,
                              height // 2 + coverage // 2,
                              5, dtype='float32')
         mapx = np.broadcast_to(range_, (5, 5)).copy()
         mapy = mapx.T
-        #mapx, mapy = np.float32(np.meshgrid(range_,range_)) # instead of broadcast
+        # mapx, mapy = np.float32(np.meshgrid(range_,range_)) # instead of broadcast
 
         pad = int(1.25 * self.input_size)
-        slices = slice( pad // 10, -pad // 10)
-        dst_slice = slice(0,(self.input_size+1),(self.input_size//4))
+        slices = slice(pad // 10, -pad // 10)
+        dst_slice = slice(0, (self.input_size+1), (self.input_size//4))
         dst_points = np.mgrid[dst_slice, dst_slice]
         interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
         ####
 
-        for i, map in enumerate([mapx, mapy]):
-            map = map + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map, (pad, pad))[slices, slices] # pylint: disable=no-member
+        for i, map_ in enumerate([mapx, mapy]):
+            map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
+            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint: disable=no-member
 
         warped_image = cv2.remap(  # pylint: disable=no-member
-            image, interp[0], interp[1], cv2.INTER_LINEAR) # pylint: disable=no-member
+            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint: disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
 
-        ### investigate taking a resize of original image as target
-        ### rather than unwarping the warp of the resized orginal image
+        # TODO investigate taking a resize of original image as target
+        # rather than unwarping the warp of the resized orginal image
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
         mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
         target_image = cv2.warpAffine(  # pylint: disable=no-member
-                       image, mat, (self.output_size, self.output_size))
+            image, mat, (self.output_size, self.output_size))
         logger.trace("Target image shape: %s", target_image.shape)
 
         warped_image, warped_mask = self.separate_mask(warped_image)
@@ -281,10 +288,10 @@ class ImageManipulation():
         if target_mask is None:
             logger.trace("Randomly warped image")
             return [warped_image, target_image]
-        else:
-            logger.trace("Target mask shape: %s", target_mask.shape)
-            logger.trace("Randomly warped image and mask")
-            return [warped_image, target_image, target_mask]
+
+        logger.trace("Target mask shape: %s", target_mask.shape)
+        logger.trace("Randomly warped image and mask")
+        return [warped_image, target_image, target_mask]
 
     def random_warp_full_face(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
@@ -300,7 +307,7 @@ class ImageManipulation():
 
         source = src_points
         destination = (dst_points.copy().astype('float32') +
-                      np.random.normal(size=dst_points.shape, scale=2.0))
+                       np.random.normal(size=dst_points.shape, scale=2.0))
         destination = destination.astype('uint8')
 
         face_core = cv2.convexHull(np.concatenate(  # pylint: disable=no-member
@@ -323,7 +330,7 @@ class ImageManipulation():
             source.pop(idx)
             destination.pop(idx)
 
-        grid_z = griddata(destination, source, (grid_x,grid_y), method="linear")
+        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear")
         map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size)
         map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size)
         map_x_32 = map_x.astype('float32')
@@ -336,13 +343,13 @@ class ImageManipulation():
                                  cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         target_image = image
 
-        slices = slice(size // 32,size - size // 32)  # 8px on a 256px image
+        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
         warped_image = cv2.resize(  # pylint: disable=no-member
-            warped_image[slices,slices,:], (self.input_size, self.input_size),
+            warped_image[slices, slices, :], (self.input_size, self.input_size),
             cv2.INTER_AREA)  # pylint: disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
         target_image = cv2.resize(  # pylint: disable=no-member
-            target_image[slices,slices,:], (self.output_size, self.output_size),
+            target_image[slices, slices, :], (self.output_size, self.output_size),
             cv2.INTER_AREA)  # pylint: disable=no-member
         logger.trace("Target image shape: %s", target_image.shape)
 
@@ -352,17 +359,17 @@ class ImageManipulation():
         if target_mask is None:
             logger.trace("Randomly warped image")
             return [warped_image, target_image]
-        else:
-            logger.trace("Target mask shape: %s", target_mask.shape)
-            logger.trace("Randomly warped image and mask")
-            return [warped_image, target_image, target_mask]
+
+        logger.trace("Target mask shape: %s", target_mask.shape)
+        logger.trace("Randomly warped image and mask")
+        return [warped_image, target_image, target_mask]
 
     def do_random_flip(self, image):
         """ Perform flip on image if random number is within threshold """
         logger.trace("Randomly flipping image")
         if np.random.random() < self.random_flip:
             logger.trace("Flip within threshold. Flipping")
-            retval = image[:,::-1]
+            retval = image[:, ::-1]
         else:
             logger.trace("Flip outside threshold. Not Flipping")
             retval = image
