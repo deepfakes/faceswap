@@ -457,7 +457,6 @@ class State():
     def load(self):
         """ Load state file """
         logger.debug("Loading State")
-        global _CONFIG  # pylint: disable=global-statement
         try:
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
@@ -467,9 +466,7 @@ class State():
                 self.state = state.get("training_size", 256)
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
-                logger.debug("Replacing config. Old config: %s", _CONFIG)
-                _CONFIG = self.config
-                logger.debug("Replaced config. New config: %s", _CONFIG)
+                self.replace_config()
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
             logger.debug("IOError: %s", str(err))
@@ -502,3 +499,15 @@ class State():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
+
+    def replace_config(self):
+        """ Replace the loaded config with the one contained within the state file """
+        global _CONFIG  # pylint: disable=global-statement
+        # Add any new items to state config for legacy purposes
+        for key, val in _CONFIG.items():
+            if key not in self.config.keys():
+                logger.info("Adding new config item to state file: '%s': '%s'", key, val)
+                self.config[key] = val
+        logger.debug("Replacing config. Old config: %s", _CONFIG)
+        _CONFIG = self.config
+        logger.debug("Replaced config. New config: %s", _CONFIG)
