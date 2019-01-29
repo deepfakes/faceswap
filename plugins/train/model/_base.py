@@ -283,7 +283,7 @@ class ModelBase():
             if not is_loaded:
                 break
         if is_loaded:
-            logger.info("loaded model")
+            logger.info("Loaded model from disk: '%s'", self.model_dir)
         return is_loaded
 
     def save_models(self):
@@ -377,7 +377,6 @@ class NNMeta():
 
     def load(self, fullpath=None, predict=False):
         """ Load model """
-
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Loading model: '%s'", fullpath)
         try:
@@ -391,8 +390,7 @@ class NNMeta():
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
-
-        except Exception as err:  # pylint: disable=broad-except
+        except OSError as err:  # pylint: disable=broad-except
             if predict:
                 raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
