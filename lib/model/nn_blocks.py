@@ -15,7 +15,7 @@ from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 from keras.initializers import he_uniform
-from .initializers import ICNR_init
+from .initializers import ICNR
 from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
 
@@ -60,7 +60,7 @@ class NNBlocks():
                      inp, filters, kernel_size, use_instance_norm, kwargs)
         kwargs = self.update_kwargs(kwargs)
         if self.use_icnr_init:
-            kwargs["kernel_initializer"] = ICNR_init(initializer=kwargs["kernel_initializer"])
+            kwargs["kernel_initializer"] = ICNR(initializer=kwargs["kernel_initializer"])
         var_x = Conv2D(filters * 4,
                        kernel_size=kernel_size,
                        padding='same',

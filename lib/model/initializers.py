@@ -30,7 +30,7 @@ def icnr_keras(shape, dtype=None):
     return var_x
 
 
-class ICNR_init(initializers.Initializer):  # pylint: disable=invalid-name
+class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
     '''
     ICNR initializer for checkerboard artifact free sub pixel convolution
 
@@ -55,21 +55,23 @@ class ICNR_init(initializers.Initializer):  # pylint: disable=invalid-name
         if self.scale == 1:
             return self.initializer(shape)
         new_shape = shape[:3] + [shape[3] // (self.scale ** 2)]
+        if type(self.initializer) is dict:
+            self.initializer = initializers.deserialize(self.initializer)
         var_x = self.initializer(new_shape, dtype)
         var_x = tf.transpose(var_x, perm=[2, 0, 1, 3])
         var_x = tf.image.resize_nearest_neighbor(
-            var_x,
-            size=(shape[0] * self.scale, shape[1] * self.scale),
-            align_corners=True)
+                         var_x,
+                         size=(shape[0] * self.scale, shape[1] * self.scale),
+                         align_corners=True)
         var_x = tf.space_to_depth(var_x, block_size=self.scale, data_format='NHWC')
         var_x = tf.transpose(var_x, perm=[1, 2, 0, 3])
         return var_x
 
     def get_config(self):
         config = {'scale': self.scale,
-                  'initializer': initializers.serialize(self.initializer)
+                  'initializer': self.initializer
                   }
-        base_config = super(ICNR_init, self).get_config()
+        base_config = super(ICNR, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
