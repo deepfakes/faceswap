@@ -95,7 +95,7 @@ class TrainerBase():
             display = ", ".join(["{}_{}: {:.5f}".format(self.model.loss_names[side][idx],
                                                         side.capitalize(),
                                                         this_loss)
-                                 for idx, this_loss in enumerate(self.loss_to_list(loss[side]))])
+                                 for idx, this_loss in enumerate(loss[side])])
             output.append(display)
         print("[{}] [#{:05d}] {}, {}".format(
             self.timestamp, self.model.iterations, output[0], output[1]), end='\r')
@@ -127,16 +127,9 @@ class TrainerBase():
         if timelapse_kwargs is not None:
             self.timelapse.output_timelapse()
 
-    @staticmethod
-    def loss_to_list(loss):
-        """ Make sure loss is consistently a list """
-        loss = loss if isinstance(loss, list) else [loss]
-        return loss
-
     def store_history(self, side, loss):
         """ Store the history of this step """
         logger.trace("Updating loss history: '%s'", side)
-        loss = self.loss_to_list(loss)
         self.model.history[side].append(loss[0])  # Either only loss or total loss
         logger.trace("Updated loss history: '%s'", side)
 
@@ -184,6 +177,7 @@ class Batcher():
         logger.trace("Training one step: (side: %s)", self.side)
         batch = self.get_next(is_preview_iteration)
         loss = self.model.predictors[self.side].train_on_batch(*batch)
+        loss = loss if isinstance(loss, list) else [loss]
         return loss
 
     def get_next(self, is_preview_iteration):
