@@ -28,7 +28,7 @@ class ModelBase():
     def __init__(self,
                  model_dir,
                  gpus,
-                 training_image_size,
+                 training_image_size=256,
                  alignments_paths=None,
                  preview_scale=100,
                  input_shape=None,
@@ -435,8 +435,8 @@ class State():
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
-        self.training_size = training_image_size
         self.iterations = 0
+        self.training_size = training_image_size
         self.inputs = dict()
         self.config = dict()
         self.load()
@@ -459,9 +459,9 @@ class State():
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
                 self.iterations = state.get("iterations", 0)
+                self.training_size = state.get("training_size", 256)
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
-                self.state = state.get("training_size", 256)
                 logger.debug("Loaded state: %s", {key: val for key, val in state.items()
                                                   if key != "models"})
                 self.replace_config()
