@@ -13,6 +13,7 @@
         coverage_ratio:     Ratio of face to be cropped out for training
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
+        enable_tensorboard: Whether to enable tensorboard logging or not
 """
 
 import logging
@@ -49,8 +50,8 @@ class TrainerBase():
                                        use_mask,
                                        batch_size)
                          for side in images.keys()}
-        self.tensorboard = {side: self.tensorboard_callback(side)
-                            for side in images.keys()}
+
+        self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
                                use_mask,
                                self.model.training_opts["coverage_ratio"],
@@ -76,16 +77,25 @@ class TrainerBase():
             self.model.training_opts["landmarks"] = landmarks
         return use_mask
 
-    def tensorboard_callback(self, side):
+    def set_tensorboard(self):
         """ Set up tensorboard callback """
-        log_dir = os.path.join(str(self.model.model_dir), "tf_logs_{}".format(side))
-        logger.debug("Setting up TensorBoard Logging. Side: %s", side)
-        tensorboard = tf_keras.callbacks.TensorBoard(log_dir=log_dir,
-                                                     histogram_freq=0,
-                                                     batch_size=self.batch_size,
-                                                     write_graph=True,
-                                                     write_grads=True)
-        tensorboard.set_model(self.model.predictors[side])
+        if not self.model.training_opts["enable_tensorboard"]:
+            logger.verbose("TensorBoard logging disabled")
+            return None
+
+        logger.info("Enabling TensorBoard Logging")
+        tensorboard = dict()
+        for side in self.images.keys():
+            logger.debug("Setting up TensorBoard Logging. Side: %s", side)
+            log_dir = os.path.join(str(self.model.model_dir),
+                                   "{}_tf_logs_{}".format(self.model.name, side))
+            tbs = tf_keras.callbacks.TensorBoard(log_dir=log_dir,
+                                                 histogram_freq=0,  # Must be 0 or hangs
+                                                 batch_size=self.batch_size,
+                                                 write_graph=True,
+                                                 write_grads=True)
+            tbs.set_model(self.model.predictors[side])
+            tensorboard[side] = tbs
         return tensorboard
 
     def print_loss(self, loss):
@@ -135,6 +145,8 @@ class TrainerBase():
 
     def log_tensorboard(self, side, loss):
         """ Log loss to TensorBoard log """
+        if not self.tensorboard:
+            return
         logger.trace("Updating TensorBoard log: '%s'", side)
         logs = {log[0]: log[1]
                 for log in zip(self.model.predictors[side].metrics_names, loss)}
@@ -143,6 +155,8 @@ class TrainerBase():
 
     def clear_tensorboard(self):
         """ Indicate training end to Tensorboard """
+        if not self.tensorboard:
+            return
         for side, tensorboard in self.tensorboard.items():
             logger.debug("Ending Tensorboard. Side: '%s'", side)
             tensorboard.on_train_end(None)
@@ -482,7 +496,8 @@ class Timelapse():
         """ Set the timelapse output folder """
         logger.debug("Setting up timelapse")
         if output is None:
-            output = str(get_folder(os.path.join(str(self.model.model_dir), "timelapse")))
+            output = str(get_folder(os.path.join(str(self.model.model_dir),
+                                                 "{}_timelapse".format(self.model.name))))
         self.output_file = str(output)
         logger.debug("Timelapse output set to '%s'", self.output_file)
 

@@ -12,6 +12,7 @@
 !Dockerfile*
 !requirements*
 !.cache
+!config/
 !lib/
 !lib/*
 !lib/gui

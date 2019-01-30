@@ -82,7 +82,8 @@ class FaceswapConfig():
     def get_config_file(self):
         """ Return the config file from the calling folder """
         dirname = os.path.dirname(sys.modules[self.__module__].__file__)
-        retval = os.path.join(dirname, "config.ini")
+        folder, fname = os.path.split(dirname)
+        retval = os.path.join(os.path.dirname(folder), "config", "{}.ini".format(fname))
         logger.debug("Config File location: '%s'", retval)
         return retval
 

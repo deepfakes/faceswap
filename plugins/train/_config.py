@@ -43,8 +43,11 @@ class Config(FaceswapConfig):
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
             info="If using a mask, Use Penalized loss for Mask training. Can stack with DSSIM.\n"
                  "May increase overall quality.")
+        self.add_item(
+            section=section, title="enable_tensorboard", datatype=bool, default=False,
+            info="Enable TensorBoard logging. Logs are stored in the Model directory.")
 
-        # << DFAKER MODEL OPTIONS >> #
+        # << DFAKER OPTIONS >> #
         section = "model.dfaker"
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
@@ -158,7 +161,7 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="A Higher resolution version of the Original "
                               "Model by VillainGuy.\n"
-                              "Extremely VRAM heavy. Full model requires 9GB+")
+                              "Extremely VRAM heavy. Full model requires 9GB+ for batchsize 16")
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "

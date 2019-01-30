@@ -94,6 +94,7 @@ class ModelBase():
         self.training_opts["mask_type"] = self.config.get("mask_type", None)
         self.training_opts["coverage_ratio"] = self.config.get("coverage", 62.5) / 100
         self.training_opts["preview_images"] = 14
+        self.training_opts["enable_tensorboard"] = self.config.get("enable_tensorboard", False)
         logger.debug("Set training data: %s", self.training_opts)
 
     def build(self):
@@ -509,3 +510,4 @@ class State():
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
         logger.debug("Replaced config. New config: %s", _CONFIG)
+        logger.info("Using configuration saved in state file")
