@@ -261,8 +261,7 @@ class ImageManipulation():
 
         pad = int(1.25 * self.input_size)
         slices = slice(pad // 10, -pad // 10)
-        dst_slice = slice(0, (self.input_size+1), (self.input_size//4))
-        dst_points = np.mgrid[dst_slice, dst_slice]
+        dst_slice = slice(0, (self.output_size + 1), (self.output_size // 4))
         interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
         ####
 
@@ -277,6 +276,7 @@ class ImageManipulation():
         # TODO investigate taking a resize of original image as target
         # rather than unwarping the warp of the resized orginal image
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
+        dst_points = np.mgrid[dst_slice, dst_slice]
         mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
         target_image = cv2.warpAffine(  # pylint: disable=no-member
             image, mat, (self.output_size, self.output_size))

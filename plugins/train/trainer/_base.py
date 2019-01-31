@@ -313,6 +313,8 @@ class Samples():
     def resize_sample(side, sample, target_size):
         """ Resize samples where predictor expects different shape from processed image """
         scale = target_size / sample.shape[1]
+        if scale == 1.0:
+            return sample
         logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                      side, sample.shape, target_size, scale)
         interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA  # pylint: disable=no-member
