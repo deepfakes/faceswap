@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Configure Plugins popup of the Faceswap GUI """
 
+from configparser import ConfigParser
 import logging
 import tkinter as tk
 
@@ -133,12 +134,23 @@ class ConfigurePlugins(tk.Toplevel):
                    for value in self.config_dict_gui.values()
                    for sect, opts in value.items()}
 
-        for section, opts in options.items():
-            for item, opt in opts.items():
+        new_config = ConfigParser(allow_no_value=True)
+        for section, items in self.config.defaults.items():
+            logger.debug("Adding section: '%s')", section)
+            self.config.insert_config_section(section, items["helptext"], config=new_config)
+            for item, def_opt in items.items():
                 if item == "helptext":
                     continue
-                val = str(opt["selected"].get())
-                self.config.config.set(section, item, val)
+                new_opt = options[section][item]
+                logger.debug("Adding option: (item: '%s', default: '%s' new: '%s'",
+                             item, def_opt, new_opt)
+                helptext = def_opt["helptext"]
+                helptext += self.config.set_helptext_choices(def_opt)
+                helptext += "\n[Default: {}]".format(def_opt["default"])
+                helptext = self.config.format_help(helptext, is_section=False)
+                new_config.set(section, helptext)
+                new_config.set(section, item, str(new_opt["selected"].get()))
+        self.config.config = new_config
         self.config.save_config()
         print("Saved config: '{}'".format(self.config.configfile))
         self.destroy()
