@@ -12,14 +12,13 @@ class DetectedFace():
     """ Detected face and landmark information """
     def __init__(  # pylint: disable=invalid-name
             self, image=None, x=None, w=None, y=None, h=None,
-            frame_dims=None, landmarksXY=None):
+            landmarksXY=None):
         logger.trace("Initializing %s", self.__class__.__name__)
         self.image = image
         self.x = x
         self.w = w
         self.y = y
         self.h = h
-        self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
         self.hash = None  # Hash must be set when the file is saved due to image compression
 
@@ -63,17 +62,12 @@ class DetectedFace():
                            self.x: self.x + self.w]
 
     def to_alignment(self):
-        """ Convert a detected face to alignment dict
-
-            NB: frame_dims should be the height and width
-                of the original frame. """
-
+        """ Convert a detected face to alignment dict """
         alignment = dict()
         alignment["x"] = self.x
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
-        alignment["frame_dims"] = self.frame_dims
         alignment["landmarksXY"] = self.landmarksXY
         alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
@@ -87,15 +81,14 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
-                     "frame_dims: %s, landmarks: %s)",
-                     self.x, self.w, self.y, self.h, self.frame_dims, self.landmarksXY)
+                     "landmarks: %s)",
+                     self.x, self.w, self.y, self.h, self.landmarksXY)
 
     # <<< Aligned Face methods and properties >>> #
     def load_aligned(self, image, size=256, align_eyes=False):

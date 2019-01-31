@@ -47,9 +47,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n\tfile." + output_opts + frames_dir +
                     "\n'missing-frames': Identify frames in the alignments file that do no "
                     "\n\tappear within the frames folder/video." + output_opts + frames_dir +
-                    "\n'legacy': This updates legacy alignments to the latest format by adding"
-                    "\n\tframe dimensions, rotating the landmarks and bounding boxes and adding"
-                    "\n\tface_hashes" + frames_and_faces_dir +
+                    "\n'legacy': This updates legacy alignments to the latest format by rotating"
+                    "\n\tthe landmarks and bounding boxes and adding face_hashes." +
+                    frames_and_faces_dir +
                     "\n'leftover-faces': Identify faces in the faces folder that do not exist in"
                     "\n\tthe alignments file." + output_opts + faces_dir +
                     "\n'multi-faces': Identify where multiple faces exist within the alignments"

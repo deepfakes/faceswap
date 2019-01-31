@@ -31,6 +31,7 @@ class Convert():
         """ Patch the image """
         logger.trace("Patching image")
         image = image.astype('float32')
+        image_size = (image.shape[1], image.shape[0])
         coverage = int(self.training_coverage_ratio * self.training_size)
         padding = (self.training_size - coverage) // 2
         logger.trace("coverage: %s, padding: %s", coverage, padding)
@@ -40,17 +41,17 @@ class Convert():
             self.mask = Mask(self.args.mask_type, self.training_size, padding, self.crop)
 
         detected_face.load_aligned(image, size=self.training_size, align_eyes=False)
-        new_image = self.get_new_image(image, detected_face, coverage)
-        image_mask = self.get_image_mask(detected_face)
+        new_image = self.get_new_image(image, detected_face, coverage, image_size)
+        image_mask = self.get_image_mask(detected_face, image_size)
         patched_face = self.apply_fixes(image,
                                         new_image,
                                         image_mask,
-                                        (detected_face.frame_dims[1], detected_face.frame_dims[0]))
+                                        image_size)
 
         logger.trace("Patched image")
         return patched_face
 
-    def get_new_image(self, image, detected_face, coverage):
+    def get_new_image(self, image, detected_face, coverage, image_size):
         """ Get the new face from the predictor """
         logger.trace("coverage: %s", coverage)
         src_face = detected_face.aligned_face
@@ -82,15 +83,15 @@ class Convert():
         new_image = cv2.warpAffine(  # pylint: disable=no-member
             src_face,
             detected_face.adjusted_matrix,
-            (detected_face.frame_dims[1], detected_face.frame_dims[0]),
+            image_size,
             background,
             flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
             borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         return new_image
 
-    def get_image_mask(self, detected_face):
+    def get_image_mask(self, detected_face, image_size):
         """ Get the image mask """
-        mask = self.mask.get_mask(detected_face)
+        mask = self.mask.get_mask(detected_face, image_size)
         if self.args.erosion_size != 0:
             kwargs = {'src': mask,
                       'kernel': self.set_erosion_kernel(mask),
@@ -254,9 +255,8 @@ class Mask():
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_mask(self, detected_face):
+    def get_mask(self, detected_face, image_size):
         """ Return a face mask """
-        image_size = (detected_face.frame_dims[1], detected_face.frame_dims[0])
         kwargs = {"matrix": detected_face.adjusted_matrix,
                   "interpolators": detected_face.adjusted_interpolators,
                   "landmarks": detected_face.landmarks_as_xy,

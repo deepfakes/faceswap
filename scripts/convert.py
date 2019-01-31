@@ -274,8 +274,6 @@ class OptionalActions():
 
 class Legacy():
     """ Update legacy alignments:
-
-        - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
           and remove the 'r' parameter
         - Add face hashes to alignments file
@@ -288,15 +286,10 @@ class Legacy():
 
     def process(self, faces_dir):
         """ Run the rotate alignments process """
-        no_dims = self.alignments.get_legacy_no_dims()
         rotated = self.alignments.get_legacy_rotation()
         hashes = self.alignments.get_legacy_no_hashes()
-        if not no_dims and not rotated and not hashes:
+        if not rotated and not hashes:
             return
-        if no_dims:
-            logger.info("Legacy landmarks found. Adding frame dimensions...")
-            self.add_dimensions(no_dims)
-            self.alignments.save()
         if rotated:
             logger.info("Legacy rotated frames found. Converting...")
             self.rotate_landmarks(rotated)
@@ -306,22 +299,14 @@ class Legacy():
             self.add_hashes(hashes, faces_dir)
             self.alignments.save()
 
-    def add_dimensions(self, no_dims):
-        """ Add width and height of original frame to alignments """
-        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
-            if no_dim not in self.frames.keys():
-                continue
-            filename = self.frames[no_dim]
-            dims = cv2.imread(filename).shape[:2]  # pylint: disable=no-member
-            self.alignments.add_dimensions(no_dim, dims)
-
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
         for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
-            if rotate_item not in self.frames.keys():
+            frame = self.frames.get(rotate_item, None)
+            if frame is None:
                 logger.debug("Skipping missing frame: '%s'", rotate_item)
                 continue
-            self.alignments.rotate_existing_landmarks(rotate_item)
+            self.alignments.rotate_existing_landmarks(rotate_item, frame)
 
     def add_hashes(self, hashes, faces_dir):
         """ Add Face Hashes to the alignments file """

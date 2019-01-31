@@ -352,8 +352,7 @@ class Extract():
             valid_faces = faces
         else:
             sizes = self.extracted_faces.get_roi_size_for_frame(frame)
-            valid_faces = [faces[idx]
-                           for idx, size in enumerate(sizes)
+            valid_faces = [faces[idx] for idx, size in enumerate(sizes)
                            if size >= self.extracted_faces.size]
         logger.trace("frame: '%s', total_faces: %s, valid_faces: %s",
                      frame, len(faces), len(valid_faces))
@@ -362,8 +361,6 @@ class Extract():
 
 class Legacy():
     """ Update legacy alignments:
-
-        - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
           and remove the 'r' parameter
         - Add face hashes to alignments file
@@ -383,16 +380,11 @@ class Legacy():
 
     def process(self):
         """ Run the rotate alignments process """
-        no_dims = self.alignments.get_legacy_no_dims()
         rotated = self.alignments.get_legacy_rotation()
         hashes = self.alignments.get_legacy_no_hashes()
-        if (not self.frames or (not no_dims and not rotated)) and (not self.faces or not hashes):
+        if (not self.frames or not rotated) and (not self.faces or not hashes):
             return
         logger.info("[UPDATE LEGACY LANDMARKS]")  # Tidy up cli output
-        if no_dims and self.frames:
-            logger.info("Legacy landmarks found. Adding frame dimensions...")
-            self.add_dimensions(no_dims)
-            self.alignments.save()
         if rotated and self.frames:
             logger.info("Legacy rotated frames found. Converting...")
             self.rotate_landmarks(rotated)
@@ -402,20 +394,13 @@ class Legacy():
             self.add_hashes(hashes)
             self.alignments.save()
 
-    def add_dimensions(self, no_dims):
-        """ Add width and height of original frame to alignments """
-        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
-            if no_dim not in self.frames.items.keys():
-                continue
-            dims = self.frames.load_image(no_dim).shape[:2]
-            self.alignments.add_dimensions(no_dim, dims)
-
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
         for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
-            if rotate_item not in self.frames.items.keys():
+            frame = self.frames.get(rotate_item, None)
+            if frame is None:
                 continue
-            self.alignments.rotate_existing_landmarks(rotate_item)
+            self.alignments.rotate_existing_landmarks(rotate_item, frame)
 
     def add_hashes(self, hashes):
         """ Add Face Hashes to the alignments file """

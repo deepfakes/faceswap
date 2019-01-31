@@ -221,7 +221,6 @@ class Extract():
             detected_face = DetectedFace()
             detected_face.from_dlib_rect(face, image)
             detected_face.landmarksXY = landmarks[idx]
-            detected_face.frame_dims = image.shape[:2]
             detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": detected_face})
