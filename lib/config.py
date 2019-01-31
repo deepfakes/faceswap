@@ -264,6 +264,9 @@ class FaceswapConfig():
                 if item == "helptext" or not opt["choices"]:
                     continue
                 opt_value = self.config.get(section, item)
+                if opt_value.lower() == "none" and any(choice.lower() == "none"
+                                                       for choice in opt["choices"]):
+                    continue
                 if opt_value not in opt["choices"]:
                     default = str(opt["default"])
                     logger.warning("'%s' is not a valid config choice for '%s': '%s'. Defaulting "
