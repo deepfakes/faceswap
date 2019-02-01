@@ -112,8 +112,8 @@ class Config(FaceswapConfig):
         # << ORIGINAL HIRES MODEL OPTIONS >> #
         section = "model.original_hires"
         self.add_section(title=section,
-                         info="Higher resolution version of the Original "
-                              "Model")
+                         info="Higher resolution version of the Original Model.\n"
+                              "This is an unbalanced model so b>a swaps may not work well")
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
