@@ -53,11 +53,12 @@ The type of computations that the process does are well suited for graphics card
 
 ## Supported operating systems
 - **Windows 10**
-  Windows 7 and 8 might work. Your milage may vary
+  Windows 7 and 8 might work. Your milage may vary.
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work.
 - **macOS**
   GPU support on macOS is limited due to lack of drivers/libraries from Nvidia.
+- All operating systems must be 64-bit for Tensorflow to run.
 
 Alternatively there is a docker image that is based on Debian.
 
@@ -68,9 +69,9 @@ The developers are also not responsible for any damage you might cause to your o
 
 # General Install Guide
 ## Installing dependencies
-- Python >= 3.2
+- Python >= 3.2-3.6 64-bit (cannot be 3.7.x as Tensorflow has not been updated to provide support)
   - apt/yum install python3 (Linux)
-  - [Installer](https://www.python.org/downloads/) (Windows)
+  - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
   - [brew](https://brew.sh/) install python3 (macOS)
 
 - [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
