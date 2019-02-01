@@ -117,7 +117,8 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
-                 "with a changed lowmem mode are not compatible with each other.")
+                 "with a changed lowmem mode are not compatible with each other. NB: lowmem will "
+                 "override cutom nodes and complexity settings.")
         self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"

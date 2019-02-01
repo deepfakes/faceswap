@@ -26,7 +26,7 @@ class Model(OriginalModel):
 
     def encoder(self):
         """ Encoder Network """
-        kwargs = {"kernel_initializer": self.kernel_initializer}
+        kwargs = dict(kernel_initializer=self.kernel_initializer)
         input_ = Input(shape=self.input_shape)
         in_conv_filters = self.input_shape[0]
         if self.input_shape[0] > 128:
@@ -39,7 +39,8 @@ class Model(OriginalModel):
         for _ in range(res_cycles):
             nn_x = self.blocks.res_block(var_x, 128, **kwargs)
             var_x = nn_x
-        var_x = add([var_x, tmp_x])  # consider adding scale before this layer to scale the residual chain
+        # consider adding scale before this layer to scale the residual chain
+        var_x = add([var_x, tmp_x])
         var_x = self.blocks.conv(var_x, 128, **kwargs)
         var_x = PixelShuffler()(var_x)
         var_x = self.blocks.conv(var_x, 128, **kwargs)
@@ -58,8 +59,8 @@ class Model(OriginalModel):
 
     def decoder(self):
         """ Decoder Network """
+        kwargs = dict(kernel_initializer=self.kernel_initializer)
         decoder_shape = self.input_shape[0] // 8
-        kwargs = {"kernel_initializer": self.kernel_initializer}
         input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
         var_x = input_
