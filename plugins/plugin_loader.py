@@ -55,15 +55,15 @@ class PluginLoader():
                         if not item.name.startswith("_")
                         and item.name.endswith(".py"))
         return models
-        
+
     @staticmethod
     def get_available_converters():
         """ Return a list of available converters """
         converter_path = os.path.join(os.path.dirname(__file__), "convert")
         converters = sorted(item.name.replace(".py", "").replace("_", "-")
-                        for item in os.scandir(converter_path)
-                        if not item.name.startswith("_")
-                        and item.name.endswith(".py"))
+                            for item in os.scandir(converter_path)
+                            if not item.name.startswith("_")
+                            and item.name.endswith(".py"))
         return converters
 
     @staticmethod
@@ -83,4 +83,4 @@ class PluginLoader():
     def get_default_model():
         """ Return the default model """
         models = PluginLoader.get_available_models()
-        return 'Original' if 'Original' in models else models[0]
+        return 'original' if 'original' in models else models[0]

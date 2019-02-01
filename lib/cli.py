@@ -712,8 +712,8 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "alignments_path_a",
                               "default": None,
                               "help": "Path to alignments file for training set A. Only required "
-                                      "if you are using a masked model, or using targeted "
-                                      "training. Defaults to <input-A>/alignments.json if not "
+                                      "if you are using a masked model or warp-to-landmarks is "
+                                      "enabled. Defaults to <input-A>/alignments.json if not "
                                       "provided."})
         argument_list.append({"opts": ("-alb", "--alignments-B"),
                               "action": FileFullPaths,
@@ -722,8 +722,8 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "alignments_path_b",
                               "default": None,
                               "help": "Path to alignments file for training set B. Only required "
-                                      "if you are using a masked model, or using targeted "
-                                      "training. Defaults to <input-B>/alignments.json if not "
+                                      "if you are using a masked model or warp-to-landmarks is "
+                                      "enabled. Defaults to <input-B>/alignments.json if not "
                                       "provided."})
         argument_list.append({"opts": ("-m", "--model-dir"),
                               "action": DirFullPaths,
@@ -795,6 +795,23 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Sets allow_growth option of Tensorflow "
                                       "to spare memory on some configs"})
+        argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
+                              "action": "store_true",
+                              "dest": "warp_to_landmarks",
+                              "default": False,
+                              "help": "Warps training faces to closely matched Landmarks from the "
+                                      "opposite face-set rather than randomly warping the face. "
+                                      "This is the 'dfaker' way of doing warping. Alignments "
+                                      "files for both sets of faces must be provided if using "
+                                      "this option."})
+        argument_list.append({"opts": ("-nf", "--no-flip"),
+                              "action": "store_true",
+                              "dest": "no_flip",
+                              "default": False,
+                              "help": "To effectively learn, a random set of images are flipped "
+                                      "horizontally. Sometimes it is desirable for this not to "
+                                      "occur. Generally this should be left off except for "
+                                      "during 'fit training'."})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
                               "dest": "timelapse_input_a",

@@ -28,6 +28,8 @@ class ModelBase():
     def __init__(self,
                  model_dir,
                  gpus,
+                 warp_to_landmarks=False,
+                 no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
                  preview_scale=100,
@@ -61,7 +63,9 @@ class ModelBase():
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
         self.training_opts = {"alignments": alignments_paths,
-                              "preview_scaling": preview_scale / 100}
+                              "preview_scaling": preview_scale / 100,
+                              "warp_to_landmarks": warp_to_landmarks,
+                              "no_flip": no_flip}
 
         self.build()
         self.set_training_data()

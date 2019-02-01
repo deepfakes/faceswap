@@ -14,6 +14,8 @@
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
         enable_tensorboard: Whether to enable tensorboard logging or not
+        warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
+        no_flip:            Don't perform a random flip on the image
 """
 
 import logging
@@ -42,22 +44,23 @@ class TrainerBase():
         self.batch_size = batch_size
         self.model = model
         self.images = images
-        use_mask = self.process_training_opts()
+
+        self.process_training_opts()
 
         self.batchers = {side: Batcher(side,
                                        images[side],
                                        self.model,
-                                       use_mask,
+                                       self.use_mask,
                                        batch_size)
                          for side in images.keys()}
 
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
-                               use_mask,
+                               self.use_mask,
                                self.model.training_opts["coverage_ratio"],
                                self.model.training_opts["preview_scaling"])
         self.timelapse = Timelapse(self.model,
-                                   use_mask,
+                                   self.use_mask,
                                    self.model.training_opts["coverage_ratio"],
                                    self.batchers)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -67,15 +70,27 @@ class TrainerBase():
         """ Standardised timestamp for loss reporting """
         return time.strftime("%H:%M:%S")
 
+    @property
+    def landmarks_required(self):
+        """ Return True if Landmarks are required """
+        opts = self.model.training_opts
+        retval = bool(opts.get("mask_type", None) or opts["warp_to_landmarks"])
+        logger.debug(retval)
+        return retval
+
+    @property
+    def use_mask(self):
+        """ Return True if a mask is requested """
+        retval = bool(self.model.training_opts.get("mask_type", None))
+        logger.debug(retval)
+        return retval
+
     def process_training_opts(self):
         """ Override for processing model specific training options """
         logger.debug(self.model.training_opts)
-        use_mask = False
-        if self.model.training_opts.get("mask_type", None):
-            use_mask = True
+        if self.landmarks_required:
             landmarks = Landmarks(self.model.training_opts).landmarks
             self.model.training_opts["landmarks"] = landmarks
-        return use_mask
 
     def set_tensorboard(self):
         """ Set up tensorboard callback """

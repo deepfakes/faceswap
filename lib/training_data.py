@@ -17,22 +17,21 @@ from lib.umeyama import umeyama
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Add source, dest points to random warp half and ability to
-# not have landmarks to random warp full
-
 
 class TrainingDataGenerator():
     """ Generate training data for models """
     def __init__(self, model_input_size, model_output_size, training_opts):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
-                     "training_opts: %s)",
+                     "training_opts: %s, landmarks: %s)",
                      self.__class__.__name__, model_input_size, model_output_size,
-                     {key: val for key, val in training_opts.items() if key != "landmarks"})
+                     {key: val for key, val in training_opts.items() if key != "landmarks"},
+                     bool(training_opts.get("landmarks", None)))
         self.batchsize = 0
         self.model_input_size = model_input_size
         self.training_opts = training_opts
-        self.full_face = self.training_opts.get("coverage_ratio", 0) == 1.0
         self.mask_function = self.set_mask_function()
+        self.landmarks = self.training_opts.get("landmarks", None)
+
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
                                             training_opts.get("coverage_ratio", 0.625))
@@ -127,21 +126,22 @@ class TrainingDataGenerator():
         except TypeError:
             raise Exception("Error while reading image", filename)
 
+        if self.mask_function or self.training_opts["warp_to_landmarks"]:
+            src_pts = self.get_landmarks(filename, image, side)
         if self.mask_function:
-            landmarks = self.training_opts["landmarks"]
-            src_pts = self.get_landmarks(filename, image, side, landmarks)
             image = self.mask_function(src_pts, image, channels=4)
 
         image = self.processing.color_adjust(image)
 
         if not is_timelapse:
             image = self.processing.random_transform(image)
-            image = self.processing.do_random_flip(image)
+            if not self.training_opts["no_flip"]:
+                image = self.processing.do_random_flip(image)
         sample = image.copy()[:, :, :3]
 
-        if self.full_face:
-            dst_pts = self.get_closest_match(filename, side, landmarks, src_pts)
-            processed = self.processing.random_warp_full_face(image, src_pts, dst_pts)
+        if self.training_opts["warp_to_landmarks"]:
+            dst_pts = self.get_closest_match(filename, side, src_pts)
+            processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
         else:
             processed = self.processing.random_warp(image)
 
@@ -150,25 +150,23 @@ class TrainingDataGenerator():
                      filename, side, [img.shape for img in processed])
         return processed
 
-    @staticmethod
-    def get_landmarks(filename, image, side, landmarks):
+    def get_landmarks(self, filename, image, side):
         """ Return the landmarks for this face """
         logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
         lm_key = sha1(image).hexdigest()
         try:
-            src_points = landmarks[side][lm_key]
+            src_points = self.landmarks[side][lm_key]
         except KeyError:
             raise Exception("Landmarks not found for hash: '{}' file: '{}'".format(lm_key,
                                                                                    filename))
         logger.trace("Returning: (src_points: %s)", src_points)
         return src_points
 
-    @staticmethod
-    def get_closest_match(filename, side, landmarks, src_points):
+    def get_closest_match(self, filename, side, src_points):
         """ Return closest matched landmarks from opposite set """
         logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
                      filename, src_points)
-        dst_points = landmarks["a"] if side == "b" else landmarks["b"]
+        dst_points = self.landmarks["a"] if side == "b" else self.landmarks["b"]
         dst_points = list(dst_points.values())
         closest = (np.mean(np.square(src_points - dst_points),
                            axis=(1, 2))).argsort()[:10]
@@ -244,14 +242,25 @@ class ImageManipulation():
         logger.trace("Randomly transformed image")
         return result
 
-    def random_warp(self, image, src_points=None, dst_points=None):
+    def do_random_flip(self, image):
+        """ Perform flip on image if random number is within threshold """
+        logger.trace("Randomly flipping image")
+        if np.random.random() < self.random_flip:
+            logger.trace("Flip within threshold. Flipping")
+            retval = image[:, ::-1]
+        else:
+            logger.trace("Flip outside threshold. Not Flipping")
+            retval = image
+        logger.trace("Randomly flipped image")
+        return retval
+
+    def random_warp(self, image):
         """ get pair of random warped images from aligned face image """
         logger.trace("Randomly warping image")
         height, width = image.shape[0:2]
         coverage = self.get_coverage(image)
         assert height == width and height % 2 == 0
 
-        # TODO move to _init as this section is static
         range_ = np.linspace(height // 2 - coverage // 2,
                              height // 2 + coverage // 2,
                              5, dtype='float32')
@@ -273,8 +282,6 @@ class ImageManipulation():
             image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint: disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
 
-        # TODO investigate taking a resize of original image as target
-        # rather than unwarping the warp of the resized orginal image
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
         dst_points = np.mgrid[dst_slice, dst_slice]
         mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
@@ -293,11 +300,13 @@ class ImageManipulation():
         logger.trace("Randomly warped image and mask")
         return [warped_image, target_image, target_mask]
 
-    def random_warp_full_face(self, image, src_points=None, dst_points=None):
+    def random_warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
             From DFAKER plugin """
         logger.trace("Randomly warping landmarks")
         size = image.shape[0]
+        coverage = self.get_coverage(image)
+
         p_mx = size - 1
         p_hf = (size // 2) - 1
 
@@ -343,7 +352,9 @@ class ImageManipulation():
                                  cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         target_image = image
 
-        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
+        # TODO Make sure this replacement is correct
+        slices = slice(size // 2 - coverage // 2, size // 2 + coverage // 2)
+#        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
         warped_image = cv2.resize(  # pylint: disable=no-member
             warped_image[slices, slices, :], (self.input_size, self.input_size),
             cv2.INTER_AREA)  # pylint: disable=no-member
@@ -363,18 +374,6 @@ class ImageManipulation():
         logger.trace("Target mask shape: %s", target_mask.shape)
         logger.trace("Randomly warped image and mask")
         return [warped_image, target_image, target_mask]
-
-    def do_random_flip(self, image):
-        """ Perform flip on image if random number is within threshold """
-        logger.trace("Randomly flipping image")
-        if np.random.random() < self.random_flip:
-            logger.trace("Flip within threshold. Flipping")
-            retval = image[:, ::-1]
-        else:
-            logger.trace("Flip outside threshold. Not Flipping")
-            retval = image
-        logger.trace("Randomly flipped image")
-        return retval
 
 
 def stack_images(images):
