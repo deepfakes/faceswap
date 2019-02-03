@@ -264,13 +264,55 @@ class SubPixelUpscaling(Layer):
         base_config = super(SubPixelUpscaling, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-class ReflectionPadding2D(ZeroPadding2D):
+
+class ReflectionPadding2D(Layer):
+    def __init__(self, in_size, out_size, stride=2, kernel_size=(5,5), **kwargs):
+        '''
+        # Arguments
+            in_size: input_shape of the incoming tensor (w, h)
+            out_size: desired output_shape of following convolution (w, h)
+            stride: stride of following convolution (2)
+            kernel_size: kernel size of following convolution (5,5)
+        '''
+        in_width, in_height = in_size
+        out_width, out_height,  = out_size
+        kernel_width, kernel_height  = kernel_size
+        total_padding_height = (out_height * stride + kernel_height - 1) - in_height
+        total_padding_width = (out_width * stride + kernel_width - 1) - in_width
+
+        padding_top = total_padding_height // 2
+        padding_bot = total_padding_height - padding_top
+        padding_left = total_padding_width // 2
+        padding_right = total_padding_width - padding_left
+
+        self.in_size = in_size
+        self.out_size = out_size
+        self.stride = stride
+        self.kernel_size = kernel_size
+        self.padding = [padding_top, padding_bot, padding_left, padding_right]
+        self.input_spec = [InputSpec(ndim=4)]
+        super(ReflectionPadding2D, self).__init__(**kwargs)
+
+    def compute_output_shape(self, s):
+        """ If you are using "channels_last" configuration"""
+        return (s[0], s[1] + self.padding[0] + self.padding[1], s[2] + self.padding[2] + self.padding[3], s[3])
+
     def call(self, x, mask=None):
-        pattern = [[0, 0],
-                   [self.padding[0][0], self.padding[0][1]],
-                   [self.padding[1][0], self.padding[1][1]],
-                   [0, 0]]
-        return tf.pad(x, pattern, mode='REFLECT')
+        
+        return tf.pad(x, [[0,0],
+                          [self.padding[0], self.padding[1]],
+                          [self.padding[2], self.padding[3]],
+                          [0,0] ],
+                          'REFLECT')
+
+    def get_config(self):
+        config = {'in_size': self.in_size,
+                  'out_size': self.out_size,
+                  'stride': self.stride,
+                  'kernel_size': self.kernel_size}
+        base_config = super(ReflectionPadding2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items())) 
+
 
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
