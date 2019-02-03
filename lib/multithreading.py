@@ -128,8 +128,8 @@ class FSThread(threading.Thread):
 class MultiThread():
     """ Threading for IO heavy ops
         Catches errors in thread and rethrows to parent """
-    def __init__(self, target, *args, thread_count=1, **kwargs):
-        self._name = target.__name__
+    def __init__(self, target, *args, thread_count=1, name=None, **kwargs):
+        self._name = name if name else target.__name__
         logger.debug("Initializing %s: (target: '%s', thread_count: %s)",
                      self.__class__.__name__, self._name, thread_count)
         logger.trace("args: %s, kwargs: %s", args, kwargs)
@@ -145,6 +145,11 @@ class MultiThread():
     def has_error(self):
         """ Return true if a thread has errored, otherwise false """
         return any(thread.err for thread in self._threads)
+
+    @property
+    def errors(self):
+        """ Return a list of thread errors """
+        return [thread.err for thread in self._threads]
 
     def start(self):
         """ Start a thread with the given method and args """

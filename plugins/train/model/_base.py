@@ -17,6 +17,7 @@ from keras.utils import get_custom_objects, multi_gpu_model
 from lib import Serializer
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
+from lib.multithreading import MultiThread
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -295,9 +296,18 @@ class ModelBase():
         """ Backup and save the models """
         logger.debug("Backing up and saving models")
         should_backup = self.get_save_averages()
+        save_threads = list()
         for network in self.networks.values():
-            network.save(should_backup=should_backup)
-        self.state.save(should_backup)
+            name = "save_{}".format(network.name)
+            save_threads.append(MultiThread(network.save, name=name, should_backup=should_backup))
+        save_threads.append(MultiThread(self.state.save,
+                                        name="save_state", should_backup=should_backup))
+        for thread in save_threads:
+            thread.start()
+        for thread in save_threads:
+            if thread.has_error:
+                logger.error(thread.errors[0])
+            thread.join()
         # Put in a line break to avoid jumbled console
         print("\n")
         logger.info("saved models")
@@ -376,9 +386,17 @@ class NNMeta():
         self.filename = filename
         self.type = network_type.lower()
         self.side = side
+        self.name = self.set_name()
         self.network = network
-        self.network.name = self.type
+        self.network.name = self.name
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_name(self):
+        """ Set the network name """
+        name = self.type
+        if self.side:
+            name += "_{}".format(self.side)
+        return name
 
     def load(self, fullpath=None, predict=False):
         """ Load model """
