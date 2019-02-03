@@ -14,7 +14,7 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-from keras.initializers import he_uniform
+from keras.initializers import he_uniform, Constant
 from .initializers import ICNR
 from .layers import PixelShuffler, Scale, SubPixelUpscaling
 from .normalization import GroupNormalization, InstanceNormalization
@@ -91,7 +91,7 @@ class NNBlocks():
                        kernel_size=kernel_size,
                        padding="same",
                        **kwargs)(var_x)
-        var_x = Scale()(var_x)
+        var_x = Scale(gamma_init=Constant(value=0.1))(var_x)
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
