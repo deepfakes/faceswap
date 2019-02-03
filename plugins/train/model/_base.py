@@ -47,7 +47,8 @@ class ModelBase():
         self.model_dir = model_dir
         self.gpus = gpus
         self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
-                               use_icnr_init=self.config["use_icnr_init"])
+                               use_icnr_init=self.config["icnr_init"],
+                               use_reflect_padding=self.config["reflect_padding"])
         self.input_shape = input_shape
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim

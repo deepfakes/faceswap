@@ -16,7 +16,7 @@ from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 from keras.initializers import he_uniform, Constant
 from .initializers import ICNR
-from .layers import PixelShuffler, Scale, SubPixelUpscaling
+from .layers import PixelShuffler, Scale, SubPixelUpscaling, ReflectionPadding2D
 from .normalization import GroupNormalization, InstanceNormalization
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -24,11 +24,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class NNBlocks():
     """ Blocks to use for creating models """
-    def __init__(self, use_subpixel=False, use_icnr_init=False):
-        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s",
-                     self.__class__.__name__, use_subpixel, use_icnr_init)
+    def __init__(self, use_subpixel=False, use_icnr_init=False, use_reflect_padding=False):
+        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s, use_reflect_padding: %s",
+                     self.__class__.__name__, use_subpixel, use_icnr_init, use_reflect_padding)
         self.use_subpixel = use_subpixel
         self.use_icnr_init = use_icnr_init
+        self.use_reflect_padding = use_reflect_padding
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -43,6 +44,9 @@ class NNBlocks():
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
                      "kwargs: %s", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
         kwargs = self.update_kwargs(kwargs)
+        if self.use_reflect_padding:
+            inp = ReflectionPadding2D(stride=strides, kernel_size=kernel_size)(inp)
+            padding = 'valid'
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
                        strides=strides,

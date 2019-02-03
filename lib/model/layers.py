@@ -266,49 +266,67 @@ class SubPixelUpscaling(Layer):
 
 
 class ReflectionPadding2D(Layer):
-    def __init__(self, in_size, out_size, stride=2, kernel_size=(5,5), **kwargs):
+    def __init__(self, stride=2, kernel_size=5, **kwargs):
         '''
         # Arguments
-            in_size: input_shape of the incoming tensor (w, h)
-            out_size: desired output_shape of following convolution (w, h)
             stride: stride of following convolution (2)
             kernel_size: kernel size of following convolution (5,5)
         '''
-        in_width, in_height = in_size
-        out_width, out_height,  = out_size
-        kernel_width, kernel_height  = kernel_size
-        total_padding_height = (out_height * stride + kernel_height - 1) - in_height
-        total_padding_width = (out_width * stride + kernel_width - 1) - in_width
-
-        padding_top = total_padding_height // 2
-        padding_bot = total_padding_height - padding_top
-        padding_left = total_padding_width // 2
-        padding_right = total_padding_width - padding_left
-
-        self.in_size = in_size
-        self.out_size = out_size
         self.stride = stride
         self.kernel_size = kernel_size
-        self.padding = [padding_top, padding_bot, padding_left, padding_right]
-        self.input_spec = [InputSpec(ndim=4)]
         super(ReflectionPadding2D, self).__init__(**kwargs)
 
-    def compute_output_shape(self, s):
+    def build(self, input_shape):
+        self.input_spec = [InputSpec(shape=input_shape)]
+        super(ReflectionPadding2D, self).build(input_shape)
+
+    def compute_output_shape(self, input_shape):
         """ If you are using "channels_last" configuration"""
-        return (s[0], s[1] + self.padding[0] + self.padding[1], s[2] + self.padding[2] + self.padding[3], s[3])
+        input_shape = self.input_spec[0].shape
+        in_width, in_height = input_shape[2], input_shape[1]
+        kernel_width, kernel_height  = self.kernel_size, self.kernel_size
+
+        if (in_height % self.stride == 0):
+            padding_height = max(kernel_height - self.stride, 0)
+        else:
+            padding_height = max(kernel_height - (in_height % self.stride), 0)
+        if (in_width % self.stride == 0):
+            padding_width = max(kernel_width - self.stride, 0)
+        else:
+            padding_width = max(kernel_width- (in_width % self.stride), 0)
+
+        return (input_shape[0],
+                input_shape[1] + padding_height,
+                input_shape[2] + padding_width,
+                input_shape[3])
 
     def call(self, x, mask=None):
-        
+        input_shape = self.input_spec[0].shape
+        in_width, in_height = input_shape[2], input_shape[1]
+        kernel_width, kernel_height  = self.kernel_size, self.kernel_size
+
+        if (in_height % self.stride == 0):
+            padding_height = max(kernel_height - self.stride, 0)
+        else:
+            padding_height = max(kernel_height - (in_height % self.stride), 0)
+        if (in_width % self.stride == 0):
+            padding_width = max(kernel_width - self.stride, 0)
+        else:
+            padding_width = max(kernel_width- (in_width % self.stride), 0)
+
+        padding_top = padding_height // 2
+        padding_bot = padding_height - padding_top
+        padding_left = padding_width // 2
+        padding_right = padding_width - padding_left
+
         return tf.pad(x, [[0,0],
-                          [self.padding[0], self.padding[1]],
-                          [self.padding[2], self.padding[3]],
+                          [padding_top, padding_bot],
+                          [padding_left, padding_right],
                           [0,0] ],
                           'REFLECT')
 
     def get_config(self):
-        config = {'in_size': self.in_size,
-                  'out_size': self.out_size,
-                  'stride': self.stride,
+        config = {'stride': self.stride,
                   'kernel_size': self.kernel_size}
         base_config = super(ReflectionPadding2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items())) 
