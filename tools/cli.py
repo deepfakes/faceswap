@@ -70,14 +70,18 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\n'rename' - Rename faces to correspond with their parent frame and position"
                     "\n\tindex in the alignments file (i.e. how they are named after running"
                     "\n\textract)." + faces_dir +
-                    "\n'sort-x' - Re-index the alignments from left to right. For alignments with"
+                    "\n'sort-x': Re-index the alignments from left to right. For alignments with"
                     "\n\tmultiple faces this will ensure that the left-most face is at index 0"
                     "\n\tOptionally pass in a faces folder (-fc) to also rename extracted faces."
-                    "\n'sort-y' - Re-index the alignments from top to bottom. For alignments with"
+                    "\n'sort-y': Re-index the alignments from top to bottom. For alignments with"
                     "\n\tmultiple faces this will ensure that the top-most face is at index 0"
                     "\n\tOptionally pass in a faces folder (-fc) to also  rename extracted faces."
-                    "\n'spatial' - Perform spatial and temporal filtering to smooth alignments"
-                    "\n\t(EXPERIMENTAL!)"})
+                    "\n'spatial': Perform spatial and temporal filtering to smooth alignments"
+                    "\n\t(EXPERIMENTAL!)"
+                    "\n'update-hashes': Recalculate the face hashes. Only use this if you have "
+                    "\n\taltered the extracted faces (e.g. colour adjust). The files MUST be "
+                    "\n\tnamed '<frame_name>_face index' (i.e. how they are named after running"
+                    "\n\textract)." + faces_dir})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FileFullPaths,
                               "dest": "alignments_file",

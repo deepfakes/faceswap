@@ -62,10 +62,13 @@ class Alignments():
     @property
     def hashes_to_frame(self):
         """ Return a dict of each face_hash with their parent
-            frame name and their index in the frame """
-        return{face["hash"]: (frame_name, idx)
-               for frame_name, faces in self.data.items()
-               for idx, face in enumerate(faces)}
+            frame name(s) and their index in the frame
+            """
+        hash_faces = dict()
+        for frame_name, faces in self.data.items():
+            for idx, face in enumerate(faces):
+                hash_faces.setdefault(face["hash"], dict())[frame_name] = idx
+        return hash_faces
 
     # << INIT FUNCTIONS >> #
 

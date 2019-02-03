@@ -25,6 +25,7 @@ from io import StringIO
 
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
+from lib.faces_detect import DetectedFace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -90,6 +91,9 @@ class Aligner():
             self.align(*args, **kwargs)
         except Exception:  # pylint: disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
+            # Display traceback if in initialization stage 
+            if not self.init.is_set():
+                logger.exception("Traceback:")
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             exception = {"exception": (os.getpid(), tb_buffer)}

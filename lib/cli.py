@@ -82,7 +82,7 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup(arguments.loglevel, self.command)
+        log_setup(arguments.loglevel, arguments.logfile, self.command)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         try:
             script = self.import_script()
@@ -147,7 +147,7 @@ class FileFullPaths(FullPaths):
         return [(name, getattr(self, name)) for name in names]
 
 
-class DirOrFileFullPaths(FileFullPaths):
+class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     """ Class that the gui uses to determine that the input can take a folder or a filename.
         Inherits functionality from FileFullPaths
         Has the effect of giving the user 2 Open Dialogue buttons in the gui """
@@ -271,10 +271,17 @@ class FaceSwapArgs():
                             "dest": "loglevel",
                             "default": "INFO",
                             "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
-                            "help": "Log level. Stick with INFO or VERBOSE "
-                                    "unless you need to file an error report. Be "
-                                    "careful with TRACE as it will generate a lot "
-                                    "of data"})
+                            "help": "Log level. Stick with INFO or VERBOSE unless you need to "
+                                    "file an error report. Be careful with TRACE as it will "
+                                    "generate a lot of data"})
+        global_args.append({"opts": ("-LF", "--logfile"),
+                            "action": FileFullPaths,
+                            "filetypes": 'log',
+                            "type": str,
+                            "dest": "logfile",
+                            "help": "Path to store the logfile. Leave blank to store in the "
+                                    "faceswap folder",
+                            "default": None})
         return global_args
 
     @staticmethod
