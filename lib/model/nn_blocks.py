@@ -58,16 +58,19 @@ class NNBlocks():
             var_x = LeakyReLU(0.1)(var_x)
         return var_x
 
-    def upscale(self, inp, filters, kernel_size=3, use_instance_norm=False, res_block_follows=False, **kwargs):
+    def upscale(self, inp, filters, kernel_size=3, padding= 'same', use_instance_norm=False, res_block_follows=False, **kwargs):
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
         kwargs = self.update_kwargs(kwargs)
+        if self.use_reflect_padding:
+            inp = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(inp)
+            padding = 'valid'
         if self.use_icnr_init:
             kwargs["kernel_initializer"] = ICNR(initializer=kwargs["kernel_initializer"])
         var_x = Conv2D(filters * 4,
                        kernel_size=kernel_size,
-                       padding='same',
+                       padding=padding,
                        **kwargs)(inp)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
@@ -80,20 +83,26 @@ class NNBlocks():
         return var_x
 
     # <<< DFaker Model Blocks >>> #
-    def res_block(self, inp, filters, kernel_size=3, **kwargs):
+    def res_block(self, inp, filters, kernel_size=3, padding= 'same', **kwargs):
         """ Residual block """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s",
                      inp, filters, kernel_size, kwargs)
         kwargs = self.update_kwargs(kwargs)
         var_x = LeakyReLU(alpha=0.2)(inp)
+        if self.use_reflect_padding:
+            var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
+            padding = 'valid'
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
-                       padding="same",
+                       padding=padding,
                        **kwargs)(var_x)
         var_x = LeakyReLU(alpha=0.2)(var_x)
+        if self.use_reflect_padding:
+            var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
+            padding = 'valid'
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
-                       padding="same",
+                       padding=padding,
                        **kwargs)(var_x)
         var_x = Scale(gamma_init=Constant(value=0.1))(var_x)
         var_x = Add()([var_x, inp])
