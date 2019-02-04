@@ -28,13 +28,16 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Options that apply to all models")
         self.add_item(
-            section=section, title="use_icnr_init", datatype=bool, default=False,
+            section=section, title="icnr_init", datatype=bool, default=False,
             info="Use ICNR Kernel Initializer for upscaling.\nThis can help reduce the "
                  "'checkerboard effect' when upscaling the image.")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Use subpixel upscaling rather than pixel shuffler.\n"
                  "Might increase speed at cost of VRAM")
+        self.add_item(
+            section=section, title="reflect_padding", datatype=bool, default=False,
+            info="Use reflect padding rather than zero padding.")
         self.add_item(
             section=section, title="dssim_mask_loss", datatype=bool, default=True,
             info="If using a mask, Use DSSIM loss for Mask training rather than Mean Absolute "

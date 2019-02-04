@@ -264,13 +264,73 @@ class SubPixelUpscaling(Layer):
         base_config = super(SubPixelUpscaling, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-class ReflectionPadding2D(ZeroPadding2D):
+
+class ReflectionPadding2D(Layer):
+    def __init__(self, stride=2, kernel_size=5, **kwargs):
+        '''
+        # Arguments
+            stride: stride of following convolution (2)
+            kernel_size: kernel size of following convolution (5,5)
+        '''
+        self.stride = stride
+        self.kernel_size = kernel_size
+        super(ReflectionPadding2D, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.input_spec = [InputSpec(shape=input_shape)]
+        super(ReflectionPadding2D, self).build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        """ If you are using "channels_last" configuration"""
+        input_shape = self.input_spec[0].shape
+        in_width, in_height = input_shape[2], input_shape[1]
+        kernel_width, kernel_height  = self.kernel_size, self.kernel_size
+
+        if (in_height % self.stride == 0):
+            padding_height = max(kernel_height - self.stride, 0)
+        else:
+            padding_height = max(kernel_height - (in_height % self.stride), 0)
+        if (in_width % self.stride == 0):
+            padding_width = max(kernel_width - self.stride, 0)
+        else:
+            padding_width = max(kernel_width- (in_width % self.stride), 0)
+
+        return (input_shape[0],
+                input_shape[1] + padding_height,
+                input_shape[2] + padding_width,
+                input_shape[3])
+
     def call(self, x, mask=None):
-        pattern = [[0, 0],
-                   [self.padding[0][0], self.padding[0][1]],
-                   [self.padding[1][0], self.padding[1][1]],
-                   [0, 0]]
-        return tf.pad(x, pattern, mode='REFLECT')
+        input_shape = self.input_spec[0].shape
+        in_width, in_height = input_shape[2], input_shape[1]
+        kernel_width, kernel_height  = self.kernel_size, self.kernel_size
+
+        if (in_height % self.stride == 0):
+            padding_height = max(kernel_height - self.stride, 0)
+        else:
+            padding_height = max(kernel_height - (in_height % self.stride), 0)
+        if (in_width % self.stride == 0):
+            padding_width = max(kernel_width - self.stride, 0)
+        else:
+            padding_width = max(kernel_width- (in_width % self.stride), 0)
+
+        padding_top = padding_height // 2
+        padding_bot = padding_height - padding_top
+        padding_left = padding_width // 2
+        padding_right = padding_width - padding_left
+
+        return tf.pad(x, [[0,0],
+                          [padding_top, padding_bot],
+                          [padding_left, padding_right],
+                          [0,0] ],
+                          'REFLECT')
+
+    def get_config(self):
+        config = {'stride': self.stride,
+                  'kernel_size': self.kernel_size}
+        base_config = super(ReflectionPadding2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items())) 
+
 
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
