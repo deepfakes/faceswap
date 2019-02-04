@@ -151,13 +151,15 @@ class Train():
         """ Load the model requested for training """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.trainer_name)(model_dir,
-                                                          self.args.gpus,
-                                                          self.args.warp_to_landmarks,
-                                                          self.args.no_flip,
-                                                          self.image_size,
-                                                          alignments_paths=self.alignments_paths,
-                                                          preview_scale=self.args.preview_scale)
+        model = PluginLoader.get_model(self.trainer_name)(
+            model_dir,
+            self.args.gpus,
+            no_logs=self.args.no_logs,
+            warp_to_landmarks=self.args.warp_to_landmarks,
+            no_flip=self.args.no_flip,
+            training_image_size=self.image_size,
+            alignments_paths=self.alignments_paths,
+            preview_scale=self.args.preview_scale)
         logger.debug("Loaded Model")
         return model
 

@@ -795,6 +795,13 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Sets allow_growth option of Tensorflow "
                                       "to spare memory on some configs"})
+        argument_list.append({"opts": ("-nl", "--no-logs"),
+                              "action": "store_true",
+                              "dest": "no_logs",
+                              "default": False,
+                              "help": "Disables TensorBoard logging. NB: Disabling logs means "
+                                      "that you will not be able to use the graph or analysis "
+                                      "for this session in the GUI."})
         argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
                               "action": "store_true",
                               "dest": "warp_to_landmarks",

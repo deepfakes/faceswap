@@ -7,8 +7,10 @@
 import logging
 import os
 import sys
+import time
 
 from json import JSONDecodeError
+
 from keras import losses
 from keras.models import load_model
 from keras.optimizers import Adam
@@ -29,6 +31,7 @@ class ModelBase():
     def __init__(self,
                  model_dir,
                  gpus,
+                 no_logs=False,
                  warp_to_landmarks=False,
                  no_flip=False,
                  training_image_size=256,
@@ -53,12 +56,11 @@ class ModelBase():
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        self.state = State(self.model_dir, self.name, training_image_size)
+        self.state = State(self.model_dir, self.name, no_logs, training_image_size)
         self.load_state_info()
 
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
-        self.loss_names = dict()  # Loss names for model
         self.history = dict()  # Loss history per save iteration)
 
         # Training information specific to the model should be placed in this
@@ -96,10 +98,10 @@ class ModelBase():
             super() this method for defaults otherwise be sure to add """
         logger.debug("Setting training data")
         self.training_opts["training_size"] = self.state.training_size
+        self.training_opts["no_logs"] = self.state.current_session["no_logs"]
         self.training_opts["mask_type"] = self.config.get("mask_type", None)
         self.training_opts["coverage_ratio"] = self.config.get("coverage", 62.5) / 100
         self.training_opts["preview_images"] = 14
-        self.training_opts["enable_tensorboard"] = self.config.get("enable_tensorboard", False)
         logger.debug("Set training data: %s", self.training_opts)
 
     def build(self):
@@ -189,16 +191,19 @@ class ModelBase():
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
 
         for side, model in self.predictors.items():
+            loss_names = ["loss"]
             loss_funcs = [self.loss_function(side)]
             mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
             if mask:
+                loss_names.insert(0, "mask_loss")
                 loss_funcs.insert(0, self.mask_loss_function(mask[0], side))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
-            if len(self.loss_names[side]) > 1:
-                self.loss_names[side].insert(0, "total_loss")
+            if len(loss_names) > 1:
+                loss_names.insert(0, "total_loss")
+            self.state.add_session_loss_names(side, loss_names)
             self.history[side] = list()
-        logger.debug("Compiled Predictors. Losses: %s", self.loss_names)
+        logger.debug("Compiled Predictors. Losses: %s", loss_names)
 
     def loss_function(self, side):
         """ Set the loss function """
@@ -210,7 +215,6 @@ class ModelBase():
             if side == "a" and not self.predict:
                 logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
-        self.loss_names[side] = ["loss"]
         logger.debug(loss_func)
         return loss_func
 
@@ -230,8 +234,6 @@ class ModelBase():
             if side == "a" and not self.predict:
                 logger.verbose("Using Penalized Loss for mask")
             mask_loss_func = PenalizedLoss(mask, mask_loss_func)
-
-        self.loss_names[side].insert(0, "mask_loss")
         logger.debug(mask_loss_func)
         return mask_loss_func
 
@@ -324,45 +326,42 @@ class ModelBase():
         avgs = dict()
         backup = True
 
-        for side in ("a", "b"):
-            hist_loss = self.history[side]
-            if not hist_loss:
+        for side, loss in self.history.items():
+            if not loss:
                 backup = False
                 break
 
-            avgs[side] = sum(hist_loss) / len(hist_loss)
-            self.history[side] = list()
+            avgs[side] = sum(loss) / len(loss)
+            self.history[side] = list()  # Reset historical loss
 
-            avg_key = "avg_{}".format(side)
-            if not self.history.get(avg_key, None):
+            if not self.state.lowest_avg_loss.get(side, None):
                 logger.debug("Setting initial save iteration loss average for '%s': %s",
-                             avg_key, avgs[side])
-                self.history[avg_key] = avgs[side]
+                             side, avgs[side])
+                self.state.lowest_avg_loss[side] = avgs[side]
                 continue
 
             if backup:
-                backup = self.check_loss_drop(avg_key, avgs[side])
+                # Only run this if backup is true. All losses must have dropped for a valid backup
+                backup = self.check_loss_drop(side, avgs[side])
 
-        logger.debug("Lowest historical save iteration loss average: {avg_a: %s, avg_b: %s)",
-                     self.history.get("avg_a", None), self.history.get("avg_b", None))
+        logger.debug("Lowest historical save iteration loss average: %s",
+                     self.state.lowest_avg_loss)
         logger.debug("Average loss since last save: %s", avgs)
 
-        if backup:  # Update lowest loss values to the history
-            for side in ("a", "b"):
-                avg_key = "avg_{}".format(side)
-                logger.debug("Updating lowest save iteration average for '%s': %s",
-                             avg_key, avgs[side])
-                self.history[avg_key] = avgs[side]
+        if backup:  # Update lowest loss values to the state
+            for side, avg_loss in avgs.items():
+                logger.debug("Updating lowest save iteration average for '%s': %s", side, avg_loss)
+                self.state.lowest_avg_loss[side] = avg_loss
 
         logger.debug("Backing up: %s", backup)
         return backup
 
-    def check_loss_drop(self, avg_key, avg):
+    def check_loss_drop(self, side, avg):
         """ Check whether total loss has dropped since lowest loss """
-        if avg < self.history[avg_key]:
-            logger.debug("Loss for '%s' has dropped", avg_key)
+        if avg < self.state.lowest_avg_loss[side]:
+            logger.debug("Loss for '%s' has dropped", side)
             return True
-        logger.debug("Loss for '%s' has not dropped", avg_key)
+        logger.debug("Loss for '%s' has not dropped", side)
         return False
 
 
@@ -451,18 +450,22 @@ class NNMeta():
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name, training_image_size):
-        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
+    def __init__(self, model_dir, model_name, no_logs, training_image_size):
+        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', no_logs: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir,
-                     model_name, training_image_size)
+                     model_name, no_logs, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
         self.iterations = 0
         self.training_size = training_image_size
+        self.sessions = dict()
+        self.lowest_avg_loss = dict()
         self.inputs = dict()
         self.config = dict()
         self.load()
+        self.session_id = self.new_session_id()
+        self.create_new_session(no_logs)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -475,12 +478,51 @@ class State():
         """ Return a list of stored mask shape inputs """
         return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
+    @property
+    def loss_names(self):
+        """ Return the loss names for this session """
+        return self.sessions[self.session_id]["loss_names"]
+
+    @property
+    def current_session(self):
+        """ Return the current session dict """
+        return self.sessions[self.session_id]
+
+    def new_session_id(self):
+        """ Return new session_id """
+        if not self.sessions:
+            session_id = 1
+        else:
+            session_id = max(int(key) for key in self.sessions.keys()) + 1
+        logger.debug(session_id)
+        return session_id
+
+    def create_new_session(self, no_logs):
+        """ Create a new session """
+        logger.debug("Creating new session. id: %s", self.session_id)
+        self.sessions[self.session_id] = {"timestamp": time.time(),
+                                          "no_logs": no_logs,
+                                          "loss_names": dict(),
+                                          "batchsize": 0}
+
+    def add_session_loss_names(self, side, loss_names):
+        """ Add the session loss names to the sessions dictionary """
+        logger.debug("Adding session loss_names. (side: '%s', loss_names: %s", side, loss_names)
+        self.sessions[self.session_id]["loss_names"][side] = loss_names
+
+    def add_session_batchsize(self, batchsize):
+        """ Add the session batchsize to the sessions dictionary """
+        logger.debug("Adding session batchsize: %s", batchsize)
+        self.sessions[self.session_id]["batchsize"] = batchsize
+
     def load(self):
         """ Load state file """
         logger.debug("Loading State")
         try:
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
+                self.sessions = state.get("sessions", dict())
+                self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
                 self.iterations = state.get("iterations", 0)
                 self.training_size = state.get("training_size", 256)
                 self.inputs = state.get("inputs", dict())
@@ -501,7 +543,9 @@ class State():
             self.backup()
         try:
             with open(self.filename, "wb") as out:
-                state = {"iterations": self.iterations,
+                state = {"sessions": self.sessions,
+                         "lowest_avg_loss": self.lowest_avg_loss,
+                         "iterations": self.iterations,
                          "inputs": self.inputs,
                          "training_size": self.training_size,
                          "config": _CONFIG}

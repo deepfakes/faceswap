@@ -13,7 +13,7 @@
         coverage_ratio:     Ratio of face to be cropped out for training
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
-        enable_tensorboard: Whether to enable tensorboard logging or not
+        no_logs:            Disable tensorboard logging
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
         no_flip:            Don't perform a random flip on the image
 """
@@ -43,6 +43,7 @@ class TrainerBase():
                      self.__class__.__name__, model, batch_size)
         self.batch_size = batch_size
         self.model = model
+        self.model.state.add_session_batchsize(batch_size)
         self.images = images
 
         self.process_training_opts()
@@ -94,7 +95,7 @@ class TrainerBase():
 
     def set_tensorboard(self):
         """ Set up tensorboard callback """
-        if not self.model.training_opts["enable_tensorboard"]:
+        if self.model.training_opts["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
             return None
 
@@ -103,7 +104,9 @@ class TrainerBase():
         for side in self.images.keys():
             logger.debug("Setting up TensorBoard Logging. Side: %s", side)
             log_dir = os.path.join(str(self.model.model_dir),
-                                   "{}_tf_logs_{}".format(self.model.name, side))
+                                   "{}_logs".format(self.model.name),
+                                   side,
+                                   "session_{}".format(self.model.state.session_id))
             tbs = tf_keras.callbacks.TensorBoard(log_dir=log_dir,
                                                  histogram_freq=0,  # Must be 0 or hangs
                                                  batch_size=self.batch_size,
@@ -117,7 +120,7 @@ class TrainerBase():
         """ Override for specific model loss formatting """
         output = list()
         for side in sorted(list(loss.keys())):
-            display = ", ".join(["{}_{}: {:.5f}".format(self.model.loss_names[side][idx],
+            display = ", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
                                                         side.capitalize(),
                                                         this_loss)
                                  for idx, this_loss in enumerate(loss[side])])

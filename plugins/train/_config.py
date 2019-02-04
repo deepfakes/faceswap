@@ -43,9 +43,6 @@ class Config(FaceswapConfig):
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
             info="If using a mask, Use Penalized loss for Mask training. Can stack with DSSIM.\n"
                  "May increase overall quality.")
-        self.add_item(
-            section=section, title="enable_tensorboard", datatype=bool, default=False,
-            info="Enable TensorBoard logging. Logs are stored in the Model directory.")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
