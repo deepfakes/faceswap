@@ -459,6 +459,7 @@ class State():
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
         self.iterations = 0
+        self.session_iterations = 0
         self.training_size = training_image_size
         self.sessions = dict()
         self.lowest_avg_loss = dict()
@@ -504,7 +505,8 @@ class State():
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
                                           "loss_names": dict(),
-                                          "batchsize": 0}
+                                          "batchsize": 0,
+                                          "iterations": 0}
 
     def add_session_loss_names(self, side, loss_names):
         """ Add the session loss names to the sessions dictionary """
@@ -515,6 +517,11 @@ class State():
         """ Add the session batchsize to the sessions dictionary """
         logger.debug("Adding session batchsize: %s", batchsize)
         self.sessions[self.session_id]["batchsize"] = batchsize
+
+    def increment_iterations(self):
+        """ Increment total and session iterations """
+        self.iterations += 1
+        self.sessions[self.session_id]["iterations"] += 1
 
     def load(self):
         """ Load state file """
@@ -528,8 +535,7 @@ class State():
                 self.training_size = state.get("training_size", 256)
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
-                logger.debug("Loaded state: %s", {key: val for key, val in state.items()
-                                                  if key != "models"})
+                logger.debug("Loaded state: %s", state)
                 self.replace_config()
         except IOError as err:
             logger.warning("No existing state file found. Generating.")

@@ -141,7 +141,7 @@ class TrainerBase():
             if timelapse_kwargs:
                 self.timelapse.get_sample(side, timelapse_kwargs)
 
-        self.model.state.iterations += 1
+        self.model.state.increment_iterations()
 
         for side, side_loss in loss.items():
             self.store_history(side, side_loss)
