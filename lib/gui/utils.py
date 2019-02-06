@@ -500,6 +500,7 @@ class Config():
             return
         for cmd, opts in opts.items():
             self.set_command_args(cmd, opts)
+        self.add_to_recent(cfgfile.name, command)
         logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
 
     def get_command_options(self, cfg, command):
@@ -546,7 +547,7 @@ class Config():
         logger.debug("Initial recent files: %s", recent_files)
         filenames = [recent[0] for recent in recent_files]
         if filename in filenames:
-            idx = filenames[filename]
+            idx = filenames.index(filename)
             del recent_files[idx]
         recent_files.insert(0, (filename, command))
         recent_files = recent_files[:20]
