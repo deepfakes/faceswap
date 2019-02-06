@@ -1,4 +1,11 @@
 # Based on the original https://www.reddit.com/r/deepfakes/ code sample + contribs
+#For GPU memory allocation issues
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+config.gpu_options.visible_device_list = "0"
+set_session(tf.Session(config=config))
 
 from keras.models import Model as KerasModel
 from keras.layers import Input, Dense, Flatten, Reshape
