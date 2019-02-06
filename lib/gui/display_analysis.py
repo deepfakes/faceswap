@@ -9,17 +9,17 @@ from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, SavedSessions, SessionsSummary, SessionsTotals
 from .tooltip import Tooltip
-from .utils import Images, FileHandler
+from .utils import FileHandler, get_config, get_images
 
 
 class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Session analysis tab """
-    def __init__(self, parent, tabname, helptext, scaling_factor):
+    def __init__(self, parent, tabname, helptext):
         DisplayPage.__init__(self, parent, tabname, helptext)
 
         self.summary = None
         self.add_options()
-        self.add_main_frame(scaling_factor)
+        self.add_main_frame()
 
     def set_vars(self):
         """ Analysis specific vars """
@@ -28,15 +28,14 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         return {"selected_id": selected_id,
                 "filename": filename}
 
-    def add_main_frame(self, scaling_factor):
+    def add_main_frame(self):
         """ Add the main frame to the subnotebook
             to hold stats and session data """
         mainframe = self.subnotebook_add_page("stats")
         self.stats = StatsData(mainframe,
                                self.vars["filename"],
                                self.vars["selected_id"],
-                               self.helptext["stats"],
-                               scaling_factor)
+                               self.helptext["stats"])
 
     def add_options(self):
         """ Add the options bar """
@@ -122,7 +121,7 @@ class Options():
         for btntype in ("reset", "clear", "save", "load"):
             cmd = getattr(self.parent, "{}_session".format(btntype))
             btn = ttk.Button(self.optsframe,
-                             image=Images().icons[btntype],
+                             image=get_images().icons[btntype],
                              command=cmd)
             btn.pack(padx=2, side=tk.RIGHT)
             hlp = self.set_help(btntype)
@@ -145,25 +144,14 @@ class Options():
 
 class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Stats frame of analysis tab """
-    def __init__(self,
-                 parent,
-                 filename,
-                 selected_id,
-                 helptext,
-                 scaling_factor):
+    def __init__(self, parent, filename, selected_id, helptext):
         ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.TOP,
-                  padx=5,
-                  pady=5,
-                  expand=True,
-                  fill=tk.X,
-                  anchor=tk.N)
+        self.pack(side=tk.TOP, padx=5, pady=5, expand=True, fill=tk.X, anchor=tk.N)
 
         self.filename = filename
         self.loaded_data = None
         self.selected_id = selected_id
         self.popup_positions = list()
-        self.scaling_factor = scaling_factor
 
         self.add_label()
         self.tree = ttk.Treeview(self, height=1, selectmode=tk.BROWSE)
@@ -218,7 +206,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         for item in sessions:
             values = [item[column] for column in self.columns]
-            kwargs = {"values": values, "image": Images().icons["graph"]}
+            kwargs = {"values": values, "image": get_images().icons["graph"]}
             if values[0] == "Total":
                 kwargs["tags"] = "total"
             self.tree.insert("", "end", **kwargs)
@@ -241,11 +229,12 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def data_popup(self):
         """ Pop up a window and control it's position """
+        scaling_factor = get_config().scaling_factor
         toplevel = SessionPopUp(self.loaded_data, self.selected_id.get())
         toplevel.title(self.data_popup_title())
         position = self.data_popup_get_position()
-        height = int(720 * self.scaling_factor)
-        width = int(400 * self.scaling_factor)
+        height = int(720 * scaling_factor)
+        width = int(400 * scaling_factor)
         toplevel.geometry("{}x{}+{}+{}".format(str(height),
                                                str(width),
                                                str(position[0]),
@@ -414,7 +403,7 @@ class SessionPopUp(tk.Toplevel):
         for btntype in ("reset", "save"):
             cmd = getattr(self, "optbtn_{}".format(btntype))
             btn = ttk.Button(btnframe,
-                             image=Images().icons[btntype],
+                             image=get_images().icons[btntype],
                              command=cmd)
             btn.pack(padx=2, side=tk.RIGHT)
             hlp = self.set_help(btntype)

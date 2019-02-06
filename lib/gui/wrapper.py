@@ -12,7 +12,7 @@ from time import time
 
 import psutil
 
-from .utils import Images
+from .utils import get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -21,15 +21,14 @@ class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, statusbar, session=None, pathscript=None, cliopts=None):
-        logger.debug("Initializing %s: (pathscript: '%s', cliopts: %s",
-                     self.__class__.__name__, pathscript, cliopts)
+    def __init__(self, session=None, pathscript=None):
+        logger.debug("Initializing %s: (session: %s, pathscript: %s)",
+                     self.__class__.__name__, session, pathscript)
         self.tk_vars = self.set_tk_vars()
         self.session = session
         self.pathscript = pathscript
-        self.cliopts = cliopts
         self.command = None
-        self.statusbar = statusbar
+        self.statusbar = get_config().statusbar
         self.task = FaceswapControl(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -59,6 +58,9 @@ class ProcessWrapper():
                    "generate": generatecommand,
                    "consoleclear": consoleclear}
         logger.debug(tk_vars)
+        #  Set the tk_vars into global config
+        config = get_config()
+        config.tk_vars = tk_vars
         return tk_vars
 
     def action_command(self, *args):
@@ -113,7 +115,8 @@ class ProcessWrapper():
         args = [sys.executable] if generate else [sys.executable, "-u"]
         args.extend([pathexecscript, command])
 
-        for cliopt in self.cliopts.gen_cli_arguments(command):
+        cli_opts = get_config().cli_opts
+        for cliopt in cli_opts.gen_cli_arguments(command):
             args.extend(cliopt)
             if command == "train" and not generate:
                 self.set_session_stats(cliopt)
@@ -138,7 +141,7 @@ class ProcessWrapper():
         self.statusbar.progress_stop()
         self.statusbar.status_message.set(message)
         self.tk_vars["display"].set(None)
-        Images().delete_preview()
+        get_images().delete_preview()
         if self.command == "train":
             self.session.save_session()
         self.session.__init__()
@@ -152,7 +155,7 @@ class FaceswapControl():
     def __init__(self, wrapper):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.wrapper = wrapper
-        self.statusbar = wrapper.statusbar
+        self.statusbar = get_config().statusbar
         self.command = None
         self.args = None
         self.process = None

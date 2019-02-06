@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Utility functions for the GUI """
 import logging
-
 import os
 import platform
 import sys
@@ -10,7 +9,40 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from PIL import Image, ImageTk
 
+from lib.Serializer import JSONSerializer
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_CONFIG = None
+_IMAGES = None
+
+
+def initialize_config(cli_opts, scaling_factor, pathcache, statusbar):
+    """ Initialize the config and add to global constant """
+    global _CONFIG  # pylint: disable=global-statement
+    if _CONFIG is not None:
+        return
+    logger.debug("Initializing config: (cli_opts: %s, tk_vars: %s, pathcache: %s, statusbar: %s)",
+                 cli_opts, scaling_factor, pathcache, statusbar)
+    _CONFIG = Config(cli_opts, scaling_factor, pathcache, statusbar)
+
+
+def get_config():
+    """ return the _CONFIG constant """
+    return _CONFIG
+
+
+def initialize_images():
+    """ Initialize the config and add to global constant """
+    global _IMAGES  # pylint: disable=global-statement
+    if _IMAGES is not None:
+        return
+    logger.debug("Initializing images")
+    _IMAGES = Images()
+
+
+def get_images():
+    """ return the _CONFIG constant """
+    return _IMAGES
 
 
 def set_slider_rounding(value, var, d_type, round_to, min_max):
@@ -21,23 +53,6 @@ def set_slider_rounding(value, var, d_type, round_to, min_max):
         steps = range(min_max[0], min_max[1] + round_to, round_to)
         value = min(steps, key=lambda x: abs(x - int(float(value))))
         var.set(value)
-
-
-class Singleton(type):
-    """ Instigate a singleton.
-    From: https://stackoverflow.com/questions/6760685
-
-    Singletons are often frowned upon.
-    Feel free to instigate a better solution """
-
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton,
-                                        cls).__call__(*args,
-                                                      **kwargs)
-        return cls._instances[cls]
 
 
 class FileHandler():
@@ -174,11 +189,15 @@ class FileHandler():
         return
 
 
-class Images(metaclass=Singleton):
-    """ Holds locations of images and actual images """
+class Images():
+    """ Holds locations of images and actual images
 
-    def __init__(self, pathcache=None):
-        logger.debug("Initializing %s: (pathcache: '%s'", self.__class__.__name__, pathcache)
+        Don't call directly. Call get_images()
+    """
+
+    def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
+        pathcache = get_config().pathcache
         self.pathicons = os.path.join(pathcache, "icons")
         self.pathpreview = os.path.join(pathcache, "preview")
         self.pathoutput = None
@@ -361,16 +380,16 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
 class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ The Console out section of the GUI """
 
-    def __init__(self, parent, debug, tk_vars):
-        logger.debug("Initializing %s: (parent: %s, debug: %s, tk_vars: %s)",
-                     self.__class__.__name__, parent, debug, tk_vars)
+    def __init__(self, parent, debug):
+        logger.debug("Initializing %s: (parent: %s, debug: %s)",
+                     self.__class__.__name__, parent, debug)
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
                   fill=tk.BOTH, expand=True)
         self.console = tk.Text(self)
         rc_menu = ContextMenu(self.console)
         rc_menu.cm_bind()
-        self.console_clear = tk_vars['consoleclear']
+        self.console_clear = get_config().tk_vars['consoleclear']
         self.set_console_clear_var_trace()
         self.debug = debug
         self.build_console()
@@ -437,3 +456,101 @@ class SysOutRouter():
     def flush():
         """ If flush is forced, send it to normal terminal """
         sys.__stdout__.flush()
+
+
+class Config():
+    """ Global configuration settings
+
+        Don't call directly. Call get_config()
+    """
+
+    def __init__(self, cli_opts, scaling_factor, pathcache, statusbar):
+        """ NB: Only pass in pathcache and recent_files_menu on first call (in menu config) """
+        logger.debug("Initializing %s", self.__class__.__name__)
+        self.cli_opts = cli_opts
+        self.scaling_factor = scaling_factor
+        self.pathcache = pathcache
+        self.statusbar = statusbar
+        self.serializer = JSONSerializer
+        self.tk_vars = dict()  # set from wrapper
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def load(self, command=None):
+        """ Pop up load dialog for a saved config file """
+        logger.debug("Loading config: (command: '%s')", command)
+        cfgfile = FileHandler("open", "config").retfile
+        if not cfgfile:
+            return
+        cfg = self.serializer.unmarshal(cfgfile.read())
+        opts = self.get_command_options(cfg, command) if command else cfg
+        if not opts:
+            return
+        for cmd, opts in opts.items():
+            self.set_command_args(cmd, opts)
+        self.add_to_recent(cfgfile.name, command)
+        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+
+    def load_recent(self, filename, command):
+        """ Load a file from the recent menu """
+        logger.debug("Loading config: (command: '%s')", command)
+        with open(filename, "r") as cfgfile:
+            cfg = self.serializer.unmarshal(cfgfile.read())
+        opts = self.get_command_options(cfg, command) if command else cfg
+        if not opts:
+            return
+        for cmd, opts in opts.items():
+            self.set_command_args(cmd, opts)
+        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+
+    def get_command_options(self, cfg, command):
+        """ return the saved options for the requested
+            command, if not loading global options """
+        opts = cfg.get(command, None)
+        retval = {command: opts}
+        if not opts:
+            self.tk_vars["consoleclear"].set(True)
+            print("No {} section found in file".format(command))
+            logger.info("No  %s section found in file", command)
+            retval = None
+        logger.debug(retval)
+        return retval
+
+    def set_command_args(self, command, options):
+        """ Pass the saved config items back to the CliOptions """
+        if not options:
+            return
+        for srcopt, srcval in options.items():
+            optvar = self.cli_opts.get_one_option_variable(command, srcopt)
+            if not optvar:
+                continue
+            optvar.set(srcval)
+
+    def save(self, command=None):
+        """ Save the current GUI state to a config file in json format """
+        logger.debug("Saving config: (command: '%s')", command)
+        cfgfile = FileHandler("save", "config").retfile
+        if not cfgfile:
+            return
+        cfg = self.cli_opts.get_option_values(command)
+        cfgfile.write(self.serializer.marshal(cfg))
+        cfgfile.close()
+        self.add_to_recent(cfgfile.name, command)
+        logger.debug("Saved config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+
+    def add_to_recent(self, filename, command):
+        """ Add to recent files """
+        recent_filename = os.path.join(self.pathcache, ".recent.json")
+        logger.debug("Adding to recent files '%s': (%s, %s)", recent_filename, filename, command)
+        with open(recent_filename, "rb") as inp:
+            recent_files = self.serializer.unmarshal(inp.read().decode("utf-8"))
+        logger.debug("Initial recent files: %s", recent_files)
+        filenames = [recent[0] for recent in recent_files]
+        if filename in filenames:
+            idx = filenames[filename]
+            del recent_files[idx]
+        recent_files.insert(0, (filename, command))
+        recent_files = recent_files[:20]
+        logger.debug("Final recent files: %s", recent_files)
+        recent_json = self.serializer.marshal(recent_files)
+        with open(recent_filename, "wb") as out:
+            out.write(recent_json.encode("utf-8"))

@@ -12,7 +12,7 @@ from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
 from .stats import Calculations
-from .utils import Images, FileHandler
+from .utils import FileHandler, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -23,8 +23,8 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_set(self):
         """ Load the latest preview if available """
         logger.trace("Loading latest preview")
-        Images().load_latest_preview()
-        self.display_item = Images().previewoutput
+        get_images().load_latest_preview()
+        self.display_item = get_images().previewoutput
 
     def display_item_process(self):
         """ Display the preview """
@@ -38,7 +38,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add the preview label child """
         logger.debug("Adding child")
         preview = self.subnotebook_add_page(self.tabname, widget=None)
-        lblpreview = ttk.Label(preview, image=Images().previewoutput[1])
+        lblpreview = ttk.Label(preview, image=get_images().previewoutput[1])
         lblpreview.pack(side=tk.TOP, anchor=tk.NW)
         Tooltip(lblpreview, text=self.helptext, wraplength=200)
 
@@ -46,7 +46,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Update the preview image on the label """
         logger.trace("Updating preview")
         for widget in self.subnotebook_get_widgets():
-            widget.configure(image=Images().previewoutput[1])
+            widget.configure(image=get_images().previewoutput[1])
 
     def save_items(self):
         """ Open save dialogue and save preview """
@@ -59,7 +59,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 "{}_{}.{}".format(filename,
                                                   now,
                                                   "png"))
-        Images().previewoutput[0].save(filename)
+        get_images().previewoutput[0].save(filename)
         logger.debug("Saved preview to %s", filename)
         print("Saved preview to {}".format(filename))
 
@@ -70,13 +70,13 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_set(self):
         """ Load the latest preview if available """
         logger.trace("Loading latest preview")
-        Images().load_training_preview()
-        self.display_item = Images().previewtrain
+        get_images().load_training_preview()
+        self.display_item = get_images().previewtrain
 
     def display_item_process(self):
         """ Display the preview(s) resized as appropriate """
         logger.trace("Displaying preview")
-        sortednames = sorted([name for name in Images().previewtrain.keys()])
+        sortednames = sorted([name for name in get_images().previewtrain.keys()])
         existing = self.subnotebook_get_titles_ids()
 
         for name in sortednames:
@@ -92,13 +92,13 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         preview = PreviewTrainCanvas(self.subnotebook, name)
         preview = self.subnotebook_add_page(name, widget=preview)
         Tooltip(preview, text=self.helptext, wraplength=200)
-        self.vars["modified"].set(Images().previewtrain[name][2])
+        self.vars["modified"].set(get_images().previewtrain[name][2])
 
     def update_child(self, tab_id, name):
         """ Update the preview canvas """
         logger.debug("Updating preview")
-        if self.vars["modified"].get() != Images().previewtrain[name][2]:
-            self.vars["modified"].set(Images().previewtrain[name][2])
+        if self.vars["modified"].get() != get_images().previewtrain[name][2]:
+            self.vars["modified"].set(get_images().previewtrain[name][2])
             widget = self.subnotebook_page_from_id(tab_id)
             widget.reload()
 
@@ -118,8 +118,8 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
         ttk.Frame.__init__(self, parent)
 
         self.name = previewname
-        Images().resize_image(self.name, None)
-        self.previewimage = Images().previewtrain[self.name][1]
+        get_images().resize_image(self.name, None)
+        self.previewimage = get_images().previewtrain[self.name][1]
 
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -136,13 +136,13 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
         framesize = (event.width, event.height)
         # Sometimes image is resized before frame is drawn
         framesize = None if framesize == (1, 1) else framesize
-        Images().resize_image(self.name, framesize)
+        get_images().resize_image(self.name, framesize)
         self.reload()
 
     def reload(self):
         """ Reload the preview image """
         logger.trace("Reloading preview image")
-        self.previewimage = Images().previewtrain[self.name][1]
+        self.previewimage = get_images().previewtrain[self.name][1]
         self.canvas.itemconfig(self.imgcanvas, image=self.previewimage)
 
     def save_preview(self, location):
@@ -153,7 +153,7 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
                                 "{}_{}.{}".format(filename,
                                                   now,
                                                   "png"))
-        Images().previewtrain[self.name][0].save(filename)
+        get_images().previewtrain[self.name][0].save(filename)
         logger.debug("Saved preview to %s", filename)
         print("Saved preview to {}".format(filename))
 

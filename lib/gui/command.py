@@ -5,9 +5,8 @@ import logging
 import tkinter as tk
 from tkinter import ttk
 
-from .options import Config
 from .tooltip import Tooltip
-from .utils import ContextMenu, Images, FileHandler, set_slider_rounding
+from .utils import ContextMenu, FileHandler, get_images, get_config, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -15,19 +14,15 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, cli_options, tk_vars, scaling_factor):
-        logger.debug("Initializing %s: (parent: %s, cli_options: %s, tk_vars: %s, "
-                     "scaling_factor: %s", self.__class__.__name__, parent, cli_options,
-                     tk_vars, scaling_factor)
+    def __init__(self, parent):
+        logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
+        scaling_factor = get_config().scaling_factor
         width = int(420 * scaling_factor)
         height = int(500 * scaling_factor)
         ttk.Notebook.__init__(self, parent, width=width, height=height)
         parent.add(self)
 
-        self.cli_opts = cli_options
-        self.tk_vars = tk_vars
         self.actionbtns = dict()
-
         self.set_running_task_trace()
         self.build_tabs()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -36,13 +31,15 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         """ Set trigger action for the running task
             to change the action buttons text and command """
         logger.debug("Set running trace")
-        self.tk_vars["runningtask"].trace("w", self.change_action_button)
+        tk_vars = get_config().tk_vars
+        tk_vars["runningtask"].trace("w", self.change_action_button)
 
     def build_tabs(self):
         """ Build the tabs for the relevant command """
         logger.debug("Build Tabs")
-        for category in self.cli_opts.categories:
-            cmdlist = self.cli_opts.commands[category]
+        cli_opts = get_config().cli_opts
+        for category in cli_opts.categories:
+            cmdlist = cli_opts.commands[category]
             for command in cmdlist:
                 title = command.title()
                 commandtab = CommandTab(self, category, command)
@@ -52,9 +49,11 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     def change_action_button(self, *args):
         """ Change the action button to relevant control """
         logger.debug("Update Action Buttons: (args: %s", args)
+        tk_vars = get_config().tk_vars
+
         for cmd in self.actionbtns.keys():
             btnact = self.actionbtns[cmd]
-            if self.tk_vars["runningtask"].get():
+            if tk_vars["runningtask"].get():
                 ttl = "Terminate"
                 hlp = "Exit the running process"
             else:
@@ -74,9 +73,7 @@ class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
         ttk.Frame.__init__(self, parent)
 
         self.category = category
-        self.cli_opts = parent.cli_opts
         self.actionbtns = parent.actionbtns
-        self.tk_vars = parent.tk_vars
         self.command = command
 
         self.build_tab()
@@ -108,7 +105,6 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.opts = parent.cli_opts
         self.command = parent.command
 
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
@@ -121,7 +117,8 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.chkbtns = self.checkbuttons_frame()
 
         self.build_frame()
-        self.opts.set_context_option(self.command)
+        cli_opts = get_config().cli_opts
+        cli_opts.set_context_option(self.command)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def checkbuttons_frame(self):
@@ -150,7 +147,8 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.add_scrollbar()
         self.canvas.bind("<Configure>", self.resize_frame)
 
-        for option in self.opts.gen_command_options(self.command):
+        cli_opts = get_config().cli_opts
+        for option in cli_opts.gen_command_options(self.command):
             optioncontrol = OptionControl(self.command,
                                           option,
                                           self.optsframe,
@@ -342,7 +340,7 @@ class OptionControl():
         logger.debug("Adding browser buttons: (sysbrowser: '%s', filepath: '%s'",
                      sysbrowser, filepath)
         for browser in sysbrowser:
-            img = Images().icons[browser]
+            img = get_images().icons[browser]
             action = getattr(self, "ask_" + browser)
             filetypes = self.option.get("filetypes", "default")
             fileopn = ttk.Button(frame,
@@ -412,16 +410,16 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.title = self.command.title()
 
         self.add_action_button(parent.category,
-                               parent.actionbtns,
-                               parent.tk_vars)
-        self.add_util_buttons(parent.cli_opts, parent.tk_vars)
+                               parent.actionbtns)
+        self.add_util_buttons()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def add_action_button(self, category, actionbtns, tk_vars):
+    def add_action_button(self, category, actionbtns):
         """ Add the action buttons for page """
         logger.debug("Add action buttons: '%s'", self.title)
         actframe = ttk.Frame(self)
         actframe.pack(fill=tk.X, side=tk.LEFT)
+        tk_vars = get_config().tk_vars
 
         var_value = "{},{}".format(category, self.command)
 
@@ -445,17 +443,17 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                 wraplength=200)
         logger.debug("Added action buttons: '%s'", self.title)
 
-    def add_util_buttons(self, cli_options, tk_vars):
+    def add_util_buttons(self):
         """ Add the section utility buttons """
         logger.debug("Add util buttons")
         utlframe = ttk.Frame(self)
         utlframe.pack(side=tk.RIGHT)
 
-        config = Config(cli_options, tk_vars)
+        config = get_config()
         for utl in ("load", "save", "clear", "reset"):
             logger.debug("Adding button: '%s'", utl)
-            img = Images().icons[utl]
-            action_cls = config if utl in (("save", "load")) else cli_options
+            img = get_images().icons[utl]
+            action_cls = config if utl in (("save", "load")) else config.cli_opts
             action = getattr(action_cls, utl)
             btnutl = ttk.Button(utlframe,
                                 image=img,

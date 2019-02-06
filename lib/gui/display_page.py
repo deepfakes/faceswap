@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .tooltip import Tooltip
-from .utils import Images
+from .utils import get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -203,7 +203,7 @@ class DisplayOptionalPage(DisplayPage):
         """ Add save button to save page output to file """
         logger.debug("Adding save option")
         btnsave = ttk.Button(self.optsframe,
-                             image=Images().icons["save"],
+                             image=get_images().icons["save"],
                              command=self.save_items)
         btnsave.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnsave,

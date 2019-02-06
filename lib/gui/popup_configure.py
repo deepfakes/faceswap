@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .tooltip import Tooltip
-from .utils import ContextMenu, set_slider_rounding
+from .utils import get_config, ContextMenu, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 POPUP = dict()
@@ -45,10 +45,11 @@ class ConfigurePlugins(tk.Toplevel):
 
     def set_geometry(self, root):
         """ Set pop-up geometry """
+        scaling_factor = get_config().scaling_factor
         pos_x = root.winfo_x() + 80
         pos_y = root.winfo_y() + 80
-        width = int(720 * root.scaling_factor)
-        height = int(400 * root.scaling_factor)
+        width = int(720 * scaling_factor)
+        height = int(400 * scaling_factor)
         logger.debug("Pop up Geometry: %sx%s, %s+%s", width, height, pos_x, pos_y)
         self.geometry("{}x{}+{}+{}".format(width, height, pos_x, pos_y))
 

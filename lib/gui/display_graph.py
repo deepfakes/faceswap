@@ -12,12 +12,12 @@ import matplotlib
 # pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
 
-from matplotlib import animation, pyplot as plt, style
+from matplotlib import animation, pyplot as plt, style  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
-                                               NavigationToolbar2Tk)
+                                               NavigationToolbar2Tk)  # noqa
 
-from .tooltip import Tooltip
-from .utils import Images
+from .tooltip import Tooltip  # noqa
+from .utils import get_images  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -37,7 +37,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                        "filesave": "save",
                        "zoom_to_rect": "zoom"}
         icon = iconmapping[file] if iconmapping.get(file, None) else file
-        img = Images().icons[icon]
+        img = get_images().icons[icon]
         btn = ttk.Button(frame, text=text, image=img, command=command)
         btn.pack(side=tk.RIGHT, padx=2)
         return btn
