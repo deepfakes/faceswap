@@ -167,8 +167,8 @@ class TrainerBase():
             return
         logger.trace("Updating TensorBoard log: '%s'", side)
         logs = {log[0]: log[1]
-                for log in zip(self.model.predictors[side].metrics_names, loss)}
-        self.tensorboard[side].on_epoch_end(self.model.state.iterations, logs)
+                for log in zip(self.model.state.loss_names[side], loss)}
+        self.tensorboard[side].on_batch_end(self.model.state.iterations, logs)
         logger.trace("Updated TensorBoard log: '%s'", side)
 
     def clear_tensorboard(self):
