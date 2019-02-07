@@ -103,32 +103,32 @@ class TensorBoardLogs():
                 both sides, so just read from one side """
         logger.debug("Getting timestamps")
         all_timestamps = dict()
-        for sess, sides in self.log_filenames.values():
+        for sess, sides in self.log_filenames.items():
             if session is not None and sess != session:
                 logger.debug("Skipping sessions: %s", sess)
                 continue
-            timestamps = list()
             for logfile in sides.values():
-                timestamps.append([event.wall_time
-                                   for event in tf.train.summary_iterator(logfile)])
+                timestamps = [event.wall_time
+                              for event in tf.train.summary_iterator(logfile)]
                 logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
                 all_timestamps[sess] = timestamps
-            break
+                break  # break after first file read
         return all_timestamps
 
 
 class Session():
     """ The Loaded or current training session """
-    def __init__(self):
+    def __init__(self, model_dir=None, model_name=None):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.serializer = JSONSerializer
         self.state = None
-        self.modeldir = None  # Set and reset by wrapper
-        self.modelname = None  # Set and reset by wrapper
-        self.logs_disabled = False  # Set and reset by wrapper
+        self.modeldir = model_dir  # Set and reset by wrapper for training sessions
+        self.modelname = model_name  # Set and reset by wrapper for training sessions
+        self.logs_disabled = False  # Set and reset by wrapper for training sessions
         self.tb_logs = None
         self.initialized = False
         self.session_id = None  # Set to specific session_id or current training session
+        self.summary = SessionsSummary(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -144,6 +144,11 @@ class Session():
         retval["input_size"] = [val[0] for key, val in self.state["inputs"].items()
                                 if key.startswith("face")][0]
         return retval
+
+    @property
+    def full_summary(self):
+        """ Retun all sessions summary data"""
+        return self.summary.compile_stats()
 
     @property
     def iterations(self):
@@ -179,6 +184,11 @@ class Session():
         return self.state["sessions"][str(self.session_id)]
 
     @property
+    def session_ids(self):
+        """ Return sorted list of all existing session ids in the state file """
+        return sorted([int(key) for key in self.state["sessions"].keys()])
+
+    @property
     def timestamps(self):
         """ Return timestamps from logs for current session """
         ts_dict = self.tb_logs.get_timestamps(session=self.session_id)
@@ -186,7 +196,7 @@ class Session():
 
     def initialize_session(self, is_training=False, session_id=None):
         """ Initialize the training session """
-        logger.debug("Initializing session: (is_training: %s, session_id: %s",
+        logger.debug("Initializing session: (is_training: %s, session_id: %s)",
                      is_training, session_id)
         self.load_state_file()
         self.tb_logs = TensorBoardLogs(os.path.join(self.modeldir,
@@ -209,6 +219,105 @@ class Session():
                 logger.debug("Loaded state: %s", state)
         except IOError as err:
             logger.warning("Unable to load state file. Graphing disabled: %s", str(err))
+
+
+class SessionsSummary():
+    """ Calculations for analysis summary stats """
+
+    def __init__(self, session):
+        logger.debug("Initializing %s: (session: %s)", self.__class__.__name__, session)
+        self.session = session
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def batch_sizes(self):
+        """ Return session batch sizes """
+        return {int(sess_id): sess["batchsize"]
+                for sess_id, sess in self.session.state["sessions"].items()}
+
+    @property
+    def iterations(self):
+        """ Return session iterations sizes """
+        return {int(sess_id): sess["iterations"]
+                for sess_id, sess in self.session.state["sessions"].items()}
+
+    @property
+    def time_stats(self):
+        """ Return session time stats """
+        ts_data = self.session.tb_logs.get_timestamps()
+        time_stats = {sess_id: {"start_time": min(timestamps),
+                                "end_time": max(timestamps)}
+                      for sess_id, timestamps in ts_data.items()}
+        return time_stats
+
+    @property
+    def sessions_stats(self):
+        """ Return compiled stats """
+        compiled = list()
+        for sess_idx, ts_data in self.time_stats.items():
+            elapsed = ts_data["end_time"] - ts_data["start_time"]
+            batchsize = self.batch_sizes[sess_idx]
+            iterations = self.iterations[sess_idx]
+            compiled.append({"session": sess_idx,
+                             "start": ts_data["start_time"],
+                             "end": ts_data["end_time"],
+                             "elapsed": elapsed,
+                             "rate": (batchsize * iterations) / elapsed,
+                             "batch": batchsize,
+                             "iterations": iterations})
+        return compiled
+
+    def compile_stats(self):
+        """ Compile sessions stats with totals, format and return """
+        logger.debug("Compiling sessions summary data")
+        compiled_stats = self.sessions_stats
+        logger.debug("sessions_stats: %s", compiled_stats)
+        total_stats = self.total_stats(compiled_stats)
+        compiled_stats.append(total_stats)
+        compiled_stats = self.format_stats(compiled_stats)
+        logger.debug("Final stats: %s", compiled_stats)
+        return compiled_stats
+
+    @staticmethod
+    def total_stats(sessions_stats):
+        """ Return total stats """
+        logger.debug("Compiling Totals")
+        elapsed = 0
+        rate = 0
+        batchset = set()
+        iterations = 0
+        total_summaries = len(sessions_stats)
+        for idx, summary in enumerate(sessions_stats):
+            if idx == 0:
+                starttime = summary["start"]
+            if idx == total_summaries - 1:
+                endtime = summary["end"]
+            elapsed += summary["elapsed"]
+            rate += summary["rate"]
+            batchset.add(summary["batch"])
+            iterations += summary["iterations"]
+        batch = ",".join(str(bs) for bs in batchset)
+        totals = {"session": "Total",
+                  "start": starttime,
+                  "end": endtime,
+                  "elapsed": elapsed,
+                  "rate": rate / total_summaries,
+                  "batch": batch,
+                  "iterations": iterations}
+        logger.debug(totals)
+        return totals
+
+    @staticmethod
+    def format_stats(compiled_stats):
+        """ Format for display """
+        logger.debug("Formatting stats")
+        for summary in compiled_stats:
+            hrs, mins, secs = convert_time(summary["elapsed"])
+            summary["start"] = time.strftime("%x %X", time.gmtime(summary["start"]))
+            summary["end"] = time.strftime("%x %X", time.gmtime(summary["end"]))
+            summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
+            summary["rate"] = "{0:.1f}".format(summary["rate"])
+        return compiled_stats
 
 
 class SessionsTotals():
@@ -246,83 +355,6 @@ class SessionsTotals():
         """ Add loss values to each of their respective lists """
         for idx, loss in enumerate(session_loss):
             self.stats["loss"][idx].extend(loss)
-
-
-class SessionsSummary():
-    """ Calculations for analysis summary stats """
-
-    def __init__(self, raw_data):
-        self.summary = list()
-        self.summary_stats_compile(raw_data)
-
-    def summary_stats_compile(self, raw_data):
-        """ Compile summary stats """
-        raw_summaries = list()
-        for idx, session in enumerate(raw_data):
-            raw_summaries.append(self.summarise_session(idx, session))
-
-        totals_summary = self.summarise_totals(raw_summaries)
-        raw_summaries.append(totals_summary)
-        self.format_summaries(raw_summaries)
-
-    # Compile Session Summaries
-    @staticmethod
-    def summarise_session(idx, session):
-        """ Compile stats for session passed in """
-        starttime = session["timestamps"][0]
-        endtime = session["timestamps"][-1]
-        elapsed = endtime - starttime
-        # Bump elapsed to 0.1s if no time is recorded
-        # to hack around div by zero error
-        elapsed = 0.1 if elapsed == 0 else elapsed
-        rate = (session["batchsize"] * session["iterations"]) / elapsed
-        return {"session": idx + 1,
-                "start": starttime,
-                "end": endtime,
-                "elapsed": elapsed,
-                "rate": rate,
-                "batch": session["batchsize"],
-                "iterations": session["iterations"]}
-
-    @staticmethod
-    def summarise_totals(raw_summaries):
-        """ Compile the stats for all sessions combined """
-        elapsed = 0
-        rate = 0
-        batchset = set()
-        iterations = 0
-        total_summaries = len(raw_summaries)
-
-        for idx, summary in enumerate(raw_summaries):
-            if idx == 0:
-                starttime = summary["start"]
-            if idx == total_summaries - 1:
-                endtime = summary["end"]
-            elapsed += summary["elapsed"]
-            rate += summary["rate"]
-            batchset.add(summary["batch"])
-            iterations += summary["iterations"]
-        batch = ",".join(str(bs) for bs in batchset)
-
-        return {"session": "Total",
-                "start": starttime,
-                "end": endtime,
-                "elapsed": elapsed,
-                "rate": rate / total_summaries,
-                "batch": batch,
-                "iterations": iterations}
-
-    def format_summaries(self, raw_summaries):
-        """ Format the summaries nicely for display """
-        for summary in raw_summaries:
-            summary["start"] = time.strftime("%x %X",
-                                             time.gmtime(summary["start"]))
-            summary["end"] = time.strftime("%x %X",
-                                           time.gmtime(summary["end"]))
-            hrs, mins, secs = convert_time(summary["elapsed"])
-            summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
-            summary["rate"] = "{0:.1f}".format(summary["rate"])
-        self.summary = raw_summaries
 
 
 class Calculations():

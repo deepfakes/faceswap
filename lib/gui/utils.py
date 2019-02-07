@@ -77,8 +77,8 @@ class FileHandler():
                                     ("PNG", "*.png"),
                                     ("TIFF", "*.tif", "*.tiff"),
                                     all_files),
+                          "state": (("State files", "*.json"), all_files),
                           "log": (("Log files", "*.log"), all_files),
-                          "session": (("Faceswap session files", "*.fss"), all_files),
                           "video": (("Audio Video Interleave", "*.avi"),
                                     ("Flash Video", "*.flv"),
                                     ("Matroska", "*.mkv"),
@@ -501,12 +501,16 @@ class Config():
         refreshgraph = tk.BooleanVar()
         refreshgraph.set(False)
 
+        updatepreview = tk.BooleanVar()
+        updatepreview.set(False)
+
         tk_vars = {"display": display,
                    "runningtask": runningtask,
                    "action": actioncommand,
                    "generate": generatecommand,
                    "consoleclear": consoleclear,
-                   "refreshgraph": refreshgraph}
+                   "refreshgraph": refreshgraph,
+                   "updatepreview": updatepreview}
         logger.debug(tk_vars)
         return tk_vars
 

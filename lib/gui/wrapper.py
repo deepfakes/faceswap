@@ -173,6 +173,9 @@ class FaceswapControl():
                 if (self.command == "train" and self.capture_loss(output)) or (
                         self.command != "train" and self.capture_tqdm(output)):
                     continue
+                if self.command == "train" and output.strip().endswith("saved models"):
+                    logger.debug("Trigger update preview")
+                    self.wrapper.tk_vars["updatepreview"].set(True)
                 print(output.strip())
         returncode = self.process.poll()
         message = self.set_final_status(returncode)

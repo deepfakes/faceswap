@@ -81,7 +81,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                 GraphDisplay(self, "graph", helptext, 5000)
             elif tab == "preview":
                 helptext = "Training preview. Updated on every save iteration"
-                PreviewTrain(self, "preview", helptext, 5000)
+                PreviewTrain(self, "preview", helptext, 1000)
         logger.debug("Built train tabs")
 
     def convert_tabs(self):

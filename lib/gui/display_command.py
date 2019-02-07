@@ -66,25 +66,35 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
 class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Training preview image(s) """
+    def __init__(self, *args, **kwargs):
+        self.update_preview = get_config().tk_vars["updatepreview"]
+        super().__init__(*args, **kwargs)
 
     def display_item_set(self):
         """ Load the latest preview if available """
         logger.trace("Loading latest preview")
+        if not self.update_preview.get():
+            logger.trace("Preview not updated")
+            return
         get_images().load_training_preview()
         self.display_item = get_images().previewtrain
 
     def display_item_process(self):
         """ Display the preview(s) resized as appropriate """
         logger.trace("Displaying preview")
-        sortednames = sorted([get_images().previewtrain.keys()])
+        sortednames = sorted(list(get_images().previewtrain.keys()))
         existing = self.subnotebook_get_titles_ids()
+        should_update = self.update_preview.get()
 
         for name in sortednames:
             if name not in existing.keys():
                 self.add_child(name)
-            else:
+            elif should_update:
                 tab_id = existing[name]
                 self.update_child(tab_id, name)
+
+        if should_update:
+            self.update_preview.set(False)
 
     def add_child(self, name):
         """ Add the preview canvas child """

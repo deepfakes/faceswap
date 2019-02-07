@@ -2,86 +2,116 @@
 """ Analysis tab of Display Frame of the Faceswap GUI """
 
 import csv
+import logging
+import os
 import tkinter as tk
 from tkinter import ttk
 
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
-from .stats import Calculations, SavedSessions, SessionsSummary, SessionsTotals
+from .stats import Calculations, Session, SessionsTotals
 from .tooltip import Tooltip
 from .utils import FileHandler, get_config, get_images
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Session analysis tab """
     def __init__(self, parent, tabname, helptext):
-        DisplayPage.__init__(self, parent, tabname, helptext)
+        logger.debug("Initializing: %s: (parent, %s, tabname: '%s', helptext: '%s')",
+                     self.__class__.__name__, parent, tabname, helptext)
+        super().__init__(parent, tabname, helptext)
 
         self.summary = None
+        self.session = None
         self.add_options()
         self.add_main_frame()
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def set_vars(self):
         """ Analysis specific vars """
         selected_id = tk.StringVar()
-        filename = tk.StringVar()
-        return {"selected_id": selected_id,
-                "filename": filename}
+        return {"selected_id": selected_id}
 
     def add_main_frame(self):
         """ Add the main frame to the subnotebook
             to hold stats and session data """
+        logger.debug("Adding main frame")
         mainframe = self.subnotebook_add_page("stats")
         self.stats = StatsData(mainframe,
-                               self.vars["filename"],
                                self.vars["selected_id"],
                                self.helptext["stats"])
+        logger.debug("Added main frame")
 
     def add_options(self):
         """ Add the options bar """
+        logger.debug("Adding options")
         self.reset_session_info()
         options = Options(self)
         options.add_options()
+        logger.debug("Added options")
 
     def reset_session_info(self):
         """ Reset the session info status to default """
-        self.vars["filename"].set(None)
+        logger.debug("Resetting session info")
         self.set_info("No session data loaded")
 
     def load_session(self):
         """ Load previously saved sessions """
+        logger.debug("Loading session")
         self.clear_session()
-        filename = FileHandler("open", "session").retfile
-        if not filename:
+        fullpath = FileHandler("filename", "state").retfile
+        if not fullpath:
             return
-        filename = filename.name
-        loaded_data = SavedSessions(filename).sessions
-        msg = filename
-        if len(filename) > 70:
-            msg = "...{}".format(filename[-70:])
-        self.set_session_summary(loaded_data, msg)
-        self.vars["filename"].set(filename)
+        logger.debug("state_file: '%s'", fullpath)
+        model_dir, state_file = os.path.split(fullpath)
+        logger.debug("model_dir: '%s'", model_dir)
+        model_name = self.get_model_name(model_dir, state_file)
+        if not model_name:
+            return
+        self.session = Session(model_dir=model_dir, model_name=model_name)
+        self.session.initialize_session(is_training=False)
+        msg = os.path.split(state_file)[0]
+        if len(msg) > 70:
+            msg = "...{}".format(msg[-70:])
+        self.set_session_summary(msg)
+
+    @staticmethod
+    def get_model_name(model_dir, state_file):
+        """ Get the state file from the model directory """
+        logger.debug("Getting model name")
+        model_name = state_file.replace("_state.json", "")
+        logger.debug("model_name: %s", model_name)
+        logs_dir = os.path.join(model_dir, "{}_logs".format(model_name))
+        if not os.path.isdir(logs_dir):
+            logger.warning("No logs folder found in folder: '%s'", logs_dir)
+            return None
+        return model_name
 
     def reset_session(self):
-        """ Load previously saved sessions """
+        """ Reset currently training sessions """
+        logger.debug("Reset current training session")
         self.clear_session()
-        if self.session.stats["iterations"] == 0:
+        session = get_config().session
+        if not session.initialized:
+            logger.debug("Training not running")
             print("Training not running")
             return
-        loaded_data = self.session.historical.sessions
         msg = "Currently running training session"
-        self.set_session_summary(loaded_data, msg)
-        self.vars["filename"].set("Currently running training session")
+        self.session = session
+        self.set_session_summary(msg)
 
-    def set_session_summary(self, data, message):
+    def set_session_summary(self, message):
         """ Set the summary data and info message """
-        self.summary = SessionsSummary(data).summary
+        logger.debug("Setting session summary. (message: '%s')", message)
+        self.summary = self.session.full_summary
         self.set_info("Session: {}".format(message))
-        self.stats.loaded_data = data
         self.stats.tree_insert_data(self.summary)
 
     def clear_session(self):
         """ Clear sessions stats """
+        logger.debug("Clearing session")
         self.summary = None
         self.stats.loaded_data = None
         self.stats.tree_clear()
@@ -89,16 +119,20 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
 
     def save_session(self):
         """ Save sessions stats to csv """
+        logger.debug("Saving session")
         if not self.summary:
+            logger.debug("No summary data loaded. Nothing to save")
             print("No summary data loaded. Nothing to save")
             return
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
+            logger.debug("No save file. Returning")
             return
 
         write_dicts = [val for val in self.summary.values()]
         fieldnames = sorted(key for key in write_dicts[0].keys())
 
+        logger.debug("Saving to: '%s'", savefile)
         with savefile as outfile:
             csvout = csv.DictWriter(outfile, fieldnames)
             csvout.writeheader()
@@ -109,8 +143,10 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
 class Options():
     """ Options bar of Analysis tab """
     def __init__(self, parent):
+        logger.debug("Initializing: %s", self.__class__.__name__)
         self.optsframe = parent.optsframe
         self.parent = parent
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_options(self):
         """ Add the display tab options """
@@ -119,6 +155,7 @@ class Options():
     def add_buttons(self):
         """ Add the option buttons """
         for btntype in ("reset", "clear", "save", "load"):
+            logger.debug("Adding button: '%s'", btntype)
             cmd = getattr(self.parent, "{}_session".format(btntype))
             btn = ttk.Button(self.optsframe,
                              image=get_images().icons[btntype],
@@ -130,6 +167,7 @@ class Options():
     @staticmethod
     def set_help(btntype):
         """ Set the helptext for option buttons """
+        logger.debug("Setting help")
         hlp = ""
         if btntype == "reset":
             hlp = "Load/Refresh stats for the currently training session"
@@ -144,11 +182,12 @@ class Options():
 
 class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Stats frame of analysis tab """
-    def __init__(self, parent, filename, selected_id, helptext):
-        ttk.Frame.__init__(self, parent)
+    def __init__(self, parent, selected_id, helptext):
+        logger.debug("Initializing: %s: (parent, %s, selected_id: %s, helptext: '%s')",
+                     self.__class__.__name__, parent, selected_id, helptext)
+        super().__init__(parent)
         self.pack(side=tk.TOP, padx=5, pady=5, expand=True, fill=tk.X, anchor=tk.N)
 
-        self.filename = filename
         self.loaded_data = None
         self.selected_id = selected_id
         self.popup_positions = list()
@@ -159,14 +198,17 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                                        orient="vertical",
                                        command=self.tree.yview)
         self.columns = self.tree_configure(helptext)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_label(self):
         """ Add Treeview Title """
+        logger.debug("Adding Treeview title")
         lbl = ttk.Label(self, text="Session Stats", anchor=tk.CENTER)
         lbl.pack(side=tk.TOP, expand=True, fill=tk.X, padx=5, pady=5)
 
     def tree_configure(self, helptext):
         """ Build a treeview widget to hold the sessions stats """
+        logger.debug("Configuring Treeview")
         self.tree.configure(yscrollcommand=self.scrollbar.set)
         self.tree.tag_configure("total",
                                 background="black",
@@ -179,6 +221,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def tree_columns(self):
         """ Add the columns to the totals treeview """
+        logger.debug("Adding Treeview columns")
         columns = (("session", 40, "#"),
                    ("start", 130, None),
                    ("end", 130, None),
@@ -190,6 +233,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         for column in columns:
             text = column[2] if column[2] else column[0].title()
+            logger.debug("Adding heading: '%s'", text)
             self.tree.heading(column[0], text=text)
             self.tree.column(column[0],
                              width=column[1],
@@ -202,6 +246,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def tree_insert_data(self, sessions):
         """ Insert the data into the totals treeview """
+        logger.debug("Inserting treeview data")
         self.tree.configure(height=len(sessions))
 
         for item in sessions:
@@ -213,6 +258,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def tree_clear(self):
         """ Clear the totals tree """
+        logger.debug("Clearing treeview data")
         self.tree.delete(* self.tree.get_children())
         self.tree.configure(height=1)
 
@@ -223,12 +269,14 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         selection = self.tree.focus()
         values = self.tree.item(selection, "values")
         if values:
+            logger.debug("Selected values: %s", values)
             self.selected_id.set(values[0])
             if region == "tree":
                 self.data_popup()
 
     def data_popup(self):
         """ Pop up a window and control it's position """
+        logger.debug("Popping up data window")
         scaling_factor = get_config().scaling_factor
         toplevel = SessionPopUp(self.loaded_data, self.selected_id.get())
         toplevel.title(self.data_popup_title())
@@ -243,14 +291,17 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def data_popup_title(self):
         """ Set the data popup title """
+        logger.debug("Setting poup title")
         selected_id = self.selected_id.get()
         title = "All Sessions"
         if selected_id != "Total":
             title = "Session #{}".format(selected_id)
-        return "{} - {}".format(title, self.filename.get())
+        logger.debug("Title: '%s'", title)
+#        return "{} - {}".format(title, self.filename.get())
 
     def data_popup_get_position(self):
         """ Get the position of the next window """
+        logger.debug("getting poup position")
         init_pos = [120, 120]
         pos = init_pos
         while True:
@@ -259,22 +310,29 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                 break
             pos = [item + 200 for item in pos]
             init_pos, pos = self.data_popup_check_boundaries(init_pos, pos)
+        logger.debug("Position: %s", pos)
         return pos
 
     def data_popup_check_boundaries(self, initial_position, position):
         """ Check that the popup remains within the screen boundaries """
+        logger.debug("Checking poup boundaries: (initial_position: %s, position: %s)",
+                     initial_position, position)
         boundary_x = self.winfo_screenwidth() - 120
         boundary_y = self.winfo_screenheight() - 120
         if position[0] >= boundary_x or position[1] >= boundary_y:
             initial_position = [initial_position[0] + 50, initial_position[1]]
             position = initial_position
+        logger.debug("Returning poup boundaries: (initial_position: %s, position: %s)",
+                     initial_position, position)
         return initial_position, position
 
 
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed graph/stats for selected session """
     def __init__(self, data, session_id):
-        tk.Toplevel.__init__(self)
+        logger.debug("Initializing: %s: (data, %s, session_id: %s)",
+                     self.__class__.__name__, data, session_id)
+        super().__init__()
 
         self.is_totals = session_id == "Total"
         self.data = self.set_session_data(data, session_id)
@@ -285,6 +343,7 @@ class SessionPopUp(tk.Toplevel):
         self.vars = dict()
         self.graph_initialised = False
         self.build()
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def set_session_data(self, sessions, session_id):
         """ Set the correct list index based on the passed in session is """
@@ -423,7 +482,7 @@ class SessionPopUp(tk.Toplevel):
             csvout.writerow(fieldnames)
             csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
 
-    def optbtn_reset(self, *args):
+    def optbtn_reset(self, *args):  # pylint: disable=unused-argument
         """ Action for reset button press and checkbox changes"""
         if not self.graph_initialised:
             return
@@ -432,7 +491,7 @@ class SessionPopUp(tk.Toplevel):
                            self.vars["display"].get(),
                            self.vars["scale"].get())
 
-    def graph_scale(self, *args):
+    def graph_scale(self, *args):  # pylint: disable=unused-argument
         """ Action for changing graph scale """
         if not self.graph_initialised:
             return
