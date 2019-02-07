@@ -9,8 +9,8 @@ import warnings
 from math import ceil, sqrt
 
 import numpy as np
-
-from lib.Serializer import PickleSerializer
+import tensorflow as tf
+from lib.Serializer import JSONSerializer, PickleSerializer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -46,58 +46,169 @@ class SavedSessions():
         logger.info("Saved session stats to: %s", filename)
 
 
-class CurrentSession():
-    """ The current training session """
+class TensorBoardLogs():
+    """ Parse and return data from TensorBoard logs """
+    def __init__(self, logs_folder):
+        self.folder_base = logs_folder
+        self.log_filenames = self.set_log_filenames()
+
+    def set_log_filenames(self):
+        """ Set the TensorBoard log filenames for all existing sessions """
+        logger.debug("Loading log filenames. base_dir: '%s'", self.folder_base)
+        log_filenames = dict()
+        for dirpath, _, filenames in os.walk(self.folder_base):
+            if not any(filename.startswith("events.out.tfevents") for filename in filenames):
+                continue
+            logfiles = [filename for filename in filenames
+                        if filename.startswith("events.out.tfevents")]
+            # Take the last logfile, in case of previous crash
+            logfile = os.path.join(dirpath, sorted(logfiles)[-1])
+            side, session = os.path.split(dirpath)
+            side = os.path.split(side)[1]
+            session = int(session[session.rfind("_") + 1:])
+            log_filenames.setdefault(session, dict())[side] = logfile
+        logger.debug("logfiles: %s", log_filenames)
+        return log_filenames
+
+    def get_loss(self, side=None, session=None):
+        """ Read the loss from the TensorBoard logs
+            Specify a side or a session or leave at None for all
+        """
+        logger.debug("Getting loss: (side: %s, session: %s)", side, session)
+        all_loss = dict()
+        for sess, sides in self.log_filenames.items():
+            if session is not None and sess != session:
+                logger.debug("Skipping session: %s", sess)
+                continue
+            loss = dict()
+            for sde, logfile in sides.items():
+                if side is not None and sde != side:
+                    logger.debug("Skipping side: %s", sde)
+                    continue
+                for event in tf.train.summary_iterator(logfile):
+                    for summary in event.summary.value:
+                        if "loss" not in summary.tag:
+                            continue
+                        tag = summary.tag.replace("batch_", "")
+                        loss.setdefault(tag,
+                                        dict()).setdefault(sde,
+                                                           list()).append(summary.simple_value)
+            all_loss[sess] = loss
+        return all_loss
+
+    def get_timestamps(self, session=None):
+        """ Read the timestamps from the TensorBoard logs
+            Specify a session or leave at None for all
+            NB: For all intents and purposes timestamps are the same for
+                both sides, so just read from one side """
+        logger.debug("Getting timestamps")
+        all_timestamps = dict()
+        for sess, sides in self.log_filenames.values():
+            if session is not None and sess != session:
+                logger.debug("Skipping sessions: %s", sess)
+                continue
+            timestamps = list()
+            for logfile in sides.values():
+                timestamps.append([event.wall_time
+                                   for event in tf.train.summary_iterator(logfile)])
+                logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
+                all_timestamps[sess] = timestamps
+            break
+        return all_timestamps
+
+
+class Session():
+    """ The Loaded or current training session """
     def __init__(self):
-        self.stats = {"iterations": 0,
-                      "batchsize": None,    # Set and reset by wrapper
-                      "timestamps": [],
-                      "loss": [],
-                      "losskeys": []}
-        self.timestats = {"start": None,
-                          "elapsed": None}
-        self.modeldir = None    # Set and reset by wrapper
-        self.filename = None
-        self.historical = None
+        logger.debug("Initializing %s", self.__class__.__name__)
+        self.serializer = JSONSerializer
+        self.state = None
+        self.modeldir = None  # Set and reset by wrapper
+        self.modelname = None  # Set and reset by wrapper
+        self.logs_disabled = False  # Set and reset by wrapper
+        self.tb_logs = None
+        self.initialized = False
+        self.session_id = None  # Set to specific session_id or current training session
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def initialize_session(self, currentloss):
+    @property
+    def batchsize(self):
+        """ Return the session batchsize """
+        return self.session["batchsize"]
+
+    @property
+    def config(self):
+        """ Return config and other information """
+        retval = {key: val for key, val in self.state["config"]}
+        retval["training_size"] = self.state["training_size"]
+        retval["input_size"] = [val[0] for key, val in self.state["inputs"].items()
+                                if key.startswith("face")][0]
+        return retval
+
+    @property
+    def iterations(self):
+        """ Return session iterations """
+        return self.session["iterations"]
+
+    @property
+    def total_iterations(self):
+        """ Return session iterations """
+        return self.state["iterations"]
+
+    @property
+    def loss(self):
+        """ Return loss from logs for current session """
+        loss_dict = self.tb_logs.get_loss(session=self.session_id)[self.session_id]
+        return loss_dict
+
+    @property
+    def loss_keys(self):
+        """ Return list of unique session loss keys """
+        loss_keys = set(loss_key for side_keys in self.session["loss_names"].values()
+                        for loss_key in side_keys)
+        return list(loss_keys)
+
+    @property
+    def lowest_loss(self):
+        """ Return the lowest average loss per save iteration seen """
+        return self.state["lowest_avg_loss"]
+
+    @property
+    def session(self):
+        """ Return current session dictionary """
+        return self.state["sessions"][str(self.session_id)]
+
+    @property
+    def timestamps(self):
+        """ Return timestamps from logs for current session """
+        ts_dict = self.tb_logs.get_timestamps(session=self.session_id)
+        return list(ts_dict.values())
+
+    def initialize_session(self, is_training=False, session_id=None):
         """ Initialize the training session """
-        self.load_historical()
-        for item in currentloss:
-            self.stats["losskeys"].append(item[0])
-            self.stats["loss"].append(list())
-        self.timestats["start"] = time.time()
+        logger.debug("Initializing session: (is_training: %s, session_id: %s",
+                     is_training, session_id)
+        self.load_state_file()
+        self.tb_logs = TensorBoardLogs(os.path.join(self.modeldir,
+                                                    "{}_logs".format(self.modelname)))
+        if is_training:
+            self.session_id = max(int(key) for key in self.state["sessions"].keys())
+        else:
+            self.session_id = session_id
+        self.initialized = True
+        logger.debug("Initialized session")
 
-    def load_historical(self):
-        """ Load historical data and add current session to the end """
-        self.filename = os.path.join(self.modeldir, "trainingstats.fss")
-        self.historical = SavedSessions(self.filename)
-        self.historical.sessions.append(self.stats)
-
-    def add_loss(self, currentloss):
-        """ Add a loss item from the training process """
-        if self.stats["iterations"] == 0:
-            self.initialize_session(currentloss)
-
-        self.stats["iterations"] += 1
-        self.add_timestats()
-
-        for idx, item in enumerate(currentloss):
-            self.stats["loss"][idx].append(float(item[1]))
-
-    def add_timestats(self):
-        """ Add time stats and timestamps to loss dict """
-        now = time.time()
-        self.stats["timestamps"].append(now)
-        elapsed_time = now - self.timestats["start"]
-        hrs, mins, secs = convert_time(elapsed_time)
-        self.timestats["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
-
-    def save_session(self):
-        """ Save the session file to the model folder """
-        if self.stats["iterations"] > 0:
-            logger.info("Saving session stats...")
-            self.historical.save_sessions(self.filename)
+    def load_state_file(self):
+        """ Load the current state file """
+        state_file = os.path.join(self.modeldir, "{}_state.json".format(self.modelname))
+        logger.debug("Loading State: '%s'", state_file)
+        try:
+            with open(state_file, "rb") as inp:
+                state = self.serializer.unmarshal(inp.read().decode("utf-8"))
+                self.state = state
+                logger.debug("Loaded state: %s", state)
+        except IOError as err:
+            logger.warning("Unable to load state file. Graphing disabled: %s", str(err))
 
 
 class SessionsTotals():
@@ -215,25 +326,17 @@ class SessionsSummary():
 
 
 class Calculations():
-    """ Class to hold calculations against raw session data """
-    def __init__(self,
-                 session,
-                 display="loss",
-                 selections=["raw"],
-                 avg_samples=10,
-                 flatten_outliers=False,
-                 is_totals=False):
+    """ Class to pull raw data for given session(s) and perform calculations """
+    def __init__(self, session, display="loss", loss_keys=["loss"], selections=["raw"],
+                 avg_samples=10, flatten_outliers=False, is_totals=False):
 
         warnings.simplefilter("ignore", np.RankWarning)
 
         self.session = session
-        if display.lower() == "loss":
-            display = self.session["losskeys"]
-        else:
-            display = [display]
-        self.args = {"display": display,
-                     "selections": selections,
-                     "avg_samples": int(avg_samples),
+        self.display = display
+        self.loss_keys = loss_keys
+        self.selections = selections
+        self.args = {"avg_samples": int(avg_samples),
                      "flatten_outliers": flatten_outliers,
                      "is_totals": is_totals}
         self.iterations = 0
@@ -249,25 +352,39 @@ class Calculations():
 
     def get_raw(self):
         """ Add raw data to stats dict """
+#        raw = dict()
         raw = dict()
-        for idx, item in enumerate(self.args["display"]):
-            if item.lower() == "rate":
-                data = self.calc_rate(self.session)
-            else:
-                data = self.session["loss"][idx][:]
+        iterations = set()
+        if self.display.lower() == "loss":
+            for loss_name, side_loss in self.session.loss.items():
+                for side, loss in side_loss.items():
+                    iterations.add(len(loss))
+                    raw["raw_{}_{}".format(loss_name, side)] = loss
 
-            if self.args["flatten_outliers"]:
-                data = self.flatten_outliers(data)
+        self.iterations = min(iterations)
+        if len(iterations) != 1:
+            # Crop all losses to the same number of items
+            raw = {lossname: loss[:self.iterations] for lossname, loss in raw}
 
-            if self.iterations == 0:
-                self.iterations = len(data)
+#        raw = dict()
+#        for idx, item in enumerate(self.args["display"]):
+#            if item.lower() == "rate":
+#                data = self.calc_rate(self.session)
+#            else:
+#                data = self.session["loss"][idx][:]
 
-            raw["raw_{}".format(item)] = data
+#            if self.args["flatten_outliers"]:
+#                data = self.flatten_outliers(data)
+
+#            if self.iterations == 0:
+#                self.iterations = len(data)
+
+#            raw["raw_{}".format(item)] = data
         return raw
 
     def remove_raw(self):
         """ Remove raw values from stats if not requested """
-        if "raw" in self.args["selections"]:
+        if "raw" in self.selections:
             return
         for key in list(self.stats.keys()):
             if key.startswith("raw"):
@@ -320,19 +437,24 @@ class Calculations():
 
     def get_calculations(self):
         """ Perform the required calculations """
-        for selection in self.get_selections():
-            if selection[0] == "raw":
+        for selection in self.selections:
+            if selection == "raw":
                 continue
-            method = getattr(self, "calc_{}".format(selection[0]))
-            key = "{}_{}".format(selection[0], selection[1])
-            raw = self.stats["raw_{}".format(selection[1])]
-            self.stats[key] = method(raw)
+            method = getattr(self, "calc_{}".format(selection))
+            raw_keys = [key for key in self.stats.keys() if key.startswith("raw_")]
+            for key in raw_keys:
+                selected_key = "{}_{}".format(selection, key.replace("raw_", ""))
+                self.stats[selected_key] = method(self.stats[key])
 
-    def get_selections(self):
-        """ Compile a list of data to be calculated """
-        for summary in self.args["selections"]:
-            for item in self.args["display"]:
-                yield summary, item
+#    def get_selections(self):
+#        """ Compile a list of data to be calculated """
+#        if self.display == "loss":
+#            process = self.loss_keys
+#        else:
+#            process = ["rate"]
+#        for summary in self.selections:
+#            for item in process:
+#                yield summary, item
 
     def calc_avg(self, data):
         """ Calculate rolling average """

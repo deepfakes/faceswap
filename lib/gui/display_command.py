@@ -12,7 +12,7 @@ from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
 from .stats import Calculations
-from .utils import FileHandler, get_images
+from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -76,7 +76,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_process(self):
         """ Display the preview(s) resized as appropriate """
         logger.trace("Displaying preview")
-        sortednames = sorted([name for name in get_images().previewtrain.keys()])
+        sortednames = sorted([get_images().previewtrain.keys()])
         existing = self.subnotebook_get_titles_ids()
 
         for name in sortednames:
@@ -161,33 +161,47 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
 
+    def add_options(self):
+        """ Add the additional options """
+        self.add_option_refresh()
+        super().add_options()
+
+    def add_option_refresh(self):
+        """ Add refresh button to refresh graph immediately """
+        logger.debug("Adding refresh option")
+        tk_var = get_config().tk_vars["refreshgraph"]
+        btnrefresh = ttk.Button(self.optsframe,
+                                image=get_images().icons["reset"],
+                                command=lambda: tk_var.set(True))
+        btnrefresh.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btnrefresh,
+                text="Graph updates every 100 iterations. Click to refresh now.",
+                wraplength=200)
+
     def display_item_set(self):
         """ Load the graph(s) if available """
-        if self.session.stats["iterations"] == 0:
-            self.display_item = None
-        else:
+        session = get_config().session
+        if session.initialized:
             logger.trace("Loading graph")
-            self.display_item = self.session.stats
+            self.display_item = session
+        else:
+            self.display_item = None
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
         logger.trace("Adding graph")
-        losskeys = self.display_item["losskeys"]
-        loss = self.display_item["loss"]
-        tabcount = int(len(losskeys) / 2)
-        existing = self.subnotebook_get_titles_ids()
-        for i in range(tabcount):
-            selectedkeys = [losskeys[i], losskeys[i + tabcount]]
-            name = selectedkeys[0]
-            name = name[0:name.rfind("_")].title().replace("_", " ")
-            if name not in existing.keys():
-                selectedloss = [loss[i], loss[i + tabcount]]
-                selection = {"loss": selectedloss,
-                             "losskeys": selectedkeys}
-                data = Calculations(session=selection,
-                                    display="loss",
-                                    selections=["raw", "trend"])
-                self.add_child(name, data)
+        existing = list(self.subnotebook_get_titles_ids().keys())
+
+        for loss_key in self.display_item.loss_keys:
+            tabname = loss_key.replace("_", " ").title()
+            if tabname in existing:
+                continue
+
+            data = Calculations(session=get_config().session,
+                                loss_keys=[loss_key],
+                                display="loss",
+                                selections=["raw", "trend"])
+            self.add_child(tabname, data)
 
     def add_child(self, name, data):
         """ Add the graph for the selected keys """

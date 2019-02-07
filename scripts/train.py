@@ -318,13 +318,13 @@ class Train():
             scriptpath = os.path.realpath(os.path.dirname(sys.argv[0]))
             if self.args.write_image:
                 logger.trace("Saving preview to disk")
-                img = "_sample_{}.jpg".format(name)
+                img = "training_preview.jpg"
                 imgfile = os.path.join(scriptpath, img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
                 logger.trace("Saved preview to: '%s'", img)
             if self.args.redirect_gui:
                 logger.trace("Generating preview for GUI")
-                img = ".gui_preview_{}.jpg".format(name)
+                img = ".gui_training_preview.jpg"
                 imgfile = os.path.join(scriptpath, "lib", "gui",
                                        ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member

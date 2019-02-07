@@ -18,14 +18,13 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     """ The display tabs """
 
-    def __init__(self, parent, session):
-        logger.debug("Initializing %s: (session: %s)", self.__class__.__name__, session)
+    def __init__(self, parent):
+        logger.debug("Initializing %s", self.__class__.__name__)
         ttk.Notebook.__init__(self, parent, width=780)
         parent.add(self)
         tk_vars = get_config().tk_vars
         self.wrapper_var = tk_vars["display"]
         self.runningtask = tk_vars["runningtask"]
-        self.session = session
 
         self.set_wrapper_var_trace()
         self.add_static_tabs()
@@ -113,7 +112,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             logger.debug("Destroying child: %s", child)
             child.destroy()
 
-    def update_displaybook(self, *args):
+    def update_displaybook(self, *args):  # pylint: disable=unused-argument
         """ Set the display tabs based on executing task """
         command = self.wrapper_var.get()
         self.remove_tabs()

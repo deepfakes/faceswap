@@ -12,12 +12,12 @@ import matplotlib
 # pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
 
-from matplotlib import animation, pyplot as plt, style  # noqa
+from matplotlib import pyplot as plt, style  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)  # noqa
 
 from .tooltip import Tooltip  # noqa
-from .utils import get_images  # noqa
+from .utils import get_config, get_images  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -147,7 +147,6 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     def axes_limits_set(self, data):
         """ Set the axes limits """
         xmax = self.calcs.iterations - 1 if self.calcs.iterations > 1 else 1
-
         if data:
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
@@ -191,7 +190,6 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         groupsize = self.lines_groupsize(raw_lines, sorted_lines)
         sorted_lines = raw_lines + sorted_lines
-
         lines = self.lines_style(sorted_lines, groupsize)
         return lines
 
@@ -250,48 +248,25 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent, data, ylabel):
         GraphBase.__init__(self, parent, data, ylabel)
+        self.add_callback()
 
-        self.anim = None
+    def add_callback(self):
+        """ Add the variable trace to update graph on recent button or save iteration """
+        get_config().tk_vars["refreshgraph"].trace("w", self.refresh)
 
     def build(self):
-        """ Update the plot area with loss values and cycle through to
-        animate """
+        """ Update the plot area with loss values """
         logger.debug("Building training graph")
-        self.anim = animation.FuncAnimation(self.fig, self.animate, interval=200, blit=False)
         self.plotcanvas.draw()
         logger.debug("Built training graph")
 
-    def animate(self, i):  # pylint: disable=unused-argument
+    def refresh(self, *args):  # pylint: disable=unused-argument
         """ Read loss data and apply to graph """
-        logger.trace("Running animation")
+        logger.debug("Updating plot")
         self.calcs.refresh()
-        self.set_animation_rate(self.calcs.iterations)
         self.update_plot(initiate=False)
-
-    def set_animation_rate(self, iterations):
-        """ Change the animation update interval based on how
-            many iterations have been
-            There's no point calculating a graph over thousands of
-            points of data when the change will be minuscule """
-        if iterations > 30000:
-            speed = 120000          # 2 min updates
-        elif iterations > 20000:
-            speed = 60000           # 1 min updates
-        elif iterations > 10000:
-            speed = 30000           # 30 sec updates
-        elif iterations > 5000:
-            speed = 10000           # 10 sec updates
-        elif iterations > 1000:
-            speed = 5000            # 5 sec updates
-        elif iterations > 500:
-            speed = 2000            # 2 sec updates
-        elif iterations > 100:
-            speed = 1000            # 1 sec updates
-        else:
-            speed = 500             # 0.5 sec updates
-        if not self.anim.event_source.interval == speed:
-            logger.debug("Animation rate set to: %sms", speed)
-            self.anim.event_source.interval = speed
+        self.plotcanvas.draw()
+        get_config().tk_vars["refreshgraph"].set(False)
 
     def save_fig(self, location):
         """ Save the figure to file """
@@ -309,7 +284,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def resize_fig(self):
         """ Resize the figure back to the canvas """
-        class Event():  # pylint: too-few-public-methods
+        class Event():  # pylint: disable=too-few-public-methods
             """ Event class that needs to be passed to plotcanvas.resize """
             pass
         Event.width = self.winfo_width()

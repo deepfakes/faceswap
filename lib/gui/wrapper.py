@@ -6,7 +6,6 @@ import re
 import signal
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
-import tkinter as tk
 from threading import Thread
 from time import time
 
@@ -21,47 +20,21 @@ class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, session=None, pathscript=None):
-        logger.debug("Initializing %s: (session: %s, pathscript: %s)",
-                     self.__class__.__name__, session, pathscript)
-        self.tk_vars = self.set_tk_vars()
-        self.session = session
+    def __init__(self, pathscript=None):
+        logger.debug("Initializing %s: (pathscript: %s)", self.__class__.__name__, pathscript)
+        self.tk_vars = get_config().tk_vars
+        self.set_callbacks()
         self.pathscript = pathscript
         self.command = None
         self.statusbar = get_config().statusbar
         self.task = FaceswapControl(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_tk_vars(self):
-        """ TK Variables to be triggered by ProcessWrapper to indicate
-            what state various parts of the GUI should be in """
-        display = tk.StringVar()
-        display.set(None)
-
-        runningtask = tk.BooleanVar()
-        runningtask.set(False)
-
-        actioncommand = tk.StringVar()
-        actioncommand.set(None)
-        actioncommand.trace("w", self.action_command)
-
-        generatecommand = tk.StringVar()
-        generatecommand.set(None)
-        generatecommand.trace("w", self.generate_command)
-
-        consoleclear = tk.BooleanVar()
-        consoleclear.set(False)
-
-        tk_vars = {"display": display,
-                   "runningtask": runningtask,
-                   "action": actioncommand,
-                   "generate": generatecommand,
-                   "consoleclear": consoleclear}
-        logger.debug(tk_vars)
-        #  Set the tk_vars into global config
-        config = get_config()
-        config.tk_vars = tk_vars
-        return tk_vars
+    def set_callbacks(self):
+        """ Set the tk variable callbacks """
+        logger.debug("Setting tk variable traces")
+        self.tk_vars["action"].trace("w", self.action_command)
+        self.tk_vars["generate"].trace("w", self.generate_command)
 
     def action_command(self, *args):
         """ The action to perform when the action button is pressed """
@@ -119,20 +92,25 @@ class ProcessWrapper():
         for cliopt in cli_opts.gen_cli_arguments(command):
             args.extend(cliopt)
             if command == "train" and not generate:
-                self.set_session_stats(cliopt)
+                self.init_training_session(cliopt)
         if not generate:
             args.append("-gui")  # Indicate to Faceswap that we are running the GUI
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
-    def set_session_stats(self, cliopt):
-        """ Set the session stats for batch size and model folder """
-        if cliopt[0] == "-bs":
-            self.session.stats["batchsize"] = int(cliopt[1])
+    @staticmethod
+    def init_training_session(cliopt):
+        """ Set the session stats for disable logging, model folder and model name """
+        session = get_config().session
+        if cliopt[0] == "-nl":
+            session.disable_logging = True
+            logger.debug("Logging Disabled")
+        if cliopt[0] == "-t":
+            session.modelname = cliopt[1].lower()
+            logger.debug("modelname: '%s'", session.modelname)
         if cliopt[0] == "-m":
-            self.session.modeldir = cliopt[1]
-        logger.debug("Set session stats: stats: (%s, modeldir: '%s')",
-                     self.session.stats, self.session.modeldir)
+            session.modeldir = cliopt[1]
+            logger.debug("modeldir: '%s'", session.modeldir)
 
     def terminate(self, message):
         """ Finalize wrapper when process has exited """
@@ -142,9 +120,7 @@ class ProcessWrapper():
         self.statusbar.status_message.set(message)
         self.tk_vars["display"].set(None)
         get_images().delete_preview()
-        if self.command == "train":
-            self.session.save_session()
-        self.session.__init__()
+        get_config().session.__init__()
         self.command = None
         logger.debug("Terminated Faceswap processes")
         print("Process exited.")
@@ -159,6 +135,7 @@ class FaceswapControl():
         self.command = None
         self.args = None
         self.process = None
+        self.train_stats = {"iterations": 0, "timestamp": None}
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
             "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
@@ -251,8 +228,6 @@ class FaceswapControl():
             logger.trace("Not loss message. Returning False")
             return False
 
-        self.wrapper.session.add_loss(loss)
-
         message = ""
         for item in loss:
             message += "{}: {}  ".format(item[0], item[1])
@@ -260,13 +235,39 @@ class FaceswapControl():
             logger.trace("Error creating loss message. Returning False")
             return False
 
-        elapsed = self.wrapper.session.timestats["elapsed"]
-        iterations = self.wrapper.session.stats["iterations"]
+        iterations = self.train_stats["iterations"]
+        if iterations == 0:
+            # Initialize session stats and set initial timestamp
+            self.train_stats["timestamp"] = time()
+            get_config().session.initialize_session(is_training=True)
 
-        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed, iterations, message)
+        iterations += 1
+        if iterations % 100 == 0:
+            self.wrapper.tk_vars["refreshgraph"].set(True)
+        self.train_stats["iterations"] = iterations
+
+        elapsed = self.calc_elapsed()
+        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed,
+                                                          self.train_stats["iterations"], message)
         self.statusbar.progress_update(message, 0, False)
         logger.trace("Succesfully captured loss: %s", message)
         return True
+
+    def calc_elapsed(self):
+        """ Calculate and format time since training started """
+        now = time()
+        elapsed_time = now - self.train_stats["timestamp"]
+        try:
+            hrs = int(elapsed_time // 3600)
+            if hrs < 10:
+                hrs = "{0:02d}".format(hrs)
+            mins = "{0:02d}".format((int(elapsed_time % 3600) // 60))
+            secs = "{0:02d}".format((int(elapsed_time % 3600) % 60))
+        except ZeroDivisionError:
+            hrs = "00"
+            mins = "00"
+            secs = "00"
+        return "{}:{}:{}".format(hrs, mins, secs)
 
     def capture_tqdm(self, string):
         """ Capture tqdm output for progress bar """

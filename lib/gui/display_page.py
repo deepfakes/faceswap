@@ -20,7 +20,6 @@ class DisplayPage(ttk.Frame):
         ttk.Frame.__init__(self, parent)
         self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
 
-        self.session = parent.session
         self.runningtask = parent.runningtask
         self.helptext = helptext
         self.tabname = tabname
@@ -35,7 +34,7 @@ class DisplayPage(ttk.Frame):
         self.add_frame_separator()
         self.set_mainframe_single_tab_style()
         parent.add(self, text=self.tabname.title())
-        logger.debug("Initialized %s")
+        logger.debug("Initialized %s", self.__class__.__name__,)
 
     def add_optional_vars(self, varsdict):
         """ Add page specific variables """

@@ -16,14 +16,14 @@ _CONFIG = None
 _IMAGES = None
 
 
-def initialize_config(cli_opts, scaling_factor, pathcache, statusbar):
+def initialize_config(cli_opts, scaling_factor, pathcache, statusbar, session):
     """ Initialize the config and add to global constant """
     global _CONFIG  # pylint: disable=global-statement
     if _CONFIG is not None:
         return
-    logger.debug("Initializing config: (cli_opts: %s, tk_vars: %s, pathcache: %s, statusbar: %s)",
-                 cli_opts, scaling_factor, pathcache, statusbar)
-    _CONFIG = Config(cli_opts, scaling_factor, pathcache, statusbar)
+    logger.debug("Initializing config: (cli_opts: %s, tk_vars: %s, pathcache: %s, statusbar: %s, "
+                 "session: %s)", cli_opts, scaling_factor, pathcache, statusbar, session)
+    _CONFIG = Config(cli_opts, scaling_factor, pathcache, statusbar, session)
 
 
 def get_config():
@@ -223,7 +223,7 @@ class Images():
         """ Delete the preview files """
         logger.debug("Deleting previews")
         for item in os.listdir(self.pathpreview):
-            if item.startswith(".gui_preview_") and item.endswith(".jpg"):
+            if item.startswith(".gui_training_preview") and item.endswith(".jpg"):
                 fullitem = os.path.join(self.pathpreview, item)
                 logger.debug("Deleting: '%s'", fullitem)
                 os.remove(fullitem)
@@ -364,7 +364,9 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         """ Bind the menu to the widget's Right Click event """
         button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         logger.debug("Binding '%s' to '%s'", button, self.widget.winfo_class())
-        self.widget.bind(button, lambda event: self.tk_popup(event.x_root, event.y_root, 0))
+        x_offset = int(34 * get_config().scaling_factor)
+        self.widget.bind(button,
+                         lambda event: self.tk_popup(event.x_root + x_offset, event.y_root, 0))
 
     def select_all(self):
         """ Select all for Text or Entry widgets """
@@ -424,7 +426,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
             sys.stderr = SysOutRouter(console=self.console, out_type="stderr")
         logger.debug("Redirected console")
 
-    def clear(self, *args):
+    def clear(self, *args):  # pylint: disable=unused-argument
         """ Clear the console output screen """
         logger.debug("Clear console")
         if not self.console_clear.get():
@@ -464,16 +466,49 @@ class Config():
         Don't call directly. Call get_config()
     """
 
-    def __init__(self, cli_opts, scaling_factor, pathcache, statusbar):
-        """ NB: Only pass in pathcache and recent_files_menu on first call (in menu config) """
-        logger.debug("Initializing %s", self.__class__.__name__)
+    def __init__(self, cli_opts, scaling_factor, pathcache, statusbar, session):
+        logger.debug("Initializing %s: (cli_opts: %s, scaling_factor: %s, pathcache: %s, "
+                     "statusbar: %s, session: %s)", self.__class__.__name__, cli_opts,
+                     scaling_factor, pathcache, statusbar, session)
         self.cli_opts = cli_opts
         self.scaling_factor = scaling_factor
         self.pathcache = pathcache
         self.statusbar = statusbar
         self.serializer = JSONSerializer
-        self.tk_vars = dict()  # set from wrapper
+        self.tk_vars = self.set_tk_vars()
+        self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def set_tk_vars():
+        """ TK Variables to be triggered by to indicate
+            what state various parts of the GUI should be in """
+        display = tk.StringVar()
+        display.set(None)
+
+        runningtask = tk.BooleanVar()
+        runningtask.set(False)
+
+        actioncommand = tk.StringVar()
+        actioncommand.set(None)
+
+        generatecommand = tk.StringVar()
+        generatecommand.set(None)
+
+        consoleclear = tk.BooleanVar()
+        consoleclear.set(False)
+
+        refreshgraph = tk.BooleanVar()
+        refreshgraph.set(False)
+
+        tk_vars = {"display": display,
+                   "runningtask": runningtask,
+                   "action": actioncommand,
+                   "generate": generatecommand,
+                   "consoleclear": consoleclear,
+                   "refreshgraph": refreshgraph}
+        logger.debug(tk_vars)
+        return tk_vars
 
     def load(self, command=None):
         """ Pop up load dialog for a saved config file """

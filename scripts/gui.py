@@ -7,7 +7,7 @@ import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from lib.gui import (CliOptions, CommandNotebook, ConsoleOut, CurrentSession, DisplayNotebook,
+from lib.gui import (CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
                      get_config, get_images, initialize_images, initialize_config, MainMenuBar,
                      ProcessWrapper, StatusBar)
 
@@ -23,8 +23,7 @@ class FaceswapGui(tk.Tk):
 
         self.initialize_globals(pathscript)
         self.set_geometry()
-        self.session = CurrentSession()
-        self.wrapper = ProcessWrapper(self.session, pathscript)
+        self.wrapper = ProcessWrapper(pathscript)
 
         get_images().delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
@@ -36,7 +35,8 @@ class FaceswapGui(tk.Tk):
         scaling_factor = self.get_scaling()
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
         statusbar = StatusBar(self)
-        initialize_config(cliopts, scaling_factor, pathcache, statusbar)
+        session = Session()
+        initialize_config(cliopts, scaling_factor, pathcache, statusbar, session)
         initialize_images()
 
     def get_scaling(self):
@@ -64,7 +64,7 @@ class FaceswapGui(tk.Tk):
         topcontainer, bottomcontainer = self.add_containers()
 
         CommandNotebook(topcontainer)
-        DisplayNotebook(topcontainer, self.session)
+        DisplayNotebook(topcontainer)
         ConsoleOut(bottomcontainer, debug_console)
         logger.debug("Built GUI")
 
