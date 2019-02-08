@@ -10,7 +10,7 @@ from math import ceil, sqrt
 
 import numpy as np
 import tensorflow as tf
-from lib.Serializer import JSONSerializer, PickleSerializer
+from lib.Serializer import JSONSerializer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -23,27 +23,6 @@ def convert_time(timestamp):
     mins = "{0:02d}".format((int(timestamp % 3600) // 60))
     secs = "{0:02d}".format((int(timestamp % 3600) % 60))
     return hrs, mins, secs
-
-
-class SavedSessions():
-    """ Saved Training Session """
-    def __init__(self, sessions_data):
-        self.serializer = PickleSerializer
-        self.sessions = self.load_sessions(sessions_data)
-
-    def load_sessions(self, filename):
-        """ Load previously saved sessions """
-        stats = list()
-        if os.path.isfile(filename):
-            with open(filename, self.serializer.roptions) as sessions:
-                stats = self.serializer.unmarshal(sessions.read())
-        return stats
-
-    def save_sessions(self, filename):
-        """ Save the session file  """
-        with open(filename, self.serializer.woptions) as session:
-            session.write(self.serializer.marshal(self.sessions))
-        logger.info("Saved session stats to: %s", filename)
 
 
 class TensorBoardLogs():
@@ -169,8 +148,11 @@ class Session():
     @property
     def loss_keys(self):
         """ Return list of unique session loss keys """
-        loss_keys = set(loss_key for side_keys in self.session["loss_names"].values()
-                        for loss_key in side_keys)
+        if self.session_id is None:
+            loss_keys = self.total_loss_keys
+        else:
+            loss_keys = set(loss_key for side_keys in self.session["loss_names"].values()
+                            for loss_key in side_keys)
         return list(loss_keys)
 
     @property
@@ -192,7 +174,37 @@ class Session():
     def timestamps(self):
         """ Return timestamps from logs for current session """
         ts_dict = self.tb_logs.get_timestamps(session=self.session_id)
-        return list(ts_dict.values())
+        return ts_dict[self.session_id]
+
+    @property
+    def total_batchsize(self):
+        """ Return all session batch sizes """
+        return {int(sess_id): sess["batchsize"]
+                for sess_id, sess in self.state["sessions"].items()}
+
+    @property
+    def total_loss(self):
+        """ Return collated loss for all session """
+        loss_dict = dict()
+        for sess in self.tb_logs.get_loss().values():
+            for loss_key, side_loss in sess.items():
+                for side, loss in side_loss.items():
+                    loss_dict.setdefault(loss_key, dict()).setdefault(side, list()).extend(loss)
+        return loss_dict
+
+    @property
+    def total_loss_keys(self):
+        """ Return list of unique session loss keys across all sessions """
+        loss_keys = set(loss_key
+                        for session in self.state["sessions"].values()
+                        for loss_keys in session["loss_names"].values()
+                        for loss_key in loss_keys)
+        return list(loss_keys)
+
+    @property
+    def total_timestamps(self):
+        """ Return timestamps from logs seperated per session for all sessions """
+        return self.tb_logs.get_timestamps()
 
     def initialize_session(self, is_training=False, session_id=None):
         """ Initialize the training session """
@@ -230,12 +242,6 @@ class SessionsSummary():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def batch_sizes(self):
-        """ Return session batch sizes """
-        return {int(sess_id): sess["batchsize"]
-                for sess_id, sess in self.session.state["sessions"].items()}
-
-    @property
     def iterations(self):
         """ Return session iterations sizes """
         return {int(sess_id): sess["iterations"]
@@ -256,7 +262,7 @@ class SessionsSummary():
         compiled = list()
         for sess_idx, ts_data in self.time_stats.items():
             elapsed = ts_data["end_time"] - ts_data["start_time"]
-            batchsize = self.batch_sizes[sess_idx]
+            batchsize = self.session.total_batchsize[sess_idx]
             iterations = self.iterations[sess_idx]
             compiled.append({"session": sess_idx,
                              "start": ts_data["start_time"],
@@ -320,151 +326,122 @@ class SessionsSummary():
         return compiled_stats
 
 
-class SessionsTotals():
-    """ The compiled totals of all saved sessions """
-    def __init__(self, all_sessions):
-        self.stats = {"split": [],
-                      "iterations": 0,
-                      "batchsize": [],
-                      "timestamps": [],
-                      "loss": [],
-                      "losskeys": []}
-
-        self.initiate(all_sessions)
-        self.compile(all_sessions)
-
-    def initiate(self, sessions):
-        """ Initiate correct loss key titles and number of loss lists """
-        for losskey in sessions[0]["losskeys"]:
-            self.stats["losskeys"].append(losskey)
-            self.stats["loss"].append(list())
-
-    def compile(self, sessions):
-        """ Compile all of the sessions into totals """
-        current_split = 0
-        for session in sessions:
-            iterations = session["iterations"]
-            current_split += iterations
-            self.stats["split"].append(current_split)
-            self.stats["iterations"] += iterations
-            self.stats["timestamps"].extend(session["timestamps"])
-            self.stats["batchsize"].append(session["batchsize"])
-            self.add_loss(session["loss"])
-
-    def add_loss(self, session_loss):
-        """ Add loss values to each of their respective lists """
-        for idx, loss in enumerate(session_loss):
-            self.stats["loss"][idx].extend(loss)
-
-
 class Calculations():
     """ Class to pull raw data for given session(s) and perform calculations """
-    def __init__(self, session, display="loss", loss_keys=["loss"], selections=["raw"],
-                 avg_samples=10, flatten_outliers=False, is_totals=False):
+    def __init__(self, session, display="loss", selections=["raw"], avg_samples=10,
+                 flatten_outliers=False, is_totals=False):
+        logger.debug("Initializing %s: (session: %s, display: %s, selections: %s, "
+                     "avg_samples: %s, flatten_outliers: %s, is_totals: %s",
+                     self.__class__.__name__, session, display, selections, avg_samples,
+                     flatten_outliers, is_totals)
 
         warnings.simplefilter("ignore", np.RankWarning)
 
         self.session = session
         self.display = display
-        self.loss_keys = loss_keys
+        self.loss_keys = self.session.loss_keys
         self.selections = selections
+        self.is_totals = is_totals
         self.args = {"avg_samples": int(avg_samples),
-                     "flatten_outliers": flatten_outliers,
-                     "is_totals": is_totals}
+                     "flatten_outliers": flatten_outliers}
         self.iterations = 0
         self.stats = None
         self.refresh()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def refresh(self):
         """ Refresh the stats """
+        logger.debug("Refreshing")
         self.iterations = 0
         self.stats = self.get_raw()
         self.get_calculations()
         self.remove_raw()
+        logger.debug("Refreshed")
 
     def get_raw(self):
         """ Add raw data to stats dict """
-#        raw = dict()
+        logger.debug("Getting Raw Data")
+
         raw = dict()
         iterations = set()
         if self.display.lower() == "loss":
-            for loss_name, side_loss in self.session.loss.items():
+            loss_dict = self.session.total_loss if self.is_totals else self.session.loss
+            for loss_name, side_loss in loss_dict.items():
                 for side, loss in side_loss.items():
+                    if self.args["flatten_outliers"]:
+                        loss = self.flatten_outliers(loss)
                     iterations.add(len(loss))
                     raw["raw_{}_{}".format(loss_name, side)] = loss
 
-        self.iterations = min(iterations)
-        if len(iterations) != 1:
-            # Crop all losses to the same number of items
-            raw = {lossname: loss[:self.iterations] for lossname, loss in raw}
+            self.iterations = 0 if not iterations else min(iterations)
+            if len(iterations) > 1:
+                # Crop all losses to the same number of items
+                raw = {lossname: loss[:self.iterations] for lossname, loss in raw}
 
-#        raw = dict()
-#        for idx, item in enumerate(self.args["display"]):
-#            if item.lower() == "rate":
-#                data = self.calc_rate(self.session)
-#            else:
-#                data = self.session["loss"][idx][:]
+        else:  # Rate calulation
+            data = self.calc_rate_total() if self.is_totals else self.calc_rate()
+            if self.args["flatten_outliers"]:
+                data = self.flatten_outliers(data)
+            self.iterations = len(data)
+            raw = {"raw_rate": data}
 
-#            if self.args["flatten_outliers"]:
-#                data = self.flatten_outliers(data)
-
-#            if self.iterations == 0:
-#                self.iterations = len(data)
-
-#            raw["raw_{}".format(item)] = data
+        logger.debug("Got Raw Data")
         return raw
 
     def remove_raw(self):
         """ Remove raw values from stats if not requested """
         if "raw" in self.selections:
             return
+        logger.debug("Removing Raw Data from output")
         for key in list(self.stats.keys()):
             if key.startswith("raw"):
                 del self.stats[key]
+        logger.debug("Removed Raw Data from output")
 
-    def calc_rate(self, data):
+    def calc_rate(self):
+        """ Calculate rate per iteration """
+        logger.debug("Calculating rate")
+        batchsize = self.session.batchsize
+        timestamps = self.session.timestamps
+        iterations = range(len(timestamps) - 1)
+        rate = [batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations]
+        logger.debug("Calculated rate: Item_count: %s", len(rate))
+        return rate
+
+    def calc_rate_total(self):
         """ Calculate rate per iteration
             NB: For totals, gaps between sessions can be large
             so time difference has to be reset for each session's
             rate calculation """
-        batchsize = data["batchsize"]
-        if self.args["is_totals"]:
-            split = data["split"]
-        else:
-            batchsize = [batchsize]
-            split = [len(data["timestamps"])]
-
-        prev_split = 0
+        logger.debug("Calculating totals rate")
+        batchsizes = self.session.total_batchsize
+        total_timestamps = self.session.total_timestamps
         rate = list()
-
-        for idx, current_split in enumerate(split):
-            prev_time = data["timestamps"][prev_split]
-            timestamp_chunk = data["timestamps"][prev_split:current_split]
-            for item in timestamp_chunk:
-                current_time = item
-                timediff = current_time - prev_time
-                iter_rate = 0 if timediff == 0 else batchsize[idx] / timediff
-                rate.append(iter_rate)
-                prev_time = current_time
-            prev_split = current_split
-
-        if self.args["flatten_outliers"]:
-            rate = self.flatten_outliers(rate)
+        for sess_id in sorted(total_timestamps.keys()):
+            batchsize = batchsizes[sess_id]
+            timestamps = total_timestamps[sess_id]
+            iterations = range(len(timestamps) - 1)
+            rate.extend([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations])
+        logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
 
     @staticmethod
     def flatten_outliers(data):
         """ Remove the outliers from a provided list """
+        logger.debug("Flattening outliers")
         retdata = list()
         samples = len(data)
         mean = (sum(data) / samples)
         limit = sqrt(sum([(item - mean)**2 for item in data]) / samples)
+        logger.debug("samples: %s, mean: %s, limit: %s", samples, mean, limit)
 
-        for item in data:
+        for idx, item in enumerate(data):
             if (mean - limit) <= item <= (mean + limit):
                 retdata.append(item)
             else:
+                logger.debug("Item idx: %s, value: %s flattened to %s", idx, item, mean)
                 retdata.append(mean)
+        logger.debug("Flattened outliers")
         return retdata
 
     def get_calculations(self):
@@ -472,24 +449,16 @@ class Calculations():
         for selection in self.selections:
             if selection == "raw":
                 continue
+            logger.debug("Calculating: %s", selection)
             method = getattr(self, "calc_{}".format(selection))
             raw_keys = [key for key in self.stats.keys() if key.startswith("raw_")]
             for key in raw_keys:
                 selected_key = "{}_{}".format(selection, key.replace("raw_", ""))
                 self.stats[selected_key] = method(self.stats[key])
 
-#    def get_selections(self):
-#        """ Compile a list of data to be calculated """
-#        if self.display == "loss":
-#            process = self.loss_keys
-#        else:
-#            process = ["rate"]
-#        for summary in self.selections:
-#            for item in process:
-#                yield summary, item
-
     def calc_avg(self, data):
         """ Calculate rolling average """
+        logger.debug("Calculating Average")
         avgs = list()
         presample = ceil(self.args["avg_samples"] / 2)
         postsample = self.args["avg_samples"] - presample
@@ -507,11 +476,13 @@ class Calculations():
                 avg = sum(data[idx - presample:idx + postsample]) \
                         / self.args["avg_samples"]
                 avgs.append(avg)
+        logger.debug("Calculated Average")
         return avgs
 
     @staticmethod
     def calc_trend(data):
         """ Compile trend data """
+        logger.debug("Calculating Trend")
         points = len(data)
         if points < 10:
             dummy = [None for i in range(points)]
@@ -520,4 +491,5 @@ class Calculations():
         fit = np.polyfit(x_range, data, 3)
         poly = np.poly1d(fit)
         trend = poly(x_range)
+        logger.debug("Calculated Trend")
         return trend

@@ -9,7 +9,7 @@ from tkinter import ttk
 
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
-from .stats import Calculations, Session, SessionsTotals
+from .stats import Calculations, Session
 from .tooltip import Tooltip
 from .utils import FileHandler, get_config, get_images
 
@@ -107,13 +107,14 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Setting session summary. (message: '%s')", message)
         self.summary = self.session.full_summary
         self.set_info("Session: {}".format(message))
+        self.stats.session = self.session
         self.stats.tree_insert_data(self.summary)
 
     def clear_session(self):
         """ Clear sessions stats """
         logger.debug("Clearing session")
         self.summary = None
-        self.stats.loaded_data = None
+        self.stats.session = None
         self.stats.tree_clear()
         self.reset_session_info()
 
@@ -188,7 +189,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.TOP, padx=5, pady=5, expand=True, fill=tk.X, anchor=tk.N)
 
-        self.loaded_data = None
+        self.session = None  # set when loading or clearing from parent
         self.selected_id = selected_id
         self.popup_positions = list()
 
@@ -244,12 +245,12 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         return [column[0] for column in columns]
 
-    def tree_insert_data(self, sessions):
+    def tree_insert_data(self, sessions_summary):
         """ Insert the data into the totals treeview """
         logger.debug("Inserting treeview data")
-        self.tree.configure(height=len(sessions))
+        self.tree.configure(height=len(sessions_summary))
 
-        for item in sessions:
+        for item in sessions_summary:
             values = [item[column] for column in self.columns]
             kwargs = {"values": values, "image": get_images().icons["graph"]}
             if values[0] == "Total":
@@ -278,7 +279,9 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Pop up a window and control it's position """
         logger.debug("Popping up data window")
         scaling_factor = get_config().scaling_factor
-        toplevel = SessionPopUp(self.loaded_data, self.selected_id.get())
+        toplevel = SessionPopUp(self.session.modeldir,
+                                self.session.modelname,
+                                self.selected_id.get())
         toplevel.title(self.data_popup_title())
         position = self.data_popup_get_position()
         height = int(720 * scaling_factor)
@@ -295,9 +298,9 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         selected_id = self.selected_id.get()
         title = "All Sessions"
         if selected_id != "Total":
-            title = "Session #{}".format(selected_id)
+            title = "{} Model: Session #{}".format(self.session.modelname.title(), selected_id)
         logger.debug("Title: '%s'", title)
-#        return "{} - {}".format(title, self.filename.get())
+        return "{} - {}".format(title, self.session.modeldir)
 
     def data_popup_get_position(self):
         """ Get the position of the next window """
@@ -329,13 +332,14 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed graph/stats for selected session """
-    def __init__(self, data, session_id):
-        logger.debug("Initializing: %s: (data, %s, session_id: %s)",
-                     self.__class__.__name__, data, session_id)
+    def __init__(self, model_dir, model_name, session_id):
+        logger.debug("Initializing: %s: (model_dir: %s, model_name: %s, session_id: %s)",
+                     self.__class__.__name__, model_dir, model_name, session_id)
         super().__init__()
 
-        self.is_totals = session_id == "Total"
-        self.data = self.set_session_data(data, session_id)
+        self.session_id = session_id
+        self.session = Session(model_dir=model_dir, model_name=model_name)
+        self.initialize_session()
 
         self.graph = None
         self.display_data = None
@@ -345,13 +349,19 @@ class SessionPopUp(tk.Toplevel):
         self.build()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def set_session_data(self, sessions, session_id):
-        """ Set the correct list index based on the passed in session is """
-        if self.is_totals:
-            data = SessionsTotals(sessions).stats
-        else:
-            data = sessions[int(session_id) - 1]
-        return data
+    @property
+    def is_totals(self):
+        """ Return True if these are totals else False """
+        return bool(self.session_id == "Total")
+
+    def initialize_session(self):
+        """ Initialize the session """
+        logger.debug("Initializing session")
+        kwargs = dict(is_training=False)
+        if not self.is_totals:
+            kwargs["session_id"] = int(self.session_id)
+        logger.debug("Session kwargs: %s", kwargs)
+        self.session.initialize_session(**kwargs)
 
     def build(self):
         """ Build the popup window """
@@ -525,12 +535,12 @@ class SessionPopUp(tk.Toplevel):
 
     def compile_display_data(self):
         """ Compile the data to be displayed """
-        self.display_data = Calculations(self.data,
-                                         self.vars["display"].get(),
-                                         self.selections_to_list(),
-                                         self.vars["avgiterations"].get(),
-                                         self.vars["outliers"].get(),
-                                         self.is_totals)
+        self.display_data = Calculations(session=self.session,
+                                         display=self.vars["display"].get(),
+                                         selections=self.selections_to_list(),
+                                         avg_samples=self.vars["avgiterations"].get(),
+                                         flatten_outliers=self.vars["outliers"].get(),
+                                         is_totals=self.is_totals)
 
     def selections_to_list(self):
         """ Compile checkbox selections to list """
