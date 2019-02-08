@@ -328,18 +328,18 @@ class SessionsSummary():
 
 class Calculations():
     """ Class to pull raw data for given session(s) and perform calculations """
-    def __init__(self, session, display="loss", selections=["raw"], avg_samples=10,
-                 flatten_outliers=False, is_totals=False):
-        logger.debug("Initializing %s: (session: %s, display: %s, selections: %s, "
+    def __init__(self, session, display="loss", loss_keys=["loss"], selections=["raw"],
+                 avg_samples=10, flatten_outliers=False, is_totals=False):
+        logger.debug("Initializing %s: (session: %s, display: %s, loss_keys: %s, selections: %s, "
                      "avg_samples: %s, flatten_outliers: %s, is_totals: %s",
-                     self.__class__.__name__, session, display, selections, avg_samples,
+                     self.__class__.__name__, session, display, loss_keys, selections, avg_samples,
                      flatten_outliers, is_totals)
 
         warnings.simplefilter("ignore", np.RankWarning)
 
         self.session = session
         self.display = display
-        self.loss_keys = self.session.loss_keys
+        self.loss_keys = loss_keys
         self.selections = selections
         self.is_totals = is_totals
         self.args = {"avg_samples": int(avg_samples),
@@ -367,6 +367,8 @@ class Calculations():
         if self.display.lower() == "loss":
             loss_dict = self.session.total_loss if self.is_totals else self.session.loss
             for loss_name, side_loss in loss_dict.items():
+                if loss_name not in self.loss_keys:
+                    continue
                 for side, loss in side_loss.items():
                     if self.args["flatten_outliers"]:
                         loss = self.flatten_outliers(loss)
@@ -376,7 +378,10 @@ class Calculations():
             self.iterations = 0 if not iterations else min(iterations)
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
-                raw = {lossname: loss[:self.iterations] for lossname, loss in raw}
+                if self.iterations == 0:
+                    raw = {lossname: list() for lossname in raw.keys()}
+                else:
+                    raw = {lossname: loss[:self.iterations] for lossname, loss in raw}
 
         else:  # Rate calulation
             data = self.calc_rate_total() if self.is_totals else self.calc_rate()

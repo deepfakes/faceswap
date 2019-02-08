@@ -209,6 +209,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
             data = Calculations(session=get_config().session,
                                 display="loss",
+                                loss_keys=[loss_key],
                                 selections=["raw", "trend"])
             self.add_child(tabname, data)
 
