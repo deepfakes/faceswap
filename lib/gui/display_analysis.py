@@ -365,14 +365,17 @@ class SessionPopUp(tk.Toplevel):
 
     def build(self):
         """ Build the popup window """
+        logger.debug("Building popup")
         optsframe, graphframe = self.layout_frames()
 
         self.opts_build(optsframe)
         self.compile_display_data()
         self.graph_build(graphframe)
+        logger.debug("Built popup")
 
     def layout_frames(self):
         """ Top level container frames """
+        logger.debug("Layout frames")
         leftframe = ttk.Frame(self)
         leftframe.pack(side=tk.LEFT, expand=False, fill=tk.BOTH, pady=5)
 
@@ -381,20 +384,25 @@ class SessionPopUp(tk.Toplevel):
 
         rightframe = ttk.Frame(self)
         rightframe.pack(side=tk.RIGHT, fill=tk.BOTH, pady=5, expand=True)
+        logger.debug("Laid out frames")
 
         return leftframe, rightframe
 
     def opts_build(self, frame):
         """ Build Options into the options frame """
+        logger.debug("Building Options")
         self.opts_combobox(frame)
         self.opts_checkbuttons(frame)
+        self.opts_loss_keys(frame)
         self.opts_entry(frame)
         self.opts_buttons(frame)
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
+        logger.debug("Built Options")
 
     def opts_combobox(self, frame):
         """ Add the options combo boxes """
+        logger.debug("Building Combo boxes")
         choices = {"Display": ("Loss", "Rate"),
                    "Scale": ("Linear", "Log")}
 
@@ -420,9 +428,11 @@ class SessionPopUp(tk.Toplevel):
 
             hlp = self.set_help(item)
             Tooltip(cmbframe, text=hlp, wraplength=200)
+        logger.debug("Built Combo boxes")
 
     def opts_checkbuttons(self, frame):
         """ Add the options check buttons """
+        logger.debug("Building Check Buttons")
         for item in ("raw", "trend", "avg", "outliers"):
             if item == "avg":
                 text = "Show Rolling Average"
@@ -442,9 +452,35 @@ class SessionPopUp(tk.Toplevel):
 
             hlp = self.set_help(item)
             Tooltip(ctl, text=hlp, wraplength=200)
+        logger.debug("Built Check Buttons")
+
+    def opts_loss_keys(self, frame):
+        """ Add loss key selections """
+        logger.debug("Building Loss Key Check Buttons")
+        loss_keys = self.session.loss_keys
+        lk_vars = dict()
+        for loss_key in sorted(loss_keys):
+            text = loss_key.replace("_", " ").title()
+            helptext = "Display {}".format(text)
+            var = tk.BooleanVar()
+            var.set(True)
+            var.trace("w", self.optbtn_reset)
+            lk_vars[loss_key] = var
+
+            if len(loss_keys) == 1:
+                # Don't display if there's only one item
+                break
+
+            ctl = ttk.Checkbutton(frame, variable=var, text=text)
+            ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
+            Tooltip(ctl, text=helptext, wraplength=200)
+
+        self.vars["loss_keys"] = lk_vars
+        logger.debug("Built Loss Key Check Buttons")
 
     def opts_entry(self, frame):
         """ Add the options entry boxes """
+        logger.debug("Building Entry Boxes")
         for item in ("avgiterations", ):
             if item == "avgiterations":
                 text = "Iterations to Average:"
@@ -463,9 +499,11 @@ class SessionPopUp(tk.Toplevel):
             Tooltip(entframe, text=hlp, wraplength=200)
 
             self.vars[item] = ctl
+        logger.debug("Built Entry Boxes")
 
     def opts_buttons(self, frame):
         """ Add the option buttons """
+        logger.debug("Building Buttons")
         btnframe = ttk.Frame(frame)
         btnframe.pack(fill=tk.X, pady=5, padx=5, side=tk.BOTTOM)
 
@@ -477,13 +515,16 @@ class SessionPopUp(tk.Toplevel):
             btn.pack(padx=2, side=tk.RIGHT)
             hlp = self.set_help(btntype)
             Tooltip(btn, text=hlp, wraplength=200)
+        logger.debug("Built Buttons")
 
     def optbtn_save(self):
         """ Action for save button press """
+        logger.debug("Saving File")
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
+            logger.debug("Save Cancelled")
             return
-
+        logger.debug("Saving to: %s", savefile)
         save_data = self.display_data.stats
         fieldnames = sorted(key for key in save_data.keys())
 
@@ -494,12 +535,17 @@ class SessionPopUp(tk.Toplevel):
 
     def optbtn_reset(self, *args):  # pylint: disable=unused-argument
         """ Action for reset button press and checkbox changes"""
+        logger.debug("Refreshing Graph")
         if not self.graph_initialised:
             return
-        self.compile_display_data()
+        valid = self.compile_display_data()
+        if not valid:
+            logger.debug("Invalid data")
+            return
         self.graph.refresh(self.display_data,
                            self.vars["display"].get(),
                            self.vars["scale"].get())
+        logger.debug("Refreshed Graph")
 
     def graph_scale(self, *args):  # pylint: disable=unused-argument
         """ Action for changing graph scale """
@@ -535,25 +581,53 @@ class SessionPopUp(tk.Toplevel):
 
     def compile_display_data(self):
         """ Compile the data to be displayed """
+        logger.debug("Compiling Display Data")
+
+        loss_keys = [key for key, val in self.vars["loss_keys"].items()
+                     if val.get()]
+        logger.debug("Selected loss_keys: %s", loss_keys)
+
+        selections = self.selections_to_list()
+
+        if not self.check_valid_selection(loss_keys, selections):
+            return False
         self.display_data = Calculations(session=self.session,
                                          display=self.vars["display"].get(),
-                                         selections=self.selections_to_list(),
+                                         loss_keys=loss_keys,
+                                         selections=selections,
                                          avg_samples=self.vars["avgiterations"].get(),
                                          flatten_outliers=self.vars["outliers"].get(),
                                          is_totals=self.is_totals)
+        logger.debug("Compiled Display Data")
+        return True
+
+    def check_valid_selection(self, loss_keys, selections):
+        """ Check that there will be data to display """
+        display = self.vars["display"].get().lower()
+        logger.debug("Validating selection. (loss_keys: %s, selections: %s, display: %s)",
+                     loss_keys, selections, display)
+        if not selections or (display == "loss" and not loss_keys):
+            msg = "No data to display. Not refreshing"
+            logger.debug(msg)
+            print(msg)
+            return False
+        return True
 
     def selections_to_list(self):
         """ Compile checkbox selections to list """
+        logger.debug("Compiling selections to list")
         selections = list()
         for key, val in self.vars.items():
             if (isinstance(val, tk.BooleanVar)
                     and key != "outliers"
                     and val.get()):
                 selections.append(key)
+        logger.debug("Compiling selections to list: %s", selections)
         return selections
 
     def graph_build(self, frame):
         """ Build the graph in the top right paned window """
+        logger.debug("Building Graph")
         self.graph = SessionGraph(frame,
                                   self.display_data,
                                   self.vars["display"].get(),
@@ -561,3 +635,4 @@ class SessionPopUp(tk.Toplevel):
         self.graph.pack(expand=True, fill=tk.BOTH)
         self.graph.build()
         self.graph_initialised = True
+        logger.debug("Built Graph")
