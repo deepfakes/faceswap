@@ -106,7 +106,7 @@ class ProcessWrapper():
             session.disable_logging = True
             logger.debug("Logging Disabled")
         if cliopt[0] == "-t":
-            session.modelname = cliopt[1].lower()
+            session.modelname = cliopt[1].lower().replace("-", "_")
             logger.debug("modelname: '%s'", session.modelname)
         if cliopt[0] == "-m":
             session.modeldir = cliopt[1]
