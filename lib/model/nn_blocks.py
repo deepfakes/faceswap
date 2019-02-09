@@ -109,7 +109,7 @@ class NNBlocks():
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
 
-    # <<< OriginalHiRes Blocks >>> #
+    # <<< Unbalanced Model Blocks >>> #
     def conv_sep(self, inp, filters, kernel_size=5, strides=2, **kwargs):
         """ Seperable Convolution Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s",

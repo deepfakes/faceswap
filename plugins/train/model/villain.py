@@ -12,7 +12,7 @@ from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
-    """ Original HiRes Faceswap Model """
+    """ Villain Faceswap Model """
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)

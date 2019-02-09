@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Original - HiRes Model
+""" Unbalanced Model
     Based on the original https://www.reddit.com/r/deepfakes/
         code sample + contribs """
 
@@ -11,7 +11,7 @@ from .original import logger, Model as OriginalModel
 
 
 class Model(OriginalModel):
-    """ Original HiRes Faceswap Model """
+    """ Unbalanced Faceswap Model """
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
@@ -33,7 +33,7 @@ class Model(OriginalModel):
         logger.debug("Added networks")
 
     def encoder(self):
-        """ Original HiRes Encoder """
+        """ Unbalanced Encoder """
         kwargs = dict(kernel_initializer=self.kernel_initializer)
         encoder_complexity = 128 if self.lowmem else self.config["complexity_encoder"]
         dense_dim = 384 if self.lowmem else 512

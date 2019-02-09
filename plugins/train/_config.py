@@ -109,10 +109,10 @@ class Config(FaceswapConfig):
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
-        # << ORIGINAL HIRES MODEL OPTIONS >> #
-        section = "model.original_hires"
+        # << UNBALANCED MODEL OPTIONS >> #
+        section = "model.unbalanced"
         self.add_section(title=section,
-                         info="Higher resolution version of the Original Model.\n"
+                         info="An unbalanced model with adjustable input size options.\n"
                               "This is an unbalanced model so b>a swaps may not work well")
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
