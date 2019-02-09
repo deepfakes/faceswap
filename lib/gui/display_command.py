@@ -191,7 +191,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_set(self):
         """ Load the graph(s) if available """
         session = get_config().session
-        if session.initialized:
+        if session.initialized and session.logging_disabled:
+            logger.trace("Logs disabled. Hiding graph")
+            self.set_info("Graph is disabled as 'no-logs' has been selected")
+            self.display_item = None
+        elif session.initialized:
             logger.trace("Loading graph")
             self.display_item = session
         else:

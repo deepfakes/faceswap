@@ -102,9 +102,6 @@ class ProcessWrapper():
     def init_training_session(cliopt):
         """ Set the session stats for disable logging, model folder and model name """
         session = get_config().session
-        if cliopt[0] == "-nl":
-            session.disable_logging = True
-            logger.debug("Logging Disabled")
         if cliopt[0] == "-t":
             session.modelname = cliopt[1].lower().replace("-", "_")
             logger.debug("modelname: '%s'", session.modelname)

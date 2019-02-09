@@ -103,7 +103,6 @@ class Session():
         self.state = None
         self.modeldir = model_dir  # Set and reset by wrapper for training sessions
         self.modelname = model_name  # Set and reset by wrapper for training sessions
-        self.logs_disabled = False  # Set and reset by wrapper for training sessions
         self.tb_logs = None
         self.initialized = False
         self.session_id = None  # Set to specific session_id or current training session
@@ -135,9 +134,9 @@ class Session():
         return self.session["iterations"]
 
     @property
-    def total_iterations(self):
-        """ Return session iterations """
-        return self.state["iterations"]
+    def logging_disabled(self):
+        """ Return whether logging is disabled for this session """
+        return self.session["no_logs"]
 
     @property
     def loss(self):
@@ -181,6 +180,11 @@ class Session():
         """ Return all session batch sizes """
         return {int(sess_id): sess["batchsize"]
                 for sess_id, sess in self.state["sessions"].items()}
+
+    @property
+    def total_iterations(self):
+        """ Return session iterations """
+        return self.state["iterations"]
 
     @property
     def total_loss(self):
