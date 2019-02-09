@@ -13,10 +13,9 @@
     - [Notes](#notes)
 - [Windows Install Guide](#windows-install-guide)
     - [Prerequisites](#prerequisites-1)
-        - [Microsoft Visual Studio 2015](#microsoft-visual-studio-2015)
+        - [Microsoft Visual Studio 2017](#microsoft-visual-studio-2017)
         - [Cuda](#cuda)
         - [cuDNN](#cudnn)
-        - [CMake](#cmake)
         - [Anaconda](#anaconda)
         - [Git](#git)
     - [Setup](#setup-1)
@@ -76,7 +75,7 @@ The developers are also not responsible for any damage you might cause to your o
 - [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
 - If you are using an Nvidia graphics card You should install CUDA (https://developer.nvidia.com/cuda-zone) and CUDNN (https://developer.nvidia.com/cudnn). If you do not plan to build Tensorflow yourself, make sure you install no higher than version 9.0 of CUDA and 7.0.x of CUDNN
 - dlib is required for face recognition and is compiled as part of the setup process. You will need the following applications for your os to successfully install dlib (nb: list may be incomplete. Please raise an issue if another prerequisite is required for your OS):
-    - Windows: Visual Studio 2015, CMake v3.8.2
+    - Windows: Visual Studio 2017 with some special components (listed [here](#microsoft-visual-studio-2017))
     - Linux: build-essential, cmake
     - macOS: xquartz 
 
@@ -149,28 +148,32 @@ A successful setup log, without docker.
 ```
 INFO    The tool provides tips for installation
         and installs required python packages
-INFO    Setup in Linux 4.14.39-1-MANJARO
-INFO    Installed Python: 3.6.5 64bit
-INFO    Installed PIP: 10.0.1
-Enable  Docker? [Y/n] n
+INFO    Setup in Windows 10
+INFO    Installed Python: 3.6.6 64bit
+INFO    Upgrading pip...
+INFO    Installed pip: 18.1
+Enable  Docker? [y/N]
 INFO    Docker Disabled
-Enable  CUDA? [Y/n] 
+Enable  CUDA? [Y/n]
 INFO    CUDA Enabled
-INFO    CUDA version: 9.1
-INFO    cuDNN version: 7
-WARNING Tensorflow has no official prebuild for CUDA 9.1 currently.
-        To continue, You have to build your own tensorflow-gpu.
-        Help: https://www.tensorflow.org/install/install_sources
-Are System Dependencies met? [y/N] y
-INFO    Installing Missing Python Packages...
-INFO    Installing tensorflow-gpu
-INFO    Installing pathlib==1.0.1
+INFO    CUDA version: 10.0
+INFO    cuDNN version: 7.4.2
+WARNING Selecting tf-nightly-gpu which works with CUDA 10.0 currently
+INFO    Checking System Dependencies...
+WARNING Last warning:
+            Make sure you setup VS2017 properly as described here:
+            https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#microsoft-visual-studio-2017
+INFO    1. Install PIP requirements
+        You may want to execute `chcp 65001` in cmd line
+        to fix Unicode issues on Windows when installing dependencies
+Please ensure your System Dependencies are met. Continue? [y/N] y
+INFO    Installing Required Python Packages. This may take some time...
+INFO    Installing nvidia-ml-py3
 ......
-INFO    Installing tqdm
-INFO    Installing matplotlib
 INFO    All python3 dependencies are met.
         You are good to go.
-```
+        Enter:  'python faceswap.py -h' to see the options
+```             'python faceswap.py gui' to launch the GUI
 
 ## Run the project
 Once all these requirements are installed, you can attempt to run the faceswap tools. Use the `-h` or `--help` options for a list of options.
@@ -195,20 +198,36 @@ If you are experiencing issues, please raise them in the [faceswap-playground](h
 # Windows Install Guide
 Setting up Faceswap can seem a little intimidating to new users, but it isn't that complicated, although a little time consuming. It is recommended to use Linux where possible as Windows will hog about 20% of your GPU Memory, making Faceswap run a little slower, however using Windows is perfectly fine and 100% supported.
 
+## Breif explaination
+The main problem is to compile dlib on windows, which is influenced by many factors including dlib version, cmake version, CUDA version, PATH and more.
+
+The basic steps are:
+1. Install Python3 and pip. Add python&pip to PATH
+2. Install VS2017 and some components
+3. Install CUDA and cuDNN
+4. Go into anaconda environment if you like
+5. In faceswap, run `python setup.py` and hope things go well
+
+If things go wrong, especially dlib, check [**dlib**](#dlib) section for help.
+
+
 ## Prerequisites
-### Microsoft Visual Studio 2015
-**Important** Make sure to downoad the 2015 version of Microsoft Visual Studio
+### Microsoft Visual Studio 2017
 
-Download and install Microsoft Visual Studio 2015 from: https://go.microsoft.com/fwlink/?LinkId=532606&clcid=0x409
+Download and install Microsoft Visual Studio 2017 from: https://visualstudio.microsoft.com/downloads/
 
-On the install screen:
-- Select "Custom" then click "Next"\
-![MSVS Custom](https://i.imgur.com/Bx8fjzT.png)
-- Uncheck all previously checked options
-- Expand "Programming Languages" and select "Visual C++"\
-![MSVS C++](https://i.imgur.com/c8k1IYD.png)
+On VS 2017 Installer (Select **Modify** in Installer if you have already installed):
+- In tab **Workloads**, select `Desktop developement with C++`
+- In tab **Individual components**, select `Visual C++ Tools for CMake` and `VC++ 2017 ... Libs for Spectre(x86 and x64)`
+- Select whatever else you like
 - Select "Next" and "Install"
 
+PS: \
+    Workload `Desktop developement with C++` is to get compilers and basic libs.\
+    Component `Visual C++ Tools for CMake` is an easy CMake source and its integrated with VS2017 so we dont have to install manually.\
+    Component `VC++ 2017 ... Libs for Spectre(x86 and x64)` is the main problem that troubled many. CMake will fail on VS2017 without it.
+
+PPS: If you are hacking with VS 2015, VC++ libs for spectre mitigation is **NOT** required then.
 
 ### Cuda
 **GPU Only** If you do not have an Nvidia GPU you can skip this step.
@@ -226,19 +245,10 @@ As with Cuda you will need to install the correct version of cuDNN that the late
 
 Download cuDNN from https://developer.nvidia.com/cudnn. You will need to create an account with Nvidia. 
 
-At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases":
-![cuDNN Archive](https://i.imgur.com/dHiAsxg.png)
-
-Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and has a minor version greater than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.3)
+At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases". Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and has a minor version greater than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.3)
 - Open the zip file
 - Extract all of the files and folders into your Cuda folder (It is likely to be located in `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA`):\
-![cuDNN to Cuda](https://i.imgur.com/X098w0N.png)
-
-### CMake
-Install the latest stable release of CMake from https://cmake.org/download/. (Scroll down the page for Latest Releases and select the relevant Binary distribution installer for your OS).
-
-When installing CMake make sure to enable the option to CMake to the system path:
-![cmake path](https://i.imgur.com/XTtacdY.png)
+![cudnn to cuda](https://i.imgur.com/X098w0N.png)
 
 
 ### Anaconda
@@ -258,7 +268,7 @@ Reboot your PC, so that everything you have just installed gets registered.
 - In the pop up:
     - Give it the name: faceswap
     - **IMPORTANT**: Select python version 3.5
-    - Hit "Create" (NB: This may take a while as it will need to download Python 3.5)
+    - Hit "Create" (NB: This may take a while as it will need to download Python 3.5)\
 ![Anaconda virtual env setup](https://i.imgur.com/Tl5tyVq.png)
 
 #### Entering your virtual environment
@@ -319,12 +329,27 @@ For reasons outside of our control, this is the trickiest part of the process, a
 3) To prevent yourself running into a whole host of issues later in the process.
 
 If you are not bothered about having GPU support or the latest version, scroll to the end of this section for a simple one-liner to install the CPU version of Dlib.
+
+
+### Explaination of dlib compiling environment 
+1. To compile dlib on windows, the easiest way is to install Visual Studio 2017 and some [specific components](#microsoft-visual-studio-2017) of it.
+2. In theory, you only need **ONE** CMake installation. It can be from your VS2017 installation, or from pip, or from offical CMake website.
+3. `pip install dlib` will try to find cmake in `%PYTHON%/Scripts/` and `%PATH%` in order.
+4. Only the first found one will be used. Once found, pip automatically passed options  to CMake like `-G "Visual Studio 15 2017 Win64"`
+5. CMake will fail to compile with VS2017 environment **IF** VS2017 component `VC++ 2017 ... Libs for Spectre(x86 and x64)` is not installed.
+6. dlib now try to enable AVX and CUDA by default.
+7. dlib has a wrong CMake version check here so it will fail CMake from VS2017 (bug described [here](https://github.com/deepfakes/faceswap/pull/568#issuecomment-450674621))
+8. If all items above good, the build should pass.
+
+In conclusion: Using cmake from pip is the fasted way to build dlib. Otherwise you need to fix the bug above for dlib manually in source.
+
+
 ### Build Latest Dlib with GPU Support
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
 - In the terminal type: `git clone https://github.com/davisking/dlib.git`
+- Make sure VS2017 is properly installed as mentioned before.
 - Enter the dlib folder: `cd dlib`
-- Add Visual Studio to your path by typing: `SET PATH=%PATH%;C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin`
-- Enter: `python setup.py -G  "Visual Studio 14 2015" install --yes USE_AVX_INSTRUCTIONS --yes DLIB_USE_CUDA --clean`
+- Enter: `python setup.py -G "Visual Studio 15 2017" install--yes USE_AVX_INSTRUCTIONS --yes DLIB_USE_CUDA --clean`
 
 This will build and install dlib for you. It is worth backing up the generated .egg file somewhere so that you can re-install it if you ever need to rather than having to re-compile:
 - From within the dlib folder copy the file named `dlib-xx.yy.zz-py3.5-win-amd64.egg` to somewhere safe

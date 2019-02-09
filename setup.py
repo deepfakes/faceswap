@@ -191,7 +191,7 @@ def upgrade_pip():
 def get_installed_packages():
     """ Get currently installed packages """
     global INSTALLED_PACKAGES
-    chk = Popen("{} -m pip freeze".format(sys.executable),
+    chk = Popen('"{}" -m pip freeze'.format(sys.executable),
                 shell=True, stdout=PIPE)
     installed = chk.communicate()[0].decode(ENCODING).splitlines()
     for pkg in installed:
@@ -205,7 +205,6 @@ def check_system_dependencies():
     check_cmake()
     if OS_VERSION[0] == "Windows":
         check_visual_studio()
-        check_cplus_plus()
     if OS_VERSION[0] == "Linux":
         check_gcc()
         check_gpp()
@@ -239,83 +238,6 @@ def check_gpp():
     out_info("g++ version: {}".format(version))
 
 
-def check_cmake():
-    """ Check CMake is installed for Windows """
-    chk = Popen("cmake --version", shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = chk.communicate()
-    stdout = stdout.decode(ENCODING)
-    if stderr and OS_VERSION[0] == "Windows":
-        stdout, stderr = check_cmake_windows()
-    if stderr:
-        out_error("CMake could not be found. See "
-                  "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cmake "
-                  "for instructions")
-        return
-    cmake = [re.sub(" +", " ", line.strip())
-             for line in stdout.splitlines()
-             if line.lower().strip().startswith("cmake")][0]
-    version = cmake[cmake.rfind(" ") + 1:]
-    out_info("CMake version: {}".format(version))
-
-
-def check_cmake_windows():
-    """ Additional checks for cmake on Windows """
-    chk = Popen("wmic product where \"name = 'cmake'\" get installlocation,version",
-                shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = chk.communicate()
-    if stderr:
-        return False, stderr
-    lines = [re.sub(" +", " ", line.strip())
-             for line in stdout.decode(ENCODING).splitlines()
-             if line.strip()]
-    stdout = lines[1]
-    location = stdout[:stdout.rfind(" ")] + "bin"
-    out_info("CMake not found in %PATH%. Temporarily adding: \"{}\"".format(location))
-    os.environ["PATH"] += ";{}".format(location)
-    stdout = "cmake {}".format(stdout)
-    return stdout, False
-
-
-def check_visual_studio():
-    """ Check Visual Studio 2015 is installed for Windows
-
-        Somewhat hacky solution which checks for the existence
-        of the VS2015 Performance Report
-    """
-    chk = Popen("reg query HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VSPerf",
-                shell=True, stdout=PIPE, stderr=PIPE)
-    _, stderr = chk.communicate()
-    if stderr:
-        out_error("Visual Studio 2015 could not be found. See "
-                  "https://github.com/deepfakes/faceswap/blob/master/"
-                  "INSTALL.md#microsoft-visual-studio-2015 for instructions")
-        return
-    out_info("Visual Studio 2015 version: 14.0")
-
-
-def check_cplus_plus():
-    """ Check Visual C++ Redistributable 2015 is instlled for Windows """
-    keys = (
-        "HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies\\{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
-        "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64")
-    for key in keys:
-        chk = Popen("reg query {}".format(key), shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = chk.communicate()
-        if stdout:
-            break
-    if stderr:
-        out_error("Visual C++ 2015 could not be found. Make sure you have selected 'Visual C++' "
-                  "in Visual Studio 2015 Configuration or download the Visual C++ 2015 "
-                  "Redistributable from: "
-                  "https://www.microsoft.com/en-us/download/details.aspx?id=48145")
-        return
-    vscpp = [re.sub(" +", " ", line.strip())
-             for line in stdout.decode(ENCODING).splitlines()
-             if line.lower().strip().startswith(("displayname", "version"))][0]
-    version = vscpp[vscpp.find("REG_SZ") + 7:]
-    out_info("Visual Studio C++ version: {}".format(version))
-
-
 def check_cuda():
     """ Check Cuda for Linux or Windows """
     if OS_VERSION[0] == "Linux":
@@ -338,7 +260,7 @@ def check_cuda_linux():
 
     if not chk:
         out_error("CUDA not found. Install and try again.\n"
-                  "Recommended version:      CUDA 9.0     cuDNN 7.1.3\n"
+                  "Recommended version:      CUDA 9.0     cuDNN 7.X\n"
                   "CUDA: https://developer.nvidia.com/cuda-downloads\n"
                   "cuDNN: https://developer.nvidia.com/rdp/cudnn-download")
         return
@@ -354,7 +276,7 @@ def check_cuda_windows():
     global CUDA_VERSION, CUDA_PATH
     cuda_keys = [key
                  for key in os.environ.keys()
-                 if key.lower().startswith("cuda_path_v") and key.lower() != "cuda_path"]
+                 if key.lower().startswith("cuda") and key.lower() != "cuda_path"]
     if not cuda_keys:
         out_error("CUDA not found. See "
                   "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cuda "
@@ -425,7 +347,7 @@ def check_missing_dep():
                     continue
 
 
-def check_dlib():
+def ask_dlib():
     """ Check dlib install requirements """
     global MISSING_PACKAGES, COMPILE_DLIB_WITH_AVX
     if "dlib" in MISSING_PACKAGES:
@@ -437,12 +359,108 @@ def check_dlib():
             COMPILE_DLIB_WITH_AVX = False
 
 
+def check_spectre_mitigation():
+    """ Without this, cmake fails to compile dlib """
+    pass
+
+
+def check_visual_studio():
+    """" Check Visual Studio by detecting VC++ version"""
+    chk = Popen("reg query HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64",
+                shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = chk.communicate()
+    if stderr:
+        out_error("Visual Studio 2017 or 2015 could not be found.\r\n"
+                  "See https://github.com/deepfakes/faceswap/blob/master/"
+                  "INSTALL.md#microsoft-visual-studio-2017 for instructions")
+        return 
+    vscpp = [re.sub(" +", " ", line.strip())
+             for line in stdout.decode(ENCODING).splitlines()
+             if line.lower().strip().startswith(("displayname", "version"))][0]
+    version = vscpp[vscpp.find("REG_SZ") + 7:]
+    if not version.startswith('v14.'):
+        out_error("Visual Studio 2017 or 2015 build tools could not be found\r\n"
+                  "Make sure you have installed VC++ 2017/2015 toolset"
+                  "See https://github.com/deepfakes/faceswap/blob/master/"
+                  "INSTALL.md#microsoft-visual-studio-2017 for instructions")
+        return
+    if version.startswith('v14.0'):
+        out_info("You are using Visual Studio 2015")
+    else:
+        # VC++ 2017 or VS2017 uses same reg entry as VS 2015
+        out_info("You are using Visual Studio 2017")
+        check_spectre_mitigation()
+
+        
+def check_cmake():
+    """ Check CMake is installed """
+    # first, check cmake installation and its version
+    chk = Popen("cmake --version", shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = chk.communicate()
+    stdout = stdout.decode(ENCODING)
+    if stderr and OS_VERSION[0] == "Windows":
+        stdout, stderr = check_cmake_windows_installation()
+    if stderr:
+        # its okay if cmake not presented currently. we will install it later
+        for rpkg in REQUIRED_PACKAGES:
+            if rpkg.startswith('cmake'):
+                """ We are to install cmake anyway, 
+                    if $PYTHON/Scripts/ in path it will be good.
+                    So a hacky way is to check if Popen("pip --version") works """
+                chk = Popen("pip --version", shell=True, stdout=PIPE, stderr=PIPE)
+                stdout, stderr = chk.communicate()
+                if stderr:
+                    out_error("$PYTHON/Scripts/ is not in PATH."
+                               "Add it to PATH and try again")
+                    return
+                out_info("CMake could not be found. We will install it for you.")
+                return
+        # it is not in requirements.txt either.
+        out_error("CMake could not be found and It will not be installed.\r\nSee "
+                  "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cmake "
+                  "for instructions")
+        return
+    # find cmake presented
+    cmake = [re.sub(" +", " ", line.strip())
+             for line in stdout.splitlines()
+             if line.lower().strip().startswith("cmake")][0]
+    version = cmake[cmake.rfind(" ") + 1:]
+    # but we need to check its version
+    if ENABLE_CUDA and version.startswith("3.12"):
+        out_error("CMake version: {}\r\n"
+                  "You need 3.13+ to compile dlib with CUDA(its a bug of dlib)\r\n"
+                  "Remove CMake from PATH and try again".format(version))
+    out_info("CMake version: {}".format(version))
+
+
+def check_cmake_windows_installation():
+    """ Additional checks for cmake on Windows """
+    chk = Popen("wmic product where \"name = 'cmake'\" get installlocation,version",
+                shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = chk.communicate()
+    if stderr:
+        return False, stderr
+    lines = [re.sub(" +", " ", line.strip())
+             for line in stdout.decode(ENCODING).splitlines()
+             if line.strip()]
+    stdout = lines[1]
+    location = stdout[:stdout.rfind(" ")] + "bin"
+    out_info("CMake not found in %PATH%. Temporarily adding: \"{}\"".format(location))
+    os.environ["PATH"] += ";{}".format(location)
+    stdout = "cmake {}".format(stdout)
+    return stdout, False
+
 def update_tf_dep(cpu_only):
     """ Update Tensorflow Dependency """
     global CUDA_VERSION, CUDNN_VERSION
 
     if cpu_only:
         REQUIRED_PACKAGES.append("tensorflow")
+        return
+
+    if CUDA_VERSION.startswith('10'):
+        out_warning('Selecting tf-nightly-gpu which works with CUDA 10.0 currently')
+        REQUIRED_PACKAGES.append("tf-nightly-gpu")
         return
 
     tf_ver = None
@@ -510,7 +528,7 @@ def install_missing_dep():
             if pkg.startswith("dlib"):
                 if OS_VERSION[0] == "Windows":
                     pipexe.extend(["--global-option=-G",
-                                   "--global-option=Visual Studio 14 2015"])
+                                   '--global-option="Visual Studio 15 2017"'])
                 opt = "yes" if COMPILE_DLIB_WITH_AVX else "no"
                 pipexe.extend(["--install-option=--{}".format(opt),
                                "--install-option=USE_AVX_INSTRUCTIONS"])
@@ -562,7 +580,7 @@ docker build -t deepfakes-cpu -f Dockerfile.cpu .
 
 3. Mount faceswap volume and Run it
 # without gui. tools.py gui not working.
-docker run -p 8888:8888 \
+docker run -itd -p 8888:8888 \
     --hostname deepfakes-cpu --name deepfakes-cpu \
     -v {path}:/srv \
     deepfakes-cpu
@@ -571,7 +589,7 @@ docker run -p 8888:8888 \
 ## enable local access to X11 server
 xhost +local:
 ## create container
-nvidia-docker run -p 8888:8888 \\
+nvidia-docker run -itd -p 8888:8888 \\
     --hostname deepfakes-cpu --name deepfakes-cpu \\
     -v {path}:/srv \\
     -v /tmp/.X11-unix:/tmp/.X11-unix \\
@@ -585,7 +603,7 @@ nvidia-docker run -p 8888:8888 \\
 
 4. Open a new terminal to run faceswap.py in /srv
 docker exec -it deepfakes-cpu bash
-""".format(path=sys.path[0]))
+""".format(path=os.path.dirname(os.path.realpath(__file__))))
     out_info("That's all you need to do with a docker. Have fun.")
 
 
@@ -605,7 +623,7 @@ docker build -t deepfakes-gpu -f Dockerfile.gpu .
 
 5. Mount faceswap volume and Run it
 # without gui. tools.py gui not working.
-docker run -p 8888:8888 \
+docker run -itd -p 8888:8888 \
     --hostname deepfakes-gpu --name deepfakes-gpu \
     -v {path}:/srv \
     deepfakes-gpu
@@ -616,7 +634,7 @@ xhost +local:
 ## enable nvidia device if working under bumblebee
 echo ON > /proc/acpi/bbswitch
 ## create container
-nvidia-docker run -p 8888:8888 \\
+nvidia-docker run -itd -p 8888:8888 \\
     --hostname deepfakes-gpu --name deepfakes-gpu \\
     -v {path}:/srv \\
     -v /tmp/.X11-unix:/tmp/.X11-unix \\
@@ -629,7 +647,7 @@ nvidia-docker run -p 8888:8888 \\
 
 6. Open a new terminal to interact with the project
 docker exec deepfakes-gpu python /srv/tools.py gui
-""".format(path=sys.path[0]))
+""".format(path=os.path.dirname(os.path.realpath(__file__))))
 
 
 def tips_2_1():
@@ -643,13 +661,16 @@ cuDNN: https://developer.nvidia.com/rdp/cudnn-download (Add DLL to "
 
 2. Install System Dependencies.
 In Windows:
-Install CMake x64: https://cmake.org/download/
+(Easy)     Install Visual Studio 2017 with:
+             * Basic packages (VC++ 2017 toolset)
+             * Visual C++ Tools for CMake
+             * VC++ 2017 Libs for Spectre(IMPORTANT)
 
 In Debian/Ubuntu, try:
 apt-get install -y cmake libsm6 libxrender1 libxext-dev python3-tk
 
 3. Install PIP requirements
-You may want to execute `chcp 866` in cmd line
+You may want to execute `chcp 65001` in cmd line
 to fix Unicode issues on Windows when installing dependencies
 """)
 
@@ -657,7 +678,7 @@ to fix Unicode issues on Windows when installing dependencies
 def tips_2_2():
     """ Pip Tips """
     out_info("1. Install PIP requirements\n"
-             "You may want to execute `chcp 866` in cmd line\n"
+             "You may want to execute `chcp 65001` in cmd line\n"
              "to fix Unicode issues on Windows when installing dependencies")
 
 
@@ -708,7 +729,7 @@ def main():
     # finally check dep
     ask_continue()
     check_missing_dep()
-    check_dlib()
+    ask_dlib()
     install_missing_dep()
     out_info("All python3 dependencies are met.\r\nYou are good to go.\r\n\r\n"
              "Enter:  'python faceswap.py -h' to see the options\r\n"
