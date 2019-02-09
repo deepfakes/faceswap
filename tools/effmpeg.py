@@ -154,6 +154,8 @@ class Effmpeg(object):
         self.print_ = False
 
     def process(self):
+        """ EFFMPEG Process """
+        logger.debug("Running Effmpeg")
         # Format action to match the method name
         self.args.action = self.args.action.replace('-', '_')
 
@@ -215,7 +217,6 @@ class Effmpeg(object):
             self.duration = self.__get_duration(self.start, self.end)
         else:
             self.duration = self.parse_time(str(self.args.duration))
-
         # If fps was left blank in gui, set it to default -1.0 value
         if self.args.fps == '':
             self.args.fps = str(-1.0)
@@ -250,7 +251,7 @@ class Effmpeg(object):
         elif self.args.transpose is None:
             try:
                 int(self.args.degrees)
-            except ValueError as ve:
+            except ValueError:
                 logger.error("You have entered an invalid value for degrees: %s",
                              self.args.degrees)
                 exit(1)
@@ -268,6 +269,7 @@ class Effmpeg(object):
             self.print_ = True
 
         self.effmpeg_process()
+        logger.debug("Finished Effmpeg process")
 
     def effmpeg_process(self):
         kwargs = {"input_": self.input,
@@ -288,14 +290,20 @@ class Effmpeg(object):
         action(**kwargs)
 
     @staticmethod
-    def extract(input_=None, output=None, fps=None, extract_ext=None,
+    def extract(input_=None, output=None, fps=None, extract_ext=None, start=None, duration=None,
                 **kwargs):
+        """ Extract video to image frames """
+        logger.debug("input_: %s, output: %s, fps: %s, extract_ext: '%s', start: %s, duration: %s",
+                     input_, output, fps, extract_ext, start, duration)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
+        if start is not None and duration is not None:
+            _input_opts += '-ss {} -t {}'.format(start, duration)
         _input = {input_.path: _input_opts}
         _output_opts = '-y -vf fps="' + str(fps) + '" -q:v 1'
         _output_path = output.path + "/" + input_.name + "_%05d" + extract_ext
         _output = {_output_path: _output_opts}
         os.makedirs(output.path, exist_ok=True)
+        logger.debug("_input: %s, _output: %s", _input, _output)
         Effmpeg.__run_ffmpeg(inputs=_input, outputs=_output)
 
     @staticmethod
@@ -453,6 +461,8 @@ class Effmpeg(object):
 
     @staticmethod
     def __run_ffmpeg(exe="ffmpeg", inputs=None, outputs=None):
+        """ Run ffmpeg """
+        logger.debug("Running ffmpeg: (exe: '%s', inputs: %s, outputs: %s", exe, inputs, outputs)
         ff = FFmpeg(executable=exe, inputs=inputs, outputs=outputs)
         try:
             ff.run(stderr=subprocess.STDOUT)
@@ -465,6 +475,7 @@ class Effmpeg(object):
                                  "{}".format(ffe))
         except KeyboardInterrupt:
             pass  # Do nothing if voluntary interruption
+        logger.debug("ffmpeg finished")
 
     @staticmethod
     def __convert_fps(fps):
