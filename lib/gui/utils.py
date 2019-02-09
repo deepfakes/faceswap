@@ -476,8 +476,15 @@ class Config():
         self.statusbar = statusbar
         self.serializer = JSONSerializer
         self.tk_vars = self.set_tk_vars()
+        self.command_notebook = None  # set in command.py
         self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def command_tabs(self):
+        """ Return dict of command tab titles with their IDs """
+        return {self.command_notebook.tab(tab_id, "text").lower(): tab_id
+                for tab_id in range(0, self.command_notebook.index("end"))}
 
     @staticmethod
     def set_tk_vars():
@@ -514,31 +521,31 @@ class Config():
         logger.debug(tk_vars)
         return tk_vars
 
-    def load(self, command=None):
+    def load(self, command=None, filename=None):
         """ Pop up load dialog for a saved config file """
         logger.debug("Loading config: (command: '%s')", command)
-        cfgfile = FileHandler("open", "config").retfile
-        if not cfgfile:
-            return
-        cfg = self.serializer.unmarshal(cfgfile.read())
-        opts = self.get_command_options(cfg, command) if command else cfg
-        if not opts:
-            return
-        for cmd, opts in opts.items():
-            self.set_command_args(cmd, opts)
-        self.add_to_recent(cfgfile.name, command)
-        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
-
-    def load_recent(self, filename, command):
-        """ Load a file from the recent menu """
-        logger.debug("Loading config: (command: '%s')", command)
-        with open(filename, "r") as cfgfile:
+        if filename:
+            with open(filename, "r") as cfgfile:
+                cfg = self.serializer.unmarshal(cfgfile.read())
+        else:
+            cfgfile = FileHandler("open", "config").retfile
+            if not cfgfile:
+                return
             cfg = self.serializer.unmarshal(cfgfile.read())
+
+        if not command and len(cfg.keys()) == 1:
+            command = list(cfg.keys())[0]
+
         opts = self.get_command_options(cfg, command) if command else cfg
         if not opts:
             return
+
         for cmd, opts in opts.items():
             self.set_command_args(cmd, opts)
+
+        if command:
+            self.command_notebook.select(self.command_tabs[command])
+
         self.add_to_recent(cfgfile.name, command)
         logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
 

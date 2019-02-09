@@ -71,7 +71,7 @@ class MainMenuBar(tk.Menu):
             lbl_command = command if command else "All"
             self.recent_menu.add_command(
                 label="{} ({})".format(filename, lbl_command.title()),
-                command=lambda fnm=filename, cmd=command: self.config.load_recent(fnm, cmd))
+                command=lambda fnm=filename, cmd=command: self.config.load(cmd, fnm))
         self.recent_menu.add_separator()
         self.recent_menu.add_command(
             label="Clear recent files",

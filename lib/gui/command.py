@@ -25,6 +25,7 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         self.actionbtns = dict()
         self.set_running_task_trace()
         self.build_tabs()
+        get_config().command_notebook = self
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_running_task_trace(self):
@@ -168,7 +169,7 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Options Scrollbar")
 
-    def update_scrollbar(self, event):
+    def update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the options frame scrollbar """
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
@@ -379,7 +380,7 @@ class OptionControl():
             filepath.set(filename)
 
     @staticmethod
-    def ask_nothing(filepath, filetypes=None):
+    def ask_nothing(filepath, filetypes=None):  # pylint: disable=unused-argument
         """ Method that does nothing, used for disabling open/save pop up """
         return
 
