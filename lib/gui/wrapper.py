@@ -236,10 +236,16 @@ class FaceswapControl():
             return False
 
         iterations = self.train_stats["iterations"]
+
         if iterations == 0:
             # Initialize session stats and set initial timestamp
             self.train_stats["timestamp"] = time()
+
+        if not get_config().session.initialized and iterations > 0:
+            # Don't initialize session until after the first iteration as state
+            # file must exist first
             get_config().session.initialize_session(is_training=True)
+            self.wrapper.tk_vars["refreshgraph"].set(True)
 
         iterations += 1
         if iterations % 100 == 0:

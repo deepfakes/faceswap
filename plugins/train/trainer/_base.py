@@ -99,7 +99,7 @@ class TrainerBase():
             logger.verbose("TensorBoard logging disabled")
             return None
 
-        logger.info("Enabling TensorBoard Logging")
+        logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
         for side in self.images.keys():
             logger.debug("Setting up TensorBoard Logging. Side: %s", side)
@@ -114,6 +114,7 @@ class TrainerBase():
                                                  write_grads=True)
             tbs.set_model(self.model.predictors[side])
             tensorboard[side] = tbs
+        logger.info("Enabled TensorBoard Logging")
         return tensorboard
 
     def print_loss(self, loss):

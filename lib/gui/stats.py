@@ -356,6 +356,9 @@ class Calculations():
     def refresh(self):
         """ Refresh the stats """
         logger.debug("Refreshing")
+        if not self.session.initialized:
+            logger.warning("Session data is not initialized. Not refreshing")
+            return
         self.iterations = 0
         self.stats = self.get_raw()
         self.get_calculations()
