@@ -111,7 +111,7 @@ class Detect(Detector):
 
     def detect_batch(self, detect_images, disable_message=False):
         """ Pass the batch through detector for consistently sized images
-            or each image seperately for inconsitently sized images """
+            or each image separately for inconsitently sized images """
         logger.trace("Detecting Batch")
         can_batch = self.check_batch_dims(detect_images)
         if can_batch:

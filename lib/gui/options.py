@@ -1,14 +1,13 @@
 #!/usr/bin python3
-""" Cli Options and Config functions for the GUI """
+""" Cli Options for the GUI """
 import inspect
 from argparse import SUPPRESS
 import logging
 from tkinter import ttk
 
 from lib import cli
-from lib.Serializer import JSONSerializer
 import tools.cli as ToolsCli
-from .utils import FileHandler, Images
+from .utils import get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -93,8 +92,7 @@ class CliOptions():
                 logger.trace("Skipping suppressed option: %s", opt)
                 continue
             ctl, sysbrowser, filetypes, action_option = self.set_control(opt)
-            opt["control_title"] = self.set_control_title(
-                opt.get("opts", ""))
+            opt["control_title"] = self.set_control_title(opt.get("opts", ""))
             opt["control"] = ctl
             opt["filesystem_browser"] = sysbrowser
             opt["filetypes"] = filetypes
@@ -126,6 +124,8 @@ class CliOptions():
             sysbrowser, filetypes = self.set_sysbrowser(action,
                                                         filetypes,
                                                         action_option)
+        elif option.get("min_max", None):
+            ctl = ttk.Scale
         elif option.get("choices", "") != "":
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":
@@ -226,7 +226,7 @@ class CliOptions():
             optval = str(option.get("value", "").get())
             opt = option["opts"][0]
             if command in ("extract", "convert") and opt == "-o":
-                Images().pathoutput = optval
+                get_images().pathoutput = optval
             if optval in ("False", ""):
                 continue
             elif optval == "True":
@@ -238,59 +238,3 @@ class CliOptions():
                 else:
                     opt = (opt, optval)
                 yield opt
-
-
-class Config():
-    """ Actions for loading and saving Faceswap GUI command configurations """
-
-    def __init__(self, cli_opts, tk_vars):
-        logger.debug("Initializing %s", self.__class__.__name__)
-        self.cli_opts = cli_opts
-        self.serializer = JSONSerializer
-        self.tk_vars = tk_vars
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def load(self, command=None):
-        """ Load a saved config file """
-        logger.debug("Loading config: (command: '%s')", command)
-        cfgfile = FileHandler("open", "config").retfile
-        if not cfgfile:
-            return
-        cfg = self.serializer.unmarshal(cfgfile.read())
-        opts = self.get_command_options(cfg, command) if command else cfg
-        for cmd, opts in opts.items():
-            self.set_command_args(cmd, opts)
-        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
-
-    def get_command_options(self, cfg, command):
-        """ return the saved options for the requested
-            command, if not loading global options """
-        opts = cfg.get(command, None)
-        if not opts:
-            self.tk_vars["consoleclear"].set(True)
-            print("No {} section found in file".format(command))
-            logger.info("No  %s section found in file", command)
-        retval = {command: opts}
-        logger.debug(retval)
-        return retval
-
-    def set_command_args(self, command, options):
-        """ Pass the saved config items back to the CliOptions """
-        if not options:
-            return
-        for srcopt, srcval in options.items():
-            optvar = self.cli_opts.get_one_option_variable(command, srcopt)
-            if not optvar:
-                continue
-            optvar.set(srcval)
-
-    def save(self, command=None):
-        """ Save the current GUI state to a config file in json format """
-        logger.debug("Saving config: (command: '%s')", command)
-        cfgfile = FileHandler("save", "config").retfile
-        if not cfgfile:
-            return
-        cfg = self.cli_opts.get_option_values(command)
-        cfgfile.write(self.serializer.marshal(cfg))
-        cfgfile.close()
-        logger.debug("Saved config: (command: '%s', cfgfile: '%s')", command, cfgfile)

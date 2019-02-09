@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Graph functions for Display Frame of the Faceswap GUI """
 import datetime
+import logging
 import os
 import tkinter as tk
 
@@ -8,14 +9,17 @@ from tkinter import ttk
 from math import ceil, floor
 
 import matplotlib
+# pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
-import matplotlib.animation as animation
-from matplotlib import pyplot as plt, style
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
-                                               NavigationToolbar2Tk)
 
-from .tooltip import Tooltip
-from .utils import Images
+from matplotlib import pyplot as plt, style  # noqa
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
+                                               NavigationToolbar2Tk)  # noqa
+
+from .tooltip import Tooltip  # noqa
+from .utils import get_config, get_images  # noqa
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ancestors
@@ -26,28 +30,24 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                  t[0] in ("Home", "Pan", "Zoom", "Save")]
 
     @staticmethod
-    def _Button(frame, text, file, command, extension=".gif"):
+    def _Button(frame, text, file, command, extension=".gif"):  # pylint: disable=arguments-differ
         """ Map Buttons to their own frame.
-            Use custom button icons,
-            Use ttk buttons
-            pack to the right """
+            Use custom button icons, Use ttk buttons pack to the right """
         iconmapping = {"home": "reset",
                        "filesave": "save",
                        "zoom_to_rect": "zoom"}
         icon = iconmapping[file] if iconmapping.get(file, None) else file
-        img = Images().icons[icon]
+        img = get_images().icons[icon]
         btn = ttk.Button(frame, text=text, image=img, command=command)
         btn.pack(side=tk.RIGHT, padx=2)
         return btn
 
     def _init_toolbar(self):
-        """ Same as original but ttk widgets and standard
-            tooltips used. Separator added and message label
-            packed to the left """
+        """ Same as original but ttk widgets and standard tooltips used. Separator added and
+            message label packed to the left """
         xmin, xmax = self.canvas.figure.bbox.intervalx
         height, width = 50, xmax-xmin
-        ttk.Frame.__init__(self, master=self.window,
-                           width=int(width), height=int(height))
+        ttk.Frame.__init__(self, master=self.window, width=int(width), height=int(height))
 
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
@@ -76,14 +76,14 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
 class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Base class for matplotlib line graphs """
     def __init__(self, parent, data, ylabel):
-        ttk.Frame.__init__(self, parent)
+        logger.debug("Initializing %s", self.__class__.__name__)
+        super().__init__(parent)
         style.use("ggplot")
 
         self.calcs = data
         self.ylabel = ylabel
-        self.colourmaps = ["Reds", "Blues", "Greens",
-                           "Purples", "Oranges", "Greys",
-                           "copper", "summer", "bone"]
+        self.colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges",
+                           "Greys", "copper", "summer", "bone"]
         self.lines = list()
         self.toolbar = None
         self.fig = plt.figure(figsize=(4, 4), dpi=75)
@@ -92,26 +92,29 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.initiate_graph()
         self.update_plot(initiate=True)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def initiate_graph(self):
         """ Place the graph canvas """
-        self.plotcanvas.get_tk_widget().pack(side=tk.TOP,
-                                             padx=5,
-                                             fill=tk.BOTH,
-                                             expand=True)
+        logger.debug("Setting plotcanvas")
+        self.plotcanvas.get_tk_widget().pack(side=tk.TOP, padx=5, fill=tk.BOTH, expand=True)
         plt.subplots_adjust(left=0.100,
                             bottom=0.100,
                             right=0.95,
                             top=0.95,
                             wspace=0.2,
                             hspace=0.2)
+        logger.debug("Set plotcanvas")
 
     def update_plot(self, initiate=True):
         """ Update the plot with incoming data """
+        logger.trace("Updating plot")
         if initiate:
+            logger.debug("Initializing plot")
             self.lines = list()
             self.ax1.clear()
             self.axes_labels_set()
+            logger.debug("Initialized plot")
 
         fulldata = [item for item in self.calcs.stats.values()]
         self.axes_limits_set(fulldata)
@@ -120,37 +123,37 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         keys = list(self.calcs.stats.keys())
         for idx, item in enumerate(self.lines_sort(keys)):
             if initiate:
-                self.lines.extend(self.ax1.plot(xrng,
-                                                self.calcs.stats[item[0]],
-                                                label=item[1],
-                                                linewidth=item[2],
-                                                color=item[3]))
+                self.lines.extend(self.ax1.plot(xrng, self.calcs.stats[item[0]],
+                                                label=item[1], linewidth=item[2], color=item[3]))
             else:
                 self.lines[idx].set_data(xrng, self.calcs.stats[item[0]])
 
         if initiate:
             self.legend_place()
+        logger.trace("Updated plot")
 
     def axes_labels_set(self):
         """ Set the axes label and range """
+        logger.debug("Setting axes labels. y-label: '%s'", self.ylabel)
         self.ax1.set_xlabel("Iterations")
         self.ax1.set_ylabel(self.ylabel)
 
     def axes_limits_set_default(self):
         """ Set default axes limits """
+        logger.debug("Setting default axes ranges")
         self.ax1.set_ylim(0.00, 100.0)
         self.ax1.set_xlim(0, 1)
 
     def axes_limits_set(self, data):
         """ Set the axes limits """
         xmax = self.calcs.iterations - 1 if self.calcs.iterations > 1 else 1
-
         if data:
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
             self.ax1.set_xlim(0, xmax)
         else:
             self.axes_limits_set_default()
+        logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
 
     @staticmethod
     def axes_data_get_min_max(data):
@@ -164,15 +167,18 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             ymax.append(max(dataset) * 1000)
         ymin = floor(min(ymin)) / 1000
         ymax = ceil(max(ymax)) / 1000
+        logger.trace("ymin: %s, ymax: %s", ymin, ymax)
         return ymin, ymax
 
     def axes_set_yscale(self, scale):
         """ Set the Y-Scale to log or linear """
+        logger.debug("yscale: '%s'", scale)
         self.ax1.set_yscale(scale)
 
     def lines_sort(self, keys):
         """ Sort the data keys into consistent order
-            and set line colourmap and line width """
+            and set line color map and line width """
+        logger.trace("Sorting lines")
         raw_lines = list()
         sorted_lines = list()
         for key in sorted(keys):
@@ -184,29 +190,28 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         groupsize = self.lines_groupsize(raw_lines, sorted_lines)
         sorted_lines = raw_lines + sorted_lines
-
         lines = self.lines_style(sorted_lines, groupsize)
         return lines
 
     @staticmethod
     def lines_groupsize(raw_lines, sorted_lines):
         """ Get the number of items in each group.
-            If raw data isn't selected, then check
-            the length of remaining groups until
-            something is found """
+            If raw data isn't selected, then check the length of
+            remaining groups until something is found """
         groupsize = 1
         if raw_lines:
             groupsize = len(raw_lines)
         else:
             for check in ("avg", "trend"):
                 if any(item[0].startswith(check) for item in sorted_lines):
-                    groupsize = len([item for item in sorted_lines
-                                     if item[0].startswith(check)])
+                    groupsize = len([item for item in sorted_lines if item[0].startswith(check)])
                     break
+        logger.trace(groupsize)
         return groupsize
 
     def lines_style(self, lines, groupsize):
-        """ Set the colourmap and linewidth for each group """
+        """ Set the color map and line width for each group """
+        logger.trace("Setting lines style")
         groups = int(len(lines) / groupsize)
         colours = self.lines_create_colors(groupsize, groups)
         for idx, item in enumerate(lines):
@@ -215,21 +220,24 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         return lines
 
     def lines_create_colors(self, groupsize, groups):
-        """ Create the colours """
+        """ Create the colors """
         colours = list()
         for i in range(1, groups + 1):
             for colour in self.colourmaps[0:groupsize]:
                 cmap = matplotlib.cm.get_cmap(colour)
                 cpoint = 1 - (i / 5)
                 colours.append(cmap(cpoint))
+        logger.trace(colours)
         return colours
 
     def legend_place(self):
         """ Place and format legend """
+        logger.debug("Placing legend")
         self.ax1.legend(loc="upper right", ncol=2)
 
     def toolbar_place(self, parent):
         """ Add Graph Navigation toolbar """
+        logger.debug("Placing toolbar")
         self.toolbar = NavigationToolbar(self.plotcanvas, parent)
         self.toolbar.pack(side=tk.BOTTOM)
         self.toolbar.update()
@@ -240,72 +248,48 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent, data, ylabel):
         GraphBase.__init__(self, parent, data, ylabel)
+        self.add_callback()
 
-        self.anim = None
+    def add_callback(self):
+        """ Add the variable trace to update graph on recent button or save iteration """
+        get_config().tk_vars["refreshgraph"].trace("w", self.refresh)
 
     def build(self):
-        """ Update the plot area with loss values and cycle through to
-        animate """
-        self.anim = animation.FuncAnimation(self.fig,
-                                            self.animate,
-                                            interval=200,
-                                            blit=False)
+        """ Update the plot area with loss values """
+        logger.debug("Building training graph")
         self.plotcanvas.draw()
+        logger.debug("Built training graph")
 
-    def animate(self, i):
+    def refresh(self, *args):  # pylint: disable=unused-argument
         """ Read loss data and apply to graph """
+        logger.debug("Updating plot")
         self.calcs.refresh()
         self.update_plot(initiate=False)
-
-    def set_animation_rate(self, iterations):
-        """ Change the animation update interval based on how
-            many iterations have been
-            There's no point calculating a graph over thousands of
-            points of data when the change will be miniscule """
-        if iterations > 30000:
-            speed = 60000           # 1 min updates
-        elif iterations > 20000:
-            speed = 30000           # 30 sec updates
-        elif iterations > 10000:
-            speed = 10000           # 10 sec updates
-        elif iterations > 5000:
-            speed = 5000            # 5 sec updates
-        elif iterations > 1000:
-            speed = 2000            # 2 sec updates
-        elif iterations > 500:
-            speed = 1000            # 1 sec updates
-        elif iterations > 100:
-            speed = 500             # 0.5 sec updates
-        else:
-            speed = 200             # 200ms updates
-        if not self.anim.event_source.interval == speed:
-            self.anim.event_source.interval = speed
+        self.plotcanvas.draw()
+        get_config().tk_vars["refreshgraph"].set(False)
 
     def save_fig(self, location):
         """ Save the figure to file """
-        keys = sorted([key.replace("raw_", "")
-                       for key in self.calcs.stats.keys()
+        logger.debug("Saving graph: '%s'", location)
+        keys = sorted([key.replace("raw_", "") for key in self.calcs.stats.keys()
                        if key.startswith("raw_")])
         filename = " - ".join(keys)
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location,
-                                "{}_{}.{}".format(filename,
-                                                  now,
-                                                  "png"))
+        filename = os.path.join(location, "{}_{}.{}".format(filename, now, "png"))
         self.fig.set_size_inches(16, 9)
         self.fig.savefig(filename, bbox_inches="tight", dpi=120)
         print("Saved graph to {}".format(filename))
+        logger.debug("Saved graph: '%s'", filename)
         self.resize_fig()
 
     def resize_fig(self):
         """ Resize the figure back to the canvas """
-        class Event():
-            """ Event class that needs to be passed to
-                plotcanvas.resize """
+        class Event():  # pylint: disable=too-few-public-methods
+            """ Event class that needs to be passed to plotcanvas.resize """
             pass
         Event.width = self.winfo_width()
         Event.height = self.winfo_height()
-        self.plotcanvas.resize(Event)
+        self.plotcanvas.resize(Event)  # pylint: disable=no-value-for-parameter
 
 
 class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
@@ -316,18 +300,24 @@ class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def build(self):
         """ Build the session graph """
+        logger.debug("Building session graph")
         self.toolbar_place(self)
         self.plotcanvas.draw()
+        logger.debug("Built session graph")
 
     def refresh(self, data, ylabel, scale):
         """ Refresh graph data """
+        logger.debug("Refreshing session graph: (ylabel: '%s', scale: '%s')", ylabel, scale)
         self.calcs = data
         self.ylabel = ylabel
         self.set_yscale_type(scale)
+        logger.debug("Refreshed session graph")
 
     def set_yscale_type(self, scale):
         """ switch the y-scale and redraw """
+        logger.debug("Updating scale type: '%s'", scale)
         self.scale = scale
         self.update_plot(initiate=True)
         self.axes_set_yscale(self.scale)
         self.plotcanvas.draw()
+        logger.debug("Updated scale type")

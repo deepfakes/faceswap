@@ -5,44 +5,42 @@ import logging
 import tkinter as tk
 from tkinter import ttk
 
-from .options import Config
 from .tooltip import Tooltip
-from .utils import ContextMenu, Images, FileHandler
+from .utils import ContextMenu, FileHandler, get_images, get_config, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class CommandNotebook(ttk.Notebook):
+class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
-    def __init__(self, parent, cli_options, tk_vars, scaling_factor):
-        logger.debug("Initializing %s: (parent: %s, cli_options: %s, tk_vars: %s, "
-                     "scaling_factor: %s", self.__class__.__name__, parent, cli_options,
-                     tk_vars, scaling_factor)
+    def __init__(self, parent):
+        logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
+        scaling_factor = get_config().scaling_factor
         width = int(420 * scaling_factor)
         height = int(500 * scaling_factor)
         ttk.Notebook.__init__(self, parent, width=width, height=height)
         parent.add(self)
 
-        self.cli_opts = cli_options
-        self.tk_vars = tk_vars
         self.actionbtns = dict()
-
         self.set_running_task_trace()
         self.build_tabs()
+        get_config().command_notebook = self
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_running_task_trace(self):
         """ Set trigger action for the running task
             to change the action buttons text and command """
         logger.debug("Set running trace")
-        self.tk_vars["runningtask"].trace("w", self.change_action_button)
+        tk_vars = get_config().tk_vars
+        tk_vars["runningtask"].trace("w", self.change_action_button)
 
     def build_tabs(self):
         """ Build the tabs for the relevant command """
         logger.debug("Build Tabs")
-        for category in self.cli_opts.categories:
-            cmdlist = self.cli_opts.commands[category]
+        cli_opts = get_config().cli_opts
+        for category in cli_opts.categories:
+            cmdlist = cli_opts.commands[category]
             for command in cmdlist:
                 title = command.title()
                 commandtab = CommandTab(self, category, command)
@@ -52,9 +50,11 @@ class CommandNotebook(ttk.Notebook):
     def change_action_button(self, *args):
         """ Change the action button to relevant control """
         logger.debug("Update Action Buttons: (args: %s", args)
+        tk_vars = get_config().tk_vars
+
         for cmd in self.actionbtns.keys():
             btnact = self.actionbtns[cmd]
-            if self.tk_vars["runningtask"].get():
+            if tk_vars["runningtask"].get():
                 ttl = "Terminate"
                 hlp = "Exit the running process"
             else:
@@ -65,7 +65,7 @@ class CommandNotebook(ttk.Notebook):
             Tooltip(btnact, text=hlp, wraplength=200)
 
 
-class CommandTab(ttk.Frame):
+class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent, category, command):
@@ -74,9 +74,7 @@ class CommandTab(ttk.Frame):
         ttk.Frame.__init__(self, parent)
 
         self.category = category
-        self.cli_opts = parent.cli_opts
         self.actionbtns = parent.actionbtns
-        self.tk_vars = parent.tk_vars
         self.command = command
 
         self.build_tab()
@@ -100,7 +98,7 @@ class CommandTab(ttk.Frame):
         logger.debug("Added frame seperator")
 
 
-class OptionsFrame(ttk.Frame):
+class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Options Frame - Holds the Options for each command """
 
     def __init__(self, parent):
@@ -108,7 +106,6 @@ class OptionsFrame(ttk.Frame):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.opts = parent.cli_opts
         self.command = parent.command
 
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
@@ -121,7 +118,8 @@ class OptionsFrame(ttk.Frame):
         self.chkbtns = self.checkbuttons_frame()
 
         self.build_frame()
-        self.opts.set_context_option(self.command)
+        cli_opts = get_config().cli_opts
+        cli_opts.set_context_option(self.command)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def checkbuttons_frame(self):
@@ -150,7 +148,8 @@ class OptionsFrame(ttk.Frame):
         self.add_scrollbar()
         self.canvas.bind("<Configure>", self.resize_frame)
 
-        for option in self.opts.gen_command_options(self.command):
+        cli_opts = get_config().cli_opts
+        for option in cli_opts.gen_command_options(self.command):
             optioncontrol = OptionControl(self.command,
                                           option,
                                           self.optsframe,
@@ -170,7 +169,7 @@ class OptionsFrame(ttk.Frame):
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Options Scrollbar")
 
-    def update_scrollbar(self, event):
+    def update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the options frame scrollbar """
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
@@ -207,6 +206,7 @@ class OptionControl():
         if ctl == ttk.Checkbutton:
             dflt = self.option.get("default", False)
         choices = self.option["choices"] if ctl == ttk.Combobox else None
+        min_max = self.option["min_max"] if ctl == ttk.Scale else None
 
         ctlframe = self.build_one_control_frame()
 
@@ -217,6 +217,7 @@ class OptionControl():
         self.option["value"] = self.build_one_control(ctlframe,
                                                       ctlvars,
                                                       choices,
+                                                      min_max,
                                                       sysbrowser)
         logger.debug("Built option control")
 
@@ -228,6 +229,7 @@ class OptionControl():
             ctlhelp = ctlhelp[2:].replace("\n\t", " ").replace("\n'", "\n\n'")
         else:
             ctlhelp = " ".join(ctlhelp.split())
+        ctlhelp = ctlhelp.replace("%%", "%")
         ctlhelp = ". ".join(i.capitalize() for i in ctlhelp.split(". "))
         ctlhelp = ctltitle + " - " + ctlhelp
         logger.debug("Formatted control help: (title: '%s', help: '%s'", ctltitle, ctlhelp)
@@ -249,15 +251,14 @@ class OptionControl():
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         logger.debug("Built control label: '%s'", control_title)
 
-    def build_one_control(self, frame, controlvars, choices, sysbrowser):
+    def build_one_control(self, frame, controlvars, choices, min_max, sysbrowser):
         """ Build and place the option controls """
-        logger.debug("Build control: (controlvars: %s, choices: %s, sysbrowser: %s",
-                     controlvars, choices, sysbrowser)
+        logger.debug("Build control: (controlvars: %s, choices: %s, min_max: %s, sysbrowser: %s",
+                     controlvars, choices, min_max, sysbrowser)
         control, control_title, default, helptext = controlvars
         default = default if default is not None else ""
 
-        var = tk.BooleanVar(
-            frame) if control == ttk.Checkbutton else tk.StringVar(frame)
+        var = tk.BooleanVar(frame) if control == ttk.Checkbutton else tk.StringVar(frame)
         var.set(default)
 
         if sysbrowser:
@@ -268,6 +269,12 @@ class OptionControl():
                                            control_title,
                                            var,
                                            helptext)
+        elif control == ttk.Scale:
+            self.slider_control(control,
+                                frame,
+                                var,
+                                min_max,
+                                helptext)
         else:
             self.control_to_optionsframe(control,
                                          frame,
@@ -292,6 +299,29 @@ class OptionControl():
         Tooltip(ctl, text=helptext, wraplength=200)
         logger.debug("Added control checkframe: '%s'", control_title)
 
+    def slider_control(self, control, frame, tk_var, min_max, helptext):
+        """ A slider control with corresponding Entry box """
+        logger.debug("Add slider control to Options Frame: %s", control)
+        d_type = self.option.get("type", float)
+        rnd = self.option.get("rounding", 2) if d_type == float else self.option.get("rounding", 1)
+
+        tbox = ttk.Entry(frame, width=8, textvariable=tk_var, justify=tk.RIGHT)
+        tbox.pack(padx=(0, 5), side=tk.RIGHT)
+        ctl = control(
+            frame,
+            variable=tk_var,
+            command=lambda val, var=tk_var, dt=d_type, rn=rnd, mm=min_max:
+            set_slider_rounding(val, var, dt, rn, mm))
+        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
+        rc_menu = ContextMenu(ctl)
+        rc_menu.cm_bind()
+        ctl["from_"] = min_max[0]
+        ctl["to"] = min_max[1]
+
+        Tooltip(ctl, text=helptext, wraplength=720)
+        Tooltip(tbox, text=helptext, wraplength=720)
+        logger.debug("Added slider control to Options Frame: %s", control)
+
     @staticmethod
     def control_to_optionsframe(control, frame, var, choices, helptext):
         """ Standard non-check buttons sit in the main options frame """
@@ -303,8 +333,7 @@ class OptionControl():
         if control == ttk.Combobox:
             logger.debug("Adding combo choices: %s", choices)
             ctl["values"] = [choice for choice in choices]
-
-        Tooltip(ctl, text=helptext, wraplength=720)
+        Tooltip(ctl, text=helptext, wraplength=920)
         logger.debug("Added control to Options Frame: %s", control)
 
     def add_browser_buttons(self, frame, sysbrowser, filepath):
@@ -312,7 +341,7 @@ class OptionControl():
         logger.debug("Adding browser buttons: (sysbrowser: '%s', filepath: '%s'",
                      sysbrowser, filepath)
         for browser in sysbrowser:
-            img = Images().icons[browser]
+            img = get_images().icons[browser]
             action = getattr(self, "ask_" + browser)
             filetypes = self.option.get("filetypes", "default")
             fileopn = ttk.Button(frame,
@@ -351,7 +380,7 @@ class OptionControl():
             filepath.set(filename)
 
     @staticmethod
-    def ask_nothing(filepath, filetypes=None):
+    def ask_nothing(filepath, filetypes=None):  # pylint: disable=unused-argument
         """ Method that does nothing, used for disabling open/save pop up """
         return
 
@@ -370,7 +399,7 @@ class OptionControl():
             filepath.set(filename)
 
 
-class ActionFrame(ttk.Frame):
+class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """Action Frame - Displays action controls for the command tab """
 
     def __init__(self, parent):
@@ -382,16 +411,16 @@ class ActionFrame(ttk.Frame):
         self.title = self.command.title()
 
         self.add_action_button(parent.category,
-                               parent.actionbtns,
-                               parent.tk_vars)
-        self.add_util_buttons(parent.cli_opts, parent.tk_vars)
+                               parent.actionbtns)
+        self.add_util_buttons()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def add_action_button(self, category, actionbtns, tk_vars):
+    def add_action_button(self, category, actionbtns):
         """ Add the action buttons for page """
         logger.debug("Add action buttons: '%s'", self.title)
         actframe = ttk.Frame(self)
         actframe.pack(fill=tk.X, side=tk.LEFT)
+        tk_vars = get_config().tk_vars
 
         var_value = "{},{}".format(category, self.command)
 
@@ -415,17 +444,17 @@ class ActionFrame(ttk.Frame):
                 wraplength=200)
         logger.debug("Added action buttons: '%s'", self.title)
 
-    def add_util_buttons(self, cli_options, tk_vars):
+    def add_util_buttons(self):
         """ Add the section utility buttons """
         logger.debug("Add util buttons")
         utlframe = ttk.Frame(self)
         utlframe.pack(side=tk.RIGHT)
 
-        config = Config(cli_options, tk_vars)
+        config = get_config()
         for utl in ("load", "save", "clear", "reset"):
             logger.debug("Adding button: '%s'", utl)
-            img = Images().icons[utl]
-            action_cls = config if utl in (("save", "load")) else cli_options
+            img = get_images().icons[utl]
+            action_cls = config if utl in (("save", "load")) else config.cli_opts
             action = getattr(action_cls, utl)
             btnutl = ttk.Button(utlframe,
                                 image=img,

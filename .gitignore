@@ -12,8 +12,9 @@
 !Dockerfile*
 !requirements*
 !.cache
-!lib
-!lib/face_alignment
+!config/
+!lib/
+!lib/*
 !lib/gui
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons
@@ -21,9 +22,9 @@
 !plugins/
 !plugins/*
 !plugins/extract/*
-!plugins/model/*
+!plugins/train/*
 !tools
 !tools/lib*
-
+*.ini
 *.pyc
 __pycache__/

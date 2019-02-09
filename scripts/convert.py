@@ -15,7 +15,6 @@ from lib.faces_detect import DetectedFace
 from lib.multithreading import BackgroundGenerator, SpawnProcess
 from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
-
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -43,7 +42,7 @@ class Convert():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
-        """ Original & LowMem models go with Adjust or Masked converter
+        """ Original & LowMem models go with converter
 
             Note: GAN prediction outputs a mask + an image, while other
             predicts only an image. """
@@ -103,37 +102,19 @@ class Convert():
 
     def load_model(self):
         """ Load the model requested for conversion """
-        model_name = self.args.trainer
+        logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        num_gpus = self.args.gpus
-
-        model = PluginLoader.get_model(model_name)(model_dir, num_gpus)
-
-        if not model.load(self.args.swap_model):
-            logger.error("Model Not Found! A valid model "
-                         "must be provided to continue!")
-            exit(1)
-
+        model = PluginLoader.get_model(self.args.trainer)(model_dir, self.args.gpus, predict=True)
+        logger.debug("Loaded Model")
         return model
 
     def load_converter(self, model):
         """ Load the requested converter for conversion """
-        args = self.args
-        conv = args.converter
-
+        conv = self.args.converter
         converter = PluginLoader.get_converter(conv)(
-            model.converter(False),
-            trainer=args.trainer,
-            blur_size=args.blur_size,
-            seamless_clone=args.seamless_clone,
-            sharpen_image=args.sharpen_image,
-            mask_type=args.mask_type,
-            erosion_kernel_size=args.erosion_kernel_size,
-            match_histogram=args.match_histogram,
-            smooth_mask=args.smooth_mask,
-            avg_color_adjust=args.avg_color_adjust,
-            draw_transparent=args.draw_transparent)
-
+            model.converter(self.args.swap_model),
+            model=model,
+            arguments=self.args)
         return converter
 
     def prepare_images(self):
@@ -205,24 +186,12 @@ class Convert():
 
             if not skip:
                 for face in faces:
-                    image = self.convert_one_face(converter, image, face)
+                    image = converter.patch_image(image, face)
                 filename = str(self.output_dir / Path(filename).name)
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
-
-    def convert_one_face(self, converter, image, face):
-        """ Perform the conversion on the given frame for a single face """
-        # TODO: This switch between 64 and 128 is a hack for now.
-        # We should have a separate cli option for size
-        size = 128 if (self.args.trainer.strip().lower()
-                       in ('gan128', 'originalhighres')) else 64
-
-        image = converter.patch_image(image,
-                                      face,
-                                      size)
-        return image
 
 
 class OptionalActions():
@@ -305,10 +274,8 @@ class OptionalActions():
 
 class Legacy():
     """ Update legacy alignments:
-
-        - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
-        and remove the 'r' parameter
+          and remove the 'r' parameter
         - Add face hashes to alignments file
         """
     def __init__(self, alignments, frames, faces_dir):
@@ -319,15 +286,10 @@ class Legacy():
 
     def process(self, faces_dir):
         """ Run the rotate alignments process """
-        no_dims = self.alignments.get_legacy_no_dims()
         rotated = self.alignments.get_legacy_rotation()
         hashes = self.alignments.get_legacy_no_hashes()
-        if not no_dims and not rotated and not hashes:
+        if not rotated and not hashes:
             return
-        if no_dims:
-            logger.info("Legacy landmarks found. Adding frame dimensions...")
-            self.add_dimensions(no_dims)
-            self.alignments.save()
         if rotated:
             logger.info("Legacy rotated frames found. Converting...")
             self.rotate_landmarks(rotated)
@@ -337,22 +299,14 @@ class Legacy():
             self.add_hashes(hashes, faces_dir)
             self.alignments.save()
 
-    def add_dimensions(self, no_dims):
-        """ Add width and height of original frame to alignments """
-        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
-            if no_dim not in self.frames.keys():
-                continue
-            filename = self.frames[no_dim]
-            dims = cv2.imread(filename).shape[:2]  # pylint: disable=no-member
-            self.alignments.add_dimensions(no_dim, dims)
-
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
         for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
-            if rotate_item not in self.frames.keys():
+            frame = self.frames.get(rotate_item, None)
+            if frame is None:
                 logger.debug("Skipping missing frame: '%s'", rotate_item)
                 continue
-            self.alignments.rotate_existing_landmarks(rotate_item)
+            self.alignments.rotate_existing_landmarks(rotate_item, frame)
 
     def add_hashes(self, hashes, faces_dir):
         """ Add Face Hashes to the alignments file """

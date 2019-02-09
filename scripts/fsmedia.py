@@ -180,7 +180,7 @@ class Images():
 
     def load_disk_frames(self):
         """ Load frames from disk """
-        logger.debug("Input is Seperate Frames. Loading images")
+        logger.debug("Input is separate Frames. Loading images")
         for filename in self.input_images:
             logger.trace("Loading image: '%s'", filename)
             try:
@@ -314,9 +314,10 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
             aligned_landmarks = face.aligned_landmarks
             resized_face = face.aligned_face
             size = face.aligned["size"]
+            padding = int(size * 0.1875)
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
-                size, 48)
+                size, padding)
             feature_mask = cv2.blur(  # pylint: disable=no-member
                 feature_mask, (10, 10))
             isolated_face = cv2.multiply(  # pylint: disable=no-member

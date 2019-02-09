@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Utility functions for the GUI """
 import logging
-
 import os
 import platform
 import sys
@@ -10,24 +9,50 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from PIL import Image, ImageTk
 
+from lib.Serializer import JSONSerializer
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_CONFIG = None
+_IMAGES = None
 
 
-class Singleton(type):
-    """ Instigate a singleton.
-    From: https://stackoverflow.com/questions/6760685
+def initialize_config(cli_opts, scaling_factor, pathcache, statusbar, session):
+    """ Initialize the config and add to global constant """
+    global _CONFIG  # pylint: disable=global-statement
+    if _CONFIG is not None:
+        return
+    logger.debug("Initializing config: (cli_opts: %s, tk_vars: %s, pathcache: %s, statusbar: %s, "
+                 "session: %s)", cli_opts, scaling_factor, pathcache, statusbar, session)
+    _CONFIG = Config(cli_opts, scaling_factor, pathcache, statusbar, session)
 
-    Singletons are often frowned upon.
-    Feel free to instigate a better solution """
 
-    _instances = {}
+def get_config():
+    """ return the _CONFIG constant """
+    return _CONFIG
 
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton,
-                                        cls).__call__(*args,
-                                                      **kwargs)
-        return cls._instances[cls]
+
+def initialize_images():
+    """ Initialize the config and add to global constant """
+    global _IMAGES  # pylint: disable=global-statement
+    if _IMAGES is not None:
+        return
+    logger.debug("Initializing images")
+    _IMAGES = Images()
+
+
+def get_images():
+    """ return the _CONFIG constant """
+    return _IMAGES
+
+
+def set_slider_rounding(value, var, d_type, round_to, min_max):
+    """ Set the underlying variable to correct number based on slider rounding """
+    if d_type == float:
+        var.set(round(float(value), round_to))
+    else:
+        steps = range(min_max[0], min_max[1] + round_to, round_to)
+        value = min(steps, key=lambda x: abs(x - int(float(value))))
+        var.set(value)
 
 
 class FileHandler():
@@ -52,8 +77,8 @@ class FileHandler():
                                     ("PNG", "*.png"),
                                     ("TIFF", "*.tif", "*.tiff"),
                                     all_files),
+                          "state": (("State files", "*.json"), all_files),
                           "log": (("Log files", "*.log"), all_files),
-                          "session": (("Faceswap session files", "*.fss"), all_files),
                           "video": (("Audio Video Interleave", "*.avi"),
                                     ("Flash Video", "*.flv"),
                                     ("Matroska", "*.mkv"),
@@ -164,11 +189,15 @@ class FileHandler():
         return
 
 
-class Images(metaclass=Singleton):
-    """ Holds locations of images and actual images """
+class Images():
+    """ Holds locations of images and actual images
 
-    def __init__(self, pathcache=None):
-        logger.debug("Initializing %s: (pathcache: '%s'", self.__class__.__name__, pathcache)
+        Don't call directly. Call get_images()
+    """
+
+    def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
+        pathcache = get_config().pathcache
         self.pathicons = os.path.join(pathcache, "icons")
         self.pathpreview = os.path.join(pathcache, "preview")
         self.pathoutput = None
@@ -194,7 +223,7 @@ class Images(metaclass=Singleton):
         """ Delete the preview files """
         logger.debug("Deleting previews")
         for item in os.listdir(self.pathpreview):
-            if item.startswith(".gui_preview_") and item.endswith(".jpg"):
+            if item.startswith(".gui_training_preview") and item.endswith(".jpg"):
                 fullitem = os.path.join(self.pathpreview, item)
                 logger.debug("Deleting: '%s'", fullitem)
                 os.remove(fullitem)
@@ -210,34 +239,34 @@ class Images(metaclass=Singleton):
     @staticmethod
     def get_images(imgpath):
         """ Get the images stored within the given directory """
-        logger.debug("Getting images: '%s'", imgpath)
+        logger.trace("Getting images: '%s'", imgpath)
         if not os.path.isdir(imgpath):
             logger.debug("Folder does not exist")
             return None
         files = [os.path.join(imgpath, f)
                  for f in os.listdir(imgpath) if f.endswith((".png", ".jpg"))]
-        logger.debug("Image files: %s", files)
+        logger.trace("Image files: %s", files)
         return files
 
     def load_latest_preview(self):
         """ Load the latest preview image for extract and convert """
-        logger.debug("Loading preview image")
+        logger.trace("Loading preview image")
         imagefiles = self.get_images(self.pathoutput)
         if not imagefiles or len(imagefiles) == 1:
             logger.debug("No preview to display")
             self.previewoutput = None
             return
-        # Get penultimate file so we don't accidently
+        # Get penultimate file so we don't accidentally
         # load a file that is being saved
         show_file = sorted(imagefiles, key=os.path.getctime)[-2]
         img = Image.open(show_file)
         img.thumbnail((768, 432))
-        logger.debug("Displaying preview: '%s'", show_file)
+        logger.trace("Displaying preview: '%s'", show_file)
         self.previewoutput = (img, ImageTk.PhotoImage(img))
 
     def load_training_preview(self):
         """ Load the training preview images """
-        logger.debug("Loading Training preview images")
+        logger.trace("Loading Training preview images")
         imagefiles = self.get_images(self.pathpreview)
         modified = None
         if not imagefiles:
@@ -250,7 +279,7 @@ class Images(metaclass=Singleton):
             name = os.path.splitext(name)[0]
             name = name[name.rfind("_") + 1:].title()
             try:
-                logger.debug("Displaying preview: '%s'", img)
+                logger.trace("Displaying preview: '%s'", img)
                 size = self.get_current_size(name)
                 self.previewtrain[name] = [Image.open(img), None, modified]
                 self.resize_image(name, size)
@@ -270,20 +299,20 @@ class Images(metaclass=Singleton):
 
     def get_current_size(self, name):
         """ Return the size of the currently displayed image """
-        logger.debug("Getting size: '%s'", name)
+        logger.trace("Getting size: '%s'", name)
         if not self.previewtrain.get(name, None):
             return None
         img = self.previewtrain[name][1]
         if not img:
             return None
-        logger.debug("Got size: (name: '%s', width: '%s', height: '%s')",
+        logger.trace("Got size: (name: '%s', width: '%s', height: '%s')",
                      name, img.width(), img.height())
         return img.width(), img.height()
 
     def resize_image(self, name, framesize):
         """ Resize the training preview image
             based on the passed in frame size """
-        logger.debug("Resizing image: (name: '%s', framesize: %s", name, framesize)
+        logger.trace("Resizing image: (name: '%s', framesize: %s", name, framesize)
         displayimg = self.previewtrain[name][0]
         if framesize:
             frameratio = float(framesize[0]) / float(framesize[1])
@@ -295,7 +324,7 @@ class Images(metaclass=Singleton):
             else:
                 scale = framesize[1] / float(displayimg.size[1])
                 size = (int(displayimg.size[0] * scale), framesize[1])
-            logger.debug("Scaling: (scale: %s, size: %s", scale, size)
+            logger.trace("Scaling: (scale: %s, size: %s", scale, size)
 
             # Hacky fix to force a reload if it happens to find corrupted
             # data, probably due to reading the image whilst it is partially
@@ -335,7 +364,9 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         """ Bind the menu to the widget's Right Click event """
         button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         logger.debug("Binding '%s' to '%s'", button, self.widget.winfo_class())
-        self.widget.bind(button, lambda event: self.tk_popup(event.x_root, event.y_root, 0))
+        x_offset = int(34 * get_config().scaling_factor)
+        self.widget.bind(button,
+                         lambda event: self.tk_popup(event.x_root + x_offset, event.y_root, 0))
 
     def select_all(self):
         """ Select all for Text or Entry widgets """
@@ -351,16 +382,16 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
 class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ The Console out section of the GUI """
 
-    def __init__(self, parent, debug, tk_vars):
-        logger.debug("Initializing %s: (parent: %s, debug: %s, tk_vars: %s)",
-                     self.__class__.__name__, parent, debug, tk_vars)
+    def __init__(self, parent, debug):
+        logger.debug("Initializing %s: (parent: %s, debug: %s)",
+                     self.__class__.__name__, parent, debug)
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
                   fill=tk.BOTH, expand=True)
         self.console = tk.Text(self)
         rc_menu = ContextMenu(self.console)
         rc_menu.cm_bind()
-        self.console_clear = tk_vars['consoleclear']
+        self.console_clear = get_config().tk_vars['consoleclear']
         self.set_console_clear_var_trace()
         self.debug = debug
         self.build_console()
@@ -395,7 +426,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
             sys.stderr = SysOutRouter(console=self.console, out_type="stderr")
         logger.debug("Redirected console")
 
-    def clear(self, *args):
+    def clear(self, *args):  # pylint: disable=unused-argument
         """ Clear the console output screen """
         logger.debug("Clear console")
         if not self.console_clear.get():
@@ -427,3 +458,146 @@ class SysOutRouter():
     def flush():
         """ If flush is forced, send it to normal terminal """
         sys.__stdout__.flush()
+
+
+class Config():
+    """ Global configuration settings
+
+        Don't call directly. Call get_config()
+    """
+
+    def __init__(self, cli_opts, scaling_factor, pathcache, statusbar, session):
+        logger.debug("Initializing %s: (cli_opts: %s, scaling_factor: %s, pathcache: %s, "
+                     "statusbar: %s, session: %s)", self.__class__.__name__, cli_opts,
+                     scaling_factor, pathcache, statusbar, session)
+        self.cli_opts = cli_opts
+        self.scaling_factor = scaling_factor
+        self.pathcache = pathcache
+        self.statusbar = statusbar
+        self.serializer = JSONSerializer
+        self.tk_vars = self.set_tk_vars()
+        self.command_notebook = None  # set in command.py
+        self.session = session
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def command_tabs(self):
+        """ Return dict of command tab titles with their IDs """
+        return {self.command_notebook.tab(tab_id, "text").lower(): tab_id
+                for tab_id in range(0, self.command_notebook.index("end"))}
+
+    @staticmethod
+    def set_tk_vars():
+        """ TK Variables to be triggered by to indicate
+            what state various parts of the GUI should be in """
+        display = tk.StringVar()
+        display.set(None)
+
+        runningtask = tk.BooleanVar()
+        runningtask.set(False)
+
+        actioncommand = tk.StringVar()
+        actioncommand.set(None)
+
+        generatecommand = tk.StringVar()
+        generatecommand.set(None)
+
+        consoleclear = tk.BooleanVar()
+        consoleclear.set(False)
+
+        refreshgraph = tk.BooleanVar()
+        refreshgraph.set(False)
+
+        updatepreview = tk.BooleanVar()
+        updatepreview.set(False)
+
+        tk_vars = {"display": display,
+                   "runningtask": runningtask,
+                   "action": actioncommand,
+                   "generate": generatecommand,
+                   "consoleclear": consoleclear,
+                   "refreshgraph": refreshgraph,
+                   "updatepreview": updatepreview}
+        logger.debug(tk_vars)
+        return tk_vars
+
+    def load(self, command=None, filename=None):
+        """ Pop up load dialog for a saved config file """
+        logger.debug("Loading config: (command: '%s')", command)
+        if filename:
+            with open(filename, "r") as cfgfile:
+                cfg = self.serializer.unmarshal(cfgfile.read())
+        else:
+            cfgfile = FileHandler("open", "config").retfile
+            if not cfgfile:
+                return
+            cfg = self.serializer.unmarshal(cfgfile.read())
+
+        if not command and len(cfg.keys()) == 1:
+            command = list(cfg.keys())[0]
+
+        opts = self.get_command_options(cfg, command) if command else cfg
+        if not opts:
+            return
+
+        for cmd, opts in opts.items():
+            self.set_command_args(cmd, opts)
+
+        if command:
+            self.command_notebook.select(self.command_tabs[command])
+
+        self.add_to_recent(cfgfile.name, command)
+        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+
+    def get_command_options(self, cfg, command):
+        """ return the saved options for the requested
+            command, if not loading global options """
+        opts = cfg.get(command, None)
+        retval = {command: opts}
+        if not opts:
+            self.tk_vars["consoleclear"].set(True)
+            print("No {} section found in file".format(command))
+            logger.info("No  %s section found in file", command)
+            retval = None
+        logger.debug(retval)
+        return retval
+
+    def set_command_args(self, command, options):
+        """ Pass the saved config items back to the CliOptions """
+        if not options:
+            return
+        for srcopt, srcval in options.items():
+            optvar = self.cli_opts.get_one_option_variable(command, srcopt)
+            if not optvar:
+                continue
+            optvar.set(srcval)
+
+    def save(self, command=None):
+        """ Save the current GUI state to a config file in json format """
+        logger.debug("Saving config: (command: '%s')", command)
+        cfgfile = FileHandler("save", "config").retfile
+        if not cfgfile:
+            return
+        cfg = self.cli_opts.get_option_values(command)
+        cfgfile.write(self.serializer.marshal(cfg))
+        cfgfile.close()
+        self.add_to_recent(cfgfile.name, command)
+        logger.debug("Saved config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+
+    def add_to_recent(self, filename, command):
+        """ Add to recent files """
+        recent_filename = os.path.join(self.pathcache, ".recent.json")
+        logger.debug("Adding to recent files '%s': (%s, %s)", recent_filename, filename, command)
+        with open(recent_filename, "rb") as inp:
+            recent_files = self.serializer.unmarshal(inp.read().decode("utf-8"))
+        logger.debug("Initial recent files: %s", recent_files)
+        filenames = [recent[0] for recent in recent_files]
+        if filename in filenames:
+            idx = filenames.index(filename)
+            del recent_files[idx]
+        recent_files.insert(0, (filename, command))
+        recent_files = recent_files[:20]
+        logger.debug("Final recent files: %s", recent_files)
+        recent_json = self.serializer.marshal(recent_files)
+        with open(recent_filename, "wb") as out:
+            out.write(recent_json.encode("utf-8"))

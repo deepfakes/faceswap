@@ -47,7 +47,7 @@ class Sort():
 
         # Assigning default threshold values based on grouping method
         if (self.args.final_process == "folders"
-                and self.args.min_threshold == -1.0):
+                and self.args.min_threshold < 0.0):
             method = self.args.group_method.lower()
             if method == 'face':
                 self.args.min_threshold = 0.6
@@ -767,9 +767,9 @@ class Sort():
         Normalize by pixel number to offset the effect
         of image size on pixel gradients & variance
         """
-        image = cv2.imread(image_file,cv2.IMREAD_GRAYSCALE)
+        image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
-        score = np.var(blur_map)  / np.sqrt(image.shape[0] * image.shape[1])
+        score = np.var(blur_map) / np.sqrt(image.shape[0] * image.shape[1])
         return score
 
     @staticmethod

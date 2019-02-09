@@ -44,9 +44,15 @@ class MultiProcessingLogger(logging.Logger):
 
 
 class FaceswapFormatter(logging.Formatter):
-    """ Override formatter to strip newlines and multiple spaces from logger """
+    """ Override formatter to strip newlines and multiple spaces from logger
+        Messages that begin with "R|" should be handled as is
+    """
     def format(self, record):
-        record.msg = re.sub(" +", " ", record.msg.replace("\n", "\\n").replace("\r", "\\r"))
+        if record.msg.startswith("R|"):
+            record.msg = record.msg[2:]
+            record.strip_spaces = False
+        elif record.strip_spaces:
+            record.msg = re.sub(" +", " ", record.msg.replace("\n", "\\n").replace("\r", "\\r"))
         return super().format(record)
 
 
@@ -92,7 +98,7 @@ def file_handler(loglevel, logfile, log_format, command):
         filename = logfile
     else:
         filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
-        # Windows has issues sharing the log file with subprocesses, so log GUI seperately
+        # Windows has issues sharing the log file with subprocesses, so log GUI separately
         filename += "_gui.log" if command == "gui" else ".log"
 
     should_rotate = os.path.isfile(filename)
@@ -151,6 +157,18 @@ def crash_log():
         outfile.write(sysinfo.full_info())
     return filename
 
+
+# Add a flag to logging.LogRecord to not strip formatting from particular records
+old_factory = logging.getLogRecordFactory()
+
+
+def faceswap_logrecord(*args, **kwargs):
+    record = old_factory(*args, **kwargs)
+    record.strip_spaces = True
+    return record
+
+
+logging.setLogRecordFactory(faceswap_logrecord)
 
 # Set logger class to custom logger
 logging.setLoggerClass(MultiProcessingLogger)

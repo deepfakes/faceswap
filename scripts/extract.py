@@ -54,7 +54,7 @@ class Extract():
                        self.verify_output)
 
     def threaded_io(self, task, io_args=None):
-        """ Load images in a background thread """
+        """ Perform I/O task in a background thread """
         logger.debug("Threading task: (Task: '%s')", task)
         io_args = tuple() if io_args is None else (io_args, )
         if task == "load":
@@ -211,7 +211,7 @@ class Extract():
 
         self.threaded_io("reload", detected_faces)
 
-    def align_face(self, faces, align_eyes, size, filename, padding=48):
+    def align_face(self, faces, align_eyes, size, filename):
         """ Align the detected face and add the destination file path """
         final_faces = list()
         image = faces["image"]
@@ -221,11 +221,7 @@ class Extract():
             detected_face = DetectedFace()
             detected_face.from_dlib_rect(face, image)
             detected_face.landmarksXY = landmarks[idx]
-            detected_face.frame_dims = image.shape[:2]
-            detected_face.load_aligned(image,
-                                       size=size,
-                                       padding=padding,
-                                       align_eyes=align_eyes)
+            detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
@@ -262,7 +258,7 @@ class Plugins():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_parallel_processing(self):
-        """ Set whether to run detect and align together or seperately """
+        """ Set whether to run detect and align together or separately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
         gpu_stats = GPUStats()
@@ -356,11 +352,6 @@ class Plugins():
         kwargs = {"in_queue": queue_manager.get_queue("load"),
                   "out_queue": out_queue}
 
-        if self.args.detector == "mtcnn":
-            mtcnn_kwargs = self.detector.validate_kwargs(
-                self.get_mtcnn_kwargs())
-            kwargs["mtcnn_kwargs"] = mtcnn_kwargs
-
         mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
         self.process_detect = mp_func(self.detector.run, **kwargs)
 
@@ -383,14 +374,6 @@ class Plugins():
             logger.info("Waiting for Detector... Time out in %s minutes", mins)
 
         logger.debug("Launched Detector")
-
-    def get_mtcnn_kwargs(self):
-        """ Add the mtcnn arguments into a kwargs dictionary """
-        mtcnn_threshold = [float(thr.strip())
-                           for thr in self.args.mtcnn_threshold]
-        return {"minsize": self.args.mtcnn_minsize,
-                "threshold": mtcnn_threshold,
-                "factor": self.args.mtcnn_scalefactor}
 
     def detect_faces(self, extract_pass="detect"):
         """ Detect faces from in an image """

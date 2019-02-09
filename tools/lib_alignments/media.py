@@ -53,7 +53,7 @@ class AlignmentData(Alignments):
         self.set_destination_format(destination_format)
 
     def set_destination_format(self, destination_format):
-        """ Standardise the destination format to the correct extension """
+        """ Standardize the destination format to the correct extension """
         extensions = {".json": "json",
                       ".p": "pickle",
                       ".yml": "yaml",
@@ -274,12 +274,11 @@ class Frames(MediaLoader):
 class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
-    def __init__(self, frames, alignments, size=256,
-                 padding=48, align_eyes=False):
+    def __init__(self, frames, alignments, size=256, align_eyes=False):
         logger.trace("Initializing %s: (size: %s, padding: %s, align_eyes: %s)",
-                     self.__class__.__name__, size, padding, align_eyes)
+                     self.__class__.__name__, size, align_eyes)
         self.size = size
-        self.padding = padding
+        self.padding = int(size * 0.1875)
         self.align_eyes = align_eyes
         self.alignments = alignments
         self.frames = frames
@@ -309,10 +308,7 @@ class ExtractedFaces():
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        face.load_aligned(image,
-                          size=self.size,
-                          padding=self.padding,
-                          align_eyes=self.align_eyes)
+        face.load_aligned(image, size=self.size, align_eyes=self.align_eyes)
         return face
 
     def get_faces_in_frame(self, frame, update=False):

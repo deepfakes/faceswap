@@ -8,7 +8,6 @@ import warnings
 from hashlib import sha1
 from pathlib import Path
 from re import finditer
-from time import time
 
 import cv2
 import numpy as np
@@ -16,7 +15,6 @@ import numpy as np
 import dlib
 
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator
 from lib.logger import get_loglevel
 
 
@@ -62,7 +60,7 @@ def get_image_paths(directory):
 
 
 def hash_image_file(filename):
-    """ Return the filename with it's sha1 hash """
+    """ Return an image file's sha1 hash """
     img = cv2.imread(filename)  # pylint: disable=no-member
     img_hash = sha1(img).hexdigest()
     logger.trace("filename: '%s', hash: %s", filename, img_hash)
@@ -107,33 +105,12 @@ def set_system_verbosity(loglevel):
     logger.debug("System Verbosity level: %s", loglevel)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
-        for warncat in (FutureWarning, DeprecationWarning):
+        for warncat in (FutureWarning, DeprecationWarning, UserWarning):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
-def add_alpha_channel(image, intensity=100):
-    """ Add an alpha channel to an image
-
-        intensity: The opacity of the alpha channel between 0 and 100
-                   100 = transparent,
-                   0 = solid  """
-    logger.trace("Adding alpha channel: intensity: %s", intensity)
-    assert 0 <= intensity <= 100, "Invalid intensity supplied"
-    intensity = (255.0 / 100.0) * intensity
-
-    d_type = image.dtype
-    image = image.astype("float32")
-
-    ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
-    ch_a = np.ones(ch_b.shape, dtype="float32") * intensity
-
-    image_bgra = cv2.merge(  # pylint: disable=no-member
-        (ch_b, ch_g, ch_r, ch_a))
-    logger.trace("Added alpha channel", intensity)
-    return image_bgra.astype(d_type)
-
-
 def rotate_landmarks(face, rotation_matrix):
+    # pylint: disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
         Pass in a DetectedFace object, Alignments dict or DLib rectangle"""
@@ -221,80 +198,6 @@ def camel_case_split(identifier):
         ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)",
         identifier)
     return [m.group(0) for m in matches]
-
-
-class Timelapse:
-    """ Time lapse function for training """
-    @classmethod
-    def create_timelapse(cls, input_dir_a, input_dir_b, output_dir, trainer):
-        """ Create the time lapse """
-        if input_dir_a is None and input_dir_b is None and output_dir is None:
-            return None
-
-        if input_dir_a is None or input_dir_b is None:
-            raise ValueError("To enable the timelapse, you have to supply "
-                             "all the parameters (--timelapse-input-A and "
-                             "--timelapse-input-B).")
-
-        if output_dir is None:
-            output_dir = get_folder(os.path.join(trainer.model.model_dir,
-                                                 "timelapse"))
-
-        return Timelapse(input_dir_a, input_dir_b, output_dir, trainer)
-
-    def __init__(self, input_dir_a, input_dir_b, output, trainer):
-        self.output_dir = output
-        self.trainer = trainer
-
-        if not os.path.isdir(self.output_dir):
-            logger.error("'%s' does not exist", self.output_dir)
-            exit(1)
-
-        self.files_a = self.read_input_images(input_dir_a)
-        self.files_b = self.read_input_images(input_dir_b)
-
-        btchsz = min(len(self.files_a), len(self.files_b))
-
-        self.images_a = self.get_image_data(self.files_a, btchsz)
-        self.images_b = self.get_image_data(self.files_b, btchsz)
-
-    @staticmethod
-    def read_input_images(input_dir):
-        """ Get the image paths """
-        if not os.path.isdir(input_dir):
-            logger.error("'%s' does not exist", input_dir)
-            exit(1)
-
-        if not os.listdir(input_dir):
-            logger.error("'%s' contains no images", input_dir)
-            exit(1)
-
-        return get_image_paths(input_dir)
-
-    def get_image_data(self, input_images, batch_size):
-        """ Get training images """
-        random_transform_args = {
-            'rotation_range': 0,
-            'zoom_range': 0,
-            'shift_range': 0,
-            'random_flip': 0
-        }
-
-        zoom = 1
-        if hasattr(self.trainer.model, 'IMAGE_SHAPE'):
-            zoom = self.trainer.model.IMAGE_SHAPE[0] // 64
-
-        generator = TrainingDataGenerator(random_transform_args, 160, zoom)
-        batch = generator.minibatchAB(input_images, batch_size,
-                                      doShuffle=False)
-
-        return next(batch)[2]
-
-    def work(self):
-        """ Write out timelapse image """
-        image = self.trainer.show_sample(self.images_a, self.images_b)
-        cv2.imwrite(os.path.join(self.output_dir,  # pylint: disable=no-member
-                                 str(int(time())) + ".png"), image)
 
 
 def safe_shutdown():

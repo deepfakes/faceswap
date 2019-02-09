@@ -294,7 +294,7 @@ class Interface():
     def get_state_color(self):
         """ Return a color based on current state
             white - View Mode
-            yellow - Edit Mide
+            yellow - Edit Mode
             red - Unsaved alignments """
         color = (255, 255, 255)
         if self.state["edit"]["updated"]:
@@ -446,7 +446,7 @@ class Manual():
         legacy.process()
 
         logger.info("[MANUAL PROCESSING]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments,
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256,
                                               align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
@@ -510,8 +510,8 @@ class Manual():
         MS Windows doesn't appear to read the window state property
         properly, so we check for a negative key press.
 
-        Conda (tested on Windows) doesn't sppear to read the window
-        state property or negative key press properly, so we arbitarily
+        Conda (tested on Windows) doesn't appear to read the window
+        state property or negative key press properly, so we arbitrarily
         use another property """
         # pylint: disable=no-member
         logger.trace("Commencing closed window check")
@@ -790,7 +790,7 @@ class MouseHandler():
             a_event = align_process.event
             align_process.start()
 
-            # Wait for Aligner to take init
+            # Wait for Aligner to initialize
             # The first ever load of the model for FAN has reportedly taken
             # up to 3-4 minutes, hence high timeout.
             a_event.wait(300)
@@ -977,7 +977,8 @@ class MouseHandler():
         self.interface.state["edit"]["updated"] = True
         self.interface.state["edit"]["update_faces"] = True
 
-    def extracted_to_alignment(self, extract_data):
+    @staticmethod
+    def extracted_to_alignment(extract_data):
         """ Convert Extracted Tuple to Alignments data """
         alignment = dict()
         d_rect, landmarks = extract_data
@@ -985,6 +986,5 @@ class MouseHandler():
         alignment["w"] = d_rect.right() - d_rect.left()
         alignment["y"] = d_rect.top()
         alignment["h"] = d_rect.bottom() - d_rect.top()
-        alignment["frame_dims"] = self.media["image"].shape[:2]
         alignment["landmarksXY"] = landmarks
         return alignment

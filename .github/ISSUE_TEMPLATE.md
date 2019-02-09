@@ -1,5 +1,7 @@
 **Note: Please only report bugs in this repository. Just because you are getting an error message does not automatically mean you have discovered a bug. If you don't have a lot of experience with this type of project, or if you need for setup help and other issues in using the faceswap tool, please refer to the [faceswap-playground](https://github.com/deepfakes/faceswap-playground/issues) instead. The faceswap-playground is also an excellent place to ask questions and submit feedback.**
 
+**Please always attach your generated crash_report.log to any bug report**
+
 ## Expected behavior
 
 *Describe, in some detail, what you are trying to do and what the output is that you expect from the program.*

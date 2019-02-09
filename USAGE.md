@@ -34,6 +34,8 @@ You can see the full list of arguments for extracting via help flag. i.e.
 python faceswap.py extract -h
 ```
 
+Some of the plugins have configurable options. You can find the config options in: `<faceswap_folder>\plugins\extract\config.ini`. Extract needs to have been run at least once to generate the config file
+
 ## TRAIN
 The training process will take the longest, especially on CPU. We specify the folders where the two faces are, and where we will save our training model. It will start hammering the training data once you run the command. I personally really like to go by the preview and quit the processing once I'm happy with the results.
 
@@ -50,6 +52,9 @@ You can see the full list of arguments for training via help flag. i.e.
 ```bash
 python faceswap.py train -h
 ```
+
+Some of the plugins have configurable options. You can find the config options in: `<faceswap_folder>\plugins\traom\config.ini`. Train needs to have been run at least once to generate the config file
+
 
 ## CONVERT
 Now that we're happy with our trained model, we can convert our video. How does it work? Similarly to the extraction script, actually! The conversion script basically detects a face in a picture using the same algorithm, quickly crops the image to the right size, runs our bot on this cropped image of the face it has found, and then (crudely) pastes the processed face back into the picture.
@@ -86,7 +91,7 @@ python tools.py effmpeg -h
 ```
 
 ## Extracting video frames with FFMPEG
-Alternatively you can split a video into seperate frames using [ffmpeg](https://www.ffmpeg.org) for instance. Below is an example command to process a video to seperate frames.
+Alternatively you can split a video into separate frames using [ffmpeg](https://www.ffmpeg.org) for instance. Below is an example command to process a video to separate frames.
 
 ```bash
 ffmpeg -i /path/to/my/video.mp4 /path/to/output/video-frame-%d.png
