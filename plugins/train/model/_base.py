@@ -101,9 +101,18 @@ class ModelBase():
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
         self.training_opts["mask_type"] = self.config.get("mask_type", None)
-        self.training_opts["coverage_ratio"] = self.config.get("coverage", 62.5) / 100
+        self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
         self.training_opts["preview_images"] = 14
         logger.debug("Set training data: %s", self.training_opts)
+
+    def calculate_coverage_ratio(self):
+        """ Coverage must be a ratio, leading to a cropped shape divisible by 2 """
+        coverage_ratio = self.config.get("coverage", 62.5) / 100
+        logger.debug("Requested coverage_ratio: %s", coverage_ratio)
+        cropped_size = (self.state.training_size * coverage_ratio) // 2 * 2
+        coverage_ratio = cropped_size / self.state.training_size
+        logger.debug("Final coverage_ratio: %s", coverage_ratio)
+        return coverage_ratio
 
     def build(self):
         """ Build the model. Override for custom build methods """
