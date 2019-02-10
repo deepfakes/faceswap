@@ -33,6 +33,7 @@ class Convert():
         image = image.astype('float32')
         image_size = (image.shape[1], image.shape[0])
         coverage = int(self.training_coverage_ratio * self.training_size)
+        coverage = coverage // 2 * 2 # this performs a floor rounding to the next multiple of 2
         padding = (self.training_size - coverage) // 2
         logger.trace("coverage: %s, padding: %s", coverage, padding)
 

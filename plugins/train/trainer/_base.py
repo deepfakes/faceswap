@@ -368,6 +368,7 @@ class Samples():
         images = [faces] + predictions
         full_size = full.shape[1]
         target_size = int(full_size * self.coverage_ratio)
+        target_size = target_size // 2 * 2  # this performs a floor rounding to the next multiple of 2
         if target_size != full_size:
             frame = self.frame_overlay(full, target_size, (0, 0, 255))
 
