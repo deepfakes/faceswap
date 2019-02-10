@@ -80,7 +80,7 @@ class Detect(Detector):
                                             output=None,
                                             scales=scales)
             if not all(faces for faces in processed) and self.rotation != [0]:
-                processed = self.process_rotations(detect_images, processed)
+                processed = self.process_rotations(detect_images, processed, scales)
             for idx, faces in enumerate(processed):
                 filename = filenames[idx]
                 for b_idx, item in enumerate(batch):
@@ -137,7 +137,8 @@ class Detect(Detector):
                        indexes=None, rotation_matrix=None, output=None, scales=None):
         """ Process the output images """
         logger.trace("Processing Output: (batch_detected: %s, indexes: %s, rotation_matrix: %s, "
-                     "output: %s", batch_detected, indexes, rotation_matrix, output)
+                     "output: %s, scales: %s",
+                     batch_detected, indexes, rotation_matrix, output, scales)
         output = output if output else list()
         for idx, faces in enumerate(batch_detected):
             detected_faces = list()
@@ -163,7 +164,7 @@ class Detect(Detector):
         logger.trace("Processed Output: %s", output)
         return output
 
-    def process_rotations(self, detect_images, processed):
+    def process_rotations(self, detect_images, processed, scales):
         """ Rotate frames missing faces until face is found """
         logger.trace("Processing Rotations")
         for angle in self.rotation:
@@ -182,7 +183,8 @@ class Detect(Detector):
             processed = self.process_output(batch_detected,
                                             indexes=indexes,
                                             rotation_matrix=rotmat,
-                                            output=processed)
+                                            output=processed,
+                                            scales=scales)
         logger.trace("Processed Rotations")
         return processed
 
