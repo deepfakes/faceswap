@@ -97,12 +97,12 @@ class Convert():
     @staticmethod
     def smooth_box(old_face, new_face):
         """ Perform gaussian blur on the edges of the output rect """
-		height = new_face.shape[0]
+        height = new_face.shape[0]
         crop = slice(0, height)
-		erode = slice(height // 15, -height // 15)
-		sigma = height / 16 # 10 for the default 160 size
-		window = int(np.ceil(sigma * 3))
-		window = window + 1 if window % 2 == 0 else window
+        erode = slice(height // 15, -height // 15)
+        sigma = height / 16 # 10 for the default 160 size
+        window = int(np.ceil(sigma * 3.0))
+        window = window + 1 if window % 2 == 0 else window
         mask = np.zeros_like(new_face)
         mask[erode, erode] = 1.0
         mask = cv2.GaussianBlur(mask,  # pylint: disable=no-member
