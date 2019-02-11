@@ -467,6 +467,7 @@ class State():
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
+        self.name = model_name
         self.iterations = 0
         self.session_iterations = 0
         self.training_size = training_image_size
@@ -538,6 +539,7 @@ class State():
         try:
             with open(self.filename, "rb") as inp:
                 state = self.serializer.unmarshal(inp.read().decode("utf-8"))
+                self.name = state.get("name", self.name)
                 self.sessions = state.get("sessions", dict())
                 self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
                 self.iterations = state.get("iterations", 0)
@@ -559,7 +561,8 @@ class State():
             self.backup()
         try:
             with open(self.filename, "wb") as out:
-                state = {"sessions": self.sessions,
+                state = {"name": self.name,
+                         "sessions": self.sessions,
                          "lowest_avg_loss": self.lowest_avg_loss,
                          "iterations": self.iterations,
                          "inputs": self.inputs,
