@@ -97,15 +97,17 @@ class Convert():
     @staticmethod
     def smooth_box(old_face, new_face):
         """ Perform gaussian blur on the edges of the output rect """
-        width, height, _ = new_face.shape
         crop = slice(0, width)
+		erode = slice(new_face.shape[0] // 15, -new_face.shape[0] // 15)
+		sigma = new_face.shape[0] / 16 # 10 for the default 160 size
+		window = int(np.ceil(sigma * 3))
+		window = window + 1 if window % 2 == 0 else window
         mask = np.zeros_like(new_face)
-        mask[height // 15:-height // 15, width // 15:-width // 15, :] = 255
+        mask[erode, erode] = 1.0
         mask = cv2.GaussianBlur(mask,  # pylint: disable=no-member
-                                (15, 15),
-                                10)
-        new_face[crop, crop] = (mask / 255 * new_face +
-                                (1 - mask / 255) * old_face)
+                                (window, window),
+                                sigma)
+        new_face[crop, crop] = (mask * new_face + (1.0 - mask ) * old_face)
 
     def get_image_mask(self, detected_face, image_size):
         """ Get the image mask """
@@ -146,7 +148,6 @@ class Convert():
 
     def apply_fixes(self, frame, new_image, image_mask, image_size):
         """ Apply fixes """
-        masked = new_image  # * image_mask
 
         if self.args.draw_transparent:
             alpha = np.full((image_size[1], image_size[0], 1), 255.0, dtype='float32')
@@ -155,31 +156,31 @@ class Convert():
             frame = np.concatenate(frame, alpha, axis=2)
 
         if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
-            np.clip(masked, 0.0, 255.0, out=masked)
+            np.clip(new_image, 0.0, 255.0, out=new_image)
             if self.args.sharpen_image == "box_filter":
                 kernel = np.ones((3, 3)) * (-1)
                 kernel[1, 1] = 9
-                masked = cv2.filter2D(masked, -1, kernel)  # pylint: disable=no-member
+                new_image = cv2.filter2D(new_image, -1, kernel)  # pylint: disable=no-member
             elif self.args.sharpen_image == "gaussian_filter":
-                blur = cv2.GaussianBlur(masked, (0, 0), 3.0)  # pylint: disable=no-member
-                masked = cv2.addWeighted(masked,  # pylint: disable=no-member
+                blur = cv2.GaussianBlur(new_image, (0, 0), 3.0)  # pylint: disable=no-member
+                new_image = cv2.addWeighted(new_image,  # pylint: disable=no-member
                                          1.5,
                                          blur,
                                          -0.5,
                                          0,
-                                         masked)
+                                         new_image)
 
         if self.args.avg_color_adjust:
             for _ in [0, 1]:
-                np.clip(masked, 0.0, 255.0, out=masked)
-                diff = frame - masked
+                np.clip(new_image, 0.0, 255.0, out=new_image)
+                diff = frame - new_image
                 avg_diff = np.sum(diff * image_mask, axis=(0, 1))
                 adjustment = avg_diff / np.sum(image_mask, axis=(0, 1))
-                masked = masked + adjustment
+                new_image = new_image + adjustment
 
         if self.args.match_histogram:
-            np.clip(masked, 0.0, 255.0, out=masked)
-            masked = self.color_hist_match(masked, frame, image_mask)
+            np.clip(new_image, 0.0, 255.0, out=new_image)
+            new_image = self.color_hist_match(new_image, frame, image_mask)
 
         if self.args.seamless_clone and not self.args.draw_transparent:
             h, w, _ = frame.shape
@@ -198,7 +199,7 @@ class Convert():
             x_center = int(np.rint(np.average(x_indices) + w)
             '''
 
-            insertion = np.rint(masked[y_crop, x_crop, :]).astype('uint8')
+            insertion = np.rint(new_image[y_crop, x_crop, :]).astype('uint8')
             insertion_mask = image_mask[y_crop, x_crop, :]
             insertion_mask[insertion_mask != 0] = 255
             insertion_mask = insertion_mask.astype('uint8')
@@ -210,10 +211,10 @@ class Convert():
                                         insertion_mask,
                                         (x_center, y_center),
                                         cv2.NORMAL_CLONE)  # pylint: disable=no-member
-            blended = blended[h:-h, w:-w, :]
+            blended = blended[h:-h, w:-w]
 
         else:
-            foreground = masked * image_mask
+            foreground = new_image * image_mask
             background = frame * (1.0 - image_mask)
             blended = foreground + background
 
