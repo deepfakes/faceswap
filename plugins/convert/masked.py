@@ -97,7 +97,7 @@ class Convert():
     @staticmethod
     def smooth_box(old_face, new_face):
         """ Perform gaussian blur on the edges of the output rect """
-        crop = slice(0, width)
+        crop = slice(0, new_face.shape[0])
 		erode = slice(new_face.shape[0] // 15, -new_face.shape[0] // 15)
 		sigma = new_face.shape[0] / 16 # 10 for the default 160 size
 		window = int(np.ceil(sigma * 3))
