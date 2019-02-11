@@ -576,13 +576,12 @@ class ConvertArgs(ExtractConvertArgs):
             "opts": ("-M", "--mask-type"),
             "type": str.lower,
             "dest": "mask_type",
-            "choices": ["rect",
-                        "ellipse",
+            "choices": ["ellipse",
                         "smoothed",
                         "facehull",
-                        "facehull_rect",
                         "dfl",
-                        "cnn"],
+                        #  "cnn",  Removed until implemented
+                        "none"],
             "default": "facehull_rect",
             "help": "R|Mask to use to replace faces."
                     "\nrect: Rectangle around face."
@@ -623,8 +622,8 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-sh", "--sharpen"),
                               "type": str.lower,
                               "dest": "sharpen_image",
-                              "choices": ["box_filter", "gaussian_filter"],
-                              "default": None,
+                              "choices": ["box_filter", "gaussian_filter", "none"],
+                              "default": "none",
                               "help": "Sharpen the masked facial region of "
                                       "the converted images. Choice of filter "
                                       "to use in sharpening process -- box"

@@ -136,7 +136,7 @@ class Convert():
             image_mask = np.concatenate(image_mask, alpha, axis=2)
             frame = np.concatenate(frame, alpha, axis=2)
 
-        if self.args.sharpen_image is not None:
+        if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
             np.clip(masked, 0.0, 255.0, out=masked)
             if self.args.sharpen_image == "box_filter":
                 kernel = np.ones((3, 3)) * (-1)
@@ -294,6 +294,10 @@ class Mask():
         return mask
 
     def rect(self, **kwargs):
+        """ Namespace for rect mask. This is the same as 'none' in the cli """
+        return self.none(**kwargs)
+
+    def none(self, **kwargs):
         """ Rect Mask """
         logger.trace("Getting mask")
         interpolator = kwargs["interpolators"][1]
@@ -315,6 +319,7 @@ class Mask():
         logger.trace("Getting mask")
         dummy = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
         mask = dfl_full(kwargs["landmarks"], dummy, channels=3)
+        mask = self.intersect_rect(mask, **kwargs)
         return mask
 
     def facehull(self, **kwargs):
@@ -327,14 +332,7 @@ class Mask():
                            hull,
                            (1.0, 1.0, 1.0),
                            lineType=cv2.LINE_AA)  # pylint: disable=no-member
-        return mask
-
-    def facehull_rect(self, **kwargs):
-        """ Facehull Rect Mask """
-        logger.trace("Getting mask")
-        mask = self.rect(**kwargs)
-        hull_mask = self.facehull(**kwargs)
-        mask *= hull_mask
+        mask = self.intersect_rect(mask, **kwargs)
         return mask
 
     def ellipse(self, **kwargs):
@@ -347,6 +345,13 @@ class Mask():
                     box=ell,
                     color=(1.0, 1.0, 1.0),
                     thickness=-1)
+        return mask
+
+    def intersect_rect(self, hull_mask, **kwargs):
+        """ Intersect the given hull mask with the roi """
+        logger.trace("Intersecting rect")
+        mask = self.rect(**kwargs)
+        mask *= hull_mask
         return mask
 
     @staticmethod
