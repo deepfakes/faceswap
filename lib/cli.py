@@ -577,21 +577,17 @@ class ConvertArgs(ExtractConvertArgs):
             "type": str.lower,
             "dest": "mask_type",
             "choices": ["ellipse",
-                        "smoothed",
                         "facehull",
                         "dfl",
                         #  "cnn",  Removed until implemented
                         "none"],
             "default": "facehull_rect",
             "help": "R|Mask to use to replace faces."
-                    "\nrect: Rectangle around face."
                     "\nellipse: Oval around face."
-                    "\nsmoothed: Rectangle around face with smoothing."
                     "\nfacehull: Face cutout based on landmarks."
-                    "\nfacehull_rect: Rectangle around faces with facehull"
-                    "\n\tbetween the edges of the face and the background."
                     "\ndfl: A Face Hull mask from DeepFaceLabs."
-                    "\ncnn: Not yet implemented"})
+                    #  "\ncnn: Not yet implemented"  Removed until implemented
+                    "\nnone: No mask. Can still use blur and erode on the edges of the swap box."})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
                               "action": Slider,
@@ -672,6 +668,13 @@ class ConvertArgs(ExtractConvertArgs):
                                       " in the swapped reconstruction to "
                                       "equal the mean of the masked area in "
                                       "the orginal image"})
+        argument_list.append({"opts": ("-sb", "--smooth-box"),
+                              "action": "store_true",
+                              "dest": "smooth_box",
+                              "default": False,
+                              "help": "Perform a Gaussian blur on the edges of the face box "
+                                      "received from the model. Helps reduce pronounced edges "
+                                      "of the swap area"})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",

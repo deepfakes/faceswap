@@ -56,6 +56,7 @@ class Convert():
         logger.trace("coverage: %s", coverage)
         src_face = detected_face.aligned_face
         coverage_face = src_face[self.crop, self.crop]
+        old_face = coverage_face.copy()
         coverage_face = cv2.resize(coverage_face,  # pylint: disable=no-member
                                    (self.input_size, self.input_size),
                                    interpolation=cv2.INTER_AREA)  # pylint: disable=no-member
@@ -77,6 +78,10 @@ class Convert():
                               (coverage, coverage),
                               interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
         np.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
+
+        if self.args.smooth_box:
+            self.smooth_box(old_face, new_face)
+
         src_face[self.crop, self.crop] = new_face
         background = image.copy()
         interpolator = detected_face.adjusted_interpolators[1]
@@ -88,6 +93,19 @@ class Convert():
             flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
             borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         return new_image
+
+    @staticmethod
+    def smooth_box(old_face, new_face):
+        """ Perform gaussian blur on the edges of the output rect """
+        width, height, _ = new_face.shape
+        crop = slice(0, width)
+        mask = np.zeros_like(new_face)
+        mask[height // 15:-height // 15, width // 15:-width // 15, :] = 255
+        mask = cv2.GaussianBlur(mask,  # pylint: disable=no-member
+                                (15, 15),
+                                10)
+        new_face[crop, crop] = (mask / 255 * new_face +
+                                (1 - mask / 255) * old_face)
 
     def get_image_mask(self, detected_face, image_size):
         """ Get the image mask """
