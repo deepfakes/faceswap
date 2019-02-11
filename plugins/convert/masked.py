@@ -291,26 +291,6 @@ class Mask():
         logger.info("cnn not yet implemented, using facehull instead")
         return self.facehull(**kwargs)
 
-    def smoothed(self, **kwargs):
-        """ Smoothed Mask """
-        logger.trace("Getting mask")
-        interpolator = kwargs["interpolators"][1]
-        ones = np.zeros((self.training_size, self.training_size, 3), dtype='float32')
-        # area = self.padding + (self.training_size - 2 * self.padding) // 15
-        # central_core = slice(area, -area)
-        ones[self.crop, self.crop] = 1.0
-        ones = cv2.GaussianBlur(ones, (25, 25), 10)  # pylint: disable=no-member
-
-        mask = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
-        cv2.warpAffine(ones,  # pylint: disable=no-member
-                       kwargs["matrix"],
-                       kwargs["image_size"],
-                       mask,
-                       flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
-                       borderMode=cv2.BORDER_CONSTANT,  # pylint: disable=no-member
-                       borderValue=0.0)
-        return mask
-
     def rect(self, **kwargs):
         """ Namespace for rect mask. This is the same as 'none' in the cli """
         return self.none(**kwargs)
