@@ -246,17 +246,12 @@ class SessionsSummary():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def iterations(self):
-        """ Return session iterations sizes """
-        return {int(sess_id): sess["iterations"]
-                for sess_id, sess in self.session.state["sessions"].items()}
-
-    @property
     def time_stats(self):
         """ Return session time stats """
         ts_data = self.session.tb_logs.get_timestamps()
         time_stats = {sess_id: {"start_time": min(timestamps),
-                                "end_time": max(timestamps)}
+                                "end_time": max(timestamps),
+                                "iterations": len(timestamps)}
                       for sess_id, timestamps in ts_data.items()}
         return time_stats
 
@@ -267,14 +262,13 @@ class SessionsSummary():
         for sess_idx, ts_data in self.time_stats.items():
             elapsed = ts_data["end_time"] - ts_data["start_time"]
             batchsize = self.session.total_batchsize[sess_idx]
-            iterations = self.iterations[sess_idx]
             compiled.append({"session": sess_idx,
                              "start": ts_data["start_time"],
                              "end": ts_data["end_time"],
                              "elapsed": elapsed,
-                             "rate": (batchsize * iterations) / elapsed,
+                             "rate": (batchsize * ts_data["iterations"]) / elapsed,
                              "batch": batchsize,
-                             "iterations": iterations})
+                             "iterations": ts_data["iterations"]})
         return compiled
 
     def compile_stats(self):
