@@ -382,7 +382,7 @@ class Calculations():
                 if self.iterations == 0:
                     raw = {lossname: list() for lossname in raw.keys()}
                 else:
-                    raw = {lossname: loss[:self.iterations] for lossname, loss in raw}
+                    raw = {lossname: loss[:self.iterations] for lossname, loss in raw.items()}
 
         else:  # Rate calulation
             data = self.calc_rate_total() if self.is_totals else self.calc_rate()
