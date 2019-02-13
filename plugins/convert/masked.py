@@ -124,7 +124,8 @@ class Convert():
 
         if self.args.blur_size != 0:
             blur_size = self.set_blur_size(mask)
-            mask = cv2.blur(mask, (blur_size, blur_size))  # pylint: disable=no-member
+            for _ in [1,2,3,4]: # approximate Gaussian blur
+                mask = cv2.blur(mask, (blur_size, blur_size))  # pylint: disable=no-member
 
         return np.clip(mask, 0.0, 1.0, out=mask)
 
@@ -141,7 +142,7 @@ class Convert():
 
     def set_blur_size(self, mask):
         """ Set the blur size to absolute or percentage """
-        blur_ratio = self.args.blur_size / 100
+        blur_ratio = self.args.blur_size / 100 / 1.6
         mask_radius = np.sqrt(np.sum(mask)) / 2
         blur_size = int(max(1, blur_ratio * mask_radius))
         logger.trace("blur_size: %s", blur_size)
@@ -223,19 +224,15 @@ class Convert():
 
         return np.rint(blended).astype('uint8')
 
-    def color_hist_match(self, new, frame, image_mask):
-        for channel in [0, 1, 2]:
-            new[:, :, channel] = self.hist_match(new[:, :, channel],
-                                                 frame[:, :, channel],
-                                                 image_mask[:, :, channel])
-        # source = np.stack([self.hist_match(source[:,:,c], target[:,:,c],image_mask[:,:,c])
-        #                      for c in [0,1,2]],
-        #                     axis=2)
+    def color_hist_match(self, new, frame, mask):
+        for c in [0, 1, 2]:
+            new[:,:,c] = self.hist_match(new[:,:,c], frame[:,:,c], mask[:,:,c])
+            
         return new
 
-    def hist_match(self, new, frame, image_mask):
+    def hist_match(self, new, frame, mask):
 
-        mask_indices = np.nonzero(image_mask)
+        mask_indices = np.nonzero(mask)
         if len(mask_indices[0]) == 0:
             return new
 
@@ -252,9 +249,9 @@ class Convert():
 
         '''
         bins = np.arange(256)
-        template_CDF, _ = np.histogram(m_frame, bins=bins, density=True)
-        flat_new_image = np.interp(m_source.ravel(), bins[:-1], template_CDF) * 255.0
-        return flat_new_image.reshape(m_source.shape) * 255.0
+        orig_CDF, _ = np.histogram(m_frame, bins=bins, density=True)
+        flat_new_image = np.interp(m_new, bins[:-1], orig_CDF) * 255.0
+        new.put(mask_indices, flat_new_image)
         '''
 
         return new
