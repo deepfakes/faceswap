@@ -59,6 +59,7 @@ class FaceswapGui(tk.Tk):
         """ Build the GUI """
         logger.debug("Building GUI")
         self.title("Faceswap.py")
+        self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
         self.configure(menu=MainMenuBar(self))
 
         topcontainer, bottomcontainer = self.add_containers()

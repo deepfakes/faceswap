@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .tooltip import Tooltip
-from .utils import get_config, ContextMenu, set_slider_rounding
+from .utils import get_config, get_images, ContextMenu, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 POPUP = dict()
@@ -32,6 +32,8 @@ class ConfigurePlugins(tk.Toplevel):
         super().__init__()
         name, self.config = config
         self.title("{} Plugins".format(name.title()))
+        self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
+
         self.set_geometry(root)
 
         self.page_frame = ttk.Frame(self)

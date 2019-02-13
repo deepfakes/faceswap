@@ -283,6 +283,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                                 self.session.modelname,
                                 self.selected_id.get())
         toplevel.title(self.data_popup_title())
+        toplevel.tk.call('wm', 'iconphoto', toplevel._w, get_images().icons["favicon"])
         position = self.data_popup_get_position()
         height = int(720 * scaling_factor)
         width = int(400 * scaling_factor)

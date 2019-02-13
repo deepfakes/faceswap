@@ -217,6 +217,7 @@ class Images():
         self.icons["graph"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "graph.png"))
         self.icons["zoom"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "zoom.png"))
         self.icons["move"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "move.png"))
+        self.icons["favicon"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "logo.png"))
         logger.debug("Initialized %s: (icons: %s)", self.__class__.__name__, self.icons)
 
     def delete_preview(self):
