@@ -45,11 +45,11 @@ class Convert():
         image_mask = self.get_image_mask(detected_face, image_size)
 
         if self.args.draw_transparent:
-            new_image = dfl_full(detected_face.landmarks_as_xy, new_image, channels=4 #Add mask as 4th channel for saving as alpha on supported output formats
+            new_image = dfl_full(detected_face.landmarks_as_xy, new_image, channels=4 )#Add mask as 4th channel for saving as alpha on supported output formats
 
             #This make sure that all the arrays match in size for later actions despite not actually using alpha in any way.
             image_mask = cv2.cvtColor(image_mask, cv2.COLOR_RGB2RGBA)
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2RGBA)
 
         patched_face = self.apply_fixes(image,
                                         new_image,
