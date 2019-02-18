@@ -67,7 +67,7 @@ class DataItem():
         if path is not None:
             self.path = path
         if self.path is not None:
-            item_ext = os.path.splitext(self.path)[1]
+            item_ext = os.path.splitext(self.path)[1].lower()
             if item_ext in DataItem.vid_ext:
                 item_type = 'vid'
             elif item_ext in DataItem.audio_ext:
