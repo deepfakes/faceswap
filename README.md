@@ -8,6 +8,7 @@ Faceswap is a tool that utilizes deep learning to recognize and swap faces in pi
   <a href="https://www.youtube.com/watch?v=r1jng79a5xc"><img src="https://img.youtube.com/vi/r1jng79a5xc/0.jpg"></img></a>
 <br />Jennifer Lawrence/Steve Buscemi Faceswap using the Villain model
 </p>
+
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
 - [Manifesto](#manifesto)
