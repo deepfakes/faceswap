@@ -7,9 +7,9 @@
 
 from __future__ import absolute_import
 
-
 import keras.backend as K
 from keras.layers import Lambda, concatenate
+import numpy
 import tensorflow as tf
 from tensorflow.contrib.distributions import Beta
 
