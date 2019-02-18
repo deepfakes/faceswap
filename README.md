@@ -16,6 +16,9 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 - [Help I need support!](#help-i-need-support)
   - [Discord Server](#discord-server)
   - [Faceswap-Playground](#faceswap-playground)
+- [Donate](#donate)
+  - [@torzdf](#@torzdf)
+  - [@kvrooman](#@kvrooman)
 - [How to contribute](#how-to-contribute)
   - [For people interested in the generative models](#for-people-interested-in-the-generative-models)
   - [For devs](#for-devs)
@@ -84,7 +87,7 @@ NB: there is a conversion tool for video. This can be accessed by running `pytho
 
 **Some tips:**
 
-Reusing existing models will train much faster than starting from nothing.  
+Reusing existing models will train much faster than starting from nothing.
 If there is not enough training data, start with someone who looks similar, then switch the data.
 
 ## Help I need support!
@@ -93,6 +96,23 @@ Your best bet is to join the [Faceswap Discord server](https://discord.gg/FdEwxX
 
 ### Faceswap-Playground
 Alternatively you can post questions in the [Faceswap Playground](https://github.com/deepfakes/faceswap-playground). Please do not post general support questions in this repo.
+
+## Donate
+The developers work tirelessly to improve and develop faceswap. Many hours have been put in to provide the software as it is today, but this is an extremely time consuming process with no financial reward. If you enjoy using the software, please consider donating to the devs, so that they can spend more time implementing improvements.
+
+### @torzdf ###
+ There is very little faceswap code that hasn't been touched by torzdf. He is responsible for implementing the GUI, FAN aligner, MTCNN detector and porting the Villain, DFL-H128 and DFaker models to faceswap, as well as significantly improving many areas of the code.
+
+**Bitcoin:** 385a1r9tyZpt5LyZcNk1FALTxC8ZHta7yq
+
+**Ethereum:** 0x18CBbff5fA7C78de7B949A2b0160A0d1bd649f80
+
+**Paypal:** [![torzdf](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=JZ8PP3YE9J62L)
+
+### @kvrooman ###
+Responsible for consolidating the converters, adding a lot of code to fix model stability issues, and helping significantly towards making the training process more modular, kvrooman continues to be a very active contributor.
+
+**Ethereum:** 0x18CBbff5fA7C78de7B949A2b0160A0d1bd649f80
 
 ## How to contribute
 
@@ -106,7 +126,7 @@ Alternatively you can post questions in the [Faceswap Playground](https://github
  - Play with it
  - Check issues with the 'dev' tag
  - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvments
- 
+
 ### For non-dev advanced users
  - Read this README entirely
  - Clone the repo
@@ -136,7 +156,7 @@ The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front
  1. Because a typosquat would have happened sooner or later as project grows
  2. Because we wanted to recognize the original author
  3. Because it will better federate contributors and users
- 
+
 ## What if /u/deepfakes feels bad about that?
 This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit). Please do not send /u/deepfakes messages for help with the code you find here.
 
