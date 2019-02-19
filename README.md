@@ -24,6 +24,7 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
   - [Faceswap-Playground](#faceswap-playground)
 - [Donate](#donate)
   - [@torzdf](#@torzdf)
+  - [@andenixa](#andenixa)
   - [@kvrooman](#@kvrooman)
 - [How to contribute](#how-to-contribute)
   - [For people interested in the generative models](#for-people-interested-in-the-generative-models)
@@ -114,6 +115,11 @@ The developers work tirelessly to improve and develop faceswap. Many hours have 
 **Ethereum:** 0x18CBbff5fA7C78de7B949A2b0160A0d1bd649f80
 
 **Paypal:** [![torzdf](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=JZ8PP3YE9J62L)
+
+### @andenixa ###
+Creator of the Unbalanced and OHR models, as well as expanding various capabilities within the training process. Andenixa is currently working on new models and will take requests for donations.
+
+**Paypal:** [![andenixa](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=NRVLQYGS6NWTU)
 
 ### @kvrooman ###
 Responsible for consolidating the converters, adding a lot of code to fix model stability issues, and helping significantly towards making the training process more modular, kvrooman continues to be a very active contributor.
