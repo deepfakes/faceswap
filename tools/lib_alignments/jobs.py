@@ -26,6 +26,7 @@ class Check():
         self.type = None
         self.output = arguments.output
         self.source_dir = self.get_source_dir(arguments)
+        self.validate()
         self.items = self.get_items()
 
         self.output_message = ""
@@ -33,7 +34,11 @@ class Check():
 
     def get_source_dir(self, arguments):
         """ Set the correct source folder """
-        if hasattr(arguments, "faces_dir") and arguments.faces_dir:
+        if (hasattr(arguments, "faces_dir") and arguments.faces_dir and
+                hasattr(arguments, "frames_dir") and arguments.frames_dir):
+            logger.error("Only select a source frames (-fr) or source faces (-fc) folder")
+            exit(0)
+        elif hasattr(arguments, "faces_dir") and arguments.faces_dir:
             self.type = "faces"
             source_dir = arguments.faces_dir
         elif hasattr(arguments, "frames_dir") and arguments.frames_dir:
@@ -53,7 +58,6 @@ class Check():
     def process(self):
         """ Process the frames check against the alignments file """
         logger.info("[CHECK %s]", self.type.upper())
-        self.validate()
         items_output = self.compile_output()
         self.output_results(items_output)
 
@@ -64,8 +68,8 @@ class Check():
             logger.warning("Missing_frames was selected with move output, but there will "
                            "be nothing to move. Defaulting to output: console")
             self.output = "console"
-        elif self.type == "faces" and self.job not in ("multi-faces", "leftover-faces"):
-            logger.warning("The selected folder is not valid. Only folder set with '-fc' is "
+        if self.type == "faces" and self.job not in ("multi-faces", "leftover-faces"):
+            logger.warning("The selected folder is not valid. Faces folder (-fc) is only "
                            "supported for 'multi-faces' and 'leftover-faces'")
             exit(0)
 
