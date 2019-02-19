@@ -7,9 +7,9 @@
 
 from __future__ import absolute_import
 
-
 import keras.backend as K
 from keras.layers import Lambda, concatenate
+import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.distributions import Beta
 
@@ -541,8 +541,8 @@ def scharr_edges(image, magnitude):
     kernels = [[[-1.0, -2.0, -3.0, -2.0, -1.0], [-1.0, -2.0, -6.0, -2.0, -1.0], [0.0, 0.0, 0.0, 0.0, 0.0], [1.0, 2.0, 6.0, 2.0, 1.0], [1.0, 2.0, 3.0, 2.0, 1.0]],
              [[-1.0, -1.0, 0.0, 1.0, 1.0], [-2.0, -2.0, 0.0, 2.0, 2.0], [-3.0, -6.0, 0.0, 6.0, 3.0], [-2.0, -2.0, 0.0, 2.0, 2.0], [-1.0, -1.0, 0.0, 1.0, 1.0]]]
     num_kernels = len(kernels)
-    kernels = numpy.transpose(numpy.asarray(kernels), (1, 2, 0))
-    kernels = numpy.expand_dims(kernels, -2) / numpy.sum(numpy.abs(kernels))
+    kernels = np.transpose(np.asarray(kernels), (1, 2, 0))
+    kernels = np.expand_dims(kernels, -2) / np.sum(np.abs(kernels))
     kernels_tf = tf.constant(kernels, dtype=image.dtype)
     kernels_tf = tf.tile(kernels_tf, [1, 1, image_shape[-1], 1], name='scharr_filters')
 
