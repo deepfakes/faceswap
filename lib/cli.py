@@ -302,7 +302,7 @@ class FaceSwapArgs():
                                     "file an error report. Be careful with TRACE as it will "
                                     "generate a lot of data"})
         global_args.append({"opts": ("-LF", "--logfile"),
-                            "action": FileFullPaths,
+                            "action": SaveFileFullPaths,
                             "filetypes": 'log',
                             "type": str,
                             "dest": "logfile",
