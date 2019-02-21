@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Obtain information about the running system, environment and gpu """
 
+import locale
 import os
 import platform
 import sys
@@ -32,6 +33,11 @@ class SysInfo():
         self.gfx_devices = gpu_stats.devices
 
     @property
+    def encoding(self):
+        """ Return system preferred encoding """
+        return locale.getpreferredencoding()
+
+    @property
     def is_conda(self):
         """ Boolean for whether in a conda environment """
         return "conda" in sys.version.lower()
@@ -54,8 +60,13 @@ class SysInfo():
     @property
     def is_virtual_env(self):
         """ Boolean for whether running in a virtual environment """
-        return hasattr(sys, "real_prefix") or (
-            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)
+        if not self.is_conda:
+            retval = (hasattr(sys, "real_prefix") or
+                      (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
+        else:
+            prefix = os.path.dirname(sys.prefix)
+            retval = (os.path.basename(prefix) == "envs")
+        return retval
 
     @property
     def ram(self):
@@ -155,10 +166,16 @@ class SysInfo():
     def cudnn_version(self):
         """ Get the installed cuDNN version """
         if not self._cuda_path:
-            return "Not Found"
+            retval = "Not Found"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda cuDNN"
+            return retval
         cudnn_checkfile = os.path.join(self._cuda_path, "include", "cudnn.h")
         if not os.path.isfile(cudnn_checkfile):
-            return "Not Found"
+            retval = "Not Found"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda cuDNN"
+            return retval
         found = 0
         with open(cudnn_checkfile, "r") as ofile:
             for line in ofile:
@@ -174,7 +191,10 @@ class SysInfo():
                 if found == 3:
                     break
         if found != 3:
-            return "Not Found"
+            retval = "Not Found"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda cuDNN"
+            return retval
         return "{}.{}.{}".format(major, minor, patchlevel)
 
     def get_cuda_path(self):
@@ -209,8 +229,7 @@ class SysInfo():
         cuda_path = os.environ.get("CUDA_PATH", None)
         return cuda_path
 
-    @staticmethod
-    def cuda_version_linux():
+    def cuda_version_linux(self):
         """ Get CUDA version for linux systems """
         ld_library_path = os.environ.get("LD_LIBRARY_PATH", None)
         chk = os.popen("ldconfig -p | grep -P \"libcudart.so.\\d+.\\d+\" | head -n 1").read()
@@ -222,18 +241,23 @@ class SysInfo():
                 if chk:
                     break
         if not chk:
-            return "Not Found"
+            retval = "Not Found"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda Cuda"
+            return retval
         cudavers = chk.strip().replace("libcudart.so.", "")
         return cudavers[:cudavers.find(" ")]
 
-    @staticmethod
-    def cuda_version_windows():
+    def cuda_version_windows(self):
         """ Get CUDA version for Windows systems """
         cuda_keys = [key
                      for key in os.environ.keys()
                      if key.lower().startswith("cuda_path_v")]
         if not cuda_keys:
-            return "Not Found"
+            retval = "Not Found"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda Cuda"
+            return retval
         cudavers = [key.replace("CUDA_PATH_V", "").replace("_", ".") for key in cuda_keys]
         return " ".join(cudavers)
 
@@ -251,6 +275,7 @@ class SysInfo():
                     "sys_cores": self.cpu_count,
                     "sys_processor": self.processor,
                     "sys_ram": self.format_ram(),
+                    "encoding": self.encoding,
                     "git_branch": self.git_branch,
                     "git_commits": self.git_commits,
                     "gpu_cuda": self.cuda_version,
