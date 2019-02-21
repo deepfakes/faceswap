@@ -38,7 +38,7 @@ class Align(Aligner):
         if card_id == -1:
             self.init.set()
             raise ValueError("No Graphics Card Detected! FAN is not currently supported on CPU. "
-                             "Use another aligner.")
+                             "Use another aligner such as DLIB ( -A dlib ).")
 
         if vram_total <= self.vram:
             tf_ratio = 1.0
