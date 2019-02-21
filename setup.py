@@ -109,7 +109,9 @@ class Environment():
     def get_required_packages():
         """ Load requirements list """
         packages = list()
-        with open("requirements.txt") as req:
+        pypath = os.path.dirname(os.path.realpath(__file__))
+        requirements_file = os.path.join(pypath, "requirements.txt")
+        with open(requirements_file) as req:
             for package in req.readlines():
                 package = package.strip()
                 if package and (not package.startswith("#")):
@@ -652,8 +654,7 @@ class Install():
                 condaexe.extend(["-c", pkg[1]])
             condaexe.append(pkg[0])
             self.output.info("Installing {}".format(pkg[0]))
-            with open(os.devnull, "w") as devnull:
-                run(condaexe, stdout=devnull)
+            run(condaexe)
 
 
 class Tips():
