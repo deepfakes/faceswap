@@ -649,12 +649,22 @@ class Install():
     def install_conda_packages(self):
         """ Install required conda packages """
         for pkg in self.env.conda_missing_packages:
-            condaexe = ["conda", "install", "-q", "-y"]
+            condaexe = ["conda", "install", "-y"]
+            if not pkg[0].startswith("tensorflow"):
+                # Let TF be verbose because it takes a long time
+                condaexe.append("-q")
             if len(pkg) == 2:
                 condaexe.extend(["-c", pkg[1]])
             condaexe.append(pkg[0])
             self.output.info("Installing {}".format(pkg[0]))
-            run(condaexe)
+
+            if pkg[0].startswith("tensorflow"):
+                # Let TF be verbose because it takes a long time
+                run(condaexe)
+                continue
+
+            with open(os.devnull, "w") as devnull:
+                run(condaexe, stdout=devnull)
 
 
 class Tips():
