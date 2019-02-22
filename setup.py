@@ -636,8 +636,6 @@ class Install():
 
     def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
         """ Install a conda package """
-        #TODO Remove this
-        verbose = True       
         success = True
         condaexe = ["conda", "install", "-y"]
         if not verbose:
