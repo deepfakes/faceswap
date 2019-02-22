@@ -384,7 +384,7 @@ Function DesktopShortcut
     SetOutPath "$INSTDIR"
     StrCpy $0 "faceswap_win_launcher.bat"
     FileOpen $9 "$INSTDIR\$0" w
-    FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate ${envName} && python $\"$INSTDIR/faceswap.py gui$\"$\r$\n"
+    FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate ${envName} && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
     CreateShortCut "$DESKTOP\${envName}.lnk" "$INSTDIR\$0" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
 FunctionEnd

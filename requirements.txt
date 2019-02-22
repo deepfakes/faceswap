@@ -1,7 +1,6 @@
 tqdm
 psutil
 pathlib
-scandir
 numpy==1.15.4
 opencv-python
 scikit-image
