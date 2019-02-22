@@ -163,13 +163,15 @@ class Environment():
 
     def upgrade_pip(self):
         """ Upgrade pip to latest version """
-        self.output.info("Upgrading pip...")
-        pipexe = [sys.executable, "-m", "pip"]
-        pipexe.extend(["install", "--no-cache-dir", "-qq", "--upgrade"])
-        if not self.is_admin and not self.is_virtualenv:
-            pipexe.append("--user")
-        pipexe.append("pip")
-        run(pipexe)
+        if not is_conda:
+            # Don't do this with Conda, as we must use conda's pip
+            self.output.info("Upgrading pip...")
+            pipexe = [sys.executable, "-m", "pip"]
+            pipexe.extend(["install", "--no-cache-dir", "-qq", "--upgrade"])
+            if not self.is_admin and not self.is_virtualenv:
+                pipexe.append("--user")
+            pipexe.append("pip")
+            run(pipexe)
         import pip
         pip_version = pip.__version__
         self.output.info("Installed pip: {}".format(pip_version))
