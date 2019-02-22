@@ -9,7 +9,7 @@ import re
 import sys
 import platform
 
-from subprocess import run, PIPE, Popen
+from subprocess import CalledProcessError, run, PIPE, Popen
 
 INSTALL_FAILED = False
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
@@ -44,7 +44,7 @@ class Environment():
         self.upgrade_pip()
 
         self.installed_packages = self.get_installed_packages()
-        self.installed_conda_packages = self.get_installed_conda_packages()
+        self.get_installed_conda_packages()
 
     @property
     def encoding(self):
@@ -190,16 +190,14 @@ class Environment():
 
     def get_installed_conda_packages(self):
         """ Get currently installed conda packages """
-        installed_packages = dict()
         if not self.is_conda:
-            return installed_packages
+            return
         chk = os.popen("conda list").read()
         installed = [re.sub(" +", " ", line.strip())
                      for line in chk.splitlines() if not line.startswith("#")]
         for pkg in installed:
             item = pkg.split(" ")
-            installed_packages[item[0]] = item[1]
-        return installed_packages
+            self.installed_packages[item[0]] = item[1]
 
     def update_tf_dep(self):
         """ Update Tensorflow Dependency """
@@ -253,9 +251,9 @@ class Environment():
     def update_tf_dep_conda(self):
         """ Update Conda TF Dependency """
         if not self.enable_cuda:
-            self.conda_required_packages.append(("tensorflow==1.12.0", ))
+            self.required_packages.append("tensorflow==1.12.0")
         else:
-            self.conda_required_packages.append(("tensorflow-gpu==1.12.0", ))
+            self.required_packages.append("tensorflow-gpu==1.12.0")
 
 
 class Output():
@@ -599,11 +597,11 @@ class Install():
 
     def check_conda_missing_dep(self):
         """ Check for conda missing dependencies """
-        if not self.env.enable_cuda:
+        if not self.env.is_conda:
             return
         for pkg in self.env.conda_required_packages:
             key = pkg[0].split("==")[0]
-            if key not in self.env.installed_conda_packages:
+            if key not in self.env.installed_packages:
                 self.env.conda_missing_packages.append(pkg)
                 continue
             else:
@@ -615,58 +613,81 @@ class Install():
     def install_missing_dep(self):
         """ Install missing dependencies """
         if self.env.missing_packages:
-            self.output.info("Installing Required Python Packages. "
-                             "This may take some time...")
-            self.install_pip_packages()
+            self.install_python_packages()
         if self.env.conda_missing_packages:
-            self.output.info("Installing Required Conda Packages. "
-                             "This may take some time...")
             self.install_conda_packages()
 
-    def install_pip_packages(self):
+    def install_python_packages(self):
         """ Install required pip packages """
+        self.output.info("Installing Required Python Packages. This may take some time...")
         for pkg in self.env.missing_packages:
-            pipexe = [sys.executable, "-m", "pip"]
-            # hide info/warning and fix cache hang
-            pipexe.extend(["install", "-qq", "--no-cache-dir"])
-            # install as user to solve perm restriction
-            if not self.env.is_admin and not self.env.is_virtualenv:
-                pipexe.append("--user")
-            if pkg.startswith("dlib"):
-                opt = "yes" if self.env.enable_cuda else "no"
-                pipexe.extend(["--install-option=--{}".format(opt),
-                               "--install-option=DLIB_USE_CUDA"])
-                if self.env.os_version[0] == "Windows":
-                    pipexe.extend(["--global-option=-G",
-                                   "--global-option=Visual Studio 14 2015"])
-                msg = ("Compiling {}. This will take a while...\n"
-                       "Please ignore the following UserWarning: "
-                       "'Disabling all use of wheels...'".format(pkg))
-            else:
-                msg = "Installing {}".format(pkg)
-            self.output.info(msg)
-            pipexe.append(pkg)
-            run(pipexe)
+            if self.env.is_conda:
+                verbose = pkg.startswith("tensorflow")
+                if self.conda_installer(pkg, verbose=verbose):
+                    continue
+            self.pip_installer(pkg)
 
     def install_conda_packages(self):
         """ Install required conda packages """
+        self.output.info("Installing Required Conda Packages. This may take some time...")
         for pkg in self.env.conda_missing_packages:
-            condaexe = ["conda", "install", "-y"]
-            if not pkg[0].startswith("tensorflow"):
-                # Let TF be verbose because it takes a long time
-                condaexe.append("-q")
-            if len(pkg) == 2:
-                condaexe.extend(["-c", pkg[1]])
-            condaexe.append(pkg[0])
-            self.output.info("Installing {}".format(pkg[0]))
+            channel = None if len(pkg) !=2 else pkg[1]
+            self.conda_installer(pkg[0], channel=channel, conda_only=True)
 
-            if pkg[0].startswith("tensorflow"):
-                # Let TF be verbose because it takes a long time
-                run(condaexe)
-                continue
+    def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
+        """ Install a conda package """
+        #TODO Remove this
+        verbose = True       
+        success = True
+        condaexe = ["conda", "install", "-y"]
+        if not verbose:
+            condaexe.append("-q")
+        if channel:
+            condaexe.extend(["-c", channel])
+        condaexe.append(package)
+        self.output.info("Installing {}".format(package))
+        try:
+            if verbose:
+                run(condaexe, check=True)
+            else:
+                with open(os.devnull, "w") as devnull:
+                    run(condaexe, stdout=devnull, stderr=devnull, check=True)
+        except CalledProcessError:
+            if not conda_only:
+                self.output.info("Couldn't install {} with Conda. Trying pip".format(package))
+            else:
+                self.output.warning("Couldn't install {} with Conda. "
+                                    "Please install this package manually".format(package))
+            success = False
+        return success
 
-            with open(os.devnull, "w") as devnull:
-                run(condaexe, stdout=devnull)
+    def pip_installer(self, package):
+        """ Install a pip package """
+        pipexe = [sys.executable, "-m", "pip"]
+        # hide info/warning and fix cache hang
+        pipexe.extend(["install", "-qq", "--no-cache-dir"])
+        # install as user to solve perm restriction
+        if not self.env.is_admin and not self.env.is_virtualenv:
+            pipexe.append("--user")
+        if package.startswith("dlib"):
+            opt = "yes" if self.env.enable_cuda else "no"
+            pipexe.extend(["--install-option=--{}".format(opt),
+                           "--install-option=DLIB_USE_CUDA"])
+            if self.env.os_version[0] == "Windows":
+                pipexe.extend(["--global-option=-G",
+                               "--global-option=Visual Studio 14 2015"])
+            msg = ("Compiling {}. This will take a while...\n"
+                   "Please ignore the following UserWarning: "
+                   "'Disabling all use of wheels...'".format(package))
+        else:
+            msg = "Installing {}".format(package)
+        self.output.info(msg)
+        pipexe.append(package)
+        try:
+            run(pipexe, check=True)
+        except CalledProcessError:
+            self.output.warning("Couldn't install {} with pip. "
+                                "Please install this package manually".format(package))
 
 
 class Tips():

@@ -581,7 +581,7 @@ class ConvertArgs(ExtractConvertArgs):
                         "dfl",
                         #  "cnn",  Removed until implemented
                         "none"],
-            "default": "facehull_rect",
+            "default": "facehull",
             "help": "R|Mask to use to replace faces."
                     "\nellipse: Oval around face."
                     "\nfacehull: Face cutout based on landmarks."
