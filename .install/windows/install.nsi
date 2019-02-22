@@ -325,7 +325,9 @@ Function SetEnvironment
             ${EndIf}
 
     CreateEnv:
+        SetDetailsPrint listonly
         ExecWait "$dirConda\scripts\activate.bat && conda create ${flagsEnv} && conda deactivate" $0
+        SetDetailsPrint both
         ${If} $0 != 0
             DetailPrint "Error Creating Conda Virtual Environment"
             Call Abort
