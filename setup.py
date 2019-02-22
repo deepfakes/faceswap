@@ -163,7 +163,7 @@ class Environment():
 
     def upgrade_pip(self):
         """ Upgrade pip to latest version """
-        if not is_conda:
+        if not self.is_conda:
             # Don't do this with Conda, as we must use conda's pip
             self.output.info("Upgrading pip...")
             pipexe = [sys.executable, "-m", "pip"]
