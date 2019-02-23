@@ -188,6 +188,11 @@ class Convert():
                 for face in faces:
                     image = converter.patch_image(image, face)
                 filename = str(self.output_dir / Path(filename).name)
+
+                if self.args.draw_transparent:
+                    filename = "{}.png".format(os.path.splitext(filename)[0])
+                    logger.trace("Set extension to png: `%s`", filename)
+
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
