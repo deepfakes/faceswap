@@ -81,15 +81,14 @@ class Sort():
 
         self.sort_process()
 
-    @staticmethod
-    def launch_aligner(loglevel):
+    def launch_aligner(self):
         """ Load the aligner plugin to retrieve landmarks """
         out_queue = queue_manager.get_queue("out")
         kwargs = {"in_queue": queue_manager.get_queue("in"),
                   "out_queue": out_queue}
 
         for plugin in ("fan", "dlib"):
-            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
+            aligner = PluginLoader.get_aligner(plugin)(loglevel=self.args.loglevel)
             process = SpawnProcess(aligner.run, **kwargs)
             event = process.event
             process.start()
@@ -245,7 +244,7 @@ class Sort():
 
     def sort_face_cnn(self):
         """ Sort by CNN similarity """
-        self.launch_aligner(self.args.loglevel)
+        self.launch_aligner()
         input_dir = self.args.input_dir
 
         logger.info("Sorting by face-cnn similarity...")
@@ -280,7 +279,7 @@ class Sort():
 
     def sort_face_cnn_dissim(self):
         """ Sort by CNN dissimilarity """
-        self.launch_aligner(self.args.loglevel)
+        self.launch_aligner()
         input_dir = self.args.input_dir
 
         logger.info("Sorting by face-cnn dissimilarity...")
@@ -315,7 +314,7 @@ class Sort():
 
     def sort_face_yaw(self):
         """ Sort by yaw of face """
-        self.launch_aligner(self.args.loglevel)
+        self.launch_aligner()
         input_dir = self.args.input_dir
 
         img_list = []
@@ -767,7 +766,9 @@ class Sort():
         Normalize by pixel number to offset the effect
         of image size on pixel gradients & variance
         """
-        image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
+        image = cv2.imread(image_file)
+        if image.ndim == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
         score = np.var(blur_map) / np.sqrt(image.shape[0] * image.shape[1])
         return score
@@ -816,13 +817,13 @@ class Sort():
 
         else:
             if keep_original:
-                def process_file(src, dst, changes):
+                def process_file(src, dst, changes):  # pylint: disable=unused-argument
                     """ Process file method if not logging changes
                         and keeping original """
                     copyfile(src, dst)
 
             else:
-                def process_file(src, dst, changes):
+                def process_file(src, dst, changes):  # pylint: disable=unused-argument
                     """ Process file method if not logging changes
                         and not keeping original """
                     os.rename(src, dst)
@@ -844,7 +845,7 @@ class Sort():
                 changes[src] = dst
                 return __src, dst
         else:
-            def renaming(src, output_dir, i, changes):
+            def renaming(src, output_dir, i, changes):  # pylint: disable=unused-argument
                 """ Rename files method if not logging changes """
                 src_basename = os.path.basename(src)
 
@@ -887,17 +888,17 @@ class Sort():
         return sum(scores) / len(scores)
 
 
-def bad_args(args):
+def bad_args(args):  # pylint: disable=unused-argument
     """ Print help on bad arguments """
     PARSER.print_help()
     exit(0)
 
 
 if __name__ == "__main__":
-    __warning_string = "Important: face-cnn method will cause an error when "
-    __warning_string += "this tool is called directly instead of through the "
-    __warning_string += "tools.py command script."
-    print(__warning_string)
+    __WARNING_STRING = "Important: face-cnn method will cause an error when "
+    __WARNING_STRING += "this tool is called directly instead of through the "
+    __WARNING_STRING += "tools.py command script."
+    print(__WARNING_STRING)
     print("Images sort tool.\n")
 
     PARSER = FullHelpArgumentParser()
