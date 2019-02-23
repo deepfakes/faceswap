@@ -881,6 +881,9 @@ class MouseHandler():
             bounding box and set face_id """
         frame = self.media["frame_id"]
         alignments = self.alignments.get_faces_in_frame(frame)
+        scale = self.interface.get_frame_scaling()
+        pt_x = int(pt_x / scale)
+        pt_y = int(pt_y / scale)
 
         for idx, alignment in enumerate(alignments):
             left = alignment["x"]

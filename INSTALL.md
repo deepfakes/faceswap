@@ -12,6 +12,8 @@
   - [Run the project](#run-the-project)
   - [Notes](#notes)
 - [Windows Install Guide](#windows-install-guide)
+  - [Installer](#installer)
+  - [Manual Install](#Manual-install)
   - [Prerequisites](#prerequisites-1)
     - [Microsoft Visual Studio 2015](#microsoft-visual-studio-2015)
     - [Cuda](#cuda)
@@ -53,7 +55,7 @@ The type of computations that the process does are well suited for graphics card
 
 ## Supported operating systems
 - **Windows 10**
-  Windows 7 and 8 might work. Your milage may vary.
+  Windows 7 and 8 might work. Your milage may vary. Windows has an installer which will set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work.
 - **macOS**
@@ -194,6 +196,14 @@ This guide is far from complete. Functionality may change over time, and new dep
 If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository instead of the main repo.
 
 # Windows Install Guide
+
+## Installer
+Windows now has an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
+
+If you have issues with the installer then read on for the more manual way to install Faceswap on Windows.
+
+## Manual Install
+
 Setting up Faceswap can seem a little intimidating to new users, but it isn't that complicated, although a little time consuming. It is recommended to use Linux where possible as Windows will hog about 20% of your GPU Memory, making Faceswap run a little slower, however using Windows is perfectly fine and 100% supported.
 
 ## Prerequisites
