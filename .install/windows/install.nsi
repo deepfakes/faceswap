@@ -16,14 +16,13 @@ InstallDir $PROFILE\faceswap
 
 
 # Faceswap Specific
-!define envName "faceswap"
 !define flagsSetup "setup.py --installer"
 
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$Profile\MiniConda3"
 !define flagsGit "/SILENT /NORESTART /NOCANCEL /SP /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
-!define flagsRepo "--depth 1"
-!define flagsEnv "-y -n ${envName} python=3.6"
+!define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
+!define flagsEnv "-y python=3.6"
 
 # Dlib Wheel prefix
 !define prefixDlib "dlib-19.16.99-cp36-cp36m-win_amd64"
@@ -55,6 +54,7 @@ Var noNvidia
 Var ctlCondaText
 Var ctlCondaButton
 Var Log
+Var envName
 
 # Modern UI2
 !define MUI_COMPONENTSPAGE_NODESC
@@ -86,6 +86,7 @@ Function .onInit
     StrCpy $dirMiniconda "$PROFILE\Miniconda3"
     StrCpy $dirAnaconda "$PROFILE\Anaconda3"
     StrCpy $gitInf "$dirTemp\git_install.inf"
+    StrCpy $envName "faceswap"
     SetOutPath "$dirTemp"
     File *.whl
     File git_install.inf
@@ -132,24 +133,31 @@ Function pgPrereqCreate
         ${EndIf}
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
 
-        StrCpy $lblPos 47
+        StrCpy $lblPos 46
     # Info Custom Options
     ${NSD_CreateGroupBox} 5% 40% 90% 60% "Custom Items"
     Pop $0
-
-        ${NSD_CreateCheckBox} 10% $lblPos% 80% 16u " IMPORTANT! Check here if you do NOT have an NVIDIA graphics card"
+        ${NSD_CreateCheckBox} 10% $lblPos% 80% 11u " IMPORTANT! Check here if you do NOT have an NVIDIA graphics card"
         Pop $noNvidia
-        intOp $lblPos $lblPos + 18
+        intOp $lblPos $lblPos + 10
+
+        ${NSD_CreateLabel} 10% $lblPos% 80% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
+        pop $0
+        intOp $lblPos $lblPos + 7
+        ${NSD_CreateText} 10% $lblPos% 80% 11u "$envName"
+        Pop $envName
+        intOp $lblPos $lblPos + 11
+
 
         ${If} $InstallConda == 1
-            ${NSD_CreateLabel} 10% $lblPos% 80% 24u "Anaconda or Miniconda is required but could not be detected.$\nIf you have Conda installed on your system please specify the location below, otherwise leave blank:"
+            ${NSD_CreateLabel} 10% $lblPos% 80% 18u "Conda is required but could not be detected. If you have Conda already installed specify the location below, otherwise leave blank:"
             Pop $0
-            intOp $lblPos $lblPos + 20
+            intOp $lblPos $lblPos + 13
 
-            ${NSD_CreateText} 10% $lblPos% 70% 12u ""
+            ${NSD_CreateText} 10% $lblPos% 73% 12u ""
             Pop $ctlCondaText
 
-            ${NSD_CreateButton} 80% $lblPos% 7% 12u "..."
+            ${NSD_CreateButton} 83% $lblPos% 7% 12u "..."
             Pop $ctlCondaButton
             ${NSD_OnClick} $ctlCondaButton fnc_hCtl_test_DirRequest1_Click
         ${EndIf}
@@ -157,8 +165,6 @@ Function pgPrereqCreate
     nsDialogs::Show
 FunctionEnd
 
-
-; onClick handler for DirRequest Button $hCtl_test_DirRequest1_Btn
 Function fnc_hCtl_test_DirRequest1_Click
 	Pop $R0
 	${If} $R0 == $ctlCondaButton
@@ -174,6 +180,8 @@ FunctionEnd
 Function pgPrereqLeave
     Call CheckCustomCondaPath
     ${NSD_GetState} $noNvidia $noNvidia
+    ${NSD_GetText} $envName $envName
+
 FunctionEnd
 
 Function CheckCustomCondaPath
@@ -304,7 +312,7 @@ FunctionEnd
 Function CloneRepo
     DetailPrint "Downloading Faceswap..."
     SetDetailsPrint listonly
-    ExecWait "$PROGRAMFILES64\git\bin\git.exe clone ${flagsRepo} ${wwwRepo} $INSTDIR" $0
+    ExecWait "$PROGRAMFILES64\git\bin\git.exe clone ${flagsRepo} $INSTDIR" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Downloading Faceswap"
@@ -313,11 +321,17 @@ Function CloneRepo
 FunctionEnd
 
 Function SetEnvironment
+    # Updating Conda breaks setup.py. Commented out in case this issue gets resolved in future
+#    DetailPrint "Initializing Conda..."
+#    SetDetailsPrint listonly
+#    ExecWait "$dirConda\scripts\activate.bat && conda update -y -n base -c defaults conda && conda deactivate" $0
+#    SetDetailsPrint both
     DetailPrint "Creating Conda Virtual Environment..."
+
     IfFileExists  "$dirConda\envs\faceswap" DeleteEnv CreateEnv
         DeleteEnv:
             SetDetailsPrint listonly
-            ExecWait "$dirConda\scripts\activate.bat && conda env remove -y -n ${envName} && conda deactivate" $0
+            ExecWait "$dirConda\scripts\activate.bat && conda env remove -y -n $\"$envName$\" && conda deactivate" $0
             SetDetailsPrint both
             ${If} $0 != 0
                 DetailPrint "Error deleting Conda Virtual Environment"
@@ -326,7 +340,7 @@ Function SetEnvironment
 
     CreateEnv:
         SetDetailsPrint listonly
-        ExecWait "$dirConda\scripts\activate.bat && conda create ${flagsEnv} && conda deactivate" $0
+        ExecWait "$dirConda\scripts\activate.bat && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate" $0
         SetDetailsPrint both
         ${If} $0 != 0
             DetailPrint "Error Creating Conda Virtual Environment"
@@ -336,6 +350,8 @@ FunctionEnd
 
 Function InstallDlib
     DetailPrint "Installing Dlib..."
+    SetDetailsPrint listonly
+
     StrCpy $dlibWhl ${prefixDlib}
 
     ${If} $noNvidia != 1
@@ -351,10 +367,10 @@ Function InstallDlib
     ${EndIf}
 
     StrCpy $dlibWhl "$dlibWhl.whl"
+    DetailPrint "Renaming $dlibWhl to ${dlibFinalName}"
     Rename  $dirTemp\$dlibWhl  $dirTemp\${dlibFinalName}
 
-    SetDetailsPrint listonly
-    ExecWait "$dirConda\scripts\activate.bat && conda activate ${envName} && pip install $dirTemp\${dlibFinalName} &&  conda deactivate" $0
+    ExecWait "$dirConda\scripts\activate.bat && conda activate $\"$envName$\" && pip install $dirTemp\${dlibFinalName} &&  conda deactivate" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Installing Dlib"
@@ -371,7 +387,7 @@ Function SetupFaceSwap
     ${EndIf}
 
     SetDetailsPrint listonly
-    ExecWait "$dirConda\scripts\activate.bat && conda activate ${envName} && python $INSTDIR\$0 && conda deactivate" $0
+    ExecWait "$dirConda\scripts\activate.bat && conda activate $\"$envName$\" && python $INSTDIR\$0 && conda deactivate" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Setting up Faceswap"
@@ -384,7 +400,7 @@ Function DesktopShortcut
     SetOutPath "$INSTDIR"
     StrCpy $0 "faceswap_win_launcher.bat"
     FileOpen $9 "$INSTDIR\$0" w
-    FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate ${envName} && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
+    FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
-    CreateShortCut "$DESKTOP\${envName}.lnk" "$INSTDIR\$0" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
+    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$INSTDIR\$0" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
 FunctionEnd
