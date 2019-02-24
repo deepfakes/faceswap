@@ -8,7 +8,6 @@ import os
 import re
 import sys
 import platform
-import warnings
 
 from subprocess import CalledProcessError, run, PIPE, Popen
 
@@ -634,7 +633,7 @@ class Install():
         """ Install required conda packages """
         self.output.info("Installing Required Conda Packages. This may take some time...")
         for pkg in self.env.conda_missing_packages:
-            channel = None if len(pkg) !=2 else pkg[1]
+            channel = None if len(pkg) != 2 else pkg[1]
             self.conda_installer(pkg[0], channel=channel, conda_only=True)
 
     def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
