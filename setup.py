@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import platform
+import warnings
 
 from subprocess import CalledProcessError, run, PIPE, Popen
 
@@ -184,6 +185,8 @@ class Environment():
         installed = chk.communicate()[0].decode(self.encoding).splitlines()
 
         for pkg in installed:
+            if "==" not in pkg:
+                continue
             item = pkg.split("==")
             installed_packages[item[0]] = item[1]
         return installed_packages

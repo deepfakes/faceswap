@@ -449,7 +449,7 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n'dlib': Dlib Pose Predictor. Faster, less "
                     "\n\tresource intensive, but less accurate."
                     "\n'fan': Face Alignment Network. Best aligner."
-                    "\n\tGPU heavy."})
+                    "\n\tGPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
