@@ -31,7 +31,7 @@ class Model(ModelBase):
         """ Initialize IAE model """
         logger.debug("Initializing model")
         inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", "none") != "none":
+        if self.config.get("mask_type", None):
             mask_shape = (self.input_shape[:2] + (1, ))
             inputs.append(Input(shape=mask_shape, name="mask"))
 
@@ -52,7 +52,7 @@ class Model(ModelBase):
         input_ = Input(shape=self.input_shape)
         var_x = input_
         var_x = self.blocks.conv(var_x, 128)
-        var_x = self.blocks.conv(var_x, 266)
+        var_x = self.blocks.conv(var_x, 256)
         var_x = self.blocks.conv(var_x, 512)
         var_x = self.blocks.conv(var_x, 1024)
         var_x = Flatten()(var_x)
