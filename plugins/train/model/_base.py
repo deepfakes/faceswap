@@ -58,6 +58,7 @@ class ModelBase():
         self.trainer = trainer
 
         self.state = State(self.model_dir, self.name, no_logs, training_image_size)
+        self.rename_legacy()
         self.load_state_info()
 
         self.networks = dict()  # Networks for the model
@@ -373,6 +374,57 @@ class ModelBase():
             return True
         logger.debug("Loss for '%s' has not dropped", side)
         return False
+
+    def rename_legacy(self):
+        """ Legacy Original, LowMem and IAE models had inconsistent naming conventions
+            Rename them if they are found and update """
+        legacy_mapping = {"iae": [("IAE_decoder.h5", "iae_decoder.h5"),
+                                  ("IAE_encoder.h5", "iae_encoder.h5"),
+                                  ("IAE_inter_A.h5", "iae_intermediate_A.h5"),
+                                  ("IAE_inter_B.h5", "iae_intermediate_B.h5"),
+                                  ("IAE_inter_both.h5", "iae_inter.h5")],
+                          "original": [("encoder.h5", "original_encoder.h5"),
+                                       ("decoder_A.h5", "original_decoder_A.h5"),
+                                       ("decoder_B.h5", "original_decoder_B.h5"),
+                                       ("lowmem_encoder.h5", "original_encoder.h5"),
+                                       ("lowmem_decoder_A.h5", "original_decoder_A.h5"),
+                                       ("lowmem_decoder_B.h5", "original_decoder_B.h5")]}
+        if self.name not in legacy_mapping.keys():
+            return
+        logger.debug("Renaming legacy files")
+
+        set_lowmem = False
+        updated = False
+        for old_name, new_name in legacy_mapping[self.name]:
+            old_path = os.path.join(str(self.model_dir), old_name)
+            new_path = os.path.join(str(self.model_dir), new_name)
+            if os.path.exists(old_path) and not os.path.exists(new_path):
+                logger.info("Updating legacy model name from: '%s' to '%s'", old_name, new_name)
+                os.rename(old_path, new_path)
+                if old_name.startswith("lowmem"):
+                    set_lowmem = True
+                updated = True
+
+        if not updated:
+            logger.debug("No legacy files to rename")
+            return
+
+        logger.debug("Creating state file for legacy model")
+        self.state.inputs = {"face:0": [64, 64, 3]}
+        self.state.training_size = 256
+        self.state.config["coverage"] = 62.5
+        self.state.config["subpixel_upscaling"] = False
+        self.state.config["reflect_padding"] = False
+        self.state.config["mask_type"] = None
+        self.state.config["lowmem"] = False
+
+        if set_lowmem:
+            logger.debug("Setting encoder_dim and lowmem flag for legacy lowmem model")
+            self.encoder_dim = 512
+            self.state.config["lowmem"] = True
+
+        self.state.replace_config()
+        self.state.save()
 
 
 class NNMeta():
