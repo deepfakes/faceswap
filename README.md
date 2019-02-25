@@ -137,7 +137,7 @@ Responsible for consolidating the converters, adding a lot of code to fix model 
  - Download the data with the link provided above
  - Play with it
  - Check issues with the 'dev' tag
- - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvments
+ - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvements
 
 ### For non-dev advanced users
  - Read this README entirely
