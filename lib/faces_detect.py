@@ -49,7 +49,7 @@ class DetectedFace():
         self.w = d_rect.right() - d_rect.left()
         self.y = d_rect.top()
         self.h = d_rect.bottom() - d_rect.top()
-        if image.any():
+        if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from dlib_rectangle: (x: %s, w: %s, y: %s. h: %s)",
                      self.x, self.w, self.y, self.h)
