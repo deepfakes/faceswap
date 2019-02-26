@@ -176,10 +176,12 @@ class Convert():
         if self.args.avg_color_adjust:
             for _ in [0, 1]:
                 np.clip(new_image, 0.0, 255.0, out=new_image)
-                diff = frame - new_image
-                avg_diff = np.sum(diff * image_mask, axis=(0, 1))
-                adjustment = avg_diff / np.sum(image_mask, axis=(0, 1))
-                new_image = new_image + adjustment
+                alpha = np.expand_dims(new_image[:, :, -1], axis=2)
+                diff = frame[:, :, :3] - new_image[:, :, :3]
+                avg_diff = np.sum(diff * image_mask[:, :, :3], axis=(0, 1))
+                adjustment = avg_diff / np.sum(image_mask[:, :, :3], axis=(0, 1))
+                new_image = new_image[:, :, :3] + adjustment
+                new_image = np.concatenate((new_image, alpha), axis=2)
 
         if self.args.match_histogram:
             np.clip(new_image, 0.0, 255.0, out=new_image)
