@@ -490,6 +490,16 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "The output size of extracted faces. Make sure that the "
                                       "model you intend to train supports your required size. "
                                       "This will only need to be changed for hi-res models."})
+        argument_list.append({"opts": ("-min", "--min-size"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "min_size",
+                              "min_max": (0, 1080),
+                              "default": 0,
+                              "rounding": 20,
+                              "help": "Filters out faces detected below this size. Length, in "
+                                      "pixels across the diagonal of the bounding box. Set to 0 "
+                                      "for off"})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
