@@ -187,35 +187,48 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Initializing: %s: (parent, %s, selected_id: %s, helptext: '%s')",
                      self.__class__.__name__, parent, selected_id, helptext)
         super().__init__(parent)
-        self.pack(side=tk.TOP, padx=5, pady=5, expand=True, fill=tk.X, anchor=tk.N)
-
+        self.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
         self.session = None  # set when loading or clearing from parent
         self.selected_id = selected_id
         self.popup_positions = list()
 
+        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.tree_frame = ttk.Frame(self.canvas)
+        self.tree_canvas = self.canvas.create_window((0, 0), window=self.tree_frame, anchor=tk.NW)
+        self.sub_frame = ttk.Frame(self.tree_frame)
+        self.sub_frame.pack(side=tk.LEFT, fill=tk.X, anchor=tk.N, expand=True)
+
         self.add_label()
-        self.tree = ttk.Treeview(self, height=1, selectmode=tk.BROWSE)
-        self.scrollbar = ttk.Scrollbar(self,
-                                       orient="vertical",
-                                       command=self.tree.yview)
+        self.tree = ttk.Treeview(self.sub_frame, height=1, selectmode=tk.BROWSE)
+        self.scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
         self.columns = self.tree_configure(helptext)
+        self.canvas.bind("<Configure>", self.resize_frame)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_label(self):
         """ Add Treeview Title """
         logger.debug("Adding Treeview title")
-        lbl = ttk.Label(self, text="Session Stats", anchor=tk.CENTER)
-        lbl.pack(side=tk.TOP, expand=True, fill=tk.X, padx=5, pady=5)
+        lbl = ttk.Label(self.sub_frame, text="Session Stats", anchor=tk.CENTER)
+        lbl.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+
+    def resize_frame(self, event):
+        """ Resize the options frame to fit the canvas """
+        logger.debug("Resize Analysis Frame")
+        canvas_width = event.width
+        canvas_height = event.height
+        self.canvas.itemconfig(self.tree_canvas, width=canvas_width, height=canvas_height)
+        logger.debug("Resized Analysis Frame")
 
     def tree_configure(self, helptext):
         """ Build a treeview widget to hold the sessions stats """
         logger.debug("Configuring Treeview")
         self.tree.configure(yscrollcommand=self.scrollbar.set)
-        self.tree.tag_configure("total",
-                                background="black",
-                                foreground="white")
-        self.tree.pack(side=tk.LEFT, expand=True, fill=tk.X)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.tag_configure("total", background="black", foreground="white")
+        self.tree.pack(side=tk.TOP, fill=tk.X)
         self.tree.bind("<ButtonRelease-1>", self.select_item)
         Tooltip(self.tree, text=helptext, wraplength=200)
         return self.tree_columns()
@@ -236,10 +249,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
             text = column[2] if column[2] else column[0].title()
             logger.debug("Adding heading: '%s'", text)
             self.tree.heading(column[0], text=text)
-            self.tree.column(column[0],
-                             width=column[1],
-                             anchor=tk.E,
-                             minwidth=40)
+            self.tree.column(column[0], width=column[1], anchor=tk.E, minwidth=40)
         self.tree.column("#0", width=40)
         self.tree.heading("#0", text="Graphs")
 
