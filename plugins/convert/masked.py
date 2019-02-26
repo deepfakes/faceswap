@@ -43,18 +43,8 @@ class Convert():
         detected_face.load_aligned(image, size=self.training_size, align_eyes=False)
         new_image = self.get_new_image(image, detected_face, coverage, image_size)
         image_mask = self.get_image_mask(detected_face, image_size)
-
-        if self.args.draw_transparent:
-            new_image = dfl_full(detected_face.landmarks_as_xy, new_image, channels=4 )#Add mask as 4th channel for saving as alpha on supported output formats
-
-            #This make sure that all the arrays match in size for later actions despite not actually using alpha in any way.
-            image_mask = cv2.cvtColor(image_mask, cv2.COLOR_RGB2RGBA)
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2RGBA)
-
-        patched_face = self.apply_fixes(image,
-                                        new_image,
-                                        image_mask,
-                                        image_size)
+        patched_face = self.apply_fixes(image, new_image, image_mask,
+                                        image_size, detected_face)
 
         logger.trace("Patched image")
         return patched_face
@@ -155,7 +145,7 @@ class Convert():
         logger.trace("blur_size: %s", blur_size)
         return blur_size
 
-    def apply_fixes(self, frame, new_image, image_mask, image_size):
+    def apply_fixes(self, frame, new_image, image_mask, image_size, detected_face):
         """ Apply fixes """
 
         if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
@@ -176,18 +166,16 @@ class Convert():
         if self.args.avg_color_adjust:
             for _ in [0, 1]:
                 np.clip(new_image, 0.0, 255.0, out=new_image)
-                alpha = np.expand_dims(new_image[:, :, -1], axis=2)
-                diff = frame[:, :, :3] - new_image[:, :, :3]
-                avg_diff = np.sum(diff * image_mask[:, :, :3], axis=(0, 1))
-                adjustment = avg_diff / np.sum(image_mask[:, :, :3], axis=(0, 1))
-                new_image = new_image[:, :, :3] + adjustment
-                new_image = np.concatenate((new_image, alpha), axis=2)
+                diff = frame - new_image
+                avg_diff = np.sum(diff * image_mask, axis=(0, 1))
+                adjustment = avg_diff / np.sum(image_mask, axis=(0, 1))
+                new_image = new_image + adjustment
 
         if self.args.match_histogram:
             np.clip(new_image, 0.0, 255.0, out=new_image)
             new_image = self.color_hist_match(new_image, frame, image_mask)
 
-        if self.args.seamless_clone and not self.args.draw_transparent:
+        if self.args.seamless_clone:
             h, w, _ = frame.shape
             h = h // 2
             w = w // 2
@@ -224,6 +212,14 @@ class Convert():
             blended = foreground + background
 
         np.clip(blended, 0.0, 255.0, out=blended)
+
+        if self.args.draw_transparent:
+            # Adding a 4th channel should happen after all other channel operations
+            
+            # Add mask as 4th channel for saving as alpha on supported output formats
+            new_image = dfl_full(detected_face.landmarks_as_xy, blended, channels=4 )
+            image_mask = cv2.cvtColor(image_mask, cv2.COLOR_RGB2RGBA)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2RGBA)
 
         return np.rint(blended).astype('uint8')
 
