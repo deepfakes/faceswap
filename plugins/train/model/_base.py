@@ -417,6 +417,7 @@ class ModelBase():
         self.state.config["reflect_padding"] = False
         self.state.config["mask_type"] = None
         self.state.config["lowmem"] = False
+        self.encoder_dim = 1024
 
         if set_lowmem:
             logger.debug("Setting encoder_dim and lowmem flag for legacy lowmem model")
