@@ -91,31 +91,46 @@ class Check():
                 yield frame_name
 
     def get_multi_faces(self):
-        """ yield each frame that has multiple faces
+        """ yield each frame or face that has multiple faces
             matched in alignments file """
-        if self.type == "faces":
-            self.output_message = "Multiple faces in frame"
-            frame_key = "face_hash"
-            retval_key = "face_fullname"
-        elif self.type == "frames":
-            self.output_message = "Frames with multiple faces"
-            frame_key = "frame_fullname"
-            retval_key = "frame_fullname"
-        logger.debug("frame_key: '%s', retval_key: '%s'", frame_key, retval_key)
+        process_type = getattr(self, "get_multi_faces_{}".format(self.type))
+        for item in process_type():
+            yield item
 
+    def get_multi_faces_frames(self):
+        """ Return Frames that contain multiple faces """
+        self.output_message = "Frames with multiple faces"
         for item in tqdm(self.items, desc=self.output_message):
-            frame = item[frame_key]
-            if self.type == "faces":
-                frame_idx = [(frame, idx)
-                             for frame, idx in self.alignments.hashes_to_frame[frame].items()]
-            retval = item[retval_key]
-            for frame, idx in frame_idx:
-                if self.alignments.frame_has_multiple_faces(frame):
-                    if self.type == "faces":
-                        # Add correct alignments index for moving faces
-                        retval = (retval, idx)
-                    logger.trace("Returning: '%s'", retval)
-                    yield retval
+            filename = item["frame_fullname"]
+            if not self.alignments.frame_has_multiple_faces(filename):
+                continue
+            logger.trace("Returning: '%s'", filename)
+            yield filename
+
+    def get_multi_faces_faces(self):
+        """ Return Faces when there are multiple faces in a frame """
+        self.output_message = "Multiple faces in frame"
+        seen_hash_dupes = set()
+        for item in tqdm(self.items, desc=self.output_message):
+            filename = item["face_fullname"]
+            f_hash = item["face_hash"]
+            frame_idx = [(frame, idx)
+                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
+
+            if len(frame_idx) > 1:
+                # If the same hash exists in multiple frames, select arbitrary frame
+                # and add to seen_hash_dupes so it is not selected again
+                logger.trace("Dupe hashes: %s", frame_idx)
+                frame_idx = [f_i for f_i in frame_idx if f_i not in seen_hash_dupes][0]
+                seen_hash_dupes.add(frame_idx)
+                frame_idx = [frame_idx]
+
+            frame_name, idx = frame_idx[0]
+            if not self.alignments.frame_has_multiple_faces(frame_name):
+                continue
+            retval = (filename, idx)
+            logger.trace("Returning: '%s'", retval)
+            yield retval
 
     def get_missing_alignments(self):
         """ yield each frame that does not exist in alignments file """
