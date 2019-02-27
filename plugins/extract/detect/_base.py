@@ -164,13 +164,13 @@ class Detector():
             source = max(height, width)
             target = max(self.target)
         else:
+            source = (width * height) ** 0.5
             if isinstance(self.target, tuple):
                 self.target = self.target[0] * self.target[1]
-            source = width * height
-            target = self.target
+            target = self.target ** 0.5
 
         if scale_up or target < source:
-            scale = sqrt(target / source)
+            scale = target / source
         else:
             scale = 1.0
         logger.trace("Detector scale: %s", scale)
