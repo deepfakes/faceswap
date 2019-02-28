@@ -44,7 +44,7 @@ class Convert():
         new_image = self.get_new_image(image, detected_face, coverage, image_size)
         image_mask = self.get_image_mask(detected_face, image_size)
         patched_face = self.apply_fixes(image, new_image, image_mask,
-                                        image_size, detected_face)
+                                        image_size, detected_face.landmarks_as_xy)
 
         logger.trace("Patched image")
         return patched_face
@@ -52,7 +52,7 @@ class Convert():
     def get_new_image(self, image, detected_face, coverage, image_size):
         """ Get the new face from the predictor """
         logger.trace("coverage: %s", coverage)
-        src_face = detected_face.aligned_face
+        src_face = detected_face.aligned_face[:,:,:3]
         coverage_face = src_face[self.crop, self.crop]
         old_face = coverage_face.copy()
         coverage_face = cv2.resize(coverage_face,  # pylint: disable=no-member
@@ -145,9 +145,12 @@ class Convert():
         logger.trace("blur_size: %s", blur_size)
         return blur_size
 
-    def apply_fixes(self, frame, new_image, image_mask, image_size, detected_face):
+    def apply_fixes(self, original, face, mask, image_size, landmarks):
         """ Apply fixes """
-
+        
+        new_image =  face.copy()
+        image_mask = mask.copy()
+        frame =  original.copy()
         if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
             np.clip(new_image, 0.0, 255.0, out=new_image)
             if self.args.sharpen_image == "box_filter":
@@ -210,16 +213,11 @@ class Convert():
             foreground = new_image * image_mask
             background = frame * (1.0 - image_mask)
             blended = foreground + background
-
         np.clip(blended, 0.0, 255.0, out=blended)
-
         if self.args.draw_transparent:
             # Adding a 4th channel should happen after all other channel operations
-            
             # Add mask as 4th channel for saving as alpha on supported output formats
-            new_image = dfl_full(detected_face.landmarks_as_xy, blended, channels=4 )
-            image_mask = cv2.cvtColor(image_mask, cv2.COLOR_RGB2RGBA)
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2RGBA)
+            blended = dfl_full(landmarks, blended, channels=4 )
 
         return np.rint(blended).astype('uint8')
 
