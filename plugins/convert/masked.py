@@ -148,9 +148,9 @@ class Convert():
     def apply_fixes(self, original, face, mask, image_size, landmarks):
         """ Apply fixes """
         
-        new_image =  face.copy()
-        image_mask = mask.copy()
-        frame =  original.copy()
+        new_image =  face[:,:,:3].copy()
+        image_mask = mask[:,:,:3].copy()
+        frame =  original[:,:,:3].copy()
         if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
             np.clip(new_image, 0.0, 255.0, out=new_image)
             if self.args.sharpen_image == "box_filter":
