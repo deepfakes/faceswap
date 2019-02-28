@@ -16,7 +16,9 @@ face-recognition
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,
-#    you may want to install tensorflow-gpu==1.4.0 for CUDA 8.0,
-#    or 1.6.0<=tensorflow-gpu<=1.13.0 for CUDA 9.0
+
+# NB: Tensorflow version 1.12 is the minimum supported version of Tensorflow.
+#    If your graphics card support is below Cuda 9.0 you will need to either
+#    compile tensorflow yourself or download a custom version.
+#    Install 1.12.0<=tensorflow-gpu<=1.13.0 for CUDA 9.0
 #    or tensorflow-gpu>=1.13.1 or tf-nightly-gpu for CUDA 10.0
-# NB: MTCNN will not work with tensorflow releases prior to 1.6.0

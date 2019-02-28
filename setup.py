@@ -13,9 +13,7 @@ from subprocess import CalledProcessError, run, PIPE, Popen
 
 INSTALL_FAILED = False
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
-TENSORFLOW_REQUIREMENTS = {"==1.2.0": ["8.0", "5.1"],
-                           "==1.4.0": ["8.0", "6.0"],
-                           "==1.12.0": ["9.0", "7.2"],
+TENSORFLOW_REQUIREMENTS = {"==1.12.0": ["9.0", "7.2"],
                            ">=1.13.1": ["10.0", "7.4"]}
 
 
@@ -227,6 +225,7 @@ class Environment():
             return
 
         self.output.warning(
+            "The minimum Tensorflow requirement is 1.12. \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN "
             "combination.\nEither install a combination that Tensorflow supports or "
             "build and install your own tensorflow-gpu.\r\n"

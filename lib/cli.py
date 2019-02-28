@@ -27,6 +27,7 @@ class ScriptExecutor():
 
     def import_script(self):
         """ Only import a script's modules when running that script."""
+        self.test_for_tf_version()
         self.test_for_gui()
         cmd = os.path.basename(sys.argv[0])
         src = "tools" if cmd == "tools.py" else "scripts"
@@ -34,6 +35,22 @@ class ScriptExecutor():
         module = import_module(mod)
         script = getattr(module, self.command.title())
         return script
+
+    @staticmethod
+    def test_for_tf_version():
+        """ Check that the minimum required Tensorflow version is installed """
+        min_ver = 1.12
+        try:
+            import tensorflow as tf
+        except ImportError:
+            logger.error("Tensorflow is a requirement but is not installed on your system.")
+            exit(1)
+        tf_ver = float(".".join(tf.__version__.split(".")[:2]))
+        if tf_ver < min_ver:
+            logger.error("The minimum supported Tensorflow is version %s but you have version "
+                         "%s installed. Please upgrade Tensorflow.", min_ver, tf_ver)
+            exit(1)
+        logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
     def test_for_gui(self):
         """ If running the gui, check the prerequisites """
