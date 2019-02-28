@@ -11,6 +11,7 @@ import time
 
 from json import JSONDecodeError
 
+import keras
 from keras import losses
 from keras.models import load_model
 from keras.optimizers import Adam
@@ -180,7 +181,11 @@ class ModelBase():
     def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
         logger.debug("Adding input shapes to state for model")
-        inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        # PlaidML doesn't support tensor.get_shape()
+        if keras.backend.backend() == "plaidml.keras.backend":
+            inputs = {tensor.name: list(tensor.shape.dims)[-3:] for tensor in model.inputs}
+        else:
+            inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
         if not any(inp for inp in inputs.keys() if inp.startswith("face")):
             raise ValueError("No input named 'face' was found. Check your input naming. "
                              "Current input names: {}".format(inputs))
@@ -190,7 +195,11 @@ class ModelBase():
     def set_output_shape(self, model):
         """ Set the output shape for use in training and convert """
         logger.debug("Setting output shape")
-        out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
+        # PlaidML doesn't support tensor.get_shape()
+        if keras.backend.backend() == "plaidml.keras.backend":
+            out = [list(tensor.shape.dims)[-3:] for tensor in model.outputs]
+        else:
+            out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
         if not out:
             raise ValueError("No outputs found! Check your model.")
         self.output_shape = tuple(out[0])
@@ -199,7 +208,14 @@ class ModelBase():
     def compile_predictors(self):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
+        # PlaidML has a bug regarding the clipnorm parameter
+        # See: https://github.com/plaidml/plaidml/issues/228
+        # Workaround by simply removing it.
+        # TODO: Remove this as soon it is fixed in PlaidML.
+        if keras.backend.backend() == "plaidml.keras.backend":
+            optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        else:
+            optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
 
         for side, model in self.predictors.items():
             loss_names = ["loss"]
