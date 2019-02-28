@@ -309,13 +309,14 @@ class Plugins():
             detector_name = self.converter_args["detector"]
         logger.debug("Loading Detector: '%s'", detector_name)
         # Rotation
-        rotation = None
-        if hasattr(self.args, "rotate_images"):
-            rotation = self.args.rotate_images
+        rotation = self.args.rotate_images if hasattr(self.args, "rotate_images") else None
+        # Min acceptable face size:
+        min_size = self.args.min_size if hasattr(self.args, "min_size") else 0
 
         detector = PluginLoader.get_detector(detector_name)(
             loglevel=self.loglevel,
-            rotation=rotation)
+            rotation=rotation,
+            min_size=min_size)
 
         return detector
 

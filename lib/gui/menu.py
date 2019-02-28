@@ -28,9 +28,11 @@ class MainMenuBar(tk.Menu):
         self.file_menu = tk.Menu(self, tearoff=0)
         self.recent_menu = tk.Menu(self.file_menu, tearoff=0, postcommand=self.refresh_recent_menu)
         self.edit_menu = tk.Menu(self, tearoff=0)
+        self.tools_menu = tk.Menu(self, tearoff=0)
 
         self.build_file_menu()
         self.build_edit_menu()
+        self.build_tools_menu()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def build_file_menu(self):
@@ -96,17 +98,15 @@ class MainMenuBar(tk.Menu):
     def build_edit_menu(self):
         """ Add the edit menu to the menu bar """
         logger.debug("Building Edit menu")
-        edit_menu = tk.Menu(self, tearoff=0)
-
         configs = self.scan_for_configs()
         for name in sorted(list(configs.keys())):
             label = "Configure {} Plugins...".format(name.title())
             config = configs[name]
-            edit_menu.add_command(
+            self.edit_menu.add_command(
                 label=label,
                 underline=10,
                 command=lambda conf=(name, config), root=self.root: popup_config(conf, root))
-        self.add_cascade(label="Edit", menu=edit_menu, underline=0)
+        self.add_cascade(label="Edit", menu=self.edit_menu, underline=0)
         logger.debug("Built Edit menu")
 
     def scan_for_configs(self):
@@ -132,3 +132,18 @@ class MainMenuBar(tk.Menu):
         config = module.Config(None)
         logger.debug("Found '%s' config at '%s'", plugin_type, config.configfile)
         return config
+
+    def build_tools_menu(self):
+        """ Add the file menu to the menu bar """
+        logger.debug("Building Tools menu")
+        self.tools_menu.add_command(
+            label="Output System Information", underline=0, command=self.output_sysinfo)
+        self.add_cascade(label="Tools", menu=self.tools_menu, underline=0)
+        logger.debug("Built Tools menu")
+
+    @staticmethod
+    def output_sysinfo():
+        """ Output system information to console """
+        get_config().tk_vars["consoleclear"].set(True)
+        from lib.sysinfo import SysInfo
+        print(SysInfo().full_info())
