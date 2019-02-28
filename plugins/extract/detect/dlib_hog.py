@@ -37,7 +37,7 @@ class Detect(Detector):
             if item == "EOF":
                 break
             logger.trace("Detecting faces: %s", item["filename"])
-            [detect_image, scale] = self.compile_detection_image(item["image"], True, True)
+            [detect_image, scale] = self.compile_detection_image(item["image"], True, True, True)
 
             for angle in self.rotation:
                 current_image, rotmat = self.rotate_image(detect_image, angle)
