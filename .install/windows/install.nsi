@@ -16,7 +16,7 @@ InstallDir $PROFILE\faceswap
 
 
 # Faceswap Specific
-!define flagsSetup "setup.py --installer"
+!define flagsSetup "--installer"
 
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$Profile\MiniConda3"
@@ -187,7 +187,7 @@ FunctionEnd
 Function CheckCustomCondaPath
     ${NSD_GetText} $ctlCondaText $2
     ${If} $2 != ""
-        nsExec::ExecToStack "$2\Scripts\conda.exe -V"
+        nsExec::ExecToStack "$\"$2\Scripts\conda.exe$\" -V"
         pop $0
         pop $1
         ${If} $0 == 0
@@ -213,12 +213,12 @@ Function CheckPrerequisites
 
     # Conda
         # miniconda
-        nsExec::ExecToStack "$dirMiniconda\Scripts\conda.exe -V"
+        nsExec::ExecToStack "$\"$dirMiniconda\Scripts\conda.exe$\" -V"
         pop $0
         pop $1
 
         # anaconda
-        nsExec::ExecToStack "$dirAnaconda\Scripts\conda.exe -V"
+        nsExec::ExecToStack "$\"$dirAnaconda\Scripts\conda.exe$\" -V"
         pop $2
         pop $3
 
@@ -269,7 +269,7 @@ Function InstallPrerequisites
             ${If} $0 == "OK"
                 DetailPrint "Installing Git..."
                 SetDetailsPrint listonly
-                ExecWait "$dirTemp\git_installer.exe ${flagsGit} /LOADINF=$\"$gitInf$\"" $0
+                ExecWait "$dirTemp\git_installer.exe ${flagsGit} /LOADINF=$gitInf" $0
                 SetDetailsPrint both
                 ${If} $0 != 0
                     DetailPrint "Error Installing Git"
@@ -312,7 +312,7 @@ FunctionEnd
 Function CloneRepo
     DetailPrint "Downloading Faceswap..."
     SetDetailsPrint listonly
-    ExecWait "$PROGRAMFILES64\git\bin\git.exe clone ${flagsRepo} $INSTDIR" $0
+    ExecWait "$\"$PROGRAMFILES64\git\bin\git.exe$\" clone ${flagsRepo} $\"$INSTDIR$\"" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Downloading Faceswap"
@@ -331,7 +331,7 @@ Function SetEnvironment
     IfFileExists  "$dirConda\envs\faceswap" DeleteEnv CreateEnv
         DeleteEnv:
             SetDetailsPrint listonly
-            ExecWait "$dirConda\scripts\activate.bat && conda env remove -y -n $\"$envName$\" && conda deactivate" $0
+            ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda env remove -y -n $\"$envName$\" && conda deactivate" $0
             SetDetailsPrint both
             ${If} $0 != 0
                 DetailPrint "Error deleting Conda Virtual Environment"
@@ -340,7 +340,7 @@ Function SetEnvironment
 
     CreateEnv:
         SetDetailsPrint listonly
-        ExecWait "$dirConda\scripts\activate.bat && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate" $0
+        ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate" $0
         SetDetailsPrint both
         ${If} $0 != 0
             DetailPrint "Error Creating Conda Virtual Environment"
@@ -370,7 +370,7 @@ Function InstallDlib
     DetailPrint "Renaming $dlibWhl to ${dlibFinalName}"
     Rename  $dirTemp\$dlibWhl  $dirTemp\${dlibFinalName}
 
-    ExecWait "$dirConda\scripts\activate.bat && conda activate $\"$envName$\" && pip install $dirTemp\${dlibFinalName} &&  conda deactivate" $0
+    ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && pip install $dirTemp\${dlibFinalName} &&  conda deactivate" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Installing Dlib"
@@ -387,7 +387,7 @@ Function SetupFaceSwap
     ${EndIf}
 
     SetDetailsPrint listonly
-    ExecWait "$dirConda\scripts\activate.bat && conda activate $\"$envName$\" && python $INSTDIR\$0 && conda deactivate" $0
+    ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Setting up Faceswap"
@@ -402,5 +402,5 @@ Function DesktopShortcut
     FileOpen $9 "$INSTDIR\$0" w
     FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
-    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$INSTDIR\$0" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
+    CreateShortCut "$\"$DESKTOP\FaceSwap.lnk$\"" "$\"$INSTDIR\$0$\"" "" "$\"$INSTDIR\.install\windows\fs_logo_32.ico$\""
 FunctionEnd
