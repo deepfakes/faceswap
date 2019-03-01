@@ -402,5 +402,5 @@ Function DesktopShortcut
     FileOpen $9 "$INSTDIR\$0" w
     FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
-    CreateShortCut "$\"$DESKTOP\FaceSwap.lnk$\"" "$\"$INSTDIR\$0$\"" "" "$\"$INSTDIR\.install\windows\fs_logo_32.ico$\""
+    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
 FunctionEnd
