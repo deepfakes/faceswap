@@ -208,14 +208,20 @@ class ModelBase():
     def compile_predictors(self):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        # PlaidML has a bug regarding the clipnorm parameter
-        # See: https://github.com/plaidml/plaidml/issues/228
-        # Workaround by simply removing it.
-        # TODO: Remove this as soon it is fixed in PlaidML.
-        if keras.backend.backend() == "plaidml.keras.backend":
-            optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        else:
-            optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
+        # TODO Look to re-instate clipnorm
+        # Clipnorm is ballooning VRAM useage, which is not expected behaviour
+        # and may be a bug in Keras/TF?
+        # For now this is commented out, but revisit in future to reinstate
+
+        ## PlaidML has a bug regarding the clipnorm parameter
+        ## See: https://github.com/plaidml/plaidml/issues/228
+        ## Workaround by simply removing it.
+        ## TODO: Remove this as soon it is fixed in PlaidML.
+        #if keras.backend.backend() == "plaidml.keras.backend":
+        #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        #else:
+        #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
+        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
             loss_names = ["loss"]
