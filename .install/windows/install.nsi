@@ -312,7 +312,12 @@ FunctionEnd
 Function CloneRepo
     DetailPrint "Downloading Faceswap..."
     SetDetailsPrint listonly
-    ExecWait "$\"$PROGRAMFILES64\git\bin\git.exe$\" clone ${flagsRepo} $\"$INSTDIR$\"" $0
+    ${If} $InstallGit == 1
+        StrCpy $9 "$\"$PROGRAMFILES64\git\bin\git.exe$\""
+    ${Else}
+        StrCpy $9 "git"
+    ${EndIf}
+    ExecWait "$9 clone ${flagsRepo} $\"$INSTDIR$\"" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Downloading Faceswap"
