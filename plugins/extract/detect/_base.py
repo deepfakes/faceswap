@@ -15,7 +15,6 @@ import logging
 import os
 import traceback
 from io import StringIO
-from math import sqrt
 
 import cv2
 import dlib
@@ -80,9 +79,6 @@ class Detector():
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
             Override for specific detector """
-        logger_init = kwargs["log_init"]
-        log_queue = kwargs["log_queue"]
-        logger_init(self.loglevel, log_queue)
         logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
         self.init = kwargs.get("event", False)

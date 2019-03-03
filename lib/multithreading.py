@@ -21,8 +21,9 @@ class PoolProcess():
 
         self.procs = self.set_procs(processes)
         ctx = mp.get_context("spawn")
-        self.pool = ctx.Pool(processes=self.procs)
-
+        self.pool = ctx.Pool(processes=self.procs,
+                             initializer=set_root_logger,
+                             initargs=(logger.getEffectiveLevel(), LOG_QUEUE))
         self._method = method
         self._kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
         self._args = args
@@ -32,8 +33,6 @@ class PoolProcess():
     @staticmethod
     def build_target_kwargs(in_queue, out_queue, kwargs):
         """ Add standard kwargs to passed in kwargs list """
-        kwargs["log_init"] = set_root_logger
-        kwargs["log_queue"] = LOG_QUEUE
         kwargs["in_queue"] = in_queue
         kwargs["out_queue"] = out_queue
         return kwargs
@@ -83,9 +82,18 @@ class SpawnProcess(mp.context.SpawnProcess):
         kwargs["event"] = self.event
         kwargs["log_init"] = set_root_logger
         kwargs["log_queue"] = LOG_QUEUE
+        kwargs["log_level"] = logger.getEffectiveLevel()
         kwargs["in_queue"] = in_queue
         kwargs["out_queue"] = out_queue
         return kwargs
+
+    def run(self):
+        """ Add logger to spawned process """
+        logger_init = self._kwargs["log_init"]
+        log_queue = self._kwargs["log_queue"]
+        log_level = self._kwargs["log_level"]
+        logger_init(log_level, log_queue)
+        super().run()
 
     def start(self):
         """ Add logging to start function """
