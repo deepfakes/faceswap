@@ -14,9 +14,9 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-from keras.initializers import he_uniform, Constant
+from keras.initializers import he_uniform, Constant, VarianceScaling
 from .initializers import ICNR
-from .layers import PixelShuffler, Scale, SubPixelUpscaling, ReflectionPadding2D
+from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D
 from .normalization import GroupNormalization, InstanceNormalization
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -66,12 +66,14 @@ class NNBlocks():
         if self.use_reflect_padding:
             inp = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(inp)
             padding = 'valid'
+        temp = kwargs["kernel_initializer"]
         if self.use_icnr_init:
             kwargs["kernel_initializer"] = ICNR(initializer=kwargs["kernel_initializer"])
         var_x = Conv2D(filters * 4,
                        kernel_size=kernel_size,
                        padding=padding,
                        **kwargs)(inp)
+        kwargs["kernel_initializer"] = temp
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
         if not res_block_follows:
@@ -100,11 +102,15 @@ class NNBlocks():
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
             padding = 'valid'
+        temp = kwargs["kernel_initializer"]
+        kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
+                                                       mode='fan_in',
+                                                       distribution='uniform')
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
                        padding=padding,
                        **kwargs)(var_x)
-        var_x = Scale(gamma_init=Constant(value=0.1))(var_x)
+        kwargs["kernel_initializer"] = temp
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
