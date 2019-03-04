@@ -58,7 +58,7 @@ class TrainingDataGenerator():
             (batchsize, self.model_input_size, self.model_input_size, 3),
             (batchsize, self.model_output_size, self.model_output_size, 3)))
         if self.mask_function:
-            batch_shape.append((self.batchsize, self.model_input_size, self.model_input_size, 1))
+            batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
 
         load_process = FixedProducerDispatcher(
             self.load_batches,
@@ -86,7 +86,7 @@ class TrainingDataGenerator():
         epoch = 0
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
-            logger.debug("Putting to batch queue: (side: '%s', is_timelapse: %s)",
+            logger.trace("Putting to batch queue: (side: '%s', is_timelapse: %s)",
                          side, is_timelapse)
             for i, img_path in enumerate(img_iter):
                 imgs = self.process_face(img_path, side, is_timelapse)

@@ -19,12 +19,12 @@ _launched_processes = set()  # pylint: disable=invalid-name
 class ConsumerBuffer():
     """ Memory buffer for consuming """
     def __init__(self, dispatcher, index, data):
-        logger.debug("Initializing %s: (dispatcher: '%s', index: %s, data: %s)",
+        logger.trace("Initializing %s: (dispatcher: '%s', index: %s, data: %s)",
                      self.__class__.__name__, dispatcher, index, data)
         self._data = data
         self._id = index
         self._dispatcher = dispatcher
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.trace("Initialized %s", self.__class__.__name__)
 
     def get(self):
         """ Return Data """
@@ -46,13 +46,13 @@ class ConsumerBuffer():
 class WorkerBuffer():
     """ Memory buffer for working """
     def __init__(self, index, data, stop_event, queue):
-        logger.debug("Initializing %s: (index: '%s', data: %s, stop_event: %s, queue: %s)",
+        logger.trace("Initializing %s: (index: '%s', data: %s, stop_event: %s, queue: %s)",
                      self.__class__.__name__, index, data, stop_event, queue)
         self._id = index
         self._data = data
         self._stop_event = stop_event
         self._queue = queue
-        logger.debug("Initialized %s", self.__class__.__name__)
+        logger.trace("Initialized %s", self.__class__.__name__)
 
     def get(self):
         """ Return Data """
@@ -226,7 +226,7 @@ class FixedProducerDispatcher():
                 self._buffer_tokens.get(block=False, timeout=0.01)
             except Queue.Empty:
                 break
-        self._result_tokens.close()
+        self._buffer_tokens.close()
         for worker in self._worker:
             worker.join()
 
