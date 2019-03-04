@@ -11,8 +11,7 @@ import numpy as np
 from scipy.interpolate import griddata
 
 from lib.model import masks
-from lib.multithreading import MultiThread, FixedProducerDispatcher
-from lib.queue_manager import queue_manager
+from lib.multithreading import FixedProducerDispatcher
 from lib.umeyama import umeyama
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -53,43 +52,42 @@ class TrainingDataGenerator():
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "is_timelapse: %s)", len(images), batchsize, side, do_shuffle, is_timelapse)
         self.batchsize = batchsize
+        training_size = self.training_opts.get("training_size", 256)
         batch_shape = list((
-            (batchsize,256,256,3), # sample images. We assume (256,256,3) for now
+            (batchsize, training_size, training_size, 3),  # sample images
             (batchsize, self.model_input_size, self.model_input_size, 3),
-            (batchsize, self.model_output_size, self.model_output_size, 3),
-        ))
+            (batchsize, self.model_output_size, self.model_output_size, 3)))
         if self.mask_function:
-            batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
+            batch_shape.append((self.batchsize, self.model_input_size, self.model_input_size, 1))
 
-        q_name = "timelapse_{}".format(side) if is_timelapse else "train_{}".format(side)
-        load_thread = FixedProducerDispatcher(
+        load_process = FixedProducerDispatcher(
             self.load_batches,
             batch_shape,
-            args=(images, q_name, side, is_timelapse, do_shuffle, batchsize),
-            log_queue=queue_manager._log_queue,
-            log_level=logger.getEffectiveLevel(),
-        )
-        load_thread.start()
-        logger.debug("Batching to queue: (side: '%s', queue: '%s')", side, q_name)
-        return self.minibatch(q_name, load_thread)
+            args=(images, side, is_timelapse, do_shuffle, batchsize))
+        load_process.start()
+        logger.debug("Batching to queue: (side: '%s', is_timelapse: %s)", side, is_timelapse)
+        return self.minibatch(side, is_timelapse, load_process)
 
-    def load_batches(self, mem_gen, images, q_name, side, is_timelapse, do_shuffle=True, batchsize=0):
+    def load_batches(self, mem_gen, images, side, is_timelapse,
+                     do_shuffle=True, batchsize=0):
         """ Load the warped images and target images to queue """
-        logger.debug("Loading batch: (image_count: %s, q_name: '%s', side: '%s', "
-                     "is_timelapse: %s, do_shuffle: %s)",
-                     len(images), q_name, side, is_timelapse, do_shuffle)
+        logger.debug("Loading batch: (image_count: %s, side: '%s', is_timelapse: %s, "
+                     "do_shuffle: %s)", len(images), side, is_timelapse, do_shuffle)
         self.validate_samples(images)
+
         def _img_iter(imgs):
             while True:
                 if do_shuffle:
                     shuffle(imgs)
                 for img in imgs:
                     yield img
+
         img_iter = _img_iter(images)
         epoch = 0
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
-            logger.debug("Putting to batch queue: (q_name: '%s', side: '%s')", q_name, side)
+            logger.debug("Putting to batch queue: (side: '%s', is_timelapse: %s)",
+                         side, is_timelapse)
             for i, img_path in enumerate(img_iter):
                 imgs = self.process_face(img_path, side, is_timelapse)
                 for j, img in enumerate(imgs):
@@ -98,8 +96,8 @@ class TrainingDataGenerator():
                 if i == batchsize - 1:
                     break
             memory_wrapper.ready()
-        logger.debug("Finished batching: (epoch: %s, q_name: '%s', side: '%s')",
-                     epoch, q_name, side)
+        logger.debug("Finished batching: (epoch: %s, side: '%s', is_timelapse: %s)",
+                     epoch, side, is_timelapse)
 
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
@@ -110,18 +108,22 @@ class TrainingDataGenerator():
                "batch-size: {}".format(length, self.batchsize))
         assert length >= self.batchsize, msg
 
-    def minibatch(self, q_name, load_thread):
+    @staticmethod
+    def minibatch(side, is_timelapse, load_process):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
-        logger.debug("Launching minibatch generator for queue: '%s'", q_name)
-        for batch_wrapper in load_thread:
+        logger.debug("Launching minibatch generator for queue (side: '%s', is_timelapse: %s)",
+                     side, is_timelapse)
+        for batch_wrapper in load_process:
             with batch_wrapper as batch:
-                logger.trace("Yielding batch: (size: %s, item shapes: %s, queue:  '%s'",
-                             len(batch), [item.shape for item in batch], q_name)
+                logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
+                             "is_timelapse: %s)",
+                             len(batch), [item.shape for item in batch], side, is_timelapse)
                 yield batch
-        load_thread.stop()
-        logger.debug("Finished minibatch generator for queue: '%s'", q_name)
-        load_thread.join()
+        load_process.stop()
+        logger.debug("Finished minibatch generator for queue: (side: '%s', is_timelapse: %s)",
+                     side, is_timelapse)
+        load_process.join()
 
     def process_face(self, filename, side, is_timelapse):
         """ Load an image and perform transformation and warping """
