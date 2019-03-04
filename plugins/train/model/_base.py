@@ -61,6 +61,7 @@ class ModelBase():
         self.trainer = trainer
 
         self.state = State(self.model_dir, self.name, no_logs, training_image_size)
+        self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
 
@@ -331,7 +332,8 @@ class ModelBase():
             logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
             exit(0)
 
-        K.clear_session()
+        if not self.is_legacy:
+            K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:
@@ -448,6 +450,7 @@ class ModelBase():
             logger.debug("No legacy files to rename")
             return
 
+        self.is_legacy = True
         logger.debug("Creating state file for legacy model")
         self.state.inputs = {"face:0": [64, 64, 3]}
         self.state.training_size = 256
