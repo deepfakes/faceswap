@@ -132,14 +132,16 @@ class TrainerBase():
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
-        is_preview_iteration = False if viewer is None else True
+        do_preview = False if viewer is None else True
+        do_timelapse = False if timelapse_kwargs is None else True
         loss = dict()
         for side, batcher in self.batchers.items():
-            loss[side] = batcher.train_one_batch(is_preview_iteration)
-            if not is_preview_iteration:
+            loss[side] = batcher.train_one_batch(do_preview)
+            if not do_preview and not do_timelapse:
                 continue
-            self.samples.images[side] = batcher.compile_sample(self.batch_size)
-            if timelapse_kwargs:
+            if do_preview:
+                self.samples.images[side] = batcher.compile_sample(self.batch_size)
+            if do_timelapse:
                 self.timelapse.get_sample(side, timelapse_kwargs)
 
         self.model.state.increment_iterations()
@@ -149,11 +151,11 @@ class TrainerBase():
             self.log_tensorboard(side, side_loss)
         self.print_loss(loss)
 
-        if viewer is not None:
+        if do_preview:
             viewer(self.samples.show_sample(),
                    "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
-        if timelapse_kwargs is not None:
+        if do_timelapse:
             self.timelapse.output_timelapse()
 
     def store_history(self, side, loss):
@@ -205,23 +207,23 @@ class Batcher():
         generator = TrainingDataGenerator(input_size, output_size, self.model.training_opts)
         return generator
 
-    def train_one_batch(self, is_preview_iteration):
+    def train_one_batch(self, do_preview):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        batch = self.get_next(is_preview_iteration)
+        batch = self.get_next(do_preview)
         loss = self.model.predictors[self.side].train_on_batch(*batch)
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self, is_preview_iteration):
+    def get_next(self, do_preview):
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        self.samples = batch[0] if is_preview_iteration else None
+        self.samples = batch[0] if do_preview else None
         batch = batch[1:]   # Remove full size samples from batch
         if self.use_mask:
             batch = self.compile_mask(batch)
-        self.target = batch[1] if is_preview_iteration else None
+        self.target = batch[1] if do_preview else None
         return batch
 
     def compile_mask(self, batch):

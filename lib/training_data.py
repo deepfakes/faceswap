@@ -12,6 +12,7 @@ from scipy.interpolate import griddata
 
 from lib.model import masks
 from lib.multithreading import FixedProducerDispatcher
+from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -52,6 +53,7 @@ class TrainingDataGenerator():
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "is_timelapse: %s)", len(images), batchsize, side, do_shuffle, is_timelapse)
         self.batchsize = batchsize
+        queue_in, queue_out = self.make_queues(side, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list((
             (batchsize, training_size, training_size, 3),  # sample images
@@ -61,12 +63,23 @@ class TrainingDataGenerator():
             batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
 
         load_process = FixedProducerDispatcher(
-            self.load_batches,
-            batch_shape,
+            method=self.load_batches,
+            shapes=batch_shape,
+            in_queue=queue_in,
+            out_queue=queue_out,
             args=(images, side, is_timelapse, do_shuffle, batchsize))
         load_process.start()
         logger.debug("Batching to queue: (side: '%s', is_timelapse: %s)", side, is_timelapse)
         return self.minibatch(side, is_timelapse, load_process)
+
+    @staticmethod
+    def make_queues(side, is_timelapse):
+        """ Create the buffer token queues for Fixed Producer Dispatcher """
+        q_name = "timelapse_{}".format(side) if is_timelapse else "train_{}".format(side)
+        q_names = ["{}_{}".format(q_name, direction) for direction in ("in", "out")]
+        logger.debug(q_names)
+        queues = [queue_manager.get_queue(queue) for queue in q_names]
+        return queues
 
     def load_batches(self, mem_gen, images, side, is_timelapse,
                      do_shuffle=True, batchsize=0):

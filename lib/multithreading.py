@@ -102,10 +102,10 @@ class FixedProducerDispatcher():
             with batch_wrapper as batch:
                 send_batch_to_trainer(batch)
     """
-    EVENT = mp.Event
-    QUEUE = mp.Queue
+    CTX = mp.get_context("spawn")
+    EVENT = CTX.Event
 
-    def __init__(self, method, shapes,
+    def __init__(self, method, shapes, in_queue, out_queue,
                  args=tuple(), kwargs={}, ctype=c_float, workers=1, buffers=None):
         logger.debug("Initializing %s: (method: '%s', shapes: %s, args: %s, kwargs: %s, "
                      "ctype: %s, workers: %s, buffers: %s)", self.__class__.__name__, method,
@@ -118,10 +118,10 @@ class FixedProducerDispatcher():
         self._target_func = method
         self._shapes = shapes
         self._stop_event = self.EVENT()
-        self._buffer_tokens = self.QUEUE()
+        self._buffer_tokens = in_queue
         for i in range(buffers):
             self._buffer_tokens.put(i)
-        self._result_tokens = self.QUEUE()
+        self._result_tokens = out_queue
         worker_data, self.data = self._create_data(shapes, ctype, buffers)
         proc_args = {
             'data': worker_data,
@@ -162,7 +162,7 @@ class FixedProducerDispatcher():
 
     def _create_worker(self, kwargs):
         """ Create Worker """
-        return mp.Process(target=self._runner, kwargs=kwargs)
+        return self.CTX.Process(target=self._runner, kwargs=kwargs)
 
     def free(self, index):
         """ Free memory """
@@ -220,13 +220,11 @@ class FixedProducerDispatcher():
         while self._open_worker:
             if self._result_tokens.get() is None:
                 self._open_worker -= 1
-        self._result_tokens.close()
         while True:
             try:
                 self._buffer_tokens.get(block=False, timeout=0.01)
             except Queue.Empty:
                 break
-        self._buffer_tokens.close()
         for worker in self._worker:
             worker.join()
 
@@ -247,15 +245,14 @@ class FixedProducerDispatcher():
                 args=None, kwargs=None):
         """ Shared Memory Object runner """
         # Fork inherits the queue handler, so skip registration with "fork"
-        if log_queue and log_level is not None and mp.get_start_method() != "fork":
-            set_root_logger(log_level, queue=log_queue)
+        set_root_logger(log_level, queue=log_queue)
         logger.debug("FixedProducerDispatcher worker for %s started", str(target))
         np_data = [cls._np_from_shared(d, shapes, dtype) for d in data]
 
         def get_free_slot():
             while not stop_event.is_set():
                 i = buffer_tokens.get()
-                if stop_event.is_set() or i is None:
+                if stop_event.is_set() or i is None or i == "EOF":
                     break
                 yield WorkerBuffer(i, np_data[i], stop_event, result_tokens)
 
