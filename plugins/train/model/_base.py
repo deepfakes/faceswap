@@ -13,6 +13,7 @@ from json import JSONDecodeError
 
 import keras
 from keras import losses
+from keras import backend as K
 from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
@@ -47,6 +48,7 @@ class ModelBase():
                      "input_shape: %s, encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      training_image_size, alignments_paths, preview_scale, input_shape,
                      encoder_dim)
+
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
@@ -93,6 +95,13 @@ class ModelBase():
         basename = os.path.basename(sys.modules[self.__module__].__file__)
         retval = os.path.splitext(basename)[0].lower()
         logger.debug("model name: '%s'", retval)
+        return retval
+
+    @property
+    def models_exist(self):
+        """ Return if all files exist and clear session """
+        retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
+        logger.debug("Pre-existing models exist: %s", retval)
         return retval
 
     def set_training_data(self):
@@ -213,13 +222,13 @@ class ModelBase():
         # and may be a bug in Keras/TF?
         # For now this is commented out, but revisit in future to reinstate
 
-        ## PlaidML has a bug regarding the clipnorm parameter
-        ## See: https://github.com/plaidml/plaidml/issues/228
-        ## Workaround by simply removing it.
-        ## TODO: Remove this as soon it is fixed in PlaidML.
-        #if keras.backend.backend() == "plaidml.keras.backend":
+        # # PlaidML has a bug regarding the clipnorm parameter
+        # # See: https://github.com/plaidml/plaidml/issues/228
+        # # Workaround by simply removing it.
+        # # TODO: Remove this as soon it is fixed in PlaidML.
+        # if keras.backend.backend() == "plaidml.keras.backend":
         #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        #else:
+        # else:
         #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
         optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
 
@@ -314,13 +323,21 @@ class ModelBase():
     def load_models(self, swapped):
         """ Load models from file """
         logger.debug("Load model: (swapped: %s)", swapped)
+
+        if not self.models_exist and not self.predict:
+            logger.info("Creating new '%s' model in folder: '%s'", self.name, self.model_dir)
+            return
+        if not self.models_exist and self.predict:
+            logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
+            exit(0)
+
+        K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:
-                is_loaded = network.load(predict=self.predict)
+                is_loaded = network.load()
             else:
-                is_loaded = network.load(fullpath=model_mapping[network.side][network.type],
-                                         predict=self.predict)
+                is_loaded = network.load(fullpath=model_mapping[network.side][network.type])
             if not is_loaded:
                 break
         if is_loaded:
@@ -482,7 +499,7 @@ class NNMeta():
             name += "_{}".format(self.side)
         return name
 
-    def load(self, fullpath=None, predict=False):
+    def load(self, fullpath=None):
         """ Load model """
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Loading model: '%s'", fullpath)
@@ -492,14 +509,10 @@ class NNMeta():
             if str(err).lower().startswith("cannot create group in read only mode"):
                 self.convert_legacy_weights()
                 return True
-            if predict:
-                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
         except OSError as err:  # pylint: disable=broad-except
-            if predict:
-                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
