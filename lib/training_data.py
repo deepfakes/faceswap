@@ -59,7 +59,7 @@ class TrainingDataGenerator():
             (batchsize, self.model_output_size, self.model_output_size, 3),
         ))
         if self.mask_function:
-            batch_shape.append((self.batchsize, self.model_input_size, self.model_input_size, 1))
+            batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
 
         q_name = "timelapse_{}".format(side) if is_timelapse else "train_{}".format(side)
         load_thread = FixedProducerDispatcher(
