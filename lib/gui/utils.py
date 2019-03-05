@@ -589,8 +589,11 @@ class Config():
         """ Add to recent files """
         recent_filename = os.path.join(self.pathcache, ".recent.json")
         logger.debug("Adding to recent files '%s': (%s, %s)", recent_filename, filename, command)
-        with open(recent_filename, "rb") as inp:
-            recent_files = self.serializer.unmarshal(inp.read().decode("utf-8"))
+        if not os.path.exists(recent_filename):
+            recent_files = list()
+        else:
+            with open(recent_filename, "rb") as inp:
+                recent_files = self.serializer.unmarshal(inp.read().decode("utf-8"))
         logger.debug("Initial recent files: %s", recent_files)
         filenames = [recent[0] for recent in recent_files]
         if filename in filenames:
