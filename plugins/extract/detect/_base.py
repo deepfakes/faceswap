@@ -145,10 +145,12 @@ class Detector():
         return retval
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
-    def compile_detection_image(self, image, is_square, scale_up):
+    def compile_detection_image(self, input_image, is_square, scale_up, to_rgb):
         """ Compile the detection image """
+        image = input_image[:, :, ::-1].copy() if to_rgb else input_image.copy()
         scale = self.set_scale(image, is_square=is_square, scale_up=scale_up)
-        return [self.set_detect_image(image, scale), scale]
+        image = self.scale_image(image, scale)
+        return [image, scale]
 
     def set_scale(self, image, is_square=False, scale_up=False):
         """ Set the scale factor for incoming image """
@@ -174,10 +176,9 @@ class Detector():
         return scale
 
     @staticmethod
-    def set_detect_image(input_image, scale):
-        """ Convert the image to RGB and scale """
+    def scale_image(image, scale):
+        """ Scale the image """
         # pylint: disable=no-member
-        image = input_image[:, :, ::-1].copy()
         if scale == 1.0:
             return image
 
@@ -317,14 +318,14 @@ class Detector():
     # <<< MISC METHODS >>> #
     @staticmethod
     def get_vram_free():
-        """ Return total free VRAM on largest card """
+        """ Return free and total VRAM on card with most VRAM free"""
         stats = GPUStats()
         vram = stats.get_card_most_free()
         logger.verbose("Using device %s with %sMB free of %sMB",
                        vram["device"],
                        int(vram["free"]),
                        int(vram["total"]))
-        return int(vram["free"])
+        return int(vram["card_id"]), int(vram["free"]), int(vram["total"])
 
     @staticmethod
     def set_predetected(width, height):

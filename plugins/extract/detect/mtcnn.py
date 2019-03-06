@@ -79,7 +79,7 @@ class Detect(Detector):
         # Must import tensorflow inside the spawned process
         # for Windows machines
         import_tensorflow()
-        vram_free = self.get_vram_free()
+        _, vram_free, _ = self.get_vram_free()
         mtcnn_graph = tf.Graph()
 
         # Windows machines sometimes misreport available vram, and overuse
@@ -138,7 +138,7 @@ class Detect(Detector):
             if item == "EOF":
                 break
             logger.trace("Detecting faces: '%s'", item["filename"])
-            [detect_image, scale] = self.compile_detection_image(item["image"], False, False)
+            [detect_image, scale] = self.compile_detection_image(item["image"], False, False, True)
 
             for angle in self.rotation:
                 current_image, rotmat = self.rotate_image(detect_image, angle)

@@ -41,7 +41,7 @@ class Detect(Detector):
         is_cuda = self.compiled_for_cuda()
         if is_cuda:
             logger.debug("Using GPU")
-            vram_free = self.get_vram_free()
+            _, vram_free, _ = self.get_vram_free()
         else:
             logger.verbose("Using CPU")
             vram_free = 2048
@@ -72,6 +72,7 @@ class Detect(Detector):
             for item in batch:
                 filenames.append(item["filename"])
                 images.append(item["image"])
+
             [detect_images, scales] = self.compile_detection_images(images)
             batch_detected = self.detect_batch(detect_images)
             processed = self.process_output(batch_detected,
@@ -103,8 +104,8 @@ class Detect(Detector):
         detect_images = list()
         scales = list()
         for image in images:
-            scale = self.set_scale(image, is_square=True, scale_up=True)
-            detect_images.append(self.set_detect_image(image, scale))
+            detect_image, scale = self.compile_detection_image(image, True, True, True)
+            detect_images.append(detect_image)
             scales.append(scale)
         logger.trace("Compiled Detection Images")
         return [detect_images, scales]
