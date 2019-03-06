@@ -44,7 +44,8 @@ class Detect(Detector):
             tf_ratio = self.vram / vram_total
         logger.verbose("Reserving %s%% of total VRAM per s3fd thread", round(tf_ratio, 2))
 
-        self.model = S3fd(self.model_path, self.target, tf_ratio, card_id)
+        confidence = self.config["confidence"] / 100
+        self.model = S3fd(self.model_path, self.target, tf_ratio, card_id, confidence)
 
         if not self.model.is_gpu:
             alloc = 2048
@@ -119,7 +120,7 @@ class Detect(Detector):
 
 class S3fd():
     """ Tensorflow Network """
-    def __init__(self, model_path, target_size, vram_ratio, card_id):
+    def __init__(self, model_path, target_size, vram_ratio, card_id, confidence):
         logger.debug("Initializing: %s: (model_path: '%s', target_size: %s, vram_ratio: %s, "
                      "card_id: %s)",
                      self.__class__.__name__, model_path, target_size, vram_ratio, card_id)
@@ -128,6 +129,7 @@ class S3fd():
         self.is_gpu = False
         self.tf = tf  # pylint: disable=invalid-name
         self.model_path = model_path
+        self.confidence = confidence
         self.graph = self.load_graph()
         self.input = self.graph.get_tensor_by_name("s3fd/input_1:0")
         self.output = self.get_outputs()
@@ -183,7 +185,7 @@ class S3fd():
 
         keep = self.nms(bboxlist, 0.3)
         bboxlist = bboxlist[keep, :]
-        bboxlist = [x for x in bboxlist if x[-1] > 0.5]
+        bboxlist = [x for x in bboxlist if x[-1] >= self.confidence]
 
         return np.array(bboxlist)
 

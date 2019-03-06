@@ -455,7 +455,9 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n'mtcnn': slower than dlib, but uses fewer"
                     "\n\tresources whilst detecting more faces and"
                     "\n\tmore false positives. Has superior"
-                    "\n\talignment to dlib"})
+                    "\n\talignment to dlib"
+                    "\n's3fd': Can detect more faces than mtcnn, but"
+                    "\n\t is a lot more resource intensive"})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "type": str.lower,
