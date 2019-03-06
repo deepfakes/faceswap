@@ -726,23 +726,33 @@ class Rename():
     def check_multi_hashes(self, faces, frame, idx):
         """ Check filenames for where multiple faces have the
             same hash (e.g. for freeze frames) """
+        logger.debug("Multiple hashes: (frame: faces: %s, frame: '%s', idx: %s", faces, frame, idx)
         frame_idx = "{}_{}".format(frame, idx)
+        retval = None
         for face_name, extension in faces:
             if (face_name, extension) in self.seen_multihash:
                 # Don't return a filename that has already been processed
+                logger.debug("Already seen: %s", (face_name, extension))
                 continue
             if face_name == frame_idx:
                 # If a matching filename already exists return that
-                self.seen_multihash.add((face_name, extension))
-                return face_name, extension
+                retval = (face_name, extension)
+                logger.debug("Matching filename found: %s", retval)
+                self.seen_multihash.add(retval)
+                break
             if face_name.startswith(frame):
                 # If a matching framename already exists return that
-                self.seen_multihash.add((face_name, extension))
-                return face_name, extension
-        # If no matches, just pop the first filename
-        face_name, extension = faces[0]
-        self.seen_multihash.add((face_name, extension))
-        return face_name, extension
+                retval = (face_name, extension)
+                logger.debug("Matching freamename found: %s", retval)
+                self.seen_multihash.add(retval)
+                break
+        if not retval:
+            # If no matches, just pop the first filename
+            retval = [face for face in faces if face not in self.seen_multihash][0]
+            logger.debug("No matches found. Choosing: %s", retval)
+            self.seen_multihash.add(retval)
+        logger.debug("Returning: %s", retval)
+        return retval
 
 
 class Sort():

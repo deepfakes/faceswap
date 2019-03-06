@@ -11,7 +11,9 @@ import time
 
 from json import JSONDecodeError
 
+import keras
 from keras import losses
+from keras import backend as K
 from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
@@ -46,6 +48,7 @@ class ModelBase():
                      "input_shape: %s, encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
                      training_image_size, alignments_paths, preview_scale, input_shape,
                      encoder_dim)
+
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
@@ -58,6 +61,7 @@ class ModelBase():
         self.trainer = trainer
 
         self.state = State(self.model_dir, self.name, no_logs, training_image_size)
+        self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
 
@@ -92,6 +96,13 @@ class ModelBase():
         basename = os.path.basename(sys.modules[self.__module__].__file__)
         retval = os.path.splitext(basename)[0].lower()
         logger.debug("model name: '%s'", retval)
+        return retval
+
+    @property
+    def models_exist(self):
+        """ Return if all files exist and clear session """
+        retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
+        logger.debug("Pre-existing models exist: %s", retval)
         return retval
 
     def set_training_data(self):
@@ -180,7 +191,11 @@ class ModelBase():
     def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
         logger.debug("Adding input shapes to state for model")
-        inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        # PlaidML doesn't support tensor.get_shape()
+        if keras.backend.backend() == "plaidml.keras.backend":
+            inputs = {tensor.name: list(tensor.shape.dims)[-3:] for tensor in model.inputs}
+        else:
+            inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
         if not any(inp for inp in inputs.keys() if inp.startswith("face")):
             raise ValueError("No input named 'face' was found. Check your input naming. "
                              "Current input names: {}".format(inputs))
@@ -190,7 +205,11 @@ class ModelBase():
     def set_output_shape(self, model):
         """ Set the output shape for use in training and convert """
         logger.debug("Setting output shape")
-        out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
+        # PlaidML doesn't support tensor.get_shape()
+        if keras.backend.backend() == "plaidml.keras.backend":
+            out = [list(tensor.shape.dims)[-3:] for tensor in model.outputs]
+        else:
+            out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
         if not out:
             raise ValueError("No outputs found! Check your model.")
         self.output_shape = tuple(out[0])
@@ -199,7 +218,20 @@ class ModelBase():
     def compile_predictors(self):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
+        # TODO Look to re-instate clipnorm
+        # Clipnorm is ballooning VRAM useage, which is not expected behaviour
+        # and may be a bug in Keras/TF?
+        # For now this is commented out, but revisit in future to reinstate
+
+        # # PlaidML has a bug regarding the clipnorm parameter
+        # # See: https://github.com/plaidml/plaidml/issues/228
+        # # Workaround by simply removing it.
+        # # TODO: Remove this as soon it is fixed in PlaidML.
+        # if keras.backend.backend() == "plaidml.keras.backend":
+        #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        # else:
+        #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
+        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
             loss_names = ["loss"]
@@ -292,13 +324,22 @@ class ModelBase():
     def load_models(self, swapped):
         """ Load models from file """
         logger.debug("Load model: (swapped: %s)", swapped)
+
+        if not self.models_exist and not self.predict:
+            logger.info("Creating new '%s' model in folder: '%s'", self.name, self.model_dir)
+            return
+        if not self.models_exist and self.predict:
+            logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
+            exit(0)
+
+        if not self.is_legacy:
+            K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:
-                is_loaded = network.load(predict=self.predict)
+                is_loaded = network.load()
             else:
-                is_loaded = network.load(fullpath=model_mapping[network.side][network.type],
-                                         predict=self.predict)
+                is_loaded = network.load(fullpath=model_mapping[network.side][network.type])
             if not is_loaded:
                 break
         if is_loaded:
@@ -409,6 +450,7 @@ class ModelBase():
             logger.debug("No legacy files to rename")
             return
 
+        self.is_legacy = True
         logger.debug("Creating state file for legacy model")
         self.state.inputs = {"face:0": [64, 64, 3]}
         self.state.training_size = 256
@@ -460,7 +502,7 @@ class NNMeta():
             name += "_{}".format(self.side)
         return name
 
-    def load(self, fullpath=None, predict=False):
+    def load(self, fullpath=None):
         """ Load model """
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Loading model: '%s'", fullpath)
@@ -470,14 +512,10 @@ class NNMeta():
             if str(err).lower().startswith("cannot create group in read only mode"):
                 self.convert_legacy_weights()
                 return True
-            if predict:
-                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
         except OSError as err:  # pylint: disable=broad-except
-            if predict:
-                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False

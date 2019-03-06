@@ -1,12 +1,14 @@
 #!/usr/bin python3
 """ The Menu Bars for faceswap GUI """
 
+import locale
 import logging
 import os
 import sys
 import tkinter as tk
 
 from importlib import import_module
+from subprocess import Popen, PIPE, STDOUT
 
 from lib.Serializer import JSONSerializer
 
@@ -137,6 +139,8 @@ class MainMenuBar(tk.Menu):
         """ Add the file menu to the menu bar """
         logger.debug("Building Tools menu")
         self.tools_menu.add_command(
+            label="Check for updates...", underline=0, command=self.check_updates)
+        self.tools_menu.add_command(
             label="Output System Information", underline=0, command=self.output_sysinfo)
         self.add_cascade(label="Tools", menu=self.tools_menu, underline=0)
         logger.debug("Built Tools menu")
@@ -147,3 +151,57 @@ class MainMenuBar(tk.Menu):
         get_config().tk_vars["consoleclear"].set(True)
         from lib.sysinfo import SysInfo
         print(SysInfo().full_info())
+
+    @staticmethod
+    def check_updates():
+        """ Check for updates and clone repo """
+        get_config().tk_vars["consoleclear"].set(True)
+        encoding = locale.getpreferredencoding()
+
+        # Do the check
+        cmd = Popen("git remote update && git status -uno", shell=True, stdout=PIPE, stderr=STDOUT)
+        stdout, _ = cmd.communicate()
+        retcode = cmd.poll()
+        logger.debug("Check output: %s", stdout.decode(encoding))
+        logger.debug("Check returncode: %s", retcode)
+        if retcode != 0:
+            print("Git is not installed or you are not running a cloned repo. "
+                  "Unable to check for updates")
+            return
+        chk = stdout.decode(encoding).splitlines()
+
+        update = False
+        for line in chk:
+            if line.lower().startswith("your branch is ahead"):
+                print("Your branch is ahead of the remote repo. Not updating")
+                break
+            if line.lower().startswith("your branch is up to date"):
+                print("Faceswap is up to date.")
+                break
+            if line.lower().startswith("your branch is behind"):
+                update = True
+                break
+            if "have diverged" in line.lower():
+                print("Your branch has diverged from the remote repo. Not updating")
+                break
+        logger.debug("update: %s", update)
+        if not update:
+            return
+
+        # Do the update
+        print("A new version is available. Updating...")
+        cmd = Popen("git pull", shell=True, stdout=PIPE, stderr=STDOUT, bufsize=1)
+        while True:
+            output = cmd.stdout.readline().decode(encoding)
+            if output == "" and cmd.poll() is not None:
+                break
+            if output:
+                logger.debug("Update output: '%s'", output.strip())
+                print(output.strip())
+        retcode = cmd.poll()
+        logger.debug("Update returncode: %s", retcode)
+        if retcode != 0:
+            print("An error occurred during update. return code: {}".format(retcode))
+            return
+
+        print("\nPlease restart Faceswap to complete the update.")

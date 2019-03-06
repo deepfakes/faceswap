@@ -77,7 +77,7 @@ The developers are also not responsible for any damage you might cause to your o
   - [brew](https://brew.sh/) install python3 (macOS)
 
 - [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
-- If you are using an Nvidia graphics card You should install CUDA (https://developer.nvidia.com/cuda-zone) and CUDNN (https://developer.nvidia.com/cudnn). If you do not plan to build Tensorflow yourself, make sure you install no higher than version 9.0 of CUDA and 7.0.x of CUDNN
+- If you are using an Nvidia graphics card You should install CUDA (https://developer.nvidia.com/cuda-zone) and CUDNN (https://developer.nvidia.com/cudnn). If you do not plan to build Tensorflow yourself, make sure you install no higher than version 10.0 of CUDA and 7.4.x of CUDNN
 - dlib is required for face recognition and is compiled as part of the setup process. You will need the following applications for your os to successfully install dlib (nb: list may be incomplete. Please raise an issue if another prerequisite is required for your OS):
     - Windows: Visual Studio 2015, CMake v3.8.2
     - Linux: build-essential, cmake
@@ -224,7 +224,7 @@ On the install screen:
 ### Cuda
 **GPU Only** If you do not have an Nvidia GPU you can skip this step.
   
-At the time of writing Tensorflow (version 1.12) only supports Cuda up to version 9.0, but check https://www.tensorflow.org/install/gpu for the latest supported version. It is crucial that you download the correct version of Cuda.
+At the time of writing Tensorflow (version 1.13.1) only supports Cuda up to version 10.0, but check https://www.tensorflow.org/install/gpu for the latest supported version. It is crucial that you download the correct version of Cuda.
 
 Download and install the correct version of the Cuda Toolkit from: https://developer.nvidia.com/cuda-toolkit-archive
 
@@ -233,7 +233,7 @@ NB: Make a note of the install folder as you'll need to access it in the next st
 ### cuDNN
 **GPU Only** If you do not have an Nvidia GPU you can skip this step.
 
-As with Cuda you will need to install the correct version of cuDNN that the latest Tensorflow supports. At the time of writing this is Tensorflow v1.12 which supports cuDNN version 7.2, but check https://www.tensorflow.org/install/gpu for the latest supported version.
+As with Cuda you will need to install the correct version of cuDNN that the latest Tensorflow supports. At the time of writing this is Tensorflow v1.13.1 which supports cuDNN version 7.4, but check https://www.tensorflow.org/install/gpu for the latest supported version.
 
 Download cuDNN from https://developer.nvidia.com/cudnn. You will need to create an account with Nvidia. 
 

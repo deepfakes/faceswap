@@ -269,6 +269,7 @@ class SessionsSummary():
                              "rate": (batchsize * ts_data["iterations"]) / elapsed,
                              "batch": batchsize,
                              "iterations": ts_data["iterations"]})
+        compiled = sorted(compiled, key=lambda k: k["session"])
         return compiled
 
     def compile_stats(self):
