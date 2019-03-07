@@ -127,6 +127,10 @@ class Config(FaceswapConfig):
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
         self.add_item(
+            section=section, title="clipnorm", datatype=bool, default=True,
+            info="Controls gradient clipping of the optimizer. Can prevent model corruption at "
+                 "the expense of VRAM")
+        self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
             choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
