@@ -517,6 +517,17 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Filters out faces detected below this size. Length, in "
                                       "pixels across the diagonal of the bounding box. Set to 0 "
                                       "for off"})
+        argument_list.append({"opts": ("-een", "--extract-every-n"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "extract_every_n",
+                              "min_max": (1, 100),
+                              "default": 1,
+                              "rounding": 1,
+                              "help": "Extract every 'nth' frame. This option will skip frames "
+                                      "when extracting faces. For example a value of 1 will "
+                                      "extract faces from every frame, a value of 10 will extract "
+                                      "faces from every 10th frame."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",

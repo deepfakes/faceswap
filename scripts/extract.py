@@ -39,6 +39,11 @@ class Extract():
             self.save_interval = self.args.save_interval
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def skip_num(self):
+        """ Number of frames to skip if extract_every_n is passed """
+        return self.args.extract_every_n if hasattr(self.args, "extract_every_n") else 1
+
     def process(self):
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
@@ -49,7 +54,7 @@ class Extract():
         self.run_extraction()
         save_thread.join()
         self.alignments.save()
-        Utils.finalize(self.images.images_found,
+        Utils.finalize(self.images.images_found // self.skip_num,
                        self.alignments.faces_count,
                        self.verify_output)
 
@@ -71,10 +76,16 @@ class Extract():
         """ Load the images """
         logger.debug("Load Images: Start")
         load_queue = queue_manager.get_queue("load")
+        idx = 0
         for filename, image in self.images.load():
+            idx += 1
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
+            if idx % self.skip_num != 0:
+                logger.trace("Skipping image '%s' due to extract_every_n = %s",
+                             filename, self.skip_num)
+                continue
             if image is None or not image.any():
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
@@ -184,7 +195,7 @@ class Extract():
         if processed != 0 and self.args.skip_faces:
             logger.info("Skipping frames with detected faces: %s", processed)
 
-        to_process = self.images.images_found - processed
+        to_process = (self.images.images_found - processed) // self.skip_num
         logger.debug("Items to be Processed: %s", to_process)
         if to_process == 0:
             logger.error("No frames to process. Exiting")
