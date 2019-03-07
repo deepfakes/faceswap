@@ -34,7 +34,7 @@ You can see the full list of arguments for extracting via help flag. i.e.
 python faceswap.py extract -h
 ```
 
-Some of the plugins have configurable options. You can find the config options in: `<faceswap_folder>\plugins\extract\config.ini`. Extract needs to have been run at least once to generate the config file
+Some of the plugins have configurable options. You can find the config options in: `<faceswap_folder>\config\extract.ini`. Extract needs to have been run at least once to generate the config file
 
 ## TRAIN
 The training process will take the longest, especially on CPU. We specify the folders where the two faces are, and where we will save our training model. It will start hammering the training data once you run the command. I personally really like to go by the preview and quit the processing once I'm happy with the results.
@@ -53,7 +53,7 @@ You can see the full list of arguments for training via help flag. i.e.
 python faceswap.py train -h
 ```
 
-Some of the plugins have configurable options. You can find the config options in: `<faceswap_folder>\plugins\traom\config.ini`. Train needs to have been run at least once to generate the config file
+Some of the plugins have configurable options. You can find the config options in: `<faceswap_folder>\config\train.ini`. Train needs to have been run at least once to generate the config file
 
 
 ## CONVERT
