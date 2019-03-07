@@ -126,9 +126,28 @@ class ConfigurePlugins(tk.Toplevel):
         frame.pack(fill=tk.BOTH, padx=5, pady=5, side=tk.BOTTOM)
         btn_cls = ttk.Button(frame, text="Cancel", width=10, command=self.destroy)
         btn_cls.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btn_cls, text="Close without saving", wraplength=720)
         btn_ok = ttk.Button(frame, text="OK", width=10, command=self.save_config)
         btn_ok.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btn_ok, text="Close and save config", wraplength=720)
+        btn_rst = ttk.Button(frame, text="Reset", width=10, command=self.reset)
+        btn_rst.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btn_rst, text="Reset all plugins to default values", wraplength=720)
         logger.debug("Added action buttons")
+
+    def reset(self):
+        """ Reset all config options to default """
+        logger.debug("Resetting config")
+        for section, items in self.config.defaults.items():
+            logger.debug("Resetting section: '%s'", section)
+            lookup = [section.split(".")[0], section] if "." in section else [section, section]
+            for item, def_opt in items.items():
+                if item == "helptext":
+                    continue
+                default = def_opt["default"]
+                tk_var = self.config_dict_gui[lookup[0]][lookup[1]][item]["selected"]
+                logger.debug("Resetting: '%s' to '%s'", item, default)
+                tk_var.set(default)
 
     def save_config(self):
         """ Save the config file """

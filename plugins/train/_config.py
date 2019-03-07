@@ -15,6 +15,7 @@ COVERAGE_INFO = ("How much of the extracted image to train on. Generally the mod
                  "\n\t75.0%% spans from temple to temple."
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
+ADDITIONAL_INFO = "\nNB: Values changed here will only take effect when creating a new model."
 
 
 class Config(FaceswapConfig):
@@ -26,7 +27,7 @@ class Config(FaceswapConfig):
         # << GLOBAL OPTIONS >> #
         section = "global"
         self.add_section(title=section,
-                         info="Options that apply to all models")
+                         info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
             info="Use ICNR Kernel Initializer for upscaling.\nThis can help reduce the "
@@ -50,7 +51,8 @@ class Config(FaceswapConfig):
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
         self.add_section(title=section,
-                         info="Dfaker Model (Adapted from https://github.com/dfaker/df)")
+                         info="Dfaker Model (Adapted from https://github.com/dfaker/df)" +
+                         ADDITIONAL_INFO)
         self.add_item(
             section=section, title="mask_type", datatype=str, default="dfaker",
             choices=MASK_TYPES, info=MASK_INFO)
@@ -62,7 +64,7 @@ class Config(FaceswapConfig):
         section = "model.dfl_h128"
         self.add_section(title=section,
                          info="DFL H128 Model (Adapted from "
-                              "https://github.com/iperov/DeepFaceLab)")
+                              "https://github.com/iperov/DeepFaceLab)" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
@@ -78,7 +80,7 @@ class Config(FaceswapConfig):
         section = "model.iae"
         self.add_section(title=section,
                          info="Intermediate Auto Encoder. Based on Original Model, uses "
-                              "intermediate layers to try to better get details")
+                              "intermediate layers to try to better get details" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=False,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
@@ -93,7 +95,7 @@ class Config(FaceswapConfig):
         # << ORIGINAL MODEL OPTIONS >> #
         section = "model.original"
         self.add_section(title=section,
-                         info="Original Faceswap Model")
+                         info="Original Faceswap Model" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
@@ -112,8 +114,9 @@ class Config(FaceswapConfig):
         # << UNBALANCED MODEL OPTIONS >> #
         section = "model.unbalanced"
         self.add_section(title=section,
-                         info="An unbalanced model with adjustable input size options.\n"
-                              "This is an unbalanced model so b>a swaps may not work well")
+                         info="An unbalanced model with adjustable input size options.\nThis is "
+                              "an unbalanced model so b>a swaps may not work "
+                              "well" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
@@ -161,8 +164,8 @@ class Config(FaceswapConfig):
         section = "model.villain"
         self.add_section(title=section,
                          info="A Higher resolution version of the Original "
-                              "Model by VillainGuy.\n"
-                              "Extremely VRAM heavy. Full model requires 9GB+ for batchsize 16")
+                              "Model by VillainGuy.\nExtremely VRAM heavy. Full model requires "
+                              "9GB+ for batchsize 16" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
