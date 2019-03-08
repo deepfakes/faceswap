@@ -47,15 +47,18 @@ class Train():
                              "all the parameters (--timelapse-input-A and "
                              "--timelapse-input-B).")
 
+        if self.args.timelapse_output is not None:
+            timelapse_output = str(get_folder(self.args.timelapse_output))
+
         for folder in (self.args.timelapse_input_a,
                        self.args.timelapse_input_b,
-                       self.args.timelapse_output):
+                       timelapse_output):
             if folder is not None and not os.path.isdir(folder):
                 raise ValueError("The Timelapse path '{}' does not exist".format(folder))
 
         kwargs = {"input_a": self.args.timelapse_input_a,
                   "input_b": self.args.timelapse_input_b,
-                  "output": self.args.timelapse_output}
+                  "output": timelapse_output}
         logger.debug("Timelapse enabled: %s", kwargs)
         return kwargs
 
