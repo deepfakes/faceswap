@@ -22,6 +22,7 @@ class Detect(Detector):
         self.name = "s3fd"
         self.target = (640, 640)  # Uses approx 4 GB of VRAM
         self.vram = 4096
+        self.min_vram = 1024  # Will run at this with warnings
         self.model = None
 
     def set_model_path(self):
@@ -43,6 +44,7 @@ class Detect(Detector):
                 tf_ratio = 1.0
             else:
                 tf_ratio = self.vram / vram_total
+
             logger.verbose("Reserving %s%% of total VRAM per s3fd thread",
                            round(tf_ratio * 100, 2))
 
@@ -57,8 +59,13 @@ class Detect(Detector):
                 alloc = vram_free
             logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
-            self.batch_size = int(alloc / self.vram)
-
+            if self.min_vram < alloc < self.vram:
+                self.batch_size = 1
+                logger.warning("You are running s3fd with %sMB VRAM. The model is optimized for "
+                               "%sMB VRAM. Detection should still run but you may get "
+                               "warnings/errors", int(alloc), self.vram)
+            else:
+                self.batch_size = int(alloc / self.vram)
             if self.batch_size < 1:
                 raise ValueError("Insufficient VRAM available to continue "
                                  "({}MB)".format(int(alloc)))
