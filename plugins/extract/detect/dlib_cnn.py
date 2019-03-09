@@ -34,31 +34,35 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Calculate batch size """
-        super().initialize(*args, **kwargs)
-        logger.verbose("Initializing Dlib-CNN Detector...")
-        self.detector = dlib.cnn_face_detection_model_v1(  # pylint: disable=c-extension-no-member
-            self.model_path)
-        is_cuda = self.compiled_for_cuda()
-        if is_cuda:
-            logger.debug("Using GPU")
-            _, vram_free, _ = self.get_vram_free()
-        else:
-            logger.verbose("Using CPU")
-            vram_free = 2048
+        try:
+            super().initialize(*args, **kwargs)
+            logger.verbose("Initializing Dlib-CNN Detector...")
+            self.detector = dlib.cnn_face_detection_model_v1(  # pylint: disable=c-extension-no-member
+                self.model_path)
+            is_cuda = self.compiled_for_cuda()
+            if is_cuda:
+                logger.debug("Using GPU")
+                _, vram_free, _ = self.get_vram_free()
+            else:
+                logger.verbose("Using CPU")
+                vram_free = 2048
 
-        # Batch size of 2 actually uses about 338MB less than a single image??
-        # From there batches increase at ~680MB per item in the batch
+            # Batch size of 2 actually uses about 338MB less than a single image??
+            # From there batches increase at ~680MB per item in the batch
 
-        self.batch_size = int(((vram_free - self.vram) / 680) + 2)
+            self.batch_size = int(((vram_free - self.vram) / 680) + 2)
 
-        if self.batch_size < 1:
-            raise ValueError("Insufficient VRAM available to continue "
-                             "({}MB)".format(int(vram_free)))
+            if self.batch_size < 1:
+                raise ValueError("Insufficient VRAM available to continue "
+                                 "({}MB)".format(int(vram_free)))
 
-        logger.verbose("Processing in batches of %s", self.batch_size)
+            logger.verbose("Processing in batches of %s", self.batch_size)
 
-        self.init.set()
-        logger.info("Initialized Dlib-CNN Detector...")
+            self.init.set()
+            logger.info("Initialized Dlib-CNN Detector...")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image """

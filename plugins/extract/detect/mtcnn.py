@@ -72,53 +72,58 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing MTCNN Detector...")
-        is_gpu = False
+        try:
+            super().initialize(*args, **kwargs)
+            logger.info("Initializing MTCNN Detector...")
+            is_gpu = False
 
-        # Must import tensorflow inside the spawned process
-        # for Windows machines
-        import_tensorflow()
-        _, vram_free, _ = self.get_vram_free()
-        mtcnn_graph = tf.Graph()
+            # Must import tensorflow inside the spawned process
+            # for Windows machines
+            import_tensorflow()
+            _, vram_free, _ = self.get_vram_free()
+            mtcnn_graph = tf.Graph()
 
-        # Windows machines sometimes misreport available vram, and overuse
-        # causing OOM. Allow growth fixes that
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True  # pylint: disable=no-member
+            # Windows machines sometimes misreport available vram, and overuse
+            # causing OOM. Allow growth fixes that
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True  # pylint: disable=no-member
 
-        with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
-            sess = tf.Session(config=config)
-            with sess.as_default():  # pylint: disable=not-context-manager
-                pnet, rnet, onet = create_mtcnn(sess, self.model_path)
+            with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
+                sess = tf.Session(config=config)
+                with sess.as_default():  # pylint: disable=not-context-manager
+                    pnet, rnet, onet = create_mtcnn(sess, self.model_path)
 
-            if any("gpu" in str(device).lower()
-                   for device in sess.list_devices()):
-                logger.debug("Using GPU")
-                is_gpu = True
-        mtcnn_graph.finalize()
+                if any("gpu" in str(device).lower()
+                       for device in sess.list_devices()):
+                    logger.debug("Using GPU")
+                    is_gpu = True
+            mtcnn_graph.finalize()
 
-        if not is_gpu:
-            alloc = 2048
-            logger.warning("Using CPU")
-        else:
-            alloc = vram_free
-        logger.debug("Allocated for Tensorflow: %sMB", alloc)
+            if not is_gpu:
+                alloc = 2048
+                logger.warning("Using CPU")
+            else:
+                alloc = vram_free
+            logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
-        self.batch_size = int(alloc / self.vram)
+            self.batch_size = int(alloc / self.vram)
 
-        if self.batch_size < 1:
-            raise ValueError("Insufficient VRAM available to continue "
-                             "({}MB)".format(int(alloc)))
+            if self.batch_size < 1:
+                self.error.set()
+                raise ValueError("Insufficient VRAM available to continue "
+                                 "({}MB)".format(int(alloc)))
 
-        logger.verbose("Processing in %s threads", self.batch_size)
+            logger.verbose("Processing in %s threads", self.batch_size)
 
-        self.kwargs["pnet"] = pnet
-        self.kwargs["rnet"] = rnet
-        self.kwargs["onet"] = onet
+            self.kwargs["pnet"] = pnet
+            self.kwargs["rnet"] = rnet
+            self.kwargs["onet"] = onet
 
-        self.init.set()
-        logger.info("Initialized MTCNN Detector.")
+            self.init.set()
+            logger.info("Initialized MTCNN Detector.")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """

@@ -381,10 +381,8 @@ class Plugins():
         mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
         self.process_detect = mp_func(self.detector.run, **kwargs)
 
-        event = None
-        if hasattr(self.process_detect, "event"):
-            event = self.process_detect.event
-
+        event = self.process_detect.event if hasattr(self.process_detect, "event") else None
+        error = self.process_detect.error if hasattr(self.process_detect, "error") else None
         self.process_detect.start()
 
         if event is None:
@@ -392,10 +390,15 @@ class Plugins():
             return
 
         for mins in reversed(range(5)):
-            event.wait(60)
+            for seconds in range(60):
+                event.wait(seconds)
+                if event.is_set():
+                    break
+                if error and error.is_set():
+                    break
             if event.is_set():
                 break
-            if mins == 0:
+            if mins == 0 or (error and error.is_set()):
                 raise ValueError("Error initializing Detector")
             logger.info("Waiting for Detector... Time out in %s minutes", mins)
 

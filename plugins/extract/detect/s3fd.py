@@ -35,36 +35,41 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Create the s3fd detector """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing S3FD Detector...")
-        card_id, vram_free, vram_total = self.get_vram_free()
-        if vram_free <= self.vram:
-            tf_ratio = 1.0
-        else:
-            tf_ratio = self.vram / vram_total
-        logger.verbose("Reserving %s%% of total VRAM per s3fd thread", round(tf_ratio, 2))
+        try:
+            super().initialize(*args, **kwargs)
+            logger.info("Initializing S3FD Detector...")
+            card_id, vram_free, vram_total = self.get_vram_free()
+            if vram_free <= self.vram:
+                tf_ratio = 1.0
+            else:
+                tf_ratio = self.vram / vram_total
+            logger.verbose("Reserving %s%% of total VRAM per s3fd thread",
+                           round(tf_ratio * 100, 2))
 
-        confidence = self.config["confidence"] / 100
-        self.model = S3fd(self.model_path, self.target, tf_ratio, card_id, confidence)
+            confidence = self.config["confidence"] / 100
+            self.model = S3fd(self.model_path, self.target, tf_ratio, card_id, confidence)
 
-        if not self.model.is_gpu:
-            alloc = 2048
-            logger.warning("Using CPU")
-        else:
-            logger.debug("Using GPU")
-            alloc = vram_free
-        logger.debug("Allocated for Tensorflow: %sMB", alloc)
+            if not self.model.is_gpu:
+                alloc = 2048
+                logger.warning("Using CPU")
+            else:
+                logger.debug("Using GPU")
+                alloc = vram_free
+            logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
-        self.batch_size = int(alloc / self.vram)
+            self.batch_size = int(alloc / self.vram)
 
-        if self.batch_size < 1:
-            raise ValueError("Insufficient VRAM available to continue "
-                             "({}MB)".format(int(alloc)))
+            if self.batch_size < 1:
+                raise ValueError("Insufficient VRAM available to continue "
+                                 "({}MB)".format(int(alloc)))
 
-        logger.verbose("Processing in %s threads", self.batch_size)
+            logger.verbose("Processing in %s threads", self.batch_size)
 
-        self.init.set()
-        logger.info("Initialized S3FD Detector.")
+            self.init.set()
+            logger.info("Initialized S3FD Detector.")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """

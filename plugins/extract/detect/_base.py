@@ -43,6 +43,7 @@ class Detector():
         self.min_size = min_size
         self.parent_is_pool = False
         self.init = None
+        self.error = None
 
         # The input and output queues for the plugin.
         # See lib.queue_manager.QueueManager for getting queues
@@ -82,6 +83,7 @@ class Detector():
         logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
         self.init = kwargs.get("event", False)
+        self.error = kwargs.get("error", False)
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 

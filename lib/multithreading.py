@@ -326,6 +326,7 @@ class SpawnProcess(mp.context.SpawnProcess):
                      self.__class__.__name__, name, args, kwargs)
         ctx = mp.get_context("spawn")
         self.event = ctx.Event()
+        self.error = ctx.Event()
         kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
         super().__init__(target=target, name=name, args=args, kwargs=kwargs)
         self.daemon = True
@@ -334,6 +335,7 @@ class SpawnProcess(mp.context.SpawnProcess):
     def build_target_kwargs(self, in_queue, out_queue, kwargs):
         """ Add standard kwargs to passed in kwargs list """
         kwargs["event"] = self.event
+        kwargs["error"] = self.error
         kwargs["log_init"] = set_root_logger
         kwargs["log_queue"] = LOG_QUEUE
         kwargs["log_level"] = logger.getEffectiveLevel()
