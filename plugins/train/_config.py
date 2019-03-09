@@ -92,6 +92,24 @@ class Config(FaceswapConfig):
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
+        # << LIGHTWEIGHT MODEL OPTIONS >> #
+        section = "model.lightweight"
+        self.add_section(title=section,
+                         info="A lightweight version of the Original Faceswap Model, designed to "
+                              "run on lower end GPUs (~2GB).\nDon't expect great results, but it "
+                              "allows users with lower end cards to play with the "
+                              "software." + ADDITIONAL_INFO)
+        self.add_item(
+            section=section, title="dssim_loss", datatype=bool, default=False,
+            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
+                 "May increase overall quality.")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=MASK_TYPES, info=MASK_INFO)
+        self.add_item(
+            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
+
         # << ORIGINAL MODEL OPTIONS >> #
         section = "model.original"
         self.add_section(title=section,
