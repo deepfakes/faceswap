@@ -30,22 +30,26 @@ class Align(Aligner):
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing Face Alignment Network...")
-        logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
+        try:
+            super().initialize(*args, **kwargs)
+            logger.info("Initializing Face Alignment Network...")
+            logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
 
-        _, _, vram_total = self.get_vram_free()
+            _, _, vram_total = self.get_vram_free()
 
-        if vram_total <= self.vram:
-            tf_ratio = 1.0
-        else:
-            tf_ratio = self.vram / vram_total
-        logger.verbose("Reserving %sMB for face alignments", self.vram)
+            if vram_total <= self.vram:
+                tf_ratio = 1.0
+            else:
+                tf_ratio = self.vram / vram_total
+            logger.verbose("Reserving %sMB for face alignments", self.vram)
 
-        self.model = FAN(self.model_path, ratio=tf_ratio)
+            self.model = FAN(self.model_path, ratio=tf_ratio)
 
-        self.init.set()
-        logger.info("Initialized Face Alignment Network.")
+            self.init.set()
+            logger.info("Initialized Face Alignment Network.")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def align(self, *args, **kwargs):
         """ Perform alignments on detected faces """

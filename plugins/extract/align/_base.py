@@ -37,6 +37,7 @@ class Aligner():
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
         self.extract = Extract()
         self.init = None
+        self.error = None
 
         # The input and output queues for the plugin.
         # See lib.queue_manager.QueueManager for getting queues
@@ -66,6 +67,7 @@ class Aligner():
         logger.debug("_base initialize %s: (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
         self.init = kwargs["event"]
+        self.error = kwargs["error"]
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 

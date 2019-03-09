@@ -354,6 +354,7 @@ class Plugins():
 
         self.process_align = SpawnProcess(self.aligner.run, **kwargs)
         event = self.process_align.event
+        error = self.process_align.error
         self.process_align.start()
 
         # Wait for Aligner to take it's VRAM
@@ -361,10 +362,15 @@ class Plugins():
         # up to 3-4 minutes, hence high timeout.
         # TODO investigate why this is and fix if possible
         for mins in reversed(range(5)):
-            event.wait(60)
+            for seconds in range(60):
+                event.wait(seconds)
+                if event.is_set():
+                    break
+                if error.is_set():
+                    break
             if event.is_set():
                 break
-            if mins == 0:
+            if mins == 0 or error.is_set():
                 raise ValueError("Error initializing Aligner")
             logger.info("Waiting for Aligner... Time out in %s minutes", mins)
 
