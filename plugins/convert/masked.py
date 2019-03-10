@@ -259,7 +259,7 @@ class Convert():
         blended = cv2.seamlessClone(new,  # pylint: disable=no-member
                                     frame,
                                     img_mask,
-                                    (center[1], [0]),
+                                    (center[1], center[0]),
                                     cv2.NORMAL_CLONE)  # pylint: disable=no-member
         blended = blended[height:-height, width:-width]
 
