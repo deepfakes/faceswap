@@ -239,18 +239,17 @@ class Convert():
     def seamless_clone(new, frame, img_mask):
         """ Seamless clone the swapped image into the old frame with cv2 """
         np.clip(new, 0.0, 255.0, out=new)
-        cropping = []
-        center = []
         height, width, _ = frame.shape
         height = height // 2
         width = width // 2
         y_indices, x_indices, _ = np.nonzero(img_mask)
-        for indices, length in zip([y_indices, x_indices], [height, width]):
-            cropping.append(slice(np.min(indices), np.max(indices)))
-            center.append(int(np.rint((np.max(indices) + np.min(indices)) / 2 + length)))
+        y_crop = slice(np.min(y_indices), np.max(y_indices))
+        x_crop = slice(np.min(x_indices), np.max(x_indices))
+        y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2 + height))
+        x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2 + width))
 
-        new = np.rint(new[cropping[0], cropping[1], :]).astype('uint8')
-        img_mask = img_mask[cropping[0], cropping[1], :]
+        new = np.rint(new[y_crop, x_crop, :]).astype('uint8')
+        img_mask = img_mask[y_crop, x_crop, :]
         img_mask[img_mask != 0] = 255
         img_mask = img_mask.astype('uint8')
         frame = np.pad(frame, ((height, height), (width, width), (0, 0)), 'constant')
@@ -259,7 +258,7 @@ class Convert():
         blended = cv2.seamlessClone(new,  # pylint: disable=no-member
                                     frame,
                                     img_mask,
-                                    (center[1], center[0]),
+                                    (x_center, y_center),
                                     cv2.NORMAL_CLONE)  # pylint: disable=no-member
         blended = blended[height:-height, width:-width]
 
