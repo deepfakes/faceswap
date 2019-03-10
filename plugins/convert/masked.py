@@ -22,7 +22,6 @@ class Convert():
         self.training_size = model.state.training_size
         self.training_coverage_ratio = model.training_opts["coverage_ratio"]
         self.input_mask_shape = model.state.mask_shapes[0] if model.state.mask_shapes else None
-
         self.crop = None
         self.mask = None
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -44,7 +43,7 @@ class Convert():
         new_image = self.get_new_image(image, detected_face, coverage, image_size)
         image_mask = self.get_image_mask(detected_face, image_size)
         patched_face = self.apply_fixes(image, new_image, image_mask,
-                                        image_size, detected_face.landmarks_as_xy)
+                                        detected_face.landmarks_as_xy)
 
         logger.trace("Patched image")
         return patched_face
@@ -52,7 +51,7 @@ class Convert():
     def get_new_image(self, image, detected_face, coverage, image_size):
         """ Get the new face from the predictor """
         logger.trace("coverage: %s", coverage)
-        src_face = detected_face.aligned_face[:,:,:3]
+        src_face = detected_face.aligned_face[:, :, :3]
         coverage_face = src_face[self.crop, self.crop]
         old_face = coverage_face.copy()
         coverage_face = cv2.resize(coverage_face,  # pylint: disable=no-member
@@ -106,7 +105,7 @@ class Convert():
         mask = cv2.GaussianBlur(mask,  # pylint: disable=no-member
                                 (window, window),
                                 sigma)
-        new_face[crop, crop] = (mask * new_face + (1.0 - mask ) * old_face)
+        new_face[crop, crop] = (mask * new_face + (1.0 - mask) * old_face)
 
     def get_image_mask(self, detected_face, image_size):
         """ Get the image mask """
@@ -122,7 +121,8 @@ class Convert():
 
         if self.args.blur_size != 0:
             blur_size = self.set_blur_size(mask)
-            mask = cv2.blur(mask, (blur_size, blur_size))  # pylint: disable=no-member
+            for _ in [1,2,3,4]: # pylint: disable=no-member
+                mask = cv2.blur(mask, (blur_size, blur_size)) 
 
         return np.clip(mask, 0.0, 1.0, out=mask)
 
@@ -139,107 +139,92 @@ class Convert():
 
     def set_blur_size(self, mask):
         """ Set the blur size to absolute or percentage """
-        blur_ratio = self.args.blur_size / 100
+        blur_ratio = self.args.blur_size / 100 / 1.6
         mask_radius = np.sqrt(np.sum(mask)) / 2
         blur_size = int(max(1, blur_ratio * mask_radius))
         logger.trace("blur_size: %s", blur_size)
         return blur_size
 
-    def apply_fixes(self, original, face, mask, image_size, landmarks):
+    def apply_fixes(self, original, face, mask, landmarks):
         """ Apply fixes """
-        
-        new_image =  face[:,:,:3].copy()
-        image_mask = mask[:,:,:3].copy()
-        frame =  original[:,:,:3].copy()
+        #TODO copies aren't likey neccesary and will slow calc... used when isolating issues
+        new_image = face[:, :, :3].copy()
+        image_mask = mask[:, :, :3].copy()
+        frame = original[:, :, :3].copy()
+
+        #TODO - force default for args.sharpen_image to ensure it isn't None
         if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
-            np.clip(new_image, 0.0, 255.0, out=new_image)
-            if self.args.sharpen_image == "box_filter":
-                kernel = np.ones((3, 3)) * (-1)
-                kernel[1, 1] = 9
-                new_image = cv2.filter2D(new_image, -1, kernel)  # pylint: disable=no-member
-            elif self.args.sharpen_image == "gaussian_filter":
-                blur = cv2.GaussianBlur(new_image, (0, 0), 3.0)  # pylint: disable=no-member
-                new_image = cv2.addWeighted(new_image,  # pylint: disable=no-member
-                                         1.5,
-                                         blur,
-                                         -0.5,
-                                         0,
-                                         new_image)
+            new_image = self.sharpen(new_image, self.args.sharpen_image)
 
         if self.args.avg_color_adjust:
-            for _ in [0, 1]:
-                np.clip(new_image, 0.0, 255.0, out=new_image)
-                diff = frame - new_image
-                avg_diff = np.sum(diff * image_mask, axis=(0, 1))
-                adjustment = avg_diff / np.sum(image_mask, axis=(0, 1))
-                new_image = new_image + adjustment
+            new_image = self.color_adjust(new_image, frame, image_mask)
 
         if self.args.match_histogram:
-            np.clip(new_image, 0.0, 255.0, out=new_image)
             new_image = self.color_hist_match(new_image, frame, image_mask)
 
         if self.args.seamless_clone:
-            h, w, _ = frame.shape
-            h = h // 2
-            w = w // 2
-
-            y_indices, x_indices, _ = np.nonzero(image_mask)
-            y_crop = slice(np.min(y_indices), np.max(y_indices))
-            x_crop = slice(np.min(x_indices), np.max(x_indices))
-            y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2) + h)
-            x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2) + w)
-
-            '''
-            # test with average of centroid rather than the h /2 , w/2 center
-            y_center = int(np.rint(np.average(y_indices) + h)
-            x_center = int(np.rint(np.average(x_indices) + w)
-            '''
-
-            insertion = np.rint(new_image[y_crop, x_crop, :]).astype('uint8')
-            insertion_mask = image_mask[y_crop, x_crop, :]
-            insertion_mask[insertion_mask != 0] = 255
-            insertion_mask = insertion_mask.astype('uint8')
-
-            prior = np.pad(frame, ((h, h), (w, w), (0, 0)), 'constant').astype('uint8')
-
-            blended = cv2.seamlessClone(insertion,  # pylint: disable=no-member
-                                        prior,
-                                        insertion_mask,
-                                        (x_center, y_center),
-                                        cv2.NORMAL_CLONE)  # pylint: disable=no-member
-            blended = blended[h:-h, w:-w]
-
+            blended = self.seamless_clone(new_image, frame, image_mask)
         else:
             foreground = new_image * image_mask
             background = frame * (1.0 - image_mask)
             blended = foreground + background
+
         np.clip(blended, 0.0, 255.0, out=blended)
         if self.args.draw_transparent:
             # Adding a 4th channel should happen after all other channel operations
             # Add mask as 4th channel for saving as alpha on supported output formats
-            blended = dfl_full(landmarks, blended, channels=4 )
+            blended = dfl_full(landmarks, blended, channels=4)
 
         return np.rint(blended).astype('uint8')
 
-    def color_hist_match(self, new, frame, image_mask):
-        for channel in [0, 1, 2]:
-            new[:, :, channel] = self.hist_match(new[:, :, channel],
-                                                 frame[:, :, channel],
-                                                 image_mask[:, :, channel])
-        # source = np.stack([self.hist_match(source[:,:,c], target[:,:,c],image_mask[:,:,c])
-        #                      for c in [0,1,2]],
-        #                     axis=2)
+    @staticmethod
+    def sharpen(new, method):
+        """ Sharpen using the unsharp=mask technique , subtracting a blurried image """
+        np.clip(new, 0.0, 255.0, out=new)
+        if method == "box_filter":
+            kernel = np.ones((3, 3)) * (-1)
+            kernel[1, 1] = 9
+            new = cv2.filter2D(new, -1, kernel)  # pylint: disable=no-member
+        elif method == "gaussian_filter":
+            blur = cv2.GaussianBlur(new, (0, 0), 3.0)   # pylint: disable=no-member
+            new = cv2.addWeighted(new, 1.5, blur, .5, 0, new) # pylint: disable=no-member
+
         return new
 
-    def hist_match(self, new, frame, image_mask):
+    @staticmethod
+    def color_adjust(new, frame, img_mask):
+        """ Adjust the mean of the color channels to be the same for the swap and old frame """
+        for _ in [0, 1]:
+            np.clip(new, 0.0, 255.0, out=new)
+            diff = frame - new
+            avg_diff = np.sum(diff * img_mask, axis=(0, 1))
+            adjustment = avg_diff / np.sum(img_mask, axis=(0, 1))
+            new = new + adjustment
 
-        mask_indices = np.nonzero(image_mask)
+        return new
+
+    def color_hist_match(self, new, frame, img_mask):
+        """ Match the histogram of the color intensity of each channel """
+        np.clip(new, 0.0, 255.0, out=new)
+        new = [self.hist_match(new[:, :, c], frame[:, :, c], img_mask[:, :, c]) for c in [0, 1, 2]]
+        new = np.stack(new, axis=2)
+
+        return new
+
+    @staticmethod
+    def hist_match(new, frame, img_mask):
+        """  Construct the histogram of the color intensity of a channel
+             for the swap and the original. Match the histogram of the original
+             by interpolation
+        """
+
+        mask_indices = img_mask.nonzero()
         if len(mask_indices[0]) == 0:
             return new
 
         m_new = new[mask_indices].ravel()
         m_frame = frame[mask_indices].ravel()
-        s_values, bin_idx, s_counts = np.unique(m_new, return_inverse=True, return_counts=True)
+        _, bin_idx, s_counts = np.unique(m_new, return_inverse=True, return_counts=True)
         t_values, t_counts = np.unique(m_frame, return_counts=True)
         s_quants = np.cumsum(s_counts, dtype='float32')
         t_quants = np.cumsum(t_counts, dtype='float32')
@@ -248,15 +233,37 @@ class Convert():
         interp_s_values = np.interp(s_quants, t_quants, t_values)
         new.put(mask_indices, interp_s_values[bin_idx])
 
-        '''
-        bins = np.arange(256)
-        template_CDF, _ = np.histogram(m_frame, bins=bins, density=True)
-        flat_new_image = np.interp(m_source.ravel(), bins[:-1], template_CDF) * 255.0
-        return flat_new_image.reshape(m_source.shape) * 255.0
-        '''
-
         return new
 
+    @staticmethod
+    def seamless_clone(new, frame, img_mask):
+        """ Seamless clone the swapped image into the old frame with cv2 """
+        np.clip(new, 0.0, 255.0, out=new)
+        cropping = []
+        center = []
+        height, width, _ = frame.shape
+        height = height // 2
+        width = width // 2
+        y_indices, x_indices, _ = np.nonzero(img_mask)
+        for indices, length in zip([y_indices, x_indices], [height, width]):
+            cropping.append(slice(np.min(indices), np.max(indices)))
+            center.append(int(np.rint((np.max(indices) + np.min(indices)) / 2 + length)))
+
+        new = np.rint(new[cropping[0], cropping[1], :]).astype('uint8')
+        img_mask = img_mask[cropping[0], cropping[1], :]
+        img_mask[img_mask != 0] = 255
+        img_mask = img_mask.astype('uint8')
+        frame = np.pad(frame, ((height, height), (width, width), (0, 0)), 'constant')
+        frame = frame.astype('uint8')
+
+        blended = cv2.seamlessClone(new,  # pylint: disable=no-member
+                                    frame,
+                                    img_mask,
+                                    (center[1], [0]),
+                                    cv2.NORMAL_CLONE)  # pylint: disable=no-member
+        blended = blended[height:-height, width:-width]
+
+        return new
 
 class Mask():
     """ Return the requested mask """
@@ -333,7 +340,8 @@ class Mask():
         mask = self.intersect_rect(mask, **kwargs)
         return mask
 
-    def ellipse(self, **kwargs):
+    @staticmethod
+    def ellipse(**kwargs):
         """ Ellipse Mask """
         logger.trace("Getting mask")
         mask = np.zeros((kwargs["image_size"][1], kwargs["image_size"][0], 3), dtype='float32')
