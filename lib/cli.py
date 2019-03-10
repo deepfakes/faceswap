@@ -778,9 +778,23 @@ class TrainArgs(FaceSwapArgs):
                               "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
-                              "help": "Select which trainer to use, Use "
-                                      "LowMem for cards with less than 2GB of "
-                                      "VRAM"})
+                              "help": "R|Select which trainer to use. Trainers can be\n"
+                                      "configured from the edit menu or the config folder.\n"
+                                      "original: The original model created by /u/deepfakes.\n"
+                                      "dfaker: 64px in/128px out model from dfaker.\n"
+                                      "\tEnable 'warp-to-landmarks' for full dfaker method.\n"
+                                      "dfl-h128. 128px in/out model from deepfacelab\n"
+                                      "iae: A model that uses intermediate layers to try to \n"
+                                      "\tget better details\n"
+                                      "lightweight. A lightweight model for low-end cards. Don't\n"
+                                      "\texpect great results. Can train as low as 1.6GB with\n"
+                                      "\tbatch size 8.\n"
+                                      "unbalanced. 128px in/out model from andenixa. The\n"
+                                      "\tautoencoders are unbalanced so B>A swaps won't work so\n"
+                                      "well. Very configurable,\n"
+                                      "villain: 128px in/out model from villainguy. Very resource"
+                                      "\n\thungry (11GB for batchsize 16). Good for details, but\n"
+                                      "\tmore susceptible to color differences"})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
@@ -817,7 +831,7 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "preview_scale",
                               "min_max": (25, 200),
                               "rounding": 25,
-                              "default": 100,
+                              "default": 50,
                               "help": "Percentage amount to scale the preview by."})
         argument_list.append({"opts": ("-p", "--preview"),
                               "action": "store_true",

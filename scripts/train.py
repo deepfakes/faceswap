@@ -47,6 +47,7 @@ class Train():
                              "all the parameters (--timelapse-input-A and "
                              "--timelapse-input-B).")
 
+        timelapse_output = None
         if self.args.timelapse_output is not None:
             timelapse_output = str(get_folder(self.args.timelapse_output))
 
