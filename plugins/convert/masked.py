@@ -248,21 +248,21 @@ class Convert():
         y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2 + height))
         x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2 + width))
 
-        new = np.rint(new[y_crop, x_crop, :]).astype('uint8')
-        img_mask = img_mask[y_crop, x_crop, :]
-        img_mask[img_mask != 0] = 255
-        img_mask = img_mask.astype('uint8')
-        frame = np.pad(frame, ((height, height), (width, width), (0, 0)), 'constant')
-        frame = frame.astype('uint8')
+        insertion = np.rint(new[y_crop, x_crop]).astype('uint8')
+        insertion_mask = img_mask[y_crop, x_crop]
+        insertion_mask[insertion_mask != 0] = 255
+        insertion_mask = insertion_mask.astype('uint8')
+        prior = np.pad(frame, ((height, height), (width, width), (0, 0)), 'constant')
+        prior = prior.astype('uint8')
 
-        blended = cv2.seamlessClone(new,  # pylint: disable=no-member
-                                    frame,
-                                    img_mask,
+        blended = cv2.seamlessClone(insertion,  # pylint: disable=no-member
+                                    prior,
+                                    insertion_mask,
                                     (x_center, y_center),
                                     cv2.NORMAL_CLONE)  # pylint: disable=no-member
         blended = blended[height:-height, width:-width]
 
-        return new
+        return blended
 
 class Mask():
     """ Return the requested mask """
