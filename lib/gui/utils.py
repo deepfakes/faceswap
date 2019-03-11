@@ -589,7 +589,7 @@ class Config():
         """ Add to recent files """
         recent_filename = os.path.join(self.pathcache, ".recent.json")
         logger.debug("Adding to recent files '%s': (%s, %s)", recent_filename, filename, command)
-        if not os.path.exists(recent_filename):
+        if not os.path.exists(recent_filename) or os.path.getsize(recent_filename) == 0:
             recent_files = list()
         else:
             with open(recent_filename, "rb") as inp:
