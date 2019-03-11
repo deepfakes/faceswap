@@ -120,6 +120,20 @@ class ScriptExecutor():
             safe_shutdown()
 
 
+class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
+    """ Adds support for the GUI Radio buttons
+
+        Just a wrapper class to tell the gui to use radio buttons instead of combo boxes
+        """
+    def __init__(self, option_strings, dest, nargs=None, **kwargs):
+        if nargs is not None:
+            raise ValueError("nargs not allowed")
+        super().__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+
+
 class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
     """ Adds support for the GUI slider
 
@@ -443,6 +457,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "fallback."})
         argument_list.append({
             "opts": ("-D", "--detector"),
+            "action": Radio,
             "type": str.lower,
             "choices":  PluginLoader.get_available_extractors(
                 "detect"),
@@ -460,6 +475,7 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n\t is a lot more resource intensive"})
         argument_list.append({
             "opts": ("-A", "--aligner"),
+            "action": Radio,
             "type": str.lower,
             "choices": PluginLoader.get_available_extractors(
                 "align"),
@@ -602,18 +618,21 @@ class ConvertArgs(ExtractConvertArgs):
                                       "specified, all faces will be "
                                       "converted"})
         argument_list.append({"opts": ("-t", "--trainer"),
+                              "action": Radio,
                               "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "help": "Select the trainer that was used to "
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
+                              "action": Radio,
                               "type": str.lower,
                               "choices": PluginLoader.get_available_converters(),
                               "default": "masked",
                               "help": "Converter to use"})
         argument_list.append({
             "opts": ("-M", "--mask-type"),
+            "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
             "choices": ["ellipse",
@@ -656,6 +675,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
         argument_list.append({"opts": ("-sh", "--sharpen"),
+                              "action": Radio,
                               "type": str.lower,
                               "dest": "sharpen_image",
                               "choices": ["box_filter", "gaussian_filter", "none"],
@@ -775,26 +795,27 @@ class TrainArgs(FaceSwapArgs):
                                       "training data will be stored. "
                                       "Defaults to 'model'"})
         argument_list.append({"opts": ("-t", "--trainer"),
+                              "action": Radio,
                               "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
-                              "help": "R|Select which trainer to use. Trainers can be\n"
-                                      "configured from the edit menu or the config folder.\n"
-                                      "original: The original model created by /u/deepfakes.\n"
-                                      "dfaker: 64px in/128px out model from dfaker.\n"
-                                      "\tEnable 'warp-to-landmarks' for full dfaker method.\n"
-                                      "dfl-h128. 128px in/out model from deepfacelab\n"
-                                      "iae: A model that uses intermediate layers to try to \n"
-                                      "\tget better details\n"
-                                      "lightweight. A lightweight model for low-end cards. Don't\n"
-                                      "\texpect great results. Can train as low as 1.6GB with\n"
-                                      "\tbatch size 8.\n"
-                                      "unbalanced. 128px in/out model from andenixa. The\n"
-                                      "\tautoencoders are unbalanced so B>A swaps won't work so\n"
-                                      "well. Very configurable,\n"
-                                      "villain: 128px in/out model from villainguy. Very resource"
-                                      "\n\thungry (11GB for batchsize 16). Good for details, but\n"
-                                      "\tmore susceptible to color differences"})
+                              "help": "R|Select which trainer to use. Trainers can be"
+                                      "\nconfigured from the edit menu or the config folder."
+                                      "\n'original': The original model created by /u/deepfakes."
+                                      "\n'dfaker': 64px in/128px out model from dfaker."
+                                      "\n\tEnable 'warp-to-landmarks' for full dfaker method."
+                                      "\n'dfl-h128'. 128px in/out model from deepfacelab"
+                                      "\n'iae': A model that uses intermediate layers to try to"
+                                      "\n\tget better details"
+                                      "\n'lightweight': A lightweight model for low-end cards."
+                                      "\n\tDon't expect great results. Can train as low as 1.6GB"
+                                      "\n\twith batch size 8."
+                                      "\n'unbalanced': 128px in/out model from andenixa. The"
+                                      "\n\tautoencoders are unbalanced so B>A swaps won't work so"
+                                      "\n\twell. Very configurable,"
+                                      "\n'villain': 128px in/out model from villainguy. Very"
+                                      "\n\tresource hungry (11GB for batchsize 16). Good for"
+                                      "\n\tdetails, but more susceptible to color differences"})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
