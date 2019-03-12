@@ -64,29 +64,6 @@ class FileHandler():
                      "'%s', variable: %s)", self.__class__.__name__, handletype, filetype, command,
                      action, variable)
         self.handletype = handletype
-        all_files = ("All files", "*.*")
-        self.filetypes = {"default": (all_files,),
-                          "alignments": (("JSON", "*.json"),
-                                         ("Pickle", "*.p"),
-                                         ("YAML", "*.yaml"),
-                                         all_files),
-                          "config": (("Faceswap config files", "*.fsw"), all_files),
-                          "csv": (("Comma separated values", "*.csv"), all_files),
-                          "image": (("Bitmap", "*.bmp"),
-                                    ("JPG", "*.jpeg", "*.jpg"),
-                                    ("PNG", "*.png"),
-                                    ("TIFF", "*.tif", "*.tiff"),
-                                    all_files),
-                          "state": (("State files", "*.json"), all_files),
-                          "log": (("Log files", "*.log"), all_files),
-                          "video": (("Audio Video Interleave", "*.avi"),
-                                    ("Flash Video", "*.flv"),
-                                    ("Matroska", "*.mkv"),
-                                    ("MOV", "*.mov"),
-                                    ("MP4", "*.mp4"),
-                                    ("MPEG", "*.mpeg"),
-                                    ("WebM", "*.webm"),
-                                    all_files)}
         self.contexts = {
             "effmpeg": {
                 "input": {"extract": "filename",
@@ -111,6 +88,41 @@ class FileHandler():
         self.kwargs = self.set_kwargs(filetype, command, action, variable)
         self.retfile = getattr(self, self.handletype.lower())()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def filetypes(self):
+        """ Set the filetypes for opening/saving """
+        all_files = ("All files", "*.*")
+        filetypes = {"default": (all_files,),
+                     "alignments": [("JSON", "*.json"),
+                                    ("Pickle", "*.p"),
+                                    ("YAML", "*.yaml"),
+                                    all_files],
+                     "config": [("Faceswap config files", "*.fsw"), all_files],
+                     "csv": [("Comma separated values", "*.csv"), all_files],
+                     "image": [("Bitmap", "*.bmp"),
+                               ("JPG", "*.jpeg", "*.jpg"),
+                               ("PNG", "*.png"),
+                               ("TIFF", "*.tif", "*.tiff"),
+                               all_files],
+                     "state": [("State files", "*.json"), all_files],
+                     "log": [("Log files", "*.log"), all_files],
+                     "video": [("Audio Video Interleave", "*.avi"),
+                               ("Flash Video", "*.flv"),
+                               ("Matroska", "*.mkv"),
+                               ("MOV", "*.mov"),
+                               ("MP4", "*.mp4"),
+                               ("MPEG", "*.mpeg"),
+                               ("WebM", "*.webm"),
+                               all_files]}
+        # Add in multi-select options
+        for key, val in filetypes.items():
+            if len(val) < 3:
+                continue
+            multi = ["{} Files".format(key.title())]
+            multi.append(" ".join([ftype[1] for ftype in val if ftype[0] != "All files"]))
+            val.insert(0, tuple(multi))
+        return filetypes
 
     def set_defaults(self):
         """ Set the default filetype to be first in list of filetypes,
