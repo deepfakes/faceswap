@@ -13,6 +13,7 @@ import os
 import sys
 import subprocess
 import datetime
+from collections import OrderedDict
 
 from ffmpy import FFprobe, FFmpeg, FFRuntimeError
 
@@ -333,7 +334,9 @@ class Effmpeg():
         filename = Effmpeg.__get_extracted_filename(input_.path)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_path = os.path.join(input_.path, filename)
-        _output_opts = '-vf fps="' + str(fps) + '" '
+        _fps_arg = '-r ' + str(fps) + ' '
+        _input_opts += _fps_arg + "-f image2 "
+        _output_opts = _fps_arg
         if not preview:
             _output_opts = '-y ' + _output_opts + ' -c:v libx264'
         if mux_audio:
@@ -342,7 +345,7 @@ class Effmpeg():
                 raise ValueError("Preview for gen-vid with audio muxing is "
                                  "not supported.")
             _output_opts = _ref_vid_opts + ' ' + _output_opts
-            _inputs = {_input_path: _input_opts, ref_vid.path: None}
+            _inputs = OrderedDict([(_input_path, _input_opts), (ref_vid.path, None)])
         else:
             _inputs = {_input_path: _input_opts}
         _outputs = {output.path: _output_opts}
@@ -359,9 +362,13 @@ class Effmpeg():
             _inputs = {input_: _input_opts}
         else:
             _inputs = {input_.path: _input_opts}
+        logger.debug(_inputs)
         ffp = FFprobe(inputs=_inputs)
         _fps = ffp.run(stdout=subprocess.PIPE)[0].decode("utf-8")
         _fps = _fps.strip()
+        if "/" in _fps:
+            _fps = _fps.split("/")
+            _fps = str(round(int(_fps[0])/int(_fps[1]), 2))
         if print_:
             logger.info("Video fps: %s", _fps)
         logger.debug(_fps)
@@ -429,7 +436,7 @@ class Effmpeg():
             raise ValueError("Preview with audio muxing is not supported.")
         # if not preview:
         #    _output_opts = '-y ' + _output_opts
-        _inputs = {input_.path: _input_opts, ref_vid.path: _ref_vid_opts}
+        _inputs = OrderedDict([(input_.path, _input_opts), (ref_vid.path, _ref_vid_opts)])
         _outputs = {output.path: _output_opts}
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 

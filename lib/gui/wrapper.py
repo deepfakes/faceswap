@@ -139,7 +139,8 @@ class FaceswapControl():
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
             "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
-                               r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]")}
+                               r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
+            "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*([\d|N/A]\S+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def execute_script(self, command, args):
@@ -170,8 +171,9 @@ class FaceswapControl():
             if output == "" and self.process.poll() is not None:
                 break
             if output:
-                if (self.command == "train" and self.capture_loss(output)) or (
-                        self.command != "train" and self.capture_tqdm(output)):
+                if ((self.command == "train" and self.capture_loss(output)) or
+                        (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
+                        (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
                 if self.command == "train" and output.strip().endswith("saved models"):
                     logger.debug("Trigger update preview")
@@ -300,6 +302,25 @@ class FaceswapControl():
 
         self.statusbar.progress_update(message, position, True)
         logger.trace("Succesfully captured tqdm message: %s", message)
+        return True
+
+    def capture_ffmpeg(self, string):
+        """ Capture tqdm output for progress bar """
+        logger.trace("Capturing ffmpeg")
+        ffmpeg = self.consoleregex["ffmpeg"].findall(string)
+        if len(ffmpeg) < 7:
+            logger.trace("Not ffmpeg message. Returning False")
+            return False
+
+        message = ""
+        for item in ffmpeg:
+            message += "{}: {}  ".format(item[0], item[1])
+        if not message:
+            logger.trace("Error creating ffmpeg message. Returning False")
+            return False
+
+        self.statusbar.progress_update(message, 0, False)
+        logger.trace("Succesfully captured ffmpeg message: %s", message)
         return True
 
     def terminate(self):
