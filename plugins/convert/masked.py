@@ -187,7 +187,7 @@ class Convert():
             new = cv2.filter2D(new, -1, kernel)  # pylint: disable=no-member
         elif method == "gaussian_filter":
             blur = cv2.GaussianBlur(new, (0, 0), 3.0)   # pylint: disable=no-member
-            new = cv2.addWeighted(new, 1.5, blur, .5, 0, new) # pylint: disable=no-member
+            new = cv2.addWeighted(new, 1.5, blur, -.5, 0, new) # pylint: disable=no-member
 
         return new
 
