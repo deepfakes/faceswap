@@ -140,7 +140,7 @@ class FaceswapControl():
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
             "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
                                r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
-            "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*([\d|N/A]\S+)")}
+            "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def execute_script(self, command, args):
