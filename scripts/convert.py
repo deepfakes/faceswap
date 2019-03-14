@@ -19,6 +19,11 @@ from plugins.plugin_loader import PluginLoader
 
 from .extract import Plugins as Extractor
 
+import numpy as np
+import face_recognition
+from PIL import Image
+import glob
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -40,6 +45,37 @@ class Convert():
         self.post_process = PostProcess(arguments)
         self.verify_output = False
 
+        ##initialize last_used face to whichever face is first
+        self.matched_face = 0
+        ##load images for target face id
+        try:
+            models_dir = self.args.model_dir
+            target_images = [face_recognition.load_image_file(file) for file in glob.glob(models_dir + '**\\*.png', recursive=True)]
+        except:
+            print("no images found")
+            quit()
+
+        ##create target face encodings which will match closest
+        try:
+            self.target_encodings = [face_recognition.face_encodings(image)[0] for image in target_images]
+        except:
+            print("I wasn't able to locate any faces in at least one of the images. Check the image files. Aborting...")
+            quit()
+
+        ##load trained models, should have one model per image
+        try:
+            models = [self.load_model(get_folder(folder)) for folder in glob.glob(models_dir + '*')]
+        except:
+            print("error finding trained models")
+            quit()
+
+        ##create converters for each model
+        try:
+            self.converters = [self.load_converter(model) for model in models]
+        except:
+            print("error loading model converters")
+            quit()
+
         self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -53,13 +89,14 @@ class Convert():
         if not self.alignments.have_alignments_file:
             self.load_extractor()
 
-        model = self.load_model()
-        converter = self.load_converter(model)
+        ##model = self.load_model()
+        ##converter = self.load_converter(model)
 
         batch = BackgroundGenerator(self.prepare_images(), 1)
 
         for item in batch.iterator():
-            self.convert(converter, item)
+            ##self.convert(converter, item)
+            self.convert(item)
 
         if self.extractor:
             queue_manager.terminate_queues()
@@ -81,11 +118,11 @@ class Convert():
         self.extractor.launch_detector()
         self.extractor.launch_aligner()
 
-    def load_model(self):
+    def load_model(self, model_dir):
         """ Load the model requested for conversion """
         logger.debug("Loading Model")
-        model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.args.trainer)(model_dir, self.args.gpus, predict=True)
+        ##model_dir = get_folder(self.args.model_dir)
+        model = PluginLoader.get_model(self.args.trainer)(get_folder(model_dir), self.args.gpus, predict=True)
         logger.debug("Loaded Model")
         return model
 
@@ -107,15 +144,19 @@ class Convert():
                                     total=self.images.images_found,
                                     file=sys.stdout):
 
-            if (self.args.discard_frames and
-                    self.opts.check_skipframe(filename) == "discard"):
-                continue
+            ##if (self.args.discard_frames and
+            ##        self.opts.check_skipframe(filename) == "discard"):
+            ##    continue
 
             frame = os.path.basename(filename)
             if self.extractor:
                 detected_faces = self.detect_faces(load_queue, filename, image)
             else:
                 detected_faces = self.alignments_faces(frame, image)
+            
+            ## if no face was found skip this image
+            if not detected_faces:
+                continue
 
             faces_count = len(detected_faces)
             if faces_count != 0:
@@ -171,22 +212,35 @@ class Convert():
                        "skipping".format(frame))
         return have_alignments
 
-    def convert(self, converter, item):
+    ##removed converter, using self.converters
+    def convert(self, item):
         """ Apply the conversion transferring faces onto frames """
         try:
             filename, image, faces = item
-            skip = self.opts.check_skipframe(filename)
+            ##skip = self.opts.check_skipframe(filename)
 
-            if not skip:
-                for face in faces:
-                    image = converter.patch_image(image, face)
-                filename = str(self.output_dir / Path(filename).name)
+            ##if not skip:
+            for face in faces:
+                ## pick best model and swap
+                im = Image.fromarray(face.image)
+                try:
+                    unknown_face_encoding = face_recognition.face_encodings(np.array(im))[0]
+                    results = face_recognition.face_distance(self.target_encodings, unknown_face_encoding)
+                    self.matched_face = np.argmin(results)
+                    print(self.matched_face)     
+                except:
+                    pass
 
-                if self.args.draw_transparent:
-                    filename = "{}.png".format(os.path.splitext(filename)[0])
-                    logger.trace("Set extension to png: `%s`", filename)
+                image = self.converters[self.matched_face].patch_image(image, face)
+                ##image = converter.patch_image(image, face)
 
-                cv2.imwrite(filename, image)  # pylint: disable=no-member
+            filename = str(self.output_dir / Path(filename).name)
+
+            if self.args.draw_transparent:
+                filename = "{}.png".format(os.path.splitext(filename)[0])
+                logger.trace("Set extension to png: `%s`", filename)
+
+            cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
