@@ -377,8 +377,10 @@ class FaceswapControl():
                     print(msg)
 
     def set_final_status(self, returncode):
-        """ Set the status bar output based on subprocess return code """
+        """ Set the status bar output based on subprocess return code 
+            and reset training stats """
         logger.debug("Setting final status. returncode: %s", returncode)
+        self.train_stats = {"iterations": 0, "timestamp": None}
         if returncode in (0, 3221225786):
             status = "Ready"
         elif returncode == -15:
