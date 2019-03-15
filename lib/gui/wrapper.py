@@ -140,7 +140,7 @@ class FaceswapControl():
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
             "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
                                r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
-            "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*([\d|N/A]\S+)")}
+            "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def execute_script(self, command, args):
@@ -377,8 +377,10 @@ class FaceswapControl():
                     print(msg)
 
     def set_final_status(self, returncode):
-        """ Set the status bar output based on subprocess return code """
+        """ Set the status bar output based on subprocess return code 
+            and reset training stats """
         logger.debug("Setting final status. returncode: %s", returncode)
+        self.train_stats = {"iterations": 0, "timestamp": None}
         if returncode in (0, 3221225786):
             status = "Ready"
         elif returncode == -15:

@@ -547,11 +547,10 @@ class Effmpeg():
                 filename = file
                 break
         logger.debug("sample filename: '%s'", filename)
-        filename = filename.split('.')
-        img_ext = filename[-1]
-        zero_pad = Effmpeg.__get_zero_pad(filename[-2])
-        name = filename[-2][:-zero_pad]
-        retval = "{}%{}d.{}".format(name, zero_pad, img_ext)
+        filename, img_ext = os.path.splitext(filename)
+        zero_pad = Effmpeg.__get_zero_pad(filename)
+        name = filename[:-zero_pad]
+        retval = "{}%{}d{}".format(name, zero_pad, img_ext)
         logger.debug("filename: %s, img_ext: '%s', zero_pad: %s, name: '%s'",
                      filename, img_ext, zero_pad, name)
         logger.debug(retval)
@@ -561,6 +560,7 @@ class Effmpeg():
     def __get_zero_pad(filename):
         """ Return the starting position of zero padding from a filename """
         chkstring = filename[::-1]
+        logger.trace("filename: %s, chkstring: %s", filename, chkstring)
         pos = 0
         for pos in range(len(chkstring)):
             if not chkstring[pos].isdigit():
