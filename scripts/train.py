@@ -163,7 +163,9 @@ class Train():
             no_flip=self.args.no_flip,
             training_image_size=self.image_size,
             alignments_paths=self.alignments_paths,
-            preview_scale=self.args.preview_scale)
+            preview_scale=self.args.preview_scale,
+            pingpong=self.args.pingpong,
+            predict=False)
         logger.debug("Loaded Model")
         return model
 
@@ -217,7 +219,11 @@ class Train():
                 break
             elif save_iteration:
                 logger.trace("Save Iteration: (iteration: %s", iteration)
-                model.save_models()
+                if self.args.pingpong:
+                    model.save_models()
+                    trainer.pingpong.switch()
+                else:
+                    model.save_models()
             elif self.save_now:
                 logger.trace("Save Requested: (iteration: %s", iteration)
                 model.save_models()
