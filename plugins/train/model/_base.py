@@ -63,7 +63,7 @@ class ModelBase():
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        self.state = State(self.model_dir, self.name, no_logs, training_image_size)
+        self.state = State(self.model_dir, self.name, no_logs, pingpong, training_image_size)
         self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
@@ -583,10 +583,10 @@ class NNMeta():
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name, no_logs, training_image_size):
+    def __init__(self, model_dir, model_name, no_logs, pingpong, training_image_size):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', no_logs: %s, "
-                     "training_image_size: '%s'", self.__class__.__name__, model_dir,
-                     model_name, no_logs, training_image_size)
+                     "pingpong: %s, training_image_size: '%s'", self.__class__.__name__, model_dir,
+                     model_name, no_logs, pingpong, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
@@ -600,7 +600,7 @@ class State():
         self.config = dict()
         self.load()
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs)
+        self.create_new_session(no_logs, pingpong)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -632,11 +632,12 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs):
+    def create_new_session(self, no_logs, pingpong):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
+                                          "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
                                           "iterations": 0}

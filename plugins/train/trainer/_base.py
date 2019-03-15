@@ -103,6 +103,14 @@ class TrainerBase():
         if self.model.training_opts["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
             return None
+        if self.pingpong.active:
+            # Currently TensorBoard uses the tf.session, meaning that VRAM does not
+            # get cleared when model switching
+            # TODO find a fix for this
+            logger.warning("Currently TensorBoard logging is not supported for Ping-Pong "
+                           "training. Session stats and graphing will not be available for this "
+                           "training session.")
+            return None
 
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
