@@ -165,6 +165,7 @@ class Train():
             alignments_paths=self.alignments_paths,
             preview_scale=self.args.preview_scale,
             pingpong=self.args.pingpong,
+            memory_saving_gradients=self.args.memory_saving_gradients,
             predict=False)
         logger.debug("Loaded Model")
         return model

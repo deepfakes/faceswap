@@ -43,13 +43,15 @@ class ModelBase():
                  encoder_dim=None,
                  trainer="original",
                  pingpong=False,
+                 memory_saving_gradients=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, no_logs: %s"
                      "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
-                     "input_shape: %s, encoder_dim: %s, trainer: %s, pingpong: %s, predict: %s)",
+                     "input_shape: %s, encoder_dim: %s, trainer: %s, pingpong: %s, "
+                     "memory_saving_gradients: %s, predict: %s)",
                      self.__class__.__name__, model_dir, gpus, no_logs, training_image_size,
                      alignments_paths, preview_scale, input_shape, encoder_dim, trainer,
-                     pingpong, predict)
+                     pingpong, memory_saving_gradients, predict)
 
         self.predict = predict
         self.pingpong = pingpong
@@ -80,6 +82,7 @@ class ModelBase():
                               "no_flip": no_flip,
                               "pingpong": pingpong}
 
+        self.set_gradient_type(memory_saving_gradients)
         self.build()
         self.set_training_data()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
@@ -108,6 +111,15 @@ class ModelBase():
         retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
         logger.debug("Pre-existing models exist: %s", retval)
         return retval
+
+    @staticmethod
+    def set_gradient_type(memory_saving_gradients):
+        """ Monkeypatch Memory Saving Gradients if requested """
+        if not memory_saving_gradients:
+            return
+        logger.info("Using Memory Saving Gradients")
+        from lib.model import memory_saving_gradients
+        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
     def set_training_data(self):
         """ Override to set model specific training data.
