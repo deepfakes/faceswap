@@ -174,6 +174,7 @@ def PenalizedLoss(mask, loss_func, mask_prop=1.0):
         from: https://github.com/dfaker/df """
     mask_as_k_inv_prop = 1 - mask_prop
     mask = mask * mask_prop + mask_as_k_inv_prop
+    mask = K.repeat_elements(mask, 3, axis=3)
     def inner_loss(y_true, y_pred):
         return loss_func(y_true * mask, y_pred * mask)
     return inner_loss
