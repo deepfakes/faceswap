@@ -60,12 +60,10 @@ class TrainerBase():
 
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
-                               self.pingpong,
                                self.use_mask,
                                self.model.training_opts["coverage_ratio"],
                                self.model.training_opts["preview_scaling"])
         self.timelapse = Timelapse(self.model,
-                                   self.pingpong,
                                    self.use_mask,
                                    self.model.training_opts["coverage_ratio"],
                                    self.batchers)
@@ -298,11 +296,10 @@ class Batcher():
 
 class Samples():
     """ Display samples for preview and timelapse """
-    def __init__(self, model, pingpong, use_mask, coverage_ratio, scaling=1.0):
+    def __init__(self, model, use_mask, coverage_ratio, scaling=1.0):
         logger.debug("Initializing %s: model: '%s', use_mask: %s, coverage_ratio: %s)",
                      self.__class__.__name__, model, use_mask, coverage_ratio)
         self.model = model
-        self.pingpong = pingpong
         self.use_mask = use_mask
         self.images = dict()
         self.coverage_ratio = coverage_ratio
@@ -524,11 +521,11 @@ class Samples():
 
 class Timelapse():
     """ Create the timelapse """
-    def __init__(self, model, pingpong, use_mask, coverage_ratio, batchers):
+    def __init__(self, model, use_mask, coverage_ratio, batchers):
         logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
                      "batchers: '%s')", self.__class__.__name__, model, use_mask,
                      coverage_ratio, batchers)
-        self.samples = Samples(model, pingpong, use_mask, coverage_ratio)
+        self.samples = Samples(model, use_mask, coverage_ratio)
         self.model = model
         self.batchers = batchers
         self.output_file = None

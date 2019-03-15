@@ -54,7 +54,6 @@ class ModelBase():
                      pingpong, memory_saving_gradients, predict)
 
         self.predict = predict
-        self.pingpong = pingpong
         self.model_dir = model_dir
         self.gpus = gpus
         self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
@@ -565,10 +564,6 @@ class NNMeta():
     def save(self, fullpath=None, should_backup=False):
         """ Save model """
         fullpath = fullpath if fullpath else self.filename
-        if self.network is None:
-            # Ping pong training may not have model loaded
-            logger.debug("No model loaded. Skipping: '%s'", fullpath)
-            return
         if should_backup:
             self.backup(fullpath=fullpath)
         logger.debug("Saving model: '%s'", fullpath)
