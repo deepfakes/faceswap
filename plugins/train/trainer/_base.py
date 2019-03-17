@@ -16,6 +16,7 @@
         no_logs:            Disable tensorboard logging
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
         no_flip:            Don't perform a random flip on the image
+        pingpong:           Train each side seperately per save iteration rather than together
 """
 
 import logging
@@ -45,15 +46,17 @@ class TrainerBase():
         self.model = model
         self.model.state.add_session_batchsize(batch_size)
         self.images = images
+        self.sides = sorted(key for key in self.images.keys())
 
         self.process_training_opts()
+        self.pingpong = PingPong(model, self.sides)
 
         self.batchers = {side: Batcher(side,
                                        images[side],
                                        self.model,
                                        self.use_mask,
                                        batch_size)
-                         for side in images.keys()}
+                         for side in self.sides}
 
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
@@ -98,10 +101,18 @@ class TrainerBase():
         if self.model.training_opts["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
             return None
+        if self.pingpong.active:
+            # Currently TensorBoard uses the tf.session, meaning that VRAM does not
+            # get cleared when model switching
+            # TODO find a fix for this
+            logger.warning("Currently TensorBoard logging is not supported for Ping-Pong "
+                           "training. Session stats and graphing will not be available for this "
+                           "training session.")
+            return None
 
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
-        for side in self.images.keys():
+        for side in self.sides:
             logger.debug("Setting up TensorBoard Logging. Side: %s", side)
             log_dir = os.path.join(str(self.model.model_dir),
                                    "{}_logs".format(self.model.name),
@@ -119,6 +130,7 @@ class TrainerBase():
 
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
+        logger.trace(loss)
         output = list()
         for side in sorted(list(loss.keys())):
             display = ", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
@@ -126,8 +138,8 @@ class TrainerBase():
                                                         this_loss)
                                  for idx, this_loss in enumerate(loss[side])])
             output.append(display)
-        print("[{}] [#{:05d}] {}, {}".format(
-            self.timestamp, self.model.iterations, output[0], output[1]), end='\r')
+        output = ", ".join(output)
+        print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
@@ -136,6 +148,8 @@ class TrainerBase():
         do_timelapse = False if timelapse_kwargs is None else True
         loss = dict()
         for side, batcher in self.batchers.items():
+            if self.pingpong.active and side != self.pingpong.side:
+                continue
             loss[side] = batcher.train_one_batch(do_preview)
             if not do_preview and not do_timelapse:
                 continue
@@ -149,11 +163,18 @@ class TrainerBase():
         for side, side_loss in loss.items():
             self.store_history(side, side_loss)
             self.log_tensorboard(side, side_loss)
-        self.print_loss(loss)
+
+        if not self.pingpong.active:
+            self.print_loss(loss)
+        else:
+            for key, val in loss.items():
+                self.pingpong.loss[key] = val
+            self.print_loss(self.pingpong.loss)
 
         if do_preview:
-            viewer(self.samples.show_sample(),
-                   "Training - 'S': Save Now. 'ENTER': Save and Quit")
+            samples = self.samples.show_sample()
+            if samples is not None:
+                viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
         if do_timelapse:
             self.timelapse.output_timelapse()
@@ -287,6 +308,9 @@ class Samples():
 
     def show_sample(self):
         """ Display preview data """
+        if len(self.images) != 2:
+            logger.debug("Ping Pong training - Only one side trained. Aborting preview")
+            return None
         logger.debug("Showing sample")
         feeds = dict()
         figures = dict()
@@ -536,10 +560,38 @@ class Timelapse():
         """ Set the timelapse dictionary """
         logger.debug("Ouputting timelapse")
         image = self.samples.show_sample()
+        if image is None:
+            return
         filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
 
         cv2.imwrite(filename, image)  # pylint: disable=no-member
         logger.debug("Created timelapse: '%s'", filename)
+
+
+class PingPong():
+    """ Side switcher for pingpong training """
+    def __init__(self, model, sides):
+        logger.debug("Initializing %s: (model: '%s')", self.__class__.__name__, model)
+        self.active = model.training_opts.get("pingpong", False)
+        self.model = model
+        self.sides = sides
+        self.side = sorted(sides)[0]
+        self.loss = {side: dict() for side in sides}
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def switch(self):
+        """ Switch pingpong side """
+        if not self.active:
+            return
+        retval = [side for side in self.sides if side != self.side][0]
+        logger.info("Switching training to side %s", retval.title())
+        self.side = retval
+        self.reload_model()
+
+    def reload_model(self):
+        """ Load the model for just the current side """
+        logger.verbose("Ping-Pong re-loading model")
+        self.model.reset_pingpong()
 
 
 class Landmarks():

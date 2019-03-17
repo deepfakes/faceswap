@@ -14,7 +14,7 @@ from json import JSONDecodeError
 import keras
 from keras import losses
 from keras import backend as K
-from keras.models import load_model
+from keras.models import load_model, Model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
@@ -42,12 +42,16 @@ class ModelBase():
                  input_shape=None,
                  encoder_dim=None,
                  trainer="original",
+                 pingpong=False,
+                 memory_saving_gradients=False,
                  predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, "
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, no_logs: %s"
                      "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
-                     "input_shape: %s, encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
-                     training_image_size, alignments_paths, preview_scale, input_shape,
-                     encoder_dim)
+                     "input_shape: %s, encoder_dim: %s, trainer: %s, pingpong: %s, "
+                     "memory_saving_gradients: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, gpus, no_logs, training_image_size,
+                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer,
+                     pingpong, memory_saving_gradients, predict)
 
         self.predict = predict
         self.model_dir = model_dir
@@ -60,7 +64,7 @@ class ModelBase():
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        self.state = State(self.model_dir, self.name, no_logs, training_image_size)
+        self.state = State(self.model_dir, self.name, no_logs, pingpong, training_image_size)
         self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
@@ -74,8 +78,10 @@ class ModelBase():
         self.training_opts = {"alignments": alignments_paths,
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
-                              "no_flip": no_flip}
+                              "no_flip": no_flip,
+                              "pingpong": pingpong}
 
+        self.set_gradient_type(memory_saving_gradients)
         self.build()
         self.set_training_data()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
@@ -105,6 +111,15 @@ class ModelBase():
         logger.debug("Pre-existing models exist: %s", retval)
         return retval
 
+    @staticmethod
+    def set_gradient_type(memory_saving_gradients):
+        """ Monkeypatch Memory Saving Gradients if requested """
+        if not memory_saving_gradients:
+            return
+        logger.info("Using Memory Saving Gradients")
+        from lib.model import memory_saving_gradients
+        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+
     def set_training_data(self):
         """ Override to set model specific training data.
 
@@ -132,7 +147,7 @@ class ModelBase():
         self.load_models(swapped=False)
         self.build_autoencoders()
         self.log_summary()
-        self.compile_predictors()
+        self.compile_predictors(initialize=True)
 
     def build_autoencoders(self):
         """ Override for Model Specific autoencoder builds
@@ -215,24 +230,42 @@ class ModelBase():
         self.output_shape = tuple(out[0])
         logger.debug("Added output shape: %s", self.output_shape)
 
-    def compile_predictors(self):
+    def reset_pingpong(self):
+        """ Reset the models for pingpong training """
+        logger.debug("Resetting models")
+
+        # Clear models and graph
+        self.predictors = dict()
+        K.clear_session()
+
+        # Load Models for current training run
+        for model in self.networks.values():
+            model.network = Model.from_config(model.config)
+            model.network.set_weights(model.weights)
+
+        self.build_autoencoders()
+        self.compile_predictors(initialize=False)
+        logger.debug("Reset models")
+
+    def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
         optimizer = self.get_optimizer(lr=5e-5, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
             loss_names = ["loss"]
-            loss_funcs = [self.loss_function(side)]
+            loss_funcs = [self.loss_function(side, initialize)]
             mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
             if mask:
                 loss_names.insert(0, "mask_loss")
-                loss_funcs.insert(0, self.mask_loss_function(mask[0], side))
+                loss_funcs.insert(0, self.mask_loss_function(mask[0], side, initialize))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(loss_names) > 1:
                 loss_names.insert(0, "total_loss")
-            self.state.add_session_loss_names(side, loss_names)
-            self.history[side] = list()
+            if initialize:
+                self.state.add_session_loss_names(side, loss_names)
+                self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", loss_names)
 
     def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
@@ -250,24 +283,24 @@ class ModelBase():
         logger.debug("Optimizer kwargs: %s", opt_kwargs)
         return Adam(**opt_kwargs)
 
-    def loss_function(self, side):
+    def loss_function(self, side, initialize):
         """ Set the loss function """
         if self.config.get("dssim_loss", False):
-            if side == "a" and not self.predict:
+            if side == "a" and not self.predict and initialize:
                 logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:
-            if side == "a" and not self.predict:
+            if side == "a" and not self.predict and initialize:
                 logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
         logger.debug(loss_func)
         return loss_func
 
-    def mask_loss_function(self, mask, side):
+    def mask_loss_function(self, mask, side, initialize):
         """ Set the loss function for masks
             Side is input so we only log once """
         if self.config.get("dssim_mask_loss", False):
-            if side == "a" and not self.predict:
+            if side == "a" and not self.predict and initialize:
                 logger.verbose("Using DSSIM Loss for mask")
             mask_loss_func = DSSIMObjective()
         else:
@@ -276,7 +309,7 @@ class ModelBase():
             mask_loss_func = losses.mean_absolute_error
 
         if self.config.get("penalized_mask_loss", False):
-            if side == "a" and not self.predict:
+            if side == "a" and not self.predict and initialize:
                 logger.verbose("Using Penalized Loss for mask")
             mask_loss_func = PenalizedLoss(mask, mask_loss_func)
         logger.debug(mask_loss_func)
@@ -329,7 +362,7 @@ class ModelBase():
 
         if not self.models_exist and not self.predict:
             logger.info("Creating new '%s' model in folder: '%s'", self.name, self.model_dir)
-            return
+            return None
         if not self.models_exist and self.predict:
             logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
             exit(0)
@@ -495,6 +528,8 @@ class NNMeta():
         self.name = self.set_name()
         self.network = network
         self.network.name = self.name
+        self.config = network.get_config()  # For pingpong restore
+        self.weights = network.get_weights()  # For pingpong restore
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_name(self):
@@ -521,6 +556,7 @@ class NNMeta():
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
+        self.config = network.get_config()
         self.network = network  # Update network with saved model
         self.network.name = self.type
         return True
@@ -531,6 +567,7 @@ class NNMeta():
         if should_backup:
             self.backup(fullpath=fullpath)
         logger.debug("Saving model: '%s'", fullpath)
+        self.weights = self.network.get_weights()
         self.network.save(fullpath)
 
     def backup(self, fullpath=None):
@@ -553,10 +590,10 @@ class NNMeta():
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name, no_logs, training_image_size):
+    def __init__(self, model_dir, model_name, no_logs, pingpong, training_image_size):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', no_logs: %s, "
-                     "training_image_size: '%s'", self.__class__.__name__, model_dir,
-                     model_name, no_logs, training_image_size)
+                     "pingpong: %s, training_image_size: '%s'", self.__class__.__name__, model_dir,
+                     model_name, no_logs, pingpong, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
@@ -570,7 +607,7 @@ class State():
         self.config = dict()
         self.load()
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs)
+        self.create_new_session(no_logs, pingpong)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -602,11 +639,12 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs):
+    def create_new_session(self, no_logs, pingpong):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
+                                          "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
                                           "iterations": 0}

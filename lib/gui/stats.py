@@ -136,7 +136,7 @@ class Session():
     @property
     def logging_disabled(self):
         """ Return whether logging is disabled for this session """
-        return self.session["no_logs"]
+        return self.session["no_logs"] or self.session["pingpong"]
 
     @property
     def loss(self):

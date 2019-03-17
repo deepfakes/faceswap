@@ -5,6 +5,7 @@ numpy==1.15.4
 opencv-python
 scikit-image
 scikit-learn
+toposort
 matplotlib==2.2.2
 ffmpy==0.2.2
 nvidia-ml-py3

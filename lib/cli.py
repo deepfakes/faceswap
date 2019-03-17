@@ -879,6 +879,25 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Disables TensorBoard logging. NB: Disabling logs means "
                                       "that you will not be able to use the graph or analysis "
                                       "for this session in the GUI."})
+        argument_list.append({"opts": ("-pp", "--ping-pong"),
+                              "action": "store_true",
+                              "dest": "pingpong",
+                              "default": False,
+                              "help": "Enable ping pong training. Trains one side at a time, "
+                                      "switching sides at each save iteration. Training will take "
+                                      "2 to 4 times longer, with about a 30%%-50%% reduction in "
+                                      "VRAM useage. NB: Preview won't show until both sides have "
+                                      "been trained once."})
+        argument_list.append({"opts": ("-msg", "--memory-saving-gradients"),
+                              "action": "store_true",
+                              "dest": "memory_saving_gradients",
+                              "default": False,
+                              "help": "Trades off VRAM useage against computation time. Can fit "
+                                      "larger models into memory at a cost of slower training "
+                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
+                                      "training time. NB: Launch time will be significantly "
+                                      "delayed. Switching sides using ping-pong training will "
+                                      "take longer."})
         argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
                               "action": "store_true",
                               "dest": "warp_to_landmarks",
