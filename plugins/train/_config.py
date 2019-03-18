@@ -38,21 +38,23 @@ class Config(FaceswapConfig):
                  "Might increase speed at cost of VRAM")
         self.add_item(
             section=section, title="reflect_padding", datatype=bool, default=False,
-            info="Use reflect padding rather than zero padding.")
-        self.add_item(
-            section=section, title="dssim_mask_loss", datatype=bool, default=True,
-            info="If using a mask, Use DSSIM loss for Mask training rather than Mean Absolute "
-                 "Error\nMay increase overall quality.")
+            info="Use reflect padding rather than zero padding. Only enable this option if the "
+                 "model you are training has a distinct line appearing around the edge of the "
+                 "swap area.")
         self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="If using a mask, Use Penalized loss for Mask training. Can stack with DSSIM.\n"
-                 "May increase overall quality.")
+            info="If using a mask, Use Penalized loss for Mask training. \n"
+                 "May increase overall quality. This should probably be left at True")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)" +
                          ADDITIONAL_INFO)
+        self.add_item(
+            section=section, title="dssim_loss", datatype=bool, default=True,
+            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
+                 "May increase overall quality.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="dfaker",
             choices=MASK_TYPES, info=MASK_INFO)

@@ -250,7 +250,8 @@ class ModelBase():
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        optimizer = self.get_optimizer(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        learning_rate = self.config.get("learning_rate", 5e-5)
+        optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
             loss_names = ["loss"]
@@ -299,14 +300,9 @@ class ModelBase():
     def mask_loss_function(self, mask, side, initialize):
         """ Set the loss function for masks
             Side is input so we only log once """
-        if self.config.get("dssim_mask_loss", False):
-            if side == "a" and not self.predict and initialize:
-                logger.verbose("Using DSSIM Loss for mask")
-            mask_loss_func = DSSIMObjective()
-        else:
-            if side == "a" and not self.predict:
-                logger.verbose("Using Mean Absolute Error Loss for mask")
-            mask_loss_func = losses.mean_absolute_error
+        if side == "a" and not self.predict:
+            logger.verbose("Using Mean Absolute Error Loss for mask")
+        mask_loss_func = losses.mean_absolute_error
 
         if self.config.get("penalized_mask_loss", False):
             if side == "a" and not self.predict and initialize:
