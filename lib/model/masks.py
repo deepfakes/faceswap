@@ -43,7 +43,7 @@ def dfaker(landmarks, face, channels=4):
 
 
 def dfl_full(landmarks, face, channels=4):
-    """ DFL Face Full Mask
+    """ DFL facial mask
 
         channels: 1, 3 or 4:
             1 - Return a single channel mask
@@ -66,7 +66,7 @@ def dfl_full(landmarks, face, channels=4):
     return merge_mask(face, mask, channels)
 
 def components(landmarks, face, channels=4):
-    """ DFL Face Full Mask
+    """ Component model mask
 
         channels: 1, 3 or 4:
             1 - Return a single channel mask
