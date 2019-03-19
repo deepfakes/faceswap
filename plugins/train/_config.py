@@ -7,7 +7,7 @@ from lib.config import FaceswapConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-MASK_TYPES = ["none", "dfaker", "dfl_full"]
+MASK_TYPES = ["none", "dfaker", "dfl_full", "components"]
 MASK_INFO = "The mask to be used for training. Select none to not use a mask"
 COVERAGE_INFO = ("How much of the extracted image to train on. Generally the model is optimized\n"
                  "to the default value. Sensible values to use are:"
