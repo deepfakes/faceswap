@@ -21,8 +21,6 @@ from .extract import Plugins as Extractor
 
 import numpy as np
 import face_recognition
-from PIL import Image
-import glob
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -50,7 +48,7 @@ class Convert():
         ##load images for target face id
         try:
             models_dir = self.args.model_dir
-            target_images = [face_recognition.load_image_file(file) for file in glob.glob(models_dir + '**\\*.png', recursive=True)]
+            target_images = [Images.load_one_image(get_image_paths(os.path.join(models_dir,folder))[0]) for folder in os.listdir(models_dir)]
         except:
             print("no images found")
             quit()
@@ -64,7 +62,7 @@ class Convert():
 
         ##load trained models, should have one model per image
         try:
-            models = [self.load_model(get_folder(folder)) for folder in glob.glob(models_dir + '*')]
+            models = [self.load_model(get_folder(os.path.join(models_dir,folder))) for folder in os.listdir(models_dir)]
         except:
             print("error finding trained models")
             quit()
@@ -222,9 +220,8 @@ class Convert():
             ##if not skip:
             for face in faces:
                 ## pick best model and swap
-                im = Image.fromarray(face.image)
                 try:
-                    unknown_face_encoding = face_recognition.face_encodings(np.array(im))[0]
+                    unknown_face_encoding = face_recognition.face_encodings(face.image)[0]
                     results = face_recognition.face_distance(self.target_encodings, unknown_face_encoding)
                     self.matched_face = np.argmin(results)
                     print(self.matched_face)     
