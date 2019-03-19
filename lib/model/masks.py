@@ -54,8 +54,10 @@ def dfl_full(landmarks, face, channels=4):
     mask = np.zeros(face.shape[0:2] + (1, ), dtype=np.float32)
 
     nose_ridge = (landmarks[27:31], landmarks[33:34])
-    jaw = (landmarks[0:17], landmarks[48:68], landmarks[0:1], landmarks[8:9], landmarks[16:17])
-    eyes = (landmarks[17:27], landmarks[0:1], landmarks[27:28], landmarks[16:17], landmarks[33:34])
+    jaw = (landmarks[0:17], landmarks[48:68], landmarks[0:1],
+           landmarks[8:9], landmarks[16:17])
+    eyes = (landmarks[17:27], landmarks[0:1], landmarks[27:28],
+            landmarks[16:17], landmarks[33:34])
     parts = [jaw, nose_ridge, eyes]
 
     for item in parts:
@@ -79,10 +81,12 @@ def components(landmarks, face, channels=4):
     r_cheek = (landmarks[17:20], landmarks[8:9])
     l_cheek = (landmarks[24:27], landmarks[8:9])
     nose_ridge = (landmarks[19:25], landmarks[8:9],)
-    r_eye = (landmarks[17:22], landmarks[27:28],landmarks[31:36],landmarks[8:9])
-    l_eye = (landmarks[22:27], landmarks[27:28],landmarks[31:36],landmarks[8:9])
-    nose = (image_landmarks[27:31], image_landmarks[31:36])
-    parts = [r_jaw, l_jaw, r_cheek, l_creek, nose_ridge, r_eye, l_eye, nose]
+    r_eye = (landmarks[17:22], landmarks[27:28],
+             landmarks[31:36], landmarks[8:9])
+    l_eye = (landmarks[22:27], landmarks[27:28],
+             landmarks[31:36], landmarks[8:9])
+    nose = (landmarks[27:31], landmarks[31:36])
+    parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
 
     for item in parts:
         cv2.fillConvexPoly(mask, cv2.convexHull(np.concatenate(item)), 255.) # pylint: disable=no-member
