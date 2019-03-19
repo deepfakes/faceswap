@@ -26,7 +26,7 @@ def dfaker(landmarks, face, channels=4):
     logger.trace("face_shape: %s, coverage: %s, landmarks: %s", face.shape, coverage, landmarks)
 
     mat = umeyama(landmarks[17:], True)[0:2]
-    mat = mat.reshape(-1).reshape((2, 3))
+    mat = mat.reshape(-1).reshape(2, 3)
     mat = mat * coverage
     mat[:, 2] += padding
 
