@@ -83,9 +83,9 @@ class NNBlocks():
         else:
             var_x = PixelShuffler()(var_x)
         return var_x
-
+    
     # <<< DFaker Model Blocks >>> #
-    def res_block(self, inp, filters, kernel_size=3, padding= 'same', **kwargs):
+    def res_block(self, inp, filters, kernel_size=3, padding= 'same', use_bias=True, **kwargs):
         """ Residual block """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s)",
                      inp, filters, kernel_size, kwargs)
@@ -97,6 +97,7 @@ class NNBlocks():
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
                        padding=padding,
+                       use_bias=use_bias,
                        **kwargs)(var_x)
         var_x = LeakyReLU(alpha=0.2)(var_x)
         if self.use_reflect_padding:
@@ -109,6 +110,7 @@ class NNBlocks():
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
                        padding=padding,
+                       use_bias=use_bias,
                        **kwargs)(var_x)
         kwargs["kernel_initializer"] = temp
         var_x = Add()([var_x, inp])
