@@ -31,8 +31,8 @@ def dfaker(landmarks, face, channels=4):
     mat[:, 2] += padding
 
     mask = np.zeros(face.shape[0:2] + (1, ), dtype=np.float32)
-    hull = cv2.convexHull(landmarks).reshape(1, -1, 2) # pylint: disable=no-member
-    hull = cv2.transform(hull, mat).reshape(-1, 2)# pylint: disable=no-member
+    hull = cv2.convexHull(landmarks).reshape(1, -1, 2)  # pylint: disable=no-member
+    hull = cv2.transform(hull, mat).reshape(-1, 2)  # pylint: disable=no-member
     cv2.fillConvexPoly(mask, hull, 255.)  # pylint: disable=no-member
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))  # pylint: disable=no-member
@@ -61,9 +61,11 @@ def dfl_full(landmarks, face, channels=4):
     parts = [jaw, nose_ridge, eyes]
 
     for item in parts:
-        cv2.fillConvexPoly(mask, cv2.convexHull(np.concatenate(item)), 255.) # pylint: disable=no-member
+        merged = np.concatenate(item)
+        cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
 
     return merge_mask(face, mask, channels)
+
 
 def components(landmarks, face, channels=4):
     """ Component model mask
@@ -89,9 +91,11 @@ def components(landmarks, face, channels=4):
     parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
 
     for item in parts:
-        cv2.fillConvexPoly(mask, cv2.convexHull(np.concatenate(item)), 255.) # pylint: disable=no-member
+        merged = np.concatenate(item)
+        cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
 
     return merge_mask(face, mask, channels)
+
 
 def merge_mask(image, mask, channels):
     """ Return the mask in requested shape """
