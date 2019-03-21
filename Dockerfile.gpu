@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu-py3
+FROM tensorflow/tensorflow:1.12.0-gpu-py3
 
 RUN apt-get update -qq -y \
  && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk\
