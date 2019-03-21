@@ -375,7 +375,7 @@ Function InstallDlib
     DetailPrint "Renaming $dlibWhl to ${dlibFinalName}"
     Rename  $dirTemp\$dlibWhl  $dirTemp\${dlibFinalName}
 
-    ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && pip install $dirTemp\${dlibFinalName} &&  conda deactivate" $0
+    ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && pip install $\"$dirTemp\${dlibFinalName}$\" &&  conda deactivate" $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Installing Dlib"
