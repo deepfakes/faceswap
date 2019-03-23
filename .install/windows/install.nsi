@@ -19,7 +19,7 @@ InstallDir $PROFILE\faceswap
 !define flagsSetup "--installer"
 
 # Install cli flags
-!define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$Profile\MiniConda3"
+!define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$\"$PROFILE\MiniConda3$\""
 !define flagsGit "/SILENT /NORESTART /NOCANCEL /SP /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
 !define flagsEnv "-y python=3.6"
@@ -269,7 +269,7 @@ Function InstallPrerequisites
             ${If} $0 == "OK"
                 DetailPrint "Installing Git..."
                 SetDetailsPrint listonly
-                ExecWait "$dirTemp\git_installer.exe ${flagsGit} /LOADINF=$gitInf" $0
+                ExecWait "$\"$dirTemp\git_installer.exe$\" ${flagsGit} /LOADINF=$\"$gitInf$\"" $0
                 SetDetailsPrint both
                 ${If} $0 != 0
                     DetailPrint "Error Installing Git"
@@ -289,7 +289,7 @@ Function InstallPrerequisites
             ${If} $0 == "OK"
                 DetailPrint "Installing Miniconda3. This will take a few minutes..."
                 SetDetailsPrint listonly
-                ExecWait "$dirTemp\Miniconda3.exe ${flagsConda}" $0
+                ExecWait "$\"$dirTemp\Miniconda3.exe$\" ${flagsConda}" $0
                 StrCpy $dirConda "$dirMiniconda"
                 SetDetailsPrint both
                 ${If} $0 != 0
@@ -373,7 +373,7 @@ Function InstallDlib
 
     StrCpy $dlibWhl "$dlibWhl.whl"
     DetailPrint "Renaming $dlibWhl to ${dlibFinalName}"
-    Rename  $dirTemp\$dlibWhl  $dirTemp\${dlibFinalName}
+    Rename  "$dirTemp\$dlibWhl"  "$dirTemp\${dlibFinalName}"
 
     ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && pip install $\"$dirTemp\${dlibFinalName}$\" &&  conda deactivate" $0
     SetDetailsPrint both
