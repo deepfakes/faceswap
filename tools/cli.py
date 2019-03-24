@@ -367,119 +367,58 @@ class SortArgs(FaceSwapArgs):
                               "help": "Output directory for sorted aligned "
                                       "faces."})
 
-        argument_list.append({"opts": ('-fp', '--final-process'),
+        argument_list.append({"opts": ("-al", "--alignments"),
+                              "action": FileFullPaths,
+                              "filetypes": 'alignments',
                               "type": str,
-                              "choices": ("folders", "rename"),
-                              "dest": 'final_process',
-                              "default": "rename",
-                              "help": "R|\n'folders': files are sorted using "
-                                      "the -s/--sort-by\n\tmethod, then they "
-                                      "are organized into\n\tfolders using "
-                                      "the -g/--group-by grouping\n\tmethod."
-                                      "\n'rename': files are sorted using "
-                                      "the -s/--sort-by\n\tthen they are "
-                                      "renamed.\nDefault: rename"})
-
-        argument_list.append({"opts": ('-k', '--keep'),
-                              "action": 'store_true',
-                              "dest": 'keep_original',
-                              "default": False,
-                              "help": "Keeps the original files in the input "
-                                      "directory. Be careful when using this "
-                                      "with rename grouping and no specified "
-                                      "output directory as this would keep "
-                                      "the original and renamed files in the "
-                                      "same directory."})
+                              "dest": "alignments_path",
+                              "help": "Optional path to an alignments file."})
 
         argument_list.append({"opts": ('-s', '--sort-by'),
                               "type": str,
-                              "choices": ("blur", "face", "face-cnn",
-                                          "face-cnn-dissim", "face-dissim",
-                                          "face-yaw", "hist",
-                                          "hist-dissim"),
+                              "choices": ("none",
+                                          "identity",
+                                          "hist_gray",
+                                          "hist_luma",
+                                          "hist_chroma_green",
+                                          "hist_chroma_orange",
+                                          "landmarks",
+                                          "luma",
+                                          "chroma_green",
+                                          "chroma_orange",
+                                          "yaw",
+                                          "roll",
+                                          "pitch",
+                                          "blur_quick",
+                                          "blur_cpbd",
+                                          "face_area",
+                                          "identity_rarity",
+                                          "hist_rarity_gray",
+                                          "hist_rarity_luma",
+                                          "hist_rarity_green",
+                                          "hist_rarity_orange",
+                                          "landmark_rarity"),
                               "dest": 'sort_method',
-                              "default": "hist",
+                              "default": "luma",
                               "help": "Sort by method. "
                                       "Choose how images are sorted. "
-                                      "Default: hist"})
+                                      "Default: luma"})
 
         argument_list.append({"opts": ('-g', '--group-by'),
                               "type": str,
-                              "choices": ("blur", "face", "face-cnn",
-                                          "face-yaw", "hist"),
+                              "choices": ("none",
+                                          "blur",
+                                          "face",
+                                          "face-cnn",
+                                          "face-yaw",
+                                          "hist"),
                               "dest": 'group_method',
-                              "default": "hist",
+                              "default": "none",
                               "help": "Group by method. "
                                       "When -fp/--final-processing by "
                                       "folders choose the how the images are "
                                       "grouped after sorting. "
-                                      "Default: hist"})
-
-        argument_list.append({"opts": ('-t', '--ref_threshold'),
-                              "action": Slider,
-                              "min_max": (-1.0, 10.0),
-                              "rounding": 2,
-                              "type": float,
-                              "dest": 'min_threshold',
-                              "default": -1.0,
-                              "help": "Float value. "
-                                      "Minimum threshold to use for grouping "
-                                      "comparison with 'face' and 'hist' "
-                                      "methods. The lower the value the more "
-                                      "discriminating the grouping is. "
-                                      "Leaving -1.0 will make the program "
-                                      "set the default value automatically. "
-                                      "For face 0.6 should be enough, with "
-                                      "0.5 being very discriminating. "
-                                      "For face-cnn 7.2 should be enough, "
-                                      "with 4 being very discriminating. "
-                                      "For hist 0.3 should be enough, with "
-                                      "0.2 being very discriminating. "
-                                      "Be careful setting a value that's too "
-                                      "low in a directory with many images, "
-                                      "as this could result in a lot of "
-                                      "directories being created. "
-                                      "Defaults: face 0.6, face-cnn 7.2, "
-                                      "hist 0.3"})
-
-        argument_list.append({"opts": ('-b', '--bins'),
-                              "action": Slider,
-                              "min_max": (1, 100),
-                              "rounding": 1,
-                              "type": int,
-                              "dest": 'num_bins',
-                              "default": 5,
-                              "help": "Integer value. "
-                                      "Number of folders that will be used "
-                                      "to group by blur and face-yaw. "
-                                      "For blur folder 0 will be the least "
-                                      "blurry, while the last folder will be "
-                                      "the blurriest. "
-                                      "For face-yaw the number of bins is by "
-                                      "how much 180 degrees is divided. So "
-                                      "if you use 18, then each folder will "
-                                      "be a 10 degree increment. Folder 0 "
-                                      "will contain faces looking the most "
-                                      "to the left whereas the last folder "
-                                      "will contain the faces looking the "
-                                      "most to the right. "
-                                      "If the number of images doesn't "
-                                      "divide evenly into the number of "
-                                      "bins, the remaining images get put in "
-                                      "the last bin."
-                                      "Default value: 5"})
-
-        argument_list.append({"opts": ('-l', '--log-changes'),
-                              "action": 'store_true',
-                              "dest": 'log_changes',
-                              "default": False,
-                              "help": "Logs file renaming changes if "
-                                      "grouping by renaming, or it logs the "
-                                      "file copying/movement if grouping by "
-                                      "folders. If no log file is specified "
-                                      "with '--log-file', then a "
-                                      "'sort_log.json' file will be created "
-                                      "in the input directory."})
+                                      "Default: none"})
 
         argument_list.append({"opts": ('-lf', '--log-file'),
                               "action": SaveFileFullPaths,
@@ -493,5 +432,36 @@ class SortArgs(FaceSwapArgs):
                                       "the serializer, with the supplied "
                                       "filename. "
                                       "Default: sort_log.json"})
+
+        argument_list.append({"opts": ('-k', '--keep'),
+                              "action": 'store_true',
+                              "dest": 'keep_original',
+                              "default": False,
+                              "help": "Keeps the original files in the input "
+                                      "directory. Be careful when using this "
+                                      "with rename grouping and no specified "
+                                      "output directory as this would keep "
+                                      "the original and renamed files in the "
+                                      "same directory."})
+
+        argument_list.append({"opts": ('-l', '--log-changes'),
+                              "action": 'store_true',
+                              "dest": 'log_changes',
+                              "default": False,
+                              "help": "Logs file renaming changes if "
+                                      "grouping by renaming, or it logs the "
+                                      "file copying/movement if grouping by "
+                                      "folders. If no log file is specified "
+                                      "with '--log-file', then a "
+                                      "'sort_log.json' file will be created "
+                                      "in the input directory."})
+
+        argument_list.append({"opts": ('-fo', '--face_only'),
+                              "action": 'store_true',
+                              "dest": 'face_only',
+                              "default": False,
+                              "help": "Calculate statistics on the face area "
+                                      "only. Setting to False will measure "
+                                      "statistics on the whole image"})
 
         return argument_list
