@@ -10,7 +10,6 @@ import operator
 import argparse
 from shutil import copyfile
 from itertools import cycle, zip_longest
-from pathlib import Path
 from tqdm import tqdm
 import numpy as np
 import cv2
@@ -147,34 +146,56 @@ class Sort():
         self.extractor.process()
         images = self.extractor.images
         alignments = self.extractor.alignments
-        #img_loader = images.load()  # yield filename, image
-        loader = alignments.yield_faces()
-        extracts = ExtractedFaces(self.frames, alignments, size=256, align_eyes=False)
+        # extracts = ExtractedFaces(self.frames, alignments, size=256, align_eyes=False)
+
+        img_loader = images.load()
+        mark_loader = alignments.yield_faces()
+        loader = zip_longest(img_loader, mark_loader)
         imgs = []
-        for frame_name, aligns, face_count, frame_fullname in loader:
-            extracts.get_faces(frame_fullname)
-            merged = self.merge_lists([frame_fullname], [0.], extracts.faces)
+        for (file, image), (_, aligns, face_count, _) in loader:
+            merged = self.merge_lists([0.], [file], [image], aligns)
+            # extracts.get_faces(frame_fullname)
+            # merged = self.merge_lists([0.], [file], [image], extracts.faces)
             for merges in merged:
-                filename = Path(self.args.input_dir) / merges[0]
-                if merges[2]:
-                    landmarks = np.array(merges[2].landmarksXY, dtype='float32')
-                    face_crop = merges[2].image.astype('float32')
-                    imgs.append([filename, merges[1], face_crop, landmarks])
+                if merges[3]:
+                    face_crop = merges[2].astype('float32')
+                    landmarks = np.array(merges[3]['landmarksXY'], dtype='int32')
+                    imgs.append([merges[0], merges[1], face_crop, landmarks])
                 else:
-                    imgs.append([filename, merges[1], np.zeros((64, 64, 3), dtype='float32'), np.zeros((68, 2), dtype='float32')])
+                    imgs.append([merges[0], merges[1], np.zeros((64, 64, 3), dtype='float32'), np.zeros((68, 2), dtype='float32')])
         return imgs
 
     @staticmethod
-    def __sort_face(imgs, method):  # still testing all error cases with images of non-uniform size
+    def __face_crop(image, landmarks):
+        """ Crop a frame down to a face and adjust landmarks accordingly """
+        x_max = max(landmarks[:, 0])
+        x_min = min(landmarks[:, 0])
+        y_max = max(landmarks[:, 1])
+        y_min = min(landmarks[:, 1])
+        x_pad = (x_max - x_min) // 6
+        y_pad = (y_max - y_min) // 6
+        height, width, _ = image.shape
+        y_slice = slice(max(0, y_min - y_pad), min(height, y_max + y_pad))
+        x_slice = slice(max(0, x_min - x_pad), min(width, x_max + x_pad))
+        image = image[y_slice, x_slice]
+        landmarks[:, 0] = landmarks[:, 0] - x_slice.start
+        landmarks[:, 1] = landmarks[:, 1] - y_slice.start
+
+        return image, landmarks
+
+    @staticmethod
+    def __sort_face(imgs, method):
         """ Sort by face identity similarity """
-        ids = face_recognition.face_encodings
-        distances = face_recognition.face_distance
-        embeddings = [ids(item[2]) for item in tqdm(imgs, desc="Encoding faces", file=sys.stdout)]
-        for i, ids in tqdm(enumerate(embeddings[:-1]), desc="Sorting", file=sys.stdout):
-            if len(ids) != 0:
-                scores = np.stack(np.array(distances(others[0], ids[0])) for others in embeddings[i+1:] if len(others) != 0)
-                best = np.argmin(scores)
-                imgs[i + 1], imgs[best] = imgs[best], imgs[i + 1]
+        encoder = face_recognition.face_encodings
+        blank = np.zeros((128,), dtype='float32')
+        p_bar = tqdm(imgs, desc="Encoding Faces", file=sys.stdout)
+        ids = [encoder(item[2].astype('uint8')) for item in p_bar]
+        ids = np.stack(item[0] if len(item) > 0 else blank for item in ids)
+        for i, identity in enumerate(tqdm(ids[:-1], desc="Sorting", file=sys.stdout)):
+            scores = np.stack(np.linalg.norm(others - identity, axis=1)for others in ids[i+1:])
+            best = np.argmin(scores)
+            imgs[i + 1], imgs[best] = imgs[best], imgs[i + 1]
+            imgs[i + 1][0] = best
 
         return imgs
 
@@ -184,23 +205,23 @@ class Sort():
         images, value = self.prep_color(imgs, method)
         p_bar = tqdm(images, desc="Calcing hists", file=sys.stdout)
         hists = [cv2.calcHist([image], [value], None, [256], [0, 256]) for image in p_bar]
-        for i, hist in tqdm(enumerate(hists[:-1]), desc="Sorting", file=sys.stdout):
+        for i, hist in enumerate(tqdm(hists[:-1], desc="Sorting", file=sys.stdout)):
             scores = np.stack(cv2.compareHist(others, hist, cost) for others in hists[i+1:])
             best = np.argmin(scores)
             imgs[i + 1], imgs[best] = imgs[best], imgs[i + 1]
+            imgs[i + 1][0] = best
 
         return imgs
 
     @staticmethod
-    def __sort_landmarks(imgs, method):  # still testing all error cases with imgs of non-uniform size
+    def __sort_landmarks(imgs, method):
         """ Sort by landmark similarity """
-        for i, img in tqdm(enumerate(imgs[:-1]), desc="Sorting", file=sys.stdout):
-            for marks in img[3]:
-                mark = np.array(marks['landmarksXY'])
-            rest = np.stack(o_marks['landmarksXY'] for items in imgs[i+1:] for o_marks in items[3])
-            scores = np.sum(np.absolute(rest - mark))
+        for i, img in enumerate(tqdm(imgs[:-1], desc="Sorting", file=sys.stdout)):
+            rest = np.stack(others[3] for others in imgs[i+1:])
+            scores = np.sum(np.absolute(rest - img[3]))
             best = np.argmin(scores)
             imgs[i + 1], imgs[best] = imgs[best], imgs[i + 1]
+            imgs[i + 1][0] = best
 
         return imgs
 
@@ -212,37 +233,43 @@ class Sort():
         else:
             scores = np.mean(images, axis=(1, 2))[:, value]
         for img, score in zip(imgs, scores):
-            img[1] = score
+            img[0] = score
 
         return imgs
 
     def __score_angle(self, imgs, method):
         """ Score by estimated face pose angle """
         picker = {'pitch': 0, 'yaw':   1, 'roll':  2}
-        for img in tqdm(imgs, desc="Scoring", file=sys.stdout):
-            for faces, marks in zip(img[2], img[3]):
-                if method == 'landmark_outliers':
-                    inliers = self.face_pose(marks['landmarksXY'], faces, method)
-                    score = len(inliers)
-                    img[1] = score
-                else:
-                    pitch_yaw_roll = self.face_pose(marks['landmarksXY'], faces, method)
-                    score = pitch_yaw_roll[picker[method]]
-                    img[1] = score
+        p_bar = tqdm(imgs, desc="Scoring", file=sys.stdout)
+        for img in p_bar:
+            if method == 'landmark_outliers':
+                inliers = self.face_pose(img[3], img[2], method)
+                score = len(inliers)
+                img[0] = score
+            else:
+                pitch_yaw_roll = self.face_pose(img[3].astype('float32'), img[2], method)
+                score = pitch_yaw_roll[picker[method]]
+                img[0] = score
+            p_bar.update()
+        p_bar.close()
 
         return imgs
 
     @staticmethod
     def __score_blur(imgs, method):
         """ Score by estimated blur """
-        for img in tqdm(imgs, desc="Scoring", file=sys.stdout):
+        p_bar = tqdm(imgs, desc="Scoring", file=sys.stdout)
+        for img in p_bar:
             image = cv2.cvtColor(img[2], cv2.COLOR_BGR2GRAY) if img[2].ndim == 3 else img[2]
+            height, width, _ = img[2].shape
             if method.endswith('quick'):
-                pixel_size = np.sqrt(image.shape[0] * image.shape[1])
+                pixel_size = np.sqrt(height * width)
                 score = np.var(cv2.Laplacian(image, cv2.CV_32F)) / pixel_size
             else:
                 score = cpbd.compute(image)
-            img[1] = score
+            img[0] = score
+            p_bar.update()
+        p_bar.close()
 
         return imgs
 
@@ -252,29 +279,30 @@ class Sort():
         Score by relative size of the face, as measured by the ratio
         of face pixels to total pixels in the image
         """
-        for i, img in tqdm(enumerate(imgs), desc="Scoring", file=sys.stdout):
+        p_bar = tqdm(imgs, desc="Scoring", file=sys.stdout)
+        for img in p_bar:
             height, width, _ = img[2].shape
-            if height == 0:
-                print(i)
-            mask = np.zeros((height+1, width+1, 1), dtype='float32')
-            hull = cv2.convexHull(img[3].astype('int32'))  # pylint: disable=no-member
+            mask = np.zeros((height, width, 1), dtype='float32')
+            hull = cv2.convexHull(img[3])  # pylint: disable=no-member
             cv2.fillConvexPoly(mask, hull, 1.)  # pylint: disable=no-member
-            score = np.count_nonzero(mask) / ((height+1) * (width+1))
-            img[1] = score
+            score = np.count_nonzero(mask) / (height * width)
+            img[0] = score
+            p_bar.update()
+        p_bar.close()
 
         return imgs
 
     @staticmethod
     def __score_face(imgs, method):
         """ Score by face uniqueness """
-        ids = face_recognition.face_encodings
-        blank = np.zeros((128,), dtype = 'float32')
+        encoder = face_recognition.face_encodings
+        blank = np.zeros((128,), dtype='float32')
         p_bar = tqdm(imgs, desc="Encoding Faces", file=sys.stdout)
-        embeddings = [ids(item[2].astype('uint8')) for item in p_bar]
-        embeddings = np.stack(item[0] if len(item) > 0 else blank for item in embeddings)
-        for i, identity in tqdm(enumerate(embeddings), desc="Scoring", file=sys.stdout):
-            score = np.linalg.norm(embeddings - identity, axis=1)
-            imgs[i][1] = np.sum(score)
+        ids = [encoder(item[2].astype('uint8')) for item in p_bar]
+        ids = np.stack(item[0] if len(item) > 0 else blank for item in ids)
+        for i, identity in enumerate(tqdm(ids, desc="Scoring", file=sys.stdout)):
+            score = np.linalg.norm(ids - identity, axis=1)
+            imgs[i][0] = np.sum(score)
 
         return imgs
 
@@ -284,52 +312,27 @@ class Sort():
         images, value = self.prep_color(imgs, method)
         p_bar = tqdm(images, desc="Calcing hists", file=sys.stdout)
         hists = [cv2.calcHist([image], [value], None, [256], [0, 256]) for image in p_bar]
-        for i, hist in tqdm(enumerate(hists), desc="Scoring", file=sys.stdout):
+        for i, hist in enumerate(tqdm(hists, desc="Scoring", file=sys.stdout)):
             score = np.stack(cv2.compareHist(others, hist, cost) for others in hists)
-            imgs[i][1] = np.sum(score)
+            imgs[i][0] = np.sum(score)
 
         return imgs
 
     @staticmethod
     def __score_landmarks(imgs, method):
         ''' Score by landmark uniqueness '''
-        for img in tqdm(imgs, desc="Scoring", file=sys.stdout):
+        p_bar = tqdm(imgs, desc="Scoring", file=sys.stdout)
+        for img in p_bar:
             rest = np.stack(others[3] for others in imgs)
             score = np.sum(np.square(rest - img[3]))
-            img[1] = score
+            img[0] = score
+            p_bar.update()
+        p_bar.close()
 
         return imgs
 
-    def prep_color(self, imgs, method):
-        """ Helper function to construct histogram in proper colorspace """
-        picker = {'gray': 0, 'dissim': 0, 'luma': 0, 'green': 1, 'orange': 2}
-        value = next(v for (k, v) in picker.items() if method.endswith(k))
-        shape_diff = np.sum(np.array(img[2].shape) - np.array(imgs[0][2]).shape for img in imgs)
-        all_same_size = False if any(shape_diff) != 0 else True
-
-        if all_same_size:
-            if method.endswith('gray'):
-                bgr_to_gray = [0.114, 0.587, 0.299]
-                path = np.einsum_path('hijk, k -> hij', imgs[:2][2], bgr_to_gray, optimize='optimal')[0]
-                images = np.einsum('hijk, k -> hij', imgs[:][2], bgr_to_gray, optimize=path).astype('float32')
-            else:
-                rgb = np.stack(img[2] for img in imgs)[..., ::-1] / 255.0
-                img_array = self.rgb_to_ycocg(rgb, single=False) * 255.0
-                if not method.endswith('luma'):
-                    img_array = img_array + 127.5
-        else:
-            if method.endswith('gray'):
-                bgr_to_gray = [0.114, 0.587, 0.299]
-                images = [np.einsum('ijk, k -> ij', img[2], bgr_to_gray, optimize='greedy').astype('float32') for img in imgs]
-            else:
-                images = [self.rgb_to_ycocg(img[2][..., ::-1] / 255.0, single=True) * 255.0 for img in imgs]
-                if not method.endswith('luma'):
-                    images = [img + 127.5 for img in images]
-
-        return images, value
-
     # Methods for grouping
-    # TODO incorporate the UMAP version of grouping
+    # TODO incorporate the hdbscan / UMAP version of grouping
     def group(self, img_list):
         '''
             num_bins = self.args.num_bins
@@ -354,8 +357,8 @@ class Sort():
     def rename(self, img_list):
         """ Rename the files """
         note = "Copying & Renaming" if self.args.keep_original else "Moving & Renaming"
-        progress_bar = tqdm(enumerate(img_list), desc=note, leave=False, file=sys.stdout)
-        any(self.process_file(img[0], i, self.args.output_dir, img[1]) for i, img in progress_bar)
+        progress_bar = enumerate(tqdm(img_list, desc=note, leave=False, file=sys.stdout))
+        any(self.process_file(img[1], i, self.args.output_dir, img[0]) for i, img in progress_bar)
         if self.args.log_changes:
             self.write_to_log(self.changes)
 
@@ -394,13 +397,12 @@ class Sort():
         with open(self.args.log_file_path, 'w') as lfile:
             lfile.write(self.serializer.marshal(changes))
 
-    def process_file(self, src, i, output_dir, score):
+    def process_file(self, src, i, o_dir, score):
         """ Process file method with logging changes and copying/renaming original """
         try:
             basename = os.path.basename(src)
-            i = i
-            # dst = os.path.join(output_dir, '{:05d}{}'.format(i, os.path.splitext(basename)[1]))
-            dst = os.path.join(output_dir, '{:05f}{}'.format(score, os.path.splitext(basename)[1]))
+            dst = os.path.join(o_dir, '{:05d}{}'.format(i, os.path.splitext(basename)[1]))
+            # dst = os.path.join(o_dir, '{:05f}{}'.format(score, os.path.splitext(basename)[1]))
             if self.args.log_changes:
                 self.changes[src] = dst
             if self.args.keep_original:
@@ -418,27 +420,56 @@ class Sort():
         for _ in zip_longest(*iterables):
             yield tuple(next(i, empty_default) for i in cycles)
 
+    def prep_color(self, imgs, method):
+        """ Helper function to construct histogram in proper colorspace """
+        picker = {'gray': 0, 'dissim': 0, 'luma': 0, 'green': 1, 'orange': 2}  # TODO finish dissim
+        value = next(v for (k, v) in picker.items() if method.endswith(k))
+        shape_diff = np.sum(np.array(img[2].shape) - np.array(imgs[0][2]).shape for img in imgs)
+        all_same_size = False if any(shape_diff) != 0 else True
+
+        if all_same_size:
+            if method.endswith('gray'):
+                bgr_to_gray = [0.114, 0.587, 0.299]
+                path = np.einsum_path('hijk, k -> hij', imgs[:2][2], bgr_to_gray, optimize='optimal')[0]
+                images = np.einsum('hijk, k -> hij', imgs[:][2], bgr_to_gray, optimize=path)
+            else:
+                rgb = np.stack(img[2] for img in imgs)[..., ::-1] / 255.0
+                images = self.rgb_to_ycocg(rgb, single=False) * 255.0
+                if not method.endswith('luma'):
+                    images += 127.5
+        else:
+            if method.endswith('gray'):
+                bgr_to_gray = [0.114, 0.587, 0.299]
+                images = [np.einsum('ijk, k -> ij', img[2], bgr_to_gray, optimize='greedy') for img in imgs]
+            else:
+                rgb_imgs = (img[2][..., ::-1] / 255.0 for img in imgs)
+                images = [self.rgb_to_ycocg(img, single=True) * 255.0 for img in rgb_imgs]
+                if not method.endswith('luma'):
+                    images = [img + 127.5 for img in images]
+
+        return images.astype('float32'), value
+
     @staticmethod
-    def rgb_to_ycocg(rgb_images, single=False):
+    def rgb_to_ycocg(rgb_imgs, single=False):
         """ RGB to YCoCG color space, efficient conversion and decorrelated channels """
         rgb_to_ycocg = np.array([[.25, .5, .25], [.5, 0., -.5], [-.25, .5, -.25]])
         if single:
             path = 'greedy'
         else:
-            path = np.einsum_path('ij,...j', rgb_to_ycocg, rgb_images[:2], optimize='optimal')[0]
-        converted = np.einsum('ij,...j', rgb_to_ycocg, rgb_images, optimize=path).astype('float32')
+            path = np.einsum_path('ij,...j', rgb_to_ycocg, rgb_imgs[:2], optimize='optimal')[0]
+        converted = np.einsum('ij,...j', rgb_to_ycocg, rgb_imgs, optimize=path)
 
         return converted
 
     @staticmethod
-    def ycocg_to_rgb(ycocg_images, single=False):
+    def ycocg_to_rgb(ycocg_imgs, single=False):
         """ YCoCG to RGB color space, efficient conversion and decorrelated channels """
         ycocg_to_rgb = np.array([[1., 1., -1.], [1., 0., 1.], [1., -1., -1.]])
         if single:
             path = 'greedy'
         else:
-            path = np.einsum_path('ij,...j', ycocg_to_rgb, ycocg_images[:2], optimize='optimal')[0]
-        converted = np.einsum('ij,...j', ycocg_to_rgb, ycocg_images, optimize=path).astype('float32')
+            path = np.einsum_path('ij,...j', ycocg_to_rgb, ycocg_imgs[:2], optimize='optimal')[0]
+        converted = np.einsum('ij,...j', ycocg_to_rgb, ycocg_imgs, optimize=path)
 
         return converted
 
@@ -570,7 +601,7 @@ class Sort():
 
             return pitch, yaw, roll
 
-        image_pts = np.float32(landmarks).reshape(68, 1, 2)  # pylint: disable=too-many-function-args
+        image_pts = landmarks.reshape(68, 1, 2)  # pylint: disable=too-many-function-args
         object_pts = object_pts.reshape(68, 1, 3)  # pylint: disable=too-many-function-args
         rot_vect, tran_vect, inliers = calc_matrix(img, object_pts, image_pts)
 
