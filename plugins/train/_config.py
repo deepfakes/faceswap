@@ -47,6 +47,11 @@ class Config(FaceswapConfig):
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
             info="If using a mask, Use Penalized loss for Mask training. Can stack with DSSIM.\n"
                  "May increase overall quality.")
+        self.add_item(
+            section=section, title="augmentation_flipping", datatype=bool, default=True,
+            info="To effectively learn, a random set of images are flipped horizontally. \n"
+                 "Sometimes it is desirable for this not to occur. Generally this should "
+                 "be applied during all 'fit training'.")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"

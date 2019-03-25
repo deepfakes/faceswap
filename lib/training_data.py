@@ -156,7 +156,7 @@ class TrainingDataGenerator():
 
         if not is_timelapse:
             image = self.processing.random_transform(image)
-            if not self.training_opts["no_flip"]:
+            if self.training_opts["flip"]:
                 image = self.processing.do_random_flip(image)
         sample = image.copy()[:, :, :3]
 
