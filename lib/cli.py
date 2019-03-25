@@ -617,13 +617,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       "conversion. If no aligned dir is "
                                       "specified, all faces will be "
                                       "converted"})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_models(),
-                              "default": PluginLoader.get_default_model(),
-                              "help": "Select the trainer that was used to "
-                                      "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "action": Radio,
                               "type": str.lower,
@@ -742,6 +735,15 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Place the swapped face on a "
                                       "transparent layer rather than the "
                                       "original frame."})
+        argument_list.append({"opts": ("-t", "--trainer"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_models(),
+                              "help": "[LEGACY] You only need to select the trainer that was "
+                                      "used to create the model if you are loading a legacy "
+                                      "model or if there are multiple models in you model "
+                                      "folder"})
+
         return argument_list
 
 

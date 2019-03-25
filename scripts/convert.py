@@ -5,15 +5,16 @@ import logging
 import re
 import os
 import sys
-from pathlib import Path
 
 import cv2
+import numpy as np
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
+from lib import Serializer
 from lib.faces_detect import DetectedFace
-from lib.multithreading import BackgroundGenerator
-from lib.queue_manager import queue_manager
+from lib.multithreading import MultiThread, PoolProcess
+from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_folder, get_image_paths, hash_image_file
 from plugins.plugin_loader import PluginLoader
 
@@ -27,49 +28,132 @@ class Convert():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
         self.args = arguments
-        self.output_dir = get_folder(self.args.output_dir)
-        self.extractor = None
-        self.faces_count = 0
+        Utils.set_verbosity(self.args.loglevel)
 
         self.images = Images(self.args)
         self.alignments = Alignments(self.args, False, self.images.is_video)
-
         # Update Legacy alignments
         Legacy(self.alignments, self.images.input_images, arguments.input_aligned_dir)
-
-        self.post_process = PostProcess(arguments)
-        self.verify_output = False
-
         self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
+
+        self.disk_io = DiskIO(self.alignments, self.images, arguments)
+        self.extractor = None
+        self.predictor = Predict(self.disk_io.load_queue, arguments)
+        self.converter = PluginLoader.get_converter(self.args.converter)(
+            get_folder(self.args.output_dir),
+            self.predictor.training_size,
+            self.predictor.padding,
+            self.predictor.crop,
+            arguments)
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
-        """ Original & LowMem models go with converter
+        """ Process the conversion """
+        logger.debug("Starting Conversion")
+        # queue_manager.debug_monitor(2)
+        self.convert_images()
+        self.disk_io.save_thread.join()
+        queue_manager.terminate_queues()
 
-            Note: GAN prediction outputs a mask + an image, while other
-            predicts only an image. """
-        Utils.set_verbosity(self.args.loglevel)
+        Utils.finalize(self.images.images_found,
+                       self.predictor.faces_count,
+                       self.predictor.verify_output)
+        logger.debug("Completed Conversion")
 
+    def convert_images(self):
+        """ Convert the images """
+        logger.debug("Converting images")
+        save_queue = queue_manager.get_queue("save")
+        patch_queue = queue_manager.get_queue("patch")
+        out_queue = queue_manager.get_queue("out")
+        pool = PoolProcess(self.converter.process, patch_queue, out_queue)
+        pool.start()
+        for item in tqdm(self.patch_iterator(pool.procs),
+                         desc="Converting",
+                         total=self.images.images_found,
+                         file=sys.stdout):
+            save_queue.put(item)
+        pool.join()
+
+        save_queue.put("EOF")
+        logger.debug("Converted images")
+
+    def check_thread_error(self):
+        """ Check and raise thread errors """
+        for thread in (self.predictor.thread, self.disk_io.load_thread, self.disk_io.save_thread):
+            thread.check_and_raise_error()
+
+    def patch_iterator(self, processes):
+        """ Prepare the images for conversion """
+        out_queue = queue_manager.get_queue("out")
+        completed = 0
+
+        while True:
+            try:
+                item = out_queue.get(True, 1)
+            except QueueEmpty:
+                self.check_thread_error()
+                continue
+            self.check_thread_error()
+
+            if item == "EOF":
+                completed += 1
+                logger.debug("Got EOF %s of %s", completed, processes)
+                if completed == processes:
+                    break
+                continue
+
+            logger.trace("Yielding: '%s'", item[0])
+            yield item
+        logger.debug("iterator exhausted")
+        return "EOF"
+
+
+class DiskIO():
+    """ Background threads to:
+            Load images from disk and get the detected faces
+            Save images back to disk """
+    def __init__(self, alignments, images, arguments):
+        logger.debug("Initializing %s: (alignments: %s, images: %s, arguments: %s)",
+                     self.__class__.__name__, alignments, images, arguments)
+        self.alignments = alignments
+        self.images = images
+        self.args = arguments
+
+        # For frame skipping
+        self.imageidxre = re.compile(r"[^(mp4)](\d+)(?!.*\d)")
+        self.frame_ranges = self.get_frame_ranges()
+
+        # Extractor for on the fly detection
+        self.extractor = None
         if not self.alignments.have_alignments_file:
             self.load_extractor()
 
-        model = self.load_model()
-        converter = self.load_converter(model)
+        self.load_queue = None
+        self.save_queue = None
+        self.load_thread = None
+        self.save_thread = None
+        self.init_threads()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-        batch = BackgroundGenerator(self.prepare_images(), 1)
+    # Initalization
+    def get_frame_ranges(self):
+        """ split out the frame ranges and parse out 'min' and 'max' values """
+        if not self.args.frame_ranges:
+            logger.debug("No frame range set")
+            return None
 
-        for item in batch.iterator():
-            self.convert(converter, item)
-
-        if self.extractor:
-            queue_manager.terminate_queues()
-
-        Utils.finalize(self.images.images_found,
-                       self.faces_count,
-                       self.verify_output)
+        minmax = {"min": 0,  # never any frames less than 0
+                  "max": float("inf")}
+        retval = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-")))
+                  for v in self.args.frame_ranges]
+        logger.debug("frame ranges: %s", retval)
+        return retval
 
     def load_extractor(self):
         """ Set on the fly extraction """
+        logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
         logger.warning("NB: This will use the inferior dlib-hog for extraction "
                        "and dlib pose predictor for landmarks. It is recommended "
@@ -80,74 +164,81 @@ class Convert():
         self.extractor = Extractor(None, extract_args)
         self.extractor.launch_detector()
         self.extractor.launch_aligner()
+        logger.debug("Loaded extractor")
 
-    def load_model(self):
-        """ Load the model requested for conversion """
-        logger.debug("Loading Model")
-        model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.args.trainer)(model_dir, self.args.gpus, predict=True)
-        logger.debug("Loaded Model")
-        return model
+    def init_threads(self):
+        """ Initialize queues and threads """
+        logger.debug("Initializing DiskIO Threads")
+        for task in ("load", "save"):
+            self.add_queue(task)
+            self.start_thread(task)
+        logger.debug("Initialized DiskIO Threads")
 
-    def load_converter(self, model):
-        """ Load the requested converter for conversion """
-        conv = self.args.converter
-        converter = PluginLoader.get_converter(conv)(
-            model.converter(self.args.swap_model),
-            model=model,
-            arguments=self.args)
-        return converter
+    def add_queue(self, task):
+        """ Add the queue to queue_manager and set queue attribute """
+        logger.debug("Adding queue for task: '%s'", task)
+        q_name = task
+        q_size = 0
+        if task == "load":
+            q_name = "convert_in"
+            q_size = 100
+        queue_manager.add_queue(q_name, maxsize=q_size)
+        setattr(self, "{}_queue".format(task), queue_manager.get_queue(q_name))
+        logger.debug("Added queue for task: '%s'", task)
 
-    def prepare_images(self):
-        """ Prepare the images for conversion """
-        filename = ""
-        if self.extractor:
-            load_queue = queue_manager.get_queue("load")
-        for filename, image in tqdm(self.images.load(),
-                                    total=self.images.images_found,
-                                    file=sys.stdout):
+    def start_thread(self, task):
+        """ Start the DiskIO thread """
+        logger.debug("Starting thread: '%s'", task)
+        func = getattr(self, task)
+        io_thread = MultiThread(func, thread_count=1)
+        io_thread.start()
+        setattr(self, "{}_thread".format(task), io_thread)
+        logger.debug("Started thread: '%s'", task)
 
-            if (self.args.discard_frames and
-                    self.opts.check_skipframe(filename) == "discard"):
+    # Loading tasks
+    def load(self):
+        """ Load the images with detected_faces"""
+        logger.debug("Load Images: Start")
+        extract_queue = queue_manager.get_queue("extract_in") if self.extractor else None
+        idx = 0
+        for filename, image in self.images.load():
+            idx += 1
+            if self.load_queue.shutdown.is_set():
+                logger.debug("Load Queue: Stop signal received. Terminating")
+                break
+            if (self.args.discard_frames and self.check_skipframe(filename) == "discard"):
+                logger.debug("Discarding frame: '%s'", filename)
+                continue
+            if image is None or not image.any():
+                logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
 
-            frame = os.path.basename(filename)
-            if self.extractor:
-                detected_faces = self.detect_faces(load_queue, filename, image)
-            else:
-                detected_faces = self.alignments_faces(frame, image)
+            detected_faces = self.get_detected_faces(filename, image, extract_queue)
+            item = dict(filename=filename, image=image, detected_faces=detected_faces)
+            self.load_queue.put(item)
 
-            faces_count = len(detected_faces)
-            if faces_count != 0:
-                # Post processing requires a dict with "detected_faces" key
-                self.post_process.do_actions(
-                    {"detected_faces": detected_faces})
-                self.faces_count += faces_count
+        self.load_queue.put("EOF")
+        logger.debug("Load Images: Complete")
 
-            if faces_count > 1:
-                self.verify_output = True
-                logger.verbose("Found more than one face in "
-                               "an image! '%s'", frame)
+    def check_skipframe(self, filename):
+        """ Check whether frame is to be skipped """
+        if not self.frame_ranges:
+            return None
+        idx = int(self.imageidxre.findall(filename)[0])
+        skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
+        if skipframe and self.args.discard_frames:
+            skipframe = "discard"
+        return skipframe
 
-            yield filename, image, detected_faces
-
-    def detect_faces(self, load_queue, filename, image):
-        """ Extract the face from a frame (If alignments file not found) """
-        inp = {"filename": filename,
-               "image": image}
-        load_queue.put(inp)
-        faces = next(self.extractor.detect_faces())
-
-        landmarks = faces["landmarks"]
-        detected_faces = faces["detected_faces"]
-        final_faces = list()
-
-        for idx, face in enumerate(detected_faces):
-            detected_face = DetectedFace()
-            detected_face.from_dlib_rect(face)
-            detected_face.landmarksXY = landmarks[idx]
-            final_faces.append(detected_face)
-        return final_faces
+    def get_detected_faces(self, filename, image, extract_queue):
+        """ Return detected faces from alignments or detector """
+        logger.trace("Getting faces for: '%s'", filename)
+        if not self.extractor:
+            detected_faces = self.alignments_faces(os.path.basename(filename), image)
+        else:
+            detected_faces = self.detect_faces(extract_queue, filename, image)
+        logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)
+        return detected_faces
 
     def alignments_faces(self, frame, image):
         """ Get the face from alignments file """
@@ -171,25 +262,263 @@ class Convert():
                        "skipping".format(frame))
         return have_alignments
 
-    def convert(self, converter, item):
-        """ Apply the conversion transferring faces onto frames """
-        try:
-            filename, image, faces = item
-            skip = self.opts.check_skipframe(filename)
+    def detect_faces(self, load_queue, filename, image):
+        """ Extract the face from a frame (If alignments file not found) """
+        inp = {"filename": filename,
+               "image": image}
+        load_queue.put(inp)
+        faces = next(self.extractor.detect_faces())
 
-            if not skip:
-                for face in faces:
-                    image = converter.patch_image(image, face)
-                filename = str(self.output_dir / Path(filename).name)
+        landmarks = faces["landmarks"]
+        detected_faces = faces["detected_faces"]
+        final_faces = list()
 
-                if self.args.draw_transparent:
-                    filename = "{}.png".format(os.path.splitext(filename)[0])
-                    logger.trace("Set extension to png: `%s`", filename)
+        for idx, face in enumerate(detected_faces):
+            detected_face = DetectedFace()
+            detected_face.from_dlib_rect(face)
+            detected_face.landmarksXY = landmarks[idx]
+            final_faces.append(detected_face)
+        return final_faces
 
+    # Saving tasks
+    def save(self):
+        """ Save the converted images """
+        logger.debug("Save Images: Start")
+        while True:
+            if self.save_queue.shutdown.is_set():
+                logger.debug("Save Queue: Stop signal received. Terminating")
+                break
+            item = self.save_queue.get()
+            if item == "EOF":
+                break
+            filename, image = item
+
+            logger.trace("Saving frame: '%s'", filename)
+            try:
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
-        except Exception as err:
-            logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
-            raise
+            except Exception as err:  # pylint: disable=broad-except
+                logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
+                continue
+        logger.debug("Save Faces: Complete")
+
+
+class Predict():
+    """ Predict faces from incoming queue """
+    def __init__(self, in_queue, arguments):
+        logger.debug("Initializing %s: (args: %s, in_queue: %s)",
+                     self.__class__.__name__, arguments, in_queue)
+        self.batchsize = 16
+        self.args = arguments
+        self.in_queue = in_queue
+        self.out_queue = queue_manager.get_queue("patch")
+        self.serializer = Serializer.get_serializer("json")
+        self.faces_count = 0
+        self.verify_output = False
+        self.pre_process = PostProcess(arguments)
+        self.model = self.load_model()
+        self.predictor = self.model.converter(self.swap_model)
+        self.queues = dict()
+
+        self.thread = MultiThread(self.predict_faces, thread_count=1)
+        self.thread.start()
+        logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self.out_queue)
+
+    @property
+    def swap_model(self):
+        """ Return swap model from args """
+        return self.args.swap_model
+
+    @property
+    def training_size(self):
+        """ Return the model training size """
+        return self.model.state.training_size
+
+    @property
+    def coverage(self):
+        """ Coverage for this model """
+        return int(self.model.training_opts["coverage_ratio"] * self.training_size)
+
+    @property
+    def padding(self):
+        """ Padding for this model """
+        return (self.training_size - self.coverage) // 2
+
+    @property
+    def crop(self):
+        """ Crop size for this model """
+        return slice(self.padding, self.training_size - self.padding)
+
+    @property
+    def input_size(self):
+        """ Return the model input size as a h,w tuple"""
+        return (self.model.input_shape[1], self.model.input_shape[0])
+
+    @property
+    def input_mask(self):
+        """ Return the input mask, if there is one, else None """
+        if not self.model.state.mask_shapes:
+            return None
+        mask = np.zeros(self.model.state.mask_shapes[0], np.float32)
+        retval = np.expand_dims(mask, 0)
+        return retval
+
+    def load_model(self):
+        """ Load the model requested for conversion """
+        logger.debug("Loading Model")
+        model_dir = get_folder(self.args.model_dir, make_folder=False)
+        if not model_dir:
+            logger.error("%s does not exist.", self.args.model_dir)
+            exit(1)
+        trainer = self.get_trainer(model_dir)
+        model = PluginLoader.get_model(trainer)(model_dir, self.args.gpus, predict=True)
+        logger.debug("Loaded Model")
+        return model
+
+    def get_trainer(self, model_dir):
+        """ Return the trainer name if provided, or read from state file """
+        if self.args.trainer:
+            logger.debug("Trainer name provided: '%s'", self.args.trainer)
+            return self.args.trainer
+
+        statefile = [fname for fname in os.listdir(str(model_dir))
+                     if fname.endswith("_state.json")]
+        if len(statefile) != 1:
+            logger.error("There should be 1 state file in your model folder. %s were found. "
+                         "Specify a trainer with the '-t', '--trainer' option.")
+            exit(1)
+        statefile = os.path.join(str(model_dir), statefile[0])
+
+        with open(statefile, "rb") as inp:
+            state = self.serializer.unmarshal(inp.read().decode("utf-8"))
+            trainer = state.get("name", None)
+
+        if not trainer:
+            logger.error("Trainer name could not be read from state file. "
+                         "Specify a trainer with the '-t', '--trainer' option.")
+            exit(1)
+        logger.debug("Trainer from state file: '%s'", trainer)
+        return trainer
+
+    def predict_faces(self):
+        """ Get detected faces from images """
+        faces_seen = 0
+        batch = list()
+        while True:
+            item = self.in_queue.get()
+            if item != "EOF":
+                logger.trace("Got from queue: '%s'", item["filename"])
+                faces_count = len(item["detected_faces"])
+                if faces_count != 0:
+                    self.pre_process.do_actions(item)
+                    self.faces_count += faces_count
+                if faces_count > 1:
+                    self.verify_output = True
+                    logger.verbose("Found more than one face in an image! '%s'",
+                                   os.path.basename(item["filename"]))
+
+                self.load_aligned(item)
+
+                faces_seen += faces_count
+                batch.append(item)
+
+            if faces_seen < self.batchsize and item != "EOF":
+                logger.trace("Continuing. Current batchsize: %s", faces_seen)
+                continue
+
+            if batch:
+                detected_batch = [detected_face for item in batch
+                                  for detected_face in item["detected_faces"]]
+                original_faces = self.compile_original_faces(detected_batch)
+                feed_faces = self.compile_feed_faces(original_faces)
+                swapped_faces = self.predict(feed_faces)
+
+                self.queue_out_frames(batch, original_faces, swapped_faces)
+
+            faces_seen = 0
+            batch = list()
+            if item == "EOF":
+                logger.debug("Load queue complete")
+                break
+        self.out_queue.put("EOF")
+
+    def load_aligned(self, item):
+        """ Load the original aligned face """
+        logger.trace("Loading aligned faces: '%s'", item["filename"])
+        for detected_face in item["detected_faces"]:
+            detected_face.load_aligned(item["image"],
+                                       size=self.training_size,
+                                       align_eyes=False)
+        logger.trace("Loaded aligned faces: '%s'", item["filename"])
+
+    def compile_original_faces(self, detected_faces):
+        """ Crop the original faces based on coverage """
+        logger.trace("Compiling original faces. Batchsize: %s", len(detected_faces))
+        original_faces = np.stack([detected_face.aligned_face[:, :, :3][self.crop, self.crop]
+                                   for detected_face in detected_faces])
+        logger.trace("Compiled Original faces. Shape: %s", original_faces.shape)
+        return original_faces
+
+    def compile_feed_faces(self, original_faces):
+        """ Compile the faces for feeding into the predictor """
+        logger.trace("Compiling feed face. Batchsize: %s", len(original_faces))
+        feed_faces = list()
+        for orig_face in original_faces:
+            feed_face = cv2.resize(orig_face.copy(),  # pylint: disable=no-member
+                                   self.input_size,
+                                   interpolation=cv2.INTER_AREA)  # pylint: disable=no-member
+            feed_face = np.clip(feed_face / 255.0, 0.0, 1.0)
+            feed_faces.append(feed_face)
+        feed_faces = np.stack(feed_faces)
+        logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
+        return feed_faces
+
+    def predict(self, feed_faces):
+        """ Perform inference on the feed """
+        logger.trace("Predicting: Batchsize: %s", len(feed_faces))
+        if self.input_mask:
+            feed = [[feed_faces, self.input_mask] for feed_face in feed_faces]
+        else:
+            feed = [feed_faces]
+        logger.trace("Input shape(s): %s", [item.shape for item in feed])
+        # TODO Handle mask output
+        new_faces = self.predictor(feed)
+        new_faces.squeeze()
+        logger.trace("Output shape: %s", new_faces.shape)
+        resized_faces = list()
+        for new_face in new_faces:
+            resized = cv2.resize(new_face,  # pylint: disable=no-member
+                                 (self.coverage, self.coverage),
+                                 interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
+            resized_faces.append(np.clip(resized * 255.0, 0.0, 255.0))
+        new_faces = np.stack(resized_faces)
+        # TODO Remove this
+#        from uuid import uuid4
+#        idu = uuid4()
+#        for idx, img in enumerate(new_faces):
+#            f_name = "/home/matt/fake/test/conv_ref/{}_{}.png".format(idu, idx)
+#            cv2.imwrite(f_name, img)
+        logger.trace("Predicted: Shape: %s", new_faces.shape)
+        return new_faces
+
+    def queue_out_frames(self, batch, original_faces, swapped_faces):
+        """ Compile the batch back to original frames and put to out_queue """
+        logger.trace("Queueing out batch. Batchsize: %s", len(batch))
+        pointer = 0
+        for item in batch:
+            num_faces = len(item["detected_faces"])
+            if num_faces == 0:
+                item["original_faces"] = np.array(list())
+                item["swapped_faces"] = np.array(list())
+            else:
+                item["original_faces"] = original_faces[pointer:pointer + num_faces]
+                item["swapped_faces"] = swapped_faces[pointer:pointer + num_faces]
+
+            logger.trace("Putting to queue. ('%s', detected_faces: %s, original_faces: %s, "
+                         "swapped_faces: %s)", item["filename"], len(item["detected_faces"]),
+                         item["original_faces"].shape[0], item["swapped_faces"].shape[0])
+            self.out_queue.put(item)
+            pointer += num_faces
+        logger.trace("Queued out batch. Batchsize: %s", len(batch))
 
 
 class OptionalActions():
@@ -200,8 +529,6 @@ class OptionalActions():
         self.args = args
         self.input_images = input_images
         self.alignments = alignments
-        self.frame_ranges = self.get_frame_ranges()
-        self.imageidxre = re.compile(r"[^(mp4)](\d+)(?!.*\d)")
 
         self.remove_skipped_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -244,30 +571,6 @@ class OptionalActions():
                 logger.warning("Aligned directory contains far fewer images than the input "
                                "directory, are you sure this is the right folder?")
         return face_hashes
-
-    # SKIP FRAME RANGES #
-    def get_frame_ranges(self):
-        """ split out the frame ranges and parse out 'min' and 'max' values """
-        if not self.args.frame_ranges:
-            return None
-
-        minmax = {"min": 0,  # never any frames less than 0
-                  "max": float("inf")}
-        rng = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q),
-                         v.split("-")))
-               for v in self.args.frame_ranges]
-        return rng
-
-    def check_skipframe(self, filename):
-        """ Check whether frame is to be skipped """
-        if not self.frame_ranges:
-            return None
-        idx = int(self.imageidxre.findall(filename)[0])
-        skipframe = not any(map(lambda b: b[0] <= idx <= b[1],
-                                self.frame_ranges))
-        if skipframe and self.args.discard_frames:
-            skipframe = "discard"
-        return skipframe
 
 
 class Legacy():

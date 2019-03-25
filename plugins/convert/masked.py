@@ -4,6 +4,9 @@
     found on https://www.reddit.com/r/deepfakes/ """
 
 import logging
+import os
+from pathlib import Path
+
 import cv2
 import numpy as np
 from lib.model.masks import dfl_full
@@ -13,82 +16,81 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Convert():
     """ Swap a source face with a target """
-    def __init__(self, encoder, model, arguments):
-        logger.debug("Initializing %s: (encoder: '%s', model: %s, arguments: %s",
-                     self.__class__.__name__, encoder, model, arguments)
-        self.encoder = encoder
+    def __init__(self, output_dir, training_size, padding, crop, arguments):
+        logger.debug("Initializing %s: (output_dir: '%s', training_size: %s, padding: %s, "
+                     "crop: %s, arguments: %s)", self.__class__.__name__, output_dir,
+                     training_size, padding, crop, arguments)
+        self.crop = crop
+        self.output_dir = output_dir
         self.args = arguments
-        self.input_size = model.input_shape[0]
-        self.training_size = model.state.training_size
-        self.training_coverage_ratio = model.training_opts["coverage_ratio"]
-        self.input_mask_shape = model.state.mask_shapes[0] if model.state.mask_shapes else None
-        self.crop = None
-        self.mask = None
+        self.mask = Mask(arguments.mask_type, training_size, padding, crop)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def patch_image(self, image, detected_face):
+    def process(self, in_queue, out_queue):
+        """ Process items from the queue """
+        logger.debug("Starting convert process. (in_queue: %s, out_queue: %s)",
+                     in_queue, out_queue)
+        while True:
+            item = in_queue.get()
+            if item == "EOF":
+                logger.debug("Patch queue finished")
+                # Signal EOF to other processes in pool
+                in_queue.put(item)
+                break
+            logger.trace("Patch queue got: '%s'", item["filename"])
+
+            try:
+                image = self.patch_image(item)
+            except Exception as err:
+                # Log error and output original frame
+                logger.error("Failed to convert image: '%s'. Reason: %s",
+                             item["filename"], str(err))
+                image = item["image"]
+
+            out_file = str(self.output_dir / Path(item["filename"]).name)
+            if self.args.draw_transparent:
+                out_file = "{}.png".format(os.path.splitext(out_file)[0])
+                logger.trace("Set extension to png: `%s`", out_file)
+
+            logger.trace("Out queue put: %s", out_file)
+            out_queue.put((out_file, image))
+
+        out_queue.put("EOF")
+        logger.debug("Completed convert process")
+
+    def patch_image(self, predicted):
         """ Patch the image """
-        logger.trace("Patching image")
-        image = image.astype('float32')
-        image_size = (image.shape[1], image.shape[0])
-        coverage = int(self.training_coverage_ratio * self.training_size)
-        padding = (self.training_size - coverage) // 2
-        logger.trace("coverage: %s, padding: %s", coverage, padding)
-
-        self.crop = slice(padding, self.training_size - padding)
-        if not self.mask:  # Init the mask on first image
-            self.mask = Mask(self.args.mask_type, self.training_size, padding, self.crop)
-
-        detected_face.load_aligned(image, size=self.training_size, align_eyes=False)
-        new_image = self.get_new_image(image, detected_face, coverage, image_size)
-        image_mask = self.get_image_mask(detected_face, image_size)
-        patched_face = self.apply_fixes(image, new_image, image_mask,
-                                        detected_face.landmarks_as_xy)
-
-        logger.trace("Patched image")
+        logger.trace("Patching image: '%s'", predicted["filename"])
+        frame_size = (predicted["image"].shape[1], predicted["image"].shape[0])
+        new_image = self.get_new_image(predicted, frame_size)
+        image_mask = self.get_image_mask(predicted, frame_size)
+        patched_face = self.apply_fixes(predicted, new_image, image_mask)
+        logger.trace("Patched image: '%s'", predicted["filename"])
         return patched_face
 
-    def get_new_image(self, image, detected_face, coverage, image_size):
+    def get_new_image(self, predicted, frame_size):
         """ Get the new face from the predictor """
-        logger.trace("coverage: %s", coverage)
-        src_face = detected_face.aligned_face[:, :, :3]
-        coverage_face = src_face[self.crop, self.crop]
-        old_face = coverage_face.copy()
-        coverage_face = cv2.resize(coverage_face,  # pylint: disable=no-member
-                                   (self.input_size, self.input_size),
-                                   interpolation=cv2.INTER_AREA)  # pylint: disable=no-member
-        coverage_face = np.expand_dims(coverage_face, 0)
-        np.clip(coverage_face / 255.0, 0.0, 1.0, out=coverage_face)
+        new_image = predicted["image"].copy()
+        source_faces = [face.aligned_face[:, :, :3] for face in predicted["detected_faces"]]
+        interpolators = [face.adjusted_interpolators for face in predicted["detected_faces"]]
 
-        if self.input_mask_shape:
-            mask = np.zeros(self.input_mask_shape, np.float32)
-            mask = np.expand_dims(mask, 0)
-            feed = [coverage_face, mask]
-        else:
-            feed = [coverage_face]
-        logger.trace("Input shapes: %s", [item.shape for item in feed])
-        new_face = self.encoder(feed)[0]
-        new_face = new_face.squeeze()
-        logger.trace("Output shape: %s", new_face.shape)
+        for idx, new_face in enumerate(predicted["swapped_faces"]):
+            src_face = source_faces[idx]
+            old_face = predicted["original_faces"][idx]
+            interpolator = interpolators[idx][1]
 
-        new_face = cv2.resize(new_face,  # pylint: disable=no-member
-                              (coverage, coverage),
-                              interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
-        np.clip(new_face * 255.0, 0.0, 255.0, out=new_face)
+            if self.args.smooth_box:
+                self.smooth_box(old_face, new_face)
 
-        if self.args.smooth_box:
-            self.smooth_box(old_face, new_face)
+            src_face[self.crop, self.crop] = new_face
 
-        src_face[self.crop, self.crop] = new_face
-        background = image.copy()
-        interpolator = detected_face.adjusted_interpolators[1]
-        new_image = cv2.warpAffine(  # pylint: disable=no-member
-            src_face,
-            detected_face.adjusted_matrix,
-            image_size,
-            background,
-            flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
-            borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
+            new_image = cv2.warpAffine(  # pylint: disable=no-member
+                src_face,
+                predicted["detected_faces"][idx].adjusted_matrix,
+                frame_size,
+                new_image,
+                flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
+                borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         return new_image
 
     @staticmethod
@@ -97,7 +99,7 @@ class Convert():
         height = new_face.shape[0]
         crop = slice(0, height)
         erode = slice(height // 15, -height // 15)
-        sigma = height / 16 # 10 for the default 160 size
+        sigma = height / 16  # 10 for the default 160 size
         window = int(np.ceil(sigma * 3.0))
         window = window + 1 if window % 2 == 0 else window
         mask = np.zeros_like(new_face)
@@ -107,24 +109,28 @@ class Convert():
                                 sigma)
         new_face[crop, crop] = (mask * new_face + (1.0 - mask) * old_face)
 
-    def get_image_mask(self, detected_face, image_size):
+    def get_image_mask(self, predicted, frame_size):
         """ Get the image mask """
-        mask = self.mask.get_mask(detected_face, image_size)
-        if self.args.erosion_size != 0:
-            kwargs = {'src': mask,
-                      'kernel': self.set_erosion_kernel(mask),
-                      'iterations': 1}
-            if self.args.erosion_size > 0:
-                mask = cv2.erode(**kwargs)  # pylint: disable=no-member
-            else:
-                mask = cv2.dilate(**kwargs)  # pylint: disable=no-member
+        logger.trace("Getting image mask: '%s'", predicted["filename"])
+        masks = list()
+        for detected_face in predicted["detected_faces"]:
+            mask = self.mask.get_mask(detected_face, frame_size)
+            if self.args.erosion_size != 0:
+                kwargs = {"src": mask,
+                          "kernel": self.set_erosion_kernel(mask),
+                          "iterations": 1}
+                if self.args.erosion_size > 0:
+                    mask = cv2.erode(**kwargs)  # pylint: disable=no-member
+                else:
+                    mask = cv2.dilate(**kwargs)  # pylint: disable=no-member
 
-        if self.args.blur_size != 0:
-            blur_size = self.set_blur_size(mask)
-            for _ in [1,2,3,4]: # pylint: disable=no-member
-                mask = cv2.blur(mask, (blur_size, blur_size)) 
-
-        return np.clip(mask, 0.0, 1.0, out=mask)
+            if self.args.blur_size != 0:
+                blur_size = self.set_blur_size(mask)
+                for _ in [1, 2, 3, 4]:
+                    mask = cv2.blur(mask, (blur_size, blur_size))   # pylint: disable=no-member
+            masks.append(np.clip(mask, 0.0, 1.0, out=mask))
+        logger.trace("Got image mask: '%s'", predicted["filename"])
+        return masks
 
     def set_erosion_kernel(self, mask):
         """ Set the erosion kernel """
@@ -145,37 +151,38 @@ class Convert():
         logger.trace("blur_size: %s", blur_size)
         return blur_size
 
-    def apply_fixes(self, original, face, mask, landmarks):
+    def apply_fixes(self, predicted, new_image, masks):
         """ Apply fixes """
-        #TODO copies aren't likey neccesary and will slow calc... used when isolating issues
-        new_image = face[:, :, :3].copy()
-        image_mask = mask[:, :, :3].copy()
-        frame = original[:, :, :3].copy()
+        frame = predicted["image"][:, :, :3]
+        new_image = new_image[:, :, :3]
+        for idx, detected_face in enumerate(predicted["detected_faces"]):
+            image_mask = masks[idx][:, :, :3].copy()
+            landmarks = detected_face.landmarks_as_xy
 
-        #TODO - force default for args.sharpen_image to ensure it isn't None
-        if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
-            new_image = self.sharpen(new_image, self.args.sharpen_image)
+            # TODO - force default for args.sharpen_image to ensure it isn't None
+            if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
+                new_image = self.sharpen(new_image, self.args.sharpen_image)
 
-        if self.args.avg_color_adjust:
-            new_image = self.color_adjust(new_image, frame, image_mask)
+            if self.args.avg_color_adjust:
+                new_image = self.color_adjust(new_image, frame, image_mask)
 
-        if self.args.match_histogram:
-            new_image = self.color_hist_match(new_image, frame, image_mask)
+            if self.args.match_histogram:
+                new_image = self.color_hist_match(new_image, frame, image_mask)
 
-        if self.args.seamless_clone:
-            blended = self.seamless_clone(new_image, frame, image_mask)
-        else:
-            foreground = new_image * image_mask
-            background = frame * (1.0 - image_mask)
-            blended = foreground + background
+            if self.args.seamless_clone:
+                frame = self.seamless_clone(new_image, frame, image_mask)
 
-        np.clip(blended, 0.0, 255.0, out=blended)
-        if self.args.draw_transparent:
-            # Adding a 4th channel should happen after all other channel operations
-            # Add mask as 4th channel for saving as alpha on supported output formats
-            blended = dfl_full(landmarks, blended, channels=4)
+            else:
+                foreground = new_image * image_mask
+                background = frame * (1.0 - image_mask)
+                frame = foreground + background
 
-        return np.rint(blended).astype('uint8')
+            np.clip(frame, 0.0, 255.0, out=frame)
+            if self.args.draw_transparent:
+                # Adding a 4th channel should happen after all other channel operations
+                # Add mask as 4th channel for saving as alpha on supported output formats
+                frame = dfl_full(landmarks, frame, channels=4)
+        return np.rint(frame).astype('uint8')
 
     @staticmethod
     def sharpen(new, method):
@@ -187,7 +194,7 @@ class Convert():
             new = cv2.filter2D(new, -1, kernel)  # pylint: disable=no-member
         elif method == "gaussian_filter":
             blur = cv2.GaussianBlur(new, (0, 0), 3.0)   # pylint: disable=no-member
-            new = cv2.addWeighted(new, 1.5, blur, -.5, 0, new) # pylint: disable=no-member
+            new = cv2.addWeighted(new, 1.5, blur, -.5, 0, new)  # pylint: disable=no-member
 
         return new
 
@@ -263,6 +270,7 @@ class Convert():
         blended = blended[height:-height, width:-width]
 
         return blended
+
 
 class Mask():
     """ Return the requested mask """
