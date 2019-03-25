@@ -378,19 +378,19 @@ class SortArgs(FaceSwapArgs):
                               "type": str,
                               "choices": ("none",
                                           "identity",
-                                          "identity_rarity",
+                                          "identity_conformity",
                                           "hist_gray",
                                           "hist_luma",
                                           "hist_chroma_green",
                                           "hist_chroma_orange",
-                                          "hist_rarity_gray",
-                                          "hist_rarity_luma",
-                                          "hist_rarity_green",
-                                          "hist_rarity_orange",
+                                          "hist_conformity_gray",
+                                          "hist_conformity_luma",
+                                          "hist_conformity_green",
+                                          "hist_conformity_orange",
                                           "landmarks",
                                           "landmarks_outlier",
                                           "landmarks_shape_error",
-                                          "landmarks_rarity",
+                                          "landmarks_conformity",
                                           "luma",
                                           "chroma_green",
                                           "chroma_orange",
@@ -423,6 +423,19 @@ class SortArgs(FaceSwapArgs):
                                       "folders choose the how the images are "
                                       "grouped after sorting. "
                                       "Default: none"})
+
+        argument_list.append({"opts": ('-sa', '--stats-area'),
+                              "type": str,
+                              "choices": ("whole_frame",
+                                          "face_crop",
+                                          "face_mask"),
+                              "dest": 'stats-area',
+                              "default": "face_crop",
+                              "help": "Statistics area. "
+                                      "What area of the images should "
+                                      "the sorter compute the relevant  "
+                                      "statistics on. "
+                                      "Default: face_crop"})
 
         argument_list.append({"opts": ('-lf', '--log-file'),
                               "action": SaveFileFullPaths,
