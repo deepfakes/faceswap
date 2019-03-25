@@ -99,34 +99,43 @@ class Sort():
         logger.info("Sorting by '%s'", method)
 
         # TODO finalize calc statistics using masked facial area instead of all image
-        sorter = {'identity':             [self.__sort_face, False],
+        sorter = {'identity':             [self.__sort_face, True],
+                  'identity_rarity':      [self.__score_face, True],
+
                   'hist_gray':            [self.__sort_hist, False],
                   'hist_luma':            [self.__sort_hist, False],
                   'hist_chroma_green':    [self.__sort_hist, False],
                   'hist_chroma_orange':   [self.__sort_hist, False],
-                  'landmarks':            [self.__sort_landmarks, True],
-                  'landmark_outliers':    [self.__score_angle, True],
-                  'luma':                 [self.__score_channel, False],
-                  'chroma_green':         [self.__score_channel, False],
-                  'chroma_orange':        [self.__score_channel, False],
-                  'yaw':                  [self.__score_angle, True],
-                  'roll':                 [self.__score_angle, True],
-                  'pitch':                [self.__score_angle, True],
-                  'blur_quick':           [self.__score_blur, False],
-                  'blur_cpbd':            [self.__score_blur, False],
-                  'face_area':            [self.__score_area, True],
-                  'identity_rarity':      [self.__score_face, False],
                   'hist_rarity_gray':     [self.__score_hist, False],
                   'hist_rarity_luma':     [self.__score_hist, False],
                   'hist_rarity_green':    [self.__score_hist, False],
                   'hist_rarity_orange':   [self.__score_hist, False],
-                  'landmark_rarity':      [self.__score_landmarks, True],
+
+                  'landmarks':            [self.__sort_landmarks, False],
+                  'landmarks_outliers':   [self.__score_angle, False],
+                # 'landmarks_shape_error': discrepancy between PCA shape model and landmarks
+                  'landmarks_rarity':     [self.__score_landmarks, True],
+
+                  'luma':                 [self.__score_channel, False],
+                  'chroma_green':         [self.__score_channel, False],
+                  'chroma_orange':        [self.__score_channel, False],
+
+                  'yaw':                  [self.__score_angle, False],
+                  'roll':                 [self.__score_angle, False],
+                  'pitch':                [self.__score_angle, False],
+
+                  'blur_quick':           [self.__score_blur, False],
+                  'blur_cpbd':            [self.__score_blur, False],
+
+                  'face_area':            [self.__score_area, False],
+                # 'face_pixels':          [self.__score_area, False],
+                # 'face_count':           [self.__score_area, False],
 
                   # legacy parameters
-                  'face':                 [self.__sort_face, False],
-                  'face_dissim':          [self.__score_face, False],
-                  'face_cnn':             [self.__sort_landmarks, True],
-                  'face_cnn_dissim':      [self.__score_landmarks, True],
+                  'face':                 [self.__sort_face, True],
+                  'face_dissim':          [self.__score_face, True],
+                  'face_cnn':             [self.__sort_landmarks, False],
+                  'face_cnn_dissim':      [self.__score_landmarks, False],
                   'hist':                 [self.__sort_hist, False],  # hist on blue only?
                   'hist_dissim':          [self.__score_hist, False]}  # hist on blue only?
 
@@ -142,7 +151,7 @@ class Sort():
 
     def load_images(self, need_landmarks):
         """ Sort by face identity similarity """
-        need_landmarks = True if self.args.face_only else need_landmarks
+        face_only = True if self.args.face_only else need_landmarks
         self.extractor.process()
         images = self.extractor.images
         alignments = self.extractor.alignments
@@ -158,9 +167,13 @@ class Sort():
                 if merges[3]:
                     face_crop = merges[2].astype('float32')
                     landmarks = np.array(merges[3]['landmarksXY'], dtype='int32')
+                    if face_only:
+                        face_crop, landmarks = self.__face_crop(face_crop, landmarks)
                     imgs.append([merges[0], merges[1], face_crop, landmarks])
                 else:
-                    imgs.append([merges[0], merges[1], np.zeros((64, 64, 3), dtype='float32'), np.zeros((68, 2), dtype='float32')])
+                    imgs.append([merges[0], merges[1],
+                                 np.zeros((64, 64, 3), dtype='float32'),
+                                 np.zeros((68, 2), dtype='float32')])
         return imgs
 
     @staticmethod
@@ -192,7 +205,6 @@ class Sort():
         for i, identity in enumerate(tqdm(ids[:-1], desc="Sorting", file=sys.stdout)):
             rest = np.stack(others for others in ids[i+1:])
             scores = np.linalg.norm(rest - identity, axis=1)
-            print(scores.shape)
             best = np.argmin(scores)
             imgs[i + 1], imgs[best] = imgs[best], imgs[i + 1]
             imgs[i + 1][0] = best
@@ -430,8 +442,10 @@ class Sort():
         if all_same_size:
             if method.endswith('gray'):
                 bgr_to_gray = [0.114, 0.587, 0.299]
-                path = np.einsum_path('hijk, k -> hij', imgs[:2][2], bgr_to_gray, optimize='optimal')[0]
-                images = np.einsum('hijk, k -> hij', imgs[:][2], bgr_to_gray, optimize=path).astype('float32')
+                path = np.einsum_path('hijk, k -> hij', imgs[:2][2],
+                                      bgr_to_gray, optimize='optimal')[0]
+                images = np.einsum('hijk, k -> hij', imgs[:][2], bgr_to_gray,
+                                   optimize=path).astype('float32')
             else:
                 rgb = np.stack(img[2] for img in imgs)[..., ::-1] / 255.0
                 images = self.rgb_to_ycocg(rgb, single=False) * 255.0
@@ -440,7 +454,8 @@ class Sort():
         else:
             if method.endswith('gray'):
                 bgr_to_gray = [0.114, 0.587, 0.299]
-                images = [np.einsum('ijk, k -> ij', img[2], bgr_to_gray, optimize='greedy').astype('float32') for img in imgs]
+                images = [np.einsum('ijk, k -> ij', img[2], bgr_to_gray,
+                          optimize='greedy').astype('float32') for img in imgs]
             else:
                 rgb_imgs = (img[2][..., ::-1] / 255.0 for img in imgs)
                 images = [self.rgb_to_ycocg(img, single=True) * 255.0 for img in rgb_imgs]
