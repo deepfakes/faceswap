@@ -47,8 +47,9 @@ class Config(FaceswapConfig):
                  "swap area.")
         self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="If using a mask, Use Penalized loss for Mask training. \n"
-                 "May increase overall quality. This should probably be left at True")
+            info="If using a mask, This penalizes the loss for the masked area, to give higher "
+                 "priority to the face area. \nShould increase overall quality and speed up "
+                 "training. This should probably be left at True")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
