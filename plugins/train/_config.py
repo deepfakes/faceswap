@@ -52,6 +52,14 @@ class Config(FaceswapConfig):
             info="To effectively learn, a random set of images are flipped horizontally. \n"
                  "Sometimes it is desirable for this not to occur. Generally this should "
                  "be applied during all 'fit training'.")
+        self.add_item(
+            section=section, title="perform_augmentation", datatype=bool, default=True,
+            info="Image augmentation is a technique that is used to artificially expand \n"
+                 "image datasets. This is helpful when we are using a data-set with very \n"
+                 "few images. In typical cases of Deep Learning, this situation is bad as \n"
+                 "the model tends to over-fit when we train it on limited number of data \n"
+                 "samples. Image augmentation parameters that are generally used to increase \n"
+                 "the data diversity are zoom, rotation, transliation, flip, and so on.")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"

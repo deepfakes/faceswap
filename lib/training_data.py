@@ -155,9 +155,10 @@ class TrainingDataGenerator():
         image = self.processing.color_adjust(image)
 
         if not is_timelapse:
-            image = self.processing.random_transform(image)
-            if self.training_opts["flip"]:
-                image = self.processing.do_random_flip(image)
+            if self.training_opts["augment"]:
+                image = self.processing.random_transform(image)
+                if self.training_opts["flip"]:
+                    image = self.processing.do_random_flip(image)
         sample = image.copy()[:, :, :3]
 
         if self.training_opts["warp_to_landmarks"]:

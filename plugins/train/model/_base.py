@@ -73,7 +73,8 @@ class ModelBase():
         self.training_opts = {"alignments": alignments_paths,
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
-                              "flip": self.config["augmentation_flipping"]}
+                              "flip": self.config["augmentation_flipping"],
+                              "augment": self.config["perform_augmentation"]}
 
         self.build()
         self.set_training_data()
