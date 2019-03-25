@@ -254,12 +254,12 @@ class ModelBase():
         optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
-            loss_names = ["loss"]
-            loss_funcs = [self.loss_function(side, initialize)]
             mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
+            loss_names = ["loss"]
+            loss_funcs = [self.loss_function(mask, side, initialize)]
             if mask:
-                loss_names.insert(0, "mask_loss")
-                loss_funcs.insert(0, self.mask_loss_function(mask[0], side, initialize))
+                loss_names.append("mask_loss")
+                loss_funcs.append(self.mask_loss_function(side, initialize))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(loss_names) > 1:
@@ -284,8 +284,9 @@ class ModelBase():
         logger.debug("Optimizer kwargs: %s", opt_kwargs)
         return Adam(**opt_kwargs)
 
-    def loss_function(self, side, initialize):
-        """ Set the loss function """
+    def loss_function(self, mask, side, initialize):
+        """ Set the loss function
+            Side is input so we only log once """
         if self.config.get("dssim_loss", False):
             if side == "a" and not self.predict and initialize:
                 logger.verbose("Using DSSIM Loss")
@@ -294,21 +295,20 @@ class ModelBase():
             if side == "a" and not self.predict and initialize:
                 logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
-        logger.debug(loss_func)
+
+        if mask and self.config.get("penalized_mask_loss", False):
+            loss_mask = mask[0]
+            if side == "a" and not self.predict and initialize:
+                logger.verbose("Penalizing mask for Loss")
+            loss_func = PenalizedLoss(loss_mask, loss_func)
         return loss_func
 
-    def mask_loss_function(self, mask, side, initialize):
-        """ Set the loss function for masks
+    def mask_loss_function(self, side, initialize):
+        """ Set the mask loss function
             Side is input so we only log once """
-        if side == "a" and not self.predict:
-            logger.verbose("Using Mean Absolute Error Loss for mask")
-        mask_loss_func = losses.mean_absolute_error
-
-        if self.config.get("penalized_mask_loss", False):
-            if side == "a" and not self.predict and initialize:
-                logger.verbose("Using Penalized Loss for mask")
-            mask_loss_func = PenalizedLoss(mask, mask_loss_func)
-        logger.debug(mask_loss_func)
+        if side == "a" and not self.predict and initialize:
+            logger.verbose("Using Mean Squared Error Loss for mask")
+        mask_loss_func = losses.mean_squared_error
         return mask_loss_func
 
     def converter(self, swap):
