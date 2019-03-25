@@ -76,9 +76,7 @@ class Extract():
         """ Load the images """
         logger.debug("Load Images: Start")
         load_queue = queue_manager.get_queue("load")
-        idx = 0
-        for filename, image in self.images.load():
-            idx += 1
+        for idx, (filename, image) in enumerate(self.images.load()):
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
@@ -200,7 +198,7 @@ class Extract():
         if to_process == 0:
             logger.error("No frames to process. Exiting")
             queue_manager.terminate_queues()
-            exit(0)
+            #exit(0)
         return to_process
 
     def run_detection(self, to_process):

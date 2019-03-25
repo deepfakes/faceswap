@@ -154,8 +154,6 @@ class Sort():
         imgs = []
         for (file, image), (_, aligns, face_count, _) in loader:
             merged = self.merge_lists([0.], [file], [image], aligns)
-            # extracts.get_faces(frame_fullname)
-            # merged = self.merge_lists([0.], [file], [image], extracts.faces)
             for merges in merged:
                 if merges[3]:
                     face_crop = merges[2].astype('float32')
@@ -192,7 +190,9 @@ class Sort():
         ids = [encoder(item[2].astype('uint8')) for item in p_bar]
         ids = np.stack(item[0] if len(item) > 0 else blank for item in ids)
         for i, identity in enumerate(tqdm(ids[:-1], desc="Sorting", file=sys.stdout)):
-            scores = np.stack(np.linalg.norm(others - identity, axis=1)for others in ids[i+1:])
+            rest = np.stack(others for others in ids[i+1:])
+            scores = np.linalg.norm(rest - identity, axis=1)
+            print(scores.shape)
             best = np.argmin(scores)
             imgs[i + 1], imgs[best] = imgs[best], imgs[i + 1]
             imgs[i + 1][0] = best
@@ -301,8 +301,8 @@ class Sort():
         ids = [encoder(item[2].astype('uint8')) for item in p_bar]
         ids = np.stack(item[0] if len(item) > 0 else blank for item in ids)
         for i, identity in enumerate(tqdm(ids, desc="Scoring", file=sys.stdout)):
-            score = np.linalg.norm(ids - identity, axis=1)
-            imgs[i][0] = np.sum(score)
+            scores = np.linalg.norm(ids - identity, axis=1)
+            imgs[i][0] = np.sum(scores)
 
         return imgs
 
@@ -431,7 +431,7 @@ class Sort():
             if method.endswith('gray'):
                 bgr_to_gray = [0.114, 0.587, 0.299]
                 path = np.einsum_path('hijk, k -> hij', imgs[:2][2], bgr_to_gray, optimize='optimal')[0]
-                images = np.einsum('hijk, k -> hij', imgs[:][2], bgr_to_gray, optimize=path)
+                images = np.einsum('hijk, k -> hij', imgs[:][2], bgr_to_gray, optimize=path).astype('float32')
             else:
                 rgb = np.stack(img[2] for img in imgs)[..., ::-1] / 255.0
                 images = self.rgb_to_ycocg(rgb, single=False) * 255.0
@@ -440,14 +440,14 @@ class Sort():
         else:
             if method.endswith('gray'):
                 bgr_to_gray = [0.114, 0.587, 0.299]
-                images = [np.einsum('ijk, k -> ij', img[2], bgr_to_gray, optimize='greedy') for img in imgs]
+                images = [np.einsum('ijk, k -> ij', img[2], bgr_to_gray, optimize='greedy').astype('float32') for img in imgs]
             else:
                 rgb_imgs = (img[2][..., ::-1] / 255.0 for img in imgs)
                 images = [self.rgb_to_ycocg(img, single=True) * 255.0 for img in rgb_imgs]
                 if not method.endswith('luma'):
                     images = [img + 127.5 for img in images]
 
-        return images.astype('float32'), value
+        return images, value
 
     @staticmethod
     def rgb_to_ycocg(rgb_imgs, single=False):
@@ -459,7 +459,7 @@ class Sort():
             path = np.einsum_path('ij,...j', rgb_to_ycocg, rgb_imgs[:2], optimize='optimal')[0]
         converted = np.einsum('ij,...j', rgb_to_ycocg, rgb_imgs, optimize=path)
 
-        return converted
+        return converted.astype('float32')
 
     @staticmethod
     def ycocg_to_rgb(ycocg_imgs, single=False):
@@ -471,7 +471,7 @@ class Sort():
             path = np.einsum_path('ij,...j', ycocg_to_rgb, ycocg_imgs[:2], optimize='optimal')[0]
         converted = np.einsum('ij,...j', ycocg_to_rgb, ycocg_imgs, optimize=path)
 
-        return converted
+        return converted.astype('float32')
 
     @staticmethod
     def face_pose(landmarks, img, method):
