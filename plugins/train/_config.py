@@ -54,18 +54,20 @@ class Config(FaceswapConfig):
                  "of the image.\n"
                  "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
-            section=section, title="image_loss_function", datatype=str, default="MAE",
-            choices=["Mean_Absolute_Error", "Mean_Squared_Error",
-                     "LogCosh", "SSIM", "Total_Variation", "Smooth_L1"],
+            section=section, title="image_loss_function", datatype=str,
+            default="Mean_Absolute_Error",
+            choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
+                     "SSIM", "Total_Variation", "Smooth_L1"],
             info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
                  "for training the neural net's image reconstruction in lieu of \n"
                  "Mean Absolute Error. Potentially better textural, second-order \n"
                  "statistics, and translation invariance than MAE.\n"
                  "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
         self.add_item(
-            section=section, title="mask_loss_function", datatype=str, default="MSE",
-            choices=["Mean_Absolute_Error", "Mean_Squared_Error",
-                     "LogCosh", "SSIM", "Total_Variation", "Smooth_L1"],
+            section=section, title="mask_loss_function", datatype=str,
+            default="Mean_Squared_Error",
+            choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
+                     "SSIM", "Total_Variation", "Smooth_L1"],
             info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
                  "for training the neural net's image reconstruction in lieu of \n"
                  "Mean Absolute Error. Potentially better textural, second-order \n"
@@ -73,8 +75,10 @@ class Config(FaceswapConfig):
                  "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
         self.add_item(
             section=section, title="mask-penalized_loss", datatype=bool, default=True,
-            info="\nUse penalized loss for training if using a mask. \n"
-                 "May increase overall quality.")
+            info="\nImage loss function is weighted by mask presence. For areas of \n"
+                 "the image without the facial mask, reconstuction errors will be \n"
+                 "ignored. May increase overall quality by focusing attention on \n"
+                 "the core face area.")
         self.add_item(
             section=section, title="perform_augmentation", datatype=bool, default=True,
             info="\nImage augmentation is a technique that is used to artificially expand \n"
@@ -170,7 +174,7 @@ class Config(FaceswapConfig):
                  "with a changed lowmem mode are not compatible with each other. NB: lowmem will "
                  "override cutom nodes and complexity settings.")
         self.add_item(
-            section=section, title="clipnorm", datatype=bool, default=True,
+            section=section, title="clipnorm", datatype=bool, default=False,
             info="Controls gradient clipping of the optimizer. Can prevent model corruption at "
                  "the expense of VRAM")
         self.add_item(

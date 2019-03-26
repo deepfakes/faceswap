@@ -380,8 +380,8 @@ def gradient_loss(y_true, y_pred):
     '''
 
     assert 4 == K.ndim(y_true)
-    y_true.set_shape([None,80,80,3])
-    y_pred.set_shape([None,80,80,3])
+    y_true.set_shape([None,64,64,3])
+    y_pred.set_shape([None,64,64,3])
     TV_weight = 1.0
     TV2_weight = 1.0
     loss = 0.0
@@ -391,7 +391,7 @@ def gradient_loss(y_true, y_pred):
         Xinner = tf.unstack(X[:, :, 2:, :] - X[:, :, :-2, :], axis=2)
         Xright = X[:, :, -1, :] - X[:, :, -2, :]
         Xout = [Xleft] + Xinner + [Xright]
-        Xout = tf.stack(Xout,axis=2)
+        Xout = tf.stack(Xout, axis=2)
         return Xout * 0.5
 
     def diff_y(X):
