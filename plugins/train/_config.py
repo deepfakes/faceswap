@@ -51,7 +51,7 @@ class Config(FaceswapConfig):
                  "downscaling or using simple convolutions. Each convolution must \n"
                  "pad the image/feature boundaries to maintain the proper sizing. \n"
                  "More complex padding schemes can reduce artifacts at the border \n"
-                 " of the image.\n"
+                 "of the image.\n"
                  "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=True,
@@ -62,7 +62,7 @@ class Config(FaceswapConfig):
                  "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf")
         self.add_item(
             section=section, title="mask-penalized_loss", datatype=bool, default=True,
-            info="\nUse penalized loss for training if using a mask. Can stack with DSSIM.\n"
+            info="\nUse penalized loss for training if using a mask. \n"
                  "May increase overall quality.")
         self.add_item(
             section=section, title="perform_augmentation", datatype=bool, default=True,

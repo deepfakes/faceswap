@@ -336,7 +336,7 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
 # <<< END: from Shoanlu GAN >>> #
 
 
-def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
+def Generalized_Loss_Function(y_true, y_pred, a = 1.0, c=1.0/255.0):
     '''
     generalized function used to return a large variety of mathematical loss functions
     primary benefit is smooth, differentiable version of L1 loss
@@ -358,17 +358,8 @@ def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
     x = y_pred - y_true
     loss = (K.abs(2.0-a)/a) * ( K.pow( K.pow(x/c, 2.0)/K.abs(2.0-a) + 1.0 , (a/2.0)) - 1.0 )
     return K.mean(loss, axis=-1) * c
-    
-    
-def staircase_loss(y_true, y_pred, a = 16.0, c=1.0/255.0):
-    h = c
-    w = c
-    x = K.clip(K.abs(y_true - y_pred) - 0.5 * c, 0.0, 1.0)
-    loss = h*( K.tanh(a*((x/w)-tf.floor(x/w)-0.5)) / ( 2.0*K.tanh(a/2.0) ) + 0.5 + tf.floor(x/w)) 
-    loss += 1e-10
-    return K.mean(loss, axis=-1)
-    
-    
+
+
 def gradient_loss(y_true, y_pred):
     '''
     Calculates the first and second order gradient difference between pixels of an image in the x and y dimensions.
@@ -484,8 +475,8 @@ def gradient_loss(y_true, y_pred):
                            2.0 * generalized_loss_function(diff_xy(y_true), diff_xy(y_pred), a=1.999999) )
 
     return loss / ( TV_weight + TV2_weight )
-    
-    
+
+
 def scharr_edges(image, magnitude):
     '''
     Returns a tensor holding modified Scharr edge maps.
@@ -535,8 +526,8 @@ def scharr_edges(image, magnitude):
         output = tf.atan(tf.squeeze(tf.div(output[:,:,:,:,0]/output[:,:,:,:,1])))
         
     return output
-    
-    
+
+
 def gmsd_loss(y_true,y_pred):
     '''
     Improved image quality metric over MS-SSIM with easier calc
@@ -552,8 +543,8 @@ def gmsd_loss(y_true,y_pred):
     _mean, _var = tf.nn.moments(GMS, axes=[1,2], keep_dims=True)
     GMSD = tf.reduce_mean(tf.sqrt(_var), axis=-1) # single metric value per image in tensor [?,1,1]
     return K.tile(GMSD,[1,64,64])  # need to expand to [?,height,width] dimensions for Keras ... modify to not be hard-coded
-    
-    
+
+
 def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.2726)):
     '''
     Computes the MS-SSIM between img1 and img2.
@@ -807,8 +798,8 @@ def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.27
     ms_ssim = tf.reduce_prod(tf.pow(mcs_and_ssim, power_factors),[-1])
 
     return tf.reduce_mean(ms_ssim, [-1])  # Avg over color channels.
-    
-    
+
+
 def ms_ssim_loss(y_true,y_pred):
     MSSSIM = K.expand_dims(K.expand_dims(1.0 - ms_ssim(y_true, y_pred),axis=-1), axis=-1)
     return K.tile(MSSSIM,[1,64,64]) # need to expand to [1,height,width] dimensions for Keras ... modify to not be hard-coded
