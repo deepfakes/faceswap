@@ -169,7 +169,7 @@ class DSSIMObjective():
 
 
 # <<< START: from Dfaker >>> #
-def PenalizedLoss(mask, loss_func, mask_prop=1.0):
+def mask_penalized_loss(mask, loss_func, mask_prop=1.0):
     """ Penalized Loss
         from: https://github.com/dfaker/df """
     mask_as_k_inv_prop = 1 - mask_prop
@@ -336,7 +336,7 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
 # <<< END: from Shoanlu GAN >>> #
 
 
-def Generalized_Loss_Function(y_true, y_pred, a = 1.0, c=1.0/255.0):
+def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
     '''
     generalized function used to return a large variety of mathematical loss functions
     primary benefit is smooth, differentiable version of L1 loss
