@@ -364,7 +364,6 @@ def gradient_loss(y_true, y_pred):
     '''
     Calculates the first and second order gradient difference between pixels of an image in the x and y dimensions.
     These gradients are then compared between the ground truth and the predicted image and the difference is taken.
-    The difference used is a smooth L1 norm ( approximate to MAE but differable at zero )
     When used as a loss, its minimization will result in predicted images approaching the same level of sharpness
     / blurriness as the ground truth.
     
