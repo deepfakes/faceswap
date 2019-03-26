@@ -16,7 +16,7 @@ from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 from keras.initializers import he_uniform, Constant, VarianceScaling
 from .initializers import ICNR
-from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D
+from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D, Scale
 from .normalization import GroupNormalization, InstanceNormalization
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

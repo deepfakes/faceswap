@@ -131,13 +131,12 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
         chkframe = ttk.Frame(container)
-        chkframe.pack(side=tk.BOTTOM, expand=True)
-
         chkleft = ttk.Frame(chkframe, name="leftFrame")
-        chkleft.pack(side=tk.LEFT, anchor=tk.N, expand=True)
-
         chkright = ttk.Frame(chkframe, name="rightFrame")
-        chkright.pack(side=tk.RIGHT, anchor=tk.N, expand=True)
+
+        chkframe.pack(fill=tk.X, expand=True)
+        chkleft.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
+        chkright.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.RIGHT, anchor=tk.N)
         logger.debug("Added Options CheckButtons Frame")
 
         return container, chkframe
@@ -205,7 +204,7 @@ class OptionControl():
             dflt = ' '.join(str(val) for val in dflt)
         if ctl == ttk.Checkbutton:
             dflt = self.option.get("default", False)
-        choices = self.option["choices"] if ctl == ttk.Combobox else None
+        choices = self.option["choices"] if ctl in(ttk.Combobox, ttk.Radiobutton) else None
         min_max = self.option["min_max"] if ctl == ttk.Scale else None
 
         ctlframe = self.build_one_control_frame()
@@ -265,24 +264,41 @@ class OptionControl():
             self.add_browser_buttons(frame, sysbrowser, var)
 
         if control == ttk.Checkbutton:
-            self.checkbutton_to_checkframe(control,
-                                           control_title,
-                                           var,
-                                           helptext)
+            self.checkbutton_to_checkframe(control, control_title, var, helptext)
+        elif control == ttk.Radiobutton:
+            self.radio_control(frame, control_title, var, choices, helptext)
         elif control == ttk.Scale:
-            self.slider_control(control,
-                                frame,
-                                var,
-                                min_max,
-                                helptext)
+            self.slider_control(control, frame, var, min_max, helptext)
         else:
-            self.control_to_optionsframe(control,
-                                         frame,
-                                         var,
-                                         choices,
-                                         helptext)
+            self.control_to_optionsframe(control, frame, var, choices, helptext)
         logger.debug("Built control: '%s'", control_title)
         return var
+
+    @staticmethod
+    def radio_control(frame, control_title, var, choices, helptext):
+        """ Create a group of radio buttons """
+        logger.debug("Adding radio group: %s", control_title)
+        radio_frame_left = ttk.Frame(frame)
+        radio_frame_middle = ttk.Frame(frame)
+        radio_frame_right = ttk.Frame(frame)
+
+        radio_frame_left.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
+        radio_frame_middle.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
+        radio_frame_right.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.RIGHT, anchor=tk.N)
+
+        for idx, choice in enumerate(choices):
+            pos = idx + 1
+            if pos % 3 == 0:
+                radio_frame = radio_frame_right
+            elif (pos + 1) % 3 == 0:
+                radio_frame = radio_frame_middle
+            else:
+                radio_frame = radio_frame_left
+
+            ctl = ttk.Radiobutton(radio_frame, text=choice.title(), value=choice, variable=var)
+            ctl.pack(anchor=tk.W)
+            Tooltip(ctl, text=helptext, wraplength=720)
+        logger.debug("Added radio group: '%s'", control_title)
 
     def checkbutton_to_checkframe(self, control, control_title, var, helptext):
         """ Add checkbuttons to the checkbutton frame """
@@ -294,7 +310,7 @@ class OptionControl():
         frame = leftframe if chkbtn_count % 2 == 0 else rightframe
 
         ctl = control(frame, variable=var, text=control_title)
-        ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
+        ctl.pack(side=tk.TOP, anchor=tk.W)
 
         Tooltip(ctl, text=helptext, wraplength=200)
         logger.debug("Added control checkframe: '%s'", control_title)

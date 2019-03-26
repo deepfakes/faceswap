@@ -61,7 +61,7 @@ class MainMenuBar(tk.Menu):
         logger.debug("Building Recent Files menu")
         serializer = JSONSerializer
         menu_file = os.path.join(self.config.pathcache, ".recent.json")
-        if not os.path.isfile(menu_file):
+        if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self.clear_recent_files(serializer, menu_file)
         with open(menu_file, "rb") as inp:
             recent_files = serializer.unmarshal(inp.read().decode("utf-8"))

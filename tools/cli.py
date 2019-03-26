@@ -2,7 +2,7 @@
 """ Command Line Arguments for tools """
 from lib.cli import FaceSwapArgs
 from lib.cli import (ContextFullPaths, DirFullPaths,
-                     FileFullPaths, SaveFileFullPaths, Slider)
+                     FileFullPaths, SaveFileFullPaths, Radio, Slider)
 from lib.utils import _image_extensions
 
 
@@ -20,8 +20,8 @@ class AlignmentsArgs(FaceSwapArgs):
         align_eyes = "\n\tCan optionally use the align-eyes switch (-ae)."
         argument_list = list()
         argument_list.append({
-
             "opts": ("-j", "--job"),
+            "action": Radio,
             "type": str,
             "choices": ("draw", "extract", "extract-large", "manual", "merge",
                         "missing-alignments", "missing-frames", "legacy", "leftover-faces",
@@ -113,6 +113,7 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "data in. Defaults to same as source."})
         argument_list.append({
             "opts": ("-o", "--output"),
+            "action": Radio,
             "type": str,
             "choices": ("console", "file", "move"),
             "default": "console",
@@ -170,6 +171,7 @@ class EffmpegArgs(FaceSwapArgs):
     def get_argument_list(self):
         argument_list = list()
         argument_list.append({"opts": ('-a', '--action'),
+                              "action": Radio,
                               "dest": "action",
                               "choices": ("extract", "gen-vid", "get-fps",
                                           "get-info", "mux-audio", "rescale",
@@ -229,6 +231,7 @@ class EffmpegArgs(FaceSwapArgs):
                                       "videos."})
 
         argument_list.append({"opts": ("-ef", "--extract-filetype"),
+                              "action": Radio,
                               "choices": _image_extensions,
                               "dest": "extract_ext",
                               "default": ".png",
@@ -367,14 +370,20 @@ class SortArgs(FaceSwapArgs):
                               "help": "Output directory for sorted aligned "
                                       "faces."})
 
+<<<<<<< HEAD
         argument_list.append({"opts": ("-al", "--alignments"),
                               "action": FileFullPaths,
                               "filetypes": 'alignments',
+=======
+        argument_list.append({"opts": ('-fp', '--final-process'),
+                              "action": Radio,
+>>>>>>> staging
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
 
         argument_list.append({"opts": ('-s', '--sort-by'),
+                              "action": Radio,
                               "type": str,
                               "choices": ("none",
                                           "identity",
@@ -409,6 +418,7 @@ class SortArgs(FaceSwapArgs):
                                       "Default: luma"})
 
         argument_list.append({"opts": ('-g', '--group-by'),
+                              "action": Radio,
                               "type": str,
                               "choices": ("none",
                                           "blur",

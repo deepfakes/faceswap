@@ -126,6 +126,8 @@ class CliOptions():
                                                         action_option)
         elif option.get("min_max", None):
             ctl = ttk.Scale
+        elif option.get("action", "") == cli.Radio:
+            ctl = ttk.Radiobutton
         elif option.get("choices", "") != "":
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":

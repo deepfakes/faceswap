@@ -160,7 +160,7 @@ class Check():
             f_hash = face["face_hash"]
             if not self.alignments.hashes_to_frame.get(f_hash, None):
                 logger.debug("Returning: '%s'", face["face_fullname"])
-                yield face["face_fullname"]
+                yield face["face_fullname"], -1
 
     def output_results(self, items_output):
         """ Output the results in the requested format """
@@ -170,7 +170,7 @@ class Check():
         if self.output == "move":
             self.move_file(items_output)
             return
-        if self.job == "multi-faces":
+        if self.job in ("multi-faces", "leftover-faces"):
             # Strip the index for printed/file output
             items_output = [item[0] for item in items_output]
         output_message = "-----------------------------------------------\r\n"
@@ -219,7 +219,7 @@ class Check():
         logger.info("Moving %s faces(s) to '%s'", len(items_output), output_folder)
         for frame, idx in items_output:
             src = os.path.join(self.source_dir, frame)
-            dst_folder = os.path.join(output_folder, str(idx))
+            dst_folder = os.path.join(output_folder, str(idx)) if idx != -1 else output_folder
             if not os.path.isdir(dst_folder):
                 logger.debug("Creating folder: '%s'", dst_folder)
                 os.makedirs(dst_folder)
