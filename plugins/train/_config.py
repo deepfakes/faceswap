@@ -30,36 +30,49 @@ class Config(FaceswapConfig):
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
-            info="Use ICNR Kernel Initializer for upscaling.\nThis can help reduce the "
-                 "'checkerboard effect' when upscaling the image.")
+            info="\nUse ICNR to tile the default initializer in a repeating pattern. \n"
+                 "This strategy is designed for  sub-pixel / pixel shuffler upscaling \n"
+                 "and should only be used on upscaling layers. This can help reduce the \n"
+                 "'checkerboard effect' when upscaling the image in the decoder.\n"
+                 "https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase speed at cost of VRAM")
+            info="\nUse subpixel upscaling rather than pixel shuffler. These techniques \n"
+                 "are both designed to produce better resolving upscaling than other \n"
+                 "methods. Each perform the same operations, but using different TF opts.\n"
+                 "https://arxiv.org/pdf/1609.05158.pdf")
         self.add_item(
             section=section, title="reflect_padding", datatype=bool, default=False,
-            info="Use reflect padding rather than zero padding.")
+            info="\nUse reflection padding rather than zero padding when either \n"
+                 "downscaling or using simple convolutions. Each convolution must \n"
+                 "pad the image/feature boundaries to maintain the proper sizing. \n"
+                 "More complex padding schemes can reduce artifacts at the border \n"
+                 " of the image.\n"
+                 "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
-            section=section, title="dssim_mask_loss", datatype=bool, default=True,
-            info="If using a mask, Use DSSIM loss for Mask training rather than Mean Absolute "
-                 "Error\nMay increase overall quality.")
+            section=section, title="dssim_loss", datatype=bool, default=True,
+            info="\nUse DSSIM (Structural Dissimilarity Index) as a loss function \n"
+                 "for training the neural net's image reconstruction in lieu of \n"
+                 "Mean Absolute Error. Potentially better textural, second-order \n"
+                 "statistics, and translation invariance than MAE.\n"
+                 "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf")
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="If using a mask, Use Penalized loss for Mask training. Can stack with DSSIM.\n"
+            section=section, title="mask-penalized_loss", datatype=bool, default=True,
+            info="\nUse penalized loss for training if using a mask. Can stack with DSSIM.\n"
                  "May increase overall quality.")
         self.add_item(
-            section=section, title="augmentation_flipping", datatype=bool, default=True,
-            info="To effectively learn, a random set of images are flipped horizontally. \n"
-                 "Sometimes it is desirable for this not to occur. Generally this should "
-                 "be applied during all 'fit training'.")
-        self.add_item(
             section=section, title="perform_augmentation", datatype=bool, default=True,
-            info="Image augmentation is a technique that is used to artificially expand \n"
+            info="\nImage augmentation is a technique that is used to artificially expand \n"
                  "image datasets. This is helpful when we are using a data-set with very \n"
                  "few images. In typical cases of Deep Learning, this situation is bad as \n"
                  "the model tends to over-fit when we train it on limited number of data \n"
-                 "samples. Image augmentation parameters that are generally used to increase \n"
-                 "the data diversity are zoom, rotation, transliation, flip, and so on.")
+                 "samples. Image augmentation parameters that are generally used to \n"
+                 "increase data diversity are zoom, rotation, translation, flip, and so on.")
+        self.add_item(
+            section=section, title="augmentation_flipping", datatype=bool, default=True,
+            info="\nTo effectively learn, a random set of images are flipped horizontally. \n"
+                 "Sometimes it is desirable for this not to occur. Generally this should "
+                 "be applied during all 'fit training'.")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
