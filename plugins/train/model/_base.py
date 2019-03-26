@@ -19,7 +19,7 @@ from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
-from lib.model.losses import DSSIMObjective, mask_penalized_loss, gmsd_loss, gradient_loss, generalized_loss_function
+from lib.model.losses import DSSIMObjective, mask_penalized_loss, gradient_loss, generalized_loss_function
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
 from plugins.train._config import Config
@@ -272,15 +272,15 @@ class ModelBase():
         return Adam(**opt_kwargs)
 
     def loss_function(self, mask, side, initialize):
-        """ Set the loss function
+        """ Set the loss function for the image and mask
             Side is input so we only log once """
-        losses = {'Mean_Absolute_Error':    losses.mean_absolute_error,
-                  'Mean_Squared_Error':     losses.mean_squared_error,
-                  'LogCosh':                losses.logcosh,
-                  'SSIM':                   DSSIMObjective(),
-                # 'GMSD':                   gmsd_loss,
-                  'Total_Variation':        gradient_loss,
-                  'Smooth_L1':              generalized_loss_function}
+        loss_dict = {'Mean_Absolute_Error':    losses.mean_absolute_error,
+                     'Mean_Squared_Error':     losses.mean_squared_error,
+                     'LogCosh':                losses.logcosh,
+                     'SSIM':                   DSSIMObjective(),
+                  #  'GMSD':                   gmsd_loss,
+                     'Total_Variation':        gradient_loss,
+                     'Smooth_L1':              generalized_loss_function}
         img_loss_config = self.config.get("image_loss_function", "MAE")
         mask_loss_config = self.config.get("mask_loss_function", "MSE")
 
@@ -288,16 +288,16 @@ class ModelBase():
             logger.verbose("Using %s loss function for image", img_loss_config)
             if mask:
                 logger.verbose("Using %s loss function for mask", mask_loss_config)
-                if self.config.get("penalized_mask_loss", False):
-                        logger.verbose("Image loss function is weighted by mask presence")
+                if self.config.get("mask-penalized_loss", False):
+                    logger.verbose("Image loss function is weighted by mask presence")
 
         loss_names = ["loss"]
-        loss_funcs = [losses[img_loss_config]]
+        loss_funcs = [loss_dict[img_loss_config]]
         if mask:
-            if self.config.get("penalized_mask_loss", False):
-                loss_funcs = [mask_penalized_loss(mask[0], losses[img_loss_config])]
+            if self.config.get("mask-penalized_loss", False):
+                loss_funcs = [mask_penalized_loss(mask[0], loss_dict[img_loss_config])]
             loss_names.append("mask_loss")
-            loss_funcs.append(losses[mask_loss_config])
+            loss_funcs.append(loss_dict[mask_loss_config])
         return loss_names, loss_funcs
 
     def converter(self, swap):
