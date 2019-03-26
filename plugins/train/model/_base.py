@@ -77,14 +77,9 @@ class ModelBase():
         self.training_opts = {"alignments": alignments_paths,
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
-<<<<<<< HEAD
                               "flip": self.config["augmentation_flipping"],
-                              "augment": self.config["perform_augmentation"]}
-=======
-                              "no_flip": no_flip,
+                              "augment": self.config["perform_augmentation"],
                               "pingpong": pingpong}
->>>>>>> staging
-
         self.set_gradient_type(memory_saving_gradients)
         self.build()
         self.set_training_data()

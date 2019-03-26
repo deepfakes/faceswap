@@ -369,15 +369,9 @@ class SortArgs(FaceSwapArgs):
                               "default": "_output_dir",
                               "help": "Output directory for sorted aligned "
                                       "faces."})
-
-<<<<<<< HEAD
         argument_list.append({"opts": ("-al", "--alignments"),
                               "action": FileFullPaths,
                               "filetypes": 'alignments',
-=======
-        argument_list.append({"opts": ('-fp', '--final-process'),
-                              "action": Radio,
->>>>>>> staging
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})

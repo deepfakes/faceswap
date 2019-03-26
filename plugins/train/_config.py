@@ -47,7 +47,6 @@ class Config(FaceswapConfig):
                  "https://arxiv.org/pdf/1609.05158.pdf")
         self.add_item(
             section=section, title="reflect_padding", datatype=bool, default=False,
-<<<<<<< HEAD
             info="\nUse reflection padding rather than zero padding when either \n"
                  "downscaling or using simple convolutions. Each convolution must \n"
                  "pad the image/feature boundaries to maintain the proper sizing. \n"
@@ -78,16 +77,6 @@ class Config(FaceswapConfig):
             info="\nTo effectively learn, a random set of images are flipped horizontally. \n"
                  "Sometimes it is desirable for this not to occur. Generally this should "
                  "be applied during all 'fit training'.")
-=======
-            info="Use reflect padding rather than zero padding. Only enable this option if the "
-                 "model you are training has a distinct line appearing around the edge of the "
-                 "swap area.")
-        self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="If using a mask, This penalizes the loss for the masked area, to give higher "
-                 "priority to the face area. \nShould increase overall quality and speed up "
-                 "training. This should probably be left at True")
->>>>>>> staging
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
