@@ -174,7 +174,7 @@ def mask_penalized_loss(mask, loss_func, mask_prop=1.0):
         from: https://github.com/dfaker/df """
     mask_as_k_inv_prop = 1 - mask_prop
     mask = mask * mask_prop + mask_as_k_inv_prop
-    mask = K.repeat_elements(mask, 3, axis=3)
+    mask = K.repeat_elements(mask, 3, axis=-1)
     def inner_loss(y_true, y_pred):
         return loss_func(y_true * mask, y_pred * mask)
     return inner_loss
@@ -359,6 +359,11 @@ def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
     loss = (K.abs(2.0-a)/a) * ( K.pow( K.pow(x/c, 2.0)/K.abs(2.0-a) + 1.0 , (a/2.0)) - 1.0 )
     return K.mean(loss, axis=-1) * c
 
+def L_p_norm(y_true, y_pred, p = np.inf):
+    """ Calculate the L-p norm as a loss function, valid choics of p are [0,1,no.inf] """
+    diff = y_true - y_pred
+    loss = tf.norm(diff, ord=p, axis=-1)
+    return loss
 
 def gradient_loss(y_true, y_pred):
     '''
