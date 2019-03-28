@@ -15,6 +15,7 @@
                             Set to None for not used
         no_logs:            Disable tensorboard logging
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
+        no_flip:            Don't perform a random flip on the image
         pingpong:           Train each side seperately per save iteration rather than together
 """
 
