@@ -365,6 +365,13 @@ def L_p_norm(y_true, y_pred, p = np.inf):
     loss = tf.norm(diff, ord=p, axis=-1)
     return loss
 
+def L_inf_norm(y_true, y_pred):
+    """ Calculate the L-inf norm as a loss function """
+    diff = K.abs(y_true - y_pred)
+    max_loss = K.max(diff, axis=(1,2),keepdims=True)
+    loss = K.mean(max_loss, axis=-1)
+    return loss
+
 def gradient_loss(y_true, y_pred):
     '''
     Calculates the first and second order gradient difference between pixels of an image in the x and y dimensions.
