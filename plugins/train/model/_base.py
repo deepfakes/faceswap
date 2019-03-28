@@ -35,7 +35,7 @@ class ModelBase():
                  gpus,
                  no_logs=False,
                  warp_to_landmarks=False,
-                 no_flip=False
+                 no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
                  preview_scale=100,
@@ -78,7 +78,7 @@ class ModelBase():
         self.training_opts = {"alignments": alignments_paths,
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
-                              "flip": no_flip,
+                              "no_flip": no_flip,
                               "augment": self.config["perform_augmentation"],
                               "pingpong": pingpong}
         self.set_gradient_type(memory_saving_gradients)
