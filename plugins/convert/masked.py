@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from lib.model.masks import dfl_full
+from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -20,11 +21,19 @@ class Convert():
         logger.debug("Initializing %s: (output_dir: '%s', training_size: %s, padding: %s, "
                      "crop: %s, arguments: %s)", self.__class__.__name__, output_dir,
                      training_size, padding, crop, arguments)
+        self.config = Config(None)
         self.crop = crop
         self.output_dir = output_dir
         self.args = arguments
         self.mask = Mask(arguments.mask_type, training_size, padding, crop)
+        self.box = Box(training_size, padding, self.config)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def get_config(self, section):
+        """ Return the config dict for the requested section """
+        self.config.section = section
+        logger.trace("returning config for section: '%s'", section)
+        return self.config.config_dict
 
     def process(self, in_queue, out_queue):
         """ Process items from the queue """
@@ -79,8 +88,10 @@ class Convert():
             old_face = predicted["original_faces"][idx]
             interpolator = interpolators[idx][1]
 
-            if self.args.smooth_box:
-                self.smooth_box(old_face, new_face)
+            # Perform the box functions on unwarped face
+            for func in self.box.funcs:
+                logger.trace("Performing function: %s", func)
+                new_face = func(old_face=old_face, new_face=new_face)
 
             src_face[self.crop, self.crop] = new_face
 
@@ -93,24 +104,9 @@ class Convert():
                 borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
         return new_image
 
-    @staticmethod
-    def smooth_box(old_face, new_face):
-        """ Perform gaussian blur on the edges of the output rect """
-        height = new_face.shape[0]
-        crop = slice(0, height)
-        erode = slice(height // 15, -height // 15)
-        sigma = height / 16  # 10 for the default 160 size
-        window = int(np.ceil(sigma * 3.0))
-        window = window + 1 if window % 2 == 0 else window
-        mask = np.zeros_like(new_face)
-        mask[erode, erode] = 1.0
-        mask = cv2.GaussianBlur(mask,  # pylint: disable=no-member
-                                (window, window),
-                                sigma)
-        new_face[crop, crop] = (mask * new_face + (1.0 - mask) * old_face)
-
     def get_image_mask(self, predicted, frame_size):
         """ Get the image mask """
+        config = self.get_config("blend_mask")
         logger.trace("Getting image mask: '%s'", predicted["filename"])
         masks = list()
         for detected_face in predicted["detected_faces"]:
@@ -126,7 +122,7 @@ class Convert():
 
             if self.args.blur_size != 0:
                 blur_size = self.set_blur_size(mask)
-                for _ in [1, 2, 3, 4]:
+                for _ in range(config["passes"]):
                     mask = cv2.blur(mask, (blur_size, blur_size))   # pylint: disable=no-member
             masks.append(np.clip(mask, 0.0, 1.0, out=mask))
         logger.trace("Got image mask: '%s'", predicted["filename"])
@@ -270,6 +266,172 @@ class Convert():
         blended = blended[height:-height, width:-width]
 
         return blended
+
+
+class Box():
+    """ Manipulations that occur on the swap box
+        Actions performed here occur prior to warping the face back to the background frame
+
+        For actions that occur identically for each frame (e.g. blend_box), constants can
+        be placed into self.func_constants to be compiled at launch, then referenced for
+        each face. """
+    def __init__(self, training_size, padding, config):
+        logger.trace("Initializing %s: (training_size: '%s', crop: %s)", self.__class__.__name__,
+                     training_size, padding)
+
+        self.config = config
+        self.facesize = training_size - (padding * 2)
+        self.func_constants = dict()
+        self.funcs = list()
+        self.add_functions()
+        logger.trace("Initialized %s: Number of functions: %s",
+                     self.__class__.__name__, len(self.funcs))
+
+    def get_config(self, section):
+        """ Return the config dict for the requested section """
+        self.config.section = section
+        logger.trace("returning config for section: '%s'", section)
+        return self.config.config_dict
+
+    def add_functions(self):
+        """ Add the functions to be performed on the swap box """
+        for action in ("crop_box", "blend_box"):
+            getattr(self, action)()
+
+    def crop_box(self):
+        """ Crop the edges of the swap box to remove artefacts """
+        config = self.get_config("box.crop")
+        if config.get("pixels", 0) == 0:
+            logger.debug("Crop box not selected")
+            return
+        logger.debug("Config: %s", config)
+        crop = slice(config["pixels"], self.facesize - config["pixels"])
+        self.func_constants["crop_box"] = crop
+        logger.debug("Crop box added to funcs")
+        self.funcs.append(self.crop_box_func)
+
+    def crop_box_func(self, **kwargs):
+        """ The crop box function """
+        logger.trace("Cropping box")
+        new_face = kwargs["new_face"]
+        cropped_face = kwargs["old_face"].copy()
+        crop = self.func_constants["crop_box"]
+        cropped_face[crop, crop] = new_face[crop, crop]
+        logger.trace("Cropped Box")
+        return cropped_face
+
+    def blend_box(self):
+        """ Create the blurred mask for the blend box function """
+        config = self.get_config("box.blend")
+        if not config.get("type", None):
+            logger.debug("Blend box not selected")
+            return
+        logger.debug("Config: %s", config)
+
+        mask_ratio = 1 - (config["blending_box"] / 100)
+        erode = slice(int(self.facesize * mask_ratio), -int(self.facesize * mask_ratio))
+        mask = np.zeros((self.facesize, self.facesize, 3))
+        mask[erode, erode] = 1.0
+
+        kernel_ratio = config["kernel_size"] / 200
+        kernel_size = int((self.facesize - (erode.start * 2)) * kernel_ratio)
+
+        mask = BlurMask(config["type"], mask, kernel_size, config["passes"]).blurred
+        self.func_constants["blend_box"] = mask
+        self.funcs.append(self.blend_box_func)
+        logger.debug("Blend box added to funcs")
+
+    def blend_box_func(self, **kwargs):
+        """ The blend box function """
+        logger.trace("Blending box")
+        old_face = kwargs["old_face"]
+        new_face = kwargs["new_face"]
+        mask = self.func_constants["blend_box"]
+        new_face = (mask * new_face + (1.0 - mask) * old_face)
+        logger.trace("Blended box")
+        return new_face
+
+
+class BlurMask():
+    """ Factory class to return the correct blur object for requested blur
+        Works for square images only.
+        Currently supports Gaussian and Normalized Box Filters
+    """
+    def __init__(self, blur_type, mask, kernel_size, passes=1):
+        """ image_size = height or width of original image
+            mask = the mask to apply the blurring to
+            kernel_size = Initial Kernel size
+            passes = the number of passes to perform the blur """
+        logger.trace("Initializing %s: (blur_type: '%s', mask_shape: %s, kernel_size: %s, "
+                     "passes: %s)", self.__class__.__name__, blur_type, mask.shape, kernel_size,
+                     passes)
+        self.blur_type = blur_type.lower()
+        self.mask = mask
+        self.passes = passes
+        self.kernel_size = self.get_kernel_tuple(kernel_size)
+        logger.trace("Initialized %s", self.__class__.__name__)
+
+    @property
+    def blurred(self):
+        """ The final blurred mask """
+        func = self.func_mapping[self.blur_type]
+        kwargs = self.get_kwargs()
+        for i in range(self.passes):
+            ksize = int(kwargs["ksize"][0])
+            logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
+            blurred = func(self.mask, **kwargs)
+            ksize *= self.multipass_factor
+            kwargs["ksize"] = self.get_kernel_tuple(ksize)
+        logger.trace("Returning blurred mask. Shape: %s", blurred.shape)
+        return blurred
+
+    @property
+    def multipass_factor(self):
+        """ Multipass Factor
+            For multiple passes the kernel must be scaled down. This value is
+            different for box filter and gaussian """
+        factor = dict(gaussian=0.8,
+                      normalized=0.5)
+        return factor[self.blur_type]
+
+    @property
+    def sigma(self):
+        """ Sigma for Gaussian Blur
+            Returns zero so it is calculated from kernel size """
+        return 0
+
+    @property
+    def func_mapping(self):
+        """ Return a dict of function name to cv2 function """
+        return dict(gaussian=cv2.GaussianBlur,  # pylint: disable = no-member
+                    normalized=cv2.blur)  # pylint: disable = no-member
+
+    @property
+    def kwarg_requirements(self):
+        """ Return a dict of function name to a list of required kwargs """
+        return dict(gaussian=["ksize", "sigmaX"],
+                    normalized=["ksize"])
+
+    @property
+    def kwarg_mapping(self):
+        """ Return a dict of kwarg names to config item names """
+        return dict(ksize=self.kernel_size,
+                    sigmaX=self.sigma)
+
+    @staticmethod
+    def get_kernel_tuple(kernel_size):
+        """ Make sure kernel_size is odd and return it as a tupe """
+        kernel_size += 1 if kernel_size % 2 == 0 else 0
+        retval = (kernel_size, kernel_size)
+        logger.trace(retval)
+        return retval
+
+    def get_kwargs(self):
+        """ return valid kwargs for the requested blur """
+        retval = {kword: self.kwarg_mapping[kword]
+                  for kword in self.kwarg_requirements[self.blur_type]}
+        logger.trace("BlurMask kwargs: %s", retval)
+        return retval
 
 
 class Mask():

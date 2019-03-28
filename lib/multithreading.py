@@ -415,6 +415,14 @@ class MultiThread():
         """ Return a list of thread errors """
         return [thread.err for thread in self._threads]
 
+    def check_and_raise_error(self):
+        """ Checks for errors in thread and raises them in caller """
+        if not self.has_error:
+            return
+        logger.debug("Thread error caught: %s", self.errors)
+        error = self.errors[0]
+        raise error[1].with_traceback(error[2])
+
     def start(self):
         """ Start a thread with the given method and args """
         logger.debug("Starting thread(s): '%s'", self._name)

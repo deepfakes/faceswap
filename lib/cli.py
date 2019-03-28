@@ -721,13 +721,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       " in the swapped reconstruction to "
                                       "equal the mean of the masked area in "
                                       "the orginal image"})
-        argument_list.append({"opts": ("-sb", "--smooth-box"),
-                              "action": "store_true",
-                              "dest": "smooth_box",
-                              "default": False,
-                              "help": "Perform a Gaussian blur on the edges of the face box "
-                                      "received from the model. Helps reduce pronounced edges "
-                                      "of the swap area"})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",
