@@ -26,7 +26,7 @@ python faceswap.py extract -i ~/faceswap/photo/trump -o ~/faceswap/data/trump
 python faceswap.py extract -i ~/faceswap/photo/cage -o ~/faceswap/data/cage
 ```
 
-We specify our photo input directory and the output folder where our training data will be saved. The script will then try its best to recognize face landmarks, crop the image to that size, and save it to the output folder. Note: this script will make grabbing test data much easier, but it is not perfect. It will (incorrectly) detect multiple faces in some photos and does not recognize if the face is the person who we want to swap. Therefore: **Always check your training data before you start training.** The training data will influence how good your model will be at swapping.
+We specify our photo input directory and the output folder where our training data will be saved. The script will then try its best to recognize face landmarks, crop the image to that size, and save it to the output folder. Note: this script will make grabbing test data much easier, but it is not perfect. It will (incorrectly) detect multiple faces in some photos and does not recognize if the face is the person whom we want to swap. Therefore: **Always check your training data before you start training.** The training data will influence how good your model will be at swapping.
 
 You can see the full list of arguments for extracting via help flag. i.e.
 
@@ -85,13 +85,13 @@ python faceswap.py gui
 A video is just a series of pictures in the form of frames. Therefore you can gather the raw images from them for your dataset or combine your results into a video.
 
 ## EFFMPEG
-You can perform various video processes with the built in effmpeg tool. You can see the full list of arguments available by running:
+You can perform various video processes with the built-in effmpeg tool. You can see the full list of arguments available by running:
 ```bash
 python tools.py effmpeg -h
 ```
 
 ## Extracting video frames with FFMPEG
-Alternatively you can split a video into separate frames using [ffmpeg](https://www.ffmpeg.org) for instance. Below is an example command to process a video to separate frames.
+Alternatively, you can split a video into separate frames using [ffmpeg](https://www.ffmpeg.org) for instance. Below is an example command to process a video to separate frames.
 
 ```bash
 ffmpeg -i /path/to/my/video.mp4 /path/to/output/video-frame-%d.png

@@ -206,11 +206,7 @@ class ModelBase():
     def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
         logger.debug("Adding input shapes to state for model")
-        # PlaidML doesn't support tensor.get_shape()
-        if keras.backend.backend() == "plaidml.keras.backend":
-            inputs = {tensor.name: list(tensor.shape.dims)[-3:] for tensor in model.inputs}
-        else:
-            inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        inputs = {tensor.name: K.int_shape(tensor)[-3:] for tensor in model.inputs}
         if not any(inp for inp in inputs.keys() if inp.startswith("face")):
             raise ValueError("No input named 'face' was found. Check your input naming. "
                              "Current input names: {}".format(inputs))
@@ -220,11 +216,7 @@ class ModelBase():
     def set_output_shape(self, model):
         """ Set the output shape for use in training and convert """
         logger.debug("Setting output shape")
-        # PlaidML doesn't support tensor.get_shape()
-        if keras.backend.backend() == "plaidml.keras.backend":
-            out = [list(tensor.shape.dims)[-3:] for tensor in model.outputs]
-        else:
-            out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
+        out = [K.int_shape(tensor)[-3:] for tensor in model.outputs]
         if not out:
             raise ValueError("No outputs found! Check your model.")
         self.output_shape = tuple(out[0])

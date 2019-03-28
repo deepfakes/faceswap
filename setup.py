@@ -178,7 +178,7 @@ class Environment():
     def get_installed_packages(self):
         """ Get currently installed packages """
         installed_packages = dict()
-        chk = Popen("{} -m pip freeze".format(sys.executable),
+        chk = Popen("\"{}\" -m pip freeze".format(sys.executable),
                     shell=True, stdout=PIPE)
         installed = chk.communicate()[0].decode(self.encoding).splitlines()
 
@@ -670,12 +670,10 @@ class Install():
         if not self.env.is_admin and not self.env.is_virtualenv:
             pipexe.append("--user")
         if package.startswith("dlib"):
-            opt = "yes" if self.env.enable_cuda else "no"
-            pipexe.extend(["--install-option=--{}".format(opt),
-                           "--install-option=DLIB_USE_CUDA"])
+            if not self.env.enable_cuda:
+                pipexe.extend(["--install-option=--no", "--install-option=DLIB_USE_CUDA"])
             if self.env.os_version[0] == "Windows":
-                pipexe.extend(["--global-option=-G",
-                               "--global-option=Visual Studio 14 2015"])
+                pipexe.extend(["--global-option=-G", "--global-option=Visual Studio 14 2015"])
             msg = ("Compiling {}. This will take a while...\n"
                    "Please ignore the following UserWarning: "
                    "'Disabling all use of wheels...'".format(package))
