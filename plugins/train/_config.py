@@ -4,10 +4,11 @@
 import logging
 
 from lib.config import FaceswapConfig
+from lib.model.masks import get_available_masks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-MASK_TYPES = ["none", "dfaker", "dfl_full", "components"]
+MASK_TYPES = get_available_masks()
 MASK_INFO = ("The mask to be used for training:"
              "\n\tnone: Doesn't use any mask."
              "\n\tdfaker: A basic face hull mask using a facehull of all 68 landmarks."

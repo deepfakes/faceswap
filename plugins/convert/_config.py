@@ -65,19 +65,26 @@ class Config(FaceswapConfig):
             info="The number of pixels to remove from each edge of the swap box.")
 
         # << MASK OPTIONS >> #
-        section = "blend_mask"
+        section = "mask.blend"
         self.add_section(title=section,
                          info="Options for blending the edges between the mask and the "
                               "background image")
         self.add_item(
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="normalized",
             info=BLUR_INFO)
+        self.add_item(section=section, title="internal_only", datatype=bool, default=True,
+                      info="Only blend sections of the mask that directly interact with the face."
+                           "\nIE: If True, the forehead area will be blended, but the jawline "
+                           "will not. If False, all edges of the mask will be blended")
         self.add_item(
-            section=section, title="kernel_size", datatype=float, default=75.0, rounding=1,
+            section=section, title="kernel_size", datatype=float, default=10.0, rounding=1,
             min_max=(0.1, 99.9),
-            info="Kernel size in relation to the mask")
+            info="Kernel size dictates how much blending should occur."
+                 "\nThis figure is set as a percentage of the mask size and "
+                 "should not exceed 100%."
+                 "\nHigher percentage means more blending")
         self.add_item(
-            section=section, title="passes", datatype=int, default=1, rounding=1,
+            section=section, title="passes", datatype=int, default=4, rounding=1,
             min_max=(1, 8),
             info="The number of passes to perform. Additional passes of the blending "
                  "algorithm can improve smoothing at a time cost."

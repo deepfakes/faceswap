@@ -10,6 +10,7 @@ from importlib import import_module
 
 from lib.logger import crash_log, log_setup
 from lib.utils import safe_shutdown
+from lib.model.masks import get_available_masks, get_default_mask
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -628,27 +629,16 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
-            "choices": ["ellipse",
-                        "facehull",
-                        "dfl",
-                        #  "cnn",  Removed until implemented
-                        "none"],
-            "default": "facehull",
-            "help": "R|Mask to use to replace faces."
-                    "\nellipse: Oval around face."
+            "choices": get_available_masks() + ["predicted"],
+            "default": get_default_mask(),
+            "help": "R|Mask to use to replace faces:"
+                    "\ndfaker: A basic face hull mask using a facehull of all 68 landmarks. "
+                    "\ndfl_full: An improved face hull mask using a facehull of 3 facial parts. "
+                    "\ncomponents: An improved face hull mask using a facehull of 8 facial parts. "
                     "\nfacehull: Face cutout based on landmarks."
-                    "\ndfl: A Face Hull mask from DeepFaceLabs."
-                    #  "\ncnn: Not yet implemented"  Removed until implemented
-                    "\nnone: No mask. Can still use blur and erode on the edges of the swap box."})
-        argument_list.append({"opts": ("-b", "--blur-size"),
-                              "type": float,
-                              "action": Slider,
-                              "min_max": (0.0, 100.0),
-                              "rounding": 2,
-                              "default": 5.0,
-                              "help": "Blur kernel size as a percentage of the swap area. Smooths "
-                                      "the transition between the swapped face and the background "
-                                      "image."})
+                    "\nnone: No mask. Can still use blur and erode on the edges of the swap box. "
+                    "\npredicted: The predicted mask generated from the model. Only valid if the "
+                    "\n\tmodel was trained with a mask."})
         argument_list.append({"opts": ("-e", "--erosion-size"),
                               "dest": "erosion_size",
                               "type": float,
@@ -729,7 +719,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       "transparent layer rather than the "
                                       "original frame."})
         argument_list.append({"opts": ("-t", "--trainer"),
-                              "action": Radio,
                               "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
                               "help": "[LEGACY] You only need to select the trainer that was "
