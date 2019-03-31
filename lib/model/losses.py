@@ -168,46 +168,17 @@ class DSSIMObjective():
         return patches
 
 # <<< START: from Dfaker >>> #
-class PenalizedLoss():  # pylint: disable=too-few-public-methods
-    """ Penalized Loss
-        from: https://github.com/dfaker/df """
-    def __init__(self, mask, loss_func, mask_prop=1.0):
-        self.mask = mask
-        self.loss_func = loss_func
-        self.mask_prop = mask_prop
-        self.mask_as_k_inv_prop = 1-mask_prop
-
-    def __call__(self, y_true, y_pred):
-        # pylint: disable=invalid-name
-        tro, tgo, tbo = tf.split(y_true, 3, 3)
-        pro, pgo, pbo = tf.split(y_pred, 3, 3)
-
-        tr = tro
-        tg = tgo
-        tb = tbo
-
-        pr = pro
-        pg = pgo
-        pb = pbo
-        m = self.mask
-
-        m = m * self.mask_prop
-        m += self.mask_as_k_inv_prop
-        tr *= m
-        tg *= m
-        tb *= m
-
-        pr *= m
-        pg *= m
-        pb *= m
-
-        y = tf.concat([tr, tg, tb], 3)
-        p = tf.concat([pr, pg, pb], 3)
-
-        # yo = tf.stack([tro,tgo,tbo],3)
-        # po = tf.stack([pro,pgo,pbo],3)
-
-        return self.loss_func(y, p)
+def PenalizedLoss(mask, loss_func, mask_prop=1.0):
+    mask_as_k_inv_prop = 1 - mask_prop
+    mask = (mask * mask_prop) + mask_as_k_inv_prop
+    def inner_loss(y_true, y_pred):
+        # Workaround until https://github.com/plaidml/plaidml/pull/284 is accepted
+        if K.backend() == "plaidml.keras.backend":
+            y_true = K.reshape(y_true, y_pred.shape.dims)
+        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        return loss_func(n_true, n_pred)
+    return inner_loss
 # <<< END: from Dfaker >>> #
 
 
