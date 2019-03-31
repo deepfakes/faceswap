@@ -390,102 +390,89 @@ def gradient_loss(y_true, y_pred):
         The GD loss.
     '''
 
-    assert 4 == K.ndim(y_true)
-    y_true.set_shape([None,64,64,3])
-    y_pred.set_shape([None,64,64,3])
     TV_weight = 1.0
     TV2_weight = 1.0
     loss = 0.0
-    
+
     def diff_x(X):
-        Xleft = X[:, :, 1, :] - X[:, :, 0, :]
-        Xinner = tf.unstack(X[:, :, 2:, :] - X[:, :, :-2, :], axis=2)
-        Xright = X[:, :, -1, :] - X[:, :, -2, :]
-        Xout = [Xleft] + Xinner + [Xright]
-        Xout = tf.stack(Xout, axis=2)
+        Xleft = X[:, :, 1:2, :] - X[:, :, 0:1, :]
+        Xinner = X[:, :, 2:, :] - X[:, :, :-2, :]
+        Xright = X[:, :, -1:, :] - X[:, :, -2:-1, :]
+        Xout = K.concatenate([Xleft, Xinner, Xright], axis=2)
         return Xout * 0.5
 
     def diff_y(X):
-        Xtop = X[:, 1, :, :] - X[:, 0, :, :]
-        Xinner = tf.unstack(X[:, 2:, :, :] - X[:, :-2, :, :], axis=1)
-        Xbot = X[:, -1, :, :] - X[:, -2, :, :]
-        Xout = [Xtop] + Xinner + [Xbot]
-        Xout = tf.stack(Xout,axis=1)
+        Xtop = X[:, 1:2, :, :] - X[:, 0:1, :, :]
+        Xinner = X[:, 2:, :, :] - X[:, :-2, :, :]
+        Xbot = X[:, -1:, :, :] - X[:, -2:-1, :, :]
+        Xout = K.concatenate([Xtop, Xinner, Xbot], axis=1)
         return Xout * 0.5
 
     def diff_xx(X):
-        Xleft = X[:, :, 1, :] + X[:, :, 0, :]
-        Xinner = tf.unstack(X[:, :, 2:, :] + X[:, :, :-2, :], axis=2)
-        Xright = X[:, :, -1, :] + X[:, :, -2, :]
-        Xout = [Xleft] + Xinner + [Xright]
-        Xout = tf.stack(Xout,axis=2)
+        Xleft = X[:, :, 1:2, :] + X[:, :, 0:1, :]
+        Xinner = X[:, :, 2:, :] + X[:, :, :-2, :]
+        Xright = X[:, :, -1:, :] + X[:, :, -2:-1, :]
+        Xout = K.concatenate([Xleft, Xinner, Xright], axis=2)
         return Xout - 2.0 * X
 
     def diff_yy(X):
-        Xtop = X[:, 1, :, :] + X[:, 0, :, :]
-        Xinner = tf.unstack(X[:, 2:, :, :] + X[:, :-2, :, :], axis=1)
-        Xbot = X[:, -1, :, :] + X[:, -2, :, :]
-        Xout = [Xtop] + Xinner + [Xbot]
-        Xout = tf.stack(Xout,axis=1)
+        Xtop = X[:, 1:2, :, :] + X[:, 0:1, :, :]
+        Xinner = X[:, 2:, :, :] + X[:, :-2, :, :]
+        Xbot = X[:, -1:, :, :] + X[:, -2:-1, :, :]
+        Xout = K.concatenate([Xtop, Xinner, Xbot], axis=1)
         return Xout - 2.0 * X
 
     def diff_xy(X):
         #xout1
-        top_left = X[:, 1, 1, :]+X[:, 0, 0, :]
-        inner_left = tf.unstack(X[:, 2:, 1, :]+X[:, :-2, 0, :], axis=1)
-        bot_left = X[:, -1, 1, :]+X[:, -2, 0, :]
-        X_left = [top_left] + inner_left + [bot_left]
-        X_left = tf.stack(X_left, axis=1)
+        top_left = X[:, 1:2, 1:2, :] + X[:,0:1, 0:1, :]
+        inner_left = X[:, 2:, 1:2, :] + X[:, :-2, 0:1, :]
+        bot_left = X[:, -1:, 1:2, :] + X[:, -2:-1, 0:1, :]
+        X_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
      
-        top_mid = X[:, 1, 2:, :]+X[:, 0, :-2, :]     
-        mid_mid = tf.unstack(X[:, 2:, 2:, :]+X[:, :-2, :-2, :], axis=1) 
-        bot_mid = X[:, -1, 2:, :]+X[:, -2, :-2, :]
-        X_mid = [top_mid] + mid_mid + [bot_mid]
-        X_mid = tf.stack(X_mid, axis=1)
+        top_mid = X[:, 1:2, 2:, :] + X[:, 0:1, :-2, :]     
+        mid_mid = X[:, 2:, 2:, :] + X[:, :-2, :-2, :]
+        bot_mid = X[:, -1:, 2:, :] + X[:, -2:-1, :-2, :]
+        X_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
         
-        top_right = X[:, 1, -1, :]+X[:, 0, -2, :]
-        inner_right = tf.unstack(X[:, 2:, -1, :]+X[:, :-2, -2, :], axis=1)     
-        bot_right = X[:, -1, -1, :]+X[:, -2, -2, :]
-        X_right = [top_right] + inner_right + [bot_right]
-        X_right = tf.stack(X_right, axis=1)
+        top_right = X[:, 1:2, -1:, :] + X[:, 0:1, -2:-1, :]
+        inner_right = X[:, 2:, -1:, :] + X[:, :-2, -2:-1, :]
+        bot_right = X[:, -1:, -1:, :] + X[:, -2:-1, -2:-1, :]
+        X_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
 
-        X_mid = tf.unstack(X_mid, axis=2)
-        Xout1 = [X_left] + X_mid + [X_right]
-        Xout1 = tf.stack(Xout1, axis=2)
+        Xout1 = K.concatenate([X_left, X_mid, X_right], axis=2)
 
         #Xout2
-        top_left = X[:, 0, 1, :]+X[:, 1, 0, :]
-        inner_left = tf.unstack(X[:, :-2, 1, :]+X[:, 2:, 0, :], axis=1)
-        bot_left = X[:, -2, 1, :]+X[:, -1, 0, :]
-        X_left = [top_left] + inner_left + [bot_left]
-        X_left = tf.stack(X_left, axis=1)
+        top_left = X[:, 0:1, 1:2, :] + X[:, 1:2, 0:1, :]
+        inner_left = X[:, :-2, 1:2, :] + X[:, 2:, 0:1, :]
+        bot_left = X[:, -2:-1, 1:2, :] + X[:, -1:, 0:1, :]
+        X_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
 
-        top_mid = X[:, 0, 2:, :]+X[:, 1, :-2, :]
-        mid_mid = tf.unstack(X[:, :-2, 2:, :]+X[:, 2:, :-2, :], axis=1)
-        bot_mid = X[:, -2, 2:, :]+X[:, -1, :-2, :]
-        X_mid = [top_mid] + mid_mid + [bot_mid]
-        X_mid = tf.stack(X_mid, axis=1)
-        
-        top_right = X[:, 0, -1, :]+X[:, 1, -2, :]
-        inner_right = tf.unstack(X[:, :-2, -1, :]+X[:, 2:, -2, :], axis=1)
-        bot_right = X[:, -2, -1, :]+X[:, -1, -2, :]
-        X_right = [top_right] + inner_right + [bot_right]
-        X_right = tf.stack(X_right, axis=1)
+        top_mid = X[:, 0:1, 2:, :] + X[:, 1:2, :-2, :]
+        mid_mid = X[:, :-2, 2:, :] + X[:, 2:, :-2, :]
+        bot_mid = X[:, -2:-1, 2:, :] + X[:, -1:, :-2, :]
+        X_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
 
-        X_mid = tf.unstack(X_mid, axis=2)
-        Xout2 = [X_left] + X_mid + [X_right]
-        Xout2 = tf.stack(Xout2, axis=2)
-        
+        top_right = X[:, 0:1, -1:, :] + X[:, 1:2, -2:-1, :]
+        inner_right = X[:, :-2, -1:, :] + X[:, 2:, -2:-1, :]
+        bot_right = X[:, -2:-1, -1:, :] + X[:, -1:, -2:-1, :]
+        X_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
+
+        Xout2 = K.concatenate([X_left, X_mid, X_right], axis=2)
+
         return (Xout1 - Xout2) * 0.25
-     
-    loss += TV_weight * ( generalized_loss_function(diff_x(y_true), diff_x(y_pred), a=1.999999) +
-                          generalized_loss_function(diff_y(y_true), diff_y(y_pred), a=1.999999) )
-    
-    loss += TV2_weight * ( generalized_loss_function(diff_xx(y_true), diff_xx(y_pred), a=1.999999) +
-                           generalized_loss_function(diff_yy(y_true), diff_yy(y_pred), a=1.999999) +
-                           2.0 * generalized_loss_function(diff_xy(y_true), diff_xy(y_pred), a=1.999999) )
 
-    return loss / ( TV_weight + TV2_weight )
+    loss += TV_weight * (K.square(diff_x(y_true) - diff_x(y_pred)) +
+                         K.square(diff_y(y_true) - diff_y(y_pred)))
+
+    loss += TV2_weight * (K.square(diff_xx(y_true) - diff_xx(y_pred)) +
+                          K.square(diff_yy(y_true) - diff_yy(y_pred)) +
+                          K.square(diff_xy(y_true) - diff_xy(y_pred)) * 2.0)
+    loss = loss / (TV_weight + TV2_weight)
+    #loss = K.mean(loss / (TV_weight + TV2_weight), axis=(1, 2), keepdims=True)
+    #loss += K.square(K.mean(y_true - y_pred, axis=(1, 2), keepdims=True))
+    loss = K.mean(loss, axis=-1)
+
+    return loss
 
 
 def scharr_edges(image, magnitude):
