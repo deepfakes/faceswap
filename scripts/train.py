@@ -298,6 +298,7 @@ class Train():
                     if key in ("s", "S"):
                         logger.info("Save requested")
                         self.save_now = True
+                sleep(1)
             except KeyboardInterrupt:
                 logger.debug("Keyboard Interrupt received")
                 break
