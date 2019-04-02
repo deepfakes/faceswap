@@ -357,7 +357,8 @@ def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
     '''
     x = y_pred - y_true
     loss = (K.abs(2.0-a)/a) * ( K.pow( K.pow(x/c, 2.0)/K.abs(2.0-a) + 1.0 , (a/2.0)) - 1.0 )
-    return K.mean(loss, axis=-1) * c
+    loss = K.mean(loss, axis=-1) * c
+    return loss
 
 def L_p_norm(y_true, y_pred, p = np.inf):
     """ Calculate the L-p norm as a loss function, valid choics of p are [0,1,no.inf] """
@@ -389,10 +390,6 @@ def gradient_loss(y_true, y_pred):
     Return:
         The GD loss.
     '''
-
-    TV_weight = 1.0
-    TV2_weight = 1.0
-    loss = 0.0
 
     def diff_x(X):
         Xleft = X[:, :, 1:2, :] - X[:, :, 0:1, :]
@@ -428,18 +425,16 @@ def gradient_loss(y_true, y_pred):
         inner_left = X[:, 2:, 1:2, :] + X[:, :-2, 0:1, :]
         bot_left = X[:, -1:, 1:2, :] + X[:, -2:-1, 0:1, :]
         X_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
-     
+
         top_mid = X[:, 1:2, 2:, :] + X[:, 0:1, :-2, :]     
         mid_mid = X[:, 2:, 2:, :] + X[:, :-2, :-2, :]
         bot_mid = X[:, -1:, 2:, :] + X[:, -2:-1, :-2, :]
         X_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
-        
+
         top_right = X[:, 1:2, -1:, :] + X[:, 0:1, -2:-1, :]
         inner_right = X[:, 2:, -1:, :] + X[:, :-2, -2:-1, :]
         bot_right = X[:, -1:, -1:, :] + X[:, -2:-1, -2:-1, :]
         X_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
-
-        Xout1 = K.concatenate([X_left, X_mid, X_right], axis=2)
 
         #Xout2
         top_left = X[:, 0:1, 1:2, :] + X[:, 1:2, 0:1, :]
@@ -457,20 +452,24 @@ def gradient_loss(y_true, y_pred):
         bot_right = X[:, -2:-1, -1:, :] + X[:, -1:, -2:-1, :]
         X_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
 
+        Xout1 = K.concatenate([X_left, X_mid, X_right], axis=2)
         Xout2 = K.concatenate([X_left, X_mid, X_right], axis=2)
 
         return (Xout1 - Xout2) * 0.25
 
-    loss += TV_weight * (K.square(diff_x(y_true) - diff_x(y_pred)) +
-                         K.square(diff_y(y_true) - diff_y(y_pred)))
-
-    loss += TV2_weight * (K.square(diff_xx(y_true) - diff_xx(y_pred)) +
-                          K.square(diff_yy(y_true) - diff_yy(y_pred)) +
-                          K.square(diff_xy(y_true) - diff_xy(y_pred)) * 2.0)
+    TV_weight = 1.0
+    TV2_weight = 1.0
+    loss = 0.0
+    loss += TV_weight * (generalized_loss_function(diff_x(y_true), diff_x(y_pred), a=1.9999) +
+                         generalized_loss_function(diff_y(y_true), diff_y(y_pred), a=1.9999))
+    loss += TV2_weight * (generalized_loss_function(diff_xx(y_true), diff_xx(y_pred), a=1.9999) +
+                          generalized_loss_function(diff_yy(y_true), diff_yy(y_pred), a=1.9999) +
+                          generalized_loss_function(diff_xy(y_true), diff_xy(y_pred), a=1.9999) * 2.0)
     loss = loss / (TV_weight + TV2_weight)
     #loss = K.mean(loss / (TV_weight + TV2_weight), axis=(1, 2), keepdims=True)
     #loss += K.square(K.mean(y_true - y_pred, axis=(1, 2), keepdims=True))
-    loss = K.mean(loss, axis=-1)
+    #loss = K.mean(loss, axis=-1)
+    print(K.int_shape(loss))
 
     return loss
 
@@ -487,42 +486,36 @@ def scharr_edges(image, magnitude):
     [batch_size, h, w, d, 2] where the last two dimensions hold [[dy[0], dx[0]],
     [dy[1], dx[1]], ..., [dy[d-1], dx[d-1]]] calculated using the Scharr filter.
     '''
-    
+
     # Define vertical and horizontal Scharr filters.
     static_image_shape = image.get_shape()
-    image_shape = tf.shape(image)
-    '''
-    #modified 3x3 Scharr
-    kernels = [[[-17.0, -61.0, -17.0], [0.0, 0.0, 0.0], [17.0, 61.0, 17.0]],
-             [[-17.0, 0.0, 17.0], [-61.0, 0.0, 61.0], [-17.0, 0.0, 17.0]]]
-    '''
-    # 5x5 Scharr
-    kernels = [[[-1.0, -2.0, -3.0, -2.0, -1.0], [-1.0, -2.0, -6.0, -2.0, -1.0], [0.0, 0.0, 0.0, 0.0, 0.0], [1.0, 2.0, 6.0, 2.0, 1.0], [1.0, 2.0, 3.0, 2.0, 1.0]],
-             [[-1.0, -1.0, 0.0, 1.0, 1.0], [-2.0, -2.0, 0.0, 2.0, 2.0], [-3.0, -6.0, 0.0, 6.0, 3.0], [-2.0, -2.0, 0.0, 2.0, 2.0], [-1.0, -1.0, 0.0, 1.0, 1.0]]]
-    num_kernels = len(kernels)
-    kernels = np.transpose(np.asarray(kernels), (1, 2, 0))
-    kernels = np.expand_dims(kernels, -2) / np.sum(np.abs(kernels))
-    kernels_tf = tf.constant(kernels, dtype=image.dtype)
-    kernels_tf = tf.tile(kernels_tf, [1, 1, image_shape[-1], 1], name='scharr_filters')
+    image_shape = K.shape(image)
+
+    # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
+    matrix = [[[[0.00070, 0.0007]],[[0.00520, 0.0037]],[[0.03700, 0.]],[[0.00520, -0.0037]],[[0.00070, -0.0007]]],
+              [[[0.00370, 0.0052]],[[0.11870, 0.1187]],[[0.25890, 0.]],[[0.11870, -0.1187]],[[0.00370, -0.0052]]],
+              [[[0.00000, 0.0370]],[[0.00000, 0.2589]],[[0.00000, 0.]],[[0.00000, -0.2589]],[[0.00000, -0.0370]]],
+              [[[-0.0037, 0.0052]],[[-0.1187, 0.1187]],[[-0.2589, 0.]],[[-0.1187, -0.1187]],[[-0.0037, -0.0052]]],
+              [[[-0.0007, 0.0007]],[[-0.0052, 0.0037]],[[-0.0370, 0.]],[[-0.0052, -0.0037]],[[-0.0007, -0.0007]]]]
+    num_kernels = [2]
+    kernels = K.constant(matrix, dtype='float32')
+    kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
 
     # Use depth-wise convolution to calculate edge maps per channel.
+    # Output tensor has shape [batch_size, h, w, d * num_kernels].
     pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
     padded = tf.pad(image, pad_sizes, mode='REFLECT')
+    output = K.depthwise_conv2d(padded, kernels)
 
-    # Output tensor has shape [batch_size, h, w, d * num_kernels].
-    strides = [1, 1, 1, 1]
-    output = tf.nn.depthwise_conv2d(padded, kernels_tf, strides, 'VALID')
+    if not magnitude: # direction of edges
+        # Reshape to [batch_size, h, w, d, num_kernels].
+        shape = K.concatenate([image_shape, num_kernels], axis=0)
+        output = K.reshape(output, shape=shape)
+        output.set_shape(static_image_shape.concatenate(num_kernels))
+        output = tf.atan(K.squeeze(output[:,:,:,:,0] / output[:,:,:,:,1]))
+    # magnitude of edges
+    #output = K.sqrt(K.sum(K.square(output),axis=-1))
 
-    # Reshape to [batch_size, h, w, d, num_kernels].
-    shape = tf.concat([image_shape, [num_kernels]], 0)
-    output = tf.reshape(output, shape=shape)
-    output.set_shape(static_image_shape.concatenate([num_kernels]))
-    
-    if magnitude: # magnitude of edges
-        output = tf.sqrt(tf.reduce_sum(tf.square(output),axis=-1))
-    else: # direction of edges
-        output = tf.atan(tf.squeeze(tf.div(output[:,:,:,:,0]/output[:,:,:,:,1])))
-        
     return output
 
 
@@ -532,15 +525,16 @@ def gmsd_loss(y_true,y_pred):
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
     '''
-    true_edge_mag = scharr_edges(y_true,True)
-    pred_edge_mag = scharr_edges(y_pred,True)
-    c = 0.002
-    upper = 2.0 * tf.multiply(true_edge_mag,pred_edge_mag) + c
-    lower = tf.square(true_edge_mag) + tf.square(pred_edge_mag) + c
-    GMS = tf.div(upper,lower)
-    _mean, _var = tf.nn.moments(GMS, axes=[1,2], keep_dims=True)
-    GMSD = tf.reduce_mean(tf.sqrt(_var), axis=-1) # single metric value per image in tensor [?,1,1]
-    return K.tile(GMSD,[1,64,64])  # need to expand to [?,height,width] dimensions for Keras ... modify to not be hard-coded
+    true_edge = scharr_edges(y_true, True)
+    pred_edge = scharr_edges(y_pred, True)
+    c = 0.0025
+    upper = 2.0 * true_edge * pred_edge
+    lower = K.square(true_edge) + K.square(pred_edge)
+    GMS = (upper + c) / (lower + c)
+    GMSD = K.std(GMS, axis=(1, 2, 3), keepdims=True)
+    GMSD = K.squeeze(GMSD, axis=-1)
+
+    return GMSD
 
 
 def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.2726)):
