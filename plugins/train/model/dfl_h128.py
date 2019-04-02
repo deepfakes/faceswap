@@ -38,16 +38,19 @@ class Model(OriginalModel):
     def decoder(self):
         """ DFL H128 Decoder """
         input_ = Input(shape=(16, 16, self.encoder_dim))
-        var = input_
-        var = self.blocks.upscale(var, self.encoder_dim)
-        var = self.blocks.upscale(var, self.encoder_dim // 2)
-        var = self.blocks.upscale(var, self.encoder_dim // 4)
-
         # Face
-        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var)
+        var_x = input_
+        var_x = self.blocks.upscale(var_x, self.encoder_dim)
+        var_x = self.blocks.upscale(var_x, self.encoder_dim // 2)
+        var_x = self.blocks.upscale(var_x, self.encoder_dim // 4)
+        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
         outputs = [var_x]
         # Mask
         if self.config.get("mask_type", None):
-            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var)
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, self.encoder_dim)
+            var_y = self.blocks.upscale(var_y, self.encoder_dim // 2)
+            var_y = self.blocks.upscale(var_y, self.encoder_dim // 4)
+            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)
