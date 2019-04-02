@@ -327,57 +327,61 @@ class FaceswapControl():
         """ Terminate the subprocess """
         logger.debug("Terminating wrapper")
         if self.command == "train":
+            timeout = get_config().tk_vars["traintimeout"].get()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
-            try:
-                now = time()
-                if os.name == "nt":
-                    try:
-                        logger.debug("Sending carriage return to process")
-                        self.process.communicate(input="\n", timeout=60)
-                    except TimeoutExpired:
-                        raise ValueError("Timeout reached sending Exit Signal")
-                else:
-                    logger.debug("Sending SIGINT to process")
-                    self.process.send_signal(signal.SIGINT)
-                    while True:
-                        timeelapsed = time() - now
-                        if self.process.poll() is not None:
-                            break
-                        if timeelapsed > 60:
-                            raise ValueError("Timeout reached sending Exit Signal")
-                return
-            except ValueError as err:
-                logger.error("Error terminating process", exc_info=True)
-                print(err)
-        else:
-            logger.debug("Terminating Process...")
-            print("Terminating Process...")
-            children = psutil.Process().children(recursive=True)
-            for child in children:
-                child.terminate()
-            _, alive = psutil.wait_procs(children, timeout=10)
-            if not alive:
-                logger.debug("Terminated")
-                print("Terminated")
-                return
-
-            logger.debug("Termination timed out. Killing Process...")
-            print("Termination timed out. Killing Process...")
-            for child in alive:
-                child.kill()
-            _, alive = psutil.wait_procs(alive, timeout=10)
-            if not alive:
-                logger.debug("Killed")
-                print("Killed")
+            if os.name == "nt":
+                try:
+                    logger.debug("Sending carriage return to process")
+                    self.process.communicate(input="\n", timeout=timeout)
+                except TimeoutExpired:
+                    logger.error("Timeout reached sending Exit Signal")
+                    self.terminate_all_children()
             else:
-                for child in alive:
-                    msg = "Process {} survived SIGKILL. Giving up".format(child)
-                    logger.debug(msg)
-                    print(msg)
+                logger.debug("Sending SIGINT to process")
+                now = time()
+                self.process.send_signal(signal.SIGINT)
+                while True:
+                    timeelapsed = time() - now
+                    if self.process.poll() is not None:
+                        break
+                    if timeelapsed > timeout:
+                        logger.error("Timeout reached sending Exit Signal")
+                        self.terminate_all_children()
+                return
+        else:
+            self.terminate_all_children()
+
+    @staticmethod
+    def terminate_all_children():
+        """ Terminates all children """
+        logger.debug("Terminating Process...")
+        print("Terminating Process...", flush=True)
+        children = psutil.Process().children(recursive=True)
+        for child in children:
+            child.terminate()
+        _, alive = psutil.wait_procs(children, timeout=10)
+        if not alive:
+            logger.debug("Terminated")
+            print("Terminated")
+            return
+
+        logger.debug("Termination timed out. Killing Process...")
+        print("Termination timed out. Killing Process...", flush=True)
+        for child in alive:
+            child.kill()
+        _, alive = psutil.wait_procs(alive, timeout=10)
+        if not alive:
+            logger.debug("Killed")
+            print("Killed")
+        else:
+            for child in alive:
+                msg = "Process {} survived SIGKILL. Giving up".format(child)
+                logger.debug(msg)
+                print(msg)
 
     def set_final_status(self, returncode):
-        """ Set the status bar output based on subprocess return code 
+        """ Set the status bar output based on subprocess return code
             and reset training stats """
         logger.debug("Setting final status. returncode: %s", returncode)
         self.train_stats = {"iterations": 0, "timestamp": None}
