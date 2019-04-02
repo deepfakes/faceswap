@@ -19,7 +19,7 @@ from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
-from lib.model.losses import DSSIMObjective, mask_penalized_loss, gradient_loss, generalized_loss, l_inf_norm, gmsd_loss
+from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss, generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
 from plugins.train._config import Config
@@ -296,7 +296,7 @@ class ModelBase():
         loss_funcs = [loss_dict[img_loss_config]]
         if mask:
             if self.config.get("mask-penalized_loss", False):
-                loss_funcs = [mask_penalized_loss(mask[0], loss_dict[img_loss_config])]
+                loss_funcs = [Mask_Penalized_Loss(mask[0], loss_dict[img_loss_config])]
             loss_names.append("mask_loss")
             loss_funcs.append(loss_dict[mask_loss_config])
         return loss_names, loss_funcs
