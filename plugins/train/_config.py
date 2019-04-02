@@ -57,7 +57,7 @@ class Config(FaceswapConfig):
             section=section, title="image_loss_function", datatype=str,
             default="Mean_Absolute_Error",
             choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
-                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "L_inf_norm"],
+                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "l_inf_norm"],
             info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
                  "for training the neural net's image reconstruction in lieu of \n"
                  "Mean Absolute Error. Potentially better textural, second-order \n"
@@ -67,7 +67,7 @@ class Config(FaceswapConfig):
             section=section, title="mask_loss_function", datatype=str,
             default="Mean_Squared_Error",
             choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
-                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "L_inf_norm"],
+                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "l_inf_norm"],
             info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
                  "for training the neural net's image reconstruction in lieu of \n"
                  "Mean Absolute Error. Potentially better textural, second-order \n"

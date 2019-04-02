@@ -19,7 +19,7 @@ from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
-from lib.model.losses import DSSIMObjective, mask_penalized_loss, gradient_loss, generalized_loss_function, L_inf_norm, gmsd_loss
+from lib.model.losses import DSSIMObjective, mask_penalized_loss, gradient_loss, generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
 from plugins.train._config import Config
@@ -280,8 +280,8 @@ class ModelBase():
                      'SSIM':                   DSSIMObjective(),
                      'GMSD':                   gmsd_loss,
                      'Total_Variation':        gradient_loss,
-                     'Smooth_L1':              generalized_loss_function,
-                     'L_inf_norm':             L_inf_norm}
+                     'Smooth_L1':              generalized_loss,
+                     'l_inf_norm':             l_inf_norm}
         img_loss_config = self.config.get("image_loss_function", "MAE")
         mask_loss_config = self.config.get("mask_loss_function", "MSE")
 

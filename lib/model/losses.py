@@ -336,141 +336,139 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
 # <<< END: from Shoanlu GAN >>> #
 
 
-def generalized_loss_function(y_true, y_pred, a = 1.0, c=1.0/255.0):
-    '''
+def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
+    """
     generalized function used to return a large variety of mathematical loss functions
     primary benefit is smooth, differentiable version of L1 loss
 
     Barron, J. A More General Robust Loss Function
     https://arxiv.org/pdf/1701.03077.pdf
-    
     Parameters:
-        a: penalty factor. larger number give larger weight to large deviations
-        c: scale factor used to adjust to the input scale (i.e. inputs of mean 1e-4 or 256 )
-
+        alpha: penalty factor. larger number give larger weight to large deviations
+        beta: scale factor used to adjust to the input scale (i.e. inputs of mean 1e-4 or 256 )
     Return:
         a loss value from the results of function(y_pred - y_true)
-    
     Example:
         a=1.0, x>>c , c=1.0/255.0 will give a smoothly differentiable version of L1 / MAE loss
-        a=1.999999 (lim as a->2), c=1.0/255.0 will give L2 / RMSE loss
-    '''
-    x = y_pred - y_true
-    loss = (K.abs(2.0-a)/a) * ( K.pow( K.pow(x/c, 2.0)/K.abs(2.0-a) + 1.0 , (a/2.0)) - 1.0 )
-    loss = K.mean(loss, axis=-1) * c
+        a=1.999999 (lim as a->2), beta=1.0/255.0 will give L2 / RMSE loss
+    """
+    diff = y_pred - y_true
+    loss = (K.abs(2.0-alpha)/alpha) * (K.pow(K.pow(diff/beta, 2.0) / K.abs(2.0-alpha) + 1.0, (alpha/2.0)) - 1.0)
+    loss = K.mean(loss, axis=-1) * beta
     return loss
 
-def L_p_norm(y_true, y_pred, p = np.inf):
-    """ Calculate the L-p norm as a loss function, valid choics of p are [0,1,no.inf] """
+def l_p_norm(y_true, y_pred, p=np.inf):
+    """
+    Calculate the L-p norm as a loss function,
+    valid choics of p are [0,1,no.inf]
+    """
     diff = y_true - y_pred
     loss = tf.norm(diff, ord=p, axis=-1)
     return loss
 
-def L_inf_norm(y_true, y_pred):
+def l_inf_norm(y_true, y_pred):
     """ Calculate the L-inf norm as a loss function """
     diff = K.abs(y_true - y_pred)
-    max_loss = K.max(diff, axis=(1,2),keepdims=True)
+    max_loss = K.max(diff, axis=(1, 2), keepdims=True)
     loss = K.mean(max_loss, axis=-1)
     return loss
 
 def gradient_loss(y_true, y_pred):
-    '''
-    Calculates the first and second order gradient difference between pixels of an image in the x and y dimensions.
-    These gradients are then compared between the ground truth and the predicted image and the difference is taken.
-    When used as a loss, its minimization will result in predicted images approaching the same level of sharpness
-    / blurriness as the ground truth.
-    
-    TV+TV2 Regularization with Nonconvex Sparseness-Inducing Penalty for Image Restoration, Chengwu Lu & Hua Huang, 2014
+    """
+    Calculates the first and second order gradient difference between pixels of
+    an image in the x and y dimensions. These gradients are then compared between
+    the ground truth and the predicted image and the difference is taken. When
+    used as a loss, its minimization will result in predicted images approaching
+    the same level of sharpness / blurriness as the ground truth.
+
+    TV+TV2 Regularization with Nonconvex Sparseness-Inducing Penalty
+    for Image Restoration, Chengwu Lu & Hua Huang, 2014
     (http://downloads.hindawi.com/journals/mpe/2014/790547.pdf)
-
     Parameters:
-        y_true: The predicted frames at each scale.
+        y_true: The predicted frames at each scale
         y_true: The ground truth frames at each scale
-        
     Return:
-        The GD loss.
-    '''
+        The GD loss
+    """
 
-    def diff_x(X):
-        Xleft = X[:, :, 1:2, :] - X[:, :, 0:1, :]
-        Xinner = X[:, :, 2:, :] - X[:, :, :-2, :]
-        Xright = X[:, :, -1:, :] - X[:, :, -2:-1, :]
-        Xout = K.concatenate([Xleft, Xinner, Xright], axis=2)
-        return Xout * 0.5
+    def diff_x(img):
+        x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
+        x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
+        x_right = img[:, :, -1:, :] - img[:, :, -2:-1, :]
+        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
+        return x_out * 0.5
 
-    def diff_y(X):
-        Xtop = X[:, 1:2, :, :] - X[:, 0:1, :, :]
-        Xinner = X[:, 2:, :, :] - X[:, :-2, :, :]
-        Xbot = X[:, -1:, :, :] - X[:, -2:-1, :, :]
-        Xout = K.concatenate([Xtop, Xinner, Xbot], axis=1)
-        return Xout * 0.5
+    def diff_y(img):
+        y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
+        y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
+        y_bot = img[:, -1:, :, :] - img[:, -2:-1, :, :]
+        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
+        return y_out * 0.5
 
-    def diff_xx(X):
-        Xleft = X[:, :, 1:2, :] + X[:, :, 0:1, :]
-        Xinner = X[:, :, 2:, :] + X[:, :, :-2, :]
-        Xright = X[:, :, -1:, :] + X[:, :, -2:-1, :]
-        Xout = K.concatenate([Xleft, Xinner, Xright], axis=2)
-        return Xout - 2.0 * X
+    def diff_xx(img):
+        x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
+        x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
+        x_right = img[:, :, -1:, :] + img[:, :, -2:-1, :]
+        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
+        return x_out - 2.0 * img
 
-    def diff_yy(X):
-        Xtop = X[:, 1:2, :, :] + X[:, 0:1, :, :]
-        Xinner = X[:, 2:, :, :] + X[:, :-2, :, :]
-        Xbot = X[:, -1:, :, :] + X[:, -2:-1, :, :]
-        Xout = K.concatenate([Xtop, Xinner, Xbot], axis=1)
-        return Xout - 2.0 * X
+    def diff_yy(img):
+        y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
+        y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
+        y_bot = img[:, -1:, :, :] + img[:, -2:-1, :, :]
+        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
+        return y_out - 2.0 * img
 
-    def diff_xy(X):
+    def diff_xy(img):
         #xout1
-        top_left = X[:, 1:2, 1:2, :] + X[:,0:1, 0:1, :]
-        inner_left = X[:, 2:, 1:2, :] + X[:, :-2, 0:1, :]
-        bot_left = X[:, -1:, 1:2, :] + X[:, -2:-1, 0:1, :]
-        X_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
+        top_left = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
+        inner_left = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
+        bot_left = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
+        xy_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
 
-        top_mid = X[:, 1:2, 2:, :] + X[:, 0:1, :-2, :]     
-        mid_mid = X[:, 2:, 2:, :] + X[:, :-2, :-2, :]
-        bot_mid = X[:, -1:, 2:, :] + X[:, -2:-1, :-2, :]
-        X_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
+        top_mid = img[:, 1:2, 2:, :] + img[:, 0:1, :-2, :]
+        mid_mid = img[:, 2:, 2:, :] + img[:, :-2, :-2, :]
+        bot_mid = img[:, -1:, 2:, :] + img[:, -2:-1, :-2, :]
+        xy_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
 
-        top_right = X[:, 1:2, -1:, :] + X[:, 0:1, -2:-1, :]
-        inner_right = X[:, 2:, -1:, :] + X[:, :-2, -2:-1, :]
-        bot_right = X[:, -1:, -1:, :] + X[:, -2:-1, -2:-1, :]
-        X_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
+        top_right = img[:, 1:2, -1:, :] + img[:, 0:1, -2:-1, :]
+        inner_right = img[:, 2:, -1:, :] + img[:, :-2, -2:-1, :]
+        bot_right = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
+        xy_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
 
         #Xout2
-        top_left = X[:, 0:1, 1:2, :] + X[:, 1:2, 0:1, :]
-        inner_left = X[:, :-2, 1:2, :] + X[:, 2:, 0:1, :]
-        bot_left = X[:, -2:-1, 1:2, :] + X[:, -1:, 0:1, :]
-        X_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
+        top_left = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
+        inner_left = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
+        bot_left = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
+        xy_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
 
-        top_mid = X[:, 0:1, 2:, :] + X[:, 1:2, :-2, :]
-        mid_mid = X[:, :-2, 2:, :] + X[:, 2:, :-2, :]
-        bot_mid = X[:, -2:-1, 2:, :] + X[:, -1:, :-2, :]
-        X_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
+        top_mid = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
+        mid_mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
+        bot_mid = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
+        xy_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
 
-        top_right = X[:, 0:1, -1:, :] + X[:, 1:2, -2:-1, :]
-        inner_right = X[:, :-2, -1:, :] + X[:, 2:, -2:-1, :]
-        bot_right = X[:, -2:-1, -1:, :] + X[:, -1:, -2:-1, :]
-        X_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
+        top_right = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
+        inner_right = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
+        bot_right = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
+        xy_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
 
-        Xout1 = K.concatenate([X_left, X_mid, X_right], axis=2)
-        Xout2 = K.concatenate([X_left, X_mid, X_right], axis=2)
+        xy_out1 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        xy_out2 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        return (xy_out1 - xy_out2) * 0.25
 
-        return (Xout1 - Xout2) * 0.25
-
-    TV_weight = 1.0
-    TV2_weight = 1.0
+    tv_weight = 1.0
+    tv2_weight = 1.0
     loss = 0.0
-    loss += TV_weight * (generalized_loss_function(diff_x(y_true), diff_x(y_pred), a=1.9999) +
-                         generalized_loss_function(diff_y(y_true), diff_y(y_pred), a=1.9999))
-    loss += TV2_weight * (generalized_loss_function(diff_xx(y_true), diff_xx(y_pred), a=1.9999) +
-                          generalized_loss_function(diff_yy(y_true), diff_yy(y_pred), a=1.9999) +
-                          generalized_loss_function(diff_xy(y_true), diff_xy(y_pred), a=1.9999) * 2.0)
-    loss = loss / (TV_weight + TV2_weight)
+    loss += tv_weight * (generalized_loss(diff_x(y_true), diff_x(y_pred), alpha=1.9999) +
+                         generalized_loss(diff_y(y_true), diff_y(y_pred), alpha=1.9999))
+    loss += tv2_weight * (generalized_loss(diff_xx(y_true), diff_xx(y_pred), alpha=1.9999) +
+                          generalized_loss(diff_yy(y_true), diff_yy(y_pred), alpha=1.9999) +
+                          generalized_loss(diff_xy(y_true), diff_xy(y_pred), alpha=1.9999) * 2.)
+    loss = loss / (tv_weight + tv2_weight)
     #loss = K.mean(loss / (TV_weight + TV2_weight), axis=(1, 2), keepdims=True)
     #loss += K.square(K.mean(y_true - y_pred, axis=(1, 2), keepdims=True))
     #loss = K.mean(loss, axis=-1)
-    print(K.int_shape(loss))
-
+    #TODO simplify to use MSE instead
     return loss
 
 
@@ -492,11 +490,11 @@ def scharr_edges(image, magnitude):
     image_shape = K.shape(image)
 
     # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
-    matrix = [[[[0.00070, 0.0007]],[[0.00520, 0.0037]],[[0.03700, 0.]],[[0.00520, -0.0037]],[[0.00070, -0.0007]]],
-              [[[0.00370, 0.0052]],[[0.11870, 0.1187]],[[0.25890, 0.]],[[0.11870, -0.1187]],[[0.00370, -0.0052]]],
-              [[[0.00000, 0.0370]],[[0.00000, 0.2589]],[[0.00000, 0.]],[[0.00000, -0.2589]],[[0.00000, -0.0370]]],
-              [[[-0.0037, 0.0052]],[[-0.1187, 0.1187]],[[-0.2589, 0.]],[[-0.1187, -0.1187]],[[-0.0037, -0.0052]]],
-              [[[-0.0007, 0.0007]],[[-0.0052, 0.0037]],[[-0.0370, 0.]],[[-0.0052, -0.0037]],[[-0.0007, -0.0007]]]]
+    matrix = [[[[0.00070, 0.0007]], [[0.00520, 0.0037]], [[0.03700, 0.]], [[0.00520, -0.0037]], [[0.00070, -0.0007]]],
+              [[[0.00370, 0.0052]], [[0.11870, 0.1187]], [[0.25890, 0.]], [[0.11870, -0.1187]], [[0.00370, -0.0052]]],
+              [[[0.00000, 0.0370]], [[0.00000, 0.2589]], [[0.00000, 0.]], [[0.00000, -0.2589]], [[0.00000, -0.0370]]],
+              [[[-0.0037, 0.0052]], [[-0.1187, 0.1187]], [[-0.2589, 0.]], [[-0.1187, -0.1187]], [[-0.0037, -0.0052]]],
+              [[[-0.0007, 0.0007]], [[-0.0052, 0.0037]], [[-0.0370, 0.]], [[-0.0052, -0.0037]], [[-0.0007, -0.0007]]]]
     num_kernels = [2]
     kernels = K.constant(matrix, dtype='float32')
     kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
@@ -512,32 +510,30 @@ def scharr_edges(image, magnitude):
         shape = K.concatenate([image_shape, num_kernels], axis=0)
         output = K.reshape(output, shape=shape)
         output.set_shape(static_image_shape.concatenate(num_kernels))
-        output = tf.atan(K.squeeze(output[:,:,:,:,0] / output[:,:,:,:,1]))
-    # magnitude of edges
+        output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1]))
+    # magnitude of edges -- unified x & y edges don't work well with NN
     #output = K.sqrt(K.sum(K.square(output),axis=-1))
-
     return output
 
 
-def gmsd_loss(y_true,y_pred):
-    '''
+def gmsd_loss(y_true, y_pred):
+    """
     Improved image quality metric over MS-SSIM with easier calc
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
-    '''
+    """
     true_edge = scharr_edges(y_true, True)
     pred_edge = scharr_edges(y_pred, True)
-    c = 0.0025
+    ephsilon = 0.0025
     upper = 2.0 * true_edge * pred_edge
     lower = K.square(true_edge) + K.square(pred_edge)
-    GMS = (upper + c) / (lower + c)
-    GMSD = K.std(GMS, axis=(1, 2, 3), keepdims=True)
-    GMSD = K.squeeze(GMSD, axis=-1)
+    gms = (upper + ephsilon) / (lower + ephsilon)
+    gmsd = K.std(gms, axis=(1, 2, 3), keepdims=True)
+    gmsd = K.squeeze(gmsd, axis=-1)
+    return gmsd
 
-    return GMSD
 
-
-def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.2726)):
+def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.2726)):
     '''
     Computes the MS-SSIM between img1 and img2.
     This function assumes that `img1` and `img2` are image batches, i.e. the last
@@ -592,13 +588,15 @@ def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.27
 
         # TODO(sjhwang): Check if shape1[:-3] and shape2[:-3] are broadcastable.
         checks = []
-        checks.append(tf.Assert(tf.greater_equal(tf.size(shape1), 3),[shape1, shape2], summarize=10))
-        checks.append(tf.Assert(tf.reduce_all(tf.equal(shape1[-3:], shape2[-3:])),[shape1, shape2], summarize=10))
-        
+        checks.append(tf.Assert(tf.greater_equal(tf.size(shape1), 3),
+                                [shape1, shape2], summarize=10))
+        checks.append(tf.Assert(tf.reduce_all(tf.equal(shape1[-3:], shape2[-3:])),
+                                [shape1, shape2], summarize=10))
+
         return shape1, shape2, checks
 
     def _ssim_per_channel(img1, img2, max_val=1.0):
-        '''
+        """
         Computes SSIM index between img1 and img2 per color channel.
         This function matches the standard SSIM implementation from:
         Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004). Image
@@ -615,45 +613,41 @@ def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.27
         Returns:
         A pair of tensors containing and channel-wise SSIM and contrast-structure
         values. The shape is [..., channels].
-        '''
-        
+        """
+
         def _fspecial_gauss(size, sigma):
-            '''
-            Function to mimic the 'fspecial' gaussian MATLAB function.
-            '''
+            """ Function to mimic the 'fspecial' gaussian MATLAB function. """
             size = tf.convert_to_tensor(size, 'int32')
             sigma = tf.convert_to_tensor(sigma)
-
             coords = tf.cast(tf.range(size), sigma.dtype)
             coords -= tf.cast(size - 1, sigma.dtype) / 2.0
 
-            g = tf.square(coords)
-            g *= -0.5 / tf.square(sigma)
+            gauss = tf.square(coords)
+            gauss *= -0.5 / tf.square(sigma)
+            gauss = tf.reshape(gauss, shape=[1, -1]) + tf.reshape(gauss, shape=[-1, 1])
+            gauss = tf.reshape(gauss, shape=[1, -1])  # For tf.nn.softmax().
+            gauss = tf.nn.softmax(gauss)
+            return tf.reshape(gauss, shape=[size, size, 1, 1])
 
-            g = tf.reshape(g, shape=[1, -1]) + tf.reshape(g, shape=[-1, 1])
-            g = tf.reshape(g, shape=[1, -1])  # For tf.nn.softmax().
-            g = tf.nn.softmax(g)
-            return tf.reshape(g, shape=[size, size, 1, 1])
-
-        def _ssim_helper(x, y, max_val, kernel, compensation=1.0):
-            '''
+        def _ssim_helper(img1, img2, max_val, kernel, compensation=1.0):
+            """
             Helper function for computing SSIM.
             SSIM estimates covariances with weighted sums.  The default parameters
             use a biased estimate of the covariance:
             Suppose `reducer` is a weighted sum, then the mean estimators are
-            \mu_x = \sum_i w_i x_i,
-            \mu_y = \sum_i w_i y_i,
+            mu_x = sum_i w_i x_i,
+            mu_y = sum_i w_i y_i,
             where w_i's are the weighted-sum weights, and covariance estimator is
-            cov_{xy} = \sum_i w_i (x_i - \mu_x) (y_i - \mu_y)
-            with assumption \sum_i w_i = 1. This covariance estimator is biased, since
-            E[cov_{xy}] = (1 - \sum_i w_i ^ 2) Cov(X, Y).
+            cov_{xy} = sum_i w_i (x_i - mu_x) (y_i - mu_y)
+            with assumption sum_i w_i = 1. This covariance estimator is biased, since
+            E[cov_{xy}] = (1 - sum_i w_i ^ 2) Cov(X, Y).
             For SSIM measure with unbiased covariance estimators, pass as `compensation`
-            argument (1 - \sum_i w_i ^ 2).
+            argument (1 - sum_i w_i ^ 2).
             Arguments:
-            x: First set of images.
-            y: Second set of images.
+            img1: First set of images.
+            img2: Second set of images.
             reducer: Function that computes 'local' averages from set of images.
-              For non-covolutional version, this is usually tf.reduce_mean(x, [1, 2]),
+              For non-covolutional version, this is usually tf.reduce_mean(img1, [1, 2]),
               and for convolutional version, this is usually tf.nn.avg_pool or
               tf.nn.conv2d with weighted-sum kernel.
             max_val: The dynamic range (i.e., the difference between the maximum
@@ -661,56 +655,57 @@ def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.27
             compensation: Compensation factor. See above.
             Returns:
             A pair containing the luminance measure, and the contrast-structure measure.
-            '''
+            """
 
-            def reducer(x, kernel):
-                shape = tf.shape(x)
-                x = tf.reshape(x, shape=tf.concat([[-1], shape[-3:]], 0))
-                y = tf.nn.depthwise_conv2d(x, kernel, strides=[1, 1, 1, 1], padding='VALID')
-                return tf.reshape(y, tf.concat([shape[:-3],tf.shape(y)[1:]], 0))
+            def reducer(img1, kernel):
+                shape = tf.shape(img1)
+                img1 = tf.reshape(img1, shape=tf.concat([[-1], shape[-3:]], 0))
+                img2 = tf.nn.depthwise_conv2d(img1, kernel, strides=[1, 1, 1, 1], padding='VALID')
+                return tf.reshape(img2, tf.concat([shape[:-3], tf.shape(img2)[1:]], 0))
 
-            _SSIM_K1 = 0.01
-            _SSIM_K2 = 0.03
-        
-            c1 = (_SSIM_K1 * max_val) ** 2
-            c2 = (_SSIM_K2 * max_val) ** 2
+            _ssim_k1 = 0.01
+            _ssim_k2 = 0.03
+            c_one = (_ssim_k1 * max_val) ** 2
+            c_two = (_ssim_k2 * max_val) ** 2
 
             # SSIM luminance measure is
-            # (2 * mu_x * mu_y + c1) / (mu_x ** 2 + mu_y ** 2 + c1).
-            mean0 = reducer(x, kernel)
-            mean1 = reducer(y, kernel)
+            # (2 * mu_x * mu_y + c_one) / (mu_x ** 2 + mu_y ** 2 + c_one).
+            mean0 = reducer(img1, kernel)
+            mean1 = reducer(img2, kernel)
             num0 = mean0 * mean1 * 2.0
             den0 = tf.square(mean0) + tf.square(mean1)
-            luminance = (num0 + c1) / (den0 + c1)
+            luminance = (num0 + c_one) / (den0 + c_one)
 
             # SSIM contrast-structure measure is
-            #   (2 * cov_{xy} + c2) / (cov_{xx} + cov_{yy} + c2).
+            #   (2 * cov_{xy} + c_two) / (cov_{xx} + cov_{yy} + c_two).
             # Note that `reducer` is a weighted sum with weight w_k, \sum_i w_i = 1, then
             #   cov_{xy} = \sum_i w_i (x_i - \mu_x) (y_i - \mu_y)
             #          = \sum_i w_i x_i y_i - (\sum_i w_i x_i) (\sum_j w_j y_j).
-            num1 = reducer(x * y, kernel) * 2.0
-            den1 = reducer(tf.square(x) + tf.square(y), kernel)
-            c2 *= compensation
-            cs = (num1 - num0 + c2) / (den1 - den0 + c2)
+            num1 = reducer(img1 * img2, kernel) * 2.0
+            den1 = reducer(tf.square(img1) + tf.square(img2), kernel)
+            c_two *= compensation
+            c_s = (num1 - num0 + c_two) / (den1 - den0 + c_two)
 
             # SSIM score is the product of the luminance and contrast-structure measures.
-            return luminance, cs
-        
-        filter_size = tf.constant(9, dtype='int32')  # changed from 11 to 9 due 
+            return luminance, c_s
+
+        filter_size = tf.constant(9, dtype='int32')  # changed from 11 to 9 due
         filter_sigma = tf.constant(1.5, dtype=img1.dtype)
 
         shape1, shape2 = tf.shape_n([img1, img2])
-        checks = [tf.Assert(tf.reduce_all(tf.greater_equal(shape1[-3:-1], filter_size)),[shape1, filter_size], summarize=8),
-                  tf.Assert(tf.reduce_all(tf.greater_equal(shape2[-3:-1], filter_size)),[shape2, filter_size], summarize=8)]
+        checks = [tf.Assert(tf.reduce_all(tf.greater_equal(shape1[-3:-1], filter_size)),
+                            [shape1, filter_size], summarize=8),
+                  tf.Assert(tf.reduce_all(tf.greater_equal(shape2[-3:-1], filter_size)),
+                            [shape2, filter_size], summarize=8)]
 
         # Enforce the check to run before computation.
         with tf.control_dependencies(checks):
             img1 = tf.identity(img1)
-            
+
         # TODO(sjhwang): Try to cache kernels and compensation factor.
         kernel = _fspecial_gauss(filter_size, filter_sigma)
         kernel = tf.tile(kernel, multiples=[1, 1, shape1[-1], 1])
-        
+
         # The correct compensation factor is `1.0 - tf.reduce_sum(tf.square(kernel))`,
         # but to match MATLAB implementation of MS-SSIM, we use 1.0 instead.
         compensation = 1.0
@@ -718,14 +713,14 @@ def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.27
         # TODO(sjhwang): Try FFT.
         # TODO(sjhwang): Gaussian kernel is separable in space. Consider applying
         #   1-by-n and n-by-1 Gaussain filters instead of an n-by-n filter.
-        
-        luminance, cs = _ssim_helper(img1, img2, max_val, kernel, compensation)
-        
+
+        luminance, c_s = _ssim_helper(img1, img2, max_val, kernel, compensation)
+
         # Average over the second and the third from the last: height, width.
         axes = tf.constant([-3, -2], dtype='int32')
-        ssim_val = tf.reduce_mean(luminance * cs, axes)
-        cs = tf.reduce_mean(cs, axes)
-        return ssim_val, cs
+        ssim_val = tf.reduce_mean(luminance * c_s, axes)
+        c_s = tf.reduce_mean(c_s, axes)
+        return ssim_val, c_s
 
     def do_pad(images, remainder):
         padding = tf.expand_dims(remainder, -1)
@@ -763,35 +758,42 @@ def ms_ssim(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.27
 
     mcs = []
     for k in range(len(power_factors)):
-          with tf.name_scope(None, 'Scale%d' % k, imgs):
+        with tf.name_scope(None, 'Scale%d' % k, imgs):
             if k > 0:
-              # Avg pool takes rank 4 tensors. Flatten leading dimensions.
-              flat_imgs = [tf.reshape(x, tf.concat([[-1], t], 0)) for x, t in zip(imgs, tails)]
+                # Avg pool takes rank 4 tensors. Flatten leading dimensions.
+                zipped = zip(imgs, tails)
+                flat_imgs = [tf.reshape(x, tf.concat([[-1], t], 0)) for x, t in zipped]
 
-              remainder = tails[0] % divisor_tensor
-              need_padding = tf.reduce_any(tf.not_equal(remainder, 0))
-              padded = tf.cond(need_padding,lambda: do_pad(flat_imgs, remainder),
-                                            lambda: flat_imgs)
+                remainder = tails[0] % divisor_tensor
+                need_padding = tf.reduce_any(tf.not_equal(remainder, 0))
+                padded = tf.cond(need_padding,
+                                 lambda: do_pad(flat_imgs, remainder), lambda: flat_imgs)
 
-              downscaled = [tf.nn.avg_pool(x, ksize=divisor, strides=divisor, padding='VALID')
-                            for x in padded]
-              tails = [x[1:] for x in tf.shape_n(downscaled)]
-              imgs = [tf.reshape(x, tf.concat([h, t], 0)) for x, h, t in zip(downscaled, heads, tails)]
+                downscaled = [tf.nn.avg_pool(x,
+                                             ksize=divisor,
+                                             strides=divisor,
+                                             padding='VALID') for x in padded]
+                tails = [x[1:] for x in tf.shape_n(downscaled)]
+                zipper = zip(downscaled, heads, tails)
+                imgs = [tf.reshape(x, tf.concat([h, t], 0)) for x, h, t in zipper]
 
             # Overwrite previous ssim value since we only need the last one.
-            ssim_per_channel, cs = _ssim_per_channel(*imgs, max_val=max_val)
-            mcs.append(tf.nn.relu(cs))
+            ssim_per_channel, c_s = _ssim_per_channel(*imgs, max_val=max_val)
+            mcs.append(tf.nn.relu(c_s))
 
-    # Remove the cs score for the last scale. In the MS-SSIM calculation,
-    # we use the l(p) at the highest scale. l(p) * cs(p) is ssim(p).
-    mcs.pop()  # Remove the cs score for the last scale.
-    mcs_and_ssim = tf.stack(mcs + [tf.nn.relu(ssim_per_channel)],axis=-1)
+    # Remove the c_s score for the last scale. In the MS-SSIM calculation,
+    # we use the l(p) at the highest scale. l(p) * c_s(p) is ssim(p).
+    mcs.pop()  # Remove the c_s score for the last scale.
+    mcs_and_ssim = tf.stack(mcs + [tf.nn.relu(ssim_per_channel)], axis=-1)
     # Take weighted geometric mean across the scale axis.
-    ms_ssim = tf.reduce_prod(tf.pow(mcs_and_ssim, power_factors),[-1])
+    ms_ssim = tf.reduce_prod(tf.pow(mcs_and_ssim, power_factors), [-1])
 
     return tf.reduce_mean(ms_ssim, [-1])  # Avg over color channels.
 
 
-def ms_ssim_loss(y_true,y_pred):
-    MSSSIM = K.expand_dims(K.expand_dims(1.0 - ms_ssim(y_true, y_pred),axis=-1), axis=-1)
-    return K.tile(MSSSIM,[1,64,64]) # need to expand to [1,height,width] dimensions for Keras ... modify to not be hard-coded
+def ms_ssim_loss(y_true, y_pred):
+    """ Keras loss function for MS-SSIM """
+    expanded = K.expand_dims(1.0 - ms_ssim_calc(y_true, y_pred), axis=-1)
+    loss = K.expand_dims(expanded, axis=-1)
+    # need to expand to [1,height,width] dimensions for Keras. modify to not be hard-coded
+    return K.tile(loss, [1, 64, 64]) 
