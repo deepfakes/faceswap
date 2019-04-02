@@ -16,7 +16,6 @@ from keras.engine import InputSpec, Layer
 from keras.utils import conv_utils
 from keras.utils.generic_utils import get_custom_objects
 from keras import initializers
-from keras.layers import ZeroPadding2D
 from keras.layers.pooling import _GlobalPooling2D
 
 
@@ -117,6 +116,7 @@ class Scale(Layer):
     """
     def __init__(self, weights=None, axis=-1, gamma_init='zero', **kwargs):
         self.axis = axis
+        self.gamma = None
         self.gamma_init = initializers.get(gamma_init)
         self.initial_weights = weights
         super(Scale, self).__init__(**kwargs)
@@ -267,6 +267,22 @@ class SubPixelUpscaling(Layer):
 
 
 class ReflectionPadding2D(Layer):
+    """Reflection-padding layer for 2D input (e.g. picture).
+    This layer can add rows and columns
+    at the top, bottom, left and right side of an image tensor.
+    Input shape:  ONLY WORKS ON CHANNELS LAST NOW
+      4D tensor with shape:
+      - If `data_format` is `"channels_last"`:
+          `(batch, rows, cols, channels)`
+      - If `data_format` is `"channels_first"`:
+          `(batch, channels, rows, cols)`
+    Output shape:
+      4D tensor with shape:
+      - If `data_format` is `"channels_last"`:
+          `(batch, padded_rows, padded_cols, channels)`
+      - If `data_format` is `"channels_first"`:
+          `(batch, channels, padded_rows, padded_cols)`
+    """
     def __init__(self, stride=2, kernel_size=5, **kwargs):
         '''
         # Arguments
@@ -285,13 +301,13 @@ class ReflectionPadding2D(Layer):
         """ If you are using "channels_last" configuration"""
         input_shape = self.input_spec[0].shape
         in_width, in_height = input_shape[2], input_shape[1]
-        kernel_width, kernel_height  = self.kernel_size, self.kernel_size
+        kernel_width, kernel_height = self.kernel_size, self.kernel_size
 
-        if (in_height % self.stride == 0):
+        if (in_height % self.stride) == 0:
             padding_height = max(kernel_height - self.stride, 0)
         else:
             padding_height = max(kernel_height - (in_height % self.stride), 0)
-        if (in_width % self.stride == 0):
+        if (in_width % self.stride) == 0:
             padding_width = max(kernel_width - self.stride, 0)
         else:
             padding_width = max(kernel_width- (in_width % self.stride), 0)
@@ -301,16 +317,16 @@ class ReflectionPadding2D(Layer):
                 input_shape[2] + padding_width,
                 input_shape[3])
 
-    def call(self, x, mask=None):
+    def call(self, x):
         input_shape = self.input_spec[0].shape
         in_width, in_height = input_shape[2], input_shape[1]
-        kernel_width, kernel_height  = self.kernel_size, self.kernel_size
+        kernel_width, kernel_height = self.kernel_size, self.kernel_size
 
-        if (in_height % self.stride == 0):
+        if (in_height % self.stride) == 0:
             padding_height = max(kernel_height - self.stride, 0)
         else:
             padding_height = max(kernel_height - (in_height % self.stride), 0)
-        if (in_width % self.stride == 0):
+        if (in_width % self.stride) == 0:
             padding_width = max(kernel_width - self.stride, 0)
         else:
             padding_width = max(kernel_width- (in_width % self.stride), 0)
@@ -320,17 +336,16 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return tf.pad(x, [[0,0],
+        return tf.pad(x, [[0, 0],
                           [padding_top, padding_bot],
                           [padding_left, padding_right],
-                          [0,0] ],
-                          'REFLECT')
+                          [0, 0]], 'REFLECT')
 
     def get_config(self):
         config = {'stride': self.stride,
                   'kernel_size': self.kernel_size}
         base_config = super(ReflectionPadding2D, self).get_config()
-        return dict(list(base_config.items()) + list(config.items())) 
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class GlobalMinPooling2D(_GlobalPooling2D):
@@ -360,9 +375,10 @@ class GlobalMinPooling2D(_GlobalPooling2D):
 
     def call(self, inputs):
         if self.data_format == 'channels_last':
-            return K.min(inputs, axis=[1, 2])
+            pooled = K.min(inputs, axis=[1, 2])
         else:
-            return K.min(inputs, axis=[2, 3])
+            pooled = K.min(inputs, axis=[2, 3])
+        return pooled
 
 
 class GlobalStdDevPooling2D(_GlobalPooling2D):
@@ -392,9 +408,10 @@ class GlobalStdDevPooling2D(_GlobalPooling2D):
 
     def call(self, inputs):
         if self.data_format == 'channels_last':
-            return K.std(inputs, axis=[1, 2])
+            pooled = K.std(inputs, axis=[1, 2])
         else:
-            return K.std(inputs, axis=[2, 3])
+            pooled = K.std(inputs, axis=[2, 3])
+        return pooled
 
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
