@@ -206,8 +206,7 @@ class Convert():
     def color_hist_match(self, new, frame, img_mask):
         """ Match the histogram of the color intensity of each channel """
         np.clip(new, 0.0, 255.0, out=new)
-        new = [self.hist_match(new[:, :, c], frame[:, :, c], img_mask[:, :, c]) for c in [0, 1, 2]]
-        new = np.stack(new, axis=2)
+        new = np.stack((self.hist_match(new[:, :, c], frame[:, :, c], img_mask[:, :, c]) for c in [0, 1, 2]), axis=-1)
 
         return new
 
@@ -217,13 +216,12 @@ class Convert():
              for the swap and the original. Match the histogram of the original
              by interpolation
         """
-
-        mask_indices = img_mask.nonzero()
+        mask_indices = np.nonzero(img_mask)
         if len(mask_indices[0]) == 0:
             return new
 
-        m_new = new[mask_indices].ravel()
-        m_frame = frame[mask_indices].ravel()
+        m_new = new[mask_indices]
+        m_frame = frame[mask_indices]
         _, bin_idx, s_counts = np.unique(m_new, return_inverse=True, return_counts=True)
         t_values, t_counts = np.unique(m_frame, return_counts=True)
         s_quants = np.cumsum(s_counts, dtype='float32')
@@ -231,7 +229,7 @@ class Convert():
         s_quants /= s_quants[-1]  # cdf
         t_quants /= t_quants[-1]  # cdf
         interp_s_values = np.interp(s_quants, t_quants, t_values)
-        new.put(mask_indices, interp_s_values[bin_idx])
+        new[mask_indices] = interp_s_values[bin_idx]
 
         return new
 
