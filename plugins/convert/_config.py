@@ -90,3 +90,14 @@ class Config(FaceswapConfig):
                  "algorithm can improve smoothing at a time cost."
                  "\nAdditional passes have exponentially less effect so it's not worth setting "
                  "this too high")
+
+        # << FACE OPTIONS >> #
+        section = "face.match_histogram"
+        self.add_section(title=section,
+                         info="Options for matching the histograms between the source and "
+                              "destination faces")
+        self.add_item(
+            section=section, title="threshold", datatype=int, default=98, rounding=1,
+            min_max=(75, 100),
+            info="Adjust the threshold for histogram matching. Can reduce extreme colors leaking "
+                 "in")

@@ -4,7 +4,8 @@
 # Fix dfaker mask for conversion
 # blur mask along only along forehead
 # vid to vid (sort output order)
-# predicted mask
+# Check if we can remove the resize from predictor
+# test predicted mask
 
 
 import logging
@@ -437,10 +438,8 @@ class Predict():
                 original_faces = self.compile_original_faces(detected_batch)
                 feed_faces = self.compile_feed_faces(original_faces)
                 predicted = self.predict(feed_faces)
-                swapped_faces = predicted[0]
-                masks = None if len(predicted) != 2 else predicted[1]
 
-                self.queue_out_frames(batch, original_faces, swapped_faces, masks)
+                self.queue_out_frames(batch, original_faces, predicted)
 
             faces_seen = 0
             batch = list()
@@ -487,37 +486,35 @@ class Predict():
         if self.input_mask is not None:
             feed.append(np.repeat(self.input_mask, feed_faces.shape[0], axis=0))
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
-        # TODO Handle mask output
+
         predicted = self.predictor(feed)
         predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
-        output = list()
-        for idx, item in enumerate(predicted):
-            logger.trace("Resizing %s", "faces" if idx == 0 else "masks")
-            resized = list()
-            for image in item:
-                resized_image = cv2.resize(  # pylint: disable=no-member
-                    image,
-                    (self.coverage, self.coverage),
-                    interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
-                resized.append(np.clip(resized_image * 255.0, 0.0, 255.0))
-            output.append(np.stack(resized))
+        # Compile masks into alpha channel or keep raw faces
+        predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
 
-        if len(output) == 2:  # Put mask into 3 channel format
-            output[1] = np.tile(output[1][..., None], 3)
+        logger.trace("Resizing faces")
+        resized = list()
+        for image in predicted:
+            resized_image = cv2.resize(  # pylint: disable=no-member
+                image,
+                (self.coverage, self.coverage),
+                interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
+            resized.append(np.clip(resized_image, 0.0, 1.0))
+        resized = np.stack(resized)
 
         # TODO Remove this
 #        from uuid import uuid4
 #        idu = uuid4()
-#        for idx, img in enumerate(output[1]):
-#            f_name = "/home/matt/fake/test/conv_ref/{}_{}.png".format(idu, idx)
-#            cv2.imwrite(f_name, np.tile(img, 3))
+#        for idx, img in enumerate(resized):
+#            f_name = "/home/matt/fake/test/conv_ref/{}_{}_post.png".format(idu, idx)
+#            cv2.imwrite(f_name, img * 255.0)
 
-        logger.trace("Predicted: Shape(s): %s", [predicted.shape for predicted in output])
-        return output
+        logger.trace("Final shape: %s", resized.shape)
+        return resized
 
-    def queue_out_frames(self, batch, original_faces, swapped_faces, masks):
+    def queue_out_frames(self, batch, original_faces, swapped_faces):
         """ Compile the batch back to original frames and put to out_queue """
         logger.trace("Queueing out batch. Batchsize: %s", len(batch))
         pointer = 0
@@ -526,17 +523,14 @@ class Predict():
             if num_faces == 0:
                 item["original_faces"] = np.array(list())
                 item["swapped_faces"] = np.array(list())
-                item["masks"] = np.array(list())
             else:
-                item["original_faces"] = original_faces[pointer:pointer + num_faces]
+                item["original_faces"] = original_faces[pointer:pointer +
+                                                        num_faces].astype("float32") / 255.0
                 item["swapped_faces"] = swapped_faces[pointer:pointer + num_faces]
-                item["masks"] = masks[pointer:pointer +
-                                      num_faces] if masks is not None else np.array(list())
 
             logger.trace("Putting to queue. ('%s', detected_faces: %s, original_faces: %s, "
-                         "swapped_faces: %s, masks: %s)", item["filename"],
-                         len(item["detected_faces"]), item["original_faces"].shape[0],
-                         item["swapped_faces"].shape[0], item["masks"].shape[0])
+                         "swapped_faces: %s)", item["filename"], len(item["detected_faces"]),
+                         item["original_faces"].shape[0], item["swapped_faces"].shape[0])
             self.out_queue.put(item)
             pointer += num_faces
         logger.trace("Queued out batch. Batchsize: %s", len(batch))
