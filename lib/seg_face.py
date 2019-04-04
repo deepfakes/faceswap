@@ -180,16 +180,13 @@ class Mask():
         return mask
         
     def fill_holes(self, mask):
-        holes = mask.copy()
-        cv2.floodFill(holes, None, (0, 0), 1.0)
-        cv2.floodFill(holes, None, (300, 0), 1.0)
-        cv2.floodFill(holes, None, (0, 300), 1.0)
-        cv2.floodFill(holes, None, (300, 300), 1.0)
-        holes = cv2.bitwise_not(holes)
+        inversion = mask.copy()
+        inversion = np.pad(inversion, ((2, 2), (2, 2), (0, 0)), 'constant')
+        cv2.floodFill(inversion, None, (0, 0), 1.0)
+        holes = cv2.bitwise_not(inversion)[2:-2,2:-2]
         filled_mask = cv2.bitwise_or(mask, holes)
-        
         return filled_mask
-        
+
     def mask_model(self, weight_file = None):
     
         # handles grouped convolutions
