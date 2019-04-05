@@ -48,9 +48,7 @@ class Convert():
         self.predictor = Predict(self.disk_io.load_queue, arguments)
         self.converter = PluginLoader.get_converter(self.args.converter)(
             get_folder(self.args.output_dir),
-            self.predictor.training_size,
-            self.predictor.padding,
-            self.predictor.crop,
+            self.predictor.output_size,
             arguments)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -323,7 +321,7 @@ class Predict():
         self.verify_output = False
         self.pre_process = PostProcess(arguments)
         self.model = self.load_model()
-        self.predictor = self.model.converter(self.swap_model)
+        self.predictor = self.model.converter(self.args.swap_model)
         self.queues = dict()
 
         self.thread = MultiThread(self.predict_faces, thread_count=1)
@@ -331,41 +329,26 @@ class Predict():
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self.out_queue)
 
     @property
-    def swap_model(self):
-        """ Return swap model from args """
-        return self.args.swap_model
-
-    @property
-    def training_size(self):
-        """ Return the model training size """
-        return self.model.state.training_size
-
-    @property
-    def coverage(self):
-        """ Coverage for this model """
-        return int(self.model.training_opts["coverage_ratio"] * self.training_size)
-
-    @property
-    def padding(self):
-        """ Padding for this model """
-        return (self.training_size - self.coverage) // 2
-
-    @property
-    def crop(self):
-        """ Crop size for this model """
-        return slice(self.padding, self.training_size - self.padding)
+    def coverage_ratio(self):
+        """ Return coverage ratio from training options """
+        return self.model.training_opts["coverage_ratio"]
 
     @property
     def input_size(self):
-        """ Return the model input size as a h,w tuple"""
-        return (self.model.input_shape[1], self.model.input_shape[0])
+        """ Return the model input size """
+        return self.model.input_shape[0]
+
+    @property
+    def output_size(self):
+        """ Return the model output size """
+        return self.model.output_shape[0]
 
     @property
     def input_mask(self):
         """ Return the input mask, if there is one, else None """
         if not self.model.state.mask_shapes:
             return None
-        mask = np.zeros(self.model.state.mask_shapes[0], np.float32)
+        mask = np.zeros(self.model.state.mask_shapes[0], dtype="float32")
         retval = np.expand_dims(mask, 0)
         return retval
 
@@ -435,11 +418,10 @@ class Predict():
             if batch:
                 detected_batch = [detected_face for item in batch
                                   for detected_face in item["detected_faces"]]
-                original_faces = self.compile_original_faces(detected_batch)
-                feed_faces = self.compile_feed_faces(original_faces)
+                feed_faces = self.compile_feed_faces(detected_batch)
                 predicted = self.predict(feed_faces)
 
-                self.queue_out_frames(batch, original_faces, predicted)
+                self.queue_out_frames(batch, predicted)
 
             faces_seen = 0
             batch = list()
@@ -449,33 +431,27 @@ class Predict():
         self.out_queue.put("EOF")
 
     def load_aligned(self, item):
-        """ Load the original aligned face """
+        """ Load the feed faces and reference output faces """
         logger.trace("Loading aligned faces: '%s'", item["filename"])
         for detected_face in item["detected_faces"]:
-            detected_face.load_aligned(item["image"],
-                                       size=self.training_size,
-                                       align_eyes=False)
+            detected_face.load_feed_face(item["image"],
+                                         size=self.input_size,
+                                         coverage_ratio=self.coverage_ratio,
+                                         dtype="float32")
+            if self.input_size == self.output_size:
+                detected_face.reference = detected_face.feed
+            else:
+                detected_face.load_reference_face(item["image"],
+                                                  size=self.output_size,
+                                                  coverage_ratio=self.coverage_ratio,
+                                                  dtype="float32")
         logger.trace("Loaded aligned faces: '%s'", item["filename"])
 
-    def compile_original_faces(self, detected_faces):
-        """ Crop the original faces based on coverage """
-        logger.trace("Compiling original faces. Batchsize: %s", len(detected_faces))
-        original_faces = np.stack([detected_face.aligned_face[:, :, :3][self.crop, self.crop]
-                                   for detected_face in detected_faces])
-        logger.trace("Compiled Original faces. Shape: %s", original_faces.shape)
-        return original_faces
-
-    def compile_feed_faces(self, original_faces):
+    @staticmethod
+    def compile_feed_faces(detected_faces):
         """ Compile the faces for feeding into the predictor """
-        logger.trace("Compiling feed face. Batchsize: %s", len(original_faces))
-        feed_faces = list()
-        for orig_face in original_faces:
-            feed_face = cv2.resize(orig_face.copy(),  # pylint: disable=no-member
-                                   self.input_size,
-                                   interpolation=cv2.INTER_AREA)  # pylint: disable=no-member
-            feed_face = np.clip(feed_face / 255.0, 0.0, 1.0)
-            feed_faces.append(feed_face)
-        feed_faces = np.stack(feed_faces)
+        logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
+        feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces
 
@@ -491,46 +467,36 @@ class Predict():
         predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
-        # Compile masks into alpha channel or keep raw faces
-        predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
-
-        logger.trace("Resizing faces")
-        resized = list()
-        for image in predicted:
-            resized_image = cv2.resize(  # pylint: disable=no-member
-                image,
-                (self.coverage, self.coverage),
-                interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
-            resized.append(np.clip(resized_image, 0.0, 1.0))
-        resized = np.stack(resized)
-
         # TODO Remove this
 #        from uuid import uuid4
 #        idu = uuid4()
-#        for idx, img in enumerate(resized):
-#            f_name = "/home/matt/fake/test/conv_ref/{}_{}_post.png".format(idu, idx)
-#            cv2.imwrite(f_name, img * 255.0)
+#        for idx, img in enumerate(predicted[0]):
+#            f_name1 = "/home/matt/fake/test/testing/{}_{}_post.png".format(idu, idx)
+#            f_name2 = "/home/matt/fake/test/testing/{}_{}_feed.png".format(idu, idx)
+#            cv2.imwrite(f_name1, img * 255.0)
+#            cv2.imwrite(f_name2, feed[0][idx] * 255.0)
 
-        logger.trace("Final shape: %s", resized.shape)
-        return resized
+        # Compile masks into alpha channel or keep raw faces
+        predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
+        predicted = predicted.astype("float32")
 
-    def queue_out_frames(self, batch, original_faces, swapped_faces):
+        logger.trace("Final shape: %s", predicted.shape)
+        return predicted
+
+    def queue_out_frames(self, batch, swapped_faces):
         """ Compile the batch back to original frames and put to out_queue """
         logger.trace("Queueing out batch. Batchsize: %s", len(batch))
         pointer = 0
         for item in batch:
             num_faces = len(item["detected_faces"])
             if num_faces == 0:
-                item["original_faces"] = np.array(list())
                 item["swapped_faces"] = np.array(list())
             else:
-                item["original_faces"] = original_faces[pointer:pointer +
-                                                        num_faces].astype("float32") / 255.0
                 item["swapped_faces"] = swapped_faces[pointer:pointer + num_faces]
 
-            logger.trace("Putting to queue. ('%s', detected_faces: %s, original_faces: %s, "
-                         "swapped_faces: %s)", item["filename"], len(item["detected_faces"]),
-                         item["original_faces"].shape[0], item["swapped_faces"].shape[0])
+            logger.trace("Putting to queue. ('%s', detected_faces: %s, swapped_faces: %s)",
+                         item["filename"], len(item["detected_faces"]),
+                         item["swapped_faces"].shape[0])
             self.out_queue.put(item)
             pointer += num_faces
         logger.trace("Queued out batch. Batchsize: %s", len(batch))

@@ -14,27 +14,18 @@ from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Option to tighten/loosen mask in match histogram
-
 
 class Convert():
     """ Swap a source face with a target """
-    def __init__(self, output_dir, training_size, padding, crop, arguments):
-        logger.debug("Initializing %s: (output_dir: '%s', training_size: %s, padding: %s, "
-                     "crop: %s, arguments: %s)", self.__class__.__name__, output_dir,
-                     training_size, padding, crop, arguments)
+    def __init__(self, output_dir, output_size, arguments):
+        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  arguments: %s)",
+                     self.__class__.__name__, output_dir, output_size, arguments)
         self.config = Config(None)
-        self.crop = crop
         self.output_dir = output_dir
         self.args = arguments
-        self.box = Box(training_size, padding, self.config)
-        self.mask = Mask(arguments.mask_type,
-                         training_size,
-                         padding,
-                         crop,
-                         arguments.erosion_size,
-                         self.config)
-        self.pre_adjustments = PrePlacementAdjustments(training_size, arguments, self.config)
+        self.box = Box(output_size, self.config)
+        self.mask = Mask(arguments.mask_type, output_size, arguments.erosion_size, self.config)
+        self.pre_adjustments = PreWarpAdjustments(arguments, self.config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_config(self, section):
@@ -58,7 +49,7 @@ class Convert():
 
             try:
                 image = self.patch_image(item)
-            except Exception as err:
+            except Exception as err:  # pylint: disable=broad-except
                 # Log error and output original frame
                 logger.error("Failed to convert image: '%s'. Reason: %s",
                              item["filename"], str(err))
@@ -84,8 +75,8 @@ class Convert():
         """ Patch the image """
         logger.trace("Patching image: '%s'", predicted["filename"])
         frame_size = (predicted["image"].shape[1], predicted["image"].shape[0])
-        new_images, masks = self.get_new_image(predicted, frame_size)
-        patched_face = self.apply_fixes(predicted, new_images, masks)
+        new_image = self.get_new_image(predicted, frame_size)
+        patched_face = self.apply_post_warp_fixes(predicted, new_image)
         logger.trace("Patched image: '%s'", predicted["filename"])
         return patched_face
 
@@ -94,59 +85,41 @@ class Convert():
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
 
-        source_faces = [face.aligned_face[:, :, :3].astype("float32") / 255.0
-                        for face in predicted["detected_faces"]]
-        interpolators = [face.adjusted_interpolators for face in predicted["detected_faces"]]
-        placeholders = list()
-        masks = list()
+        placeholder = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
 
-        for idx, new_face in enumerate(predicted["swapped_faces"]):
-            # TODO Check whether old_face can be replaced with a crop of src_face
-            # TODO Crop box - old face reinsertion
-            warped = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
+        for new_face, detected_face in zip(predicted["swapped_faces"],
+                                           predicted["detected_faces"]):
             new_face = new_face[:, :, :3]
+            new_face[:, :, :2] += 0.1
+            src_face = detected_face.reference_face
+
             predicted_mask = new_face[:, :, :-1] if new_face.ndim == 4 else None
-            src_face = source_faces[idx]
-            swapped_face = np.concatenate((src_face, np.zeros(src_face.shape[:2] + (1, ))),
-                                          axis=-1).astype("float32")
-            old_face = predicted["original_faces"][idx]
-            interpolator = interpolators[idx][1]
+            interpolator = detected_face.reference_interpolators[1]
 
-            # Create the box mask in the alpha channel of unwarped face
-            for func in self.box.funcs:
-                logger.trace("Performing function: %s", func)
-                new_face = func(new_face)
+            new_face = self.box.do_actions(old_face=src_face, new_face=new_face)
+            new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
+            new_face = self.pre_adjustments.do_actions(src_face, new_face, raw_mask)
 
-            swapped_face[self.crop, self.crop] = new_face
-            # Place mask into the alpha channel
-            swapped_face = self.get_image_mask(swapped_face,
-                                               predicted["detected_faces"][idx],
-                                               predicted_mask)
             # Warp face with the mask
-            warped = cv2.warpAffine(  # pylint: disable=no-member
-                swapped_face,
-                predicted["detected_faces"][idx].adjusted_matrix,
+            placeholder = cv2.warpAffine(  # pylint: disable=no-member
+                new_face,
+                detected_face.reference_matrix,
                 frame_size,
-                warped,
+                placeholder,
                 flags=cv2.WARP_INVERSE_MAP | interpolator,  # pylint: disable=no-member
                 borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
 
-            warped = np.clip(warped, 0.0, 1.0)
-            # Output face to placeholder and mask to mask list
-            masks.append(np.expand_dims(warped[:, :, -1], axis=2))
-            placeholders.append(np.clip(warped[:, :, :3], 0.0, 1.0))
+            placeholder = np.clip(placeholder, 0.0, 1.0)
 
-        placeholders = np.stack(placeholders) if placeholders else np.array(list())
-        masks = np.stack(masks) if masks else np.array(list())
-        logger.trace("Got filename: '%s'. (placeholders: %s, masks: %s)",
-                     predicted["filename"], placeholders.shape, masks.shape)
+        logger.trace("Got filename: '%s'. (placeholders: %s)",
+                     predicted["filename"], placeholder.shape)
 
-        return placeholders, masks
+        return placeholder
 
     def get_image_mask(self, new_face, detected_face, predicted_mask):
         """ Get the image mask """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
-        mask = self.mask.get_mask(detected_face, predicted_mask)
+        mask, raw_mask = self.mask.get_mask(detected_face, predicted_mask)
         if new_face.shape[2] == 4:
             logger.trace("Combining mask with alpha channel box mask")
             new_face[:, :, -1] = np.minimum(new_face[:, :, -1], mask.squeeze())
@@ -155,22 +128,19 @@ class Convert():
             new_face = np.concatenate((new_face, mask), -1)
         new_face = np.clip(new_face, 0.0, 1.0)
         logger.trace("Got mask. Image shape: %s", new_face.shape)
-        return new_face
+        return new_face, raw_mask
 
-    def apply_fixes(self, predicted, swapped_frames, masks):
-        """ Apply fixes """
-        background = predicted["image"][:, :, :3] / 255.0
-        foreground = np.zeros_like(background)
-
-        for swapped_frame, mask in zip(swapped_frames, masks):
-            swapped_frame = self.pre_adjustments.adjust(background, swapped_frame, mask)
-            foreground += swapped_frame * mask
-            background *= (1.0 - mask)
+    def apply_post_warp_fixes(self, predicted, new_image):
+        """ Apply fixes to the image prior to warping """
+        mask = np.repeat(new_image[:, :, -1][:, :, np.newaxis], 3, axis=-1)
+        foreground = new_image[:, :, :3]
+        background = (predicted["image"][:, :, :3] / 255.0) * (1.0 - mask)
 
         # TODO - force default for args.sharpen_image to ensure it isn't None
         if self.args.sharpen_image is not None and self.args.sharpen_image.lower() != "none":
             foreground = self.sharpen(foreground, self.args.sharpen_image)
 
+        foreground *= mask
         frame = foreground + background
         frame = self.draw_transparent(frame, predicted)
 
@@ -216,12 +186,11 @@ class Box():
         For actions that occur identically for each frame (e.g. blend_box), constants can
         be placed into self.func_constants to be compiled at launch, then referenced for
         each face. """
-    def __init__(self, training_size, padding, config):
-        logger.trace("Initializing %s: (training_size: '%s', crop: %s)", self.__class__.__name__,
-                     training_size, padding)
+    def __init__(self, output_size, config):
+        logger.trace("Initializing %s: (output_size: '%s')", self.__class__.__name__, output_size)
 
         self.config = config
-        self.facesize = training_size - (padding * 2)
+        self.facesize = output_size
         self.func_constants = dict()
         self.funcs = list()
         self.add_functions()
@@ -251,13 +220,15 @@ class Box():
         logger.debug("Crop box added to funcs")
         self.funcs.append(self.crop_box_func)
 
-    def crop_box_func(self, new_face):
+    def crop_box_func(self, **kwargs):
         """ The crop box function """
         logger.trace("Cropping box")
+        new_face = kwargs["new_face"]
+        cropped_face = kwargs["old_face"].copy()
         crop = self.func_constants["crop_box"]
-        new_face = new_face[crop, crop]
+        cropped_face[crop, crop] = new_face[crop, crop]
         logger.trace("Cropped Box")
-        return new_face
+        return cropped_face
 
     def blend_box(self):
         """ Create the blurred mask for the blend box function """
@@ -269,7 +240,7 @@ class Box():
 
         mask_ratio = 1 - (config["blending_box"] / 100)
         erode = slice(int(self.facesize * mask_ratio), -int(self.facesize * mask_ratio))
-        mask = np.zeros((self.facesize, self.facesize, 1))
+        mask = np.zeros((self.facesize, self.facesize, 1)).astype("float32")
         mask[erode, erode] = 1.0
 
         kernel_ratio = config["kernel_size"] / 200
@@ -280,30 +251,38 @@ class Box():
         self.funcs.append(self.blend_box_func)
         logger.debug("Blend box added to funcs")
 
-    def blend_box_func(self, new_face):
+    def blend_box_func(self, **kwargs):
         """ The blend box function. Adds the created mask to the alpha channel """
         logger.trace("Blending box")
+        new_face = kwargs["new_face"]
         mask = np.expand_dims(self.func_constants["blend_box"], axis=-1)
         new_face = np.clip(np.concatenate((new_face, mask), axis=-1), 0.0, 1.0)
         logger.trace("Blended box")
+        return new_face
+
+    def do_actions(self, **kwargs):
+        """ Perform the requested box_functions """
+        logger.trace("Performing box actions")
+        for func in self.funcs:
+            logger.trace("Performing function: %s", func)
+            new_face = func(**kwargs)
+        logger.trace("Performed box actions")
         return new_face
 
 
 class Mask():
     """ Return the requested mask """
 
-    def __init__(self, mask_type, training_size, padding, crop, erosion_percent, config):
+    def __init__(self, mask_type, output_size, erosion_percent, config):
         """ Set requested mask """
-        logger.debug("Initializing %s: (mask_type: '%s', training_size: %s, padding: %s)",
-                     self.__class__.__name__, mask_type, training_size, padding)
+        logger.debug("Initializing %s: (mask_type: '%s', output_size: %s)",
+                     self.__class__.__name__, mask_type, output_size)
 
-        self.padding = padding
         self.mask_type = mask_type
-        self.crop = crop
         self.erosion_percent = erosion_percent
         self.config = config
 
-        self.dummy = np.zeros((training_size, training_size, 3), dtype='float32')
+        self.dummy = np.zeros((output_size, output_size, 3), dtype='float32')
         self.funcs = list()
         self.func_constants = dict()
         self.add_functions()
@@ -384,14 +363,14 @@ class Mask():
         """ Return a face mask """
         mask = self.mask(detected_face, predicted_mask)
         mask = self.finalize_mask(mask)
+        raw_mask = mask.copy()
 
         for func in self.funcs:
             mask = func(mask)
-        if mask.ndim != 3:
-            mask = np.expand_dims(mask, axis=-1)
-
-        logger.trace("mask shape: %s", mask.shape)
-        return mask
+        raw_mask = np.expand_dims(raw_mask, axis=-1) if raw_mask.ndim != 3 else raw_mask
+        mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
+        logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
+        return mask, raw_mask
 
     # MASKS
     def mask(self, detected_face, predicted_mask):
@@ -401,33 +380,13 @@ class Mask():
             logger.warning("Predicted selected, but the model was not trained with a mask. "
                            "Switching to '%s'", self.mask_type)
 
-        if self.mask_type in ("none", "rect"):
-            mask = getattr(self, self.mask_type)()
+        if self.mask_type == "none":
+            mask = np.ones_like(self.dummy[:, :, 1])
         elif self.mask_type == "predicted":
             mask = predicted_mask
-            mask = self.intersect_rect(mask)
         else:
-            landmarks = detected_face.aligned_landmarks
+            landmarks = detected_face.reference_landmarks
             mask = getattr(model_masks, self.mask_type)(landmarks, self.dummy, channels=1).mask
-            mask = self.intersect_rect(mask)
-        return mask
-
-    def rect(self):
-        """ Namespace for rect mask. This is the same as 'none' in the cli """
-        return self.none()
-
-    def none(self):
-        """ Rect Mask """
-        logger.trace("Getting mask")
-        mask = self.dummy[:, :, :1]
-        mask[self.crop, self.crop] = 1.0
-        return mask
-
-    def intersect_rect(self, hull_mask):
-        """ Intersect the given hull mask with the roi """
-        logger.trace("Intersecting rect")
-        mask = self.rect()
-        mask *= hull_mask
         return mask
 
     @staticmethod
@@ -439,7 +398,7 @@ class Mask():
         return mask
 
 
-class PrePlacementAdjustments():
+class PreWarpAdjustments():
     """ Adjustments for the face
 
         As the mask is embedded to Alpha Channel, adjustments that use the mask
@@ -449,12 +408,10 @@ class PrePlacementAdjustments():
         Otherwise, in instances where there are multiple faces, masks can clash if they are all
         placed into the final frame
         """
-    def __init__(self, training_size, arguments, config):
+    def __init__(self, arguments, config):
         """ Set requested mask """
-        logger.debug("Initializing %s: (arguments: '%s')",
-                     self.__class__.__name__, arguments)
+        logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
 
-        self.training_size = training_size
         self.args = arguments
         self.config = config
 
@@ -498,18 +455,18 @@ class PrePlacementAdjustments():
 
     # IMAGE MANIPULATIONS
     @staticmethod
-    def avg_color_adjust(old_face, new_face, mask):
+    def avg_color_adjust(old_face, new_face, raw_mask):
         """ Adjust the mean of the color channels to be the same for the swap and old frame """
         for _ in [0, 1]:
             diff = old_face - new_face
-            avg_diff = np.sum(diff * mask, axis=(0, 1))
-            adjustment = avg_diff / np.sum(mask, axis=(0, 1))
-            new_face = new_face + adjustment
+            avg_diff = np.sum(diff * raw_mask, axis=(0, 1))
+            adjustment = avg_diff / np.sum(raw_mask, axis=(0, 1))
+            new_face += adjustment
         return new_face
 
-    def match_histogram(self, old_face, new_face, mask):
+    def match_histogram(self, old_face, new_face, raw_mask):
         """ Match the histogram of the color intensity of each channel """
-        mask_indices = np.nonzero(mask.squeeze() > 0.99)
+        mask_indices = np.nonzero(raw_mask.squeeze())
         threshold = self.func_constants["match_histogram"]["threshold"]
         new_face = [self.hist_match(old_face[:, :, c],
                                     new_face[:, :, c],
@@ -541,20 +498,20 @@ class PrePlacementAdjustments():
         return new_channel
 
     @staticmethod
-    def seamless_clone(old_face, new_face, mask):
+    def seamless_clone(old_face, new_face, raw_mask):
         """ Seamless clone the swapped face into the old face with cv2 """
         height, width, _ = old_face.shape
         height = height // 2
         width = width // 2
 
-        y_indices, x_indices, _ = np.nonzero(mask)
+        y_indices, x_indices, _ = np.nonzero(raw_mask)
         y_crop = slice(np.min(y_indices), np.max(y_indices))
         x_crop = slice(np.min(x_indices), np.max(x_indices))
         y_center = int(np.rint((np.max(y_indices) + np.min(y_indices)) / 2 + height))
         x_center = int(np.rint((np.max(x_indices) + np.min(x_indices)) / 2 + width))
 
         insertion = np.rint(new_face[y_crop, x_crop] * 255.0).astype("uint8")
-        insertion_mask = np.rint(mask[y_crop, x_crop] * 255.0).astype("uint8")
+        insertion_mask = np.rint(raw_mask[y_crop, x_crop] * 255.0).astype("uint8")
         insertion_mask[insertion_mask != 0] = 255
         prior = np.rint(np.pad(old_face * 255.0,
                                ((height, height), (width, width), (0, 0)),
@@ -569,12 +526,21 @@ class PrePlacementAdjustments():
 
         return blended.astype("float32") / 255.0
 
-    def adjust(self, old_face, swapped_face, mask):
+    def do_actions(self, old_face, new_face, raw_mask):
         """ Perform selected adjustments on face """
+        logger.trace("Performing pre-warp image adjustments")
+
+        # Remove Mask for processing
+        final_mask = new_face[:, :, -1]
+        new_face = new_face[:, :, :3]
         for func in self.funcs:
-            swapped_face = func(old_face, swapped_face, mask)
-            swapped_face = np.clip(swapped_face, 0.0, 1.0)
-        return swapped_face
+            new_face = func(old_face, new_face, raw_mask)
+            new_face = np.clip(new_face, 0.0, 1.0)
+
+        # Reinsert Mask
+        new_face = np.concatenate((new_face, np.expand_dims(final_mask, axis=-1)), -1)
+        logger.trace("Performed pre-warp image adjustments")
+        return new_face
 
 
 class BlurMask():
