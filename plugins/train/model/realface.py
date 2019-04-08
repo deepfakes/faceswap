@@ -24,17 +24,15 @@ class Model(ModelBase):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
-        self.dowscalers_no = 4
+        self.dowscalers_no = 4 # don't change!
         
-        input_size = self.config['input_size']
-        output_size = self.config['output_size']
-        
+        output_size = self.config['output_size']        
         sides = [(output_size // 2**n, n) for n in [4, 5] if (output_size // 2**n)<10]
         downscale_ratio = 2**self.dowscalers_no
-        closest = min([x*downscale_ratio for x, _ in sides], key=lambda x:abs(x-input_size))
+        closest = min([x*downscale_ratio for x, _ in sides], key=lambda x:abs(x-self.config['input_size']))
         self.dense_width, self.upscalers_no = [(s, n) for s, n in sides if s*downscale_ratio==closest][0]
         
-        self.dense_filters = 1024 - (self.dense_width-4)*64
+        self.dense_filters = 1024 - (self.dense_width-4)*64 # don't change!
         
         self.lowmem = self.config.get("lowmem", False)
         
@@ -125,8 +123,7 @@ class Model(ModelBase):
             
             outputs+=[var_y]
             
-        return KerasModel(input_, outputs=outputs)
-     
+        return KerasModel(input_, outputs=outputs)     
     
     def decoder_a(self):
         """ RealFace Decoder (A) Network """
