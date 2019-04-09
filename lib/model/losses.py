@@ -14,6 +14,10 @@ import tensorflow as tf
 from tensorflow.contrib.distributions import Beta
 
 from .normalization import InstanceNormalization
+if K.backend() == "plaidml.keras.backend":
+    from lib.plaidml_utils import extract_image_patches
+else:
+    from tensorflow import extract_image_patches
 
 
 class DSSIMObjective():
@@ -92,11 +96,7 @@ class DSSIMObjective():
                                                   kernel,
                                                   'valid',
                                                   self.dim_ordering)
-
-        # Reshape to get the var in the cells
-        _, w, h, c1, c2, c3 = self.__int_shape(patches_pred)
-        patches_pred = K.reshape(patches_pred, [-1, w, h, c1 * c2 * c3])
-        patches_true = K.reshape(patches_true, [-1, w, h, c1 * c2 * c3])
+        
         # Get mean
         u_true = K.mean(patches_true, axis=-1)
         u_pred = K.mean(patches_pred, axis=-1)
@@ -152,19 +152,8 @@ class DSSIMObjective():
         padding = self._preprocess_padding(padding)
         if data_format == 'channels_first':
             x = K.permute_dimensions(x, (0, 2, 3, 1))
-        _, _, _, ch_i = K.int_shape(x)
-        patches = tf.extract_image_patches(x, kernel, strides, [1, 1, 1, 1],
+        patches = extract_image_patches(x, kernel, strides, [1, 1, 1, 1],
                                            padding)
-        # Reshaping to fit Theano
-        _, w, h, ch = K.int_shape(patches)
-        patches = tf.reshape(tf.transpose(tf.reshape(patches,
-                                                     [-1, w, h,
-                                                      tf.floordiv(ch, ch_i),
-                                                      ch_i]),
-                                          [0, 1, 2, 4, 3]),
-                             [-1, w, h, ch_i, ksizes[0], ksizes[1]])
-        if data_format == 'channels_last':
-            patches = K.permute_dimensions(patches, [0, 1, 2, 4, 5, 3])
         return patches
 
 # <<< START: from Dfaker >>> #
