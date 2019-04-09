@@ -348,8 +348,7 @@ class Images():
                 except OSError:
                     if i == 999:
                         raise
-                    else:
-                        continue
+                    continue
                 break
 
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
@@ -524,13 +523,17 @@ class Config():
         updatepreview = tk.BooleanVar()
         updatepreview.set(False)
 
+        traintimeout = tk.IntVar()
+        traintimeout.set(120)
+
         tk_vars = {"display": display,
                    "runningtask": runningtask,
                    "action": actioncommand,
                    "generate": generatecommand,
                    "consoleclear": consoleclear,
                    "refreshgraph": refreshgraph,
-                   "updatepreview": updatepreview}
+                   "updatepreview": updatepreview,
+                   "traintimeout": traintimeout}
         logger.debug(tk_vars)
         return tk_vars
 

@@ -79,6 +79,11 @@ class Model(ModelBase):
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
-            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+            var_y = input_
+            var_y = self.blocks.upscale(var_y, 512)
+            var_y = self.blocks.upscale(var_y, 256)
+            var_y = self.blocks.upscale(var_y, 128)
+            var_y = self.blocks.upscale(var_y, 64)
+            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)
