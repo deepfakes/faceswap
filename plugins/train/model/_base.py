@@ -93,7 +93,7 @@ class ModelBase():
         if not _CONFIG:
             model_name = ".".join(self.__module__.split(".")[-2:])
             logger.debug("Loading config for: %s", model_name)
-            _CONFIG = Config(model_name).config_dict
+            _CONFIG = Config(model_name).get_config_dict()
         return _CONFIG
 
     @property

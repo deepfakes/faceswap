@@ -35,34 +35,32 @@ class Config(FaceswapConfig):
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="gaussian",
             info=BLUR_INFO)
         self.add_item(
-            section=section, title="blending_box", datatype=float, default=93.3, rounding=1,
-            min_max=(0.1, 99.9),
-            info="A box is created within the swap box from where the blending commences."
-                 "\nSet the size of this box as a percentage of the swap box size."
-                 "\nLower percentages starts the blending from closer to the center of the face")
+            section=section, title="distance", datatype=float, default=6.5, rounding=1,
+            min_max=(0.1, 25.0),
+            info="The distance from the edges of the swap box to start blending. "
+                 "\nThe distance is set as percentage of the swap box size to give the number of "
+                 "pixels from the edge of the box. Eg: For a swap area of 256px and a percentage "
+                 "of 4%, blending would commence 10 pixels from the edge."
+                 "\nHigher percentages start the blending from closer to the center of the face, "
+                 "so will reveal more of the source face.")
         self.add_item(
-            section=section, title="kernel_size", datatype=float, default=75.0, rounding=1,
-            min_max=(0.1, 99.9),
-            info="Kernel size dictates how much blending should occur."
-                 "\nThis figure is set as a percentage of the blending box size and "
-                 "should not exceed 100%."
-                 "\nHigher percentage means more blending")
+            section=section, title="radius", datatype=float, default=5.0, rounding=1,
+            min_max=(0.1, 25.0),
+            info="Radius dictates how much blending should occur, or more specifically, how far "
+                 "the blending will spread away from the 'distance' parameter."
+                 "\nThis figure is set as a percentage of the swap box size to give the radius in "
+                 "pixels. Eg: For a swap area of 256px and a percentage of 5%, the radius would "
+                 "be 13 pixels"
+                 "\nNB: Higher percentage means more blending, but too high may reveal more of "
+                 "the source face, or lead to hard lines at the border.")
         self.add_item(
             section=section, title="passes", datatype=int, default=1, rounding=1,
             min_max=(1, 8),
             info="The number of passes to perform. Additional passes of the blending "
-                 "algorithm can improve smoothing at a time cost."
+                 "algorithm can improve smoothing at a time cost. This is more useful for 'box' "
+                 "type blending."
                  "\nAdditional passes have exponentially less effect so it's not worth setting "
                  "this too high")
-
-        section = "box.crop"
-        self.add_section(title=section,
-                         info="Options for cropping the swap box.\nUseful for removing unwanted "
-                              "artefacts from the edge of the swap area")
-        self.add_item(
-            section=section, title="pixels", datatype=int, default=0, rounding=1,
-            min_max=(1, 10),
-            info="The number of pixels to remove from each edge of the swap box.")
 
         # << MASK OPTIONS >> #
         section = "mask.blend"
@@ -72,10 +70,6 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="normalized",
             info=BLUR_INFO)
-        self.add_item(section=section, title="internal_only", datatype=bool, default=True,
-                      info="Only blend sections of the mask that directly interact with the face."
-                           "\nIE: If True, the forehead area will be blended, but the jawline "
-                           "will not. If False, all edges of the mask will be blended")
         self.add_item(
             section=section, title="kernel_size", datatype=float, default=10.0, rounding=1,
             min_max=(0.1, 99.9),
@@ -91,8 +85,8 @@ class Config(FaceswapConfig):
                  "\nAdditional passes have exponentially less effect so it's not worth setting "
                  "this too high")
 
-        # << FACE OPTIONS >> #
-        section = "face.match_histogram"
+        # << PRE WARP OPTIONS >> #
+        section = "prewarpface.match_histogram"
         self.add_section(title=section,
                          info="Options for matching the histograms between the source and "
                               "destination faces")
@@ -101,3 +95,41 @@ class Config(FaceswapConfig):
             min_max=(75, 100),
             info="Adjust the threshold for histogram matching. Can reduce extreme colors leaking "
                  "in")
+
+        # << POST WARP OPTIONS >> #
+        section = "postwarpface.sharpen_image"
+        self.add_section(title=section,
+                         info="Options for sharpening the face after placement")
+        self.add_item(
+            section=section, title="method", datatype=str,
+            choices=["none", "box", "gaussian", "unsharp_mask"], default="none",
+            info="Sharpen the masked facial region of the converted images")
+        self.add_item(
+            section=section, title="amount", datatype=int, default=150, rounding=1,
+            min_max=(100, 500),
+            info="Percentage that controls the magnitude of each overshoot "
+                 "(how much darker and how much lighter the edge borders become)."
+                 "\nThis can also be thought of as how much contrast is added at the edges. It "
+                 "does not affect the width of the edge rims.")
+        self.add_item(
+            section=section, title="radius", datatype=float, default=0.3, rounding=1,
+            min_max=(0.1, 5.0),
+            info="Affects the size of the edges to be enhanced or how wide the edge rims become, "
+                 "so a smaller radius enhances smaller-scale detail."
+                 "\nRadius is set as a percentage of the final frame width and rounded to the "
+                 "nearest pixel. E.g for a 1280 width frame, a 0.6 percenatage will give a radius "
+                 "of 8px."
+                 "\nHigher radius values can cause halos at the edges, a detectable faint light "
+                 "rim around objects. Fine detail needs a smaller radius. "
+                 "\nRadius and amount interact; reducing one allows more of the other.")
+        self.add_item(
+            section=section, title="threshold", datatype=float, default=5.0, rounding=1,
+            min_max=(1.0, 10.0),
+            info="[unsharp_mask only] Controls the minimal brightness change that will be "
+                 "sharpened or how far apart adjacent tonal values have to be before the filter "
+                 "does anything."
+                 "\nThis lack of action is important to prevent smooth areas from becoming "
+                 "speckled. The threshold setting can be used to sharpen more pronounced edges, "
+                 "while leaving subtler edges untouched. "
+                 "\nLow values should sharpen more because fewer areas are excluded. "
+                 "\nHigher threshold values exclude areas of lower contrast.")

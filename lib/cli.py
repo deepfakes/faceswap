@@ -657,16 +657,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
-        argument_list.append({"opts": ("-sh", "--sharpen"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "dest": "sharpen_image",
-                              "choices": ["box_filter", "gaussian_filter", "none"],
-                              "default": "none",
-                              "help": "Sharpen the masked facial region of "
-                                      "the converted images. Choice of filter "
-                                      "to use in sharpening process -- box"
-                                      "filter or gaussian filter."})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,

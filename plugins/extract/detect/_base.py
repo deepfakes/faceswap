@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_config(plugin_name):
     """ Return the config for the requested model """
-    return Config(plugin_name).config_dict
+    return Config(plugin_name).get_config_dict()
 
 
 class Detector():
