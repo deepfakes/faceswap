@@ -281,8 +281,7 @@ class Train():
                         logger.info("Save requested")
                         self.save_now = True
 
-                if not is_preview:
-                    sleep(1)
+                sleep(1)
             except KeyboardInterrupt:
                 logger.debug("Keyboard Interrupt received")
                 break
