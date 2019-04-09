@@ -71,39 +71,46 @@ class Config(FaceswapConfig):
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="normalized",
             info=BLUR_INFO)
         self.add_item(
-            section=section, title="kernel_size", datatype=float, default=10.0, rounding=1,
-            min_max=(0.1, 99.9),
-            info="Kernel size dictates how much blending should occur."
-                 "\nThis figure is set as a percentage of the mask size and "
-                 "should not exceed 100%."
+            section=section, title="radius", datatype=float, default=3.0, rounding=1,
+            min_max=(0.1, 25.0),
+            info="Radius dictates how much blending should occur."
+                 "\nThis figure is set as a percentage of the mask diameter to give the radius in "
+                 "pixels. Eg: for a mask with diameter 200px, a percentage of 6% would give a "
+                 "final radius of 3px."
                  "\nHigher percentage means more blending")
         self.add_item(
             section=section, title="passes", datatype=int, default=4, rounding=1,
             min_max=(1, 8),
             info="The number of passes to perform. Additional passes of the blending "
-                 "algorithm can improve smoothing at a time cost."
+                 "algorithm can improve smoothing at a time cost. This is more useful for 'box' "
+                 "type blending."
                  "\nAdditional passes have exponentially less effect so it's not worth setting "
                  "this too high")
 
         # << PRE WARP OPTIONS >> #
-        section = "prewarpface.match_histogram"
+        section = "face.match_histogram"
         self.add_section(title=section,
                          info="Options for matching the histograms between the source and "
                               "destination faces")
         self.add_item(
-            section=section, title="threshold", datatype=int, default=98, rounding=1,
-            min_max=(75, 100),
+            section=section, title="threshold", datatype=float, default=99.0, rounding=1,
+            min_max=(90.0, 100.0),
             info="Adjust the threshold for histogram matching. Can reduce extreme colors leaking "
-                 "in")
+                 "in by filtering out colors at the extreme ends of the histogram spectrum")
 
         # << POST WARP OPTIONS >> #
-        section = "postwarpface.sharpen_image"
+        section = "scaling.sharpen_image"
         self.add_section(title=section,
                          info="Options for sharpening the face after placement")
         self.add_item(
             section=section, title="method", datatype=str,
             choices=["none", "box", "gaussian", "unsharp_mask"], default="none",
-            info="Sharpen the masked facial region of the converted images")
+            info="The type of sharpening to use: "
+                 "\n\t box: Fastest, but weakest method. Uses a box filter to assess edges."
+                 "\n\t gaussian: Slower, but better than box. Uses a gaussian filter to assess "
+                 "edges."
+                 "\n\t unsharp-mask: Slowest, but most tweakable. Uses the unsharp-mask method "
+                 "to assess edges.")
         self.add_item(
             section=section, title="amount", datatype=int, default=150, rounding=1,
             min_max=(100, 500),

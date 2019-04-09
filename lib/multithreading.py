@@ -293,9 +293,9 @@ class PoolProcess():
 
     def set_procs(self, processes):
         """ Set the number of processes to use """
-        if processes is None:
-            running_processes = len(mp.active_children())
-            processes = max(mp.cpu_count() - running_processes, 1)
+        running_processes = len(mp.active_children())
+        avail_processes = max(mp.cpu_count() - running_processes, 1)
+        processes = min(avail_processes, processes)
         logger.verbose("Processing '%s' in %s processes", self._name, processes)
         return processes
 

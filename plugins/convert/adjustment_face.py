@@ -8,7 +8,7 @@ import cv2
 from ._base import Adjustment, logger, np
 
 
-class PreWarpFace(Adjustment):
+class Face(Adjustment):
     """ Adjustments for the face applied prior to warp """
 
     @property
@@ -44,11 +44,12 @@ class PreWarpFace(Adjustment):
 
     def match_histogram(self, old_face, new_face, raw_mask):
         """ Match the histogram of the color intensity of each channel """
+        config = self.config["match_histogram"]
         mask_indices = np.nonzero(raw_mask.squeeze())
         new_face = [self.hist_match(old_face[:, :, c],
                                     new_face[:, :, c],
                                     mask_indices,
-                                    self.config["threshold"] / 100)
+                                    config["threshold"] / 100)
                     for c in range(3)]
         new_face = np.stack(new_face, axis=-1)
         return new_face
@@ -104,7 +105,7 @@ class PreWarpFace(Adjustment):
         return blended.astype("float32") / 255.0
 
 
-class PostWarpFace(Adjustment):
+class Scaling(Adjustment):
     """ Adjustments for the face applied after warp to final frame """
     @property
     def func_names(self):
@@ -149,9 +150,8 @@ class PostWarpFace(Adjustment):
     def get_kernel_size(new_face, radius_percent):
         """ Return the kernel size and central point for the given radius
             relative to frame width """
-        radius = round(new_face.shape[1] * radius_percent / 100)
-        radius = 1 if radius < 1 else radius
-        kernel_size = (radius * 2) + 1
+        radius = max(1, round(new_face.shape[1] * radius_percent / 100))
+        kernel_size = int((radius * 2) + 1)
         kernel_size = (kernel_size, kernel_size)
         logger.trace(kernel_size)
         return kernel_size, radius

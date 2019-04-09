@@ -40,9 +40,8 @@ class Box(Adjustment):
         mask = np.zeros((self.facesize, self.facesize, 1)).astype("float32")
         mask[erode, erode] = 1.0
 
-        radius = round(self.facesize * config["radius"] / 100)
-        kernel_size = (radius * 2) + 1
-        kernel_size += 1 if kernel_size < 1 else 0
+        radius = max(1, round(self.facesize * config["radius"] / 100))
+        kernel_size = int((radius * 2) + 1)
         mask = BlurMask(config["type"], mask, kernel_size, config["passes"]).blurred
 
         self.func_constants[action] = mask
@@ -108,15 +107,16 @@ class Mask(Adjustment):
         """ Blur mask if requested """
         logger.trace("Blending mask")
         config = self.config["blend"]
-        kernel_size = self.get_blur_kernel_size(mask, config["kernel_size"] / 100)
+        kernel_size = self.get_blur_kernel_size(mask, config["radius"])
         mask = BlurMask(config["type"], mask, kernel_size, config["passes"]).blurred
         return mask
 
     @staticmethod
-    def get_blur_kernel_size(mask, kernel_ratio):
+    def get_blur_kernel_size(mask, radius_ratio):
         """ Set the kernel size to absolute """
         mask_diameter = np.sqrt(np.sum(mask))
-        kernel_size = int(max(1, kernel_ratio * mask_diameter))
+        radius = max(1, round(mask_diameter * radius_ratio / 100))
+        kernel_size = int((radius * 2) + 1)
         logger.trace("kernel_size: %s", kernel_size)
         return kernel_size
 
@@ -186,10 +186,11 @@ class BlurMask():
         """ The final blurred mask """
         func = self.func_mapping[self.blur_type]
         kwargs = self.get_kwargs()
+        blurred = self.mask
         for i in range(self.passes):
             ksize = int(kwargs["ksize"][0])
             logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
-            blurred = func(self.mask, **kwargs)
+            blurred = func(blurred, **kwargs)
             ksize = int(ksize * self.multipass_factor)
             kwargs["ksize"] = self.get_kernel_tuple(ksize)
         logger.trace("Returning blurred mask. Shape: %s", blurred.shape)

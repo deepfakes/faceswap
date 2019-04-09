@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 from lib.model import masks as model_masks
 
-from . import Box, Mask, PreWarpFace, PostWarpFace
+from . import Box, Mask, Face, Scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,8 +27,8 @@ class Convert():
         self.args = arguments
         self.box = Box(arguments, output_size)
         self.mask = Mask(arguments, output_size)
-        self.pre_adjustments = PreWarpFace(arguments)
-        self.post_adjustments = PostWarpFace(arguments)
+        self.pre_adjustments = Face(arguments)
+        self.post_adjustments = Scaling(arguments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self, in_queue, out_queue):

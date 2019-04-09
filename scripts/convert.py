@@ -2,9 +2,7 @@
 """ The script to run the convert process of faceswap """
 # TODO
 # Fix dfaker mask for conversion
-# blur mask along only along forehead
 # vid to vid (sort output order)
-# Check if we can remove the resize from predictor
 # test predicted mask
 
 
@@ -72,7 +70,8 @@ class Convert():
         save_queue = queue_manager.get_queue("save")
         patch_queue = queue_manager.get_queue("patch")
         out_queue = queue_manager.get_queue("out")
-        pool = PoolProcess(self.converter.process, patch_queue, out_queue)
+        pool = PoolProcess(self.converter.process, patch_queue, out_queue,
+                           processes=self.images.images_found)
         pool.start()
         for item in tqdm(self.patch_iterator(pool.procs),
                          desc="Converting",
@@ -466,15 +465,6 @@ class Predict():
         predicted = self.predictor(feed)
         predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
-
-        # TODO Remove this
-#        from uuid import uuid4
-#        idu = uuid4()
-#        for idx, img in enumerate(predicted[0]):
-#            f_name1 = "/home/matt/fake/test/testing/{}_{}_post.png".format(idu, idx)
-#            f_name2 = "/home/matt/fake/test/testing/{}_{}_feed.png".format(idu, idx)
-#            cv2.imwrite(f_name1, img * 255.0)
-#            cv2.imwrite(f_name2, feed[0][idx] * 255.0)
 
         # Compile masks into alpha channel or keep raw faces
         predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
