@@ -19,7 +19,8 @@ COVERAGE_INFO = ("How much of the extracted image to train on. Generally the mod
                  "\n\t75.0%% spans from temple to temple."
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
-ADDITIONAL_INFO = "\nNB: Values changed here will only take effect when creating a new model."
+ADDITIONAL_INFO = ("\nNB: Unless specifically stated, values changed here will only take effect "
+                   "when creating a new model.")
 
 
 class Config(FaceswapConfig):
@@ -46,7 +47,11 @@ class Config(FaceswapConfig):
                  "model you are training has a distinct line appearing around the edge of the "
                  "swap area.")
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
+            section=section, title="dssim_loss", datatype=bool, default=True, fixed=False,
+            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
+                 "May increase overall quality.")
+        self.add_item(
+            section=section, title="penalized_mask_loss", datatype=bool, default=True, fixed=False,
             info="If using a mask, This penalizes the loss for the masked area, to give higher "
                  "priority to the face area. \nShould increase overall quality and speed up "
                  "training. This should probably be left at True")
@@ -56,10 +61,6 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)" +
                          ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=True,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="dfaker",
             choices=MASK_TYPES, info=MASK_INFO)
@@ -89,10 +90,6 @@ class Config(FaceswapConfig):
                          info="Intermediate Auto Encoder. Based on Original Model, uses "
                               "intermediate layers to try to better get details" + ADDITIONAL_INFO)
         self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=False,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
-        self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
             choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
@@ -106,10 +103,6 @@ class Config(FaceswapConfig):
                               "run on lower end GPUs (~2GB).\nDon't expect great results, but it "
                               "allows users with lower end cards to play with the "
                               "software." + ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=False,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
             choices=MASK_TYPES, info=MASK_INFO)
@@ -125,10 +118,6 @@ class Config(FaceswapConfig):
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=False,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
             choices=MASK_TYPES, info=MASK_INFO)
@@ -147,10 +136,6 @@ class Config(FaceswapConfig):
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other. NB: lowmem will "
                  "override cutom nodes and complexity settings.")
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=False,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
         self.add_item(
             section=section, title="clipnorm", datatype=bool, default=True,
             info="Controls gradient clipping of the optimizer. Can prevent model corruption at "
@@ -199,10 +184,6 @@ class Config(FaceswapConfig):
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=False,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
             choices=["none", "dfaker", "dfl_full"],
