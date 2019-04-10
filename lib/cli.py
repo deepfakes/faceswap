@@ -670,7 +670,7 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
-                              "min_max": (1, 10),
+                              "min_max": (0, 10),
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
@@ -842,7 +842,7 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
-                              "min_max": (1, 10),
+                              "min_max": (0, 10),
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for training"})

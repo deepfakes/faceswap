@@ -4,11 +4,11 @@
 import logging
 import os
 import sys
-
 from threading import Lock
 from time import sleep
 
 import cv2
+import psutil
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
@@ -32,7 +32,6 @@ class Train():
         self.save_now = False
         self.preview_buffer = dict()
         self.lock = Lock()
-
         self.trainer_name = self.args.trainer
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -130,10 +129,7 @@ class Train():
             sleep(1)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
             logger.info("Loading data, this may take a while...")
-
-            if self.args.allow_growth:
-                self.set_tf_allow_growth()
-
+            self.configure_session()
             model = self.load_model()
             trainer = self.load_trainer(model)
             self.run_training_cycle(model, trainer)
@@ -296,14 +292,21 @@ class Train():
         while True:
             keypress_queue.put(sys.stdin.read(1))
 
-    @staticmethod
-    def set_tf_allow_growth():
-        """ Allow TensorFlow to manage VRAM growth """
+    def configure_session(self):
+        """ Set session parameters, devices and allow_growth option
+        Allow TensorFlow to manage VRAM growth """
         # pylint: disable=no-member
         logger.debug("Setting Tensorflow 'allow_growth' option")
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        config.gpu_options.visible_device_list = "0"
+        num_cores = psutil.cpu_count(logical=False)
+        gpu_options = tf.GPUOptions(allow_growth = self.args.allow_growth,
+                                    visible_device_list="0")
+        config = tf.ConfigProto(gpu_options=gpu_options,
+                                intra_op_parallelism_threads=num_cores,
+                                inter_op_parallelism_threads=num_cores,
+                                allow_soft_placement=True,
+                                device_count = {'CPU' : 1,
+                                                'GPU' : self.args.gpus})
+                                
         set_session(tf.Session(config=config))
         logger.debug("Set Tensorflow 'allow_growth' option")
 
