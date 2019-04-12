@@ -326,7 +326,8 @@ class ExtractedFaces():
             self.get_faces(frame)
         sizes = list()
         for face in self.faces:
-            top_left, top_right = face.original_roi[0], face.original_roi[3]
+            roi = face.original_roi.squeeze()
+            top_left, top_right = roi[0], roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
             if top_left[1] == top_right[1]:
