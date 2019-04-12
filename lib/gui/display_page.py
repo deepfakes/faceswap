@@ -11,7 +11,7 @@ from .utils import get_images
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class DisplayPage(ttk.Frame):
+class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Parent frame holder for each tab.
         Defines uniform structure for each tab to inherit from """
     def __init__(self, parent, tabname, helptext):
@@ -147,7 +147,7 @@ class DisplayPage(ttk.Frame):
         return self.subnotebook.children[tab_name]
 
 
-class DisplayOptionalPage(DisplayPage):
+class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
     def __init__(self, parent, tabname, helptext, waittime):
@@ -260,3 +260,11 @@ class DisplayOptionalPage(DisplayPage):
     def display_item_process(self):
         """ Override for display specific loading """
         raise NotImplementedError()
+
+    def close(self):
+        """ Called when the parent notebook is shutting down
+            Children must be destroyed as forget only hides display
+            Override for page specific shutdown """
+        for child in self.winfo_children():
+            logger.debug("Destroying child: %s", child)
+            child.destroy()
