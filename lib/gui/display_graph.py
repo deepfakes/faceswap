@@ -151,9 +151,9 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
             self.ax1.set_xlim(0, xmax)
+            logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
         else:
             self.axes_limits_set_default()
-        logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
 
     @staticmethod
     def axes_data_get_min_max(data):
