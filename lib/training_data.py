@@ -196,7 +196,7 @@ class TrainingDataGenerator():
             dst_points_items = list(landmarks.items())
             dst_points = list(x[1] for x in dst_points_items)
             closest = (np.mean(np.square(src_points - dst_points),
-                          axis=(1, 2))).argsort()[:10]
+                               axis=(1, 2))).argsort()[:10]
             closest_hashes = tuple(dst_points_items[i][0] for i in closest)
             self._nearest_landmarks[filename] = closest_hashes
         dst_points = landmarks[choice(closest_hashes)]
