@@ -3,6 +3,7 @@
 import inspect
 from argparse import SUPPRESS
 import logging
+import re
 from tkinter import ttk
 
 from lib import cli
@@ -118,6 +119,7 @@ class CliOptions():
         if action in (cli.FullPaths,
                       cli.DirFullPaths,
                       cli.FileFullPaths,
+                      cli.FilesFullPaths,
                       cli.DirOrFileFullPaths,
                       cli.SaveFileFullPaths,
                       cli.ContextFullPaths):
@@ -142,6 +144,8 @@ class CliOptions():
         filetypes = "default" if not filetypes else filetypes
         if action == cli.FileFullPaths:
             sysbrowser = ["load"]
+        elif action == cli.FilesFullPaths:
+            sysbrowser = ["load_multi"]
         elif action == cli.SaveFileFullPaths:
             sysbrowser = ["save"]
         elif action == cli.DirOrFileFullPaths:
@@ -235,7 +239,10 @@ class CliOptions():
                 yield (opt, )
             else:
                 if option.get("nargs", None):
-                    optval = optval.split(" ")
+                    if "\"" in optval:
+                        optval = [arg[1:-1] for arg in re.findall(r"\".+?\"", optval)]
+                    else:
+                        optval = optval.split(" ")
                     opt = [opt] + optval
                 else:
                     opt = (opt, optval)

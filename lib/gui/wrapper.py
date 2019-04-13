@@ -97,7 +97,9 @@ class ProcessWrapper():
             args.append("-gui")  # Indicate to Faceswap that we are running the GUI
         if generate:
             # Delimit args with spaces
-            args = ['"{}"'.format(arg) if " " in arg else arg for arg in args]
+            args = ['"{}"'.format(arg) if " " in arg and not arg.startswith(("[", "("))
+                    and not arg.endswith(("]", ")")) else arg
+                    for arg in args]
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
