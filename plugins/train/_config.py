@@ -188,45 +188,48 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
-        
+
         # << PEGASUS MODEL OPTIONS >> #
         section = "model.realface"
         self.add_section(title=section,
-                         info="an extra detailed variant of Original utilizing the majority of suggestions by Bryanlyon,\n"
+                         info="an extra detailed variant of Original utilizing the majority of "
+                              "suggestions by Bryanlyon,\n"
                               "and is greatly inspired by VillainGuy's model.\n"
                               "This model doesn't provide a low_mem variant!\n"
-                              "Requires about 6GB-8GB of VRAM (batchsize 8-16)." + ADDITIONAL_INFO )
+                              "Requires about 6GB-8GB of VRAM (batchsize 8-16)." + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="lowmem", datatype=bool, default=False,
-            info="The option is here for compatibility reasons. Has no real effect.")                   
+            info="The option is here for compatibility reasons. Has no real effect.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="dfl_full",
             choices=["none", "dfaker", "dfl_full"],
             info="The mask to be used for training. Select none to not use a mask")
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            info="The model is essentially created for 60-80% coverage as it follows Original paradigm.\n"
-                  "You may try higher values but good results are not guaranteed.",
-                  min_max=(62.5, 100.0))                  
+            min_max=(62.5, 100.0),
+            info="The model is essentially created for 60-80% coverage as it follows Original "
+                 "paradigm.\n"
+                 "You may try higher values but good results are not guaranteed.")
         self.add_item(
             section=section, title="output_size", datatype=int, default=128,
             rounding=16, min_max=(64, 256),
             info="Output image resolution (in pixels).\n"
                  "Be aware that larger resolution might increase VRAM requirements.\n"
-                 "Note that input is rounded to the next number divisible by 16.\n")                        
+                 "Note that input is rounded to the next number divisible by 16.\n")
         self.add_item(
             section=section, title="input_size", datatype=int, default=64,
-            #choices=(64, 80, 96, 128),
+            # choices=(64, 80, 96, 128),
             rounding=16, min_max=(64, 128),
             info="Input size (in pixels) of the image to train on.\n"
                  "Higher resolutions may increase prediction accuracy.\n"
-                 "* Doesn't affect the resulting output size!.\n"                                
-                 "Can be: 64, 80, 96, 128.")           
+                 "* Doesn't affect the resulting output size!.\n"
+                 "Can be: 64, 80, 96, 128.")
         self.add_item(
             section=section, title="dense_nodes", datatype=int, default=1536, rounding=64,
             min_max=(768, 2048),
-            info="Number of nodes for decoder. Might affect your model's ability to learn in general.\n"
-                 "Note that: Lower values will affect the ability to predict details.")                    
+            info="Number of nodes for decoder. Might affect your model's ability to learn in "
+                 "general.\n"
+                 "Note that: Lower values will affect the ability to predict details.")
         self.add_item(
             section=section, title="complexity_encoder", datatype=int, default=128,
             min_max=(96, 160), rounding=4,
@@ -239,12 +242,12 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="dssim_loss", datatype=bool, default=True,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")        
+                 "May increase overall quality.")
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(5e-6, 1e-4), rounding=6,
             info="Learning rate - how fast your network will learn.\n"
-                 "Note that: Higher values might result in RSoD failure.")                                    
+                 "Note that: Higher values might result in RSoD failure.")
 
         # << VILLAIN MODEL OPTIONS >> #
         section = "model.villain"
@@ -267,4 +270,3 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
-                
