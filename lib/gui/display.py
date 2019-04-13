@@ -98,19 +98,9 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                 continue
             logger.debug("removing child: %s", child)
             child_name = child.split(".")[-1]
-            child_object = self.children[child_name]
-            self.destroy_tabs_children(child_object)
+            child_object = self.children[child_name]  # returns the OptionalDisplayPage object
+            child_object.close()  # Call the OptionalDisplayPage close() method
             self.forget(child)
-
-    @staticmethod
-    def destroy_tabs_children(tab):
-        """ Destroy all tabs children
-            Children must be destroyed as forget only hides display
-        """
-        logger.debug("Destroying children for tab: %s", tab)
-        for child in tab.winfo_children():
-            logger.debug("Destroying child: %s", child)
-            child.destroy()
 
     def update_displaybook(self, *args):  # pylint: disable=unused-argument
         """ Set the display tabs based on executing task """

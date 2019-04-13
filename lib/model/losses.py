@@ -14,6 +14,10 @@ import tensorflow as tf
 from tensorflow.contrib.distributions import Beta
 
 from .normalization import InstanceNormalization
+if K.backend() == "plaidml.keras.backend":
+    from lib.plaidml_utils import extract_image_patches
+else:
+    from tensorflow import extract_image_patches  # pylint: disable=ungrouped-imports
 
 
 class DSSIMObjective():
@@ -63,8 +67,8 @@ class DSSIMObjective():
         self.k1 = k1
         self.k2 = k2
         self.max_value = max_value
-        self.c1 = (self.k1 * self.max_value) ** 2
-        self.c2 = (self.k2 * self.max_value) ** 2
+        self.c_1 = (self.k1 * self.max_value) ** 2
+        self.c_2 = (self.k2 * self.max_value) ** 2
         self.dim_ordering = K.image_data_format()
         self.backend = K.backend()
 
@@ -93,10 +97,6 @@ class DSSIMObjective():
                                                   'valid',
                                                   self.dim_ordering)
 
-        # Reshape to get the var in the cells
-        _, w, h, c1, c2, c3 = self.__int_shape(patches_pred)
-        patches_pred = K.reshape(patches_pred, [-1, w, h, c1 * c2 * c3])
-        patches_true = K.reshape(patches_true, [-1, w, h, c1 * c2 * c3])
         # Get mean
         u_true = K.mean(patches_true, axis=-1)
         u_pred = K.mean(patches_pred, axis=-1)
@@ -107,11 +107,11 @@ class DSSIMObjective():
         covar_true_pred = K.mean(
             patches_true * patches_pred, axis=-1) - u_true * u_pred
 
-        ssim = (2 * u_true * u_pred + self.c1) * (
-            2 * covar_true_pred + self.c2)
-        denom = (K.square(u_true) + K.square(u_pred) + self.c1) * (
-            var_pred + var_true + self.c2)
-        ssim /= denom  # no need for clipping, c1 + c2 make the denom non-zero
+        ssim = (2 * u_true * u_pred + self.c_1) * (
+            2 * covar_true_pred + self.c_2)
+        denom = (K.square(u_true) + K.square(u_pred) + self.c_1) * (
+            var_pred + var_true + self.c_2)
+        ssim /= denom  # no need for clipping, c_1 + c_2 make the denom non-zero
         return K.mean((1.0 - ssim) / 2.0)
 
     @staticmethod
@@ -134,7 +134,7 @@ class DSSIMObjective():
 
     def extract_image_patches(self, x, ksizes, ssizes, padding='same',
                               data_format='channels_last'):
-        '''
+        """
         Extract the patches from an image
         # Parameters
             x : The input image
@@ -143,71 +143,33 @@ class DSSIMObjective():
             padding : 'same' or 'valid'
             data_format : 'channels_last' or 'channels_first'
         # Returns
-            The (k_w,k_h) patches extracted
-            TF ==> (batch_size,w,h,k_w,k_h,c)
-            TH ==> (batch_size,w,h,c,k_w,k_h)
-        '''
+            The (k_w, k_h) patches extracted
+            TF ==> (batch_size, w, h, k_w, k_h, c)
+            TH ==> (batch_size, w, h, c, k_w, k_h)
+        """
         kernel = [1, ksizes[0], ksizes[1], 1]
         strides = [1, ssizes[0], ssizes[1], 1]
         padding = self._preprocess_padding(padding)
         if data_format == 'channels_first':
             x = K.permute_dimensions(x, (0, 2, 3, 1))
-        _, _, _, ch_i = K.int_shape(x)
-        patches = tf.extract_image_patches(x, kernel, strides, [1, 1, 1, 1],
-                                           padding)
-        # Reshaping to fit Theano
-        _, w, h, ch = K.int_shape(patches)
-        patches = tf.reshape(tf.transpose(tf.reshape(patches,
-                                                     [-1, w, h,
-                                                      tf.floordiv(ch, ch_i),
-                                                      ch_i]),
-                                          [0, 1, 2, 4, 3]),
-                             [-1, w, h, ch_i, ksizes[0], ksizes[1]])
-        if data_format == 'channels_last':
-            patches = K.permute_dimensions(patches, [0, 1, 2, 4, 5, 3])
+        patches = extract_image_patches(x, kernel, strides, [1, 1, 1, 1], padding)
         return patches
 
+
 # <<< START: from Dfaker >>> #
-class Mask_Penalized_Loss():  # pylint: disable=too-few-public-methods
-    """ Penalized Loss
-        from: https://github.com/dfaker/df """
-    def __init__(self, mask, loss_func, mask_prop=1.0):
-        self.mask = mask
-        self.loss_func = loss_func
-        self.mask_prop = mask_prop
-        self.mask_as_k_inv_prop = 1-mask_prop
+def Mask_Penalized_Loss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-name
+    """ Plaidml + tf Penalized loss function """
+    mask_as_k_inv_prop = 1 - mask_prop
+    mask = (mask * mask_prop) + mask_as_k_inv_prop
 
-    def __call__(self, y_true, y_pred):
-        # pylint: disable=invalid-name
-        tro, tgo, tbo = tf.split(y_true, 3, 3)
-        pro, pgo, pbo = tf.split(y_pred, 3, 3)
-
-        tr = tro
-        tg = tgo
-        tb = tbo
-
-        pr = pro
-        pg = pgo
-        pb = pbo
-        m = self.mask
-
-        m = m * self.mask_prop
-        m += self.mask_as_k_inv_prop
-        tr *= m
-        tg *= m
-        tb *= m
-
-        pr *= m
-        pg *= m
-        pb *= m
-
-        y = tf.concat([tr, tg, tb], 3)
-        p = tf.concat([pr, pg, pb], 3)
-
-        # yo = tf.stack([tro,tgo,tbo],3)
-        # po = tf.stack([pro,pgo,pbo],3)
-
-        return self.loss_func(y, p)
+    def inner_loss(y_true, y_pred):
+        # Workaround until https://github.com/plaidml/plaidml/pull/284 is accepted
+        if K.backend() == "plaidml.keras.backend":
+            y_true = K.reshape(y_true, y_pred.shape.dims)
+        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        return loss_func(n_true, n_pred)
+    return inner_loss
 # <<< END: from Dfaker >>> #
 
 
@@ -366,6 +328,7 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
 # <<< END: from Shoanlu GAN >>> #
 
 
+
 def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
     """
     generalized function used to return a large variety of mathematical loss functions
@@ -414,6 +377,7 @@ def gradient_loss(y_true, y_pred):
     TV+TV2 Regularization with Nonconvex Sparseness-Inducing Penalty
     for Image Restoration, Chengwu Lu & Hua Huang, 2014
     (http://downloads.hindawi.com/journals/mpe/2014/790547.pdf)
+
     Parameters:
         y_true: The predicted frames at each scale
         y_true: The ground truth frames at each scale
@@ -495,15 +459,13 @@ def gradient_loss(y_true, y_pred):
                           generalized_loss(diff_yy(y_true), diff_yy(y_pred), alpha=1.9999) +
                           generalized_loss(diff_xy(y_true), diff_xy(y_pred), alpha=1.9999) * 2.)
     loss = loss / (tv_weight + tv2_weight)
-    #loss = K.mean(loss / (TV_weight + TV2_weight), axis=(1, 2), keepdims=True)
-    #loss += K.square(K.mean(y_true - y_pred, axis=(1, 2), keepdims=True))
-    #loss = K.mean(loss, axis=-1)
     #TODO simplify to use MSE instead
     return loss
 
 
+
 def scharr_edges(image, magnitude):
-    '''
+    """
     Returns a tensor holding modified Scharr edge maps.
     Arguments:
     image: Image tensor with shape [batch_size, h, w, d] and type float32.
@@ -513,8 +475,8 @@ def scharr_edges(image, magnitude):
     Tensor holding edge maps for each channel. Returns a tensor with shape
     [batch_size, h, w, d, 2] where the last two dimensions hold [[dy[0], dx[0]],
     [dy[1], dx[1]], ..., [dy[d-1], dx[d-1]]] calculated using the Scharr filter.
-    '''
-
+    """
+    
     # Define vertical and horizontal Scharr filters.
     static_image_shape = image.get_shape()
     image_shape = K.shape(image)
@@ -529,6 +491,7 @@ def scharr_edges(image, magnitude):
     kernels = K.constant(matrix, dtype='float32')
     kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
 
+
     # Use depth-wise convolution to calculate edge maps per channel.
     # Output tensor has shape [batch_size, h, w, d * num_kernels].
     pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
@@ -542,7 +505,7 @@ def scharr_edges(image, magnitude):
         output.set_shape(static_image_shape.concatenate(num_kernels))
         output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1]))
     # magnitude of edges -- unified x & y edges don't work well with NN
-    #output = K.sqrt(K.sum(K.square(output),axis=-1))
+
     return output
 
 
@@ -552,6 +515,7 @@ def gmsd_loss(y_true, y_pred):
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
     """
+
     true_edge = scharr_edges(y_true, True)
     pred_edge = scharr_edges(y_pred, True)
     ephsilon = 0.0025
@@ -564,7 +528,7 @@ def gmsd_loss(y_true, y_pred):
 
 
 def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462, 0.2726)):
-    '''
+    """
     Computes the MS-SSIM between img1 and img2.
     This function assumes that `img1` and `img2` are image batches, i.e. the last
     three dimensions are [height, width, channels].
@@ -588,10 +552,10 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
     A tensor containing an MS-SSIM value for each image in batch.  The values
     are in range [0, 1].  Returns a tensor with shape:
     broadcast(img1.shape[:-3], img2.shape[:-3]).
-    '''
+    """
 
     def _verify_compatible_image_shapes(img1, img2):
-        '''
+        """
         Checks if two image tensors are compatible for applying SSIM or PSNR.
         This function checks if two sets of images have ranks at least 3, and if the
         last three dimensions match.
@@ -603,7 +567,7 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
         list of control_flow_ops.Assert() ops implementing the checks.
         Raises:
         ValueError: When static shape check fails.
-        '''
+        """
         shape1 = img1.get_shape().with_rank_at_least(3)
         shape2 = img2.get_shape().with_rank_at_least(3)
         shape1[-3:].assert_is_compatible_with(shape2[-3:])
@@ -647,6 +611,7 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
 
         def _fspecial_gauss(size, sigma):
             """ Function to mimic the 'fspecial' gaussian MATLAB function. """
+
             size = tf.convert_to_tensor(size, 'int32')
             sigma = tf.convert_to_tensor(sigma)
             coords = tf.cast(tf.range(size), sigma.dtype)
@@ -786,13 +751,14 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
     divisor = [1, 2, 2, 1]
     divisor_tensor = tf.constant(divisor[1:], dtype='int32')
 
-    mcs = []
+    mc_s = []
     for k in range(len(power_factors)):
         with tf.name_scope(None, 'Scale%d' % k, imgs):
             if k > 0:
                 # Avg pool takes rank 4 tensors. Flatten leading dimensions.
                 zipped = zip(imgs, tails)
                 flat_imgs = [tf.reshape(x, tf.concat([[-1], t], 0)) for x, t in zipped]
+
 
                 remainder = tails[0] % divisor_tensor
                 need_padding = tf.reduce_any(tf.not_equal(remainder, 0))
@@ -827,3 +793,4 @@ def ms_ssim_loss(y_true, y_pred):
     loss = K.expand_dims(expanded, axis=-1)
     # need to expand to [1,height,width] dimensions for Keras. modify to not be hard-coded
     return K.tile(loss, [1, 64, 64]) 
+

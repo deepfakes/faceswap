@@ -170,8 +170,11 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
 class FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
     """ Expand user- and relative-paths """
     def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, os.path.abspath(
-            os.path.expanduser(values)))
+        if isinstance(values, (list, tuple)):
+            vals = [os.path.abspath(os.path.expanduser(val)) for val in values]
+        else:
+            vals = os.path.abspath(os.path.expanduser(values))
+        setattr(namespace, self.dest, vals)
 
 
 class DirFullPaths(FullPaths):
@@ -188,9 +191,7 @@ class FileFullPaths(FullPaths):
     """
     # pylint: disable=too-few-public-methods
     def __init__(self, option_strings, dest, nargs=None, filetypes=None, **kwargs):
-        super(FileFullPaths, self).__init__(option_strings, dest, **kwargs)
-        if nargs is not None:
-            raise ValueError("nargs not allowed")
+        super().__init__(option_strings, dest, nargs, **kwargs)
         self.filetypes = filetypes
 
     def _get_kwargs(self):
@@ -205,6 +206,13 @@ class FileFullPaths(FullPaths):
                  "metavar",
                  "filetypes"]
         return [(name, getattr(self, name)) for name in names]
+
+
+class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
+    """ Class that the gui uses to determine that the input can take multiple files as an input.
+        Inherits functionality from FileFullPaths
+        Has the effect of giving the user 2 Open Dialogue buttons in the gui """
+    pass
 
 
 class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
@@ -402,7 +410,7 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "Defaults to 'output'"})
         argument_list.append({"opts": ("-al", "--alignments"),
                               "action": FileFullPaths,
-                              "filetypes": 'alignments',
+                              "filetypes": "alignments",
                               "type": str,
                               "dest": "alignments_path",
                               "help": "Optional path to an alignments file."})
@@ -416,7 +424,8 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "help": "Threshold for positive face recognition. For use with "
                                       "nfilter or filter. Lower values are stricter."})
         argument_list.append({"opts": ("-n", "--nfilter"),
-                              "type": str,
+                              "action": FilesFullPaths,
+                              "filetypes": "image",
                               "dest": "nfilter",
                               "nargs": "+",
                               "default": None,
@@ -425,7 +434,8 @@ class ExtractConvertArgs(FaceSwapArgs):
                                       "portrait. Multiple images can be added "
                                       "space separated"})
         argument_list.append({"opts": ("-f", "--filter"),
-                              "type": str,
+                              "action": FilesFullPaths,
+                              "filetypes": "image",
                               "dest": "filter",
                               "nargs": "+",
                               "default": None,

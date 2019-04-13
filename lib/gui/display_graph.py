@@ -12,7 +12,8 @@ import matplotlib
 # pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
 
-from matplotlib import pyplot as plt, style  # noqa
+from matplotlib import style  # noqa
+from matplotlib.figure import Figure  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)  # noqa
 
@@ -86,7 +87,8 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
                            "Greys", "copper", "summer", "bone"]
         self.lines = list()
         self.toolbar = None
-        self.fig = plt.figure(figsize=(4, 4), dpi=75)
+        self.fig = Figure(figsize=(4, 4), dpi=75)
+
         self.ax1 = self.fig.add_subplot(1, 1, 1)
         self.plotcanvas = FigureCanvasTkAgg(self.fig, self)
 
@@ -98,12 +100,12 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Place the graph canvas """
         logger.debug("Setting plotcanvas")
         self.plotcanvas.get_tk_widget().pack(side=tk.TOP, padx=5, fill=tk.BOTH, expand=True)
-        plt.subplots_adjust(left=0.100,
-                            bottom=0.100,
-                            right=0.95,
-                            top=0.95,
-                            wspace=0.2,
-                            hspace=0.2)
+        self.fig.subplots_adjust(left=0.100,
+                                 bottom=0.100,
+                                 right=0.95,
+                                 top=0.95,
+                                 wspace=0.2,
+                                 hspace=0.2)
         logger.debug("Set plotcanvas")
 
     def update_plot(self, initiate=True):
@@ -151,9 +153,9 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
             self.ax1.set_xlim(0, xmax)
+            logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
         else:
             self.axes_limits_set_default()
-        logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
 
     @staticmethod
     def axes_data_get_min_max(data):
@@ -241,6 +243,12 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.toolbar = NavigationToolbar(self.plotcanvas, parent)
         self.toolbar.pack(side=tk.BOTTOM)
         self.toolbar.update()
+
+    def clear(self):
+        """ Clear the plots from RAM """
+        logger.debug("Clearing graph from RAM: %s", self)
+        self.fig.clf()
+        del self.fig
 
 
 class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors

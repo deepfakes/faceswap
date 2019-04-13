@@ -19,7 +19,8 @@ COVERAGE_INFO = ("How much of the extracted image to train on. Generally the mod
                  "\n\t75.0%% spans from temple to temple."
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
-ADDITIONAL_INFO = "\nNB: Values changed here will only take effect when creating a new model."
+ADDITIONAL_INFO = ("\nNB: Unless specifically stated, values changed here will only take effect "
+                   "when creating a new model.")
 
 
 class Config(FaceswapConfig):

@@ -232,3 +232,10 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             return
         for graph in self.subnotebook.children.values():
             graph.save_fig(graphlocation)
+
+    def close(self):
+        """ Clear the plots from RAM """
+        for name, graph in self.subnotebook.children.items():
+            logger.debug("Clearing: %s", name)
+            graph.clear()
+        super().close()

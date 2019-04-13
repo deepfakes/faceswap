@@ -6,13 +6,14 @@ import os
 import pickle
 import struct
 from datetime import datetime
+from PIL import Image
 
 import numpy as np
 from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from . import AlignmentData, Annotate, ExtractedFaces, Faces, Frames
+from . import Annotate, ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -449,36 +450,38 @@ class Legacy():
 class Merge():
     """ Merge two alignments files into one """
     def __init__(self, alignments, arguments):
-        self.alignments = alignments
-        self.alignments2 = AlignmentData(arguments.alignments_file2, "json")
+        self.final_alignments = alignments[0]
+        self.process_alignments = alignments[1:]
 
     def process(self):
         """Process the alignments file merge """
         logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
         skip_count = 0
         merge_count = 0
-        for _, src_alignments, _, frame in tqdm(self.alignments2.yield_faces(),
-                                                desc="Merging Alignments",
-                                                total=self.alignments2.frames_count):
-            for idx, alignment in enumerate(src_alignments):
-                if not alignment.get("hash", None):
-                    logger.warning("Alignment '%s':%s has no Hash! Skipping", frame, idx)
-                    skip_count += 1
-                    continue
-                if self.check_exists(frame, alignment, idx):
-                    skip_count += 1
-                    continue
-                self.merge_alignment(frame, alignment, idx)
-                merge_count += 1
+        total_count = sum([alignments.frames_count for alignments in self.process_alignments])
+        with tqdm(desc="Merging Alignments", total=total_count) as pbar:
+            for alignments in self.process_alignments:
+                for _, src_alignments, _, frame in alignments.yield_faces():
+                    for idx, alignment in enumerate(src_alignments):
+                        if not alignment.get("hash", None):
+                            logger.warning("Alignment '%s':%s has no Hash! Skipping", frame, idx)
+                            skip_count += 1
+                            continue
+                        if self.check_exists(frame, alignment, idx):
+                            skip_count += 1
+                            continue
+                        self.merge_alignment(frame, alignment, idx)
+                        merge_count += 1
+                    pbar.update(1)
         logger.info("Alignments Merged: %s", merge_count)
         logger.info("Alignments Skipped: %s", skip_count)
         if merge_count != 0:
             self.set_destination_filename()
-            self.alignments.save()
+            self.final_alignments.save()
 
     def check_exists(self, frame, alignment, idx):
         """ Check whether this face already exists """
-        existing_frame = self.alignments.hashes_to_frame.get(alignment["hash"], None)
+        existing_frame = self.final_alignments.hashes_to_frame.get(alignment["hash"], None)
         if not existing_frame:
             return False
         if frame in existing_frame.keys():
@@ -493,14 +496,16 @@ class Merge():
         """ Merge the source alignment into the destination """
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
-        self.alignments.data.setdefault(frame, list()).append(alignment)
+        self.final_alignments.data.setdefault(frame, list()).append(alignment)
 
     def set_destination_filename(self):
         """ Set the destination filename """
-        orig, ext = os.path.splitext(self.alignments.file)
-        filename = "{}_merged{}".format(orig, ext)
+        folder = os.path.split(self.final_alignments.file)[0]
+        ext = os.path.splitext(self.final_alignments.file)[1]
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(folder, "alignments_merged_{}{}".format(now, ext))
         logger.debug("Output set to: '%s'", filename)
-        self.alignments.file = filename
+        self.final_alignments.file = filename
 
 
 class Reformat():
@@ -525,8 +530,8 @@ class Reformat():
         """ Load alignments from DeepFaceLab and format for Faceswap """
         alignments = dict()
         for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
-            if face["face_extension"] != ".png":
-                logger.verbose("'%s' is not a png. Skipping", face["face_fullname"])
+            if face["face_extension"] not in (".png", ".jpg"):
+                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
                 continue
             f_hash = face["face_hash"]
             fullpath = os.path.join(self.faces.folder, face["face_fullname"])
@@ -541,6 +546,18 @@ class Reformat():
     @staticmethod
     def get_dfl_alignment(filename):
         """ Process the alignment of one face """
+        ext = os.path.splitext(filename)[1]
+
+        if ext.lower() in (".jpg", ".jpeg"):
+            img = Image.open(filename)
+            try:
+                dfl_alignments = pickle.loads(img.app["APP15"])
+                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
+                                                 for n in dfl_alignments["source_rect"]]
+                return dfl_alignments
+            except pickle.UnpicklingError:
+                return None
+
         with open(filename, "rb") as dfl:
             header = dfl.read(8)
             if header != b"\x89PNG\r\n\x1a\n":
