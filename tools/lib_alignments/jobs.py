@@ -6,6 +6,7 @@ import os
 import pickle
 import struct
 from datetime import datetime
+from PIL import Image
 
 import numpy as np
 from scipy import signal
@@ -548,7 +549,6 @@ class Reformat():
         ext = os.path.splitext(filename)[1]
 
         if ext.lower() in (".jpg", ".jpeg"):
-            from PIL import Image
             img = Image.open(filename)
             try:
                 dfl_alignments = pickle.loads(img.app["APP15"])
