@@ -23,6 +23,7 @@ from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
 from plugins.train._config import Config
+from scripts.train import Train
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
@@ -33,6 +34,7 @@ class ModelBase():
     def __init__(self,
                  model_dir,
                  gpus,
+                 growth=False,
                  no_logs=False,
                  warp_to_landmarks=False,
                  no_flip=False,
@@ -56,6 +58,7 @@ class ModelBase():
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
+        self.growth = growth
         self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
                                use_icnr_init=self.config["icnr_init"],
                                use_reflect_padding=self.config["reflect_padding"])
@@ -229,7 +232,7 @@ class ModelBase():
         # Clear models and graph
         self.predictors = dict()
         K.clear_session()
-
+        Train.configure_session(growth=self.growth, gpus=self.gpus)
         # Load Models for current training run
         for model in self.networks.values():
             model.network = Model.from_config(model.config)
@@ -357,6 +360,7 @@ class ModelBase():
 
         if not self.is_legacy:
             K.clear_session()
+            Train.configure_session(growth=self.growth, gpus=self.gpus)
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:

@@ -129,7 +129,7 @@ class Train():
             sleep(1)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
             logger.info("Loading data, this may take a while...")
-            self.configure_session()
+            self.configure_session(growth=self.args.allow_growth, gpus=self.args.gpus)
             model = self.load_model()
             trainer = self.load_trainer(model)
             self.run_training_cycle(model, trainer)
@@ -151,6 +151,7 @@ class Train():
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
             self.args.gpus,
+            growth=self.args.allow_growth,
             no_logs=self.args.no_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
             no_flip=self.args.no_flip,
@@ -291,21 +292,22 @@ class Train():
         """ Monitor stdin for keypress """
         while True:
             keypress_queue.put(sys.stdin.read(1))
-
-    def configure_session(self):
+            
+    @staticmethod
+    def configure_session(growth=False, gpus=1):
         """ Set session parameters, devices and allow_growth option
         Allow TensorFlow to manage VRAM growth """
         # pylint: disable=no-member
         logger.debug("Setting Tensorflow 'allow_growth' option")
         num_cores = psutil.cpu_count(logical=False)
-        gpu_options = tf.GPUOptions(allow_growth = self.args.allow_growth,
+        gpu_options = tf.GPUOptions(allow_growth = growth,
                                     visible_device_list="0")
         config = tf.ConfigProto(gpu_options=gpu_options,
                                 intra_op_parallelism_threads=num_cores,
-                                inter_op_parallelism_threads=num_cores,
+                                inter_op_parallelism_threads=2,
                                 allow_soft_placement=True,
                                 device_count = {'CPU' : 1,
-                                                'GPU' : self.args.gpus})
+                                                'GPU' : gpus})
                                 
         set_session(tf.Session(config=config))
         logger.debug("Set Tensorflow 'allow_growth' option")
