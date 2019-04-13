@@ -529,8 +529,8 @@ class Reformat():
         """ Load alignments from DeepFaceLab and format for Faceswap """
         alignments = dict()
         for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
-            if face["face_extension"] != ".png":
-                logger.verbose("'%s' is not a png. Skipping", face["face_fullname"])
+            if face["face_extension"] not in (".png", ".jpg"):
+                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
                 continue
             f_hash = face["face_hash"]
             fullpath = os.path.join(self.faces.folder, face["face_fullname"])
@@ -545,6 +545,18 @@ class Reformat():
     @staticmethod
     def get_dfl_alignment(filename):
         """ Process the alignment of one face """
+        _, ext = os.path.splitext(filename)
+        
+        if ext.lower() in ('.jpg', '.jpeg'):
+            from PIL import Image
+            img = Image.open(filename)
+            try:
+                dfl_alignments = pickle.loads(img.app['APP15'])
+                dfl_alignments["source_rect"] = [n.item() for n in dfl_alignments["source_rect"]] # comes as non-JSONable np.int32
+                return dfl_alignments
+            except pickle.UnpicklingError:
+                return None
+            
         with open(filename, "rb") as dfl:
             header = dfl.read(8)
             if header != b"\x89PNG\r\n\x1a\n":
