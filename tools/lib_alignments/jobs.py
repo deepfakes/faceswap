@@ -545,18 +545,19 @@ class Reformat():
     @staticmethod
     def get_dfl_alignment(filename):
         """ Process the alignment of one face """
-        _, ext = os.path.splitext(filename)
-        
-        if ext.lower() in ('.jpg', '.jpeg'):
+        ext = os.path.splitext(filename)[1]
+
+        if ext.lower() in (".jpg", ".jpeg"):
             from PIL import Image
             img = Image.open(filename)
             try:
-                dfl_alignments = pickle.loads(img.app['APP15'])
-                dfl_alignments["source_rect"] = [n.item() for n in dfl_alignments["source_rect"]] # comes as non-JSONable np.int32
+                dfl_alignments = pickle.loads(img.app["APP15"])
+                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
+                                                 for n in dfl_alignments["source_rect"]]
                 return dfl_alignments
             except pickle.UnpicklingError:
                 return None
-            
+
         with open(filename, "rb") as dfl:
             header = dfl.read(8)
             if header != b"\x89PNG\r\n\x1a\n":
