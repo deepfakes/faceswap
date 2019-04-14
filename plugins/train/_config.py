@@ -47,11 +47,11 @@ class Config(FaceswapConfig):
                  "model you are training has a distinct line appearing around the edge of the "
                  "swap area.")
         self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=True, fixed=False,
+            section=section, title="dssim_loss", datatype=bool, default=True,
             info="Use DSSIM for Loss rather than Mean Absolute Error\n"
                  "May increase overall quality.")
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True, fixed=False,
+            section=section, title="penalized_mask_loss", datatype=bool, default=True,
             info="If using a mask, This penalizes the loss for the masked area, to give higher "
                  "priority to the face area. \nShould increase overall quality and speed up "
                  "training. This should probably be left at True")
@@ -226,7 +226,7 @@ class Config(FaceswapConfig):
             info="Decoder Complexity.")
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
-            min_max=(5e-6, 1e-4), rounding=6,
+            min_max=(5e-6, 1e-4), rounding=6, fixed=False,
             info="Learning rate - how fast your network will learn.\n"
                  "Note that: Higher values might result in RSoD failure.")
 
