@@ -202,13 +202,13 @@ class Config(FaceswapConfig):
                  "VRAM requirements.\n"
                  "Higher resolutions may increase prediction accuracy, but does not effect the "
                  "resulting output size.\n"
-                 "Must be between 16 and 128 and be divisible by 16.")
+                 "Must be between 64 and 128 and be divisible by 16.")
         self.add_item(
             section=section, title="output_size", datatype=int, default=128,
             rounding=16, min_max=(64, 256),
             info="Output image resolution (in pixels).\n"
                  "Be aware that larger resolution will increase VRAM requirements.\n"
-                 "NB: input is rounded to the next number divisible by 16.\n")
+                 "NB: Must be between 64 and 256 and be divisible by 16.")
         self.add_item(
             section=section, title="dense_nodes", datatype=int, default=1536, rounding=64,
             min_max=(768, 2048),
