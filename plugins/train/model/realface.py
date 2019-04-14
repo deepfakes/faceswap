@@ -15,36 +15,44 @@ from keras.models import Model as KerasModel
 from ._base import ModelBase, logger
 
 
-LR_REFINE, LR_LOW, LR_LOWER, LR_NORMAL, LR_HIGH = 5e-6, 1e-5, 2.5e-5, 5e-5, 1e-4
-
-
 class Model(ModelBase):
     """ RealFace(tm) Faceswap Model """
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
-        self.dowscalers_no = 4  # don't change!
-
-        output_size = self.config['output_size']
-        sides = [(output_size // 2**n, n) for n in [4, 5] if (output_size // 2**n) < 10]
-        self._downscale_ratio = 2**self.dowscalers_no
-        closest = min([x*self._downscale_ratio for x, _ in sides],
-                      key=lambda x: abs(x-self.config['input_size']))
-        self.dense_width, self.upscalers_no = [(s, n) for s, n in sides
-                                               if s * self._downscale_ratio == closest][0]
-
-        self.dense_filters = (int(1024 - (self.dense_width-4)*64) // 16)*16  # don't change!
-
-        # print('self.dense_width', self.dense_width, 'self.upscalers_no', self.upscalers_no,
-        #       'self.dense_filters', self.dense_filters)
-        self.lowmem = self.config.get("lowmem", False)
-
+        self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
         kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
         self.kernel_initializer = RandomNormal(0, 0.02)
 
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def downscalers_no(self):
+        """ Number of downscalers. Don't change! """
+        return 4
+
+    @property
+    def _downscale_ratio(self):
+        """ Downscale Ratio """
+        return 2**self.downscalers_no
+
+    @property
+    def dense_filters(self):
+        """ Dense Filters. Don't change! """
+        return (int(1024 - (self.dense_width - 4) * 64) // 16) * 16
+
+    def get_dense_width_upscalers_numbers(self):
+        """ Return the dense width and number of upscalers """
+        output_size = self.config['output_size']
+        sides = [(output_size // 2**n, n) for n in [4, 5] if (output_size // 2**n) < 10]
+        closest = min([x * self._downscale_ratio for x, _ in sides],
+                      key=lambda x: abs(x - self.config['input_size']))
+        dense_width, upscalers_no = [(s, n) for s, n in sides
+                                     if s * self._downscale_ratio == closest][0]
+        logger.debug("dense_width: %s, upscalers_no: %s", dense_width, upscalers_no)
+        return dense_width, upscalers_no
 
     def add_networks(self):
         """ Add the original model weights """
@@ -77,7 +85,7 @@ class Model(ModelBase):
 
         encoder_complexity = self.config['complexity_encoder']
 
-        for idx in range(self.dowscalers_no-1):
+        for idx in range(self.downscalers_no - 1):
             var_x = self.blocks.conv(var_x, encoder_complexity * 2**idx)
             var_x = self.blocks.res_block(var_x, encoder_complexity * 2**idx, use_bias=True)
             var_x = self.blocks.res_block(var_x, encoder_complexity * 2**idx, use_bias=True)

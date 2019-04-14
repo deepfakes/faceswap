@@ -24,7 +24,7 @@ ADDITIONAL_INFO = "\nNB: Values changed here will only take effect when creating
 
 class Config(FaceswapConfig):
     """ Config File for Models """
-
+    # pylint: disable=too-many-statements
     def set_defaults(self):
         """ Set the default values for config """
         logger.debug("Setting defaults")
@@ -192,38 +192,38 @@ class Config(FaceswapConfig):
         # << PEGASUS MODEL OPTIONS >> #
         section = "model.realface"
         self.add_section(title=section,
-                         info="an extra detailed variant of Original utilizing the majority of "
-                              "suggestions by Bryanlyon,\n"
-                              "and is greatly inspired by VillainGuy's model.\n"
-                              "This model doesn't provide a low_mem variant!\n"
+                         info="An extra detailed variant of Original model.\n"
+                              "Incorporates ideas from Bryanlyon and inspiration from the Villain "
+                              "model.\n"
                               "Requires about 6GB-8GB of VRAM (batchsize 8-16)." + ADDITIONAL_INFO)
         self.add_item(
-            section=section, title="lowmem", datatype=bool, default=False,
-            info="The option is here for compatibility reasons. Has no real effect.")
+            section=section, title="dssim_loss", datatype=bool, default=True,
+            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
+                 "May increase overall quality.")
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="dfl_full",
-            choices=["none", "dfaker", "dfl_full"],
-            info="The mask to be used for training. Select none to not use a mask")
+            section=section, title="mask_type", datatype=str, default="components",
+            choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0),
-            info="The model is essentially created for 60-80% coverage as it follows Original "
-                 "paradigm.\n"
-                 "You may try higher values but good results are not guaranteed.")
+            info="{}\nThe model is essentially created for 60-80% coverage as it follows "
+                 "Original paradigm.\nYou may try higher values but good results are not "
+                 "guaranteed.".format(COVERAGE_INFO))
+        self.add_item(
+            section=section, title="input_size", datatype=int, default=64,
+            rounding=16, min_max=(64, 128),
+            info="Resolution (in pixels) of the input image to train on.\n"
+                 "BE AWARE Larger resolution will dramatically increase"
+                 "VRAM requirements.\n"
+                 "Higher resolutions may increase prediction accuracy, but does not effect the "
+                 "resulting output size.\n"
+                 "Must be between 16 and 128 and be divisible by 16.")
         self.add_item(
             section=section, title="output_size", datatype=int, default=128,
             rounding=16, min_max=(64, 256),
             info="Output image resolution (in pixels).\n"
-                 "Be aware that larger resolution might increase VRAM requirements.\n"
-                 "Note that input is rounded to the next number divisible by 16.\n")
-        self.add_item(
-            section=section, title="input_size", datatype=int, default=64,
-            # choices=(64, 80, 96, 128),
-            rounding=16, min_max=(64, 128),
-            info="Input size (in pixels) of the image to train on.\n"
-                 "Higher resolutions may increase prediction accuracy.\n"
-                 "* Doesn't affect the resulting output size!.\n"
-                 "Can be: 64, 80, 96, 128.")
+                 "Be aware that larger resolution will increase VRAM requirements.\n"
+                 "NB: input is rounded to the next number divisible by 16.\n")
         self.add_item(
             section=section, title="dense_nodes", datatype=int, default=1536, rounding=64,
             min_max=(768, 2048),
@@ -239,10 +239,6 @@ class Config(FaceswapConfig):
             section=section, title="complexity_decoder", datatype=int, default=512,
             rounding=4, min_max=(512, 544),
             info="Decoder Complexity.")
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=True,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(5e-6, 1e-4), rounding=6,
@@ -265,8 +261,7 @@ class Config(FaceswapConfig):
                  "May increase overall quality.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=["none", "dfaker", "dfl_full"],
-            info="The mask to be used for training. Select none to not use a mask")
+            choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
