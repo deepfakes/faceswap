@@ -4,7 +4,7 @@
 import logging
 
 from hashlib import sha1
-from random import shuffle
+from random import shuffle, choice
 
 import cv2
 import numpy as np
@@ -32,6 +32,7 @@ class TrainingDataGenerator():
         self.training_opts = training_opts
         self.mask_function = self.set_mask_function()
         self.landmarks = self.training_opts.get("landmarks", None)
+        self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
                                             training_opts.get("coverage_ratio", 0.625))
@@ -87,6 +88,8 @@ class TrainingDataGenerator():
         logger.debug("Loading batch: (image_count: %s, side: '%s', is_timelapse: %s, "
                      "do_shuffle: %s)", len(images), side, is_timelapse, do_shuffle)
         self.validate_samples(images)
+        # Intialize this for each subprocess
+        self._nearest_landmarks = dict()
 
         def _img_iter(imgs):
             while True:
@@ -187,12 +190,16 @@ class TrainingDataGenerator():
         """ Return closest matched landmarks from opposite set """
         logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
                      filename, src_points)
-        dst_points = self.landmarks["a"] if side == "b" else self.landmarks["b"]
-        dst_points = list(dst_points.values())
-        closest = (np.mean(np.square(src_points - dst_points),
-                           axis=(1, 2))).argsort()[:10]
-        closest = np.random.choice(closest)
-        dst_points = dst_points[closest]
+        landmarks = self.landmarks["a"] if side == "b" else self.landmarks["b"]
+        closest_hashes = self._nearest_landmarks.get(filename)
+        if not closest_hashes:
+            dst_points_items = list(landmarks.items())
+            dst_points = list(x[1] for x in dst_points_items)
+            closest = (np.mean(np.square(src_points - dst_points),
+                               axis=(1, 2))).argsort()[:10]
+            closest_hashes = tuple(dst_points_items[i][0] for i in closest)
+            self._nearest_landmarks[filename] = closest_hashes
+        dst_points = landmarks[choice(closest_hashes)]
         logger.trace("Returning: (dst_points: %s)", dst_points)
         return dst_points
 

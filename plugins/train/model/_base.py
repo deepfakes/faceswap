@@ -64,7 +64,12 @@ class ModelBase():
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        self.state = State(self.model_dir, self.name, no_logs, pingpong, training_image_size)
+        self.state = State(self.model_dir,
+                           self.name,
+                           self.config_changeable_items,
+                           no_logs,
+                           pingpong,
+                           training_image_size)
         self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
@@ -87,14 +92,27 @@ class ModelBase():
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
+    def config_section(self):
+        """ The section name for loading config """
+        retval = ".".join(self.__module__.split(".")[-2:])
+        logger.debug(retval)
+        return retval
+
+    @property
     def config(self):
         """ Return config dict for current plugin """
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
-            model_name = ".".join(self.__module__.split(".")[-2:])
+            model_name = self.config_section
             logger.debug("Loading config for: %s", model_name)
             _CONFIG = Config(model_name).config_dict
         return _CONFIG
+
+    @property
+    def config_changeable_items(self):
+        """ Return the dict of config items that can be updated after the model
+            has been created """
+        return Config(self.config_section).changeable_items
 
     @property
     def name(self):
@@ -489,7 +507,7 @@ class ModelBase():
             self.encoder_dim = 512
             self.state.config["lowmem"] = True
 
-        self.state.replace_config()
+        self.state.replace_config(self.config_changeable_items)
         self.state.save()
 
 
@@ -578,10 +596,12 @@ class NNMeta():
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name, no_logs, pingpong, training_image_size):
-        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', no_logs: %s, "
-                     "pingpong: %s, training_image_size: '%s'", self.__class__.__name__, model_dir,
-                     model_name, no_logs, pingpong, training_image_size)
+    def __init__(self, model_dir, model_name, config_changeable_items,
+                 no_logs, pingpong, training_image_size):
+        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
+                     "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
+                     "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
+                     config_changeable_items, no_logs, pingpong, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
@@ -593,7 +613,7 @@ class State():
         self.lowest_avg_loss = dict()
         self.inputs = dict()
         self.config = dict()
-        self.load()
+        self.load(config_changeable_items)
         self.session_id = self.new_session_id()
         self.create_new_session(no_logs, pingpong)
         logger.debug("Initialized %s:", self.__class__.__name__)
@@ -652,7 +672,7 @@ class State():
         self.iterations += 1
         self.sessions[self.session_id]["iterations"] += 1
 
-    def load(self):
+    def load(self, config_changeable_items):
         """ Load state file """
         logger.debug("Loading State")
         try:
@@ -666,7 +686,7 @@ class State():
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", state)
-                self.replace_config()
+                self.replace_config(config_changeable_items)
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
             logger.debug("IOError: %s", str(err))
@@ -703,15 +723,30 @@ class State():
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
 
-    def replace_config(self):
-        """ Replace the loaded config with the one contained within the state file """
+    def replace_config(self, config_changeable_items):
+        """ Replace the loaded config with the one contained within the state file
+            Check for any fixed=False parameters changes and log info changes
+        """
         global _CONFIG  # pylint: disable=global-statement
         # Add any new items to state config for legacy purposes
         for key, val in _CONFIG.items():
             if key not in self.config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
                 self.config[key] = val
+        self.update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
         logger.debug("Replaced config. New config: %s", _CONFIG)
         logger.info("Using configuration saved in state file")
+
+    def update_changed_config_items(self, config_changeable_items):
+        """ Update any parameters which are not fixed and have been changed """
+        if not config_changeable_items:
+            logger.debug("No changeable parameters have been updated")
+            return
+        for key, val in config_changeable_items.items():
+            old_val = self.config[key]
+            if old_val == val:
+                continue
+            self.config[key] = val
+            logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)

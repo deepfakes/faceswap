@@ -167,8 +167,6 @@ class ConfigurePlugins(tk.Toplevel):
                 logger.debug("Adding option: (item: '%s', default: '%s' new: '%s'",
                              item, def_opt, new_opt)
                 helptext = def_opt["helptext"]
-                helptext += self.config.set_helptext_choices(def_opt)
-                helptext += "\n[Default: {}]".format(def_opt["default"])
                 helptext = self.config.format_help(helptext, is_section=False)
                 new_config.set(section, helptext)
                 new_config.set(section, item, str(new_opt["selected"].get()))

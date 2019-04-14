@@ -297,7 +297,7 @@ class OptionControl():
 
             ctl = ttk.Radiobutton(radio_frame, text=choice.title(), value=choice, variable=var)
             ctl.pack(anchor=tk.W)
-            Tooltip(ctl, text=helptext, wraplength=720)
+            Tooltip(ctl, text=helptext, wraplength=920)
         logger.debug("Added radio group: '%s'", control_title)
 
     def checkbutton_to_checkframe(self, control, control_title, var, helptext):
@@ -334,8 +334,8 @@ class OptionControl():
         ctl["from_"] = min_max[0]
         ctl["to"] = min_max[1]
 
-        Tooltip(ctl, text=helptext, wraplength=720)
-        Tooltip(tbox, text=helptext, wraplength=720)
+        Tooltip(ctl, text=helptext, wraplength=920)
+        Tooltip(tbox, text=helptext, wraplength=920)
         logger.debug("Added slider control to Options Frame: %s", control)
 
     @staticmethod
@@ -386,6 +386,15 @@ class OptionControl():
         if filename:
             logger.debug(filename)
             filepath.set(filename)
+
+    @staticmethod
+    def ask_load_multi(filepath, filetypes):
+        """ Pop-up to get path to a file """
+        filenames = FileHandler("filename_multi", filetypes).retfile
+        if filenames:
+            final_names = " ".join("\"{}\"".format(fname) for fname in filenames)
+            logger.debug(final_names)
+            filepath.set(final_names)
 
     @staticmethod
     def ask_save(filepath, filetypes=None):
