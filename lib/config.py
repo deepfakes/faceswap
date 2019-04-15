@@ -61,12 +61,12 @@ class FaceswapConfig():
         """
         raise NotImplementedError
 
-    def get_config_dict(self, section=None):
+    @property
+    def config_dict(self):
         """ Collate global options and requested section into a dictionary
             with the correct datatypes """
         conf = dict()
-        section = section if section else self.section
-        for sect in ("global", section):
+        for sect in ("global", self.section):
             if sect not in self.config.sections():
                 continue
             for key in self.config[sect]:

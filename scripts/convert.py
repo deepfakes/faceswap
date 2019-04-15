@@ -77,13 +77,12 @@ class Convert():
         save_queue = queue_manager.get_queue("save")
         patch_queue = queue_manager.get_queue("patch")
         out_queue = queue_manager.get_queue("out")
+        # TODO: Better name processes to be maximum possible processes
         pool = PoolProcess(self.converter.process, patch_queue, out_queue,
                            processes=self.images.images_found)
         pool.start()
-        for item in tqdm(self.patch_iterator(pool.procs),
-                         desc="Converting",
-                         total=self.images.images_found,
-                         file=sys.stdout):
+        # TODO: Look to remove this and put directly to save queue from pooled processes
+        for item in self.patch_iterator(pool.procs):
             save_queue.put(item)
         pool.join()
 
@@ -133,7 +132,7 @@ class DiskIO():
         self.args = arguments
 
         # For frame skipping
-        self.imageidxre = re.compile(r"[^(mp4)](\d+)(?!.*\d)")
+        self.imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
         self.frame_ranges = self.get_frame_ranges()
 
         # Extractor for on the fly detection
@@ -147,6 +146,16 @@ class DiskIO():
         self.save_thread = None
         self.init_threads()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def total_count(self):
+        """ Return the total number of frames to be converted """
+        if self.frame_ranges and not self.args.keep_unchanged:
+            retval = sum([fr[1] - fr[0] for fr in self.frame_ranges])
+        else:
+            retval = self.images.images_found
+        logger.debug(retval)
+        return retval
 
     # Initalization
     def get_frame_ranges(self):
@@ -212,11 +221,16 @@ class DiskIO():
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if (self.args.discard_frames and self.check_skipframe(filename) == "discard"):
-                logger.debug("Discarding frame: '%s'", filename)
-                continue
             if image is None or not image.any():
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
+                continue
+            if self.check_skipframe(filename):
+                if self.args.keep_unchanged:
+                    logger.trace("Saving unchanged frame: %s", filename)
+                    out_file = os.path.join(self.args.output_dir, os.path.basename(filename))
+                    self.save_queue.put((out_file, image))
+                else:
+                    logger.trace("Discarding frame: '%s'", filename)
                 continue
 
             detected_faces = self.get_detected_faces(filename, image, extract_queue)
@@ -230,10 +244,13 @@ class DiskIO():
         """ Check whether frame is to be skipped """
         if not self.frame_ranges:
             return None
-        idx = int(self.imageidxre.findall(filename)[0])
+        indices = self.imageidxre.findall(filename)
+        if not indices:
+            logger.warning("Could not determine frame number. Frame will be converted: '%s'",
+                           filename)
+            return False
+        idx = int(indices[0]) if indices else None
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
-        if skipframe and self.args.discard_frames:
-            skipframe = "discard"
         return skipframe
 
     def get_detected_faces(self, filename, image, extract_queue):
@@ -290,12 +307,15 @@ class DiskIO():
     def save(self):
         """ Save the converted images """
         logger.debug("Save Images: Start")
-        while True:
+        pbar = tqdm(range(self.total_count), desc="Converting", file=sys.stdout)
+        for _ in pbar:
             if self.save_queue.shutdown.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
+                pbar.close()
                 break
             item = self.save_queue.get()
             if item == "EOF":
+                pbar.close()
                 break
             filename, image = item
 

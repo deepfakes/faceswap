@@ -60,7 +60,6 @@ class ConfigurePlugins(tk.Toplevel):
             been supplied """
         logger.debug("Formatting Config for GUI")
         conf = dict()
-        config_dict = self.config.get_config_dict()
         for section in self.config.config.sections():
             self.config.section = section
             category = section.split(".")[0]
@@ -70,7 +69,7 @@ class ConfigurePlugins(tk.Toplevel):
                 if key == "helptext":
                     self.plugin_info[section] = options[key]
                     continue
-                options[key]["value"] = config_dict.get(key, options[key]["default"])
+                options[key]["value"] = self.config.config_dict.get(key, options[key]["default"])
         logger.debug("Formatted Config for GUI: %s", conf)
         return conf
 

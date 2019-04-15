@@ -676,18 +676,17 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,
-                              "help": "frame ranges to apply transfer to e.g. "
-                                      "For frames 10 to 50 and 90 to 100 use "
-                                      "--frame-ranges 10-50 90-100. Files "
-                                      "must have the frame-number as the last "
-                                      "number in the name!"})
-        argument_list.append({"opts": ("-d", "--discard-frames"),
+                              "help": "frame ranges to apply transfer to e.g. For frames 10 to 50 "
+                                      "and 90 to 100 use --frame-ranges 10-50 90-100. Files "
+                                      "must have the frame-number as the last number in the name! "
+                                      "Frames falling outside of the selected range will be "
+                                      "discarded unless '-k' (--keep-unchanged) is selected."})
+        argument_list.append({"opts": ("-k", "--keep-unchanged"),
                               "action": "store_true",
-                              "dest": "discard_frames",
+                              "dest": "keep_unchanged",
                               "default": False,
-                              "help": "When used with --frame-ranges discards "
-                                      "frames that are not processed instead "
-                                      "of writing them out unchanged"})
+                              "help": "When used with --frame-ranges outputs the unchanged frames "
+                                      "that are not processed instead of discarding them."})
         argument_list.append({"opts": ("-s", "--swap-model"),
                               "action": "store_true",
                               "dest": "swap_model",
