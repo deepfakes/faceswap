@@ -21,11 +21,6 @@ class PluginLoader():
         return PluginLoader._import("extract.align", name)
 
     @staticmethod
-    def get_converter(name):
-        """ Return requested converter plugin """
-        return PluginLoader._import("convert", name)
-
-    @staticmethod
     def get_model(name):
         """ Return requested model plugin """
         return PluginLoader._import("train.model", name)
@@ -55,16 +50,6 @@ class PluginLoader():
                         if not item.name.startswith("_")
                         and item.name.endswith(".py"))
         return models
-
-    @staticmethod
-    def get_available_converters():
-        """ Return a list of available converters """
-        converter_path = os.path.join(os.path.dirname(__file__), "convert")
-        converters = sorted(item.name.replace(".py", "").replace("_", "-")
-                            for item in os.scandir(converter_path)
-                            if not item.name.startswith("_")
-                            and item.name.endswith(".py"))
-        return converters
 
     @staticmethod
     def get_available_extractors(extractor_type):

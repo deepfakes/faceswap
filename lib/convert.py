@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Masked converter for faceswap.py
+""" Converter for faceswap.py
     Based on: https://gist.github.com/anonymous/d3815aba83a8f79779451262599b0955
     found on https://www.reddit.com/r/deepfakes/ """
 
@@ -11,14 +11,12 @@ import cv2
 import numpy as np
 from lib.model import masks as model_masks
 
-from . import Box, Mask, Face, Scaling
+from plugins.convert import Box, Mask, Face, Scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Move this module
 
-
-class Convert():
+class Converter():
     """ Swap a source face with a target """
     def __init__(self, output_dir, output_size, arguments):
         logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  arguments: %s)",

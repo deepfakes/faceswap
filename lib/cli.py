@@ -628,12 +628,6 @@ class ConvertArgs(ExtractConvertArgs):
                                       "conversion. If no aligned dir is "
                                       "specified, all faces will be "
                                       "converted"})
-        argument_list.append({"opts": ("-c", "--converter"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_converters(),
-                              "default": "masked",
-                              "help": "Converter to use"})
         argument_list.append({
             "opts": ("-M", "--mask-type"),
             "action": Radio,
@@ -667,6 +661,18 @@ class ConvertArgs(ExtractConvertArgs):
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
+        argument_list.append({"opts": ("-qs", "--queue-size"),
+                              "type": int,
+                              "action": Slider,
+                              "min_max": (25, 100),
+                              "rounding": 10,
+                              "default": 100,
+                              "dest": "queuesize",
+                              "help": "The convert process can sometimes run faster than it can "
+                                      "save out images. On slow hard disks with limited system "
+                                      "RAM this can lead to images stacking up in memory "
+                                      "meaning that the program locks up and exits. Lower the "
+                                      "queue-size if this occurs."})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,

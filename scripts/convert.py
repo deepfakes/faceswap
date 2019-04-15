@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 from lib import Serializer
+from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.multithreading import MultiThread, PoolProcess
 from lib.queue_manager import queue_manager, QueueEmpty
@@ -41,15 +42,21 @@ class Convert():
         Legacy(self.alignments, self.images.input_images, arguments.input_aligned_dir)
         self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
 
+        self.add_queues()
         self.disk_io = DiskIO(self.alignments, self.images, arguments)
         self.extractor = None
         self.predictor = Predict(self.disk_io.load_queue, arguments)
-        self.converter = PluginLoader.get_converter(self.args.converter)(
-            get_folder(self.args.output_dir),
-            self.predictor.output_size,
-            arguments)
+        self.converter = Converter(get_folder(self.args.output_dir),
+                                   self.predictor.output_size,
+                                   arguments)
 
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def add_queues(self):
+        """ Add the queues for convert """
+        logger.debug("Adding queues. Queue size: %s", self.args.queuesize)
+        for qname in ("convert_in", "save", "patch", "out"):
+            queue_manager.add_queue(qname, self.args.queuesize)
 
     def process(self):
         """ Process the conversion """
@@ -181,12 +188,7 @@ class DiskIO():
     def add_queue(self, task):
         """ Add the queue to queue_manager and set queue attribute """
         logger.debug("Adding queue for task: '%s'", task)
-        q_name = task
-        q_size = 0
-        if task == "load":
-            q_name = "convert_in"
-            q_size = 100
-        queue_manager.add_queue(q_name, maxsize=q_size)
+        q_name = "convert_in" if task == "load" else task
         setattr(self, "{}_queue".format(task), queue_manager.get_queue(q_name))
         logger.debug("Added queue for task: '%s'", task)
 
