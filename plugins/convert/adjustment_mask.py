@@ -63,6 +63,7 @@ class Mask(Adjustment):
     def __init__(self, arguments, output_size):
         """ Set requested mask """
         self.dummy = np.zeros((output_size, output_size, 3), dtype='float32')
+        self.warning_shown = False
         super().__init__(arguments)
 
     @property
@@ -126,8 +127,10 @@ class Mask(Adjustment):
         mask_type = self.args.mask_type
         if mask_type == "predicted" and predicted_mask is None:
             mask_type = model_masks.get_default_mask()
-            logger.warning("Predicted selected, but the model was not trained with a mask. "
-                           "Switching to '%s'", mask_type)
+            if not self.warning_shown:
+                logger.warning("Predicted selected, but the model was not trained with a mask. "
+                               "Switching to '%s'", mask_type)
+                self.warning_shown = True
 
         if mask_type == "none":
             mask = np.ones_like(self.dummy[:, :, 1])

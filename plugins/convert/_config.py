@@ -35,7 +35,7 @@ class Config(FaceswapConfig):
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="gaussian",
             info=BLUR_INFO)
         self.add_item(
-            section=section, title="distance", datatype=float, default=6.5, rounding=1,
+            section=section, title="distance", datatype=float, default=11.0, rounding=1,
             min_max=(0.1, 25.0),
             info="The distance from the edges of the swap box to start blending. "
                  "\nThe distance is set as percentage of the swap box size to give the number of "

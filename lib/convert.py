@@ -84,10 +84,9 @@ class Converter():
                                      axis=-1).astype("float32")
         for new_face, detected_face in zip(predicted["swapped_faces"],
                                            predicted["detected_faces"]):
+            predicted_mask = new_face[:, :, -1] if new_face.shape[2] == 4 else None
             new_face = new_face[:, :, :3]
             src_face = detected_face.reference_face
-
-            predicted_mask = new_face[:, :, :-1] if new_face.ndim == 4 else None
             interpolator = detected_face.reference_interpolators[1]
 
             new_face = self.box.do_actions(old_face=src_face, new_face=new_face)
@@ -106,7 +105,6 @@ class Converter():
                 borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
 
             placeholder = np.clip(placeholder, 0.0, 1.0)
-
         logger.trace("Got filename: '%s'. (placeholders: %s)",
                      predicted["filename"], placeholder.shape)
 
