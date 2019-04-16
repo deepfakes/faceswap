@@ -7,6 +7,8 @@ scikit-image
 scikit-learn
 toposort
 matplotlib==2.2.2
+imageio
+imageio-ffmpeg
 ffmpy==0.2.2
 nvidia-ml-py3
 h5py==2.9.0

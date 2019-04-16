@@ -711,6 +711,11 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Place the swapped face on a "
                                       "transparent layer rather than the "
                                       "original frame."})
+        argument_list.append({"opts": ("-v", "--video"),
+                              "action": "store_true",
+                              "default": False,
+                              "help": "Output to video. NB: Currently the input source must be a "
+                                      "video to be able to render straight to video."})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,
