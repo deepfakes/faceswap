@@ -228,7 +228,8 @@ class DiskIO():
         """ Start the DiskIO thread """
         logger.debug("Starting thread: '%s'", task)
         args = self.completion_event if task == "save" else None
-        func = getattr(self, task)
+        name = "{}_video".format(task) if self.images.is_video and task == "save" else task
+        func = getattr(self, name)
         io_thread = MultiThread(func, args, thread_count=1)
         io_thread.start()
         setattr(self, "{}_thread".format(task), io_thread)
@@ -349,6 +350,44 @@ class DiskIO():
             except Exception as err:  # pylint: disable=broad-except
                 logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
                 continue
+        completion_event.set()
+        logger.debug("Save Faces: Complete")
+
+    def save_video(self, completion_event):
+        """ Video must be ordered correctly """
+        logger.debug("Save Video: Start")
+        re_search = re.compile(r"(\d+)(?=\.\w+$)")
+        frame_order = list(range(1, self.total_count + 1))
+        cache = dict()
+        for _ in tqdm(range(self.total_count), desc="Converting", file=sys.stdout):
+            if self.save_queue.shutdown.is_set():
+                logger.debug("Save Queue: Stop signal received. Terminating")
+                break
+            item = self.save_queue.get()
+            if item == "EOF":
+                break
+
+            filename, image = item
+            frame_no = int(re.search(re_search, filename).group())
+            cache[frame_no] = image
+            logger.trace("Added to cache. Frame no: %s", frame_no)
+
+            while frame_order:
+                if frame_order[0] not in cache:
+                    logger.trace("Next frame not ready. Continuing")
+                    break
+
+                save_no = frame_order.pop(0)
+                save_image = cache.pop(save_no)
+                logger.trace("Rendering from cache. Frame no: %s", save_no)
+                try:
+                    fname = "{}.png".format(save_no)
+                    ofile = os.path.join(os.path.dirname(filename), fname)
+                    cv2.imwrite(ofile, save_image)  # pylint: disable=no-member
+                except Exception as err:  # pylint: disable=broad-except
+                    logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
+            logger.trace("Current cache size: %s", len(cache))
+
         completion_event.set()
         logger.debug("Save Faces: Complete")
 
