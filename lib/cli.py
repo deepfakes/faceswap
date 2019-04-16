@@ -661,18 +661,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
-        argument_list.append({"opts": ("-qs", "--queue-size"),
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (25, 100),
-                              "rounding": 10,
-                              "default": 100,
-                              "dest": "queuesize",
-                              "help": "The convert process can sometimes run faster than it can "
-                                      "save out images. On slow hard disks with limited system "
-                                      "RAM this can lead to images stacking up in memory "
-                                      "meaning that the program locks up and exits. Lower the "
-                                      "queue-size if this occurs."})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,
@@ -723,13 +711,17 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Place the swapped face on a "
                                       "transparent layer rather than the "
                                       "original frame."})
+        argument_list.append({"opts": ("-sp", "--singleprocess"),
+                              "action": "store_true",
+                              "default": False,
+                              "help": "Disable multiprocessing. Slower but less resource "
+                                      "intensive."})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "type": str.lower,
                               "choices": PluginLoader.get_available_models(),
-                              "help": "[LEGACY] You only need to select the trainer that was "
-                                      "used to create the model if you are loading a legacy "
-                                      "model or if there are multiple models in you model "
-                                      "folder"})
+                              "help": "[LEGACY] This only needs to be selected if a legacy "
+                                      "model is being loaded or if there are multiple models in "
+                                      "the  model folder"})
 
         return argument_list
 

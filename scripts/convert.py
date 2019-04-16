@@ -10,6 +10,8 @@ import logging
 import re
 import os
 import sys
+from time import sleep
+from threading import Event
 
 import cv2
 import numpy as np
@@ -19,7 +21,7 @@ from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
-from lib.multithreading import MultiThread, PoolProcess
+from lib.multithreading import MultiThread, PoolProcess, total_cpus
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_folder, get_image_paths, hash_image_file
 from plugins.plugin_loader import PluginLoader
@@ -45,18 +47,38 @@ class Convert():
         self.add_queues()
         self.disk_io = DiskIO(self.alignments, self.images, arguments)
         self.extractor = None
-        self.predictor = Predict(self.disk_io.load_queue, arguments)
+        self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
                                    arguments)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def queue_size(self):
+        """ Set q-size to double number of cpus available """
+        if self.args.singleprocess:
+            retval = 2
+        else:
+            retval = total_cpus() * 2
+        logger.debug(retval)
+        return retval
+
+    @property
+    def pool_processes(self):
+        """ return the maximum number of pooled processes to use """
+        if self.args.singleprocess:
+            retval = 1
+        else:
+            retval = min(total_cpus(), self.images.images_found)
+        logger.debug(retval)
+        return retval
+
     def add_queues(self):
         """ Add the queues for convert """
-        logger.debug("Adding queues. Queue size: %s", self.args.queuesize)
-        for qname in ("convert_in", "save", "patch", "out"):
-            queue_manager.add_queue(qname, self.args.queuesize)
+        logger.debug("Adding queues. Queue size: %s", self.queue_size)
+        for qname in ("convert_in", "save", "patch"):
+            queue_manager.add_queue(qname, self.queue_size)
 
     def process(self):
         """ Process the conversion """
@@ -76,14 +98,14 @@ class Convert():
         logger.debug("Converting images")
         save_queue = queue_manager.get_queue("save")
         patch_queue = queue_manager.get_queue("patch")
-        out_queue = queue_manager.get_queue("out")
-        # TODO: Better name processes to be maximum possible processes
-        pool = PoolProcess(self.converter.process, patch_queue, out_queue,
-                           processes=self.images.images_found)
+        pool = PoolProcess(self.converter.process, patch_queue, save_queue,
+                           processes=self.pool_processes)
         pool.start()
-        # TODO: Look to remove this and put directly to save queue from pooled processes
-        for item in self.patch_iterator(pool.procs):
-            save_queue.put(item)
+        while True:
+            self.check_thread_error()
+            if self.disk_io.completion_event.is_set():
+                break
+            sleep(1)
         pool.join()
 
         save_queue.put("EOF")
@@ -130,6 +152,7 @@ class DiskIO():
         self.alignments = alignments
         self.images = images
         self.args = arguments
+        self.completion_event = Event()
 
         # For frame skipping
         self.imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
@@ -204,14 +227,15 @@ class DiskIO():
     def start_thread(self, task):
         """ Start the DiskIO thread """
         logger.debug("Starting thread: '%s'", task)
+        args = self.completion_event if task == "save" else None
         func = getattr(self, task)
-        io_thread = MultiThread(func, thread_count=1)
+        io_thread = MultiThread(func, args, thread_count=1)
         io_thread.start()
         setattr(self, "{}_thread".format(task), io_thread)
         logger.debug("Started thread: '%s'", task)
 
     # Loading tasks
-    def load(self):
+    def load(self, *args):  # pylint: disable=unused-argument
         """ Load the images with detected_faces"""
         logger.debug("Load Images: Start")
         extract_queue = queue_manager.get_queue("extract_in") if self.extractor else None
@@ -304,7 +328,7 @@ class DiskIO():
         return final_faces
 
     # Saving tasks
-    def save(self):
+    def save(self, completion_event):
         """ Save the converted images """
         logger.debug("Save Images: Start")
         pbar = tqdm(range(self.total_count), desc="Converting", file=sys.stdout)
@@ -325,15 +349,16 @@ class DiskIO():
             except Exception as err:  # pylint: disable=broad-except
                 logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
                 continue
+        completion_event.set()
         logger.debug("Save Faces: Complete")
 
 
 class Predict():
     """ Predict faces from incoming queue """
-    def __init__(self, in_queue, arguments):
-        logger.debug("Initializing %s: (args: %s, in_queue: %s)",
-                     self.__class__.__name__, arguments, in_queue)
-        self.batchsize = 16
+    def __init__(self, in_queue, queue_size, arguments):
+        logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
+                     self.__class__.__name__, arguments, queue_size, in_queue)
+        self.batchsize = min(queue_size, 16)
         self.args = arguments
         self.in_queue = in_queue
         self.out_queue = queue_manager.get_queue("patch")

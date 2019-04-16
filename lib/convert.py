@@ -62,8 +62,6 @@ class Converter():
 
             logger.trace("Out queue put: %s", out_file)
             out_queue.put((out_file, image))
-
-        out_queue.put("EOF")
         logger.debug("Completed convert process")
 
     def patch_image(self, predicted):

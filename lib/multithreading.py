@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _launched_processes = set()  # pylint: disable=invalid-name
 
 
+def total_cpus():
+    """ Return total number of cpus """
+    return mp.cpu_count()
+
+
 class ConsumerBuffer():
     """ Memory buffer for consuming """
     def __init__(self, dispatcher, index, data):
