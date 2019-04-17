@@ -88,6 +88,30 @@ class Config(FaceswapConfig):
                  "this too high")
 
         # << COLOR OPTIONS >> #
+        section = "face.color_transfer"
+        self.add_section(title=section,
+                         info="Options for transfering the color distribution from the source to "
+                              "the target image using the mean and standard deviations of the "
+                              "L*a*b* color space.\n"
+                              "This implementation is (loosely) based on to the 'Color Transfer "
+                              "between Images paper by Reinhard et al., 2001. matching the "
+                              "histograms between the source and destination faces.")
+        self.add_item(
+            section=section, title="clip", datatype=bool, default=True,
+            info="Should components of L*a*b* image be scaled by np.clip before converting back "
+                 "to BGR color space?\n"
+                 "If False then components will be min-max scaled appropriately.\n"
+                 "Clipping will keep target image brightness truer to the input.\n"
+                 "Scaling will adjust image brightness to avoid washed out portions in the "
+                 "resulting color transfer that can be caused by clipping.")
+        self.add_item(
+            section=section, title="preserve_paper", datatype=bool, default=True,
+            info="Should color transfer strictly follow methodology layed out in original paper?\n"
+                 "The method does not always produce aesthetically pleasing results.\n"
+                 "If False then L*a*b* components will be scaled using the reciprocal of the "
+                 "scaling factor proposed in the paper. This method seems to produce more "
+                 "consistently aesthetically pleasing results")
+
         section = "face.match_hist"
         self.add_section(title=section,
                          info="Options for matching the histograms between the source and "

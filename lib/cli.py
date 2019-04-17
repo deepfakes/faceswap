@@ -630,11 +630,16 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "color_adjustment",
-            "choices": ["avg-color", "match-hist", "none"],
+            "choices": ["avg-color", "color-transfer", "match-hist", "none"],
             "default": "avg-color",
-            "help": "R|Performs color adjustment to the swapped face:"
+            "help": "R|Performs color adjustment to the swapped face. Some of these options have "
+                    "\nconfigurable settings in '/config/convert.ini' or 'Edit > Configure "
+                    "\nConvert Plugins':"
                     "\navg-color: Adjust the mean of each color channel in the swapped "
                     "\n\treconstruction to equal the mean of the masked area in the orginal image."
+                    "\ncolor-transfer: Transfers the color distribution from the source to the "
+                    "\n\ttarget image using the mean and standard deviations of the L*a*b* "
+                    "\n\tcolor space."
                     "\nmatch-hist: Adjust the histogram of each color channel in the swapped "
                     "\n\treconstruction to equal the histogram of the masked area in the orginal "
                     "\n\timage."
@@ -646,15 +651,16 @@ class ConvertArgs(ExtractConvertArgs):
             "dest": "mask_type",
             "choices": get_available_masks() + ["predicted"],
             "default": "predicted",
-            "help": "R|Mask to use to replace faces:"
+            "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
+                    "\n'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
                     "\ndfaker: A basic face hull mask using a facehull of all 68 landmarks. "
                     "\ndfl_full: An improved face hull mask using a facehull of 3 facial parts. "
                     "\ncomponents: An improved face hull mask using a facehull of 8 facial parts. "
                     "\nfacehull: Face cutout based on landmarks."
-                    "\nnone: No mask. Can still use blur and erode on the edges of the swap box. "
                     "\npredicted: The predicted mask generated from the model. If the model was "
                     "\n\tnot trained with a mask then this will fallback to "
-                    "'{}'".format(get_default_mask())})
+                    "'{}'".format(get_default_mask()) +
+                    "\nnone: Don't use a mask."})
         argument_list.append({"opts": ("-e", "--erosion-size"),
                               "dest": "erosion_size",
                               "type": float,

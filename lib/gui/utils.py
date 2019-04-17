@@ -55,6 +55,12 @@ def set_slider_rounding(value, var, d_type, round_to, min_max):
         var.set(value)
 
 
+def adjust_wraplength(event):
+    """ dynamically adjust the wraplength of a label on event """
+    label = event.widget
+    label.configure(wraplength=event.width - 1)
+
+
 class FileHandler():
     """ Raise a filedialog box and capture input """
 
