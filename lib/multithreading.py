@@ -312,6 +312,7 @@ class PoolProcess():
             logger.debug("Adding process %s of %s to mp.Pool '%s'",
                          idx + 1, self.procs, self._name)
             self.pool.apply_async(self._method, args=self._args, kwds=self._kwargs)
+            _launched_processes.add(self.pool)
         logging.debug("Pooled Processes: '%s'", self._name)
 
     def join(self):
@@ -319,6 +320,7 @@ class PoolProcess():
         logger.debug("Joining Pooled Process: '%s'", self._name)
         self.pool.close()
         self.pool.join()
+        _launched_processes.remove(self.pool)
         logger.debug("Joined Pooled Process: '%s'", self._name)
 
 
@@ -493,9 +495,13 @@ def terminate_processes():
         have a mechanism in place to terminate this work to avoid
         long blocks
     """
-    logger.debug("Processes to join: %s", [process.name
+
+    logger.debug("Processes to join: %s", [process
                                            for process in _launched_processes
-                                           if process.is_alive()])
+                                           if isinstance(process, mp.pool.Pool)
+                                           or process.is_alive()])
     for process in list(_launched_processes):
-        if process.is_alive():
+        if isinstance(process, mp.pool.Pool):
+            process.terminate()
+        if isinstance(process, mp.pool.Pool) or process.is_alive():
             process.join()

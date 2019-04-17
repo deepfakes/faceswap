@@ -87,8 +87,8 @@ class Config(FaceswapConfig):
                  "\nAdditional passes have exponentially less effect so it's not worth setting "
                  "this too high")
 
-        # << PRE WARP OPTIONS >> #
-        section = "face.match_histogram"
+        # << COLOR OPTIONS >> #
+        section = "face.match_hist"
         self.add_section(title=section,
                          info="Options for matching the histograms between the source and "
                               "destination faces")

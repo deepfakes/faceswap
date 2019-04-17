@@ -397,18 +397,16 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "action": DirOrFileFullPaths,
                               "filetypes": "video",
                               "dest": "input_dir",
-                              "default": "input",
-                              "help": "Input directory or video. Either a "
-                                      "directory containing the image files "
-                                      "you wish to process or path to a "
-                                      "video file. Defaults to 'input'"})
+                              "required": True,
+                              "help": "Input directory or video. Either a directory containing "
+                                      "the image files you wish to process or path to a video "
+                                      "file."})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",
-                              "default": "output",
-                              "help": "Output directory. This is where the "
-                                      "converted files will be stored. "
-                                      "Defaults to 'output'"})
+                              "required": True,
+                              "help": "Output directory. This is where the converted files will "
+                                      "be saved."})
         argument_list.append({"opts": ("-al", "--alignments"),
                               "action": FileFullPaths,
                               "filetypes": "alignments",
@@ -612,10 +610,9 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-m", "--model-dir"),
                               "action": DirFullPaths,
                               "dest": "model_dir",
-                              "default": "models",
-                              "help": "Model directory. A directory "
-                                      "containing the trained model you wish "
-                                      "to process. Defaults to 'models'"})
+                              "required": True,
+                              "help": "Model directory. A directory containing the trained model "
+                                      "you wish to process."})
         argument_list.append({"opts": ("-a", "--input-aligned-dir"),
                               "action": DirFullPaths,
                               "dest": "input_aligned_dir",
@@ -629,20 +626,35 @@ class ConvertArgs(ExtractConvertArgs):
                                       "specified, all faces will be "
                                       "converted"})
         argument_list.append({
+            "opts": ("-c", "--color-adjustment"),
+            "action": Radio,
+            "type": str.lower,
+            "dest": "color_adjustment",
+            "choices": ["avg-color", "match-hist", "none"],
+            "default": "avg-color",
+            "help": "R|Performs color adjustment to the swapped face:"
+                    "\navg-color: Adjust the mean of each color channel in the swapped "
+                    "\n\treconstruction to equal the mean of the masked area in the orginal image."
+                    "\nmatch-hist: Adjust the histogram of each color channel in the swapped "
+                    "\n\treconstruction to equal the histogram of the masked area in the orginal "
+                    "\n\timage."
+                    "\nnone: Don't perform color adjustment."})
+        argument_list.append({
             "opts": ("-M", "--mask-type"),
             "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
             "choices": get_available_masks() + ["predicted"],
-            "default": get_default_mask(),
+            "default": "predicted",
             "help": "R|Mask to use to replace faces:"
                     "\ndfaker: A basic face hull mask using a facehull of all 68 landmarks. "
                     "\ndfl_full: An improved face hull mask using a facehull of 3 facial parts. "
                     "\ncomponents: An improved face hull mask using a facehull of 8 facial parts. "
                     "\nfacehull: Face cutout based on landmarks."
                     "\nnone: No mask. Can still use blur and erode on the edges of the swap box. "
-                    "\npredicted: The predicted mask generated from the model. Only valid if the "
-                    "\n\tmodel was trained with a mask."})
+                    "\npredicted: The predicted mask generated from the model. If the model was "
+                    "\n\tnot trained with a mask then this will fallback to "
+                    "'{}'".format(get_default_mask())})
         argument_list.append({"opts": ("-e", "--erosion-size"),
                               "dest": "erosion_size",
                               "type": float,
@@ -688,22 +700,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Use cv2's seamless clone function to "
                                       "remove extreme gradients at the mask "
                                       "seam by smoothing colors."})
-        argument_list.append({"opts": ("-mh", "--match-histogram"),
-                              "action": "store_true",
-                              "dest": "match_histogram",
-                              "default": False,
-                              "help": "Adjust the histogram of each color "
-                                      "channel in the swapped reconstruction "
-                                      "to equal the histogram of the masked "
-                                      "area in the orginal image"})
-        argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
-                              "action": "store_true",
-                              "dest": "avg_color_adjust",
-                              "default": False,
-                              "help": "Adjust the mean of each color channel "
-                                      " in the swapped reconstruction to "
-                                      "equal the mean of the masked area in "
-                                      "the orginal image"})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",
@@ -742,17 +738,15 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-A", "--input-A"),
                               "action": DirFullPaths,
                               "dest": "input_a",
-                              "default": "input_a",
-                              "help": "Input directory. A directory "
-                                      "containing training images for face A. "
-                                      "Defaults to 'input'"})
+                              "required": True,
+                              "help": "Input directory. A directory containing training images "
+                                      "for face A."})
         argument_list.append({"opts": ("-B", "--input-B"),
                               "action": DirFullPaths,
                               "dest": "input_b",
-                              "default": "input_b",
-                              "help": "Input directory. A directory "
-                                      "containing training images for face B. "
-                                      "Defaults to 'input'"})
+                              "required": True,
+                              "help": "Input directory. A directory containing training images "
+                                      "for face B."})
         argument_list.append({"opts": ("-ala", "--alignments-A"),
                               "action": FileFullPaths,
                               "filetypes": 'alignments',
@@ -776,10 +770,9 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-m", "--model-dir"),
                               "action": DirFullPaths,
                               "dest": "model_dir",
-                              "default": "models",
-                              "help": "Model directory. This is where the "
-                                      "training data will be stored. "
-                                      "Defaults to 'model'"})
+                              "required": True,
+                              "help": "Model directory. This is where the training data will be "
+                                      "stored."})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "action": Radio,
                               "type": str.lower,

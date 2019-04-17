@@ -13,17 +13,14 @@ class Face(Adjustment):
 
     @property
     def func_names(self):
-        return ["avg_color_adjust", "match_histogram", "seamless_clone"]
+        return ["color_adjustment", "seamless_clone"]
 
     # Add Functions
-    def add_avg_color_adjust_func(self, action):
-        """ Add the average color adjust function to funcs if requested """
-        do_add = hasattr(self.args, action) and getattr(self.args, action)
-        self.add_function(action, do_add)
-
-    def add_match_histogram_func(self, action):
-        """ Add the match histogram function to funcs if requested """
-        do_add = hasattr(self.args, action) and getattr(self.args, action)
+    def add_color_adjustment_func(self, action):
+        """ Add the color adjustment function to funcs if requested """
+        do_add = getattr(self.args, action).lower() != "none"
+        if do_add:
+            action = getattr(self.args, action).lower().replace("-", "_")
         self.add_function(action, do_add)
 
     def add_seamless_clone_func(self, action):
@@ -33,7 +30,7 @@ class Face(Adjustment):
 
     # IMAGE MANIPULATIONS
     @staticmethod
-    def avg_color_adjust(old_face, new_face, raw_mask):
+    def avg_color(old_face, new_face, raw_mask):
         """ Adjust the mean of the color channels to be the same for the swap and old frame """
         for _ in [0, 1]:
             diff = old_face - new_face
@@ -42,9 +39,9 @@ class Face(Adjustment):
             new_face += adjustment
         return new_face
 
-    def match_histogram(self, old_face, new_face, raw_mask):
+    def match_hist(self, old_face, new_face, raw_mask):
         """ Match the histogram of the color intensity of each channel """
-        config = self.config["match_histogram"]
+        config = self.config["match_hist"]
         mask_indices = np.nonzero(raw_mask.squeeze())
         new_face = [self.hist_match(old_face[:, :, c],
                                     new_face[:, :, c],

@@ -2,9 +2,6 @@
 """ The script to run the convert process of faceswap """
 # TODO
 # Fix dfaker mask for conversion
-# vid to vid (sort output order)
-# test predicted mask
-
 
 import logging
 import re
@@ -43,6 +40,7 @@ class Convert():
         Utils.set_verbosity(self.args.loglevel)
 
         self.images = Images(self.args)
+        self.validate()
         self.alignments = Alignments(self.args, False, self.images.is_video)
         # Update Legacy alignments
         Legacy(self.alignments, self.images.input_images, arguments.input_aligned_dir)
@@ -77,6 +75,16 @@ class Convert():
             retval = min(total_cpus(), self.images.images_found)
         logger.debug(retval)
         return retval
+
+    def validate(self):
+        """ Make the output folder if it doesn't exist and check that video flag is
+            a valid choice """
+        output_dir = get_folder(self.args.output_dir)
+        logger.info("Output Directory: %s", output_dir)
+        if self.args.video and not self.images.is_video:
+            logger.warning("Output as video selected, but using frames as input. "
+                           "Falling back to frames output")
+            self.args.video = False
 
     def add_queues(self):
         """ Add the queues for convert """
@@ -232,9 +240,7 @@ class DiskIO():
         """ Start the DiskIO thread """
         logger.debug("Starting thread: '%s'", task)
         args = self.completion_event if task == "save" else None
-        name = "{}_video".format(task) if (self.images.is_video
-                                           and task == "save"
-                                           and self.args.video) else task
+        name = "{}_video".format(task) if self.args.video and task == "save" else task
         func = getattr(self, name)
         io_thread = MultiThread(func, args, thread_count=1)
         io_thread.start()
