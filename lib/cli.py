@@ -623,6 +623,27 @@ class ConvertArgs(ExtractConvertArgs):
                                       "conversion. If no aligned dir is "
                                       "specified, all faces will be "
                                       "converted"})
+        argument_list.append({"opts": ("-ref", "--reference-video"),
+                              "action": FileFullPaths,
+                              "dest": "reference_video",
+                              "filetypes": "video",
+                              "type": str,
+                              "help": "Only required if converting from images to video. Provide "
+                                      "The original video that the source frames were extracted "
+                                      "from (for extracting the fps and audio)."})
+        argument_list.append({"opts": ("-fmt", "--output-format"),
+                              "action": Radio,
+                              "type": str,
+                              "dest": "output_format",
+                              "choices": PluginLoader.get_available_convert_plugins("output",
+                                                                                    False),
+                              "default": "images",
+                              "help": "Whether to write out to video or a series of images. If "
+                                      "converting to video, when the input is a series of images "
+                                      "then the '-ref' (--reference-video) parameter must be "
+                                      "passed. The output format is configurable in "
+                                      "'/config/convert.ini' or 'Edit > Configure Convert "
+                                      "Plugins."})
         argument_list.append({
             "opts": ("-c", "--color-adjustment"),
             "action": Radio,
@@ -708,14 +729,9 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "draw_transparent",
                               "default": False,
-                              "help": "Place the swapped face on a "
-                                      "transparent layer rather than the "
-                                      "original frame."})
-        argument_list.append({"opts": ("-v", "--video"),
-                              "action": "store_true",
-                              "default": False,
-                              "help": "Output to video. NB: Currently the input source must be a "
-                                      "video to be able to render straight to video."})
+                              "help": "Place the swapped face on a transparent layer rather than "
+                                      "the original frame. NB: This is only compatible with image "
+                                      "output and will be ignored for video output."})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,

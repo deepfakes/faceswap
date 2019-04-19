@@ -27,7 +27,7 @@ class Config(FaceswapConfig):
 #        self.add_section(title=section,
 #                         info="Options that apply to all models")
 
-        # << BOX OPTIONS >> #
+        # << MASK OPTIONS >> #
         section = "mask.box_blend"
         self.add_section(title=section,
                          info="Options for blending the edges of the swapped box with the "
@@ -63,7 +63,6 @@ class Config(FaceswapConfig):
                  "\nAdditional passes have exponentially less effect so it's not worth setting "
                  "this too high")
 
-        # << MASK OPTIONS >> #
         section = "mask.mask_blend"
         self.add_section(title=section,
                          info="Options for blending the edges between the mask and the "
@@ -94,14 +93,14 @@ class Config(FaceswapConfig):
                  "Positive values apply erosion which reduces the size of the swapped area.\n"
                  "Negative values apply dilation which increases the swapped area")
 
-        # << COLOR OPTIONS >> #
+        # <<<<<< COLOUR  OPTIONS >>>>>> #
         section = "color.color_transfer"
         self.add_section(title=section,
                          info="Options for transfering the color distribution from the source to "
                               "the target image using the mean and standard deviations of the "
                               "L*a*b* color space.\n"
                               "This implementation is (loosely) based on to the 'Color Transfer "
-                              "between Images paper by Reinhard et al., 2001. matching the "
+                              "between Images' paper by Reinhard et al., 2001. matching the "
                               "histograms between the source and destination faces.")
         self.add_item(
             section=section, title="clip", datatype=bool, default=True,
@@ -129,7 +128,7 @@ class Config(FaceswapConfig):
             info="Adjust the threshold for histogram matching. Can reduce extreme colors leaking "
                  "in by filtering out colors at the extreme ends of the histogram spectrum")
 
-        # << POST WARP OPTIONS >> #
+        # <<<<<< SCALING  OPTIONS >>>>>> #
         section = "scaling.sharpen"
         self.add_section(title=section,
                          info="Options for sharpening the face after placement")
@@ -172,10 +171,10 @@ class Config(FaceswapConfig):
                  "\nLow values should sharpen more because fewer areas are excluded. "
                  "\nHigher threshold values exclude areas of lower contrast.")
 
-        # << VIDEO ENCODING OPTIONS >> #
-        section = "video.global"
+        # <<<<<< OUTPUT  OPTIONS >>>>>> #
+        section = "output.video"
         self.add_section(title=section,
-                         info="Options for encoding converted videos")
+                         info="Options for encoding converted frames to video.")
         self.add_item(
             section=section, title="container", datatype=str, default="mp4",
             choices=[ext.replace(".", "") for ext in _video_extensions],
@@ -183,13 +182,9 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="codec", datatype=str,
             choices=["libx264", "libx265"], default="libx264",
-            info="Video codec to use:\n"
-                 "libx264: H.264. A widely supported and commonly used codec.\n"
-                 "libx265: H.265 / HEVC video encoder application library.")
-
-        section = "video.libx264"
-        self.add_section(title=section,
-                         info="Options for h.264 encoding")
+            info="Video codec to use:"
+                 "\n\t libx264: H.264. A widely supported and commonly used codec."
+                 "\n\t libx265: H.265 / HEVC video encoder application library.")
         self.add_item(
             section=section, title="crf", datatype=int, min_max=(0, 51), rounding=1, default=23,
             info="Constant Rate Factor:  0 is lossless and 51 is worst quality possible. A lower "
@@ -206,59 +201,41 @@ class Config(FaceswapConfig):
             choices=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow",
                      "slower", "veryslow"],
             info="A preset is a collection of options that will provide a certain encoding speed "
-                 "to compression ratio. A slower preset will provide better compression "
-                 "(compression is quality per filesize). Use the slowest preset that you have "
+                 "to compression ratio.\nA slower preset will provide better compression "
+                 "(compression is quality per filesize).\nUse the slowest preset that you have "
                  "patience for")
         self.add_item(
             section=section, title="tune", datatype=str, default="none",
             choices=["none", "film", "animation", "grain", "stillimage", "fastdecode",
                      "zerolatency"],
-            info="Change settings based upon the specifics of your input:\n"
-                 "film: use for high quality movie content; lowers deblocking.\n\t"
-                 "animation: good for cartoons; uses higher deblocking and more reference "
-                 "frames.\n\t"
-                 "grain: preserves the grain structure in old, grainy film material.\n\t"
-                 "stillimage: good for slideshow-like content.\n\t"
-                 "fastdecode: allows faster decoding by disabling certain filters.\n\t"
-                 "zerolatency: good for fast encoding and low-latency streaming.")
+            info="Change settings based upon the specifics of your input:"
+                 "\n\t none: Don't perform any additional tuning."
+                 "\n\t film: [H.264 only] Use for high quality movie content; lowers deblocking."
+                 "\n\t animation: [H.264 only] Good for cartoons; uses higher deblocking and more "
+                 "reference frames."
+                 "\n\t grain: Preserves the grain structure in old, grainy film material."
+                 "\n\t stillimage: [H.264 only] Good for slideshow-like content."
+                 "\n\t fastdecode: Allows faster decoding by disabling certain filters."
+                 "\n\t zerolatency: Good for fast encoding and low-latency streaming.")
         self.add_item(
             section=section, title="profile", datatype=str, default="auto",
             choices=["auto", "baseline", "main", "high", "high10", "high422", "high444"],
-            info="Limit the output to a specific H.264 profile. Don't change this unless your "
-                 "target device only supports a certain profile.")
+            info="[H.264 Only] Limit the output to a specific H.264 profile. Don't change this "
+                 "unless your target device only supports a certain profile.")
         self.add_item(
             section=section, title="level", datatype=str, default="auto",
             choices=["auto", "1", "1b", "1.1", "1.2", "1.3", "2", "2.1", "2.2", "3", "3.1", "3.2",
                      "4", "4.1", "4.2", "5", "5.1", "5.2", "6", "6.1", "6.2"],
-            info="Set the encoder level, Don't change this unless your target device only "
-                 "supports a certain level.")
-
-        section = "video.libx265"
-        self.add_section(title=section,
-                         info="Options for h.265 / HEVC encoding")
+            info="[H.264 Only] Set the encoder level, Don't change this unless your target device "
+                 "only supports a certain level.")
         self.add_item(
-            section=section, title="crf", datatype=int, min_max=(0, 51), rounding=1, default=28,
-            info="Constant Rate Factor:  0 is lossless and 51 is worst quality possible. A lower "
-                 "value generally leads to higher quality, and a subjectively sane range is "
-                 "17–28. Consider 17 or 18 to be visually lossless or nearly so; it should look "
-                 "the same or nearly the same as the input but it isn't technically lossless.\n"
-                 "The range is exponential, so increasing the CRF value +6 results in roughly "
-                 "half the bitrate / file size, while -6 leads to roughly twice the bitrate.\n"
-                 "Choose the highest CRF value that still provides an acceptable quality. If the "
-                 "output looks good, then try a higher value. If it looks bad, choose a lower "
-                 "value.")
+            section=section, title="width", datatype=int, min_max=(0, 3840), rounding=4, default=0,
+            info="Output width of the final frame. Set to 0 for same as source (no scaling).\nIf "
+                 "width is set to 0 when a value has been set for height, then width will be "
+                 "automatically adjusted to maintain the source aspect ratio.")
         self.add_item(
-            section=section, title="preset", datatype=str, default="medium",
-            choices=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow",
-                     "slower", "veryslow"],
-            info="A preset is a collection of options that will provide a certain encoding speed "
-                 "to compression ratio. A slower preset will provide better compression "
-                 "(compression is quality per filesize). Use the slowest preset that you have "
-                 "patience for")
-        self.add_item(
-            section=section, title="tune", datatype=str, default="none",
-            choices=["none", "grain", "fastdecode", "zerolatency"],
-            info="Change settings based upon the specifics of your input:\n"
-                 "grain: preserves the grain structure in old, grainy film material.\n\t"
-                 "fastdecode: allows faster decoding by disabling certain filters.\n\t"
-                 "zerolatency: good for fast encoding and low-latency streaming.")
+            section=section, title="height", datatype=int, min_max=(0, 2160),
+            rounding=4, default=0,
+            info="Output width of the final frame. Set to 0 for same as source (no scaling).\nIf "
+                 "height is set to 0 when a value has been set for width, then height will be "
+                 "automatically adjusted to maintain the source aspect ratio.")

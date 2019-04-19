@@ -7,15 +7,10 @@ import logging
 import re
 import os
 import sys
-from collections import OrderedDict
 from time import sleep
 from threading import Event
 
-import cv2
-import imageio
-import imageio_ffmpeg as im_ffm
 import numpy as np
-from ffmpy import FFmpeg
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
@@ -80,12 +75,14 @@ class Convert():
     def validate(self):
         """ Make the output folder if it doesn't exist and check that video flag is
             a valid choice """
+        if (self.args.output_format == "video" and
+                not self.images.is_video and
+                self.args.reference_video is None):
+            logger.error("Output as video selected, but using frames as input. You must provide a "
+                         "reference video ('-ref', '--reference-video').")
+            exit(1)
         output_dir = get_folder(self.args.output_dir)
         logger.info("Output Directory: %s", output_dir)
-        if self.args.video and not self.images.is_video:
-            logger.warning("Output as video selected, but using frames as input. "
-                           "Falling back to frames output")
-            self.args.video = False
 
     def add_queues(self):
         """ Add the queues for convert """
@@ -166,10 +163,11 @@ class DiskIO():
         self.images = images
         self.args = arguments
         self.completion_event = Event()
+        self.frame_ranges = self.get_frame_ranges()
+        self.writer = self.get_writer()
 
         # For frame skipping
         self.imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
-        self.frame_ranges = self.get_frame_ranges()
 
         # Extractor for on the fly detection
         self.extractor = None
@@ -194,6 +192,18 @@ class DiskIO():
         return retval
 
     # Initalization
+    def get_writer(self):
+        """ Return the writer plugin """
+        args = [self.args.output_dir]
+        if self.args.output_format == "video":
+            args.append(self.total_count)
+            if self.images.is_video:
+                args.append(self.args.input_dir)
+            else:
+                args.append(self.args.reference_video)
+        logger.debug("Writer args: %s", args)
+        return PluginLoader.get_converter("output", self.args.output_format)(*args)
+
     def get_frame_ranges(self):
         """ split out the frame ranges and parse out 'min' and 'max' values """
         if not self.args.frame_ranges:
@@ -241,8 +251,7 @@ class DiskIO():
         """ Start the DiskIO thread """
         logger.debug("Starting thread: '%s'", task)
         args = self.completion_event if task == "save" else None
-        name = "{}_video".format(task) if self.args.video and task == "save" else task
-        func = getattr(self, name)
+        func = getattr(self, task)
         io_thread = MultiThread(func, args, thread_count=1)
         io_thread.start()
         setattr(self, "{}_thread".format(task), io_thread)
@@ -345,62 +354,6 @@ class DiskIO():
     def save(self, completion_event):
         """ Save the converted images """
         logger.debug("Save Images: Start")
-        pbar = tqdm(range(self.total_count), desc="Converting", file=sys.stdout)
-        for _ in pbar:
-            if self.save_queue.shutdown.is_set():
-                logger.debug("Save Queue: Stop signal received. Terminating")
-                pbar.close()
-                break
-            item = self.save_queue.get()
-            if item == "EOF":
-                pbar.close()
-                break
-            filename, image = item
-
-            logger.trace("Saving frame: '%s'", filename)
-            try:
-                cv2.imwrite(filename, image)  # pylint: disable=no-member
-            except Exception as err:  # pylint: disable=broad-except
-                logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
-                continue
-        completion_event.set()
-        logger.debug("Save Faces: Complete")
-
-    # Save to video methods
-    @property
-    def video_file(self):
-        """ Return full path to video output """
-        filename = os.path.basename(self.args.input_dir)
-        filename, ext = os.path.splitext(filename)
-        filename = "{}_converted{}".format(filename, ext)
-        retval = os.path.join(self.args.output_dir, filename)
-        logger.debug(retval)
-        return retval
-
-    @property
-    def video_tmp_file(self):
-        """ Temporary video file, prior to muxing final audio """
-        path, filename = os.path.split(self.video_file)
-        retval = os.path.join(path, "__tmp_{}".format(filename))
-        logger.debug(retval)
-        return retval
-
-    @property
-    def video_fps(self):
-        """ Return the fps of source video """
-        reader = imageio.get_reader(self.args.input_dir)
-        retval = reader.get_meta_data()["fps"]
-        logger.debug(retval)
-        return retval
-
-    def save_video(self, completion_event):
-        """ Video must be ordered correctly """
-        logger.debug("Save Video: Start")
-        re_search = re.compile(r"(\d+)(?=\.\w+$)")
-        frame_order = list(range(1, self.total_count + 1))
-
-        writer = imageio.get_writer(self.video_tmp_file, fps=self.video_fps)
-        cache = dict()
         for _ in tqdm(range(self.total_count), desc="Converting", file=sys.stdout):
             if self.save_queue.shutdown.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
@@ -408,45 +361,11 @@ class DiskIO():
             item = self.save_queue.get()
             if item == "EOF":
                 break
-
             filename, image = item
-            frame_no = int(re.search(re_search, filename).group())
-            cache[frame_no] = image
-            logger.trace("Added to cache. Frame no: %s", frame_no)
-
-            while frame_order:
-                if frame_order[0] not in cache:
-                    logger.trace("Next frame not ready. Continuing")
-                    break
-
-                save_no = frame_order.pop(0)
-                save_image = cache.pop(save_no)
-                logger.trace("Rendering from cache. Frame no: %s", save_no)
-                writer.append_data(save_image[:, :, ::-1])
-            logger.trace("Current cache size: %s", len(cache))
-
-        writer.close()
-        self.video_mux_audio()
+            self.writer.write(filename, image)
+        self.writer.close()
         completion_event.set()
         logger.debug("Save Faces: Complete")
-
-    def video_mux_audio(self):
-        """ Mux audio
-            ImageIO is a useful lib for frames > video as it also packages the ffmpeg binary
-            however muxing audio is non-trivial, so this is done afterwards with ffmpy.
-            A future fix could be implemented to mux audio with the frames """
-        logger.info("Muxing Audio...")
-        exe = im_ffm.get_ffmpeg_exe()
-        inputs = OrderedDict([(self.video_tmp_file, None), (self.args.input_dir, None)])
-        outputs = {self.video_file: "-map 0:0 -map 1:1 -c: copy"}
-        ffm = FFmpeg(executable=exe,
-                     global_options="-hide_banner -nostats -v 0 -y",
-                     inputs=inputs,
-                     outputs=outputs)
-        logger.debug("Executing: %s", ffm.cmd)
-        ffm.run()
-        logger.debug("Removing temp file")
-        os.remove(self.video_tmp_file)
 
 
 class Predict():

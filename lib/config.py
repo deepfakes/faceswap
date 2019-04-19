@@ -75,30 +75,6 @@ class FaceswapConfig():
                 conf[key] = self.get(sect, key)
         return conf
 
-    def get_master_section_config_dict(self, master_section):
-        """ Collate global options and requested master section into a dictionary
-            with the correct datatypes
-
-            Master sections are the names that exist before the "." in sections
-            where this naming schema is valid.
-            e.g. "model.<model_name>" with a master_section of 'model' will return all of
-            the config options for any section that begins with 'model.'
-
-            The master_section will be stripped from the returning dict (e.g model. will
-            be removed from the key in the above example)
-            """
-        conf = dict()
-        for sect in self.config.sections():
-            if sect != "global" and not sect.startswith("{}.".format(master_section)):
-                continue
-            for key in self.config[sect]:
-                if key.startswith(("#", "\n")):  # Skip comments
-                    continue
-                new_sect = sect.split(".")
-                new_sect = new_sect[0] if len(new_sect) == 1 else ".".join(new_sect[1:])
-                conf.setdefault(new_sect, dict())[key] = self.get(sect, key)
-        return conf
-
     def get(self, section, option):
         """ Return a config item in it's correct format """
         logger.debug("Getting config item: (section: '%s', option: '%s')", section, option)
