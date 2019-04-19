@@ -52,6 +52,7 @@ class Convert():
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
+                                   self.predictor.has_predicted_mask,
                                    arguments)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -487,11 +488,14 @@ class Predict():
     @property
     def input_mask(self):
         """ Return the input mask, if there is one, else None """
-        if not self.model.state.mask_shapes:
-            return None
         mask = np.zeros(self.model.state.mask_shapes[0], dtype="float32")
         retval = np.expand_dims(mask, 0)
         return retval
+
+    @property
+    def has_predicted_mask(self):
+        """ Return whether this model has a predicted mask """
+        return self.model.state.mask_shapes is not None
 
     def load_model(self):
         """ Load the model requested for conversion """
@@ -600,7 +604,7 @@ class Predict():
         """ Perform inference on the feed """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))
         feed = [feed_faces]
-        if self.input_mask is not None:
+        if self.has_predicted_mask:
             feed.append(np.repeat(self.input_mask, feed_faces.shape[0], axis=0))
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
 

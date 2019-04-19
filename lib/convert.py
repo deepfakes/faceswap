@@ -11,23 +11,46 @@ import cv2
 import numpy as np
 from lib.model import masks as model_masks
 
-from plugins.convert import Box, Mask, Face, Scaling
+from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Converter():
     """ Swap a source face with a target """
-    def __init__(self, output_dir, output_size, arguments):
-        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  arguments: %s)",
-                     self.__class__.__name__, output_dir, output_size, arguments)
+    def __init__(self, output_dir, output_size, output_has_mask, arguments):
+        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  output_has_mask: %s, "
+                     "arguments: %s)", self.__class__.__name__, output_dir, output_size,
+                     output_has_mask, arguments)
         self.output_dir = output_dir
         self.args = arguments
-        self.box = Box(arguments, output_size)
-        self.mask = Mask(arguments, output_size)
-        self.pre_adjustments = Face(arguments)
-        self.post_adjustments = Scaling(arguments)
+        self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
+        self.load_plugins(output_size, output_has_mask)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def load_plugins(self, output_size, output_has_mask):
+        """ Load the requested adjustment plugins """
+        logger.debug("Loading plugins")
+        self.adjustments["box"] = PluginLoader.get_converter("mask", "box_blend")(
+            "none",
+            output_size)
+
+        self.adjustments["mask"] = PluginLoader.get_converter("mask", "mask_blend")(
+            self.args.mask_type,
+            output_size,
+            output_has_mask)
+
+        if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
+            self.adjustments["color"] = PluginLoader.get_converter("color",
+                                                                   self.args.color_adjustment)()
+
+        if self.args.seamless_clone:
+            self.adjustments["seamless"] = PluginLoader.get_converter("color", "seamless_clone")()
+
+        if self.args.scaling != "none" and self.args.scaling is not None:
+            self.adjustments["scaling"] = PluginLoader.get_converter("scaling",
+                                                                     self.args.scaling)()
+        logger.debug("Loaded plugins: %s", self.adjustments)
 
     def process(self, in_queue, out_queue):
         """ Process items from the queue """
@@ -69,7 +92,7 @@ class Converter():
         logger.trace("Patching image: '%s'", predicted["filename"])
         frame_size = (predicted["image"].shape[1], predicted["image"].shape[0])
         new_image = self.get_new_image(predicted, frame_size)
-        patched_face = self.apply_post_warp_fixes(predicted, new_image)
+        patched_face = self.post_warp_adjustments(predicted, new_image)
         logger.trace("Patched image: '%s'", predicted["filename"])
         return patched_face
 
@@ -89,11 +112,7 @@ class Converter():
             src_face = detected_face.reference_face
             interpolator = detected_face.reference_interpolators[1]
 
-            new_face = self.box.do_actions(old_face=src_face, new_face=new_face)
-            new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
-            new_face = self.pre_adjustments.do_actions(old_face=src_face,
-                                                       new_face=new_face,
-                                                       raw_mask=raw_mask)
+            new_face = self.pre_warp_adjustments(src_face, new_face, detected_face, predicted_mask)
 
             # Warp face with the mask
             placeholder = cv2.warpAffine(  # pylint: disable=no-member
@@ -110,11 +129,23 @@ class Converter():
 
         return placeholder
 
+    def pre_warp_adjustments(self, old_face, new_face, detected_face, predicted_mask):
+        """ Run the pre-warp adjustments """
+        logger.trace("old_face shape: %s, new_face shape: %s, predicted_mask shape: %s",
+                     old_face.shape, new_face.shape, predicted_mask.shape)
+        new_face = self.adjustments["box"].run(new_face)
+        new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
+        if self.adjustments["color"] is not None:
+            new_face = self.adjustments["color"].run(old_face, new_face, raw_mask)
+        if self.adjustments["seamless"] is not None:
+            new_face = self.adjustments["seamless"].run(old_face, new_face, raw_mask)
+        logger.trace("returning: new_face shape %s", new_face.shape)
+        return new_face
+
     def get_image_mask(self, new_face, detected_face, predicted_mask):
         """ Get the image mask """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
-        mask, raw_mask = self.mask.do_actions(detected_face=detected_face,
-                                              predicted_mask=predicted_mask)
+        mask, raw_mask = self.adjustments["mask"].run(detected_face, predicted_mask)
         if new_face.shape[2] == 4:
             logger.trace("Combining mask with alpha channel box mask")
             new_face[:, :, -1] = np.minimum(new_face[:, :, -1], mask.squeeze())
@@ -125,9 +156,10 @@ class Converter():
         logger.trace("Got mask. Image shape: %s", new_face.shape)
         return new_face, raw_mask
 
-    def apply_post_warp_fixes(self, predicted, new_image):
-        """ Apply fixes to the image prior to warping """
-        new_image = self.post_adjustments.do_actions(new_face=new_image)
+    def post_warp_adjustments(self, predicted, new_image):
+        """ Apply fixes to the image after warping """
+        if self.adjustments["scaling"] is not None:
+            new_image = self.adjustments["scaling"].run(new_image)
 
         mask = np.repeat(new_image[:, :, -1][:, :, np.newaxis], 3, axis=-1)
         foreground = new_image[:, :, :3]

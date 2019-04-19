@@ -31,6 +31,11 @@ class PluginLoader():
         return PluginLoader._import("train.trainer", name)
 
     @staticmethod
+    def get_converter(category, name):
+        """ Return the converter sub plugin """
+        return PluginLoader._import("convert.{}".format(category), name)
+
+    @staticmethod
     def _import(attr, name):
         """ Import the plugin's module """
         name = name.replace("-", "_")
@@ -40,16 +45,6 @@ class PluginLoader():
         mod = ".".join(("plugins", attr, name))
         module = import_module(mod)
         return getattr(module, ttl)
-
-    @staticmethod
-    def get_available_models():
-        """ Return a list of available models """
-        modelpath = os.path.join(os.path.dirname(__file__), "train", "model")
-        models = sorted(item.name.replace(".py", "").replace("_", "-")
-                        for item in os.scandir(modelpath)
-                        if not item.name.startswith("_")
-                        and item.name.endswith(".py"))
-        return models
 
     @staticmethod
     def get_available_extractors(extractor_type):
@@ -65,7 +60,31 @@ class PluginLoader():
         return extractors
 
     @staticmethod
+    def get_available_models():
+        """ Return a list of available models """
+        modelpath = os.path.join(os.path.dirname(__file__), "train", "model")
+        models = sorted(item.name.replace(".py", "").replace("_", "-")
+                        for item in os.scandir(modelpath)
+                        if not item.name.startswith("_")
+                        and item.name.endswith(".py"))
+        return models
+
+    @staticmethod
     def get_default_model():
         """ Return the default model """
         models = PluginLoader.get_available_models()
         return 'original' if 'original' in models else models[0]
+
+    @staticmethod
+    def get_available_convert_plugins(convert_category, add_none=True):
+        """ Return a list of available models """
+        convertpath = os.path.join(os.path.dirname(__file__),
+                                   "convert",
+                                   convert_category)
+        converters = sorted(item.name.replace(".py", "").replace("_", "-")
+                            for item in os.scandir(convertpath)
+                            if not item.name.startswith("_")
+                            and item.name.endswith(".py"))
+        if add_none:
+            converters.insert(0, "none")
+        return converters

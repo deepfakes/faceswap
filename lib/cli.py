@@ -468,8 +468,7 @@ class ExtractArgs(ExtractConvertArgs):
             "opts": ("-D", "--detector"),
             "action": Radio,
             "type": str.lower,
-            "choices":  PluginLoader.get_available_extractors(
-                "detect"),
+            "choices":  PluginLoader.get_available_extractors("detect"),
             "default": "mtcnn",
             "help": "R|Detector to use."
                     "\n'dlib-hog': uses least resources, but is the"
@@ -486,8 +485,7 @@ class ExtractArgs(ExtractConvertArgs):
             "opts": ("-A", "--aligner"),
             "action": Radio,
             "type": str.lower,
-            "choices": PluginLoader.get_available_extractors(
-                "align"),
+            "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
             "help": "R|Aligner to use."
                     "\n'dlib': Dlib Pose Predictor. Faster, less "
@@ -630,7 +628,7 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "color_adjustment",
-            "choices": ["avg-color", "color-transfer", "match-hist", "none"],
+            "choices": PluginLoader.get_available_convert_plugins("color", True),
             "default": "avg-color",
             "help": "R|Performs color adjustment to the swapped face. Some of these options have "
                     "\nconfigurable settings in '/config/convert.ini' or 'Edit > Configure "
@@ -644,6 +642,17 @@ class ConvertArgs(ExtractConvertArgs):
                     "\n\treconstruction to equal the histogram of the masked area in the orginal "
                     "\n\timage."
                     "\nnone: Don't perform color adjustment."})
+        argument_list.append({
+            "opts": ("-sc", "--scaling"),
+            "action": Radio,
+            "type": str.lower,
+            "choices": PluginLoader.get_available_convert_plugins("scaling", True),
+            "default": "none",
+            "help": "R|Performs a scaling process to attempt to get better definition on the "
+                    "\nfinal swap. Some of these options have configurable settings in "
+                    "\n'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
+                    "\nsharpen: Perform sharpening on the final face."
+                    "\nnone: Don't perform any scaling operations."})
         argument_list.append({
             "opts": ("-M", "--mask-type"),
             "action": Radio,
@@ -661,17 +670,6 @@ class ConvertArgs(ExtractConvertArgs):
                     "\n\tnot trained with a mask then this will fallback to "
                     "'{}'".format(get_default_mask()) +
                     "\nnone: Don't use a mask."})
-        argument_list.append({"opts": ("-e", "--erosion-size"),
-                              "dest": "erosion_size",
-                              "type": float,
-                              "action": Slider,
-                              "min_max": (-100.0, 100.0),
-                              "rounding": 2,
-                              "default": 0.0,
-                              "help": "Erosion kernel size as a percentage of the mask radius "
-                                      "area. Positive values apply erosion which reduces the size "
-                                      "of the swapped area. Negative values apply dilation which "
-                                      "increases the swapped area"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,

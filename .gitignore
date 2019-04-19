@@ -28,6 +28,7 @@
 !plugins/*
 !plugins/extract/*
 !plugins/train/*
+!plugins/convert/*
 !tools
 !tools/lib*
 *.ini
