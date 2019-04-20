@@ -631,19 +631,32 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Only required if converting from images to video. Provide "
                                       "The original video that the source frames were extracted "
                                       "from (for extracting the fps and audio)."})
-        argument_list.append({"opts": ("-fmt", "--output-format"),
+        argument_list.append({"opts": ("-w", "--writer"),
                               "action": Radio,
                               "type": str,
-                              "dest": "output_format",
-                              "choices": PluginLoader.get_available_convert_plugins("output",
+                              "choices": PluginLoader.get_available_convert_plugins("writer",
                                                                                     False),
                               "default": "images",
-                              "help": "Whether to write out to video or a series of images. If "
-                                      "converting to video, when the input is a series of images "
-                                      "then the '-ref' (--reference-video) parameter must be "
-                                      "passed. The output format is configurable in "
-                                      "'/config/convert.ini' or 'Edit > Configure Convert "
-                                      "Plugins."})
+                              "help": "R|The plugin to use to output the converted images. The "
+                                      "\nwriters are configurable in '/config/convert.ini' or "
+                                      "\n'Edit > Configure Convert Plugins:"
+                                      "\nimages-opencv: The fastest image writer, but less options"
+                                      "\n\tand formats than other plugins."
+                                      "\nimages-pillow: Slower than opencv, but has more options"
+                                      "\n\tand supports more formats."
+                                      "\nvideo-ffmpeg: Writes out the convert straight to video."
+                                      "\n\twhen the input is a series of images then the '-ref' "
+                                      "\n\t(--reference-video) parameter must be set"})
+        argument_list.append({"opts": ("-osc", "--output-scale"),
+                              "dest": "output_scale",
+                              "action": Slider,
+                              "type": int,
+                              "default": 100,
+                              "min_max": (25, 400),
+                              "rounding": 1,
+                              "help": "Scale the final output frames by this amount. 100%% will "
+                                      "output the frames at source dimensions. 50%% at half size "
+                                      "200%% at double size"})
         argument_list.append({
             "opts": ("-c", "--color-adjustment"),
             "action": Radio,
@@ -725,13 +738,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Use cv2's seamless clone function to "
                                       "remove extreme gradients at the mask "
                                       "seam by smoothing colors."})
-        argument_list.append({"opts": ("-dt", "--draw-transparent"),
-                              "action": "store_true",
-                              "dest": "draw_transparent",
-                              "default": False,
-                              "help": "Place the swapped face on a transparent layer rather than "
-                                      "the original frame. NB: This is only compatible with image "
-                                      "output and will be ignored for video output."})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,

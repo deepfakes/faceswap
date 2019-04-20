@@ -8,20 +8,19 @@ import imageio
 import imageio_ffmpeg as im_ffm
 from ffmpy import FFmpeg
 
-from ._base import Writer, logger
+from ._base import Output, logger
 
 
-class Output(Writer):
+class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, output_folder, total_count, source_video):
-        super().__init__(output_folder)
+    def __init__(self, scaling, output_folder, total_count, source_video):
+        super().__init__(scaling, output_folder)
         self.source_video = source_video
         self.re_search = re.compile(r"(\d+)(?=\.\w+$)")  # Identify frame numbers
         self.frame_order = list(range(1, total_count + 1))
         self.writer = None  # Need to know dimensions of first frame, so set writer then
         self.cache = dict()
         self.dimensions = None
-        self.scaling_factor = 1
 
     @property
     def video_file(self):
@@ -106,26 +105,10 @@ class Output(Writer):
             images coming in and ensure all images go into the video at the same size """
         logger.debug("frame_dims: %s", frame_dims)
         height, width = frame_dims
-        dest_width = self.config["width"]
-        dest_height = self.config["height"]
-
-        if dest_width == 0 and dest_height == 0:
-            scale_width = width
-            scale_height = height
-        elif dest_width != 0 and dest_height != 0:
-            self.scaling_factor = round((dest_height * dest_width) / (height * width))
-            scale_width = dest_width
-            scale_height = dest_height
-        elif dest_height == 0:
-            self.scaling_factor = dest_width / width
-            scale_width = dest_width
-            scale_height = round(height * self.scaling_factor)
-        elif dest_width == 0:
-            self.scaling_factor = dest_height / height
-            scale_width = round(width * self.scaling_factor)
-            scale_height = dest_height
-        self.dimensions = "{}:{}".format(scale_width, scale_height)
-        logger.debug("dimensions: %s, scale_factor: %s", self.dimensions, self.scaling_factor)
+        dest_width = round((width * self.scaling_factor) / 2) * 2
+        dest_height = round((height * self.scaling_factor) / 2) * 2
+        self.dimensions = "{}:{}".format(dest_width, dest_height)
+        logger.debug("dimensions: %s", self.dimensions)
 
     def cache_frame(self, filename, image):
         """ Add the incoming frame to the cache """

@@ -2,6 +2,7 @@
 """ The script to run the convert process of faceswap """
 # TODO
 # Fix dfaker mask for conversion
+# Decide what to do with seamless clone
 
 import logging
 import re
@@ -48,6 +49,7 @@ class Convert():
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
                                    self.predictor.has_predicted_mask,
+                                   self.disk_io.draw_transparent,
                                    arguments)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -75,7 +77,7 @@ class Convert():
     def validate(self):
         """ Make the output folder if it doesn't exist and check that video flag is
             a valid choice """
-        if (self.args.output_format == "video" and
+        if (self.args.writer.startswith("video") and
                 not self.images.is_video and
                 self.args.reference_video is None):
             logger.error("Output as video selected, but using frames as input. You must provide a "
@@ -182,6 +184,12 @@ class DiskIO():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
+    def draw_transparent(self):
+        """ Draw transparent is an image writer only parameter.
+            Return the value here for easy access for predictor """
+        return self.writer.config.get("draw_transparent", False)
+
+    @property
     def total_count(self):
         """ Return the total number of frames to be converted """
         if self.frame_ranges and not self.args.keep_unchanged:
@@ -194,15 +202,15 @@ class DiskIO():
     # Initalization
     def get_writer(self):
         """ Return the writer plugin """
-        args = [self.args.output_dir]
-        if self.args.output_format == "video":
+        args = [self.args.output_scale, self.args.output_dir]
+        if self.args.writer.startswith("video"):
             args.append(self.total_count)
             if self.images.is_video:
                 args.append(self.args.input_dir)
             else:
                 args.append(self.args.reference_video)
         logger.debug("Writer args: %s", args)
-        return PluginLoader.get_converter("output", self.args.output_format)(*args)
+        return PluginLoader.get_converter("writer", self.args.writer)(*args)
 
     def get_frame_ranges(self):
         """ split out the frame ranges and parse out 'min' and 'max' values """

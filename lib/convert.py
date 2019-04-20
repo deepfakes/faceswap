@@ -4,8 +4,6 @@
     found on https://www.reddit.com/r/deepfakes/ """
 
 import logging
-import os
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -18,11 +16,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Converter():
     """ Swap a source face with a target """
-    def __init__(self, output_dir, output_size, output_has_mask, arguments):
+    def __init__(self, output_dir, output_size, output_has_mask, draw_transparent, arguments):
         logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  output_has_mask: %s, "
-                     "arguments: %s)", self.__class__.__name__, output_dir, output_size,
-                     output_has_mask, arguments)
+                     "draw_transparent: %s, arguments: %s)", self.__class__.__name__, output_dir,
+                     output_size, output_has_mask, draw_transparent, arguments)
         self.output_dir = output_dir
+        self.draw_transparent = draw_transparent
         self.args = arguments
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
         self.load_plugins(output_size, output_has_mask)
@@ -78,13 +77,8 @@ class Converter():
                 exc_info = sys.exc_info()
                 traceback.print_exception(*exc_info)
 
-            out_file = str(self.output_dir / Path(item["filename"]).name)
-            if self.args.draw_transparent:
-                out_file = "{}.png".format(os.path.splitext(out_file)[0])
-                logger.trace("Set extension to png: `%s`", out_file)
-
-            logger.trace("Out queue put: %s", out_file)
-            out_queue.put((out_file, image))
+            logger.trace("Out queue put: %s", item["filename"])
+            out_queue.put((item["filename"], image))
         logger.debug("Completed convert process")
 
     def patch_image(self, predicted):
@@ -167,15 +161,15 @@ class Converter():
 
         foreground *= mask
         frame = foreground + background
-        frame = self.draw_transparent(frame, predicted)
+        frame = self.add_alpha_mask(frame, predicted)
 
         np.clip(frame, 0.0, 1.0, out=frame)
         return np.rint(frame * 255.0).astype("uint8")
 
-    def draw_transparent(self, frame, predicted):
+    def add_alpha_mask(self, frame, predicted):
         """ Adding a 4th channel should happen after all other channel operations
             Add the default mask as 4th channel for saving as png with alpha channel """
-        if not self.args.draw_transparent:
+        if not self.draw_transparent:
             return frame
         logger.trace("Creating transparent image: '%s'", predicted["filename"])
         mask_type = getattr(model_masks, model_masks.get_default_mask())

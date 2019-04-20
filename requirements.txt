@@ -4,6 +4,7 @@ pathlib
 numpy==1.16.2
 opencv-python
 scikit-image
+Pillow
 scikit-learn
 toposort
 matplotlib==2.2.2
