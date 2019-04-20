@@ -27,7 +27,7 @@ class Writer(Output):
         """ Return the save parameters for the file format """
         filetype = self.config["format"]
         kwargs = dict()
-        if filetype in ("jpg", "png"):
+        if filetype in ("gif", "jpg", "png"):
             kwargs["optimize"] = self.config["optimize"]
         if filetype == "png":
             kwargs["compress_level"] = self.config["png_compress_level"]
@@ -41,7 +41,10 @@ class Writer(Output):
     def write(self, filename, image):
         logger.trace("Outputting: (filename: '%s', shape: %s", filename, image.shape)
         filename = self.output_filename(filename)
-        out_image = Image.fromarray(image[:, :, ::-1])
+        rgb = [2, 1, 0]
+        if image.shape[2] == 4:
+            rgb.append(3)
+        out_image = Image.fromarray(image[..., rgb])
         try:
             out_image.save(filename, **self.kwargs)
         except Exception as err:  # pylint: disable=broad-except

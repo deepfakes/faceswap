@@ -179,9 +179,10 @@ class Config(FaceswapConfig):
                               "Pillow is more feature rich than OpenCV but can be slower.")
         self.add_item(
             section=section, title="format", datatype=str, default="png",
-            choices=["bmp", "jpg", "jp2", "png", "ppm", "tif"],
+            choices=["bmp", "gif", "jpg", "jp2", "png", "ppm", "tif"],
             info="Image format to use:"
                  "\n\t bmp: Windows bitmap"
+                 "\n\t gif: Graphics Interchange Format (NB: Not animated)"
                  "\n\t jpg: JPEG format"
                  "\n\t jp2: JPEG 2000 format"
                  "\n\t png: Portable Network Graphics"
@@ -194,8 +195,8 @@ class Config(FaceswapConfig):
                  "incompatible format is selected then the image will be saved as a png.")
         self.add_item(
             section=section, title="optimize", datatype=bool, default=False,
-            info="[jpg and png only] If enabled, indicates that the encoder should make an extra "
-                 "pass over the image in order to select optimal encoder settings.")
+            info="[gif, jpg and png only] If enabled, indicates that the encoder should make an "
+                 "extra pass over the image in order to select optimal encoder settings.")
         self.add_item(
             section=section, title="jpg_quality", datatype=int, min_max=(1, 95),
             rounding=1, default=75,
