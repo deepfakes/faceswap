@@ -637,16 +637,17 @@ class ConvertArgs(ExtractConvertArgs):
                               "choices": PluginLoader.get_available_convert_plugins("writer",
                                                                                     False),
                               "default": "images",
-                              "help": "R|The plugin to use to output the converted images. The "
-                                      "\nwriters are configurable in '/config/convert.ini' or "
-                                      "\n'Edit > Configure Convert Plugins:"
-                                      "\nimages-opencv: The fastest image writer, but less options"
-                                      "\n\tand formats than other plugins."
-                                      "\nimages-pillow: Slower than opencv, but has more options"
-                                      "\n\tand supports more formats."
-                                      "\nvideo-ffmpeg: Writes out the convert straight to video."
-                                      "\n\twhen the input is a series of images then the '-ref' "
-                                      "\n\t(--reference-video) parameter must be set"})
+                              "help": "R|The plugin to use to output the converted images. The\n"
+                                      "writers are configurable in '/config/convert.ini' or `Edit"
+                                      "\n > Configure Convert Plugins:'"
+                                      "\nffmpeg: [video] Writes out the convert straight to video."
+                                      "\n\tWhen the input is a series of images then the '-ref' "
+                                      "\n\t(--reference-video) parameter must be set"
+                                      "\ngif: [animated image] Create an animated gif."
+                                      "\nopencv: [images] The fastest image writer, but less "
+                                      "\n\toptions and formats than other plugins."
+                                      "\npillow: [images] Slower than opencv, but has more options"
+                                      "\n\tand supports more formats."})
         argument_list.append({"opts": ("-osc", "--output-scale"),
                               "dest": "output_scale",
                               "action": Slider,

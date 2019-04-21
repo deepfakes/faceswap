@@ -39,6 +39,8 @@ class Writer(Output):
     def write(self, filename, image):
         logger.trace("Outputting: (filename: '%s', shape: %s", filename, image.shape)
         filename = self.output_filename(filename)
+        if self.scaling_factor != 1:
+            image = self.scale_image_cv2(image)
         try:
             cv2.imwrite(filename, image, self.args)  # pylint: disable=no-member
         except Exception as err:  # pylint: disable=broad-except

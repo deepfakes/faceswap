@@ -172,7 +172,59 @@ class Config(FaceswapConfig):
                  "\nHigher threshold values exclude areas of lower contrast.")
 
         # <<<<<< OUTPUT  OPTIONS >>>>>> #
-        section = "writer.images_pillow"
+        section = "writer.gif"
+        self.add_section(title=section,
+                         info="Options for outputting converted frames to an animated gif.")
+        self.add_item(
+            section=section, title="fps", datatype=int, min_max=(1, 60),
+            rounding=1, default=25,
+            info="Frames per Second.")
+        self.add_item(
+            section=section, title="loop", datatype=int, min_max=(0, 100),
+            rounding=1, default=0,
+            info="The number of iterations. Set to 0 to loop indefinitely.")
+        self.add_item(
+            section=section, title="palettesize", datatype=str, default="256",
+            choices=["2", "4", "8", "16", "32", "64", "128", "256"],
+            info="The number of colors to quantize the image to. Is rounded to the nearest power "
+                 "of two.")
+        self.add_item(
+            section=section, title="subrectangles", datatype=bool, default=False,
+            info="If True, will try and optimize the GIF by storing only the rectangular parts of "
+                 "each frame that change with respect to the previous.")
+
+        section = "writer.opencv"
+        self.add_section(title=section,
+                         info="Options for outputting converted frames to a series of images "
+                              "using OpenCV\n"
+                              "OpenCV can be faster than other image writers, but lacks some of "
+                              " configuration options and formats.")
+        self.add_item(
+            section=section, title="format", datatype=str, default="png",
+            choices=["bmp", "jpg", "jp2", "png", "ppm"],
+            info="Image format to use:"
+                 "\n\t bmp: Windows bitmap"
+                 "\n\t jpg: JPEG format"
+                 "\n\t jp2: JPEG 2000 format"
+                 "\n\t png: Portable Network Graphics"
+                 "\n\t ppm: Portable Pixmap Format")
+        self.add_item(
+            section=section, title="draw_transparent", datatype=bool, default=False,
+            info="Place the swapped face on a transparent layer rather than the original frame.\n"
+                 "NB: This is only compatible with images saved in png format. If an "
+                 "incompatible format is selected then the image will be saved as a png.")
+        self.add_item(
+            section=section, title="jpg_quality", datatype=int, min_max=(1, 95),
+            rounding=1, default=75,
+            info="[jpg only] Set the jpg quality. 1 is worst 95 is best. Higher quality leads to "
+                 "larger file sizes.")
+        self.add_item(
+            section=section, title="png_compress_level", datatype=int, min_max=(0, 9),
+            rounding=1, default=3,
+            info="[png only] ZLIB compression level, 1 gives best speed, 9 gives best "
+                 "compression, 0 gives no compression at all.")
+
+        section = "writer.pillow"
         self.add_section(title=section,
                          info="Options for outputting converted frames to a series of images "
                               "using Pillow\n"
@@ -198,13 +250,16 @@ class Config(FaceswapConfig):
             info="[gif, jpg and png only] If enabled, indicates that the encoder should make an "
                  "extra pass over the image in order to select optimal encoder settings.")
         self.add_item(
+            section=section, title="gif_interlace", datatype=bool, default=True,
+            info="[gif only] Set whether to save the gif as interlaced or not.")
+        self.add_item(
             section=section, title="jpg_quality", datatype=int, min_max=(1, 95),
             rounding=1, default=75,
             info="[jpg only] Set the jpg quality. 1 is worst 95 is best. Higher quality leads to "
                  "larger file sizes.")
         self.add_item(
             section=section, title="png_compress_level", datatype=int, min_max=(0, 9),
-            rounding=1, default=6,
+            rounding=1, default=3,
             info="[png only] ZLIB compression level, 1 gives best speed, 9 gives best "
                  "compression, 0 gives no compression at all. When optimize option is set to True "
                  "this has no effect (it is set to 9 regardless of a value passed).")
@@ -215,38 +270,7 @@ class Config(FaceswapConfig):
                      "tiff_raw_16"],
             info="[tif only] The desired compression method for the file.")
 
-        section = "writer.images_opencv"
-        self.add_section(title=section,
-                         info="Options for outputting converted frames to a series of images "
-                              "using OpenCV\n"
-                              "OpenCV can be faster than other image writers, but lacks some of "
-                              " configuration options and formats.")
-        self.add_item(
-            section=section, title="format", datatype=str, default="png",
-            choices=["bmp", "jpg", "jp2", "png", "ppm"],
-            info="Image format to use:"
-                 "\n\t bmp: Windows bitmap"
-                 "\n\t jpg: JPEG format"
-                 "\n\t jp2: JPEG 2000 format"
-                 "\n\t png: Portable Network Graphics"
-                 "\n\t ppm: Portable Pixmap Format")
-        self.add_item(
-            section=section, title="draw_transparent", datatype=bool, default=False,
-            info="Place the swapped face on a transparent layer rather than the original frame.\n"
-                 "NB: This is only compatible with images saved in png format. If an "
-                 "incompatible format is selected then the image will be saved as a png.")
-        self.add_item(
-            section=section, title="jpg_quality", datatype=int, min_max=(1, 95),
-            rounding=1, default=95,
-            info="[jpg only] Set the jpg quality. 1 is worst 95 is best. Higher quality leads to "
-                 "larger file sizes.")
-        self.add_item(
-            section=section, title="png_compress_level", datatype=int, min_max=(0, 9),
-            rounding=1, default=3,
-            info="[png only] ZLIB compression level, 1 gives best speed, 9 gives best "
-                 "compression, 0 gives no compression at all.")
-
-        section = "writer.video_ffmpeg"
+        section = "writer.ffmpeg"
         self.add_section(title=section,
                          info="Options for encoding converted frames to video.")
         self.add_item(

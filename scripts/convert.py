@@ -77,7 +77,7 @@ class Convert():
     def validate(self):
         """ Make the output folder if it doesn't exist and check that video flag is
             a valid choice """
-        if (self.args.writer.startswith("video") and
+        if (self.args.writer == "ffmpeg" and
                 not self.images.is_video and
                 self.args.reference_video is None):
             logger.error("Output as video selected, but using frames as input. You must provide a "
@@ -203,8 +203,9 @@ class DiskIO():
     def get_writer(self):
         """ Return the writer plugin """
         args = [self.args.output_scale, self.args.output_dir]
-        if self.args.writer.startswith("video"):
+        if self.args.writer in ("ffmpeg", "gif"):
             args.append(self.total_count)
+        if self.args.writer == "ffmpeg":
             if self.images.is_video:
                 args.append(self.args.input_dir)
             else:

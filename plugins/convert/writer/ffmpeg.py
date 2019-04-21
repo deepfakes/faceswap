@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Video output writer for faceswap.py converter """
 import os
-import re
 from collections import OrderedDict
 
 import imageio
@@ -16,11 +15,8 @@ class Writer(Output):
     def __init__(self, scaling, output_folder, total_count, source_video):
         super().__init__(scaling, output_folder)
         self.source_video = source_video
-        self.re_search = re.compile(r"(\d+)(?=\.\w+$)")  # Identify frame numbers
         self.frame_order = list(range(1, total_count + 1))
         self.writer = None  # Need to know dimensions of first frame, so set writer then
-        self.cache = dict()
-        self.dimensions = None
 
     @property
     def video_file(self):
@@ -60,7 +56,7 @@ class Writer(Output):
         """ FFMPEG Output parameters """
         codec = self.config["codec"]
         tune = self.config["tune"]
-        output_args = ["-vf", "scale={}".format(self.dimensions)]
+        output_args = ["-vf", "scale={}".format(self.output_dimensions)]
         if self.scaling_factor < 1:
             output_args.extend(["-sws_flags", "area"])
         elif self.scaling_factor > 1:
@@ -94,27 +90,20 @@ class Writer(Output):
         """ Frames come from the pool in arbitrary order, so cache frames
             for writing out in correct order """
         logger.trace("Received frame: (filename: '%s', shape: %s", filename, image.shape)
-        if not self.dimensions:
+        if not self.output_dimensions:
             self.set_dimensions(image.shape[:2])
             self.writer = self.get_writer()
         self.cache_frame(filename, image)
         self.save_from_cache()
 
     def set_dimensions(self, frame_dims):
-        """ Set the dimensions based on the first frame. This protects against different sized "
-            images coming in and ensure all images go into the video at the same size """
-        logger.debug("frame_dims: %s", frame_dims)
-        height, width = frame_dims
-        dest_width = round((width * self.scaling_factor) / 2) * 2
-        dest_height = round((height * self.scaling_factor) / 2) * 2
-        self.dimensions = "{}:{}".format(dest_width, dest_height)
-        logger.debug("dimensions: %s", self.dimensions)
-
-    def cache_frame(self, filename, image):
-        """ Add the incoming frame to the cache """
-        frame_no = int(re.search(self.re_search, filename).group())
-        self.cache[frame_no] = image
-        logger.trace("Added to cache. Frame no: %s", frame_no)
+        """ Set the dimensions based on a given frame frame. This protects against different
+            sized images coming in and ensure all images go out at the same size for writers
+            that require it """
+        super().set_dimensions(frame_dims)
+        self.output_dimensions = "{}:{}".format(self.output_dimensions[0],
+                                                self.output_dimensions[1])
+        logger.debug("reformatted dimensions: %s", self.output_dimensions)
 
     def save_from_cache(self):
         """ Save all the frames that are ready to be output from cache """

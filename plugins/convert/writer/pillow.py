@@ -29,10 +29,10 @@ class Writer(Output):
         kwargs = dict()
         if filetype in ("gif", "jpg", "png"):
             kwargs["optimize"] = self.config["optimize"]
+        if filetype == "gif":
+            kwargs["interlace"] = self.config["gif_interlace"]
         if filetype == "png":
             kwargs["compress_level"] = self.config["png_compress_level"]
-        if filetype == "jpg":
-            kwargs["quality"] = self.config["jpg_quality"]
         if filetype == "tif":
             kwargs["compression"] = self.config["tif_compression"]
         logger.debug(kwargs)
@@ -41,12 +41,16 @@ class Writer(Output):
     def write(self, filename, image):
         logger.trace("Outputting: (filename: '%s', shape: %s", filename, image.shape)
         filename = self.output_filename(filename)
+        if self.scaling_factor != 1:
+            image = self.scale_image_cv2(image)
+
         rgb = [2, 1, 0]
         if image.shape[2] == 4:
             rgb.append(3)
+
         out_image = Image.fromarray(image[..., rgb])
         try:
-            out_image.save(filename, **self.kwargs)
+            out_image.save(filename, **self.kwargs, interlace=0)
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
