@@ -4,15 +4,16 @@
 import logging
 
 from lib.config import FaceswapConfig
+from lib.model.masks import get_available_masks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-MASK_TYPES = ["none", "dfaker", "dfl_full", "components"]
+MASK_TYPES = get_available_masks()
 MASK_INFO = ("The mask to be used for training:"
-             "\n\tnone: Doesn't use any mask."
-             "\n\tdfaker: A basic face hull mask using a facehull of all 68 landmarks."
-             "\n\tdfl_full: An improved face hull mask using a facehull of 3 facial parts"
-             "\n\tcomponents: An improved face hull mask using a facehull of 8 facial parts")
+             "\n\t none: Doesn't use any mask."
+             "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
+             "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
+             "\n\t facehull: Face cutout based on landmarks")
 COVERAGE_INFO = ("How much of the extracted image to train on. Generally the model is optimized\n"
                  "to the default value. Sensible values to use are:"
                  "\n\t62.5%% spans from eyebrow to eyebrow."
@@ -62,7 +63,7 @@ class Config(FaceswapConfig):
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)" +
                          ADDITIONAL_INFO)
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="dfaker",
+            section=section, title="mask_type", datatype=str, default="facehull",
             choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=100.0, rounding=1,

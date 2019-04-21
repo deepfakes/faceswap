@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _launched_processes = set()  # pylint: disable=invalid-name
 
 
+def total_cpus():
+    """ Return total number of cpus """
+    return mp.cpu_count()
+
+
 class ConsumerBuffer():
     """ Memory buffer for consuming """
     def __init__(self, dispatcher, index, data):
@@ -293,9 +298,9 @@ class PoolProcess():
 
     def set_procs(self, processes):
         """ Set the number of processes to use """
-        if processes is None:
-            running_processes = len(mp.active_children())
-            processes = max(mp.cpu_count() - running_processes, 1)
+        running_processes = len(mp.active_children())
+        avail_processes = max(mp.cpu_count() - running_processes, 1)
+        processes = min(avail_processes, processes)
         logger.verbose("Processing '%s' in %s processes", self._name, processes)
         return processes
 
@@ -307,6 +312,7 @@ class PoolProcess():
             logger.debug("Adding process %s of %s to mp.Pool '%s'",
                          idx + 1, self.procs, self._name)
             self.pool.apply_async(self._method, args=self._args, kwds=self._kwargs)
+            _launched_processes.add(self.pool)
         logging.debug("Pooled Processes: '%s'", self._name)
 
     def join(self):
@@ -314,6 +320,7 @@ class PoolProcess():
         logger.debug("Joining Pooled Process: '%s'", self._name)
         self.pool.close()
         self.pool.join()
+        _launched_processes.remove(self.pool)
         logger.debug("Joined Pooled Process: '%s'", self._name)
 
 
@@ -415,6 +422,14 @@ class MultiThread():
         """ Return a list of thread errors """
         return [thread.err for thread in self._threads]
 
+    def check_and_raise_error(self):
+        """ Checks for errors in thread and raises them in caller """
+        if not self.has_error:
+            return
+        logger.debug("Thread error caught: %s", self.errors)
+        error = self.errors[0]
+        raise error[1].with_traceback(error[2])
+
     def start(self):
         """ Start a thread with the given method and args """
         logger.debug("Starting thread(s): '%s'", self._name)
@@ -480,9 +495,13 @@ def terminate_processes():
         have a mechanism in place to terminate this work to avoid
         long blocks
     """
-    logger.debug("Processes to join: %s", [process.name
+
+    logger.debug("Processes to join: %s", [process
                                            for process in _launched_processes
-                                           if process.is_alive()])
+                                           if isinstance(process, mp.pool.Pool)
+                                           or process.is_alive()])
     for process in list(_launched_processes):
-        if process.is_alive():
+        if isinstance(process, mp.pool.Pool):
+            process.terminate()
+        if isinstance(process, mp.pool.Pool) or process.is_alive():
             process.join()

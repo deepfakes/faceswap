@@ -27,10 +27,13 @@ _video_extensions = [  # pylint: disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".webm"]
 
 
-def get_folder(path):
+def get_folder(path, make_folder=True):
     """ Return a path to a folder, creating it if it doesn't exist """
     logger.debug("Requested path: '%s'", path)
     output_dir = Path(path)
+    if not make_folder and not output_dir.exists():
+        logger.debug("%s does not exist", path)
+        return None
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.debug("Returning: '%s'", output_dir)
     return output_dir

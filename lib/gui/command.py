@@ -225,7 +225,7 @@ class OptionControl():
         logger.debug("Format control help: '%s'", ctltitle)
         ctlhelp = self.option.get("help", "")
         if ctlhelp.startswith("R|"):
-            ctlhelp = ctlhelp[2:].replace("\n\t", " ").replace("\n'", "\n\n'")
+            ctlhelp = ctlhelp[2:].replace("\nL|", "\n - ").replace("\n", "\n\n")
         else:
             ctlhelp = " ".join(ctlhelp.split())
         ctlhelp = ctlhelp.replace("%%", "%")

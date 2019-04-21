@@ -10,14 +10,14 @@ class AlignmentsArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Aligments tool """
 
     def get_argument_list(self):
-        frames_dir = "\n\tMust Pass in a frames folder/source video file (-fr)."
-        faces_dir = "\n\tMust Pass in a faces folder (-fc)."
-        frames_or_faces_dir = ("\n\tMust Pass in either a frames folder/source video file OR a"
-                               "\n\tfaces folder (-fr or -fc).")
-        frames_and_faces_dir = ("\n\tMust Pass in a frames folder/source video file AND a faces "
-                                "\n\tfolder (-fr and -fc).")
-        output_opts = "\n\tUse the output option (-o) to process results."
-        align_eyes = "\n\tCan optionally use the align-eyes switch (-ae)."
+        frames_dir = " Must Pass in a frames folder/source video file (-fr)."
+        faces_dir = " Must Pass in a faces folder (-fc)."
+        frames_or_faces_dir = (" Must Pass in either a frames folder/source video file OR a"
+                               "faces folder (-fr or -fc).")
+        frames_and_faces_dir = (" Must Pass in a frames folder/source video file AND a faces "
+                                "folder (-fr and -fc).")
+        output_opts = " Use the output option (-o) to process results."
+        align_eyes = " Can optionally use the align-eyes switch (-ae)."
         argument_list = list()
         argument_list.append({
             "opts": ("-j", "--job"),
@@ -28,59 +28,57 @@ class AlignmentsArgs(FaceSwapArgs):
                         "multi-faces", "no-faces", "reformat", "remove-faces", "remove-frames",
                         "rename", "sort-x", "sort-y", "spatial", "update-hashes"),
             "required": True,
-            "help": "R|Choose which action you want to perform.\n"
+            "help": "R|Choose which action you want to perform. "
                     "NB: All actions require an alignments file (-a) to be passed in."
-                    "\n'draw': Draw landmarks on frames in the selected folder/video. A subfolder"
-                    "\n\twill be created within the frames folder to hold the output." +
+                    "\nL|'draw': Draw landmarks on frames in the selected folder/video. A "
+                    "subfolder will be created within the frames folder to hold the output." +
                     frames_dir + align_eyes +
-                    "\n'extract': Re-extract faces from the source frames/video based on "
-                    "\n\talignment data. This is a lot quicker than re-detecting faces." +
+                    "\nL|'extract': Re-extract faces from the source frames/video based on "
+                    "alignment data. This is a lot quicker than re-detecting faces." +
                     frames_and_faces_dir + align_eyes +
-                    "\n'extract-large' - Extract all faces that have not been upscaled. Useful"
-                    "\n\tfor excluding low-res images from a training set." +
+                    "\nL|'extract-large' - Extract all faces that have not been upscaled. Useful "
+                    "for excluding low-res images from a training set." +
                     frames_and_faces_dir + align_eyes +
-                    "\n'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
-                    "\n'merge': Merge multiple alignment files into one. Specify a space "
-                    "\n\tseparated list of alignments files with the -a flag."
-                    "\n'missing-alignments': Identify frames that do not exist in the alignments"
-                    "\n\tfile." + output_opts + frames_dir +
-                    "\n'missing-frames': Identify frames in the alignments file that do no "
-                    "\n\tappear within the frames folder/video." + output_opts + frames_dir +
-                    "\n'legacy': This updates legacy alignments to the latest format by rotating"
-                    "\n\tthe landmarks and bounding boxes and adding face_hashes." +
+                    "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
+                    "\nL|'merge': Merge multiple alignment files into one. Specify a space "
+                    "separated list of alignments files with the -a flag."
+                    "\nL|'missing-alignments': Identify frames that do not exist in the "
+                    "alignments file." + output_opts + frames_dir +
+                    "\nL|'missing-frames': Identify frames in the alignments file that do not "
+                    "appear within the frames folder/video." + output_opts + frames_dir +
+                    "\nL|'legacy': This updates legacy alignments to the latest format by "
+                    "rotating the landmarks and bounding boxes and adding face_hashes." +
                     frames_and_faces_dir +
-                    "\n'leftover-faces': Identify faces in the faces folder that do not exist in"
-                    "\n\tthe alignments file." + output_opts + faces_dir +
-                    "\n'multi-faces': Identify where multiple faces exist within the alignments"
-                    "\n\tfile." + output_opts + frames_or_faces_dir +
-                    "\n'no-faces': Identify frames that exist within the alignment file but no"
-                    "\n\tfaces were detected." + output_opts + frames_dir +
-                    "\n'reformat': Save a copy of alignments file in a different format. Specify"
-                    "\n\ta format with the -fmt option."
-                    "\n\tAlignments can be converted from DeepFaceLab by specifing:"
-                    "\n\t    -a dfl"
-                    "\n\t    -fc <source faces folder>"
-                    "\n'remove-faces': Remove deleted faces from an alignments file. The original"
-                    "\n\talignments file will be backed up. A different file format for the"
-                    "\n\talignments file can optionally be specified (-fmt)." + faces_dir +
-                    "\n'remove-frames': Remove deleted frames from an alignments file. The"
-                    "\n\toriginal alignments file will be backed up. A different file format for"
-                    "\n\tthe alignments file can optionally be specified (-fmt)." + frames_dir +
-                    "\n'rename' - Rename faces to correspond with their parent frame and position"
-                    "\n\tindex in the alignments file (i.e. how they are named after running"
-                    "\n\textract)." + faces_dir +
-                    "\n'sort-x': Re-index the alignments from left to right. For alignments with"
-                    "\n\tmultiple faces this will ensure that the left-most face is at index 0"
-                    "\n\tOptionally pass in a faces folder (-fc) to also rename extracted faces."
-                    "\n'sort-y': Re-index the alignments from top to bottom. For alignments with"
-                    "\n\tmultiple faces this will ensure that the top-most face is at index 0"
-                    "\n\tOptionally pass in a faces folder (-fc) to also  rename extracted faces."
-                    "\n'spatial': Perform spatial and temporal filtering to smooth alignments"
-                    "\n\t(EXPERIMENTAL!)"
-                    "\n'update-hashes': Recalculate the face hashes. Only use this if you have "
-                    "\n\taltered the extracted faces (e.g. colour adjust). The files MUST be "
-                    "\n\tnamed '<frame_name>_face index' (i.e. how they are named after running"
-                    "\n\textract)." + faces_dir})
+                    "\nL|'leftover-faces': Identify faces in the faces folder that do not exist "
+                    "in the alignments file." + output_opts + faces_dir +
+                    "\nL|'multi-faces': Identify where multiple faces exist within the alignments "
+                    "file." + output_opts + frames_or_faces_dir +
+                    "\nL|'no-faces': Identify frames that exist within the alignment file but no "
+                    "faces were detected." + output_opts + frames_dir +
+                    "\nL|'reformat': Save a copy of alignments file in a different format. "
+                    "Specify a format with the -fmt option. Alignments can be converted from "
+                    "DeepFaceLab by specifing: '-a dfl -fc <source faces folder>'"
+                    "\nL|'remove-faces': Remove deleted faces from an alignments file. The "
+                    "original alignments file will be backed up. A different file format for the "
+                    "alignments file can optionally be specified (-fmt)." + faces_dir +
+                    "\nL|'remove-frames': Remove deleted frames from an alignments file. The "
+                    "original alignments file will be backed up. A different file format for "
+                    "the alignments file can optionally be specified (-fmt)." + frames_dir +
+                    "\nL|'rename' - Rename faces to correspond with their parent frame and "
+                    "position index in the alignments file (i.e. how they are named after running "
+                    "extract)." + faces_dir +
+                    "\nL|'sort-x': Re-index the alignments from left to right. For alignments "
+                    "with multiple faces this will ensure that the left-most face is at index 0 "
+                    "Optionally pass in a faces folder (-fc) to also rename extracted faces."
+                    "\nL|'sort-y': Re-index the alignments from top to bottom. For alignments "
+                    "with multiple faces this will ensure that the top-most face is at index 0. "
+                    "Optionally pass in a faces folder (-fc) to also  rename extracted faces."
+                    "\nL|'spatial': Perform spatial and temporal filtering to smooth alignments "
+                    "(EXPERIMENTAL!)"
+                    "\nL|'update-hashes': Recalculate the face hashes. Only use this if you have "
+                    "altered the extracted faces (e.g. colour adjust). The files MUST be "
+                    "named '<frame_name>_face index' (i.e. how they are named after running "
+                    "extract)." + faces_dir})
         argument_list.append({"opts": ("-a", "--alignments_file"),
                               "action": FilesFullPaths,
                               "dest": "alignments_file",
@@ -110,13 +108,12 @@ class AlignmentsArgs(FaceSwapArgs):
             "type": str,
             "choices": ("console", "file", "move"),
             "default": "console",
-            "help": "R|How to output discovered items ('faces' and"
-                    "\n'frames' only):"
-                    "\n'console': Print the list of frames to the screen. (DEFAULT)"
-                    "\n'file': Output the list of frames to a text file (stored within the source"
-                    "\n\tdirectory)."
-                    "\n'move': Move the discovered items to a sub-folder within the source"
-                    "\n\tdirectory."})
+            "help": "R|How to output discovered items ('faces' and 'frames' only):"
+                    "\nL|'console': Print the list of frames to the screen. (DEFAULT)"
+                    "\nL|'file': Output the list of frames to a text file (stored within the "
+                    " source directory)."
+                    "\nL|'move': Move the discovered items to a sub-folder within the source "
+                    "directory."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
@@ -170,11 +167,11 @@ class EffmpegArgs(FaceSwapArgs):
                                           "get-info", "mux-audio", "rescale",
                                           "rotate", "slice"),
                               "default": "extract",
-                              "help": "Choose which action you want ffmpeg "
-                                      "ffmpeg to do.\n"
-                                      "'slice' cuts a portion of the video "
-                                      "into a separate video file.\n"
-                                      "'get-fps' returns the chosen video's "
+                              "help": "R|Choose which action you want ffmpeg "
+                                      "ffmpeg to do."
+                                      "\nL|'slice' cuts a portion of the video "
+                                      "into a separate video file."
+                                      "\nL|'get-fps' returns the chosen video's "
                                       "fps."})
 
         argument_list.append({"opts": ('-i', '--input'),
@@ -198,7 +195,7 @@ class EffmpegArgs(FaceSwapArgs):
                                       "meant to be a directory then a "
                                       "directory called 'out' will be "
                                       "created inside the input "
-                                      "directory.\n"
+                                      "directory."
                                       "Note: the chosen output file "
                                       "extension will determine the file "
                                       "encoding.",
@@ -240,7 +237,7 @@ class EffmpegArgs(FaceSwapArgs):
                               "dest": "start",
                               "default": "00:00:00",
                               "help": "Enter the start time from which an "
-                                      "action is to be applied.\n"
+                                      "action is to be applied. "
                                       "Default: 00:00:00, in HH:MM:SS "
                                       "format. You can also enter the time "
                                       "with or without the colons, e.g. "
@@ -254,7 +251,7 @@ class EffmpegArgs(FaceSwapArgs):
                                       "is to be applied. If both an end time "
                                       "and duration are set, then the end "
                                       "time will be used and the duration "
-                                      "will be ignored.\n"
+                                      "will be ignored. "
                                       "Default: 00:00:00, in HH:MM:SS."})
 
         argument_list.append({"opts": ('-d', '--duration'),
@@ -266,7 +263,7 @@ class EffmpegArgs(FaceSwapArgs):
                                       "00:00:10 for slice, then the first 10 "
                                       "seconds after and including the start "
                                       "time will be cut out into a new "
-                                      "video.\n"
+                                      "video. "
                                       "Default: 00:00:00, in HH:MM:SS "
                                       "format. You can also enter the time "
                                       "with or without the colons, e.g. "
@@ -369,13 +366,14 @@ class SortArgs(FaceSwapArgs):
                               "choices": ("folders", "rename"),
                               "dest": 'final_process',
                               "default": "rename",
-                              "help": "R|\n'folders': files are sorted using "
-                                      "the -s/--sort-by\n\tmethod, then they "
-                                      "are organized into\n\tfolders using "
-                                      "the -g/--group-by grouping\n\tmethod."
-                                      "\n'rename': files are sorted using "
-                                      "the -s/--sort-by\n\tthen they are "
-                                      "renamed.\nDefault: rename"})
+                              "help": "R|Default: rename."
+                                      "\nL|'folders': files are sorted using "
+                                      "the -s/--sort-by method, then they "
+                                      "are organized into folders using "
+                                      "the -g/--group-by grouping method."
+                                      "\nL|'rename': files are sorted using "
+                                      "the -s/--sort-by then they are "
+                                      "renamed."})
 
         argument_list.append({"opts": ('-k', '--keep'),
                               "action": 'store_true',

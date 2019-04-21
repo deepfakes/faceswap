@@ -4,9 +4,12 @@ pathlib
 numpy==1.16.2
 opencv-python
 scikit-image
+Pillow
 scikit-learn
 toposort
 matplotlib==2.2.2
+imageio
+imageio-ffmpeg
 ffmpy==0.2.2
 nvidia-ml-py3
 h5py==2.9.0

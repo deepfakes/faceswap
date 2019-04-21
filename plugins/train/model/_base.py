@@ -325,9 +325,13 @@ class ModelBase():
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
         if swap:
-            retval = self.predictors["a"].predict
+            model = self.predictors["a"]
         else:
-            retval = self.predictors["b"].predict
+            model = self.predictors["b"]
+        if self.predict:
+            # Must compile the model to be thread safe
+            model._make_predict_function()  # pylint: disable=protected-access
+        retval = model.predict
         logger.debug("Got Converter: %s", retval)
         return retval
 
