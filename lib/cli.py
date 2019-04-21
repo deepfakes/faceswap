@@ -4,7 +4,9 @@ import argparse
 import logging
 import os
 import platform
+import re
 import sys
+import textwrap
 
 from importlib import import_module
 
@@ -279,17 +281,34 @@ class FullHelpArgumentParser(argparse.ArgumentParser):
 
 class SmartFormatter(argparse.HelpFormatter):
     """ Smart formatter for allowing raw formatting in help
-        text.
+        text and lists in the helptext
 
-        To use prefix the help item with "R|" to overide
-        default formatting
+        To use: prefix the help item with "R|" to overide
+        default formatting. List items can be marked with "L|"
+        at the start of a newline
 
-        from: https://stackoverflow.com/questions/3853722 """
+        adapted from: https://stackoverflow.com/questions/3853722 """
+
+    def __init__(self,
+                 prog,
+                 indent_increment=2,
+                 max_help_position=24,
+                 width=None):
+
+        super().__init__(prog, indent_increment, max_help_position, width)
+        self._whitespace_matcher_limited = re.compile(r'[ \r\f\v]+', re.ASCII)
 
     def _split_lines(self, text, width):
         if text.startswith("R|"):
-            return text[2:].splitlines()
-        # this is the RawTextHelpFormatter._split_lines
+            text = self._whitespace_matcher_limited.sub(' ', text).strip()[2:]
+            output = list()
+            for txt in text.splitlines():
+                indent = ""
+                if txt.startswith("L|"):
+                    indent = "    "
+                    txt = "  - {}".format(txt[2:])
+                output.extend(textwrap.wrap(txt, width, subsequent_indent=indent))
+            return output
         return argparse.HelpFormatter._split_lines(self, text, width)
 
 
@@ -471,16 +490,16 @@ class ExtractArgs(ExtractConvertArgs):
             "choices":  PluginLoader.get_available_extractors("detect"),
             "default": "mtcnn",
             "help": "R|Detector to use."
-                    "\n'dlib-hog': uses least resources, but is the"
-                    "\n\tleast reliable."
-                    "\n'dlib-cnn': faster than mtcnn but detects"
-                    "\n\tfewer faces and fewer false positives."
-                    "\n'mtcnn': slower than dlib, but uses fewer"
-                    "\n\tresources whilst detecting more faces and"
-                    "\n\tmore false positives. Has superior"
-                    "\n\talignment to dlib"
-                    "\n's3fd': Can detect more faces than mtcnn, but"
-                    "\n\t is a lot more resource intensive"})
+                    "\nL|'dlib-hog': uses least resources, but is the "
+                    "least reliable."
+                    "\nL|'dlib-cnn': faster than mtcnn but detects "
+                    "fewer faces and fewer false positives."
+                    "\nL|'mtcnn': slower than dlib, but uses fewer "
+                    "resources whilst detecting more faces and "
+                    "more false positives. Has superior "
+                    "alignment to dlib"
+                    "\nL|'s3fd': Can detect more faces than mtcnn, but "
+                    "is a lot more resource intensive"})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "action": Radio,
@@ -488,10 +507,10 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
             "help": "R|Aligner to use."
-                    "\n'dlib': Dlib Pose Predictor. Faster, less "
-                    "\n\tresource intensive, but less accurate."
-                    "\n'fan': Face Alignment Network. Best aligner."
-                    "\n\tGPU heavy, slow when not running on GPU"})
+                    "\nL|'dlib': Dlib Pose Predictor. Faster, less "
+                    "resource intensive, but less accurate."
+                    "\nL|'fan': Face Alignment Network. Best aligner. "
+                    "GPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -631,23 +650,73 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Only required if converting from images to video. Provide "
                                       "The original video that the source frames were extracted "
                                       "from (for extracting the fps and audio)."})
+        argument_list.append({
+            "opts": ("-c", "--color-adjustment"),
+            "action": Radio,
+            "type": str.lower,
+            "dest": "color_adjustment",
+            "choices": PluginLoader.get_available_convert_plugins("color", True),
+            "default": "avg-color",
+            "help": "R|Performs color adjustment to the swapped face. Some of these options have "
+                    "configurable settings in '/config/convert.ini' or 'Edit > Configure "
+                    "Convert Plugins':"
+                    "\nL|avg-color: Adjust the mean of each color channel in the swapped "
+                    "reconstruction to equal the mean of the masked area in the orginal image."
+                    "\nL|color-transfer: Transfers the color distribution from the source to the "
+                    "target image using the mean and standard deviations of the L*a*b* "
+                    "color space."
+                    "\nL|match-hist: Adjust the histogram of each color channel in the swapped "
+                    "reconstruction to equal the histogram of the masked area in the orginal "
+                    "image."
+                    "\nL|seamless-clone: Use cv2's seamless clone function to remove extreme "
+                    "gradients at the mask seam by smoothing colors. Generally does not give "
+                    "very satisfactory results."
+                    "\nL|none: Don't perform color adjustment."})
+        argument_list.append({
+            "opts": ("-sc", "--scaling"),
+            "action": Radio,
+            "type": str.lower,
+            "choices": PluginLoader.get_available_convert_plugins("scaling", True),
+            "default": "none",
+            "help": "R|Performs a scaling process to attempt to get better definition on the "
+                    "final swap. Some of these options have configurable settings in "
+                    "'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
+                    "\nL|sharpen: Perform sharpening on the final face."
+                    "\nL|none: Don't perform any scaling operations."})
+        argument_list.append({
+            "opts": ("-M", "--mask-type"),
+            "action": Radio,
+            "type": str.lower,
+            "dest": "mask_type",
+            "choices": get_available_masks() + ["predicted"],
+            "default": "predicted",
+            "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
+                    "'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
+                    "\nL|components: An improved face hull mask using a facehull of 8 facial "
+                    "parts."
+                    "\nL|dfl_full: An improved face hull mask using a facehull of 3 facial parts."
+                    "\nL|facehull: Face cutout based on landmarks."
+                    "\nL|predicted: The predicted mask generated from the model. If the model was "
+                    "not trained with a mask then this will fallback to "
+                    "'{}'".format(get_default_mask()) +
+                    "\nL|none: Don't use a mask."})
         argument_list.append({"opts": ("-w", "--writer"),
                               "action": Radio,
                               "type": str,
                               "choices": PluginLoader.get_available_convert_plugins("writer",
                                                                                     False),
                               "default": "opencv",
-                              "help": "R|The plugin to use to output the converted images. The\n"
-                                      "writers are configurable in '/config/convert.ini' or `Edit"
-                                      "\n > Configure Convert Plugins:'"
-                                      "\nffmpeg: [video] Writes out the convert straight to video."
-                                      "\n\tWhen the input is a series of images then the '-ref' "
-                                      "\n\t(--reference-video) parameter must be set"
-                                      "\ngif: [animated image] Create an animated gif."
-                                      "\nopencv: [images] The fastest image writer, but less "
-                                      "\n\toptions and formats than other plugins."
-                                      "\npillow: [images] Slower than opencv, but has more options"
-                                      "\n\tand supports more formats."})
+                              "help": "R|The plugin to use to output the converted images. The "
+                                      "writers are configurable in '/config/convert.ini' or `Edit "
+                                      "> Configure Convert Plugins:'"
+                                      "\nL|ffmpeg: [video] Writes out the convert straight to "
+                                      "video. When the input is a series of images then the "
+                                      "'-ref' (--reference-video) parameter must be set."
+                                      "\nL|gif: [animated image] Create an animated gif."
+                                      "\nL|opencv: [images] The fastest image writer, but less "
+                                      "options and formats than other plugins."
+                                      "\nL|pillow: [images] Slower than opencv, but has more "
+                                      "options and supports more formats."})
         argument_list.append({"opts": ("-osc", "--output-scale"),
                               "dest": "output_scale",
                               "action": Slider,
@@ -658,55 +727,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Scale the final output frames by this amount. 100%% will "
                                       "output the frames at source dimensions. 50%% at half size "
                                       "200%% at double size"})
-        argument_list.append({
-            "opts": ("-c", "--color-adjustment"),
-            "action": Radio,
-            "type": str.lower,
-            "dest": "color_adjustment",
-            "choices": PluginLoader.get_available_convert_plugins("color", True),
-            "default": "avg-color",
-            "help": "R|Performs color adjustment to the swapped face. Some of these options have "
-                    "\nconfigurable settings in '/config/convert.ini' or 'Edit > Configure "
-                    "\nConvert Plugins':"
-                    "\navg-color: Adjust the mean of each color channel in the swapped "
-                    "\n\treconstruction to equal the mean of the masked area in the orginal image."
-                    "\ncolor-transfer: Transfers the color distribution from the source to the "
-                    "\n\ttarget image using the mean and standard deviations of the L*a*b* "
-                    "\n\tcolor space."
-                    "\nmatch-hist: Adjust the histogram of each color channel in the swapped "
-                    "\n\treconstruction to equal the histogram of the masked area in the orginal "
-                    "\n\timage."
-                    "\nseamless-clone: Use cv2's seamless clone function to remove extreme "
-                    "\n\tgradients at the mask seam by smoothing colors. Generally does not give "
-                    "\n\tvery satisfactory results."
-                    "\nnone: Don't perform color adjustment."})
-        argument_list.append({
-            "opts": ("-sc", "--scaling"),
-            "action": Radio,
-            "type": str.lower,
-            "choices": PluginLoader.get_available_convert_plugins("scaling", True),
-            "default": "none",
-            "help": "R|Performs a scaling process to attempt to get better definition on the "
-                    "\nfinal swap. Some of these options have configurable settings in "
-                    "\n'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
-                    "\nsharpen: Perform sharpening on the final face."
-                    "\nnone: Don't perform any scaling operations."})
-        argument_list.append({
-            "opts": ("-M", "--mask-type"),
-            "action": Radio,
-            "type": str.lower,
-            "dest": "mask_type",
-            "choices": get_available_masks() + ["predicted"],
-            "default": "predicted",
-            "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
-                    "\n'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
-                    "\ncomponents: An improved face hull mask using a facehull of 8 facial parts. "
-                    "\ndfl_full: An improved face hull mask using a facehull of 3 facial parts. "
-                    "\nfacehull: Face cutout based on landmarks."
-                    "\npredicted: The predicted mask generated from the model. If the model was "
-                    "\n\tnot trained with a mask then this will fallback to "
-                    "'{}'".format(get_default_mask()) +
-                    "\nnone: Don't use a mask."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
@@ -801,22 +821,25 @@ class TrainArgs(FaceSwapArgs):
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "help": "R|Select which trainer to use. Trainers can be"
-                                      "\nconfigured from the edit menu or the config folder."
-                                      "\n'original': The original model created by /u/deepfakes."
-                                      "\n'dfaker': 64px in/128px out model from dfaker."
-                                      "\n\tEnable 'warp-to-landmarks' for full dfaker method."
-                                      "\n'dfl-h128'. 128px in/out model from deepfacelab"
-                                      "\n'iae': A model that uses intermediate layers to try to"
-                                      "\n\tget better details"
-                                      "\n'lightweight': A lightweight model for low-end cards."
-                                      "\n\tDon't expect great results. Can train as low as 1.6GB"
-                                      "\n\twith batch size 8."
-                                      "\n'unbalanced': 128px in/out model from andenixa. The"
-                                      "\n\tautoencoders are unbalanced so B>A swaps won't work so"
-                                      "\n\twell. Very configurable,"
-                                      "\n'villain': 128px in/out model from villainguy. Very"
-                                      "\n\tresource hungry (11GB for batchsize 16). Good for"
-                                      "\n\tdetails, but more susceptible to color differences"})
+                                      "configured from the edit menu or the config folder."
+                                      "\nL|original: The original model created by /u/deepfakes."
+                                      "\nL|dfaker: 64px in/128px out model from dfaker. "
+                                      "Enable 'warp-to-landmarks' for full dfaker method."
+                                      "\nL|dfl-h128. 128px in/out model from deepfacelab"
+                                      "\nL|iae: A model that uses intermediate layers to try to "
+                                      "get better details"
+                                      "\nL|lightweight: A lightweight model for low-end cards. "
+                                      "Don't expect great results. Can train as low as 1.6GB "
+                                      "with batch size 8."
+                                      "\nL|realface: Customizable in/out resolution model "
+                                      "from andenixa. The autoencoders are unbalanced so B>A "
+                                      "swaps won't work so well. Very configurable."
+                                      "\nL|unbalanced: 128px in/out model from andenixa. The "
+                                      "autoencoders are unbalanced so B>A swaps won't work so "
+                                      "well. Very configurable."
+                                      "\nL|villain: 128px in/out model from villainguy. Very "
+                                      "resource hungry (11GB for batchsize 16). Good for "
+                                      "details, but more susceptible to color differences."})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
