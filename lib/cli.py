@@ -636,7 +636,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "type": str,
                               "choices": PluginLoader.get_available_convert_plugins("writer",
                                                                                     False),
-                              "default": "images",
+                              "default": "opencv",
                               "help": "R|The plugin to use to output the converted images. The\n"
                                       "writers are configurable in '/config/convert.ini' or `Edit"
                                       "\n > Configure Convert Plugins:'"
