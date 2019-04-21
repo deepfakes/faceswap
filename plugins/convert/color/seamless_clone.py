@@ -12,9 +12,8 @@ from ._base import Adjustment
 
 class Color(Adjustment):
     """ Seamless clone the swapped face into the old face with cv2
-        NB: This probably isn't the best place for this, but it is independent of
-            color adjustments and does not have a natural home, so here for now
-            and called as an extra plugin from lib/convert.py
+        NB: This probably isn't the best place for this, but it doesn't work well and
+        and does not have a natural home, so here for now.
     """
 
     @staticmethod

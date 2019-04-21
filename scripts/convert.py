@@ -1,7 +1,5 @@
 #!/usr/bin python3
 """ The script to run the convert process of faceswap """
-# TODO
-# Decide what to do with seamless clone
 
 import logging
 import re
@@ -424,7 +422,7 @@ class Predict():
 
     @property
     def input_mask(self):
-        """ Return the input mask, if there is one, else None """
+        """ Return the input mask """
         mask = np.zeros(self.model.state.mask_shapes[0], dtype="float32")
         retval = np.expand_dims(mask, 0)
         return retval
@@ -432,7 +430,7 @@ class Predict():
     @property
     def has_predicted_mask(self):
         """ Return whether this model has a predicted mask """
-        return self.model.state.mask_shapes is not None
+        return bool(self.model.state.mask_shapes)
 
     def load_model(self):
         """ Load the model requested for conversion """

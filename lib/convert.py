@@ -47,9 +47,6 @@ class Converter():
             self.adjustments["color"] = PluginLoader.get_converter("color",
                                                                    self.args.color_adjustment)()
 
-        if self.args.seamless_clone:
-            self.adjustments["seamless"] = PluginLoader.get_converter("color", "seamless_clone")()
-
         if self.args.scaling != "none" and self.args.scaling is not None:
             self.adjustments["scaling"] = PluginLoader.get_converter("scaling",
                                                                      self.args.scaling)()
@@ -75,11 +72,11 @@ class Converter():
                 logger.error("Failed to convert image: '%s'. Reason: %s",
                              item["filename"], str(err))
                 image = item["image"]
-                # TODO Remove this debugging code
-                import sys
-                import traceback
-                exc_info = sys.exc_info()
-                traceback.print_exception(*exc_info)
+                # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
+                # import sys
+                # import traceback
+                # exc_info = sys.exc_info()
+                # traceback.print_exception(*exc_info)
 
             logger.trace("Out queue put: %s", item["filename"])
             out_queue.put((item["filename"], image))
@@ -134,7 +131,8 @@ class Converter():
     def pre_warp_adjustments(self, old_face, new_face, detected_face, predicted_mask):
         """ Run the pre-warp adjustments """
         logger.trace("old_face shape: %s, new_face shape: %s, predicted_mask shape: %s",
-                     old_face.shape, new_face.shape, predicted_mask.shape)
+                     old_face.shape, new_face.shape,
+                     predicted_mask.shape if predicted_mask is not None else None)
         new_face = self.adjustments["box"].run(new_face)
         new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
         if self.adjustments["color"] is not None:

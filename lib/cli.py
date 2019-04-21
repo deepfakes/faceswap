@@ -676,6 +676,9 @@ class ConvertArgs(ExtractConvertArgs):
                     "\nmatch-hist: Adjust the histogram of each color channel in the swapped "
                     "\n\treconstruction to equal the histogram of the masked area in the orginal "
                     "\n\timage."
+                    "\nseamless-clone: Use cv2's seamless clone function to remove extreme "
+                    "\n\tgradients at the mask seam by smoothing colors. Generally does not give "
+                    "\n\tvery satisfactory results."
                     "\nnone: Don't perform color adjustment."})
         argument_list.append({
             "opts": ("-sc", "--scaling"),
@@ -731,13 +734,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Swap the model. Instead of A -> B, "
                                       "swap B -> A"})
-        argument_list.append({"opts": ("-S", "--seamless"),
-                              "action": "store_true",
-                              "dest": "seamless_clone",
-                              "default": False,
-                              "help": "Use cv2's seamless clone function to "
-                                      "remove extreme gradients at the mask "
-                                      "seam by smoothing colors."})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,
