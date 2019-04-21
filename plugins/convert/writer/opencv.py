@@ -9,8 +9,9 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Images output writer using cv2 """
-    def __init__(self, scaling, output_folder):
-        super().__init__(scaling, output_folder)
+    def __init__(self, output_folder):
+        super().__init__(output_folder)
+        self.extension = ".{}".format(self.config["format"])
         self.check_transparency_format()
         self.args = self.get_save_args()
 
@@ -37,14 +38,18 @@ class Writer(Output):
         return args
 
     def write(self, filename, image):
-        logger.trace("Outputting: (filename: '%s', shape: %s", filename, image.shape)
+        logger.trace("Outputting: (filename: '%s'", filename)
         filename = self.output_filename(filename)
-        if self.scaling_factor != 1:
-            image = self.scale_image_cv2(image)
         try:
-            cv2.imwrite(filename, image, self.args)  # pylint: disable=no-member
+            with open(filename, "wb") as outfile:
+                outfile.write(image)
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
+
+    def pre_encode(self, image):
+        logger.trace("Pre-encoding image")
+        image = cv2.imencode(self.extension, image, self.args)[1]  # pylint: disable=no-member
+        return image
 
     def close(self):
         """ Image writer does not need a close method """

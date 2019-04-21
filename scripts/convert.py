@@ -1,7 +1,6 @@
 #!/usr/bin python3
 """ The script to run the convert process of faceswap """
 # TODO
-# Fix dfaker mask for conversion
 # Decide what to do with seamless clone
 
 import logging
@@ -50,6 +49,7 @@ class Convert():
                                    self.predictor.output_size,
                                    self.predictor.has_predicted_mask,
                                    self.disk_io.draw_transparent,
+                                   self.disk_io.pre_encode,
                                    arguments)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -190,6 +190,15 @@ class DiskIO():
         return self.writer.config.get("draw_transparent", False)
 
     @property
+    def pre_encode(self):
+        """ Return the writer's pre-encoder """
+        dummy = np.zeros((20, 20, 3)).astype("uint8")
+        test = self.writer.pre_encode(dummy)
+        retval = None if test is None else self.writer.pre_encode
+        logger.debug("Writer pre_encode function: %s", retval)
+        return retval
+
+    @property
     def total_count(self):
         """ Return the total number of frames to be converted """
         if self.frame_ranges and not self.args.keep_unchanged:
@@ -202,7 +211,7 @@ class DiskIO():
     # Initalization
     def get_writer(self):
         """ Return the writer plugin """
-        args = [self.args.output_scale, self.args.output_dir]
+        args = [self.args.output_dir]
         if self.args.writer in ("ffmpeg", "gif"):
             args.append(self.total_count)
         if self.args.writer == "ffmpeg":

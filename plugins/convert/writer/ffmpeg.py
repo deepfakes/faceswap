@@ -2,6 +2,7 @@
 """ Video output writer for faceswap.py converter """
 import os
 from collections import OrderedDict
+from math import ceil
 
 import imageio
 import imageio_ffmpeg as im_ffm
@@ -12,10 +13,11 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, scaling, output_folder, total_count, source_video):
-        super().__init__(scaling, output_folder)
+    def __init__(self, output_folder, total_count, source_video):
+        super().__init__(output_folder)
         self.source_video = source_video
         self.frame_order = list(range(1, total_count + 1))
+        self.output_dimensions = None  # Fix dims of 1st frame in case of different sized images
         self.writer = None  # Need to know dimensions of first frame, so set writer then
 
     @property
@@ -56,11 +58,8 @@ class Writer(Output):
         """ FFMPEG Output parameters """
         codec = self.config["codec"]
         tune = self.config["tune"]
+        # Force all frames to the same size
         output_args = ["-vf", "scale={}".format(self.output_dimensions)]
-        if self.scaling_factor < 1:
-            output_args.extend(["-sws_flags", "area"])
-        elif self.scaling_factor > 1:
-            output_args.extend(["-sws_flags", "spline"])
 
         output_args.extend(["-c:v", codec])
         output_args.extend(["-crf", str(self.config["crf"])])
@@ -83,6 +82,7 @@ class Writer(Output):
         logger.debug("writer config: %s", self.config)
         return imageio.get_writer(self.video_tmp_file,
                                   fps=self.video_fps,
+                                  ffmpeg_log_level="error",
                                   quality=None,
                                   output_params=self.output_params)
 
@@ -91,6 +91,7 @@ class Writer(Output):
             for writing out in correct order """
         logger.trace("Received frame: (filename: '%s', shape: %s", filename, image.shape)
         if not self.output_dimensions:
+            logger.info("Outputting to: '%s'", self.video_file)
             self.set_dimensions(image.shape[:2])
             self.writer = self.get_writer()
         self.cache_frame(filename, image)
@@ -99,11 +100,12 @@ class Writer(Output):
     def set_dimensions(self, frame_dims):
         """ Set the dimensions based on a given frame frame. This protects against different
             sized images coming in and ensure all images go out at the same size for writers
-            that require it """
-        super().set_dimensions(frame_dims)
-        self.output_dimensions = "{}:{}".format(self.output_dimensions[0],
-                                                self.output_dimensions[1])
-        logger.debug("reformatted dimensions: %s", self.output_dimensions)
+            that require it and mapped to a macro block size 16"""
+        logger.debug("input dimensions: %s", frame_dims)
+        self.output_dimensions = "{}:{}".format(
+            int(ceil(frame_dims[1] / 16) * 16),
+            int(ceil(frame_dims[0] / 16) * 16))
+        logger.debug("Set dimensions: %s", self.output_dimensions)
 
     def save_from_cache(self):
         """ Save all the frames that are ready to be output from cache """

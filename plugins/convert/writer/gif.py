@@ -2,6 +2,7 @@
 """ Animated GIF writer for faceswap.py converter """
 import os
 
+import cv2
 import imageio
 
 from ._base import Output, logger
@@ -9,9 +10,10 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, scaling, output_folder, total_count):
-        super().__init__(scaling, output_folder)
+    def __init__(self, output_folder, total_count):
+        super().__init__(output_folder)
         self.frame_order = list(range(1, total_count + 1))
+        self.output_dimensions = None  # Fix dims of 1st frame in case of different sized images
         self.writer = None  # Need to know dimensions of first frame, so set writer then
         self.gif_file = None  # Set filename based on first file seen
 
@@ -38,7 +40,7 @@ class Writer(Output):
             self.set_dimensions(image.shape[:2])
             self.writer = self.get_writer()
         if (image.shape[1], image.shape[0]) != self.output_dimensions:
-            image = self.scale_image_cv2(image)
+            image = cv2.resize(image, self.output_dimensions)  # pylint: disable=no-member
         self.cache_frame(filename, image)
         self.save_from_cache()
 
@@ -51,8 +53,16 @@ class Writer(Output):
             if not char.isdigit() and char not in ("_", "-"):
                 break
             idx -= 1
-        self.gif_file = os.path.join(self.output_folder, "{}.gif".format(filename[:idx]))
-        logger.debug("output gif file: '%s'", self.gif_file)
+        self.gif_file = os.path.join(self.output_folder, "{}_converted.gif".format(filename[:idx]))
+        logger.info("Outputting to: '%s'", self.gif_file)
+
+    def set_dimensions(self, frame_dims):
+        """ Set the dimensions based on a given frame frame. This protects against different
+            sized images coming in and ensure all images go out at the same size for writers
+            that require it """
+        logger.debug("input dimensions: %s", frame_dims)
+        self.output_dimensions = (frame_dims[1], frame_dims[0])
+        logger.debug("Set dimensions: %s", self.output_dimensions)
 
     def save_from_cache(self):
         """ Save all the frames that are ready to be output from cache """

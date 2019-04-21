@@ -2,6 +2,7 @@
 """ Image output writer for faceswap.py converter """
 
 import os
+from io import BytesIO
 from PIL import Image
 
 from ._base import Output, logger
@@ -9,9 +10,11 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Images output writer using cv2 """
-    def __init__(self, scaling, output_folder):
-        super().__init__(scaling, output_folder)
+    def __init__(self, output_folder):
+        super().__init__(output_folder)
         self.check_transparency_format()
+        # Correct format namings for writing to byte stream
+        self.format_dict = dict(jpg="JPEG", jp2="JPEG 2000", tif="TIFF")
         self.kwargs = self.get_save_kwargs()
 
     def check_transparency_format(self):
@@ -39,18 +42,11 @@ class Writer(Output):
         return kwargs
 
     def write(self, filename, image):
-        logger.trace("Outputting: (filename: '%s', shape: %s", filename, image.shape)
+        logger.trace("Outputting: (filename: '%s'", filename)
         filename = self.output_filename(filename)
-        if self.scaling_factor != 1:
-            image = self.scale_image_cv2(image)
-
-        rgb = [2, 1, 0]
-        if image.shape[2] == 4:
-            rgb.append(3)
-
-        out_image = Image.fromarray(image[..., rgb])
         try:
-            out_image.save(filename, **self.kwargs, interlace=0)
+            with open(filename, "wb") as outfile:
+                outfile.write(image.read())
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
@@ -60,6 +56,19 @@ class Writer(Output):
         out_filename = os.path.join(self.output_folder, out_filename)
         logger.trace("in filename: '%s', out filename: '%s'", filename, out_filename)
         return out_filename
+
+    def pre_encode(self, image):
+        logger.trace("Pre-encoding image")
+        fmt = self.format_dict.get(self.config["format"], None)
+        fmt = self.config["format"].upper() if fmt is None else fmt
+        encoded = BytesIO()
+        rgb = [2, 1, 0]
+        if image.shape[2] == 4:
+            rgb.append(3)
+        out_image = Image.fromarray(image[..., rgb])
+        out_image.save(encoded, fmt, **self.kwargs)
+        encoded.seek(0)
+        return encoded
 
     def close(self):
         """ Image writer does not need a close method """

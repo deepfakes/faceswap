@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-""" Masks functions for faceswap.py
-    Masks from:
-        dfaker: https://github.com/dfaker/df"""
+""" Masks functions for faceswap.py """
 
 import inspect
 import logging
@@ -9,8 +7,6 @@ import sys
 
 import cv2
 import numpy as np
-
-from lib.umeyama import umeyama
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -47,51 +43,31 @@ class Mask():
                      self.__class__.__name__, face.shape, channels, landmarks)
         self.landmarks = landmarks
         self.face = face
+        self.channels = channels
 
         mask = self.build_mask()
-        self.mask = self.merge_mask(mask, channels)
+        self.mask = self.merge_mask(mask)
         logger.trace("Initialized %s", self.__class__.__name__)
 
     def build_mask(self):
         """ Override to build the mask """
         raise NotImplementedError
 
-    def merge_mask(self, mask, channels):
+    def merge_mask(self, mask):
         """ Return the mask in requested shape """
         logger.trace("mask_shape: %s", mask.shape)
-        assert channels in (1, 3, 4), "Channels should be 1, 3 or 4"
+        assert self.channels in (1, 3, 4), "Channels should be 1, 3 or 4"
         assert mask.shape[2] == 1 and mask.ndim == 3, "Input mask be 3 dimensions with 1 channel"
 
-        if channels == 3:
+        if self.channels == 3:
             retval = np.tile(mask, 3)
-        elif channels == 4:
+        elif self.channels == 4:
             retval = np.concatenate((self.face, mask), -1)
         else:
             retval = mask
 
         logger.trace("Final mask shape: %s", retval.shape)
         return retval
-
-
-class dfaker(Mask):  # pylint: disable=invalid-name
-    """ Dfaker model mask """
-    def build_mask(self):
-        padding = int(self.face.shape[0] * 0.1875)
-        coverage = self.face.shape[0] - (padding * 2)
-        mat = umeyama(self.landmarks[17:], True)[0:2]
-        mat = mat.reshape(-1).reshape(2, 3)
-        mat = mat * coverage
-        mat[:, 2] += padding
-
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
-        hull = cv2.convexHull(self.landmarks).reshape(1, -1, 2)  # pylint: disable=no-member
-        hull = cv2.transform(hull, mat).reshape(-1, 2)  # pylint: disable=no-member
-        cv2.fillConvexPoly(mask, hull, 255.)  # pylint: disable=no-member
-
-        krnl = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))  # pylint: disable=no-member
-        mask = cv2.dilate(mask, krnl, borderType=cv2.BORDER_REFLECT)  # pylint: disable=no-member
-        mask = np.expand_dims(mask, axis=-1)
-        return mask
 
 
 class dfl_full(Mask):  # pylint: disable=invalid-name

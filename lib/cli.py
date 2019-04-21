@@ -697,9 +697,8 @@ class ConvertArgs(ExtractConvertArgs):
             "default": "predicted",
             "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
                     "\n'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
-                    "\ndfaker: A basic face hull mask using a facehull of all 68 landmarks. "
-                    "\ndfl_full: An improved face hull mask using a facehull of 3 facial parts. "
                     "\ncomponents: An improved face hull mask using a facehull of 8 facial parts. "
+                    "\ndfl_full: An improved face hull mask using a facehull of 3 facial parts. "
                     "\nfacehull: Face cutout based on landmarks."
                     "\npredicted: The predicted mask generated from the model. If the model was "
                     "\n\tnot trained with a mask then this will fallback to "

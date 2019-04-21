@@ -16,12 +16,16 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Converter():
     """ Swap a source face with a target """
-    def __init__(self, output_dir, output_size, output_has_mask, draw_transparent, arguments):
+    def __init__(self, output_dir, output_size, output_has_mask,
+                 draw_transparent, pre_encode, arguments):
         logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  output_has_mask: %s, "
-                     "draw_transparent: %s, arguments: %s)", self.__class__.__name__, output_dir,
-                     output_size, output_has_mask, draw_transparent, arguments)
+                     "draw_transparent: %s, pre_encode: %s, arguments: %s)",
+                     self.__class__.__name__, output_dir, output_size, output_has_mask,
+                     draw_transparent, pre_encode, arguments)
         self.output_dir = output_dir
         self.draw_transparent = draw_transparent
+        self.writer_pre_encode = pre_encode
+        self.scale = arguments.output_scale / 100
         self.args = arguments
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
         self.load_plugins(output_size, output_has_mask)
@@ -87,6 +91,10 @@ class Converter():
         frame_size = (predicted["image"].shape[1], predicted["image"].shape[0])
         new_image = self.get_new_image(predicted, frame_size)
         patched_face = self.post_warp_adjustments(predicted, new_image)
+        patched_face = self.scale_image(patched_face)
+        patched_face = np.rint(patched_face * 255.0).astype("uint8")
+        if self.writer_pre_encode is not None:
+            patched_face = self.writer_pre_encode(patched_face)
         logger.trace("Patched image: '%s'", predicted["filename"])
         return patched_face
 
@@ -164,7 +172,7 @@ class Converter():
         frame = self.add_alpha_mask(frame, predicted)
 
         np.clip(frame, 0.0, 1.0, out=frame)
-        return np.rint(frame * 255.0).astype("uint8")
+        return frame
 
     def add_alpha_mask(self, frame, predicted):
         """ Adding a 4th channel should happen after all other channel operations
@@ -181,4 +189,16 @@ class Converter():
                                         mask_type(landmarks, frame, channels=1).mask)
         frame = np.concatenate((frame, np.expand_dims(final_mask, axis=-1)), axis=-1)
         logger.trace("Created transparent image: '%s'", predicted["filename"])
+        return frame
+
+    def scale_image(self, frame):
+        """ Scale the image if requested """
+        if self.scale == 1:
+            return frame
+        logger.trace("source frame: %s", frame.shape)
+        interp = cv2.INTER_CUBIC if self.scale > 1 else cv2.INTER_AREA  # pylint: disable=no-member
+        dims = (round((frame.shape[1] / 2 * self.scale) * 2),
+                round((frame.shape[0] / 2 * self.scale) * 2))
+        frame = cv2.resize(frame, dims, interpolation=interp)  # pylint: disable=no-member
+        logger.trace("resized frame: %s", frame.shape)
         return frame
