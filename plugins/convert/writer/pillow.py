@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Image output writer for faceswap.py converter """
 
-import os
 from io import BytesIO
 from PIL import Image
 
@@ -49,13 +48,6 @@ class Writer(Output):
                 outfile.write(image.read())
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
-
-    def output_filename(self, filename):
-        """ Return the output filename with the correct folder and extension """
-        out_filename = "{}.{}".format(os.path.splitext(filename)[0], self.config["format"])
-        out_filename = os.path.join(self.output_folder, out_filename)
-        logger.trace("in filename: '%s', out filename: '%s'", filename, out_filename)
-        return out_filename
 
     def pre_encode(self, image):
         logger.trace("Pre-encoding image")

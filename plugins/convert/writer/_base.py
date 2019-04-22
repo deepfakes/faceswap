@@ -34,7 +34,8 @@ class Output():
         """ Return the output filename with the correct folder and extension
             NB: The plugin must have a config item 'format' that contains the
                 file extension to use this method """
-        out_filename = "{}.{}".format(os.path.splitext(filename)[0], self.config["format"])
+        filename = os.path.splitext(os.path.basename(filename))[0]
+        out_filename = "{}.{}".format(filename, self.config["format"])
         out_filename = os.path.join(self.output_folder, out_filename)
         logger.trace("in filename: '%s', out filename: '%s'", filename, out_filename)
         return out_filename

@@ -47,7 +47,7 @@ class Writer(Output):
     def set_gif_filename(self, filename):
         """ Set the gif output filename """
         logger.debug("sample filename: '%s'", filename)
-        filename = os.path.splitext(filename)[0]
+        filename = os.path.splitext(os.path.basename(filename))[0]
         idx = len(filename)
         for char in list(filename[::-1]):
             if not char.isdigit() and char not in ("_", "-"):
