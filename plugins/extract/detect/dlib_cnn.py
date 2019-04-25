@@ -72,15 +72,14 @@ class Detect(Detector):
             for item in batch:
                 filenames.append(item["filename"])
                 images.append(item["image"])
-            [detect_images, scales] = self.compile_detection_images(images)
+            detect_images = self.compile_detection_images(images)
             batch_detected = self.detect_batch(detect_images)
             processed = self.process_output(batch_detected,
                                             indexes=None,
                                             rotation_matrix=None,
-                                            output=None,
-                                            scales=scales)
+                                            output=None)
             if not all(faces for faces in processed) and self.rotation != [0]:
-                processed = self.process_rotations(detect_images, processed, scales)
+                processed = self.process_rotations(detect_images, processed)
             for idx, faces in enumerate(processed):
                 filename = filenames[idx]
                 for b_idx, item in enumerate(batch):
@@ -101,17 +100,15 @@ class Detect(Detector):
         """ Compile the detection images into batches """
         logger.trace("Compiling Detection Images: %s", len(images))
         detect_images = list()
-        scales = list()
         for image in images:
-            scale = self.set_scale(image, is_square=True, scale_up=True)
-            detect_images.append(self.set_detect_image(image, scale))
-            scales.append(scale)
+            self.set_scale(image, is_square=True, scale_up=True)
+            detect_images.append(self.set_detect_image(image))
         logger.trace("Compiled Detection Images")
-        return [detect_images, scales]
+        return detect_images
 
     def detect_batch(self, detect_images, disable_message=False):
         """ Pass the batch through detector for consistently sized images
-            or each image separately for inconsitently sized images """
+            or each image seperately for inconsitently sized images """
         logger.trace("Detecting Batch")
         can_batch = self.check_batch_dims(detect_images)
         if can_batch:
@@ -134,15 +131,13 @@ class Detect(Detector):
         return len(dims) == 1
 
     def process_output(self, batch_detected,
-                       indexes=None, rotation_matrix=None, output=None, scales=None):
+                       indexes=None, rotation_matrix=None, output=None):
         """ Process the output images """
         logger.trace("Processing Output: (batch_detected: %s, indexes: %s, rotation_matrix: %s, "
-                     "output: %s, scales: %s",
-                     batch_detected, indexes, rotation_matrix, output, scales)
+                     "output: %s", batch_detected, indexes, rotation_matrix, output)
         output = output if output else list()
         for idx, faces in enumerate(batch_detected):
             detected_faces = list()
-            scale = scales[idx]
 
             if isinstance(rotation_matrix, np.ndarray):
                 faces = [self.rotate_rect(face.rect, rotation_matrix)
@@ -151,10 +146,10 @@ class Detect(Detector):
             for face in faces:
                 face = self.convert_to_dlib_rectangle(face)
                 face = dlib.rectangle(  # pylint: disable=c-extension-no-member
-                    int(face.left() / scale),
-                    int(face.top() / scale),
-                    int(face.right() / scale),
-                    int(face.bottom() / scale))
+                    int(face.left() / self.scale),
+                    int(face.top() / self.scale),
+                    int(face.right() / self.scale),
+                    int(face.bottom() / self.scale))
                 detected_faces.append(face)
             if indexes:
                 target = indexes[idx]
@@ -164,7 +159,7 @@ class Detect(Detector):
         logger.trace("Processed Output: %s", output)
         return output
 
-    def process_rotations(self, detect_images, processed, scales):
+    def process_rotations(self, detect_images, processed):
         """ Rotate frames missing faces until face is found """
         logger.trace("Processing Rotations")
         for angle in self.rotation:
@@ -183,8 +178,7 @@ class Detect(Detector):
             processed = self.process_output(batch_detected,
                                             indexes=indexes,
                                             rotation_matrix=rotmat,
-                                            output=processed,
-                                            scales=scales)
+                                            output=processed)
         logger.trace("Processed Rotations")
         return processed
 

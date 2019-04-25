@@ -15,7 +15,6 @@ import logging
 import os
 import traceback
 from io import StringIO
-from math import sqrt
 
 import cv2
 import dlib
@@ -46,6 +45,9 @@ class Detector():
         # The input and output queues for the plugin.
         # See lib.queue_manager.QueueManager for getting queues
         self.queues = {"in": None, "out": None}
+
+        # Scaling factor for image. Plugin dependent
+        self.scale = 1.0
 
         #  Path to model if required
         self.model_path = self.set_model_path()
@@ -107,11 +109,8 @@ class Detector():
             Do not override """
         try:
             self.detect_faces(*args, **kwargs)
-        except Exception as err:  # pylint: disable=broad-except
-            logger.error("Caught exception in child process: %s: %s", os.getpid(), str(err))
-            # Display traceback if in initialization stage
-            if not self.init.is_set():
-                logger.exception("Traceback:")
+        except Exception:  # pylint: disable=broad-except
+            logger.error("Caught exception in child process: %s", os.getpid())
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             logger.trace(tb_buffer.getvalue())
@@ -134,8 +133,8 @@ class Detector():
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def compile_detection_image(self, image, is_square, scale_up):
         """ Compile the detection image """
-        scale = self.set_scale(image, is_square=is_square, scale_up=scale_up)
-        return [self.set_detect_image(image, scale), scale]
+        self.set_scale(image, is_square=is_square, scale_up=scale_up)
+        return self.set_detect_image(image)
 
     def set_scale(self, image, is_square=False, scale_up=False):
         """ Set the scale factor for incoming image """
@@ -153,26 +152,23 @@ class Detector():
             target = self.target
 
         if scale_up or target < source:
-            scale = sqrt(target / source)
+            self.scale = target / source
         else:
-            scale = 1.0
-        logger.trace("Detector scale: %s", scale)
+            self.scale = 1.0
+        logger.trace("Detector scale: %s", self.scale)
 
-        return scale
-
-    @staticmethod
-    def set_detect_image(input_image, scale):
+    def set_detect_image(self, input_image):
         """ Convert the image to RGB and scale """
         # pylint: disable=no-member
         image = input_image[:, :, ::-1].copy()
-        if scale == 1.0:
+        if self.scale == 1.0:
             return image
 
         height, width = image.shape[:2]
-        interpln = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA
-        dims = (int(width * scale), int(height * scale))
+        interpln = cv2.INTER_LINEAR if self.scale > 1.0 else cv2.INTER_AREA
+        dims = (int(width * self.scale), int(height * self.scale))
 
-        if scale < 1.0:
+        if self.scale < 1.0:
             logger.verbose("Resizing image from %sx%s to %s.",
                            width, height, "x".join(str(i) for i in dims))
 

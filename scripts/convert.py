@@ -12,12 +12,11 @@ from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 from lib.faces_detect import DetectedFace
-from lib.multithreading import BackgroundGenerator
+from lib.multithreading import BackgroundGenerator, SpawnProcess
 from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
-from plugins.plugin_loader import PluginLoader
 
-from .extract import Plugins as Extractor
+from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -28,7 +27,7 @@ class Convert():
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
         self.args = arguments
         self.output_dir = get_folder(self.args.output_dir)
-        self.extractor = None
+        self.extract_faces = False
         self.faces_count = 0
 
         self.images = Images(self.args)
@@ -44,11 +43,11 @@ class Convert():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
-        """ Original & LowMem models go with converter
+        """ Original & LowMem models go with Adjust or Masked converter
 
             Note: GAN prediction outputs a mask + an image, while other
             predicts only an image. """
-        Utils.set_verbosity(self.args.loglevel)
+        Utils.set_verbosity()
 
         if not self.alignments.have_alignments_file:
             self.load_extractor()
@@ -61,7 +60,7 @@ class Convert():
         for item in batch.iterator():
             self.convert(converter, item)
 
-        if self.extractor:
+        if self.extract_faces:
             queue_manager.terminate_queues()
 
         Utils.finalize(self.images.images_found,
@@ -74,26 +73,55 @@ class Convert():
         logger.warning("NB: This will use the inferior dlib-hog for extraction "
                        "and dlib pose predictor for landmarks. It is recommended "
                        "to perfom Extract first for superior results")
-        extract_args = {"detector": "dlib-hog",
-                        "aligner": "dlib",
-                        "loglevel": self.args.loglevel}
-        self.extractor = Extractor(None, extract_args)
-        self.extractor.launch_detector()
-        self.extractor.launch_aligner()
+        for task in ("load", "detect", "align"):
+            queue_manager.add_queue(task, maxsize=0)
+
+        detector = PluginLoader.get_detector("dlib_hog")(loglevel=self.args.loglevel)
+        aligner = PluginLoader.get_aligner("dlib")(loglevel=self.args.loglevel)
+
+        d_kwargs = {"in_queue": queue_manager.get_queue("load"),
+                    "out_queue": queue_manager.get_queue("detect")}
+        a_kwargs = {"in_queue": queue_manager.get_queue("detect"),
+                    "out_queue": queue_manager.get_queue("align")}
+
+        d_process = SpawnProcess(detector.run, **d_kwargs)
+        d_event = d_process.event
+        d_process.start()
+
+        a_process = SpawnProcess(aligner.run, **a_kwargs)
+        a_event = a_process.event
+        a_process.start()
+
+        d_event.wait(10)
+        if not d_event.is_set():
+            raise ValueError("Error inititalizing Detector")
+        a_event.wait(10)
+        if not a_event.is_set():
+            raise ValueError("Error inititalizing Aligner")
+
+        self.extract_faces = True
 
     def load_model(self):
         """ Load the model requested for conversion """
-        logger.debug("Loading Model")
+        model_name = self.args.trainer
         model_dir = get_folder(self.args.model_dir)
-        model = PluginLoader.get_model(self.args.trainer)(model_dir, self.args.gpus, predict=True)
-        logger.debug("Loaded Model")
+        num_gpus = self.args.gpus
+
+        model = PluginLoader.get_model(model_name)(model_dir, num_gpus)
+
+        if not model.load(self.args.swap_model):
+            logger.error("Model Not Found! A valid model "
+                         "must be provided to continue!")
+            exit(1)
+
         return model
 
     def load_converter(self, model):
         """ Load the requested converter for conversion """
-        conv = self.args.converter
+        args = self.args
+        conv = args.converter
+
         converter = PluginLoader.get_converter(conv)(
-<<<<<<< HEAD
             model.converter(False),
             trainer=args.trainer,
             blur_size=args.blur_size,
@@ -106,18 +134,11 @@ class Convert():
             draw_transparent=args.draw_transparent,
             enlargement_scale=args.enlargement_scale)
 
-=======
-            model.converter(self.args.swap_model),
-            model=model,
-            arguments=self.args)
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         return converter
 
     def prepare_images(self):
         """ Prepare the images for conversion """
         filename = ""
-        if self.extractor:
-            load_queue = queue_manager.get_queue("load")
         for filename, image in tqdm(self.images.load(),
                                     total=self.images.images_found,
                                     file=sys.stdout):
@@ -127,10 +148,13 @@ class Convert():
                 continue
 
             frame = os.path.basename(filename)
-            if self.extractor:
-                detected_faces = self.detect_faces(load_queue, filename, image)
+            if self.extract_faces:
+                detected_faces = self.detect_faces(filename, image)
             else:
                 detected_faces = self.alignments_faces(frame, image)
+
+            if not detected_faces:
+                continue
 
             faces_count = len(detected_faces)
             if faces_count != 0:
@@ -146,28 +170,18 @@ class Convert():
 
             yield filename, image, detected_faces
 
-    def detect_faces(self, load_queue, filename, image):
-        """ Extract the face from a frame (If alignments file not found) """
-        inp = {"filename": filename,
-               "image": image}
-        load_queue.put(inp)
-        faces = next(self.extractor.detect_faces())
-
-        landmarks = faces["landmarks"]
-        detected_faces = faces["detected_faces"]
-        final_faces = list()
-
-        for idx, face in enumerate(detected_faces):
-            detected_face = DetectedFace()
-            detected_face.from_dlib_rect(face)
-            detected_face.landmarksXY = landmarks[idx]
-            final_faces.append(detected_face)
-        return final_faces
+    @staticmethod
+    def detect_faces(filename, image):
+        """ Extract the face from a frame (If not alignments file found) """
+        queue_manager.get_queue("load").put((filename, image))
+        item = queue_manager.get_queue("align").get()
+        detected_faces = item["detected_faces"]
+        return detected_faces
 
     def alignments_faces(self, frame, image):
         """ Get the face from alignments file """
         if not self.check_alignments(frame):
-            return list()
+            return None
 
         faces = self.alignments.get_faces_in_frame(frame)
         detected_faces = list()
@@ -199,27 +213,14 @@ class Convert():
 
             if not skip:
                 for face in faces:
-<<<<<<< HEAD
                     image = converter.patch_image(image,face,size)
                     
-=======
-                    image = converter.patch_image(image, face)
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
                 filename = str(self.output_dir / Path(filename).name)
-
-                if self.args.draw_transparent:
-                    filename = "{}.png".format(os.path.splitext(filename)[0])
-                    logger.trace("Set extension to png: `%s`", filename)
-
                 cv2.imwrite(filename, image)  # pylint: disable=no-member
         except Exception as err:
             logger.error("Failed to convert image: '%s'. Reason: %s", filename, err)
             raise
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
 class OptionalActions():
     """ Process the optional actions for convert """
 
@@ -300,6 +301,8 @@ class OptionalActions():
 
 class Legacy():
     """ Update legacy alignments:
+
+        - Add frame dimensions
         - Rotate landmarks and bounding boxes on legacy alignments
           and remove the 'r' parameter
         - Add face hashes to alignments file
@@ -312,10 +315,15 @@ class Legacy():
 
     def process(self, faces_dir):
         """ Run the rotate alignments process """
+        no_dims = self.alignments.get_legacy_no_dims()
         rotated = self.alignments.get_legacy_rotation()
         hashes = self.alignments.get_legacy_no_hashes()
-        if not rotated and not hashes:
+        if not no_dims and not rotated and not hashes:
             return
+        if no_dims:
+            logger.info("Legacy landmarks found. Adding frame dimensions...")
+            self.add_dimensions(no_dims)
+            self.alignments.save()
         if rotated:
             logger.info("Legacy rotated frames found. Converting...")
             self.rotate_landmarks(rotated)
@@ -325,14 +333,22 @@ class Legacy():
             self.add_hashes(hashes, faces_dir)
             self.alignments.save()
 
+    def add_dimensions(self, no_dims):
+        """ Add width and height of original frame to alignments """
+        for no_dim in tqdm(no_dims, desc="Adding Frame Dimensions"):
+            if no_dim not in self.frames.keys():
+                continue
+            filename = self.frames[no_dim]
+            dims = cv2.imread(filename).shape[:2]  # pylint: disable=no-member
+            self.alignments.add_dimensions(no_dim, dims)
+
     def rotate_landmarks(self, rotated):
         """ Rotate the landmarks """
         for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
-            frame = self.frames.get(rotate_item, None)
-            if frame is None:
+            if rotate_item not in self.frames.keys():
                 logger.debug("Skipping missing frame: '%s'", rotate_item)
                 continue
-            self.alignments.rotate_existing_landmarks(rotate_item, frame)
+            self.alignments.rotate_existing_landmarks(rotate_item)
 
     def add_hashes(self, hashes, faces_dir):
         """ Add Face Hashes to the alignments file """

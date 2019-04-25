@@ -91,7 +91,7 @@ python tools.py effmpeg -h
 ```
 
 ## Extracting video frames with FFMPEG
-Alternatively you can split a video into separate frames using [ffmpeg](https://www.ffmpeg.org) for instance. Below is an example command to process a video to separate frames.
+Alternatively you can split a video into seperate frames using [ffmpeg](https://www.ffmpeg.org) for instance. Below is an example command to process a video to seperate frames.
 
 ```bash
 ffmpeg -i /path/to/my/video.mp4 /path/to/output/video-frame-%d.png

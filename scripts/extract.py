@@ -42,7 +42,7 @@ class Extract():
     def process(self):
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
-        Utils.set_verbosity(self.args.loglevel)
+        Utils.set_verbosity()
 #        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
@@ -75,9 +75,6 @@ class Extract():
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if image is None or not image.any():
-                logger.warning("Unable to open image. Skipping: '%s'", filename)
-                continue
             imagename = os.path.basename(filename)
             if imagename in self.alignments.data.keys():
                 logger.trace("Skipping image: '%s'", filename)
@@ -211,7 +208,7 @@ class Extract():
 
         self.threaded_io("reload", detected_faces)
 
-    def align_face(self, faces, align_eyes, size, filename):
+    def align_face(self, faces, align_eyes, size, filename, padding=48):
         """ Align the detected face and add the destination file path """
         final_faces = list()
         image = faces["image"]
@@ -221,7 +218,11 @@ class Extract():
             detected_face = DetectedFace()
             detected_face.from_dlib_rect(face, image)
             detected_face.landmarksXY = landmarks[idx]
-            detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
+            detected_face.frame_dims = image.shape[:2]
+            detected_face.load_aligned(image,
+                                       size=size,
+                                       padding=padding,
+                                       align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
@@ -245,15 +246,9 @@ class Extract():
 
 class Plugins():
     """ Detector and Aligner Plugins and queues """
-    def __init__(self, arguments, converter_args=None):
+    def __init__(self, arguments):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
-        self.converter_args = converter_args  # Arguments from converter for on the fly extract
-        if converter_args is not None:
-            self.loglevel = converter_args["loglevel"]
-        else:
-            self.loglevel = self.args.loglevel
-
         self.detector = self.load_detector()
         self.aligner = self.load_aligner()
         self.is_parallel = self.set_parallel_processing()
@@ -264,7 +259,7 @@ class Plugins():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_parallel_processing(self):
-        """ Set whether to run detect and align together or separately """
+        """ Set whether to run detect and align together or seperately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
         gpu_stats = GPUStats()
@@ -303,10 +298,7 @@ class Plugins():
 
     def load_detector(self):
         """ Set global arguments and load detector plugin """
-        if not self.converter_args:
-            detector_name = self.args.detector.replace("-", "_").lower()
-        else:
-            detector_name = self.converter_args["detector"]
+        detector_name = self.args.detector.replace("-", "_").lower()
         logger.debug("Loading Detector: '%s'", detector_name)
         # Rotation
         rotation = None
@@ -314,22 +306,18 @@ class Plugins():
             rotation = self.args.rotate_images
 
         detector = PluginLoader.get_detector(detector_name)(
-            loglevel=self.loglevel,
+            loglevel=self.args.loglevel,
             rotation=rotation)
 
         return detector
 
     def load_aligner(self):
         """ Set global arguments and load aligner plugin """
-        if not self.converter_args:
-            aligner_name = self.args.aligner.replace("-", "_").lower()
-        else:
-            aligner_name = self.converter_args["aligner"]
-
+        aligner_name = self.args.aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
 
         aligner = PluginLoader.get_aligner(aligner_name)(
-            loglevel=self.loglevel)
+            loglevel=self.args.loglevel)
 
         return aligner
 
@@ -364,12 +352,7 @@ class Plugins():
         out_queue = queue_manager.get_queue("detect")
         kwargs = {"in_queue": queue_manager.get_queue("load"),
                   "out_queue": out_queue}
-<<<<<<< HEAD
 
-=======
-        if self.converter_args:
-            kwargs["processes"] = 1
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
         self.process_detect = mp_func(self.detector.run, **kwargs)
 

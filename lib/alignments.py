@@ -62,13 +62,10 @@ class Alignments():
     @property
     def hashes_to_frame(self):
         """ Return a dict of each face_hash with their parent
-            frame name(s) and their index in the frame
-            """
-        hash_faces = dict()
-        for frame_name, faces in self.data.items():
-            for idx, face in enumerate(faces):
-                hash_faces.setdefault(face["hash"], dict())[frame_name] = idx
-        return hash_faces
+            frame name and their index in the frame """
+        return {face["hash"]: (frame_name, idx)
+                for frame_name, faces in self.data.items()
+                for idx, face in enumerate(faces)}
 
     # << INIT FUNCTIONS >> #
 
@@ -270,6 +267,33 @@ class Alignments():
 
     # << LEGACY FUNCTIONS >> #
 
+    # < Original Frame Dimensions > #
+    # For dfaker and convert-adjust the original dimensions of a frame are
+    # required to calculate the transposed landmarks. As transposed landmarks
+    # will change on face size, we store original frame dimensions
+    # These were not previously required, so this adds the dimensions
+    # to the landmarks file
+
+    def get_legacy_no_dims(self):
+        """ Return a list of frames that do not contain the original frame
+            height and width attributes """
+        logger.debug("Getting alignments without frame_dims")
+        keys = list()
+        for key, val in self.data.items():
+            for alignment in val:
+                if "frame_dims" not in alignment.keys():
+                    keys.append(key)
+                    break
+        logger.debug("Got alignments without frame_dims: %s", len(keys))
+        return keys
+
+    def add_dimensions(self, frame_name, dimensions):
+        """ Backward compatability fix. Add frame dimensions
+            to alignments """
+        logger.trace("Adding dimensions: (frame: '%s', dimensions: %s)", frame_name, dimensions)
+        for face in self.get_faces_in_frame(frame_name):
+            face["frame_dims"] = dimensions
+
     # < Rotation > #
     # The old rotation method would rotate the image to find a face, then
     # store the rotated landmarks along with a rotation value to tell the
@@ -292,20 +316,20 @@ class Alignments():
         logger.debug("Got alignments containing legacy rotations: %s", len(keys))
         return keys
 
-    def rotate_existing_landmarks(self, frame_name, frame):
+    def rotate_existing_landmarks(self, frame_name):
         """ Backwards compatability fix. Rotates the landmarks to
             their correct position and deletes r
 
-            NB: The original frame must be passed in otherwise
+            NB: The original frame dimensions must be passed in otherwise
             the transformation cannot be performed """
         logger.trace("Rotating existing landmarks for frame: '%s'", frame_name)
-        dims = frame.shape[:2]
         for face in self.get_faces_in_frame(frame_name):
             angle = face.get("r", 0)
             if not angle:
                 logger.trace("Landmarks do not require rotation: '%s'", frame_name)
                 return
             logger.trace("Rotating landmarks: (frame: '%s', angle: %s)", frame_name, angle)
+            dims = face["frame_dims"]
             r_mat = self.get_original_rotation_matrix(dims, angle)
             rotate_landmarks(face, r_mat)
             del face["r"]

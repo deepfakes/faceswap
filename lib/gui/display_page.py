@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .tooltip import Tooltip
-from .utils import get_images
+from .utils import Images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -20,6 +20,7 @@ class DisplayPage(ttk.Frame):
         ttk.Frame.__init__(self, parent)
         self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
 
+        self.session = parent.session
         self.runningtask = parent.runningtask
         self.helptext = helptext
         self.tabname = tabname
@@ -34,7 +35,7 @@ class DisplayPage(ttk.Frame):
         self.add_frame_separator()
         self.set_mainframe_single_tab_style()
         parent.add(self, text=self.tabname.title())
-        logger.debug("Initialized %s", self.__class__.__name__,)
+        logger.debug("Initialized %s")
 
     def add_optional_vars(self, varsdict):
         """ Add page specific variables """
@@ -202,7 +203,7 @@ class DisplayOptionalPage(DisplayPage):
         """ Add save button to save page output to file """
         logger.debug("Adding save option")
         btnsave = ttk.Button(self.optsframe,
-                             image=get_images().icons["save"],
+                             image=Images().icons["save"],
                              command=self.save_items)
         btnsave.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnsave,

@@ -15,10 +15,6 @@ import numpy as np
 import dlib
 
 from lib.faces_detect import DetectedFace
-<<<<<<< HEAD
-=======
-from lib.logger import get_loglevel
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -79,24 +75,7 @@ def hash_encode_image(image, extension):
     return f_hash, img
 
 
-<<<<<<< HEAD
 def set_system_verbosity():
-=======
-def backup_file(directory, filename):
-    """ Backup a given file by appending .bk to the end """
-    logger.trace("Backing up: '%s'", filename)
-    origfile = os.path.join(directory, filename)
-    backupfile = origfile + '.bk'
-    if os.path.exists(backupfile):
-        logger.trace("Removing existing file: '%s'", backup_file)
-        os.remove(backupfile)
-    if os.path.exists(origfile):
-        logger.trace("Renaming: '%s' to '%s'", origfile, backup_file)
-        os.rename(origfile, backupfile)
-
-
-def set_system_verbosity(loglevel):
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
     """ Set the verbosity level of tensorflow and suppresses
         future and deprecation warnings from any modules
         From:
@@ -107,13 +86,34 @@ def set_system_verbosity(loglevel):
         2 - filter out WARNING logs
         3 - filter out ERROR logs  """
 
-    numeric_level = get_loglevel(loglevel)
-    loglevel = "2" if numeric_level > 15 else "0"
+    loglevel = "2" if logger.getEffectiveLevel() > 15 else "0"
     logger.debug("System Verbosity level: %s", loglevel)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = loglevel
     if loglevel != '0':
-        for warncat in (FutureWarning, DeprecationWarning, UserWarning):
+        for warncat in (FutureWarning, DeprecationWarning):
             warnings.simplefilter(action='ignore', category=warncat)
+
+
+def add_alpha_channel(image, intensity=100):
+    """ Add an alpha channel to an image
+
+        intensity: The opacity of the alpha channel between 0 and 100
+                   100 = transparent,
+                   0 = solid  """
+    logger.trace("Adding alpha channel: intensity: %s", intensity)
+    assert 0 <= intensity <= 100, "Invalid intensity supplied"
+    intensity = (255.0 / 100.0) * intensity
+
+    d_type = image.dtype
+    image = image.astype("float32")
+
+    ch_b, ch_g, ch_r = cv2.split(image)  # pylint: disable=no-member
+    ch_a = np.ones(ch_b.shape, dtype="float32") * intensity
+
+    image_bgra = cv2.merge(  # pylint: disable=no-member
+        (ch_b, ch_g, ch_r, ch_a))
+    logger.trace("Added alpha channel", intensity)
+    return image_bgra.astype(d_type)
 
 
 def rotate_landmarks(face, rotation_matrix):
@@ -220,7 +220,6 @@ def safe_shutdown():
         continue
     queue_manager.manager.shutdown()
 
-<<<<<<< HEAD
 def parse_model_weights(self, weight_file, model_file):
 
     # handles grouped convolutions
@@ -355,29 +354,3 @@ def parse_model_weights(self, weight_file, model_file):
     model.save(model_file)
     
     return model
-=======
-def fft_convolve2d(image, kernel):
-    """ 2D convolution, using FFT"""
-
-    def pad_to_power(arr, kernel):
-        next_power = NextPowerOfTwo(np.max(arr.shape))
-        next_size = np.power(2, next_power)
-        y_deficit, x_deficit, _ = next_size - arr.shape
-        a_deficit, b_deficit, _ = next_size - arr.shape
-        image = np.pad(arr, ((y_deficit,0),(x_deficit,0)), mode='constant')
-        kernel = np.pad(arr, ((a_deficit,0),(b_deficit,0)), mode='constant')
-
-        return image, kernel
-
-    padded_image, padded_kernel = pad_to_power(image, kernel)
-    fr = np.fft.fft2(padded_image)
-    fr2 = np.fft.fft2(np.flipud(np.fliplr(padded_kernel)))
-    m,n = fr.shape
-    cc = np.real(np.fft.ifft2(fr * fr2))
-    cc = np.roll(cc, -m/2+1, axis=0)
-    cc = np.roll(cc, -n/2+1, axis=1)
-
-    return cc
-
-
->>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae

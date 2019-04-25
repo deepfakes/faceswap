@@ -74,16 +74,13 @@ class FaceswapConfig():
         else:
             func = self.config.get
         retval = func(section, option)
-        if isinstance(retval, str) and retval.lower() == "none":
-            retval = None
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
         return retval
 
     def get_config_file(self):
         """ Return the config file from the calling folder """
         dirname = os.path.dirname(sys.modules[self.__module__].__file__)
-        folder, fname = os.path.split(dirname)
-        retval = os.path.join(os.path.dirname(folder), "config", "{}.ini".format(fname))
+        retval = os.path.join(dirname, "config.ini")
         logger.debug("Config File location: '%s'", retval)
         return retval
 
@@ -264,9 +261,6 @@ class FaceswapConfig():
                 if item == "helptext" or not opt["choices"]:
                     continue
                 opt_value = self.config.get(section, item)
-                if opt_value.lower() == "none" and any(choice.lower() == "none"
-                                                       for choice in opt["choices"]):
-                    continue
                 if opt_value not in opt["choices"]:
                     default = str(opt["default"])
                     logger.warning("'%s' is not a valid config choice for '%s': '%s'. Defaulting "

@@ -23,7 +23,7 @@ class PluginLoader():
     @staticmethod
     def get_converter(name):
         """ Return requested converter plugin """
-        return PluginLoader._import("convert", name)
+        return PluginLoader._import("Convert", "Convert_{0}".format(name))
 
     @staticmethod
     def get_model(name):
@@ -57,16 +57,6 @@ class PluginLoader():
         return models
 
     @staticmethod
-    def get_available_converters():
-        """ Return a list of available converters """
-        converter_path = os.path.join(os.path.dirname(__file__), "convert")
-        converters = sorted(item.name.replace(".py", "").replace("_", "-")
-                            for item in os.scandir(converter_path)
-                            if not item.name.startswith("_")
-                            and item.name.endswith(".py"))
-        return converters
-
-    @staticmethod
     def get_available_extractors(extractor_type):
         """ Return a list of available models """
         extractpath = os.path.join(os.path.dirname(__file__),
@@ -83,4 +73,4 @@ class PluginLoader():
     def get_default_model():
         """ Return the default model """
         models = PluginLoader.get_available_models()
-        return 'original' if 'original' in models else models[0]
+        return 'Original' if 'Original' in models else models[0]

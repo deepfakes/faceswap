@@ -82,7 +82,7 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup(arguments.loglevel, arguments.logfile, self.command)
+        log_setup(arguments.loglevel, self.command)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         try:
             script = self.import_script()
@@ -298,17 +298,10 @@ class FaceSwapArgs():
                             "dest": "loglevel",
                             "default": "INFO",
                             "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
-                            "help": "Log level. Stick with INFO or VERBOSE unless you need to "
-                                    "file an error report. Be careful with TRACE as it will "
-                                    "generate a lot of data"})
-        global_args.append({"opts": ("-LF", "--logfile"),
-                            "action": SaveFileFullPaths,
-                            "filetypes": 'log',
-                            "type": str,
-                            "dest": "logfile",
-                            "help": "Path to store the logfile. Leave blank to store in the "
-                                    "faceswap folder",
-                            "default": None})
+                            "help": "Log level. Stick with INFO or VERBOSE "
+                                    "unless you need to file an error report. Be "
+                                    "careful with TRACE as it will generate a lot "
+                                    "of data"})
         # This is a hidden argument to indicate that the GUI is being used,
         # so the preview window should be redirected Accordingly
         global_args.append({"opts": ("-gui", "--gui"),
@@ -449,7 +442,7 @@ class ExtractArgs(ExtractConvertArgs):
                     "\n'dlib': Dlib Pose Predictor. Faster, less "
                     "\n\tresource intensive, but less accurate."
                     "\n'fan': Face Alignment Network. Best aligner."
-                    "\n\tGPU heavy, slow when not running on GPU"})
+                    "\n\tGPU heavy."})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -569,45 +562,49 @@ class ConvertArgs(ExtractConvertArgs):
                                       "create the model"})
         argument_list.append({"opts": ("-c", "--converter"),
                               "type": str.lower,
-                              "choices": PluginLoader.get_available_converters(),
-                              "default": "masked",
+                              "choices": ("Masked", "Adjust"),
+                              "default": "Masked",
                               "help": "Converter to use"})
-        argument_list.append({
-            "opts": ("-M", "--mask-type"),
-            "type": str.lower,
-            "dest": "mask_type",
-            "choices": ["ellipse",
-                        "facehull",
-                        "dfl",
-                        #  "cnn",  Removed until implemented
-                        "none"],
-            "default": "facehull",
-            "help": "R|Mask to use to replace faces."
-                    "\nellipse: Oval around face."
-                    "\nfacehull: Face cutout based on landmarks."
-                    "\ndfl: A Face Hull mask from DeepFaceLabs."
-                    #  "\ncnn: Not yet implemented"  Removed until implemented
-                    "\nnone: No mask. Can still use blur and erode on the edges of the swap box."})
         argument_list.append({"opts": ("-b", "--blur-size"),
                               "type": float,
                               "action": Slider,
-                              "min_max": (0.0, 100.0),
-                              "rounding": 2,
-                              "default": 5.0,
-                              "help": "Blur kernel size as a percentage of the swap area. Smooths "
-                                      "the transition between the swapped face and the background "
-                                      "image."})
-        argument_list.append({"opts": ("-e", "--erosion-size"),
-                              "dest": "erosion_size",
+                              "min_max": (0.0, 256.0),
+                              "rounding": 0.1,
+                              "default": 2.0,
+                              "help": "Blur size for smoothing the transition "
+                                      "between the swapped face and the "
+                                      "background image. Integer values will blur "
+                                      "x pixels, fractions will blur x% of the "
+                                      "face area"})
+        argument_list.append({"opts": ("-e", "--erosion-kernel-size"),
+                              "dest": "erosion_kernel_size",
                               "type": float,
                               "action": Slider,
                               "min_max": (-100.0, 100.0),
-                              "rounding": 2,
+                              "rounding": 0.1,
                               "default": 0.0,
-                              "help": "Erosion kernel size as a percentage of the mask radius "
-                                      "area. Positive values apply erosion which reduces the size "
-                                      "of the swapped area. Negative values apply dilation which "
-                                      "increases the swapped area"})
+                              "help": "Erosion kernel size. Positive values "
+                                      "apply erosion which reduces the edge "
+                                      "of the swapped face. Negative values "
+                                      "apply dilation which allows the "
+                                      "swapped face to cover more space. "})
+        argument_list.append({"opts": ("-M", "--mask-type"),
+                              "type": str.lower,
+                              "dest": "mask_type",
+                              "choices": ["rect",
+                                          "facehull",
+                                          "facehullandrect"],
+                              "default": "facehullandrect",
+                              "help": "Mask to use to replace faces. "
+                                      "(Masked converter only)"})
+        argument_list.append({"opts": ("-sh", "--sharpen"),
+                              "type": str.lower,
+                              "dest": "sharpen_image",
+                              "choices": ["bsharpen", "gsharpen"],
+                              "default": None,
+                              "help": "Use Sharpen Image. bsharpen for Box "
+                                      "Blur, gsharpen for Gaussian Blur "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
@@ -615,15 +612,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for conversion"})
-        argument_list.append({"opts": ("-sh", "--sharpen"),
-                              "type": str.lower,
-                              "dest": "sharpen_image",
-                              "choices": ["box_filter", "gaussian_filter", "none"],
-                              "default": "none",
-                              "help": "Sharpen the masked facial region of "
-                                      "the converted images. Choice of filter "
-                                      "to use in sharpening process -- box"
-                                      "filter or gaussian filter."})
         argument_list.append({"opts": ("-fr", "--frame-ranges"),
                               "nargs": "+",
                               "type": str,
@@ -649,32 +637,32 @@ class ConvertArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "dest": "seamless_clone",
                               "default": False,
-                              "help": "Use cv2's seamless clone function to "
-                                      "remove extreme gradients at the mask "
-                                      "seam by smoothing colors."})
+                              "help": "Use cv2's seamless clone. "
+                                      "(Masked converter only)"})
         argument_list.append({"opts": ("-mh", "--match-histogram"),
                               "action": "store_true",
                               "dest": "match_histogram",
                               "default": False,
-                              "help": "Adjust the histogram of each color "
-                                      "channel in the swapped reconstruction "
-                                      "to equal the histogram of the masked "
-                                      "area in the orginal image"})
+                              "help": "Use histogram matching. "
+                                      "(Masked converter only)"})
+        argument_list.append({"opts": ("-es", "--enlargment-scale"),
+                              "type": float,
+                              "dest": "enlargment_scale",
+                              "default": 0.0,
+                              "help": "Input images to the model are cropped to "
+                                      "a central square that spans from eyebrow "
+                                      "to chin cleft vertically and eyebrow to "
+                                      "eyebrow horizontally at the default scale. "
+                                      "0 spans from eyebrow to eyebrow"
+                                      "3/64 spans from temple to temple"
+                                      "6/64 spans from ear to ear"
+                                      "12/64 is a mugshot"})
         argument_list.append({"opts": ("-aca", "--avg-color-adjust"),
                               "action": "store_true",
                               "dest": "avg_color_adjust",
                               "default": False,
-                              "help": "Adjust the mean of each color channel "
-                                      " in the swapped reconstruction to "
-                                      "equal the mean of the masked area in "
-                                      "the orginal image"})
-        argument_list.append({"opts": ("-sb", "--smooth-box"),
-                              "action": "store_true",
-                              "dest": "smooth_box",
-                              "default": False,
-                              "help": "Perform a Gaussian blur on the edges of the face box "
-                                      "received from the model. Helps reduce pronounced edges "
-                                      "of the swap area"})
+                              "help": "Average color adjust. "
+                                      "(Adjust converter only)"})
         argument_list.append({"opts": ("-dt", "--draw-transparent"),
                               "action": "store_true",
                               "dest": "draw_transparent",
@@ -707,26 +695,6 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Input directory. A directory "
                                       "containing training images for face B. "
                                       "Defaults to 'input'"})
-        argument_list.append({"opts": ("-ala", "--alignments-A"),
-                              "action": FileFullPaths,
-                              "filetypes": 'alignments',
-                              "type": str,
-                              "dest": "alignments_path_a",
-                              "default": None,
-                              "help": "Path to alignments file for training set A. Only required "
-                                      "if you are using a masked model or warp-to-landmarks is "
-                                      "enabled. Defaults to <input-A>/alignments.json if not "
-                                      "provided."})
-        argument_list.append({"opts": ("-alb", "--alignments-B"),
-                              "action": FileFullPaths,
-                              "filetypes": 'alignments',
-                              "type": str,
-                              "dest": "alignments_path_b",
-                              "default": None,
-                              "help": "Path to alignments file for training set B. Only required "
-                                      "if you are using a masked model or warp-to-landmarks is "
-                                      "enabled. Defaults to <input-B>/alignments.json if not "
-                                      "provided."})
         argument_list.append({"opts": ("-m", "--model-dir"),
                               "action": DirFullPaths,
                               "dest": "model_dir",
@@ -734,13 +702,6 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Model directory. This is where the "
                                       "training data will be stored. "
                                       "Defaults to 'model'"})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_models(),
-                              "default": PluginLoader.get_default_model(),
-                              "help": "Select which trainer to use, Use "
-                                      "LowMem for cards with less than 2GB of "
-                                      "VRAM"})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
@@ -749,6 +710,13 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "save_interval",
                               "default": 100,
                               "help": "Sets the number of iterations before saving the model"})
+        argument_list.append({"opts": ("-t", "--trainer"),
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_models(),
+                              "default": PluginLoader.get_default_model(),
+                              "help": "Select which trainer to use, Use "
+                                      "LowMem for cards with less than 2GB of "
+                                      "VRAM"})
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "action": Slider,
@@ -771,14 +739,6 @@ class TrainArgs(FaceSwapArgs):
                               "rounding": 1,
                               "default": 1,
                               "help": "Number of GPUs to use for training"})
-        argument_list.append({"opts": ("-ps", "--preview-scale"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "preview_scale",
-                              "min_max": (25, 200),
-                              "rounding": 25,
-                              "default": 100,
-                              "help": "Percentage amount to scale the preview by."})
         argument_list.append({"opts": ("-p", "--preview"),
                               "action": "store_true",
                               "dest": "preview",
@@ -797,30 +757,6 @@ class TrainArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Sets allow_growth option of Tensorflow "
                                       "to spare memory on some configs"})
-        argument_list.append({"opts": ("-nl", "--no-logs"),
-                              "action": "store_true",
-                              "dest": "no_logs",
-                              "default": False,
-                              "help": "Disables TensorBoard logging. NB: Disabling logs means "
-                                      "that you will not be able to use the graph or analysis "
-                                      "for this session in the GUI."})
-        argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
-                              "action": "store_true",
-                              "dest": "warp_to_landmarks",
-                              "default": False,
-                              "help": "Warps training faces to closely matched Landmarks from the "
-                                      "opposite face-set rather than randomly warping the face. "
-                                      "This is the 'dfaker' way of doing warping. Alignments "
-                                      "files for both sets of faces must be provided if using "
-                                      "this option."})
-        argument_list.append({"opts": ("-nf", "--no-flip"),
-                              "action": "store_true",
-                              "dest": "no_flip",
-                              "default": False,
-                              "help": "To effectively learn, a random set of images are flipped "
-                                      "horizontally. Sometimes it is desirable for this not to "
-                                      "occur. Generally this should be left off except for "
-                                      "during 'fit training'."})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
                               "dest": "timelapse_input_a",
