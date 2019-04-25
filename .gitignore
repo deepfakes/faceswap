@@ -1,17 +1,27 @@
 *
 !setup.cfg
-!*.keep
-!*.py
-!*.md
-!*.txt
-!*.png
-!*.h5
-!*.pb
 !*.dat
+!*.h5
+!*.ico
+!*.inf
+!*.keep
+!*.md
 !*.npy
+!*.nsi
+!*.pb
+!*.png
+!*.py
+!*.txt
+!.cache
 !Dockerfile*
 !requirements*
+<<<<<<< HEAD
 !.cache
+=======
+!.install/
+!.install/windows
+!config/
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
 !lib/
 !lib/*
 !lib/gui

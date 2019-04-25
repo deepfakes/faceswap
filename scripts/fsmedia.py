@@ -94,6 +94,8 @@ class Alignments(AlignmentsBase):
         """ Override  parent loader to handle skip existing on extract """
         data = dict()
         if not self.is_extract:
+            if not self.have_alignments_file:
+                return data
             data = super().load()
             return data
 

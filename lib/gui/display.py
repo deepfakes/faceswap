@@ -10,6 +10,7 @@ from tkinter import ttk
 
 from .display_analysis import Analysis
 from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
+from .utils import get_config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -17,18 +18,16 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     """ The display tabs """
 
-    def __init__(self, parent, session, tk_vars, scaling_factor):
-        logger.debug("Initializing %s: (tk_vars: '%s', scaling_factor: %s",
-                     self.__class__.__name__, tk_vars, scaling_factor)
+    def __init__(self, parent):
+        logger.debug("Initializing %s", self.__class__.__name__)
         ttk.Notebook.__init__(self, parent, width=780)
         parent.add(self)
-
+        tk_vars = get_config().tk_vars
         self.wrapper_var = tk_vars["display"]
         self.runningtask = tk_vars["runningtask"]
-        self.session = session
 
         self.set_wrapper_var_trace()
-        self.add_static_tabs(scaling_factor)
+        self.add_static_tabs()
         self.static_tabs = [child for child in self.tabs()]
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -38,7 +37,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         logger.debug("Setting wrapper var trace")
         self.wrapper_var.trace("w", self.update_displaybook)
 
-    def add_static_tabs(self, scaling_factor):
+    def add_static_tabs(self):
         """ Add tabs that are permanently available """
         logger.debug("Adding static tabs")
         for tab in ("job queue", "analysis"):
@@ -47,7 +46,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             if tab == "analysis":
                 helptext = {"stats":
                             "Summary statistics for each training session"}
-                frame = Analysis(self, tab, helptext, scaling_factor)
+                frame = Analysis(self, tab, helptext)
             else:
                 frame = self.add_frame()
                 self.add(frame, text=tab.title())
@@ -82,7 +81,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                 GraphDisplay(self, "graph", helptext, 5000)
             elif tab == "preview":
                 helptext = "Training preview. Updated on every save iteration"
-                PreviewTrain(self, "preview", helptext, 5000)
+                PreviewTrain(self, "preview", helptext, 1000)
         logger.debug("Built train tabs")
 
     def convert_tabs(self):
@@ -113,7 +112,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             logger.debug("Destroying child: %s", child)
             child.destroy()
 
-    def update_displaybook(self, *args):
+    def update_displaybook(self, *args):  # pylint: disable=unused-argument
         """ Set the display tabs based on executing task """
         command = self.wrapper_var.get()
         self.remove_tabs()

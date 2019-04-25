@@ -4,7 +4,7 @@ import logging
 from hashlib import sha256
 
 from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
-from lib.aligner import Extract as AlignerExtract, get_align_mat
+from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -13,14 +13,13 @@ class DetectedFace():
     """ Detected face and landmark information """
     def __init__(  # pylint: disable=invalid-name
             self, image=None, x=None, w=None, y=None, h=None,
-            frame_dims=None, landmarksXY=None):
+            landmarksXY=None):
         logger.trace("Initializing %s", self.__class__.__name__)
         self.image = image
         self.x = x
         self.w = w
         self.y = y
         self.h = h
-        self.frame_dims = frame_dims
         self.landmarksXY = landmarksXY
         self.hash = None  # Hash must be set when the file is saved due to image compression
 
@@ -51,7 +50,7 @@ class DetectedFace():
         self.w = d_rect.right() - d_rect.left()
         self.y = d_rect.top()
         self.h = d_rect.bottom() - d_rect.top()
-        if image.any():
+        if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from dlib_rectangle: (x: %s, w: %s, y: %s. h: %s)",
                      self.x, self.w, self.y, self.h)
@@ -64,17 +63,12 @@ class DetectedFace():
                            self.x: self.x + self.w]
 
     def to_alignment(self):
-        """ Convert a detected face to alignment dict
-
-            NB: frame_dims should be the height and width
-                of the original frame. """
-
+        """ Convert a detected face to alignment dict """
         alignment = dict()
         alignment["x"] = self.x
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
-        alignment["frame_dims"] = self.frame_dims
         alignment["landmarksXY"] = self.landmarksXY
         alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
@@ -88,23 +82,22 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.frame_dims = alignment["frame_dims"]
         self.landmarksXY = alignment["landmarksXY"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
-                     "frame_dims: %s, landmarks: %s)",
-                     self.x, self.w, self.y, self.h, self.frame_dims, self.landmarksXY)
+                     "landmarks: %s)",
+                     self.x, self.w, self.y, self.h, self.landmarksXY)
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, padding=48, align_eyes=False):
+    def load_aligned(self, image, size=256, align_eyes=False):
         """ No need to load aligned information for all uses of this
             class, so only call this to load the information for easy
             reference to aligned properties for this face """
-        logger.trace("Loading aligned face: (size: %s, padding: %s, align_eyes: %s)",
-                     size, padding, align_eyes)
+        logger.trace("Loading aligned face: (size: %s, align_eyes: %s)", size, align_eyes)
+        padding = int(size * 0.1875)
         self.aligned["size"] = size
         self.aligned["padding"] = padding
         self.aligned["align_eyes"] = align_eyes
@@ -154,3 +147,8 @@ class DetectedFace():
                                                 self.aligned["padding"])
         logger.trace("Returning: %s", mat)
         return mat
+
+    @property
+    def adjusted_interpolators(self):
+        """ Return the interpolator and reverse interpolator for the adjusted matrix """
+        return get_matrix_scaling(self.adjusted_matrix)

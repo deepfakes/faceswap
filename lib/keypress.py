@@ -32,11 +32,18 @@ else:
 
 class KBHit:
     """ Creates a KBHit object that you can call to do various keyboard things. """
+<<<<<<< HEAD
 
     def __init__(self, is_gui=False):
         self.is_gui = is_gui
         if os.name == "nt" or self.is_gui:
            pass
+=======
+    def __init__(self, is_gui=False):
+        self.is_gui = is_gui
+        if os.name == "nt" or self.is_gui:
+            pass
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         else:
             # Save the terminal settings
             self.file_desc = sys.stdin.fileno()

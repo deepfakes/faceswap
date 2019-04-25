@@ -12,6 +12,8 @@
   - [Run the project](#run-the-project)
   - [Notes](#notes)
 - [Windows Install Guide](#windows-install-guide)
+  - [Installer](#installer)
+  - [Manual Install](#Manual-install)
   - [Prerequisites](#prerequisites-1)
     - [Microsoft Visual Studio 2015](#microsoft-visual-studio-2015)
     - [Cuda](#cuda)
@@ -53,11 +55,12 @@ The type of computations that the process does are well suited for graphics card
 
 ## Supported operating systems
 - **Windows 10**
-  Windows 7 and 8 might work. Your milage may vary
+  Windows 7 and 8 might work. Your milage may vary. Windows has an installer which will set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work.
 - **macOS**
   GPU support on macOS is limited due to lack of drivers/libraries from Nvidia.
+- All operating systems must be 64-bit for Tensorflow to run.
 
 Alternatively there is a docker image that is based on Debian.
 
@@ -68,9 +71,9 @@ The developers are also not responsible for any damage you might cause to your o
 
 # General Install Guide
 ## Installing dependencies
-- Python >= 3.2 <= 3.7
+- Python >= 3.2-3.6 64-bit (cannot be 3.7.x as Tensorflow has not been updated to provide support)
   - apt/yum install python3 (Linux)
-  - [Installer](https://www.python.org/downloads/) (Windows)
+  - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
   - [brew](https://brew.sh/) install python3 (macOS)
 
 - [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
@@ -193,6 +196,14 @@ This guide is far from complete. Functionality may change over time, and new dep
 If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository instead of the main repo.
 
 # Windows Install Guide
+
+## Installer
+Windows now has an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
+
+If you have issues with the installer then read on for the more manual way to install Faceswap on Windows.
+
+## Manual Install
+
 Setting up Faceswap can seem a little intimidating to new users, but it isn't that complicated, although a little time consuming. It is recommended to use Linux where possible as Windows will hog about 20% of your GPU Memory, making Faceswap run a little slower, however using Windows is perfectly fine and 100% supported.
 
 ## Prerequisites
@@ -226,10 +237,13 @@ As with Cuda you will need to install the correct version of cuDNN that the late
 
 Download cuDNN from https://developer.nvidia.com/cudnn. You will need to create an account with Nvidia. 
 
-At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases". Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and has a minor version greater than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.3)
+At the bottom of the list of latest cuDNN release will be a link to "Archived cuDNN Releases":
+![cuDNN Archive](https://i.imgur.com/dHiAsxg.png)
+
+Select this and choose the latest version of cuDNN that supports the version of Cuda you installed and has a minor version greater than or equal to the latest version that Tensorflow supports. (Eg Tensorflow 1.12 supports Cuda 9.0 and cuDNN 7.2. There is not an archived version of cuDNN 7.2 for Cuda 9.0, so select cuDNN version 7.3)
 - Open the zip file
 - Extract all of the files and folders into your Cuda folder (It is likely to be located in `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA`):\
-![cudnn to cuda](https://i.imgur.com/X098w0N.png)
+![cuDNN to Cuda](https://i.imgur.com/X098w0N.png)
 
 ### CMake
 Install the latest stable release of CMake from https://cmake.org/download/. (Scroll down the page for Latest Releases and select the relevant Binary distribution installer for your OS).
@@ -254,8 +268,8 @@ Reboot your PC, so that everything you have just installed gets registered.
 - Select "Create" at the bottom
 - In the pop up:
     - Give it the name: faceswap
-    - **IMPORTANT**: Select python version 3.5
-    - Hit "Create" (NB: This may take a while as it will need to download Python 3.5)
+    - **IMPORTANT**: Select python version 3.6
+    - Hit "Create" (NB: This may take a while as it will need to download Python 3.6)
 ![Anaconda virtual env setup](https://i.imgur.com/Tl5tyVq.png)
 
 #### Entering your virtual environment

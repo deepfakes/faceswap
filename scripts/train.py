@@ -64,8 +64,13 @@ class Train():
         objects """
         logger.debug("Getting image paths")
         images = dict()
+<<<<<<< HEAD
         for image_group in ("a", "b"):
             image_dir = getattr(self.args, "input_{}".format(image_group))
+=======
+        for side in ("a", "b"):
+            image_dir = getattr(self.args, "input_{}".format(side))
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
             if not os.path.isdir(image_dir):
                 logger.error("Error: '%s' does not exist", image_dir)
                 exit(1)
@@ -74,7 +79,11 @@ class Train():
                 logger.error("Error: '%s' contains no images", image_dir)
                 exit(1)
 
+<<<<<<< HEAD
             images[image_group] = get_image_paths(image_dir)
+=======
+            images[side] = get_image_paths(image_dir)
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         logger.info("Model A Directory: %s", self.args.input_a)
         logger.info("Model B Directory: %s", self.args.input_b)
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
@@ -85,7 +94,11 @@ class Train():
         """ Call the training process object """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self.args.model_dir)
+<<<<<<< HEAD
         set_system_verbosity()
+=======
+        set_system_verbosity(self.args.loglevel)
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         thread = self.start_thread()
         # queue_manager.debug_monitor(1)
 
@@ -139,7 +152,12 @@ class Train():
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
+<<<<<<< HEAD
                 model.save_weights()
+=======
+                model.save_models()
+                trainer.clear_tensorboard()
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
             exit(0)
@@ -150,12 +168,45 @@ class Train():
         """ Load the model requested for training """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
+<<<<<<< HEAD
         model = PluginLoader.get_model(self.trainer_name)(model_dir,
                                                           self.args.gpus)
 
         model.load_weights(swapped=False)
+=======
+        model = PluginLoader.get_model(self.trainer_name)(
+            model_dir,
+            self.args.gpus,
+            no_logs=self.args.no_logs,
+            warp_to_landmarks=self.args.warp_to_landmarks,
+            no_flip=self.args.no_flip,
+            training_image_size=self.image_size,
+            alignments_paths=self.alignments_paths,
+            preview_scale=self.args.preview_scale)
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         logger.debug("Loaded Model")
         return model
+
+    @property
+    def image_size(self):
+        """ Get the training set image size for storing in model data """
+        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
+        size = image.shape[0]
+        logger.debug("Training image size: %s", size)
+        return size
+
+    @property
+    def alignments_paths(self):
+        """ Set the alignments path to input dirs if not provided """
+        alignments_paths = dict()
+        for side in ("a", "b"):
+            alignments_path = getattr(self.args, "alignments_path_{}".format(side))
+            if not alignments_path:
+                image_path = getattr(self.args, "input_{}".format(side))
+                alignments_path = os.path.join(image_path, "alignments.json")
+            alignments_paths[side] = alignments_path
+        logger.debug("Alignments paths: %s", alignments_paths)
+        return alignments_paths
 
     def load_trainer(self, model):
         """ Load the trainer requested for training """
@@ -186,6 +237,7 @@ class Train():
                 break
             elif save_iteration:
                 logger.trace("Save Iteration: (iteration: %s", iteration)
+<<<<<<< HEAD
                 model.save_weights()
             elif self.save_now:
                 logger.trace("Save Requested: (iteration: %s", iteration)
@@ -193,6 +245,16 @@ class Train():
                 self.save_now = False
         logger.debug("Training cycle complete")
         model.save_weights()
+=======
+                model.save_models()
+            elif self.save_now:
+                logger.trace("Save Requested: (iteration: %s", iteration)
+                model.save_models()
+                self.save_now = False
+        logger.debug("Training cycle complete")
+        model.save_models()
+        trainer.clear_tensorboard()
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         self.stop = True
 
     def monitor_preview(self, thread):
@@ -290,13 +352,21 @@ class Train():
             scriptpath = os.path.realpath(os.path.dirname(sys.argv[0]))
             if self.args.write_image:
                 logger.trace("Saving preview to disk")
+<<<<<<< HEAD
                 img = "_sample_{}.jpg".format(name)
+=======
+                img = "training_preview.jpg"
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
                 imgfile = os.path.join(scriptpath, img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
                 logger.trace("Saved preview to: '%s'", img)
             if self.args.redirect_gui:
                 logger.trace("Generating preview for GUI")
+<<<<<<< HEAD
                 img = ".gui_preview_{}.jpg".format(name)
+=======
+                img = ".gui_training_preview.jpg"
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
                 imgfile = os.path.join(scriptpath, "lib", "gui",
                                        ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member

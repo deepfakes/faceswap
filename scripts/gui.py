@@ -7,11 +7,17 @@ import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+<<<<<<< HEAD
 from importlib import import_module
 
 from lib.gui import (CliOptions, CommandNotebook, Config, ConsoleOut,
                      CurrentSession, DisplayNotebook, Images, ProcessWrapper,
                      StatusBar, popup_config)
+=======
+from lib.gui import (CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
+                     get_config, get_images, initialize_images, initialize_config, MainMenuBar,
+                     ProcessWrapper, StatusBar)
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -21,15 +27,28 @@ class FaceswapGui(tk.Tk):
 
     def __init__(self, pathscript):
         logger.debug("Initializing %s", self.__class__.__name__)
+<<<<<<< HEAD
         tk.Tk.__init__(self)
         self.scaling_factor = self.get_scaling()
-        self.set_geometry()
+=======
+        super().__init__()
 
+        self.initialize_globals(pathscript)
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
+        self.set_geometry()
+        self.wrapper = ProcessWrapper(pathscript)
+
+        get_images().delete_preview()
+        self.protocol("WM_DELETE_WINDOW", self.close_app)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def initialize_globals(self, pathscript):
+        """ Initialize config and images global constants """
+        cliopts = CliOptions()
+        scaling_factor = self.get_scaling()
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        self.images = Images(pathcache)
-        self.cliopts = CliOptions()
-        self.session = CurrentSession()
         statusbar = StatusBar(self)
+<<<<<<< HEAD
         self.wrapper = ProcessWrapper(statusbar,
                                       self.session,
                                       pathscript,
@@ -38,6 +57,11 @@ class FaceswapGui(tk.Tk):
         self.images.delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         logger.debug("Initialized %s", self.__class__.__name__)
+=======
+        session = Session()
+        initialize_config(cliopts, scaling_factor, pathcache, statusbar, session)
+        initialize_images()
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
 
     def get_scaling(self):
         """ Get the display DPI """
@@ -48,9 +72,16 @@ class FaceswapGui(tk.Tk):
 
     def set_geometry(self):
         """ Set GUI geometry """
+<<<<<<< HEAD
         self.tk.call("tk", "scaling", self.scaling_factor)
         width = int(1200 * self.scaling_factor)
         height = int(640 * self.scaling_factor)
+=======
+        scaling_factor = get_config().scaling_factor
+        self.tk.call("tk", "scaling", scaling_factor)
+        width = int(1200 * scaling_factor)
+        height = int(640 * scaling_factor)
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
         logger.debug("Geometry: %sx%s", width, height)
         self.geometry("{}x{}+80+80".format(str(width), str(height)))
 
@@ -58,10 +89,12 @@ class FaceswapGui(tk.Tk):
         """ Build the GUI """
         logger.debug("Building GUI")
         self.title("Faceswap.py")
-        self.menu()
+        self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
+        self.configure(menu=MainMenuBar(self))
 
         topcontainer, bottomcontainer = self.add_containers()
 
+<<<<<<< HEAD
         CommandNotebook(topcontainer,
                         self.cliopts,
                         self.wrapper.tk_vars,
@@ -138,6 +171,12 @@ class FaceswapGui(tk.Tk):
         config = module.Config(None)
         logger.debug("Found '%s' config at '%s'", plugin_type, config.configfile)
         return config
+=======
+        CommandNotebook(topcontainer)
+        DisplayNotebook(topcontainer)
+        ConsoleOut(bottomcontainer, debug_console)
+        logger.debug("Built GUI")
+>>>>>>> 60e0099c4d88a551b33592bf5126ab96bd5dc5ae
 
     def add_containers(self):
         """ Add the paned window containers that
@@ -166,13 +205,14 @@ class FaceswapGui(tk.Tk):
         logger.debug("Close Requested")
         confirm = messagebox.askokcancel
         confirmtxt = "Processes are still running. Are you sure...?"
-        if (self.wrapper.tk_vars["runningtask"].get()
+        tk_vars = get_config().tk_vars
+        if (tk_vars["runningtask"].get()
                 and not confirm("Close", confirmtxt)):
             logger.debug("Close Cancelled")
             return
-        if self.wrapper.tk_vars["runningtask"].get():
+        if tk_vars["runningtask"].get():
             self.wrapper.task.terminate()
-        self.images.delete_preview()
+        get_images().delete_preview()
         self.quit()
         logger.debug("Closed GUI")
         exit()

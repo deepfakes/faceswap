@@ -446,7 +446,7 @@ class Manual():
         legacy.process()
 
         logger.info("[MANUAL PROCESSING]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments,
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256,
                                               align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
@@ -881,6 +881,9 @@ class MouseHandler():
             bounding box and set face_id """
         frame = self.media["frame_id"]
         alignments = self.alignments.get_faces_in_frame(frame)
+        scale = self.interface.get_frame_scaling()
+        pt_x = int(pt_x / scale)
+        pt_y = int(pt_y / scale)
 
         for idx, alignment in enumerate(alignments):
             left = alignment["x"]
@@ -977,7 +980,8 @@ class MouseHandler():
         self.interface.state["edit"]["updated"] = True
         self.interface.state["edit"]["update_faces"] = True
 
-    def extracted_to_alignment(self, extract_data):
+    @staticmethod
+    def extracted_to_alignment(extract_data):
         """ Convert Extracted Tuple to Alignments data """
         alignment = dict()
         d_rect, landmarks = extract_data
@@ -985,6 +989,5 @@ class MouseHandler():
         alignment["w"] = d_rect.right() - d_rect.left()
         alignment["y"] = d_rect.top()
         alignment["h"] = d_rect.bottom() - d_rect.top()
-        alignment["frame_dims"] = self.media["image"].shape[:2]
         alignment["landmarksXY"] = landmarks
         return alignment
