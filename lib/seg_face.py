@@ -135,5 +135,6 @@ class FaceSegmentation():
 
 
 if __name__ == '__main__':
-    Segmentator = FaceSegmentation()
-    Segmentator.segment()
+    Segmentator = FaceSegmentation(model_path='C:/data/models/segmentation_model.h5',
+                                   in_dir='C:/data/putin/')
+    Segmentator.segment(out_dir='C:/data/masked/')
