@@ -30,26 +30,26 @@ class Align(Aligner):
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing Face Alignment Network...")
-        logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
+        try:
+            super().initialize(*args, **kwargs)
+            logger.info("Initializing Face Alignment Network...")
+            logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
 
-        card_id, _, vram_total = self.get_vram_free()
-        if card_id == -1:
+            _, _, vram_total = self.get_vram_free()
+
+            if vram_total <= self.vram:
+                tf_ratio = 1.0
+            else:
+                tf_ratio = self.vram / vram_total
+            logger.verbose("Reserving %sMB for face alignments", self.vram)
+
+            self.model = FAN(self.model_path, ratio=tf_ratio)
+
             self.init.set()
-            raise ValueError("No Graphics Card Detected! FAN is not currently supported on CPU. "
-                             "Use another aligner.")
-
-        if vram_total <= self.vram:
-            tf_ratio = 1.0
-        else:
-            tf_ratio = self.vram / vram_total
-        logger.verbose("Reserving %sMB for face alignments", self.vram)
-
-        self.model = FAN(self.model_path, ratio=tf_ratio)
-
-        self.init.set()
-        logger.info("Initialized Face Alignment Network.")
+            logger.info("Initialized Face Alignment Network.")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def align(self, *args, **kwargs):
         """ Perform alignments on detected faces """
@@ -60,10 +60,10 @@ class Align(Aligner):
                 break
             image = item["image"][:, :, ::-1].copy()
 
-            logger.trace("Algning faces")
+            logger.trace("Aligning faces")
             try:
                 item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
-                logger.trace("Algned faces: %s", item["landmarks"])
+                logger.trace("Aligned faces: %s", item["landmarks"])
             except ValueError as err:
                 logger.warning("Image '%s' could not be processed. This may be due to corrupted "
                                "data: %s", item["filename"], str(err))
@@ -225,14 +225,15 @@ class FAN():
 
         self.model_path = model_path
         self.graph = self.load_graph()
-        self.input = self.graph.get_tensor_by_name("fa/0:0")
-        self.output = self.graph.get_tensor_by_name("fa/Add_95:0")
+        self.input = self.graph.get_tensor_by_name("fa/input_1:0")
+        self.output = self.graph.get_tensor_by_name("fa/transpose_647:0")
         self.session = self.set_session(ratio)
 
     def load_graph(self):
         """ Load the tensorflow Model and weights """
         # pylint: disable=not-context-manager
         logger.verbose("Initializing Face Alignment Network model...")
+
         with self.tf.gfile.GFile(self.model_path, "rb") as gfile:
             graph_def = self.tf.GraphDef()
             graph_def.ParseFromString(gfile.read())
@@ -250,6 +251,10 @@ class FAN():
             config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
             session = self.tf.Session(config=config)
             with session.as_default():
+                if any("gpu" in str(device).lower() for device in session.list_devices()):
+                    logger.debug("Using GPU")
+                else:
+                    logger.warning("Using CPU")
                 session.run(self.output, feed_dict={self.input: placeholder})
         return session
 

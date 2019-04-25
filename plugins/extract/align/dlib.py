@@ -21,12 +21,16 @@ class Align(Aligner):
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing Dlib Pose Predictor...")
-        logger.debug("dlib initialize: (args: %s kwargs: %s)", args, kwargs)
-        self.model = dlib.shape_predictor(self.model_path)  # pylint: disable=c-extension-no-member
-        self.init.set()
-        logger.info("Initialized Dlib Pose Predictor.")
+        try:
+            super().initialize(*args, **kwargs)
+            logger.info("Initializing Dlib Pose Predictor...")
+            logger.debug("dlib initialize: (args: %s kwargs: %s)", args, kwargs)
+            self.model = dlib.shape_predictor(self.model_path)  # pylint: disable=c-extension-no-member
+            self.init.set()
+            logger.info("Initialized Dlib Pose Predictor.")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def align(self, *args, **kwargs):
         """ Perform alignments on detected faces """

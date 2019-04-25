@@ -39,17 +39,22 @@ class Extract():
             self.save_interval = self.args.save_interval
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def skip_num(self):
+        """ Number of frames to skip if extract_every_n is passed """
+        return self.args.extract_every_n if hasattr(self.args, "extract_every_n") else 1
+
     def process(self):
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
-        Utils.set_verbosity()
+        Utils.set_verbosity(self.args.loglevel)
 #        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
         self.run_extraction()
         save_thread.join()
         self.alignments.save()
-        Utils.finalize(self.images.images_found,
+        Utils.finalize(self.images.images_found // self.skip_num,
                        self.alignments.faces_count,
                        self.verify_output)
 
@@ -71,10 +76,19 @@ class Extract():
         """ Load the images """
         logger.debug("Load Images: Start")
         load_queue = queue_manager.get_queue("load")
+        idx = 0
         for filename, image in self.images.load():
+            idx += 1
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
+            if idx % self.skip_num != 0:
+                logger.trace("Skipping image '%s' due to extract_every_n = %s",
+                             filename, self.skip_num)
+                continue
+            if image is None or not image.any():
+                logger.warning("Unable to open image. Skipping: '%s'", filename)
+                continue
             imagename = os.path.basename(filename)
             if imagename in self.alignments.data.keys():
                 logger.trace("Skipping image: '%s'", filename)
@@ -181,7 +195,7 @@ class Extract():
         if processed != 0 and self.args.skip_faces:
             logger.info("Skipping frames with detected faces: %s", processed)
 
-        to_process = self.images.images_found - processed
+        to_process = (self.images.images_found - processed) // self.skip_num
         logger.debug("Items to be Processed: %s", to_process)
         if to_process == 0:
             logger.error("No frames to process. Exiting")
@@ -208,7 +222,7 @@ class Extract():
 
         self.threaded_io("reload", detected_faces)
 
-    def align_face(self, faces, align_eyes, size, filename, padding=48):
+    def align_face(self, faces, align_eyes, size, filename):
         """ Align the detected face and add the destination file path """
         final_faces = list()
         image = faces["image"]
@@ -218,11 +232,7 @@ class Extract():
             detected_face = DetectedFace()
             detected_face.from_dlib_rect(face, image)
             detected_face.landmarksXY = landmarks[idx]
-            detected_face.frame_dims = image.shape[:2]
-            detected_face.load_aligned(image,
-                                       size=size,
-                                       padding=padding,
-                                       align_eyes=align_eyes)
+            detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
@@ -246,9 +256,15 @@ class Extract():
 
 class Plugins():
     """ Detector and Aligner Plugins and queues """
-    def __init__(self, arguments):
+    def __init__(self, arguments, converter_args=None):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.args = arguments
+        self.converter_args = converter_args  # Arguments from converter for on the fly extract
+        if converter_args is not None:
+            self.loglevel = converter_args["loglevel"]
+        else:
+            self.loglevel = self.args.loglevel
+
         self.detector = self.load_detector()
         self.aligner = self.load_aligner()
         self.is_parallel = self.set_parallel_processing()
@@ -259,7 +275,7 @@ class Plugins():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_parallel_processing(self):
-        """ Set whether to run detect and align together or seperately """
+        """ Set whether to run detect and align together or separately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
         gpu_stats = GPUStats()
@@ -298,26 +314,34 @@ class Plugins():
 
     def load_detector(self):
         """ Set global arguments and load detector plugin """
-        detector_name = self.args.detector.replace("-", "_").lower()
+        if not self.converter_args:
+            detector_name = self.args.detector.replace("-", "_").lower()
+        else:
+            detector_name = self.converter_args["detector"]
         logger.debug("Loading Detector: '%s'", detector_name)
         # Rotation
-        rotation = None
-        if hasattr(self.args, "rotate_images"):
-            rotation = self.args.rotate_images
+        rotation = self.args.rotate_images if hasattr(self.args, "rotate_images") else None
+        # Min acceptable face size:
+        min_size = self.args.min_size if hasattr(self.args, "min_size") else 0
 
         detector = PluginLoader.get_detector(detector_name)(
-            loglevel=self.args.loglevel,
-            rotation=rotation)
+            loglevel=self.loglevel,
+            rotation=rotation,
+            min_size=min_size)
 
         return detector
 
     def load_aligner(self):
         """ Set global arguments and load aligner plugin """
-        aligner_name = self.args.aligner.replace("-", "_").lower()
+        if not self.converter_args:
+            aligner_name = self.args.aligner.replace("-", "_").lower()
+        else:
+            aligner_name = self.converter_args["aligner"]
+
         logger.debug("Loading Aligner: '%s'", aligner_name)
 
         aligner = PluginLoader.get_aligner(aligner_name)(
-            loglevel=self.args.loglevel)
+            loglevel=self.loglevel)
 
         return aligner
 
@@ -330,6 +354,7 @@ class Plugins():
 
         self.process_align = SpawnProcess(self.aligner.run, **kwargs)
         event = self.process_align.event
+        error = self.process_align.error
         self.process_align.start()
 
         # Wait for Aligner to take it's VRAM
@@ -337,10 +362,15 @@ class Plugins():
         # up to 3-4 minutes, hence high timeout.
         # TODO investigate why this is and fix if possible
         for mins in reversed(range(5)):
-            event.wait(60)
+            for seconds in range(60):
+                event.wait(seconds)
+                if event.is_set():
+                    break
+                if error.is_set():
+                    break
             if event.is_set():
                 break
-            if mins == 0:
+            if mins == 0 or error.is_set():
                 raise ValueError("Error initializing Aligner")
             logger.info("Waiting for Aligner... Time out in %s minutes", mins)
 
@@ -352,14 +382,13 @@ class Plugins():
         out_queue = queue_manager.get_queue("detect")
         kwargs = {"in_queue": queue_manager.get_queue("load"),
                   "out_queue": out_queue}
-
+        if self.converter_args:
+            kwargs["processes"] = 1
         mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
         self.process_detect = mp_func(self.detector.run, **kwargs)
 
-        event = None
-        if hasattr(self.process_detect, "event"):
-            event = self.process_detect.event
-
+        event = self.process_detect.event if hasattr(self.process_detect, "event") else None
+        error = self.process_detect.error if hasattr(self.process_detect, "error") else None
         self.process_detect.start()
 
         if event is None:
@@ -367,10 +396,15 @@ class Plugins():
             return
 
         for mins in reversed(range(5)):
-            event.wait(60)
+            for seconds in range(60):
+                event.wait(seconds)
+                if event.is_set():
+                    break
+                if error and error.is_set():
+                    break
             if event.is_set():
                 break
-            if mins == 0:
+            if mins == 0 or (error and error.is_set()):
                 raise ValueError("Error initializing Detector")
             logger.info("Waiting for Detector... Time out in %s minutes", mins)
 

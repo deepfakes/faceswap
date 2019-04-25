@@ -46,3 +46,14 @@ class Config(FaceswapConfig):
             section=section, title="scalefactor", datatype=float, default=0.709, rounding=3,
             min_max=(0.1, 0.9),
             info="The scale factor for the image pyramid")
+
+        # << S3FD DETECTOR OPTIONS >> #
+        section = "detect.s3fd"
+        self.add_section(title=section,
+                         info="S3FD Detector options")
+        self.add_item(
+            section=section, title="confidence", datatype=int, default=50, rounding=5,
+            min_max=(25, 100),
+            info="The confidence level at which the detector has succesfully found a face.\n"
+                 "Higher levels will be more discriminating, lower levels will have more false "
+                 "positives")

@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-py3
+FROM tensorflow/tensorflow:1.12.0-py3
 
 RUN apt-get update -qq -y \
  && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk\
@@ -6,9 +6,10 @@ RUN apt-get update -qq -y \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /opt/
+RUN pip3 install --upgrade pip
 RUN pip3 install cmake
-RUN pip3 install dlib --install-option=--yes --install-option=USE_AVX_INSTRUCTIONS
+RUN pip3 install dlib
 RUN pip3 --no-cache-dir install -r /opt/requirements.txt && rm /opt/requirements.txt
 
-WORKDIR "/notebooks"
-CMD ["/run_jupyter.sh", "--allow-root"]
+WORKDIR "/srv"
+CMD ["/bin/bash"]

@@ -72,53 +72,58 @@ class Detect(Detector):
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing MTCNN Detector...")
-        is_gpu = False
+        try:
+            super().initialize(*args, **kwargs)
+            logger.info("Initializing MTCNN Detector...")
+            is_gpu = False
 
-        # Must import tensorflow inside the spawned process
-        # for Windows machines
-        import_tensorflow()
-        vram_free = self.get_vram_free()
-        mtcnn_graph = tf.Graph()
+            # Must import tensorflow inside the spawned process
+            # for Windows machines
+            import_tensorflow()
+            _, vram_free, _ = self.get_vram_free()
+            mtcnn_graph = tf.Graph()
 
-        # Windows machines sometimes misreport available vram, and overuse
-        # causing OOM. Allow growth fixes that
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True  # pylint: disable=no-member
+            # Windows machines sometimes misreport available vram, and overuse
+            # causing OOM. Allow growth fixes that
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True  # pylint: disable=no-member
 
-        with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
-            sess = tf.Session(config=config)
-            with sess.as_default():  # pylint: disable=not-context-manager
-                pnet, rnet, onet = create_mtcnn(sess, self.model_path)
+            with mtcnn_graph.as_default():  # pylint: disable=not-context-manager
+                sess = tf.Session(config=config)
+                with sess.as_default():  # pylint: disable=not-context-manager
+                    pnet, rnet, onet = create_mtcnn(sess, self.model_path)
 
-            if any("gpu" in str(device).lower()
-                   for device in sess.list_devices()):
-                logger.debug("Using GPU")
-                is_gpu = True
-        mtcnn_graph.finalize()
+                if any("gpu" in str(device).lower()
+                       for device in sess.list_devices()):
+                    logger.debug("Using GPU")
+                    is_gpu = True
+            mtcnn_graph.finalize()
 
-        if not is_gpu:
-            alloc = 2048
-            logger.warning("Using CPU")
-        else:
-            alloc = vram_free
-        logger.debug("Allocated for Tensorflow: %sMB", alloc)
+            if not is_gpu:
+                alloc = 2048
+                logger.warning("Using CPU")
+            else:
+                alloc = vram_free
+            logger.debug("Allocated for Tensorflow: %sMB", alloc)
 
-        self.batch_size = int(alloc / self.vram)
+            self.batch_size = int(alloc / self.vram)
 
-        if self.batch_size < 1:
-            raise ValueError("Insufficient VRAM available to continue "
-                             "({}MB)".format(int(alloc)))
+            if self.batch_size < 1:
+                self.error.set()
+                raise ValueError("Insufficient VRAM available to continue "
+                                 "({}MB)".format(int(alloc)))
 
-        logger.verbose("Processing in %s threads", self.batch_size)
+            logger.verbose("Processing in %s threads", self.batch_size)
 
-        self.kwargs["pnet"] = pnet
-        self.kwargs["rnet"] = rnet
-        self.kwargs["onet"] = onet
+            self.kwargs["pnet"] = pnet
+            self.kwargs["rnet"] = rnet
+            self.kwargs["onet"] = onet
 
-        self.init.set()
-        logger.info("Initialized MTCNN Detector.")
+            self.init.set()
+            logger.info("Initialized MTCNN Detector.")
+        except Exception as err:
+            self.error.set()
+            raise err
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in Multiple Threads """
@@ -138,7 +143,7 @@ class Detect(Detector):
             if item == "EOF":
                 break
             logger.trace("Detecting faces: '%s'", item["filename"])
-            detect_image = self.compile_detection_image(item["image"], False, False)
+            [detect_image, scale] = self.compile_detection_image(item["image"], False, False, True)
 
             for angle in self.rotation:
                 current_image, rotmat = self.rotate_image(detect_image, angle)
@@ -148,13 +153,13 @@ class Detect(Detector):
                 if faces.any():
                     break
 
-            detected_faces = self.process_output(faces, points, rotmat)
+            detected_faces = self.process_output(faces, points, rotmat, scale)
             item["detected_faces"] = detected_faces
             self.finalize(item)
 
         logger.debug("Thread Completed Detect")
 
-    def process_output(self, faces, points, rotation_matrix):
+    def process_output(self, faces, points, rotation_matrix, scale):
         """ Compile found faces for output """
         logger.trace("Processing Output: (faces: %s, points: %s, rotation_matrix: %s)",
                      faces, points, rotation_matrix)
@@ -166,10 +171,10 @@ class Detect(Detector):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
         detected = [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(face.left() / self.scale),
-            int(face.top() / self.scale),
-            int(face.right() / self.scale),
-            int(face.bottom() / self.scale))
+            int(face.left() / scale),
+            int(face.top() / scale),
+            int(face.right() / scale),
+            int(face.bottom() / scale))
                     for face in faces]
         logger.trace("Processed Output: %s", detected)
         return detected

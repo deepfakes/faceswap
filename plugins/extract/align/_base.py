@@ -37,6 +37,7 @@ class Aligner():
         self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
         self.extract = Extract()
         self.init = None
+        self.error = None
 
         # The input and output queues for the plugin.
         # See lib.queue_manager.QueueManager for getting queues
@@ -63,12 +64,10 @@ class Aligner():
         """ Inititalize the aligner
             Tasks to be run before any alignments are performed.
             Override for specific detector """
-        logger_init = kwargs["log_init"]
-        log_queue = kwargs["log_queue"]
-        logger_init(self.loglevel, log_queue)
         logger.debug("_base initialize %s: (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
         self.init = kwargs["event"]
+        self.error = kwargs["error"]
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
@@ -90,6 +89,9 @@ class Aligner():
             self.align(*args, **kwargs)
         except Exception:  # pylint: disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
+            # Display traceback if in initialization stage
+            if not self.init.is_set():
+                logger.exception("Traceback:")
             tb_buffer = StringIO()
             traceback.print_exc(file=tb_buffer)
             exception = {"exception": (os.getpid(), tb_buffer)}

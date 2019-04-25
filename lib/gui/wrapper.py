@@ -6,13 +6,12 @@ import re
 import signal
 from subprocess import PIPE, Popen, TimeoutExpired
 import sys
-import tkinter as tk
 from threading import Thread
 from time import time
 
 import psutil
 
-from .utils import Images
+from .utils import get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -21,45 +20,21 @@ class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, statusbar, session=None, pathscript=None, cliopts=None):
-        logger.debug("Initializing %s: (pathscript: '%s', cliopts: %s",
-                     self.__class__.__name__, pathscript, cliopts)
-        self.tk_vars = self.set_tk_vars()
-        self.session = session
+    def __init__(self, pathscript=None):
+        logger.debug("Initializing %s: (pathscript: %s)", self.__class__.__name__, pathscript)
+        self.tk_vars = get_config().tk_vars
+        self.set_callbacks()
         self.pathscript = pathscript
-        self.cliopts = cliopts
         self.command = None
-        self.statusbar = statusbar
+        self.statusbar = get_config().statusbar
         self.task = FaceswapControl(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_tk_vars(self):
-        """ TK Variables to be triggered by ProcessWrapper to indicate
-            what state various parts of the GUI should be in """
-        display = tk.StringVar()
-        display.set(None)
-
-        runningtask = tk.BooleanVar()
-        runningtask.set(False)
-
-        actioncommand = tk.StringVar()
-        actioncommand.set(None)
-        actioncommand.trace("w", self.action_command)
-
-        generatecommand = tk.StringVar()
-        generatecommand.set(None)
-        generatecommand.trace("w", self.generate_command)
-
-        consoleclear = tk.BooleanVar()
-        consoleclear.set(False)
-
-        tk_vars = {"display": display,
-                   "runningtask": runningtask,
-                   "action": actioncommand,
-                   "generate": generatecommand,
-                   "consoleclear": consoleclear}
-        logger.debug(tk_vars)
-        return tk_vars
+    def set_callbacks(self):
+        """ Set the tk variable callbacks """
+        logger.debug("Setting tk variable traces")
+        self.tk_vars["action"].trace("w", self.action_command)
+        self.tk_vars["generate"].trace("w", self.generate_command)
 
     def action_command(self, *args):
         """ The action to perform when the action button is pressed """
@@ -113,36 +88,41 @@ class ProcessWrapper():
         args = [sys.executable] if generate else [sys.executable, "-u"]
         args.extend([pathexecscript, command])
 
-        for cliopt in self.cliopts.gen_cli_arguments(command):
+        cli_opts = get_config().cli_opts
+        for cliopt in cli_opts.gen_cli_arguments(command):
             args.extend(cliopt)
             if command == "train" and not generate:
-                self.set_session_stats(cliopt)
+                self.init_training_session(cliopt)
         if not generate:
             args.append("-gui")  # Indicate to Faceswap that we are running the GUI
+        if generate:
+            # Delimit args with spaces
+            args = ['"{}"'.format(arg) if " " in arg and not arg.startswith(("[", "("))
+                    and not arg.endswith(("]", ")")) else arg
+                    for arg in args]
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
-    def set_session_stats(self, cliopt):
-        """ Set the session stats for batch size and model folder """
-        if cliopt[0] == "-bs":
-            self.session.stats["batchsize"] = int(cliopt[1])
+    @staticmethod
+    def init_training_session(cliopt):
+        """ Set the session stats for disable logging, model folder and model name """
+        session = get_config().session
+        if cliopt[0] == "-t":
+            session.modelname = cliopt[1].lower().replace("-", "_")
+            logger.debug("modelname: '%s'", session.modelname)
         if cliopt[0] == "-m":
-            self.session.modeldir = cliopt[1]
-        logger.debug("Set session stats: stats: (%s, modeldir: '%s')",
-                     self.session.stats, self.session.modeldir)
+            session.modeldir = cliopt[1]
+            logger.debug("modeldir: '%s'", session.modeldir)
 
     def terminate(self, message):
         """ Finalize wrapper when process has exited """
-
         logger.debug("Terminating Faceswap processes")
         self.tk_vars["runningtask"].set(False)
         self.statusbar.progress_stop()
         self.statusbar.status_message.set(message)
         self.tk_vars["display"].set(None)
-        Images().delete_preview()
-        if self.command == "train":
-            self.session.save_session()
-        self.session.__init__()
+        get_images().delete_preview()
+        get_config().session.__init__()
         self.command = None
         logger.debug("Terminated Faceswap processes")
         print("Process exited.")
@@ -153,13 +133,16 @@ class FaceswapControl():
     def __init__(self, wrapper):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.wrapper = wrapper
-        self.statusbar = wrapper.statusbar
+        self.statusbar = get_config().statusbar
         self.command = None
         self.args = None
         self.process = None
+        self.train_stats = {"iterations": 0, "timestamp": None}
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
-            "tqdm": re.compile(r"(\d+%|\d+/\d+|\d+:\d+|\d+\.\d+[a-zA-Z/]+)")}
+            "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
+                               r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
+            "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def execute_script(self, command, args):
@@ -190,9 +173,13 @@ class FaceswapControl():
             if output == "" and self.process.poll() is not None:
                 break
             if output:
-                if (self.command == "train" and self.capture_loss(output)) or (
-                        self.command != "train" and self.capture_tqdm(output)):
+                if ((self.command == "train" and self.capture_loss(output)) or
+                        (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
+                        (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
+                if self.command == "train" and output.strip().endswith("saved models"):
+                    logger.debug("Trigger update preview")
+                    self.wrapper.tk_vars["updatepreview"].set(True)
                 print(output.strip())
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
@@ -248,8 +235,6 @@ class FaceswapControl():
             logger.trace("Not loss message. Returning False")
             return False
 
-        self.wrapper.session.add_loss(loss)
-
         message = ""
         for item in loss:
             message += "{}: {}  ".format(item[0], item[1])
@@ -257,91 +242,151 @@ class FaceswapControl():
             logger.trace("Error creating loss message. Returning False")
             return False
 
-        elapsed = self.wrapper.session.timestats["elapsed"]
-        iterations = self.wrapper.session.stats["iterations"]
+        iterations = self.train_stats["iterations"]
 
-        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed, iterations, message)
+        if iterations == 0:
+            # Initialize session stats and set initial timestamp
+            self.train_stats["timestamp"] = time()
+
+        if not get_config().session.initialized and iterations > 0:
+            # Don't initialize session until after the first iteration as state
+            # file must exist first
+            get_config().session.initialize_session(is_training=True)
+            self.wrapper.tk_vars["refreshgraph"].set(True)
+
+        iterations += 1
+        if iterations % 100 == 0:
+            self.wrapper.tk_vars["refreshgraph"].set(True)
+        self.train_stats["iterations"] = iterations
+
+        elapsed = self.calc_elapsed()
+        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed,
+                                                          self.train_stats["iterations"], message)
         self.statusbar.progress_update(message, 0, False)
         logger.trace("Succesfully captured loss: %s", message)
         return True
 
+    def calc_elapsed(self):
+        """ Calculate and format time since training started """
+        now = time()
+        elapsed_time = now - self.train_stats["timestamp"]
+        try:
+            hrs = int(elapsed_time // 3600)
+            if hrs < 10:
+                hrs = "{0:02d}".format(hrs)
+            mins = "{0:02d}".format((int(elapsed_time % 3600) // 60))
+            secs = "{0:02d}".format((int(elapsed_time % 3600) % 60))
+        except ZeroDivisionError:
+            hrs = "00"
+            mins = "00"
+            secs = "00"
+        return "{}:{}:{}".format(hrs, mins, secs)
+
     def capture_tqdm(self, string):
         """ Capture tqdm output for progress bar """
         logger.trace("Capturing tqdm")
-        tqdm = self.consoleregex["tqdm"].findall(string)
-        if len(tqdm) != 5:
-            logger.trace("Not a tqdm message. Returning False")
+        tqdm = self.consoleregex["tqdm"].match(string)
+        if not tqdm:
             return False
+        tqdm = tqdm.groupdict()
+        if any("?" in val for val in tqdm.values()):
+            logger.trace("tqdm initializing. Skipping")
+            return True
+        processtime = "Elapsed: {}  Remaining: {}".format(tqdm["tme"].split("<")[0],
+                                                          tqdm["tme"].split("<")[1])
+        message = "{}  |  {}  |  {}  |  {}".format(processtime,
+                                                   tqdm["rte"],
+                                                   tqdm["itm"],
+                                                   tqdm["pct"])
 
-        percent = tqdm[0]
-        processed = tqdm[1]
-        processtime = "Elapsed: {}  Remaining: {}".format(tqdm[2], tqdm[3])
-        rate = tqdm[4]
-        message = "{}  |  {}  |  {}  |  {}".format(processtime, rate, processed, percent)
-
-        current, total = processed.split("/")
+        current, total = tqdm["itm"].split("/")
         position = int((float(current) / float(total)) * 1000)
 
         self.statusbar.progress_update(message, position, True)
         logger.trace("Succesfully captured tqdm message: %s", message)
         return True
 
+    def capture_ffmpeg(self, string):
+        """ Capture tqdm output for progress bar """
+        logger.trace("Capturing ffmpeg")
+        ffmpeg = self.consoleregex["ffmpeg"].findall(string)
+        if len(ffmpeg) < 7:
+            logger.trace("Not ffmpeg message. Returning False")
+            return False
+
+        message = ""
+        for item in ffmpeg:
+            message += "{}: {}  ".format(item[0], item[1])
+        if not message:
+            logger.trace("Error creating ffmpeg message. Returning False")
+            return False
+
+        self.statusbar.progress_update(message, 0, False)
+        logger.trace("Succesfully captured ffmpeg message: %s", message)
+        return True
+
     def terminate(self):
         """ Terminate the subprocess """
         logger.debug("Terminating wrapper")
         if self.command == "train":
+            timeout = get_config().tk_vars["traintimeout"].get()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
-            try:
-                now = time()
-                if os.name == "nt":
-                    try:
-                        logger.debug("Sending carriage return to process")
-                        self.process.communicate(input="\n", timeout=60)
-                    except TimeoutExpired:
-                        raise ValueError("Timeout reached sending Exit Signal")
-                else:
-                    logger.debug("Sending SIGINT to process")
-                    self.process.send_signal(signal.SIGINT)
-                    while True:
-                        timeelapsed = time() - now
-                        if self.process.poll() is not None:
-                            break
-                        if timeelapsed > 60:
-                            raise ValueError("Timeout reached sending Exit Signal")
-                return
-            except ValueError as err:
-                logger.error("Error terminating process", exc_info=True)
-                print(err)
-        else:
-            logger.debug("Terminating Process...")
-            print("Terminating Process...")
-            children = psutil.Process().children(recursive=True)
-            for child in children:
-                child.terminate()
-            _, alive = psutil.wait_procs(children, timeout=10)
-            if not alive:
-                logger.debug("Terminated")
-                print("Terminated")
-                return
-
-            logger.debug("Termination timed out. Killing Process...")
-            print("Termination timed out. Killing Process...")
-            for child in alive:
-                child.kill()
-            _, alive = psutil.wait_procs(alive, timeout=10)
-            if not alive:
-                logger.debug("Killed")
-                print("Killed")
+            if os.name == "nt":
+                try:
+                    logger.debug("Sending carriage return to process")
+                    self.process.communicate(input="\n", timeout=timeout)
+                except TimeoutExpired:
+                    logger.error("Timeout reached sending Exit Signal")
+                    self.terminate_all_children()
             else:
-                for child in alive:
-                    msg = "Process {} survived SIGKILL. Giving up".format(child)
-                    logger.debug(msg)
-                    print(msg)
+                logger.debug("Sending SIGINT to process")
+                now = time()
+                self.process.send_signal(signal.SIGINT)
+                while True:
+                    timeelapsed = time() - now
+                    if self.process.poll() is not None:
+                        break
+                    if timeelapsed > timeout:
+                        logger.error("Timeout reached sending Exit Signal")
+                        self.terminate_all_children()
+                return
+        else:
+            self.terminate_all_children()
+
+    @staticmethod
+    def terminate_all_children():
+        """ Terminates all children """
+        logger.debug("Terminating Process...")
+        print("Terminating Process...", flush=True)
+        children = psutil.Process().children(recursive=True)
+        for child in children:
+            child.terminate()
+        _, alive = psutil.wait_procs(children, timeout=10)
+        if not alive:
+            logger.debug("Terminated")
+            print("Terminated")
+            return
+
+        logger.debug("Termination timed out. Killing Process...")
+        print("Termination timed out. Killing Process...", flush=True)
+        for child in alive:
+            child.kill()
+        _, alive = psutil.wait_procs(alive, timeout=10)
+        if not alive:
+            logger.debug("Killed")
+            print("Killed")
+        else:
+            for child in alive:
+                msg = "Process {} survived SIGKILL. Giving up".format(child)
+                logger.debug(msg)
+                print(msg)
 
     def set_final_status(self, returncode):
-        """ Set the status bar output based on subprocess return code """
+        """ Set the status bar output based on subprocess return code
+            and reset training stats """
         logger.debug("Setting final status. returncode: %s", returncode)
+        self.train_stats = {"iterations": 0, "timestamp": None}
         if returncode in (0, 3221225786):
             status = "Ready"
         elif returncode == -15:

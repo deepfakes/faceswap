@@ -12,12 +12,13 @@ import matplotlib
 # pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
 
-from matplotlib import animation, pyplot as plt, style
+from matplotlib import style  # noqa
+from matplotlib.figure import Figure  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
-                                               NavigationToolbar2Tk)
+                                               NavigationToolbar2Tk)  # noqa
 
-from .tooltip import Tooltip
-from .utils import Images
+from .tooltip import Tooltip  # noqa
+from .utils import get_config, get_images  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -37,7 +38,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                        "filesave": "save",
                        "zoom_to_rect": "zoom"}
         icon = iconmapping[file] if iconmapping.get(file, None) else file
-        img = Images().icons[icon]
+        img = get_images().icons[icon]
         btn = ttk.Button(frame, text=text, image=img, command=command)
         btn.pack(side=tk.RIGHT, padx=2)
         return btn
@@ -86,7 +87,8 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
                            "Greys", "copper", "summer", "bone"]
         self.lines = list()
         self.toolbar = None
-        self.fig = plt.figure(figsize=(4, 4), dpi=75)
+        self.fig = Figure(figsize=(4, 4), dpi=75)
+
         self.ax1 = self.fig.add_subplot(1, 1, 1)
         self.plotcanvas = FigureCanvasTkAgg(self.fig, self)
 
@@ -98,12 +100,12 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Place the graph canvas """
         logger.debug("Setting plotcanvas")
         self.plotcanvas.get_tk_widget().pack(side=tk.TOP, padx=5, fill=tk.BOTH, expand=True)
-        plt.subplots_adjust(left=0.100,
-                            bottom=0.100,
-                            right=0.95,
-                            top=0.95,
-                            wspace=0.2,
-                            hspace=0.2)
+        self.fig.subplots_adjust(left=0.100,
+                                 bottom=0.100,
+                                 right=0.95,
+                                 top=0.95,
+                                 wspace=0.2,
+                                 hspace=0.2)
         logger.debug("Set plotcanvas")
 
     def update_plot(self, initiate=True):
@@ -147,14 +149,13 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     def axes_limits_set(self, data):
         """ Set the axes limits """
         xmax = self.calcs.iterations - 1 if self.calcs.iterations > 1 else 1
-
         if data:
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
             self.ax1.set_xlim(0, xmax)
+            logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
         else:
             self.axes_limits_set_default()
-        logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
 
     @staticmethod
     def axes_data_get_min_max(data):
@@ -179,7 +180,6 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     def lines_sort(self, keys):
         """ Sort the data keys into consistent order
             and set line color map and line width """
-
         logger.trace("Sorting lines")
         raw_lines = list()
         sorted_lines = list()
@@ -192,7 +192,6 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         groupsize = self.lines_groupsize(raw_lines, sorted_lines)
         sorted_lines = raw_lines + sorted_lines
-
         lines = self.lines_style(sorted_lines, groupsize)
         return lines
 
@@ -245,54 +244,37 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.toolbar.pack(side=tk.BOTTOM)
         self.toolbar.update()
 
+    def clear(self):
+        """ Clear the plots from RAM """
+        logger.debug("Clearing graph from RAM: %s", self)
+        self.fig.clf()
+        del self.fig
+
 
 class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """ Live graph to be displayed during training. """
 
     def __init__(self, parent, data, ylabel):
         GraphBase.__init__(self, parent, data, ylabel)
+        self.add_callback()
 
-        self.anim = None
+    def add_callback(self):
+        """ Add the variable trace to update graph on recent button or save iteration """
+        get_config().tk_vars["refreshgraph"].trace("w", self.refresh)
 
     def build(self):
-        """ Update the plot area with loss values and cycle through to
-        animate """
+        """ Update the plot area with loss values """
         logger.debug("Building training graph")
-        self.anim = animation.FuncAnimation(self.fig, self.animate, interval=200, blit=False)
         self.plotcanvas.draw()
         logger.debug("Built training graph")
 
-    def animate(self, i):  # pylint: disable=unused-argument
+    def refresh(self, *args):  # pylint: disable=unused-argument
         """ Read loss data and apply to graph """
-        logger.trace("Running animation")
+        logger.debug("Updating plot")
         self.calcs.refresh()
-        self.set_animation_rate(self.calcs.iterations)
         self.update_plot(initiate=False)
-
-    def set_animation_rate(self, iterations):
-        """ Change the animation update interval based on how
-            many iterations have been
-            There's no point calculating a graph over thousands of
-            points of data when the change will be minuscule """
-        if iterations > 30000:
-            speed = 120000          # 2 min updates
-        elif iterations > 20000:
-            speed = 60000           # 1 min updates
-        elif iterations > 10000:
-            speed = 30000           # 30 sec updates
-        elif iterations > 5000:
-            speed = 10000           # 10 sec updates
-        elif iterations > 1000:
-            speed = 5000            # 5 sec updates
-        elif iterations > 500:
-            speed = 2000            # 2 sec updates
-        elif iterations > 100:
-            speed = 1000            # 1 sec updates
-        else:
-            speed = 500             # 0.5 sec updates
-        if not self.anim.event_source.interval == speed:
-            logger.debug("Animation rate set to: %sms", speed)
-            self.anim.event_source.interval = speed
+        self.plotcanvas.draw()
+        get_config().tk_vars["refreshgraph"].set(False)
 
     def save_fig(self, location):
         """ Save the figure to file """
@@ -310,7 +292,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def resize_fig(self):
         """ Resize the figure back to the canvas """
-        class Event():  # pylint: too-few-public-methods
+        class Event():  # pylint: disable=too-few-public-methods
             """ Event class that needs to be passed to plotcanvas.resize """
             pass
         Event.width = self.winfo_width()
