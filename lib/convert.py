@@ -185,7 +185,8 @@ class Converter():
             landmarks = detected_face.landmarks_as_xy
             final_mask = cv2.bitwise_or(final_mask,  # pylint: disable=no-member
                                         mask_type(landmarks, frame, channels=1).mask)
-        frame = np.concatenate((frame, np.expand_dims(final_mask, axis=-1)), axis=-1)
+        final_mask = np.expand_dims(final_mask, axis=-1) if final_mask.ndim == 2 else final_mask
+        frame = np.concatenate((frame, final_mask), axis=-1)
         logger.trace("Created transparent image: '%s'", predicted["filename"])
         return frame
 
