@@ -7,6 +7,9 @@ import pathlib
 import cv2
 import numpy as np
 import keras
+from keras.layers import *
+from keras.models import Model
+
 CURRENT_DIR = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 PARENT_DIR = os.path.dirname(CURRENT_DIR)
 sys.path.insert(0, PARENT_DIR)
@@ -15,10 +18,11 @@ class FaceSegmentation():
     """ doc string """
 
     def __init__(self, batch_size=24, model_img_size=(300, 300),
-                 model_path='C:/data/models/segmentation_model.h5',
+                 model_path='C:/data/models/Nirkin_500.h5',
                  in_dir='C:/data/putin/'):
         """ doc string """
         self.model = keras.models.load_model(model_path)
+        #keras.models.save_model(self.model, 'C:/data/models/compressed_segmentation_model.h5', include_optimizer=False)
         print('\n' + 'Model loaded')
 
         in_dir = pathlib.Path(in_dir)
@@ -27,23 +31,66 @@ class FaceSegmentation():
         image_dataset, self.means = self.dataset_setup(image_file_list, model_img_size, batch_size)
         self.memmapped_images = np.load(image_dataset, mmap_mode='r+')
         print('\n' + 'Image dataset loaded')
+        """
+        import requests
 
-    def segment(self, out_dir='C:/data/masked/'):
+        def download_file_from_google_drive(id, destination):
+            URL = "https://docs.google.com/uc?export=download"
+
+            session = requests.Session()
+
+            response = session.get(URL, params = { 'id' : id }, stream = True)
+            token = get_confirm_token(response)
+
+            if token:
+                params = { 'id' : id, 'confirm' : token }
+                response = session.get(URL, params = params, stream = True)
+
+            save_response_content(response, destination)    
+
+        def get_confirm_token(response):
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    return value
+
+            return None
+
+        def save_response_content(response, destination):
+            CHUNK_SIZE = 32768
+
+            with open(destination, "wb") as f:
+                for chunk in response.iter_content(CHUNK_SIZE):
+                    if chunk: # filter out keep-alive new chunks
+                        f.write(chunk)
+        In [2]:
+        file_id = '0B1fGSuBXAh1IeEpzajRISkNHckU'
+        destination = '/home/myusername/work/myfile.ext'
+        download_file_from_google_drive(file_id, destination)
+        """
+
+    def segment(self, model_type, out_dir='C:/data/masked/'):
         """ doc string """
         i = 0
         for img_batch, avgs in zip(self.memmapped_images, self.means):
-            results = self.model.predict_on_batch(img_batch)
-            img_batch += avgs[:, None, None, :]
-            mask_batch = results.argmax(axis=-1).astype('float32')
-            mask_batch = np.expand_dims(mask_batch, axis=-1)
-            generator = (self.postprocessing(mask[:, :, 0:1]) for mask in mask_batch)
-            mask_batch = np.array(tuple(generator))
-            img_batch = np.concatenate((img_batch, mask_batch), axis=-1)
+            if model_type=='Nirkin':
+                results = self.model.predict_on_batch(img_batch)
+                img_batch += avgs[:, None, None, :]
+                mask_batch = np.clip(results.argmax(axis=-1), 0, 1).astype('uint8')
+                mask_batch = np.expand_dims(mask_batch, axis=-1)
+                generator = (self.postprocessing(mask[:, :, 0:1]) for mask in mask_batch)
+                mask_batch = np.array(tuple(generator))
+                img_batch = np.concatenate((img_batch.astype('uint8'), mask_batch), axis=-1)
+            if  model_type=='DFL':
+                img_batch += avgs[:, None, None, :]
+                results = self.model.predict(img_batch / 255.)
+                results[results < 0.1] = 0.
+                mask_batch = results * 255.
+                img_batch = np.concatenate((img_batch, mask_batch), axis=-1).astype('uint8')
 
             for four_channel in img_batch:
                 if i < self.num_images:
                     path_string = '{0}{1:05d}.png'.format(out_dir, i)
-                    cv2.imwrite(path_string, four_channel.astype('uint8'))  # pylint: disable=no-member
+                    cv2.imwrite(path_string, four_channel)  # pylint: disable=no-member
                     i += 1
 
         print('\n' + 'Mask generation complete')
@@ -101,21 +148,25 @@ class FaceSegmentation():
         smooth_contours = False # Don't do this right now
         if smooth_contours:
             iters = 2
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))  # pylint: disable=no-member
-            for _ in range(iters):
-                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)  # pylint: disable=no-member
-                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)  # pylint: disable=no-member
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))  # pylint: disable=no-member
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)  # pylint: disable=no-member
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)  # pylint: disable=no-member
+            
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)  # pylint: disable=no-member
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)  # pylint: disable=no-member
 
+        mask *= 255
         #Fill holes
-        fill_holes = False # Don't do this right now
+        fill_holes = True
         if fill_holes:
-            inversion = mask.copy()
-            inversion = np.pad(inversion, ((2, 2), (2, 2), (0, 0)), 'constant')
-            cv2.floodFill(inversion, None, (0, 0), 1)  # pylint: disable=no-member
-            holes = cv2.bitwise_not(inversion)[2:-2, 2:-2]  # pylint: disable=no-member
+            not_holes = mask.copy()
+            not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
+            cv2.floodFill(not_holes, None, (0, 0), 255)  # pylint: disable=no-member
+            holes = cv2.bitwise_not(not_holes)[2:-2,2:-2]  # pylint: disable=no-member
             mask = cv2.bitwise_or(mask, holes)  # pylint: disable=no-member
             mask = np.expand_dims(mask, axis=-1)
-        return mask * 255
+            
+        return mask
 
     @staticmethod
     def crop_standarization(image, landmarks):
@@ -134,7 +185,41 @@ class FaceSegmentation():
         return rect
 
 
+    def merge_comparision(self, out_dir='C:/data/masked/'):
+        """ doc string """
+        image_file_lists = []
+        target_size = 300
+        for in_dir in ['C:/data/masked - DFL/','C:/data/masked - Nirkin500/','C:/data/masked - Nirkin300/']:
+            dir = pathlib.Path(in_dir)
+            image_file_lists.append(self.get_image_paths(dir))
+        
+        for i, (file_a, file_b, file_c) in enumerate(zip(image_file_lists[0], image_file_lists[1], image_file_lists[2])):
+            img_a = cv2.imread(file_a, cv2.IMREAD_UNCHANGED).astype('float32')  # pylint: disable=no-member
+            height, width, _ = img_a.shape
+            image_size = min(height, width)
+            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA  # pylint: disable=no-member
+            img_a = cv2.resize(img_a, (target_size, target_size), method)  # pylint: disable=no-member
+            
+            img_b = cv2.imread(file_b, cv2.IMREAD_UNCHANGED).astype('float32')  # pylint: disable=no-member
+            height, width, _ = img_b.shape
+            image_size = min(height, width)
+            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA  # pylint: disable=no-member
+            img_b = cv2.resize(img_b, (target_size, target_size), method)  # pylint: disable=no-member
+            
+            img_c = cv2.imread(file_c, cv2.IMREAD_UNCHANGED).astype('float32')  # pylint: disable=no-member
+            height, width, _ = img_c.shape
+            image_size = min(height, width)
+            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA  # pylint: disable=no-member
+            img_c = cv2.resize(img_c, (target_size, target_size), method)  # pylint: disable=no-member
+            
+            compare = np.concatenate((img_a, img_b, img_c), axis=1)
+            path_string = '{0}{1:05d}.png'.format(out_dir, i)
+            cv2.imwrite(path_string, compare)  # pylint: disable=no-member
+
 if __name__ == '__main__':
-    Segmentator = FaceSegmentation(model_path='C:/data/models/segmentation_model.h5',
+    Segmentator = FaceSegmentation(model_path='C:/data/models/Nirkin_300.h5',
+                                   model_img_size=(300, 300),
+                                   batch_size=8,
                                    in_dir='C:/data/putin/')
-    Segmentator.segment(out_dir='C:/data/masked/')
+    #Segmentator.segment(out_dir='C:/data/masked/', model_type='Nirkin')
+    Segmentator.merge_comparision(out_dir='C:/data/masked/')
