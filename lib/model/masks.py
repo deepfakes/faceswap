@@ -76,7 +76,7 @@ class Mask():
         parts = mask_function()
         for item in parts:
             hull = cv2.convexHull(np.concatenate(item))  # pylint: disable=no-member
-            cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)  # pylint: disable=no-member
+            cv2.fillConvexPoly(mask, hull, 255., lineType=cv2.LINE_AA)  # pylint: disable=no-member
         return mask
 
     def one_part_facehull(self):
