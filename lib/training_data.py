@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from scipy.interpolate import griddata
 
-from lib.model import masks
+from lib.model.masks import Mask
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -40,12 +40,8 @@ class TrainingDataGenerator():
 
     def set_mask_class(self):
         """ Set the mask function to use if using mask """
-        mask_type = self.training_opts.get("mask_type", None)
-        if mask_type:
-            logger.debug("Mask type: '%s'", mask_type)
-            mask_class = getattr(masks, mask_type)
-        else:
-            mask_class = None
+        mask_type = self.training_opts.get("mask_type", "none")
+        mask_class = None if mask_type == "none" else mask_type
         logger.debug("Mask class: %s", mask_class)
         return mask_class
 
@@ -153,7 +149,7 @@ class TrainingDataGenerator():
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             src_pts = self.get_landmarks(filename, image, side)
         if self.mask_class:
-            image = self.mask_class(src_pts, image, channels=4).mask
+            image = Mask(src_pts, image, self.mask_class, channels=4).mask
 
         image = self.processing.color_adjust(image)
 

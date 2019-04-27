@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_available_masks():
     """ Return a list of the available masks for cli """
-    masks = sorted([name for name, obj in inspect.getmembers(sys.modules[__name__])
-                    if inspect.isclass(obj) and name != "Mask"])
-    masks.append("none")
+    #masks = sorted([name for name, obj in inspect.getmembers(sys.modules[__name__])
+    #                if inspect.isclass(obj) and name != "Mask"])
+    #masks.append("none")
+    masks = ['components', 'dfl_full', 'facehull', 'none']
     logger.debug(masks)
     return masks
 
@@ -38,20 +39,16 @@ class Mask():
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
 
-    def __init__(self, landmarks, face, channels=4):
+    def __init__(self, landmarks, face, type, channels=4):
         logger.trace("Initializing %s: (face_shape: %s, channels: %s, landmarks: %s)",
                      self.__class__.__name__, face.shape, channels, landmarks)
         self.landmarks = landmarks
         self.face = face
+        self.type = type
         self.channels = channels
-
         mask = self.build_mask()
         self.mask = self.merge_mask(mask)
         logger.trace("Initialized %s", self.__class__.__name__)
-
-    def build_mask(self):
-        """ Override to build the mask """
-        raise NotImplementedError
 
     def merge_mask(self, mask):
         """ Return the mask in requested shape """
@@ -69,12 +66,27 @@ class Mask():
         logger.trace("Final mask shape: %s", retval.shape)
         return retval
 
-
-class dfl_full(Mask):  # pylint: disable=invalid-name
-    """ DFL facial mask """
     def build_mask(self):
+        """ Build the mask """
         mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
+        mask_dict = {'facehull':    self.one_part_facehull,
+                     'dfl_full':    self.three_part_facehull,
+                     'components':  self.eight_part_facehull}
+        mask_function = mask_dict[self.type]
+        parts = mask_function()
+        for item in parts:
+            hull = cv2.convexHull(np.concatenate(item))  # pylint: disable=no-member
+            cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        return mask
 
+    def one_part_facehull(self):
+        """ Basic facehull mask """
+        #hull = cv2.convexHull(np.array(self.landmarks).reshape((-1, 2)))
+        parts = [(self.landmarks)]
+        return parts
+
+    def three_part_facehull(self):
+        """ DFL facehull mask """
         nose_ridge = (self.landmarks[27:31], self.landmarks[33:34])
         jaw = (self.landmarks[0:17],
                self.landmarks[48:68],
@@ -87,18 +99,10 @@ class dfl_full(Mask):  # pylint: disable=invalid-name
                 self.landmarks[16:17],
                 self.landmarks[33:34])
         parts = [jaw, nose_ridge, eyes]
+        return parts
 
-        for item in parts:
-            merged = np.concatenate(item)
-            cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
-        return mask
-
-
-class components(Mask):  # pylint: disable=invalid-name
-    """ Component model mask """
-    def build_mask(self):
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
-
+    def eight_part_facehull(self):
+        """ Component facehull mask """
         r_jaw = (self.landmarks[0:9], self.landmarks[17:18])
         l_jaw = (self.landmarks[8:17], self.landmarks[26:27])
         r_cheek = (self.landmarks[17:20], self.landmarks[8:9])
@@ -114,18 +118,6 @@ class components(Mask):  # pylint: disable=invalid-name
                  self.landmarks[8:9])
         nose = (self.landmarks[27:31], self.landmarks[31:36])
         parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
-
-        for item in parts:
-            merged = np.concatenate(item)
-            cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
-        return mask
+        return parts
 
 
-class facehull(Mask):  # pylint: disable=invalid-name
-    """ Basic face hull mask """
-    def build_mask(self):
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
-        hull = cv2.convexHull(  # pylint: disable=no-member
-            np.array(self.landmarks).reshape((-1, 2)))
-        cv2.fillConvexPoly(mask, hull, 1.0, lineType=cv2.LINE_AA)  # pylint: disable=no-member
-        return mask
