@@ -287,7 +287,7 @@ class Config(FaceswapConfig):
             section=section, title="crf", datatype=int, min_max=(0, 51), rounding=1, default=23,
             info="Constant Rate Factor:  0 is lossless and 51 is worst quality possible. A lower "
                  "value generally leads to higher quality, and a subjectively sane range is "
-                 "17–28. Consider 17 or 18 to be visually lossless or nearly so; it should look "
+                 "17-28. Consider 17 or 18 to be visually lossless or nearly so; it should look "
                  "the same or nearly the same as the input but it isn't technically lossless.\n"
                  "The range is exponential, so increasing the CRF value +6 results in roughly "
                  "half the bitrate / file size, while -6 leads to roughly twice the bitrate.\n"
