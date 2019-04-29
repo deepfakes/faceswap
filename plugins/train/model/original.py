@@ -3,7 +3,7 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contribs """
 
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, Concatenate
 
 from keras.models import Model as KerasModel
 
@@ -15,7 +15,7 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-
+        self.mask_shape = (self.input_shape[:-1] + (1, ))
         if "input_shape" not in kwargs:
             kwargs["input_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
@@ -35,33 +35,34 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize original model """
         logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[:2] + (1, ))
-            inputs.append(Input(shape=mask_shape, name="mask"))
+        face = Input(shape=self.input_shape, name="face")
+        mask = Input(shape=self.mask_shape, name="mask")
+        inputs = [face, mask]
 
         for side in ("a", "b"):
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inputs[0]))
+            output = decoder(self.networks["encoder"].network(inputs))
             autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):
         """ Encoder Network """
-        input_ = Input(shape=self.input_shape)
-        var_x = input_
+        face_ = Input(shape=self.input_shape)
+        mask_ = Input(shape=self.mask_shape)
+        var_x = Concatenate(axis=-1)(face_, mask_)
         var_x = self.blocks.conv(var_x, 128)
         var_x = self.blocks.conv(var_x, 256)
         var_x = self.blocks.conv(var_x, 512)
         if not self.config.get("lowmem", False):
             var_x = self.blocks.conv(var_x, 1024)
-        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
+        var_x = Flatten()(var_x)
+        var_x = Dense(self.encoder_dim)(var_x)
         var_x = Dense(4 * 4 * 1024)(var_x)
         var_x = Reshape((4, 4, 1024))(var_x)
         var_x = self.blocks.upscale(var_x, 512)
-        return KerasModel(input_, var_x)
+        return KerasModel([face_, mask_], var_x)
 
     def decoder(self):
         """ Decoder Network """

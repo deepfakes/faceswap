@@ -14,6 +14,7 @@ class Model(ModelBase):
                      self.__class__.__name__, args, kwargs)
         kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
+        self.mask_shape = (self.input_shape[:-1] + (1, ))
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -30,18 +31,17 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize IAE model """
         logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[:2] + (1, ))
-            inputs.append(Input(shape=mask_shape, name="mask"))
+        face = Input(shape=self.input_shape, name="face")
+        mask = Input(shape=self.mask_shape, name="mask")
+        inputs = [face, mask]
 
         decoder = self.networks["decoder"].network
         encoder = self.networks["encoder"].network
         inter_both = self.networks["inter"].network
         for side in ("a", "b"):
             inter_side = self.networks["intermediate_{}".format(side)].network
-            output = decoder(Concatenate()([inter_side(encoder(inputs[0])),
-                                            inter_both(encoder(inputs[0]))]))
+            output = decoder(Concatenate()([inter_side(encoder(inputs)),
+                                            inter_both(encoder(inputs))]))
 
             autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
@@ -49,14 +49,15 @@ class Model(ModelBase):
 
     def encoder(self):
         """ Encoder Network """
-        input_ = Input(shape=self.input_shape)
-        var_x = input_
+        face_ = Input(shape=self.input_shape)
+        mask_ = Input(shape=self.mask_shape)
+        var_x = Concatenate(axis=-1)(face_, mask_)
         var_x = self.blocks.conv(var_x, 128)
         var_x = self.blocks.conv(var_x, 256)
         var_x = self.blocks.conv(var_x, 512)
         var_x = self.blocks.conv(var_x, 1024)
         var_x = Flatten()(var_x)
-        return KerasModel(input_, var_x)
+        return KerasModel([face_, mask_], var_x)
 
     def intermediate(self):
         """ Intermediate Network """
