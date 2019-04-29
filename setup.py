@@ -325,7 +325,9 @@ class Checks():
             exit(0)
 
     # Check for CUDA and cuDNN
-        if self.env.enable_cuda and self.env.os_version[0] in ("Linux", "Windows"):
+        if self.env.enable_cuda and self.env.is_conda:
+            self.output.info("Skipping Cuda/cuDNN checks for Conda install")
+        elif self.env.enable_cuda and self.env.os_version[0] in ("Linux", "Windows"):
             self.cuda_check()
             self.cudnn_check()
         elif self.env.enable_cuda and self.env.os_version[0] not in ("Linux", "Windows"):
@@ -376,6 +378,15 @@ class Checks():
 
     def cuda_check(self):
         """ Check Cuda for Linux or Windows """
+        chk = Popen("nvcc -V", shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = chk.communicate()
+        if not stderr:
+            version = re.search(r".*release (?P<cuda>\d+\.\d+)", stdout.decode(self.env.encoding))
+            self.env.cuda_version = version.groupdict().get("cuda", None)
+            if self.env.cuda_version:
+                self.output.info("CUDA version: " + self.env.cuda_version)
+                return
+        # Failed to load nvcc
         if self.env.os_version[0] == "Linux":
             self.cuda_check_linux()
         elif self.env.os_version[0] == "Windows":
@@ -420,8 +431,17 @@ class Checks():
 
     def cudnn_check(self):
         """ Check Linux or Windows cuDNN Version from cudnn.h """
-        cudnn_checkfile = os.path.join(self.env.cuda_path, "include", "cudnn.h")
-        if not os.path.isfile(cudnn_checkfile):
+        if self.env.os_version[0] == "Linux":
+            cudnn_checkfiles = self.cudnn_checkfiles_linux()
+        elif self.env.os_version[0] == "Windows":
+            cudnn_checkfiles = self.cudnn_checkfiles_windows()
+
+        cudnn_checkfile = None
+        for checkfile in cudnn_checkfiles:
+            if os.path.isfile(checkfile):
+                cudnn_checkfile = checkfile
+                break
+        if not cudnn_checkfile:
             self.output.error("cuDNN not found. See "
                               "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cudnn "
                               "for instructions")
@@ -448,6 +468,24 @@ class Checks():
 
         self.env.cudnn_version = "{}.{}".format(major, minor)
         self.output.info("cuDNN version: {}.{}".format(self.env.cudnn_version, patchlevel))
+
+    @staticmethod
+    def cudnn_checkfiles_linux():
+        """ Return the checkfile locations for linux """
+        chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
+        chk = chk.strip().replace("libcudnn.so.", "")
+        cudnn_vers = chk[0]
+        cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
+        cudnn_path = cudnn_path.replace("lib", "include")
+        cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
+                            os.path.join(cudnn_path, "cudnn.h")]
+        return cudnn_checkfiles
+
+    def cudnn_checkfiles_windows(self):
+        """ Return the checkfile locations for windows """
+        # TODO A more reliable way of getting the windows location
+        cudnn_checkfile = os.path.join(self.env.cuda_path, "include", "cudnn.h")
+        return [cudnn_checkfile]
 
     def check_system_dependencies(self):
         """ Check that system applications are installed """
@@ -540,7 +578,8 @@ class Checks():
     def check_cplus_plus(self):
         """ Check Visual C++ Redistributable 2015 is instlled for Windows """
         keys = (
-            "HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies\\{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
+            "HKLM\\SOFTWARE\\Classes\\Installer\\Dependencies\\"
+            "{d992c12e-cab2-426f-bde3-fb8c53950b0d}",
             "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64")
         for key in keys:
             chk = Popen("reg query {}".format(key), shell=True, stdout=PIPE, stderr=PIPE)
@@ -614,10 +653,11 @@ class Install():
 
     def install_missing_dep(self):
         """ Install missing dependencies """
-        if self.env.missing_packages:
-            self.install_python_packages()
+        # Install conda packages first as dlib will need Cuda
         if self.env.conda_missing_packages:
             self.install_conda_packages()
+        if self.env.missing_packages:
+            self.install_python_packages()
 
     def install_python_packages(self):
         """ Install required pip packages """
@@ -721,7 +761,8 @@ class Tips():
             "\t-e UID=`id -u` \\ \n"
             "\tdeepfakes-cpu \n\n"
             "4. Open a new terminal to run faceswap.py in /srv\n"
-            "docker exec -it deepfakes-cpu bash".format(path=os.path.dirname(os.path.realpath(__file__))))
+            "docker exec -it deepfakes-cpu bash".format(
+                path=os.path.dirname(os.path.realpath(__file__))))
         self.output.info("That's all you need to do with a docker. Have fun.")
 
     def docker_cuda(self):
@@ -758,7 +799,8 @@ class Tips():
             "\t-e UID=`id -u` \\ \n"
             "\tdeepfakes-gpu\n\n"
             "6. Open a new terminal to interact with the project\n"
-            "docker exec deepfakes-gpu python /srv/tools.py gui\n".format(path=os.path.dirname(os.path.realpath(__file__))))
+            "docker exec deepfakes-gpu python /srv/tools.py gui\n".format(
+                path=os.path.dirname(os.path.realpath(__file__))))
 
     def macos(self):
         """ Output Tips for macOS"""
