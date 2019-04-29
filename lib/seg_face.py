@@ -7,8 +7,6 @@ import pathlib
 import cv2
 import numpy as np
 import keras
-from keras.layers import *
-from keras.models import Model
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 PARENT_DIR = os.path.dirname(CURRENT_DIR)
@@ -22,9 +20,14 @@ class FaceSegmentation():
                  in_dir='C:/data/putin/'):
         """ doc string """
         self.model = keras.models.load_model(model_path)
+
+        #self.model.layers[-1].activation = keras.activations.softmax
         #keras.models.save_model(self.model, 'C:/data/models/compressed_segmentation_model.h5', include_optimizer=False)
+        #self.model = keras.models.load_model('C:/data/models/compressed_segmentation_model.h5')
         print('\n' + 'Model loaded')
 
+        keras.utils.plot_model(self.model, show_shapes=True, to_file='C:/data/models/model.png')
+        
         in_dir = pathlib.Path(in_dir)
         image_file_list = self.get_image_paths(in_dir)
         self.num_images = len(image_file_list)
@@ -86,6 +89,16 @@ class FaceSegmentation():
                 results[results < 0.1] = 0.
                 mask_batch = results * 255.
                 img_batch = np.concatenate((img_batch, mask_batch), axis=-1).astype('uint8')
+            if model_type=='Nirkin_soft':
+                results = self.model.predict_on_batch(img_batch)[:,:,:,1:2]
+                img_batch += avgs[:, None, None, :]
+                generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in results)
+                results = np.expand_dims(np.array(tuple(generator)), axis=-1)
+                low = results < 0.01
+                high = results > 0.975
+                results[low] = 0.
+                results[high] = 1.
+                img_batch = np.concatenate((img_batch, results * 255.), axis=-1).astype('uint8')
 
             for four_channel in img_batch:
                 if i < self.num_images:
@@ -217,9 +230,9 @@ class FaceSegmentation():
             cv2.imwrite(path_string, compare)  # pylint: disable=no-member
 
 if __name__ == '__main__':
-    Segmentator = FaceSegmentation(model_path='C:/data/models/Nirkin_300.h5',
+    Segmentator = FaceSegmentation(model_path='C:/data/models/Nirkin_300_softmax.h5',
                                    model_img_size=(300, 300),
                                    batch_size=8,
                                    in_dir='C:/data/putin/')
-    #Segmentator.segment(out_dir='C:/data/masked/', model_type='Nirkin')
-    Segmentator.merge_comparision(out_dir='C:/data/masked/')
+    Segmentator.segment(out_dir='C:/data/masked/', model_type='Nirkin_soft')
+    #Segmentator.merge_comparision(out_dir='C:/data/masked/')
