@@ -30,7 +30,7 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
-        self.mask_function = self.set_mask_function()
+        self.mask_class = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
@@ -38,16 +38,16 @@ class TrainingDataGenerator():
                                             training_opts.get("coverage_ratio", 0.625))
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_mask_function(self):
+    def set_mask_class(self):
         """ Set the mask function to use if using mask """
         mask_type = self.training_opts.get("mask_type", None)
         if mask_type:
             logger.debug("Mask type: '%s'", mask_type)
-            mask_func = getattr(masks, mask_type)
+            mask_class = getattr(masks, mask_type)
         else:
-            mask_func = None
-        logger.debug("Mask function: %s", mask_func)
-        return mask_func
+            mask_class = None
+        logger.debug("Mask class: %s", mask_class)
+        return mask_class
 
     def minibatch_ab(self, images, batchsize, side, do_shuffle=True, is_timelapse=False):
         """ Keep a queue filled to 8x Batch Size """
@@ -60,7 +60,7 @@ class TrainingDataGenerator():
             (batchsize, training_size, training_size, 3),  # sample images
             (batchsize, self.model_input_size, self.model_input_size, 3),
             (batchsize, self.model_output_size, self.model_output_size, 3)))
-        if self.mask_function:
+        if self.mask_class:
             batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
 
         load_process = FixedProducerDispatcher(
@@ -150,10 +150,10 @@ class TrainingDataGenerator():
         except TypeError:
             raise Exception("Error while reading image", filename)
 
-        if self.mask_function or self.training_opts["warp_to_landmarks"]:
+        if self.mask_class or self.training_opts["warp_to_landmarks"]:
             src_pts = self.get_landmarks(filename, image, side)
-        if self.mask_function:
-            image = self.mask_function(src_pts, image, channels=4)
+        if self.mask_class:
+            image = self.mask_class(src_pts, image, channels=4).mask
 
         image = self.processing.color_adjust(image)
 

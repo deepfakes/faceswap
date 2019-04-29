@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .tooltip import Tooltip
-from .utils import get_config, get_images, ContextMenu, set_slider_rounding
+from .utils import adjust_wraplength, get_config, get_images, ContextMenu, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 POPUP = dict()
@@ -238,6 +238,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         info = ttk.Label(info_frame, text=self.plugin_info)
         info.pack(padx=5, pady=5, fill=tk.X, expand=True)
+        info.bind("<Configure>", adjust_wraplength)
 
 
 class OptionControl():

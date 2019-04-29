@@ -15,6 +15,7 @@ import subprocess
 import datetime
 from collections import OrderedDict
 
+import imageio_ffmpeg as im_ffm
 from ffmpy import FFprobe, FFmpeg, FFRuntimeError
 
 # faceswap imports
@@ -145,7 +146,7 @@ class Effmpeg():
                                "rotate", "slice"]
 
     # Class variable that stores the target executable (ffmpeg or ffplay)
-    _executable = 'ffmpeg'
+    _executable = im_ffm.get_ffmpeg_exe()
 
     # Class variable that stores the common ffmpeg arguments based on verbosity
     __common_ffmpeg_args_dict = {"normal": "-hide_banner ",
@@ -160,7 +161,7 @@ class Effmpeg():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.args = arguments
-        self.exe = "ffmpeg"
+        self.exe = im_ffm.get_ffmpeg_exe()
         self.input = DataItem()
         self.output = DataItem()
         self.ref_vid = DataItem()
@@ -494,7 +495,7 @@ class Effmpeg():
         return all(getattr(self, i).fps is None for i in items_to_check)
 
     @staticmethod
-    def __run_ffmpeg(exe="ffmpeg", inputs=None, outputs=None):
+    def __run_ffmpeg(exe=im_ffm.get_ffmpeg_exe(), inputs=None, outputs=None):
         """ Run ffmpeg """
         logger.debug("Running ffmpeg: (exe: '%s', inputs: %s, outputs: %s", exe, inputs, outputs)
         ffm = FFmpeg(executable=exe, inputs=inputs, outputs=outputs)

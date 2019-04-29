@@ -28,6 +28,20 @@ class FaceswapConfig():
         self.handle_config()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
+    @property
+    def changeable_items(self):
+        """ Training only.
+            Return a dict of config items with their set values for items
+            that can be altered after the model has been created """
+        retval = dict()
+        for sect in ("global", self.section):
+            for key, val in self.defaults[sect].items():
+                if key == "helptext" or val["fixed"]:
+                    continue
+                retval[key] = self.get(sect, key)
+        logger.debug("Alterable for existing models: %s", retval)
+        return retval
+
     def set_defaults(self):
         """ Override for plugin specific config defaults
 
@@ -60,20 +74,6 @@ class FaceswapConfig():
                     continue
                 conf[key] = self.get(sect, key)
         return conf
-
-    @property
-    def changeable_items(self):
-        """ Training only.
-            Return a dict of config items with their set values for items
-            that can be altered after the model has been created """
-        retval = dict()
-        for sect in ("global", self.section):
-            for key, val in self.defaults[sect].items():
-                if key == "helptext" or val["fixed"]:
-                    continue
-                retval[key] = self.get(sect, key)
-        logger.debug("Alterable for existing models: %s", retval)
-        return retval
 
     def get(self, section, option):
         """ Return a config item in it's correct format """
@@ -236,7 +236,7 @@ class FaceswapConfig():
 
     def load_config(self):
         """ Load values from config """
-        logger.info("Loading config: '%s'", self.configfile)
+        logger.verbose("Loading config: '%s'", self.configfile)
         self.config.read(self.configfile)
 
     def save_config(self):
