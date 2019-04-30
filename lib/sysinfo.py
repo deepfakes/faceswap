@@ -227,6 +227,8 @@ class SysInfo():
     def cudnn_checkfiles_windows(self):
         """ Return the checkfile locations for windows """
         # TODO A more reliable way of getting the windows location
+        if not self._cuda_path:
+            return list()
         cudnn_checkfile = os.path.join(self._cuda_path, "include", "cudnn.h")
         return [cudnn_checkfile]
 
