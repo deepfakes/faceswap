@@ -190,7 +190,7 @@ class DiskIO():
     @property
     def pre_encode(self):
         """ Return the writer's pre-encoder """
-        dummy = np.zeros((20, 20, 3)).astype("uint8")
+        dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self.writer.pre_encode(dummy)
         retval = None if test is None else self.writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
@@ -423,9 +423,8 @@ class Predict():
     @property
     def input_mask(self):
         """ Return the input mask """
-        mask = np.zeros(self.model.state.mask_shapes[0], dtype="float32")
-        retval = np.expand_dims(mask, 0)
-        return retval
+        mask = np.zeros((1, ) + self.model.state.mask_shapes[0], dtype="float32")
+        return mask
 
     @property
     def has_predicted_mask(self):
@@ -531,7 +530,8 @@ class Predict():
     def compile_feed_faces(detected_faces):
         """ Compile the faces for feeding into the predictor """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
+        generator = (detected_face.feed_face for detected_face in detected_faces)
+        feed_faces = np.array(tuple(generator))
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces
 

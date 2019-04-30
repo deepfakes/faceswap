@@ -56,13 +56,14 @@ class ModelBase():
         self.predict = predict
         self.model_dir = model_dir
         self.gpus = gpus
-        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
-                               use_icnr_init=self.config["icnr_init"],
-                               use_reflect_padding=self.config["reflect_padding"])
         self.input_shape = input_shape
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
+        self.is_legacy = False
+        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
+                               use_icnr_init=self.config["icnr_init"],
+                               use_reflect_padding=self.config["reflect_padding"])
 
         self.state = State(self.model_dir,
                            self.name,
@@ -70,7 +71,6 @@ class ModelBase():
                            no_logs,
                            pingpong,
                            training_image_size)
-        self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
 
@@ -199,13 +199,14 @@ class ModelBase():
     def add_network(self, network_type, side, network):
         """ Add a NNMeta object """
         logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
-        filename = "{}_{}".format(self.name, network_type.lower())
-        name = network_type.lower()
+        f_string = ""
+        n_string = ""
         if side:
             side = side.lower()
-            filename += "_{}".format(side.upper())
-            name += "_{}".format(side)
-        filename += ".h5"
+            f_string = side.upper()
+            n_string = side
+        filename = "{0}_{1}_{2}.h5".format(self.name, network_type.lower(), f_string)
+        name = "{0}_{1}".format(network_type.lower(), n_string)
         logger.debug("name: '%s', filename: '%s'", name, filename)
         self.networks[name] = NNMeta(str(self.model_dir / filename), network_type, side, network)
 
@@ -260,8 +261,20 @@ class ModelBase():
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        learning_rate = self.config.get("learning_rate", 5e-5)
-        optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
+        opt_kwargs = {"lr":       self.config.get("learning_rate", 5e-5)
+                      "beta_1":   0.5
+                      "beta_2":   0.999
+        plaid = "plaidml.keras.backend"
+        if (self.config.get("clipnorm", False) and K.backend() != plaid):
+            opt_kwargs["clipnorm"] = 1.
+        # NB: Clipnorm is ballooning VRAM useage, which is not expected behaviour
+        # and may be a bug in Keras/TF.
+        # PlaidML has a bug regarding the clipnorm parameter
+        # See: https://github.com/plaidml/plaidml/issues/228
+        # Workaround by simply removing it.
+        # TODO: Remove this as soon it is fixed in PlaidML.
+        optimizer = Adam(**opt_kwargs)
+        logger.debug("Build optimizer with kwargs: %s", opt_kwargs)
 
         for side, model in self.predictors.items():
             mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
@@ -278,21 +291,6 @@ class ModelBase():
                 self.state.add_session_loss_names(side, loss_names)
                 self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", loss_names)
-
-    def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
-        """ Build and return Optimizer """
-        opt_kwargs = dict(lr=lr, beta_1=beta_1, beta_2=beta_2)
-        if (self.config.get("clipnorm", False) and
-                keras.backend.backend() != "plaidml.keras.backend"):
-            # NB: Clipnorm is ballooning VRAM useage, which is not expected behaviour
-            # and may be a bug in Keras/TF.
-            # PlaidML has a bug regarding the clipnorm parameter
-            # See: https://github.com/plaidml/plaidml/issues/228
-            # Workaround by simply removing it.
-            # TODO: Remove this as soon it is fixed in PlaidML.
-            opt_kwargs["clipnorm"] = 1.0
-        logger.debug("Optimizer kwargs: %s", opt_kwargs)
-        return Adam(**opt_kwargs)
 
     def loss_function(self, mask, side, initialize):
         """ Set the loss function
@@ -324,10 +322,8 @@ class ModelBase():
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
-        if swap:
-            model = self.predictors["a"]
-        else:
-            model = self.predictors["b"]
+        side = "a" if swap else "b"
+        model = self.predictors[side]
         if self.predict:
             # Must compile the model to be thread safe
             model._make_predict_function()  # pylint: disable=protected-access
