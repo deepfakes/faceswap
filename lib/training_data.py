@@ -151,7 +151,7 @@ class TrainingDataGenerator():
         if self.mask_class:
             image = Mask(src_pts, image, self.mask_class, channels=4).mask
 
-        image = self.processing.color_adjust(image)
+        image = image.astype('float32') / 255.0
 
         if not is_timelapse:
             image = self.processing.random_transform(image)
