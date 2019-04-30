@@ -19,7 +19,8 @@ from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
-from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss, generalized_loss, l_inf_norm, gmsd_loss
+from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss
+from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
 from plugins.train._config import Config
@@ -132,11 +133,10 @@ class ModelBase():
     @staticmethod
     def set_gradient_type(memory_saving_gradients):
         """ Monkeypatch Memory Saving Gradients if requested """
-        if not memory_saving_gradients:
-            return
-        logger.info("Using Memory Saving Gradients")
-        from lib.model import memory_saving_gradients
-        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+        if memory_saving_gradients:
+            logger.info("Using Memory Saving Gradients")
+            from lib.model import memory_saving_gradients
+            K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
     def set_training_data(self):
         """ Override to set model specific training data.
