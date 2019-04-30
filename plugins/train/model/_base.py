@@ -261,9 +261,9 @@ class ModelBase():
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        opt_kwargs = {"lr":       self.config.get("learning_rate", 5e-5)
-                      "beta_1":   0.5
-                      "beta_2":   0.999
+        opt_kwargs = {"lr":       self.config.get("learning_rate", 5e-5),
+                      "beta_1":   0.5,
+                      "beta_2":   0.999}
         plaid = "plaidml.keras.backend"
         if (self.config.get("clipnorm", False) and K.backend() != plaid):
             opt_kwargs["clipnorm"] = 1.
