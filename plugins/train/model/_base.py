@@ -19,7 +19,8 @@ from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
-from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss, generalized_loss, l_inf_norm, gmsd_loss
+from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss
+from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
 from plugins.train._config import Config
@@ -132,11 +133,10 @@ class ModelBase():
     @staticmethod
     def set_gradient_type(memory_saving_gradients):
         """ Monkeypatch Memory Saving Gradients if requested """
-        if not memory_saving_gradients:
-            return
-        logger.info("Using Memory Saving Gradients")
-        from lib.model import memory_saving_gradients
-        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+        if memory_saving_gradients:
+            logger.info("Using Memory Saving Gradients")
+            from lib.model import memory_saving_gradients
+            K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
     def set_training_data(self):
         """ Override to set model specific training data.
@@ -203,10 +203,10 @@ class ModelBase():
         n_string = ""
         if side:
             side = side.lower()
-            f_string = side.upper()
-            n_string = side
-        filename = "{0}_{1}_{2}.h5".format(self.name, network_type.lower(), f_string)
-        name = "{0}_{1}".format(network_type.lower(), n_string)
+            f_string = "_" + side.upper()
+            n_string = "_" + side
+        filename = "{0}_{1}{2}.h5".format(self.name, network_type.lower(), f_string)
+        name = "{0}{1}".format(network_type.lower(), n_string)
         logger.debug("name: '%s', filename: '%s'", name, filename)
         self.networks[name] = NNMeta(str(self.model_dir / filename), network_type, side, network)
 
@@ -298,8 +298,8 @@ class ModelBase():
                      'Total_Variation':        gradient_loss,
                      'Smooth_L1':              generalized_loss,
                      'l_inf_norm':             l_inf_norm}
-        img_loss_config = self.config.get("image_loss_function", "MAE")
-        mask_loss_config = self.config.get("mask_loss_function", "MSE")
+        img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
+        mask_loss_config = self.config.get("mask_loss_function", "Mean_Squared_Error")
 
         if side == "a" and not self.predict and initialize:
             logger.verbose("Using %s loss function for image", img_loss_config)

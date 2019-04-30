@@ -21,7 +21,7 @@ from keras.layers.pooling import _GlobalPooling2D
 if K.backend() == "plaidml.keras.backend":
     from lib.plaidml_utils import pad
 else:
-    from tensorflow import pad 
+    from tensorflow import pad
 
 class PixelShuffler(Layer):
     """ PixelShuffler layer for Keras
@@ -321,7 +321,7 @@ class ReflectionPadding2D(Layer):
                 input_shape[2] + padding_width,
                 input_shape[3])
 
-    def call(self, x):
+    def call(self, x, mask=None):
         input_shape = self.input_spec[0].shape
         in_width, in_height = input_shape[2], input_shape[1]
         kernel_width, kernel_height = self.kernel_size, self.kernel_size
@@ -340,7 +340,7 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return pad(x, [[0,0],
+        return pad(x, [[0, 0],
                        [padding_top, padding_bot],
                        [padding_left, padding_right],
                        [0, 0]], 'REFLECT')
