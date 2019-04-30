@@ -50,25 +50,38 @@ class Mask():
         logger.trace("Initialized %s", self.__class__.__name__)
 
     def check_for_models(self, type):
+        """ Check for presence of segmentation models """
         dirname = 'C:/data/models/'
         URL = 'https://docs.google.com/uc?export=download'
         filename = {'vgg_300':     'Nirkin_300_softmax',
                     'vgg_500':     'Nirkin_500_softmax',
                     'unet_256':    'DFL_256_sigmoid'}
-        """
-        URL = {'vgg_300':     https://drive.google.com/open?id=1_DxWEvcs8UwIBR-d7ga8-9WBlLOKDxa1 ,
-               'vgg_500':     https://drive.google.com/open?id=1YY1-l4L37VwsWx1MHIaamG0xmnYHQpiT ,
-               'unet_256':    https://drive.google.com/open?id=1LSn-jf9O6VjeYexfNdd4hOG6AtbpDA3O }
-        """
         id = {'vgg_300':     '1_DxWEvcs8UwIBR-d7ga8-9WBlLOKDxa1',
               'vgg_500':     '1YY1-l4L37VwsWx1MHIaamG0xmnYHQpiT',
               'unet_256':    '1LSn-jf9O6VjeYexfNdd4hOG6AtbpDA3O'}
         expected_location = Path(dirname, filename[type]).with_suffix('.h5')
         if not expected_location.is_file():
+            logger.verbose("Model at %s is missing. Downloading from internet", expected_location)
             download_model(id[type], expected_location, URL)
+            logger.verbose("Model at %s is downloaded", expected_location)
         else:
 
-
+    @staticmethod
+    def download_model(self, id, destination, URL):
+        """ Download segmentation models from internet """
+        #TODO error handling for no web connection ?
+        CHUNK_SIZE = 32768
+        session = requests.Session()
+        response = session.get(URL, params = { 'id' : id }, stream = True)
+        for key, value in response.cookies.items():
+            token = value if key.startswith('download_warning') else None
+        if token:
+            params = { 'id' : id, 'confirm' : token }
+            response = session.get(URL, params = params, stream = True)
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
 
     def merge_mask(self, mask):
         """ Return the mask in requested shape """
@@ -172,19 +185,4 @@ class Mask():
         """ Basic facehull mask """
         mask = 1.
         return mask
-
-    @staticmethod
-    def download_model(self, id, destination, URL):
-        CHUNK_SIZE = 32768
-        session = requests.Session()
-        response = session.get(URL, params = { 'id' : id }, stream = True)
-        for key, value in response.cookies.items():
-            token = value if key.startswith('download_warning') else None
-        if token:
-            params = { 'id' : id, 'confirm' : token }
-            response = session.get(URL, params = params, stream = True)
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(CHUNK_SIZE):
-                if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
 
