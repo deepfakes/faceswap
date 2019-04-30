@@ -11,7 +11,7 @@ import keras.backend as K
 from keras.layers import Lambda, concatenate
 import numpy as np
 import tensorflow as tf
-from tensorflow.contrib.distributions import Beta
+from tensorflow.distributions import Beta
 
 from .normalization import InstanceNormalization
 if K.backend() == "plaidml.keras.backend":
@@ -254,8 +254,7 @@ def reconstruction_loss(real, fake_abgr, mask_eyes, model_outputs, **weights):
     alpha = Lambda(lambda x: x[:, :, :, :1])(fake_abgr)
     fake_bgr = Lambda(lambda x: x[:, :, :, 1:])(fake_abgr)
 
-    loss_g = 0
-    loss_g += weights['w_recon'] * calc_loss(fake_bgr, real, "l1")
+    loss_g = weights['w_recon'] * calc_loss(fake_bgr, real, "l1")
     loss_g += weights['w_eyes'] * K.mean(K.abs(mask_eyes*(fake_bgr - real)))
 
     for out in model_outputs[:-1]:
@@ -270,9 +269,8 @@ def edge_loss(real, fake_abgr, mask_eyes, **weights):
     alpha = Lambda(lambda x: x[:, :, :, :1])(fake_abgr)
     fake_bgr = Lambda(lambda x: x[:, :, :, 1:])(fake_abgr)
 
-    loss_g = 0
-    loss_g += weights['w_edge'] * calc_loss(first_order(fake_bgr, axis=1),
-                                            first_order(real, axis=1), "l1")
+    loss_g = weights['w_edge'] * calc_loss(first_order(fake_bgr, axis=1),
+                                           first_order(real, axis=1), "l1")
     loss_g += weights['w_edge'] * calc_loss(first_order(fake_bgr, axis=2),
                                             first_order(real, axis=2), "l1")
     shape_mask_eyes = mask_eyes.get_shape().as_list()
@@ -294,7 +292,7 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
     fake = alpha * fake_bgr + (1-alpha) * distorted
 
     def preprocess_vggface(var_x):
-        var_x = (var_x + 1) / 2 * 255  # channel order: BGR
+        var_x = (var_x + 1.) / 2. * 255.  # channel order: BGR
         var_x -= [91.4953, 103.8827, 131.0912]
         return var_x
 
@@ -346,17 +344,18 @@ def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
         a=1.999999 (lim as a->2), beta=1.0/255.0 will give L2 / RMSE loss
     """
     diff = y_pred - y_true
-    loss = (K.abs(2.0-alpha)/alpha) * (K.pow(K.pow(diff/beta, 2.0) / K.abs(2.0-alpha) + 1.0, (alpha/2.0)) - 1.0)
+    second = (K.pow(K.pow(diff/beta, 2.) / K.abs(2.-alpha) + 1., (alpha/2.)) - 1.)
+    loss = (K.abs(2.-alpha)/alpha) * second
     loss = K.mean(loss, axis=-1) * beta
     return loss
 
-def l_p_norm(y_true, y_pred, p=np.inf):
+def l_p_norm(y_true, y_pred, p_norm=np.inf):
     """
     Calculate the L-p norm as a loss function,
     valid choics of p are [0,1,no.inf]
     """
     diff = y_true - y_pred
-    loss = tf.norm(diff, ord=p, axis=-1)
+    loss = tf.norm(diff, ord=p_norm, axis=-1)
     return loss
 
 def l_inf_norm(y_true, y_pred):
@@ -476,7 +475,7 @@ def scharr_edges(image, magnitude):
     [batch_size, h, w, d, 2] where the last two dimensions hold [[dy[0], dx[0]],
     [dy[1], dx[1]], ..., [dy[d-1], dx[d-1]]] calculated using the Scharr filter.
     """
-    
+
     # Define vertical and horizontal Scharr filters.
     static_image_shape = image.get_shape()
     image_shape = K.shape(image)
@@ -624,7 +623,7 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
             gauss = tf.nn.softmax(gauss)
             return tf.reshape(gauss, shape=[size, size, 1, 1])
 
-        def _ssim_helper(img1, img2, max_val, kernel, compensation=1.0):
+        def _ssim_helper(img1, img2, max_val, kernel, compensation=1.):
             """
             Helper function for computing SSIM.
             SSIM estimates covariances with weighted sums.  The default parameters
@@ -658,16 +657,14 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
                 img2 = tf.nn.depthwise_conv2d(img1, kernel, strides=[1, 1, 1, 1], padding='VALID')
                 return tf.reshape(img2, tf.concat([shape[:-3], tf.shape(img2)[1:]], 0))
 
-            _ssim_k1 = 0.01
-            _ssim_k2 = 0.03
-            c_one = (_ssim_k1 * max_val) ** 2
-            c_two = (_ssim_k2 * max_val) ** 2
+            c_one = (0.01 * max_val) ** 2
+            c_two = ((0.03 * max_val)) ** 2 * compensation
 
             # SSIM luminance measure is
             # (2 * mu_x * mu_y + c_one) / (mu_x ** 2 + mu_y ** 2 + c_one).
             mean0 = reducer(img1, kernel)
             mean1 = reducer(img2, kernel)
-            num0 = mean0 * mean1 * 2.0
+            num0 = mean0 * mean1 * 2.
             den0 = tf.square(mean0) + tf.square(mean1)
             luminance = (num0 + c_one) / (den0 + c_one)
 
@@ -678,7 +675,6 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
             #          = \sum_i w_i x_i y_i - (\sum_i w_i x_i) (\sum_j w_j y_j).
             num1 = reducer(img1 * img2, kernel) * 2.0
             den1 = reducer(tf.square(img1) + tf.square(img2), kernel)
-            c_two *= compensation
             c_s = (num1 - num0 + c_two) / (den1 - den0 + c_two)
 
             # SSIM score is the product of the luminance and contrast-structure measures.
@@ -703,7 +699,7 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
 
         # The correct compensation factor is `1.0 - tf.reduce_sum(tf.square(kernel))`,
         # but to match MATLAB implementation of MS-SSIM, we use 1.0 instead.
-        compensation = 1.0
+        compensation = 1.
 
         # TODO(sjhwang): Try FFT.
         # TODO(sjhwang): Gaussian kernel is separable in space. Consider applying
@@ -758,8 +754,6 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
                 # Avg pool takes rank 4 tensors. Flatten leading dimensions.
                 zipped = zip(imgs, tails)
                 flat_imgs = [tf.reshape(x, tf.concat([[-1], t], 0)) for x, t in zipped]
-
-
                 remainder = tails[0] % divisor_tensor
                 need_padding = tf.reduce_any(tf.not_equal(remainder, 0))
                 padded = tf.cond(need_padding,
@@ -775,12 +769,12 @@ def ms_ssim_calc(img1, img2, max_val=1.0, power_factors=(0.0517, 0.3295, 0.3462,
 
             # Overwrite previous ssim value since we only need the last one.
             ssim_per_channel, c_s = _ssim_per_channel(*imgs, max_val=max_val)
-            mcs.append(tf.nn.relu(c_s))
+            mc_s.append(tf.nn.relu(c_s))
 
     # Remove the c_s score for the last scale. In the MS-SSIM calculation,
     # we use the l(p) at the highest scale. l(p) * c_s(p) is ssim(p).
-    mcs.pop()  # Remove the c_s score for the last scale.
-    mcs_and_ssim = tf.stack(mcs + [tf.nn.relu(ssim_per_channel)], axis=-1)
+    mc_s.pop()  # Remove the c_s score for the last scale.
+    mcs_and_ssim = tf.stack(mc_s + [tf.nn.relu(ssim_per_channel)], axis=-1)
     # Take weighted geometric mean across the scale axis.
     ms_ssim = tf.reduce_prod(tf.pow(mcs_and_ssim, power_factors), [-1])
 
@@ -792,5 +786,4 @@ def ms_ssim_loss(y_true, y_pred):
     expanded = K.expand_dims(1.0 - ms_ssim_calc(y_true, y_pred), axis=-1)
     loss = K.expand_dims(expanded, axis=-1)
     # need to expand to [1,height,width] dimensions for Keras. modify to not be hard-coded
-    return K.tile(loss, [1, 64, 64]) 
-
+    return K.tile(loss, [1, 64, 64])
