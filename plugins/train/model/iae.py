@@ -69,8 +69,8 @@ class Model(ModelBase):
         """ Decoder Network """
         input_a = Input(shape=(4, 4, int(self.encoder_dim/2)))
         input_b = Input(shape=(4, 4, int(self.encoder_dim/2)))
-        var_x = Concatenate()([input_a,input_b])
-        var_x = self.blocks.upscale(var_x, 512)
+        input_ = Concatenate()([input_a, input_b])
+        var_x = self.blocks.upscale(input_, 512)
         var_x = self.blocks.upscale(var_x, 256)
         var_x = self.blocks.upscale(var_x, 128)
         var_x = self.blocks.upscale(var_x, 64)
