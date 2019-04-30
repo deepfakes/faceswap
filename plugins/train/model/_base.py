@@ -203,10 +203,10 @@ class ModelBase():
         n_string = ""
         if side:
             side = side.lower()
-            f_string = side.upper()
-            n_string = side
-        filename = "{0}_{1}_{2}.h5".format(self.name, network_type.lower(), f_string)
-        name = "{0}_{1}".format(network_type.lower(), n_string)
+            f_string = "_" + side.upper()
+            n_string = "_" + side
+        filename = "{0}_{1}{2}.h5".format(self.name, network_type.lower(), f_string)
+        name = "{0}{1}".format(network_type.lower(), n_string)
         logger.debug("name: '%s', filename: '%s'", name, filename)
         self.networks[name] = NNMeta(str(self.model_dir / filename), network_type, side, network)
 
