@@ -162,6 +162,7 @@ class DiskIO():
         self.alignments = alignments
         self.images = images
         self.args = arguments
+        self.pre_process = PostProcess(arguments)
         self.completion_event = Event()
         self.frame_ranges = self.get_frame_ranges()
         self.writer = self.get_writer()
@@ -298,6 +299,7 @@ class DiskIO():
 
             detected_faces = self.get_detected_faces(filename, image, extract_queue)
             item = dict(filename=filename, image=image, detected_faces=detected_faces)
+            self.pre_process.do_actions(item)
             self.load_queue.put(item)
 
         self.load_queue.put("EOF")
@@ -396,7 +398,6 @@ class Predict():
         self.serializer = Serializer.get_serializer("json")
         self.faces_count = 0
         self.verify_output = False
-        self.pre_process = PostProcess(arguments)
         self.model = self.load_model()
         self.predictor = self.model.converter(self.args.swap_model)
         self.queues = dict()
@@ -478,9 +479,7 @@ class Predict():
             if item != "EOF":
                 logger.trace("Got from queue: '%s'", item["filename"])
                 faces_count = len(item["detected_faces"])
-                if faces_count != 0:
-                    self.pre_process.do_actions(item)
-                    self.faces_count += faces_count
+                self.faces_count += faces_count
                 if faces_count > 1:
                     self.verify_output = True
                     logger.verbose("Found more than one face in an image! '%s'",
@@ -496,10 +495,15 @@ class Predict():
                 continue
 
             if batch:
+                logger.trace("Batching to predictor. Frames: %s, Faces: %s",
+                             len(batch), faces_seen)
                 detected_batch = [detected_face for item in batch
                                   for detected_face in item["detected_faces"]]
-                feed_faces = self.compile_feed_faces(detected_batch)
-                predicted = self.predict(feed_faces)
+                if faces_seen != 0:
+                    feed_faces = self.compile_feed_faces(detected_batch)
+                    predicted = self.predict(feed_faces)
+                else:
+                    predicted = list()
 
                 self.queue_out_frames(batch, predicted)
 
