@@ -40,10 +40,7 @@ class Model(ModelBase):
         inter_both = self.networks["inter"].network
         for side in ("a", "b"):
             inter_side = self.networks["intermediate_{}".format(side)].network
-            output = decoder(Concatenate()([inter_side(encoder(inputs)),
-                                            inter_both(encoder(inputs))]))
-
-            autoencoder = KerasModel(inputs, output)
+            output = decoder([inter_side(encoder(inputs[0])), inter_both(encoder(inputs[0]))])            autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
@@ -70,8 +67,9 @@ class Model(ModelBase):
 
     def decoder(self):
         """ Decoder Network """
-        input_ = Input(shape=(4, 4, self.encoder_dim))
-        var_x = input_
+        input_a = Input(shape=(4, 4, int(self.encoder_dim/2)))
+        input_b = Input(shape=(4, 4, int(self.encoder_dim/2)))
+        var_x = Concatenate()([input_a,input_b])
         var_x = self.blocks.upscale(var_x, 512)
         var_x = self.blocks.upscale(var_x, 256)
         var_x = self.blocks.upscale(var_x, 128)
@@ -87,4 +85,4 @@ class Model(ModelBase):
             var_y = self.blocks.upscale(var_y, 64)
             var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs)
+        return KerasModel(inputs=[input_a, input_b], outputs=outputs)

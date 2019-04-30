@@ -36,26 +36,66 @@ class Config(FaceswapConfig):
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
-            info="Use ICNR Kernel Initializer for upscaling.\nThis can help reduce the "
-                 "'checkerboard effect' when upscaling the image.")
+            info="\nUse ICNR to tile the default initializer in a repeating pattern. \n"
+                 "This strategy is designed for  sub-pixel / pixel shuffler upscaling \n"
+                 "and should only be used on upscaling layers. This can help reduce the \n"
+                 "'checkerboard effect' when upscaling the image in the decoder.\n"
+                 "https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="Use subpixel upscaling rather than pixel shuffler.\n"
-                 "Might increase speed at cost of VRAM")
+            info="\nUse subpixel upscaling rather than pixel shuffler. These techniques \n"
+                 "are both designed to produce better resolving upscaling than other \n"
+                 "methods. Each perform the same operations, but using different TF opts.\n"
+                 "https://arxiv.org/pdf/1609.05158.pdf")
         self.add_item(
             section=section, title="reflect_padding", datatype=bool, default=False,
-            info="Use reflect padding rather than zero padding. Only enable this option if the "
-                 "model you are training has a distinct line appearing around the edge of the "
-                 "swap area.")
+            info="\nUse reflection padding rather than zero padding when either \n"
+                 "downscaling or using simple convolutions. Each convolution must \n"
+                 "pad the image/feature boundaries to maintain the proper sizing. \n"
+                 "More complex padding schemes can reduce artifacts at the border \n"
+                 "of the image.\n"
+                 "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=True,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
+            section=section, title="image_loss_function", datatype=str,
+            default="Mean_Absolute_Error",
+            choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
+                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "l_inf_norm"],
+            info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
+                 "for training the neural net's image reconstruction in lieu of \n"
+                 "Mean Absolute Error. Potentially better textural, second-order \n"
+                 "statistics, and translation invariance than MAE.\n"
+                 "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="If using a mask, This penalizes the loss for the masked area, to give higher "
-                 "priority to the face area. \nShould increase overall quality and speed up "
-                 "training. This should probably be left at True")
+            section=section, title="mask_loss_function", datatype=str,
+            default="Mean_Squared_Error",
+            choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
+                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "l_inf_norm"],
+            info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
+                 "for training the neural net's image reconstruction in lieu of \n"
+                 "Mean Absolute Error. Potentially better textural, second-order \n"
+                 "statistics, and translation invariance than MAE.\n"
+                 "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
+        self.add_item(
+            section=section, title="mask-penalized_loss", datatype=bool, default=True,
+            info="\nImage loss function is weighted by mask presence. For areas of \n"
+                 "the image without the facial mask, reconstuction errors will be \n"
+                 "ignored. May increase overall quality by focusing attention on \n"
+                 "the core face area.")
+        self.add_item(
+            section=section, title="perform_augmentation", datatype=bool, default=True,
+            info="\nImage augmentation is a technique that is used to artificially expand \n"
+                 "image datasets. This is helpful when we are using a data-set with very \n"
+                 "few images. In typical cases of Deep Learning, this situation is bad as \n"
+                 "the model tends to over-fit when we train it on limited number of data \n"
+                 "samples. Image augmentation parameters that are generally used to \n"
+                 "increase data diversity are zoom, rotation, translation, flip, and so on.")
+        '''
+        self.add_item(
+            section=section, title="augmentation_flipping", datatype=bool, default=True,
+            info="\nTo effectively learn, a random set of images are flipped horizontally. \n"
+                 "Sometimes it is desirable for this not to occur. Generally this should "
+                 "be applied during all 'fit training'.")
+        '''
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
@@ -138,7 +178,7 @@ class Config(FaceswapConfig):
                  "with a changed lowmem mode are not compatible with each other. NB: lowmem will "
                  "override cutom nodes and complexity settings.")
         self.add_item(
-            section=section, title="clipnorm", datatype=bool, default=True,
+            section=section, title="clipnorm", datatype=bool, default=False,
             info="Controls gradient clipping of the optimizer. Can prevent model corruption at "
                  "the expense of VRAM")
         self.add_item(
