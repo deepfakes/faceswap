@@ -1,5 +1,6 @@
 *
 !setup.cfg
+!*.caffemodel
 !*.dat
 !*.h5
 !*.ico
@@ -10,6 +11,7 @@
 !*.nsi
 !*.pb
 !*.png
+!*.prototxt
 !*.py
 !*.txt
 !.cache

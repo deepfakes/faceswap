@@ -96,7 +96,7 @@ class Detect(Detector):
             if item == "EOF":
                 break
             logger.trace("Detecting faces: '%s'", item["filename"])
-            detect_image, scale = self.compile_detection_image(item["image"], True, False, False)
+            detect_image, scale = self.compile_detection_image(item["image"], is_square=True)
             for angle in self.rotation:
                 current_image, rotmat = self.rotate_image(detect_image, angle)
                 faces = self.model.detect_face(current_image)

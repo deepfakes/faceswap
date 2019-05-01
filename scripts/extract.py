@@ -48,7 +48,7 @@ class Extract():
         """ Perform the extraction process """
         logger.info('Starting, this may take a while...')
         Utils.set_verbosity(self.args.loglevel)
-#        queue_manager.debug_monitor(1)
+        queue_manager.debug_monitor(1)
         self.threaded_io("load")
         save_thread = self.threaded_io("save")
         self.run_extraction()
@@ -75,7 +75,7 @@ class Extract():
     def load_images(self):
         """ Load the images """
         logger.debug("Load Images: Start")
-        load_queue = queue_manager.get_queue("load")
+        load_queue = queue_manager.get_queue("extract_in")
         idx = 0
         for filename, image in self.images.load():
             idx += 1
@@ -121,7 +121,7 @@ class Extract():
     def save_faces():
         """ Save the generated faces """
         logger.debug("Save Faces: Start")
-        save_queue = queue_manager.get_queue("save")
+        save_queue = queue_manager.get_queue("extract_out")
         while True:
             if save_queue.shutdown.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
@@ -142,7 +142,7 @@ class Extract():
 
     def run_extraction(self):
         """ Run Face Detection """
-        save_queue = queue_manager.get_queue("save")
+        save_queue = queue_manager.get_queue("extract_out")
         to_process = self.process_item_count()
         frame_no = 0
         size = self.args.size if hasattr(self.args, "size") else 256
@@ -257,7 +257,8 @@ class Extract():
 class Plugins():
     """ Detector and Aligner Plugins and queues """
     def __init__(self, arguments, converter_args=None):
-        logger.debug("Initializing %s", self.__class__.__name__)
+        logger.debug("Initializing %s: (converter_args: %s)",
+                     self.__class__.__name__, converter_args)
         self.args = arguments
         self.converter_args = converter_args  # Arguments from converter for on the fly extract
         if converter_args is not None:
@@ -310,7 +311,13 @@ class Plugins():
             size = 0
             if task == "load" or (not self.is_parallel and task == "detect"):
                 size = 100
-            queue_manager.add_queue(task, maxsize=size)
+            if task == "load":
+                q_name = "extract_in"
+            elif task == "save":
+                q_name = "extract_out"
+            else:
+                q_name = task
+            queue_manager.add_queue(q_name, maxsize=size)
 
     def load_detector(self):
         """ Set global arguments and load detector plugin """
@@ -380,7 +387,7 @@ class Plugins():
         """ Launch the face detector """
         logger.debug("Launching Detector")
         out_queue = queue_manager.get_queue("detect")
-        kwargs = {"in_queue": queue_manager.get_queue("load"),
+        kwargs = {"in_queue": queue_manager.get_queue("extract_in"),
                   "out_queue": out_queue}
         if self.converter_args:
             kwargs["processes"] = 1

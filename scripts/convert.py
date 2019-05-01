@@ -87,7 +87,7 @@ class Convert():
     def add_queues(self):
         """ Add the queues for convert """
         logger.debug("Adding queues. Queue size: %s", self.queue_size)
-        for qname in ("convert_in", "save", "patch"):
+        for qname in ("convert_in", "convert_out", "patch"):
             queue_manager.add_queue(qname, self.queue_size)
 
     def process(self):
@@ -106,7 +106,7 @@ class Convert():
     def convert_images(self):
         """ Convert the images """
         logger.debug("Converting images")
-        save_queue = queue_manager.get_queue("save")
+        save_queue = queue_manager.get_queue("convert_out")
         patch_queue = queue_manager.get_queue("patch")
         pool = PoolProcess(self.converter.process, patch_queue, save_queue,
                            processes=self.pool_processes)
@@ -238,13 +238,13 @@ class DiskIO():
         """ Set on the fly extraction """
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
-        logger.warning("NB: This will use the inferior dlib-hog for extraction "
+        logger.warning("NB: This will use the inferior cv2-dnn for extraction "
                        "and dlib pose predictor for landmarks. It is recommended "
                        "to perfom Extract first for superior results")
-        extract_args = {"detector": "dlib-hog",
+        extract_args = {"detector": "cv2_dnn",
                         "aligner": "dlib",
                         "loglevel": self.args.loglevel}
-        self.extractor = Extractor(None, extract_args)
+        self.extractor = Extractor(None, converter_args=extract_args)
         self.extractor.launch_detector()
         self.extractor.launch_aligner()
         logger.debug("Loaded extractor")
@@ -260,7 +260,12 @@ class DiskIO():
     def add_queue(self, task):
         """ Add the queue to queue_manager and set queue attribute """
         logger.debug("Adding queue for task: '%s'", task)
-        q_name = "convert_in" if task == "load" else task
+        if task == "load":
+            q_name = "convert_in"
+        elif task == "save":
+            q_name = "convert_out"
+        else:
+            q_name = task
         setattr(self, "{}_queue".format(task), queue_manager.get_queue(q_name))
         logger.debug("Added queue for task: '%s'", task)
 

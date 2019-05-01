@@ -106,6 +106,7 @@ class Detector():
             are passed back to parent.
             Do not override """
         try:
+            logger.debug("Executing detector run function")
             self.detect_faces(*args, **kwargs)
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Caught exception in child process: %s: %s", os.getpid(), str(err))
@@ -147,9 +148,14 @@ class Detector():
         return retval
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
-    def compile_detection_image(self, input_image, is_square, scale_up, to_rgb):
+    def compile_detection_image(self, input_image,
+                                is_square=False, scale_up=False, to_rgb=False, to_grayscale=False):
         """ Compile the detection image """
-        image = input_image[:, :, ::-1].copy() if to_rgb else input_image.copy()
+        image = input_image.copy()
+        if to_rgb:
+            image = image[:, :, ::-1]
+        elif to_grayscale:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
         scale = self.set_scale(image, is_square=is_square, scale_up=scale_up)
         image = self.scale_image(image, scale)
         return [image, scale]
