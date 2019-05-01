@@ -32,6 +32,7 @@ class SysInfo():
         self.vram = gpu_stats.vram
         self.gfx_driver = gpu_stats.driver
         self.gfx_devices = gpu_stats.devices
+        self.gfx_devices_active = gpu_stats.active_devices
 
     @property
     def encoding(self):
@@ -319,9 +320,11 @@ class SysInfo():
                     "gpu_devices": ", ".join(["GPU_{}: {}".format(idx, device)
                                               for idx, device in enumerate(self.gfx_devices)]),
                     "gpu_vram": ", ".join(["GPU_{}: {}MB".format(idx, int(vram))
-                                           for idx, vram in enumerate(self.vram)])}
+                                           for idx, vram in enumerate(self.vram)]),
+                    "gpu_devices_active": ", ".join(["GPU_{}".format(idx)
+                                                     for idx in self.gfx_devices_active])}
         for key in sorted(sys_info.keys()):
-            retval += ("{0: <18} {1}\n".format(key + ":", sys_info[key]))
+            retval += ("{0: <20} {1}\n".format(key + ":", sys_info[key]))
         retval += "\n=============== Pip Packages ===============\n"
         retval += self.installed_pip
         if not self.is_conda:
