@@ -81,21 +81,6 @@ class Config(FaceswapConfig):
                  "the image without the facial mask, reconstuction errors will be \n"
                  "ignored. May increase overall quality by focusing attention on \n"
                  "the core face area.")
-        self.add_item(
-            section=section, title="perform_augmentation", datatype=bool, default=True,
-            info="\nImage augmentation is a technique that is used to artificially expand \n"
-                 "image datasets. This is helpful when we are using a data-set with very \n"
-                 "few images. In typical cases of Deep Learning, this situation is bad as \n"
-                 "the model tends to over-fit when we train it on limited number of data \n"
-                 "samples. Image augmentation parameters that are generally used to \n"
-                 "increase data diversity are zoom, rotation, translation, flip, and so on.")
-        '''
-        self.add_item(
-            section=section, title="augmentation_flipping", datatype=bool, default=True,
-            info="\nTo effectively learn, a random set of images are flipped horizontally. \n"
-                 "Sometimes it is desirable for this not to occur. Generally this should "
-                 "be applied during all 'fit training'.")
-        '''
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"

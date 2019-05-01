@@ -85,7 +85,6 @@ class ModelBase():
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
                               "no_flip": no_flip,
-                              "augment": self.config["perform_augmentation"],
                               "pingpong": pingpong}
         self.set_gradient_type(memory_saving_gradients)
         self.build()

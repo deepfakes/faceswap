@@ -215,8 +215,8 @@ class Batcher():
         self.target = None
         self.samples = None
         self.mask = None
-
-        self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side)
+        self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side,
+                                                       do_shuffle=True, augmenting=True)
         self.timelapse_feed = None
 
     def load_generator(self):
@@ -251,10 +251,7 @@ class Batcher():
         """ Compile the mask into training data """
         logger.trace("Compiling Mask: (side: '%s')", self.side)
         mask = batch[-1]
-        retval = list()
-        for idx in range(len(batch) - 1):
-            image = batch[idx]
-            retval.append([image, mask])
+        retval = [[image, mask] for image in batch[:-1]]
         return retval
 
     def compile_sample(self, batch_size, samples=None, images=None):
@@ -262,8 +259,8 @@ class Batcher():
         num_images = self.model.training_opts.get("preview_images", 14)
         num_images = min(batch_size, num_images)
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
-        images = images if images is not None else self.target
-        samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
+        images = self.target if images is None else images
+        samples = [self.samples[0:num_images]] if samples is None else [samples[0:num_images]]
         if self.use_mask:
             retval = [tgt[0:num_images] for tgt in images]
         else:
@@ -290,7 +287,7 @@ class Batcher():
         self.timelapse_feed = self.load_generator().minibatch_ab(images[:batchsize],
                                                                  batchsize, self.side,
                                                                  do_shuffle=False,
-                                                                 is_timelapse=True)
+                                                                 augmenting=False)
         logger.debug("Set timelapse feed")
 
 
@@ -317,7 +314,7 @@ class Samples():
         headers = dict()
         for side, samples in self.images.items():
             faces = samples[1]
-            if self.model.input_shape[0] / faces.shape[1] != 1.0:
+            if self.model.input_shape[0] / faces.shape[1] != 1.:
                 feeds[side] = self.resize_sample(side, faces, self.model.input_shape[0])
                 feeds[side] = feeds[side].reshape((-1, ) + self.model.input_shape)
             else:
@@ -336,8 +333,7 @@ class Samples():
             headers[side] = self.get_headers(side, other_side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
-                figures[side] = np.concatenate([figures[side],
-                                                np.expand_dims(figures[side][0], 0)])
+                figures[side] = np.concatenate([figures[side], figures[side][0:1]])
 
         width = 4
         side_cols = width // 2
@@ -349,7 +345,7 @@ class Samples():
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
-        figure = np.vstack((header, figure))
+        figure = np.stack((header, figure), axis=0)
 
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
@@ -358,17 +354,15 @@ class Samples():
     def resize_sample(side, sample, target_size):
         """ Resize samples where predictor expects different shape from processed image """
         scale = target_size / sample.shape[1]
-        if scale == 1.0:
-            return sample
-        logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
-                     side, sample.shape, target_size, scale)
-        interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA  # pylint: disable=no-member
-        retval = np.array([cv2.resize(img,  # pylint: disable=no-member
-                                      (target_size, target_size),
-                                      interpn)
-                           for img in sample])
-        logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
-        return retval
+        if scale != 1.:
+            logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
+                         side, sample.shape, target_size, scale)
+            interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
+            sample = [cv2.resize(img, None, fx=scale, fy=scale,    # pylint: disable=no-member
+                                 interpolation=interp) for img in sample]
+            sample = np.array(sample)
+            logger.debug("Resized sample: (side: '%s' shape: %s)", side, sample.shape)
+        return sample
 
     def get_predictions(self, feed_a, feed_b):
         """ Return the sample predictions from the model """
@@ -390,19 +384,18 @@ class Samples():
         """ Patch the images into the full frame """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
-        full, faces = samples[:2]
-        images = [faces] + predictions
+        full, original_faces = samples[:2]
+        masks = samples[-1]
+        images = [original_faces] + predictions
         full_size = full.shape[1]
         target_size = int(full_size * self.coverage_ratio)
-        if target_size != full_size:
-            frame = self.frame_overlay(full, target_size, (0, 0, 255))
-
         if self.use_mask:
-            images = self.compile_masked(images, samples[-1])
+            images = self.compile_masked(images, masks)
         images = [self.resize_sample(side, image, target_size) for image in images]
         if target_size != full_size:
+            frame = self.frame_overlay(full, target_size, (0, 0, 255))
             images = [self.overlay_foreground(frame, image) for image in images]
-        if self.scaling != 1.0:
+        if self.scaling != 1.:
             new_size = int(full_size * self.scaling)
             images = [self.resize_sample(side, image, new_size) for image in images]
         return images
@@ -445,29 +438,22 @@ class Samples():
         return retval
 
     @staticmethod
-    def compile_masked(faces, masks):
+    def compile_masked(predictions, masks):
         """ Add the mask to the faces for masked preview """
-        retval = list()
-        masks3 = np.tile(1 - np.rint(masks), 3)
-        for mask in masks3:
-            mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
-        for previews in faces:
-            images = np.array([cv2.addWeighted(img, 1.0,  # pylint: disable=no-member
-                                               masks3[idx], 0.3,
-                                               0)
-                               for idx, img in enumerate(previews)])
-            retval.append(images)
-        logger.debug("masked shapes: %s", [faces.shape for faces in retval])
-        return retval
+        red_area = (np.rint(masks) == 0.)
+        coloring = np.oneslike(predictions[0])
+        coloring[red_area] = [0., 0., 0.3]
+        colored_images = [faces + coloring for faces in predictions]
+        logger.debug("masked shapes: %s", [faces.shape for faces in colored_images])
+        return colored_images
 
     @staticmethod
     def overlay_foreground(backgrounds, foregrounds):
         """ Overlay the training images into the center of the background """
         offset = (backgrounds.shape[1] - foregrounds.shape[1]) // 2
         new_images = list()
-        for idx, img in enumerate(backgrounds):
-            img[offset:offset + foregrounds[idx].shape[0],
-                offset:offset + foregrounds[idx].shape[1]] = foregrounds[idx]
+        for idx, (fore, back) in enumerate(zip(foregrounds, backgrounds)):
+            back[offset:offset + fore.shape[0], offset:offset + fore.shape[1]] = fore
             new_images.append(img)
         retval = np.array(new_images)
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
@@ -543,8 +529,10 @@ class Timelapse():
         """ Set the timelapse output folder """
         logger.debug("Setting up timelapse")
         if output is None:
-            output = str(get_folder(os.path.join(str(self.model.model_dir),
-                                                 "{}_timelapse".format(self.model.name))))
+            str_dir = "{}".format(self.model.model_dir))
+            str_name = "{}_timelapse".format(self.model.name))
+            model_path = Path(str_dir) / str_name
+            output = str(get_folder()
         self.output_file = str(output)
         logger.debug("Timelapse output set to '%s'", self.output_file)
 
@@ -562,6 +550,7 @@ class Timelapse():
         image = self.samples.show_sample()
         if image is None:
             return
+            Path(self.output_file) / "{0}.h5".format(str(int(time.time())))
         filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
 
         cv2.imwrite(filename, image)  # pylint: disable=no-member

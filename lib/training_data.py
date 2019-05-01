@@ -49,12 +49,12 @@ class TrainingDataGenerator():
         logger.debug("Mask class: %s", mask_class)
         return mask_class
 
-    def minibatch_ab(self, images, batchsize, side, do_shuffle=True, is_timelapse=False):
+    def minibatch_ab(self, images, batchsize, side, do_shuffle=True, augmenting=True):
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
-                     "is_timelapse: %s)", len(images), batchsize, side, do_shuffle, is_timelapse)
+                     "augmenting: %s)", len(images), batchsize, side, do_shuffle, augmenting)
         self.batchsize = batchsize
-        queue_in, queue_out = self.make_queues(side, is_timelapse)
+        queue_in, queue_out = self.make_queues(side, augmenting)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list((
             (batchsize, training_size, training_size, 3),  # sample images
@@ -68,25 +68,24 @@ class TrainingDataGenerator():
             shapes=batch_shape,
             in_queue=queue_in,
             out_queue=queue_out,
-            args=(images, side, is_timelapse, do_shuffle, batchsize))
+            args=(images, side, augmenting, do_shuffle, batchsize))
         load_process.start()
-        logger.debug("Batching to queue: (side: '%s', is_timelapse: %s)", side, is_timelapse)
-        return self.minibatch(side, is_timelapse, load_process)
+        logger.debug("Batching to queue: (side: '%s', augmenting: %s)", side, augmenting)
+        return self.minibatch(side, augmenting, load_process)
 
     @staticmethod
-    def make_queues(side, is_timelapse):
+    def make_queues(side, augmenting):
         """ Create the buffer token queues for Fixed Producer Dispatcher """
-        q_name = "timelapse_{}".format(side) if is_timelapse else "train_{}".format(side)
+        q_name = "train_{}".format(side) if augmenting else "timelapse_{}".format(side)
         q_names = ["{}_{}".format(q_name, direction) for direction in ("in", "out")]
         logger.debug(q_names)
         queues = [queue_manager.get_queue(queue) for queue in q_names]
         return queues
 
-    def load_batches(self, mem_gen, images, side, is_timelapse,
-                     do_shuffle=True, batchsize=0):
+    def load_batches(self, mem_gen, images, side, augmenting, do_shuffle=True, batchsize=0):
         """ Load the warped images and target images to queue """
-        logger.debug("Loading batch: (image_count: %s, side: '%s', is_timelapse: %s, "
-                     "do_shuffle: %s)", len(images), side, is_timelapse, do_shuffle)
+        logger.debug("Loading batch: (image_count: %s, side: '%s', augmenting: %s, "
+                     "do_shuffle: %s)", len(images), side, augmenting, do_shuffle)
         self.validate_samples(images)
         # Intialize this for each subprocess
         self._nearest_landmarks = dict()
@@ -102,18 +101,18 @@ class TrainingDataGenerator():
         epoch = 0
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
-            logger.trace("Putting to batch queue: (side: '%s', is_timelapse: %s)",
-                         side, is_timelapse)
+            logger.trace("Putting to batch queue: (side: '%s', augmenting: %s)",
+                         side, augmenting)
             for i, img_path in enumerate(img_iter):
-                imgs = self.process_face(img_path, side, is_timelapse)
+                imgs = self.process_face(img_path, side, augmenting)
                 for j, img in enumerate(imgs):
                     memory[j][i][:] = img
                 epoch += 1
                 if i == batchsize - 1:
                     break
             memory_wrapper.ready()
-        logger.debug("Finished batching: (epoch: %s, side: '%s', is_timelapse: %s)",
-                     epoch, side, is_timelapse)
+        logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
+                     epoch, side, augmenting)
 
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
@@ -125,26 +124,26 @@ class TrainingDataGenerator():
         assert length >= self.batchsize, msg
 
     @staticmethod
-    def minibatch(side, is_timelapse, load_process):
+    def minibatch(side, augmenting, load_process):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
-        logger.debug("Launching minibatch generator for queue (side: '%s', is_timelapse: %s)",
-                     side, is_timelapse)
+        logger.debug("Launching minibatch generator for queue (side: '%s', augmenting: %s)",
+                     side, augmenting)
         for batch_wrapper in load_process:
             with batch_wrapper as batch:
                 logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
-                             "is_timelapse: %s)",
-                             len(batch), [item.shape for item in batch], side, is_timelapse)
+                             "augmenting: %s)",
+                             len(batch), [item.shape for item in batch], side, augmenting)
                 yield batch
         load_process.stop()
-        logger.debug("Finished minibatch generator for queue: (side: '%s', is_timelapse: %s)",
-                     side, is_timelapse)
+        logger.debug("Finished minibatch generator for queue: (side: '%s', augmenting: %s)",
+                     side, augmenting)
         load_process.join()
 
-    def process_face(self, filename, side, is_timelapse):
+    def process_face(self, filename, side, augmenting):
         """ Load an image and perform transformation and warping """
-        logger.trace("Process face: (filename: '%s', side: '%s', is_timelapse: %s)",
-                     filename, side, is_timelapse)
+        logger.trace("Process face: (filename: '%s', side: '%s', augmenting: %s)",
+                     filename, side, augmenting)
         try:
             image = cv2.imread(filename)  # pylint: disable=no-member
         except TypeError:
@@ -157,11 +156,10 @@ class TrainingDataGenerator():
 
         image = self.processing.color_adjust(image)
 
-        if not is_timelapse:
-            if self.training_opts["augment"]:
-                image = self.processing.random_transform(image)
-                if not self.training_opts["no_flip"]:
-                    image = self.processing.do_random_flip(image)
+        if augmenting:
+            image = self.processing.random_transform(image)
+            if not self.training_opts["no_flip"]:
+                image = self.processing.do_random_flip(image)
         sample = image.copy()[:, :, :3]
 
         if self.training_opts["warp_to_landmarks"]:
