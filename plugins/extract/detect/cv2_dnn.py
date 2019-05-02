@@ -15,6 +15,7 @@ class Detect(Detector):
         self.parent_is_pool = True
         self.target = (300, 300)  # Doesn't use VRAM
         self.vram = 0
+        self.config_file = os.path.join(self.cachepath, "deploy.prototxt")
         self.detector = None
         self.confidence = self.config["confidence"] / 100
 
@@ -32,17 +33,15 @@ class Detect(Detector):
         super().initialize(*args, **kwargs)
         logger.info("Initializing CV2-DNN Detector...")
         logger.verbose("Using CPU for detection")
-
-        config_file = os.path.join(self.cachepath, "deploy.prototxt")
-        self.detector = cv2.dnn.readNetFromCaffe(config_file,  # pylint: disable=no-member
-                                                 self.model_path)
-        self.detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
         self.init = True
         logger.info("Initialized CV2-DNN Detector...")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in grayscale image """
         super().detect_faces(*args, **kwargs)
+        detector = cv2.dnn.readNetFromCaffe(self.config_file,  # pylint: disable=no-member
+                                            self.model_path)
+        detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
         while True:
             item = self.get_item()
             if item == "EOF":
@@ -62,8 +61,8 @@ class Detect(Detector):
                                              [104, 117, 123],
                                              False,
                                              False)
-                self.detector.setInput(blob)
-                detected = self.detector.forward()
+                detector.setInput(blob)
+                detected = detector.forward()
                 faces = list()
                 for i in range(detected.shape[2]):
                     confidence = detected[0, 0, i, 2]
