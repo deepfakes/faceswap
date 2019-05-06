@@ -30,20 +30,12 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
-        self.mask_class = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
                                             training_opts.get("coverage_ratio", 0.625))
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def set_mask_class(self):
-        """ Set the mask function to use if using mask """
-        mask_type = self.training_opts.get("mask_type", "none")
-        mask_class = None if mask_type == "none" else mask_type
-        logger.debug("Mask class: %s", mask_class)
-        return mask_class
 
     def minibatch_ab(self, images, batchsize, side, do_shuffle=True, augmenting=True):
         """ Keep a queue filled to 8x Batch Size """
@@ -52,12 +44,13 @@ class TrainingDataGenerator():
         self.batchsize = batchsize
         queue_in, queue_out = self.make_queues(side, augmenting)
         training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list((
-            (batchsize, training_size, training_size, 3),  # sample images
-            (batchsize, self.model_input_size, self.model_input_size, 3),
-            (batchsize, self.model_output_size, self.model_output_size, 3)))
-        if self.mask_class:
-            batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
+        batch_shape = list(
+            ((batchsize, training_size, training_size, 3),                   # sample images
+             (batchsize, self.model_input_size, self.model_input_size, 3),   # warped images
+             (batchsize, self.model_output_size, self.model_output_size, 1), # warped masks
+             (batchsize, self.model_output_size, self.model_output_size, 3), # target images
+             (batchsize, self.model_output_size, self.model_output_size, 1)  # target masks
+            ))
 
         load_process = FixedProducerDispatcher(
             method=self.load_batches,
@@ -145,13 +138,10 @@ class TrainingDataGenerator():
         except TypeError:
             raise Exception("Error while reading image", filename)
 
-        if self.mask_class or self.training_opts["warp_to_landmarks"]:
-            src_pts = self.get_landmarks(filename, image, side)
-        else:
-            src_pts = None
-            self.mask_class = "default"
+        src_pts = self.get_landmarks(filename, image, side)
         image = image.astype("float32") / 255.
-        image = Mask(src_pts, image, self.mask_class, channels=4).mask
+        mask_type = self.training_opts.get("mask_type", "dfl_full")
+        image = Mask(src_pts, image, mask_type, channels=4).mask
 
         if augmenting:
             image = self.processing.random_transform(image)
@@ -225,13 +215,9 @@ class ImageManipulation():
     @staticmethod
     def separate_mask(image):
         """ Return the image and the mask from a 4 channel image """
-        mask = None
-        if image.shape[2] == 4:
-            logger.trace("Image contains mask")
-            mask = np.expand_dims(image[:, :, -1], axis=2)
-            image = image[:, :, :3]
-        else:
-            logger.trace("Image has no mask")
+        logger.trace("Seperating mask from four channel image")
+        mask = image[:, :, -1:]
+        image = image[:, :, :3]
         return image, mask
 
     def get_coverage(self, image):
@@ -316,7 +302,7 @@ class ImageManipulation():
 
         logger.trace("Target mask shape: %s", target_mask.shape)
         logger.trace("Randomly warped image and mask")
-        return [warped_image, target_image, target_mask]
+        return [warped_image, warped_mask, target_image, target_mask]
 
     def random_warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
@@ -391,5 +377,5 @@ class ImageManipulation():
 
         logger.trace("Target mask shape: %s", target_mask.shape)
         logger.trace("Randomly warped image and mask")
-        return [warped_image, target_image, target_mask]
+        return [warped_image, warped_mask, target_image, target_mask]
 

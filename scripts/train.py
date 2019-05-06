@@ -194,6 +194,7 @@ class Train():
         trainer = PluginLoader.get_trainer(model.trainer)
         trainer = trainer(model,
                           self.images,
+                          self.timelapse,
                           self.args.batch_size)
         logger.debug("Loaded Trainer")
         return trainer
@@ -211,7 +212,10 @@ class Train():
             save_iteration = iteration % self.args.save_interval == 0
             viewer = display_func if save_iteration or self.save_now else None
             timelapse = self.timelapse if save_iteration else None
-            trainer.train_one_step(viewer, timelapse)
+            if viewer or timelapse:
+                trainer.preview(viewer, timelapse)
+
+            trainer.train_one_step()
             if self.stop:
                 logger.debug("Stop received. Terminating")
                 break

@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class TrainerBase():
     """ Base Trainer """
 
-    def __init__(self, model, images, batch_size):
+    def __init__(self, model, images, timelapse_kwargs, batch_size):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
         self.batch_size = batch_size
@@ -53,19 +53,17 @@ class TrainerBase():
         self.batchers = {side: Batcher(side,
                                        images[side],
                                        self.model,
-                                       self.use_mask,
                                        batch_size)
                          for side in self.sides}
 
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
-                               self.use_mask,
                                self.model.training_opts["coverage_ratio"],
                                self.model.training_opts["preview_scaling"])
         self.timelapse = Timelapse(self.model,
-                                   self.use_mask,
                                    self.model.training_opts["coverage_ratio"],
-                                   self.batchers)
+                                   self.batchers,
+                                   timelapse_kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -78,13 +76,6 @@ class TrainerBase():
         """ Return True if Landmarks are required """
         opts = self.model.training_opts
         retval = bool(opts.get("mask_type", None) or opts["warp_to_landmarks"])
-        logger.debug(retval)
-        return retval
-
-    @property
-    def use_mask(self):
-        """ Return True if a mask is requested """
-        retval = bool(self.model.training_opts.get("mask_type", None))
         logger.debug(retval)
         return retval
 
@@ -140,42 +131,41 @@ class TrainerBase():
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
-    def train_one_step(self, viewer, timelapse_kwargs):
+    def train_one_step(self):
         """ Train a batch """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
-        do_preview = False if viewer is None else True
-        do_timelapse = False if timelapse_kwargs is None else True
         loss = dict()
         for side, batcher in self.batchers.items():
             if self.pingpong.active and side != self.pingpong.side:
                 continue
-            loss[side] = batcher.train_one_batch(do_preview)
-            if not do_preview and not do_timelapse:
-                continue
-            if do_preview:
-                self.samples.images[side] = batcher.compile_sample(self.batch_size)
-            if do_timelapse:
-                self.timelapse.get_sample(side, timelapse_kwargs)
+            loss[side] = batcher.train_one_batch()
 
         self.model.state.increment_iterations()
 
         for side, side_loss in loss.items():
             self.store_history(side, side_loss)
-            self.log_tensorboard(side, side_loss)
+            if self.tensorboard:
+                self.log_tensorboard(side, side_loss)
 
-        if not self.pingpong.active:
-            self.print_loss(loss)
-        else:
+        if self.pingpong.active:
             for key, val in loss.items():
                 self.pingpong.loss[key] = val
             self.print_loss(self.pingpong.loss)
+        else:
+            self.print_loss(loss)
 
-        if do_preview:
+    def preview(self, viewer, timelapse):
+        """ Preview Samples """
+        if viewer:
+            for side, batcher in self.batchers.items():
+                _, _, self.samples.images[side] = batcher.get_next("preview")
             samples = self.samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
-        if do_timelapse:
+        if timelapse:
+            for side, batcher in self.batchers.items():
+                _, _, self.timelapse.samples.images[side] = batcher.get_next("timelapse")
             self.timelapse.output_timelapse()
 
     def store_history(self, side, loss):
@@ -186,37 +176,51 @@ class TrainerBase():
 
     def log_tensorboard(self, side, loss):
         """ Log loss to TensorBoard log """
-        if not self.tensorboard:
-            return
         logger.trace("Updating TensorBoard log: '%s'", side)
-        logs = {log[0]: log[1]
-                for log in zip(self.model.state.loss_names[side], loss)}
+        dual_generator = zip(self.model.state.loss_names[side], loss)
+        logs = {log[0]: log[1] for log in dual_generator}
         self.tensorboard[side].on_batch_end(self.model.state.iterations, logs)
         logger.trace("Updated TensorBoard log: '%s'", side)
 
     def clear_tensorboard(self):
         """ Indicate training end to Tensorboard """
-        if not self.tensorboard:
-            return
-        for side, tensorboard in self.tensorboard.items():
-            logger.debug("Ending Tensorboard. Side: '%s'", side)
-            tensorboard.on_train_end(None)
+        if self.tensorboard:
+            for side, tensorboard in self.tensorboard.items():
+                logger.debug("Ending Tensorboard. Side: '%s'", side)
+                tensorboard.on_train_end(None)
 
 
 class Batcher():
     """ Batch images from a single side """
-    def __init__(self, side, images, model, use_mask, batch_size):
+    def __init__(self, side, images, model, batch_size):
         logger.debug("Initializing %s: side: '%s', num_images: %s, batch_size: %s)",
                      self.__class__.__name__, side, len(images), batch_size)
-        self.model = model
-        self.use_mask = use_mask
         self.side = side
-        self.target = None
-        self.samples = None
-        self.mask = None
-        self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side,
-                                                       do_shuffle=True, augmenting=True)
-        self.timelapse_feed = None
+        self.model = model
+        self.batch_size = batch_size
+        self.feed = dict()
+        self.set_dataset_feed(side, images, batch_size, "training", True, True)
+        self.set_dataset_feed(side, images, batch_size, "preview", True, False)
+        #self.set_dataset_feed(side, images, batch_size, "timelapse", False, False)
+
+    def train_one_batch(self):
+        """ Train a batch """
+        logger.trace("Training one step: (side: %s)", self.side)
+        inputs, targets, _ = self.get_next(self.feed)
+        loss = self.model.predictors[self.side].train_on_batch(x=inputs, y=targets)
+        loss = loss if isinstance(loss, list) else [loss]
+        return loss
+
+    def get_next(self, feed):
+        """ Return the next batch from the generator
+            Items should come out as: (full_coverage_img, warped, target, mask]) """
+        batch = next(feed)
+        inputs = [batch[1], batch[2]]
+        targets = [batch[3], batch[4]]
+        samples = None
+        if feed != "training":
+            samples = [batch[0]] + targets
+        return inputs, targets, samples
 
     def load_generator(self):
         """ Pass arguments to TrainingDataGenerator and return object """
@@ -227,76 +231,24 @@ class Batcher():
         generator = TrainingDataGenerator(input_size, output_size, self.model.training_opts)
         return generator
 
-    def train_one_batch(self, do_preview):
-        """ Train a batch """
-        logger.trace("Training one step: (side: %s)", self.side)
-        batch = self.get_next(do_preview)
-        loss = self.model.predictors[self.side].train_on_batch(*batch)
-        loss = loss if isinstance(loss, list) else [loss]
-        return loss
-
-    def get_next(self, do_preview):
-        """ Return the next batch from the generator
-            Items should come out as: (warped, target [, mask]) """
-        batch = next(self.feed)
-        self.samples = batch[0] if do_preview else None
-        batch = batch[1:]   # Remove full size samples from batch
-        if self.use_mask:
-            batch = self.compile_mask(batch)
-        self.target = batch[1] if do_preview else None
-        return batch
-
-    def compile_mask(self, batch):
-        """ Compile the mask into training data """
-        logger.trace("Compiling Mask: (side: '%s')", self.side)
-        mask = batch[-1]
-        retval = [[image, mask] for image in batch[:-1]]
-        return retval
-
-    def compile_sample(self, batch_size, samples=None, images=None):
-        """ Training samples to display in the viewer """
-        num_images = self.model.training_opts.get("preview_images", 14)
-        num_images = min(batch_size, num_images)
-        logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
-        images = self.target if images is None else images
-        samples = [self.samples[0:num_images]] if samples is None else [samples[0:num_images]]
-        if self.use_mask:
-            retval = [tgt[0:num_images] for tgt in images]
-        else:
-            retval = [images[0:num_images]]
-        retval = samples + retval
-        return retval
-
-    def compile_timelapse_sample(self):
-        """ Timelapse samples """
-        batch = next(self.timelapse_feed)
-        samples = batch[0]
-        batch = batch[1:]   # Remove full size samples from batch
-        batchsize = len(samples)
-        if self.use_mask:
-            batch = self.compile_mask(batch)
-        images = batch[1]
-        sample = self.compile_sample(batchsize, samples=samples, images=images)
-        return sample
-
-    def set_timelapse_feed(self, images, batchsize):
-        """ Set the timelapse dictionary """
-        logger.debug("Setting timelapse feed: (side: '%s', input_images: '%s', batchsize: %s)",
-                     self.side, images, batchsize)
-        self.timelapse_feed = self.load_generator().minibatch_ab(images[:batchsize],
-                                                                 batchsize, self.side,
-                                                                 do_shuffle=False,
-                                                                 augmenting=False)
-        logger.debug("Set timelapse feed")
+    def set_dataset_feed(self, side, images, batch_size, type, do_shuffle, augmenting):
+        """ Set the feed dataset """
+        logger.debug("Setting '%s' feed: (side: '%s', input_images: '%s', batchsize: %s)",
+                     type, side, images, batch_size)
+        self.feed[type] = self.load_generator().minibatch_ab(images,
+                                                             batch_size,
+                                                             side,
+                                                             do_shuffle=do_shuffle,
+                                                             augmenting=augmenting)
+        logger.debug("'%s' dataset created", type)
 
 
 class Samples():
     """ Display samples for preview and timelapse """
-    def __init__(self, model, use_mask, coverage_ratio, scaling=1.0):
-        logger.debug("Initializing %s: model: '%s', use_mask: %s, coverage_ratio: %s)",
-                     self.__class__.__name__, model, use_mask, coverage_ratio)
+    def __init__(self, model, coverage_ratio, scaling=1.0):
+        logger.debug("Initializing %s: model: '%s', coverage_ratio: %s)",
+                     self.__class__.__name__, model, coverage_ratio)
         self.model = model
-        self.use_mask = use_mask
         self.images = dict()
         self.coverage_ratio = coverage_ratio
         self.scaling = scaling
@@ -379,8 +331,7 @@ class Samples():
         target_scale = unadjusted_scale * self.coverage_ratio
         new_scale = unadjusted_scale * self.scaling
 
-        if self.use_mask:
-            images = self.compile_masked(images, masks)
+        images = self.tint_masked(images, masks)
         images = self.resize_samples(side, images, target_scale)
         if self.coverage_ratio != 1.:
             frames = self.frame_overlay(frames)
@@ -408,7 +359,7 @@ class Samples():
         return frames
 
     @staticmethod
-    def compile_masked(images, masks):
+    def tint_masked(images, masks):
         """ Add the mask to the faces for masked preview """
         red_area = (np.rint(masks) == 0.)
         coloring = np.zeros_like(masks)
@@ -420,21 +371,20 @@ class Samples():
     @staticmethod
     def overlay_foreground(backgrounds, foregrounds):
         """ Overlay the training images into the center of the background """
-        image_list = list()
-        for foreground in foregrounds:
-            offset = (backgrounds.shape[1] - foreground.shape[1]) // 2
-            new_images = list()
-            for idx, (fore, back) in enumerate(zip(foreground, backgrounds)):
-                back[offset:offset + fore.shape[0], offset:offset + fore.shape[1]] = fore
-                new_images.append(img)
-            image_list.append(np.array(new_images))
-            logger.debug("Overlayed foreground. Shape: %s", image_list[-1].shape)
-        return image_list
+        offset = (backgrounds.shape[1] - foregrounds.shape[2]) // 2
+        slice_y = slice(offset, offset + foregrounds.shape[2])
+        slice_x = slice(offset, offset + foregrounds.shape[3])
+        new_images = np.repeat(backgrounds, 3, axis=0)
+        for background, foreground in zip(new_images, foregrounds):
+            for fore, back in zip(foreground, background):
+                back[slice_y, slice_x] = fore
+        logger.debug("Overlayed foreground. Shape: %s", new_images.shape)
+        return new_images
 
     def get_headers(self, side, other_side, width):
         """ Set headers for images """
 
-        def t_size(self, text, font):
+        def t_size(text, font):
             """ Helper function for list comprehension """
             return cv2.getTextSize(text, font, self.scaling, 1)[0]  # pylint: disable=no-member
 
@@ -449,7 +399,7 @@ class Samples():
         logger.debug("height: %s, total_width: %s", height, width * 3)
 
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-        text_sizes = [self.t_size(text, font) for text in texts]  # pylint: disable=no-member
+        text_sizes = [t_size(text, font) for text in texts]  # pylint: disable=no-member
         text_y = int((height + text_sizes[0][1]) / 2)
         text_xs = [int((width - text[0]) / 2) + widths for text in text_sizes]
         logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
@@ -479,23 +429,15 @@ class Samples():
 
 class Timelapse():
     """ Create the timelapse """
-    def __init__(self, model, use_mask, coverage_ratio, batchers):
-        logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
-                     "batchers: '%s')", self.__class__.__name__, model, use_mask,
-                     coverage_ratio, batchers)
-        self.samples = Samples(model, use_mask, coverage_ratio)
+    def __init__(self, model, coverage_ratio, batchers, timelapse_kwargs):
+        logger.debug("Initializing %s: model: %s, coverage_ratio: %s, "
+                     "batchers: '%s')", self.__class__.__name__, model, coverage_ratio, batchers)
+        self.samples = Samples(model, coverage_ratio)
         self.model = model
         self.batchers = batchers
         self.output_file = None
+        self.setup(**timelapse_kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def get_sample(self, side, timelapse_kwargs):
-        """ Perform timelapse """
-        logger.debug("Getting timelapse samples: '%s'", side)
-        if not self.output_file:
-            self.setup(**timelapse_kwargs)
-        self.samples.images[side] = self.batchers[side].compile_timelapse_sample()
-        logger.debug("Got timelapse samples: '%s' - %s", side, len(self.samples.images[side]))
 
     def setup(self, input_a=None, input_b=None, output=None):
         """ Set the timelapse output folder """
@@ -509,24 +451,23 @@ class Timelapse():
         logger.debug("Timelapse output set to '%s'", self.output_file)
 
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
-        batchsize = min(len(images["a"]),
+        batch_size = min(len(images["a"]),
                         len(images["b"]),
                         self.model.training_opts.get("preview_images", 14))
-        for side, image_files in images.items():
-            self.batchers[side].set_timelapse_feed(image_files, batchsize)
+        for side, images in images.items():
+            self.batchers[side].set_dataset_feed(side, images, batch_size,
+                                                 "timelapse", False, False)
         logger.debug("Set up timelapse")
 
     def output_timelapse(self):
         """ Set the timelapse dictionary """
         logger.debug("Ouputting timelapse")
         image = self.samples.show_sample()
-        if image is None:
-            return
+        if image is not None:
             #TODO Path(self.output_file) / "{0}.h5".format(str(int(time.time())))
-        filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
-
-        cv2.imwrite(filename, image)  # pylint: disable=no-member
-        logger.debug("Created timelapse: '%s'", filename)
+            filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
+            cv2.imwrite(filename, image)  # pylint: disable=no-member
+            logger.debug("Created timelapse: '%s'", filename)
 
 
 class PingPong():
