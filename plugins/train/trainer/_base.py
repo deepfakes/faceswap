@@ -314,8 +314,11 @@ class Samples():
         headers = dict()
         for side, samples in self.images.items():
             faces = samples[1]
-            if self.model.input_shape[0] / faces.shape[1] != 1.:
-                feeds[side] = self.resize_sample(side, faces, self.model.input_shape[0])
+            scale = self.model.input_shape[0] / faces.shape[1]
+            if  scale != 1.:
+                feeds[side] = self.resize_sample(side, faces, scale)
+                print(faces.shape)
+                print(feeds[side].shape)
                 feeds[side] = feeds[side].reshape((-1, ) + self.model.input_shape)
             else:
                 feeds[side] = faces
@@ -329,7 +332,7 @@ class Samples():
             other_side = "a" if side == "b" else "b"
             predictions = [preds["{}_{}".format(side, side)],
                            preds["{}_{}".format(other_side, side)]]
-            display = self.to_full_frame(side, samples, predictions)
+            display = self.patch_into_frame(side, samples, predictions)
             headers[side] = self.get_headers(side, other_side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
@@ -348,21 +351,20 @@ class Samples():
         figure = np.stack((header, figure), axis=0)
 
         logger.debug("Compiled sample")
-        return np.clip(figure * 255, 0, 255).astype('uint8')
+        return np.clip(figure * 255., 0., 255.).astype('uint8')
 
     @staticmethod
-    def resize_sample(side, sample, target_size):
+    def resize_samples(side, samples, scale):
         """ Resize samples where predictor expects different shape from processed image """
-        scale = target_size / sample.shape[1]
         if scale != 1.:
             logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                          side, sample.shape, target_size, scale)
             interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
             sample = [cv2.resize(img, None, fx=scale, fy=scale,    # pylint: disable=no-member
-                                 interpolation=interp) for img in sample]
-            sample = np.array(sample)
+                                 interpolation=interp) for img in samples]
+            samples = np.array(sample)
             logger.debug("Resized sample: (side: '%s' shape: %s)", side, sample.shape)
-        return sample
+        return samples
 
     def get_predictions(self, feed_a, feed_b):
         """ Return the sample predictions from the model """
@@ -380,62 +382,45 @@ class Samples():
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
-    def to_full_frame(self, side, samples, predictions):
+    def patch_into_frame(self, side, samples, predictions):
         """ Patch the images into the full frame """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
-        full, original_faces = samples[:2]
+        frames, original_faces = samples[:2]
         masks = samples[-1]
         images = [original_faces] + predictions
-        full_size = full.shape[1]
-        target_size = int(full_size * self.coverage_ratio)
+        unadjusted_scale = frames.shape[1] / images.shape[1]
+        target_scale = unadjusted_scale * self.coverage_ratio 
+        new_scale = unadjusted_scale * self.scaling 
+
         if self.use_mask:
             images = self.compile_masked(images, masks)
-        images = [self.resize_sample(side, image, target_size) for image in images]
-        if target_size != full_size:
-            frame = self.frame_overlay(full, target_size, (0, 0, 255))
-            images = [self.overlay_foreground(frame, image) for image in images]
+        images = self.resize_samples(side, images, target_scale)
+        if self.coverage_ratio != 1.:
+            frames = self.frame_overlay(frames)
+            images = self.overlay_foreground(frames, images)
         if self.scaling != 1.:
-            new_size = int(full_size * self.scaling)
-            images = [self.resize_sample(side, image, new_size) for image in images]
+            images = self.resize_samples(side, images, new_scale)
         return images
 
     @staticmethod
-    def frame_overlay(images, target_size, color):
+    def frame_overlay(frames):
         """ Add roi frame to a backfround image """
-        logger.debug("full_size: %s, target_size: %s, color: %s",
-                     images.shape[1], target_size, color)
-        new_images = list()
-        full_size = images.shape[1]
-        padding = (full_size - target_size) // 2
-        length = target_size // 4
+        logger.debug("full_size: %s, color: %s", frames.shape[1], color)
+        color = (0., 0., 1.)
+        full_size = frames.shape[1]
+        padding = (full_size * (1. - self.coverage_ratio)) // 2
+        length = (full_size * self.coverage_ratio) // 4
         t_l, b_r = (padding, full_size - padding)
-        for img in images:
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (t_l, t_l),
-                          (t_l + length, t_l + length),
-                          color,
-                          3)
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (b_r, t_l),
-                          (b_r - length, t_l + length),
-                          color,
-                          3)
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (b_r, b_r),
-                          (b_r - length,
-                           b_r - length),
-                          color,
-                          3)
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (t_l, b_r),
-                          (t_l + length, b_r - length),
-                          color,
-                          3)
-            new_images.append(img)
-        retval = np.array(new_images)
-        logger.debug("Overlayed background. Shape: %s", retval.shape)
-        return retval
+        
+        top_left = slice(t_l, t_l + length), slice(t_l, t_l + length)
+        bot_left = slice(b_r - length, b_r), , slice(t_l, t_l + length)
+        top_right = slice(b_r - length, b_r), slice(b_r - length, b_r)
+        bot_right = slice(t_l, t_l + length), slice(b_r - length, b_r)
+        for roi in [top_left, bot_left, top_right, bot_right]
+            frames[:,roi[0],roi[1]] = color
+        logger.debug("Overlayed background. Shape: %s", frames.shape)
+        return frames
 
     @staticmethod
     def compile_masked(predictions, masks):
@@ -450,14 +435,16 @@ class Samples():
     @staticmethod
     def overlay_foreground(backgrounds, foregrounds):
         """ Overlay the training images into the center of the background """
-        offset = (backgrounds.shape[1] - foregrounds.shape[1]) // 2
-        new_images = list()
-        for idx, (fore, back) in enumerate(zip(foregrounds, backgrounds)):
-            back[offset:offset + fore.shape[0], offset:offset + fore.shape[1]] = fore
-            new_images.append(img)
-        retval = np.array(new_images)
-        logger.debug("Overlayed foreground. Shape: %s", retval.shape)
-        return retval
+        image_list = list()
+        for foreground in foregrounds:
+            offset = (backgrounds.shape[1] - foreground.shape[1]) // 2
+            new_images = list()
+            for idx, (fore, back) in enumerate(zip(foreground, backgrounds)):
+                back[offset:offset + fore.shape[0], offset:offset + fore.shape[1]] = fore
+                new_images.append(img)
+            image_list.append(np.array(new_images))
+            logger.debug("Overlayed foreground. Shape: %s", image_list[-1].shape)
+        return image_list
 
     def get_headers(self, side, other_side, width):
         """ Set headers for images """
@@ -466,30 +453,30 @@ class Samples():
         side = side.upper()
         other_side = other_side.upper()
         height = int(64 * self.scaling)
+        widths = [0, width, width * 2]
         total_width = width * 3
-        logger.debug("height: %s, total_width: %s", height, total_width)
-        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
         texts = ["Target {}".format(side),
                  "{} > {}".format(side, side),
                  "{} > {}".format(side, other_side)]
-        text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
-                                      font,
-                                      self.scaling,
-                                      1)[0]
-                      for idx in range(len(texts))]
+        logger.debug("height: %s, total_width: %s", height, total_width)
+
+        def t_size(self, text):
+            font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+            return cv2.getTextSize(text, font, self.scaling, 1)[0]
+
+        text_sizes = [self.t_size(text) for text in texts]  # pylint: disable=no-member
         text_y = int((height + text_sizes[0][1]) / 2)
-        text_x = [int((width - text_sizes[idx][0]) / 2) + width * idx
-                  for idx in range(len(texts))]
+        text_xs = [int((width - text[0]) / 2) + widths for text in text_sizes]
         logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
                      texts, text_sizes, text_x, text_y)
         header_box = np.ones((height, total_width, 3), np.float32)
-        for idx, text in enumerate(texts):
+        for text_x, text in zip(text_xs, texts):
             cv2.putText(header_box,  # pylint: disable=no-member
                         text,
-                        (text_x[idx], text_y),
+                        (text_x, text_y),
                         font,
                         self.scaling,
-                        (0, 0, 0),
+                        (0., 0., 0.),
                         1,
                         lineType=cv2.LINE_AA)  # pylint: disable=no-member
         logger.debug("header_box.shape: %s", header_box.shape)
@@ -550,7 +537,7 @@ class Timelapse():
         image = self.samples.show_sample()
         if image is None:
             return
-            Path(self.output_file) / "{0}.h5".format(str(int(time.time())))
+            #TODO Path(self.output_file) / "{0}.h5".format(str(int(time.time())))
         filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
 
         cv2.imwrite(filename, image)  # pylint: disable=no-member
