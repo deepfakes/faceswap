@@ -58,6 +58,7 @@ class ModelBase():
         self.model_dir = model_dir
         self.gpus = gpus
         self.input_shape = input_shape
+        self.mask_shape = (input_shape[:-1] + (1, ))
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer

@@ -64,7 +64,7 @@ class Mask():
             logger.verbose("Model at %s is missing. Downloading from internet", expected_location)
             download_model(id[type], expected_location, URL)
             logger.verbose("Model at %s is downloaded", expected_location)
-        else:
+        #TODO finish
 
     @staticmethod
     def download_model(self, id, destination, URL):

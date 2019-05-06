@@ -14,7 +14,6 @@ class Model(ModelBase):
                      self.__class__.__name__, args, kwargs)
         kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
-        self.mask_shape = (self.input_shape[:-1] + (1, ))
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 

@@ -18,7 +18,6 @@ class Model(OriginalModel):
         kwargs["input_shape"] = (64, 64, 3)
         kwargs["encoder_dim"] = 1024
         self.kernel_initializer = RandomNormal(0, 0.02)
-        self.mask_shape = (self.input_shape[0] * 2, self.input_shape[1] * 2, 1)
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 

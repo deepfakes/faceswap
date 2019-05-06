@@ -16,7 +16,6 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-        self.mask_shape = (self.input_shape[:-1] + (1, ))
         kwargs["input_shape"] = (128, 128, 3)
         kwargs["encoder_dim"] = 512 if self.config["lowmem"] else 1024
         self.kernel_initializer = RandomNormal(0, 0.02)
