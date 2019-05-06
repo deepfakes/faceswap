@@ -67,7 +67,7 @@ class Mask():
         #TODO finish
 
     @staticmethod
-    def download_model(self, id, destination, URL):
+    def download_model(id, destination, URL):
         """ Download segmentation models from internet """
         #TODO error handling for no web connection ?
         CHUNK_SIZE = 32768
@@ -109,8 +109,7 @@ class Mask():
                      'vgg_300':     self.nirkin_300,
                      'vgg_500':     self.nirkin_500,
                      'unet_256':    self.ternaus_256}
-        mask_function, use_facehull = mask_dict[self.type]
-        mask = mask_function(mask)
+        mask = mask_dict[self.type](mask)
         return mask
 
     def one_part_facehull(self, mask):
@@ -157,7 +156,6 @@ class Mask():
         mask = self.compute_facehull(mask, parts)
         return mask
 
-    @staticmethod
     def compute_facehull(self, mask, parts):
         """ Compute the facehull """
         for item in parts:

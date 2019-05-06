@@ -99,6 +99,7 @@ class Converter():
         """ Get the new face from the predictor and apply box manipulations """
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
+        #TODO finish
         print(placeholder.dtype)
         placeholder = (predicted["image"] / 255.).astype("float32")
         zeros = np.zeros((frame_size[1], frame_size[0], 1), dtype="float32")

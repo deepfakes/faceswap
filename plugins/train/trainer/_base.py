@@ -389,7 +389,7 @@ class Samples():
         frames, original_faces = samples[:2]
         masks = samples[-1]
         images = [original_faces] + predictions
-        unadjusted_scale = frames.shape[1] / images.shape[1]
+        unadjusted_scale = frames.shape[1] / original_faces.shape[1]
         target_scale = unadjusted_scale * self.coverage_ratio 
         new_scale = unadjusted_scale * self.scaling 
 
