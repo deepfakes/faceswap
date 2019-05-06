@@ -33,8 +33,7 @@ class Mask(Adjustment):
         """ Return the mask from lib/model/masks and intersect with box """
         if self.mask_type == "none":
             # Return a dummy mask of ones if not using a mask
-            mask = self.dummy
-            mask = 1.
+            mask = self.dummy + 1.
         elif self.mask_type == "predicted":
             mask = predicted_mask
         else:
