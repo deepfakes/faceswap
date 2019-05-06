@@ -330,8 +330,8 @@ class Samples():
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            predictions = [preds["{}_{}".format(side, side)],
-                           preds["{}_{}".format(other_side, side)]]
+            predictions = np.stack([preds["{}_{}".format(side, side)],
+                                    preds["{}_{}".format(other_side, side)]])
             display = self.patch_into_frame(side, samples, predictions)
             headers[side] = self.get_headers(side, other_side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
@@ -357,13 +357,12 @@ class Samples():
     def resize_samples(side, samples, scale):
         """ Resize samples where predictor expects different shape from processed image """
         if scale != 1.:
-            logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
-                         side, samples.shape, target_size, scale)
+            logger.debug("Resizing samples: (side: '%s', sample.shape: %s, scale: %s)",
+                         side, samples[0].shape, scale)
             interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
-            samples = [cv2.resize(img, None, fx=scale, fy=scale,    # pylint: disable=no-member
-                                 interpolation=interp) for img in samples]
-            samples = np.array(samples)
-            logger.debug("Resized sample: (side: '%s' shape: %s)", side, sample.shape)
+            samples = np.stack(np.stack(cv2.resize(img, None, fx=scale, fy=scale,  # pylint: disable=no-member
+                                        interpolation=interp) for img in face_batch) for face_batch in samples)
+            logger.debug("Resized sample: (side: '%s' shape: %s)", side, samples[0].shape)
         return samples
 
     def get_predictions(self, feed_a, feed_b):
@@ -386,9 +385,9 @@ class Samples():
         """ Patch the images into the full frame """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
-        frames, original_faces = samples[:2]
-        masks = samples[-1]
-        images = [original_faces] + predictions
+                     
+        frames, original_faces, masks = samples
+        images = np.concatenate([original_faces[None,...], predictions], axis=0)
         unadjusted_scale = frames.shape[1] / original_faces.shape[1]
         target_scale = unadjusted_scale * self.coverage_ratio 
         new_scale = unadjusted_scale * self.scaling 
@@ -423,14 +422,14 @@ class Samples():
         return frames
 
     @staticmethod
-    def compile_masked(predictions, masks):
+    def compile_masked(images, masks):
         """ Add the mask to the faces for masked preview """
         red_area = (np.rint(masks) == 0.)
         coloring = np.zeros_like(masks)
         coloring[red_area] = 0.3
-        colored_images = [faces[...,-1:] + coloring for faces in predictions]
-        logger.debug("masked shapes: %s", [faces.shape for faces in colored_images])
-        return colored_images
+        images[...,-1:] += coloring
+        logger.debug("masked shapes: %s", [faces.shape for faces in images[0]])
+        return images
 
     @staticmethod
     def overlay_foreground(backgrounds, foregrounds):
