@@ -24,7 +24,7 @@ class Converter():
                      draw_transparent, pre_encode, arguments)
         self.output_dir = output_dir
         self.draw_transparent = draw_transparent
-        self.pre_encode = pre_encode
+        self.writer_pre_encode = pre_encode
         self.scale = arguments.output_scale / 100.
         self.args = arguments
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
@@ -90,9 +90,10 @@ class Converter():
         patched_face = self.post_warp_adjustments(predicted, new_image)
         patched_face = self.scale_image(patched_face)
         patched_face = np.rint(patched_face).astype("uint8")
-        retval = self.pre_encode(patched_face) if self.pre_encode else patched_face
+        if self.writer_pre_encode is not None:
+            patched_face = self.writer_pre_encode(patched_face)
         logger.trace("Patched image: '%s'", predicted["filename"])
-        return retval
+        return patched_face
 
     def get_new_image(self, predicted, frame_size):
         """ Get the new face from the predictor and apply box manipulations """
