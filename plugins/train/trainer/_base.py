@@ -358,11 +358,11 @@ class Samples():
         """ Resize samples where predictor expects different shape from processed image """
         if scale != 1.:
             logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
-                         side, sample.shape, target_size, scale)
+                         side, samples.shape, target_size, scale)
             interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
-            sample = [cv2.resize(img, None, fx=scale, fy=scale,    # pylint: disable=no-member
+            samples = [cv2.resize(img, None, fx=scale, fy=scale,    # pylint: disable=no-member
                                  interpolation=interp) for img in samples]
-            samples = np.array(sample)
+            samples = np.array(samples)
             logger.debug("Resized sample: (side: '%s' shape: %s)", side, sample.shape)
         return samples
 
@@ -426,9 +426,9 @@ class Samples():
     def compile_masked(predictions, masks):
         """ Add the mask to the faces for masked preview """
         red_area = (np.rint(masks) == 0.)
-        coloring = np.oneslike(predictions[0])
-        coloring[red_area] = [0., 0., 0.3]
-        colored_images = [faces + coloring for faces in predictions]
+        coloring = np.zeros_like(masks)
+        coloring[red_area] = 0.3
+        colored_images = [faces[...,-1:] + coloring for faces in predictions]
         logger.debug("masked shapes: %s", [faces.shape for faces in colored_images])
         return colored_images
 
