@@ -48,7 +48,7 @@ class Model(ModelBase):
         """ Encoder Network """
         face_ = Input(shape=self.input_shape)
         mask_ = Input(shape=self.mask_shape)
-        var_x = Concatenate(axis=-1)(face_, mask_)
+        var_x = Concatenate(axis=-1)([face_, mask_])
         var_x = self.blocks.conv(var_x, 128)
         var_x = self.blocks.conv(var_x, 256)
         var_x = self.blocks.conv(var_x, 512)

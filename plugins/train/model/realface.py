@@ -94,7 +94,7 @@ class Model(ModelBase):
         """ RealFace Encoder Network """
         face_ = Input(shape=self.input_shape)
         mask_ = Input(shape=self.mask_shape)
-        var_x = Concatenate(axis=-1)(face_, mask_)
+        var_x = Concatenate(axis=-1)([face_, mask_])
 
         encoder_complexity = self.config['complexity_encoder']
 

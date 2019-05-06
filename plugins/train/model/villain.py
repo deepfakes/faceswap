@@ -34,7 +34,7 @@ class Model(OriginalModel):
 
         face_ = Input(shape=self.input_shape)
         mask_ = Input(shape=self.mask_shape)
-        var_x = Concatenate(axis=-1)(face_, mask_)
+        var_x = Concatenate(axis=-1)([face_, mask_])
         var_x = self.blocks.conv(var_x, in_conv_filters, res_block_follows=True, **kwargs)
         initial_conv = var_x
         for _ in range(res_cycles):

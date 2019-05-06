@@ -41,7 +41,7 @@ class Model(OriginalModel):
 
         face_ = Input(shape=self.input_shape)
         mask_ = Input(shape=self.mask_shape)
-        var_x = Concatenate(axis=-1)(face_, mask_)
+        var_x = Concatenate(axis=-1)([face_, mask_])
         var_x = self.blocks.conv(var_x, encoder_complexity, use_instance_norm=True, **kwargs)
         var_x = self.blocks.conv(var_x, encoder_complexity * 2, use_instance_norm=True, **kwargs)
         var_x = self.blocks.conv(var_x, encoder_complexity * 4, **kwargs)
