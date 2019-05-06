@@ -23,18 +23,23 @@ import traceback
 
 from io import StringIO
 
+import cv2
+
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
+from lib.utils import GetModel
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Aligner():
     """ Landmarks Aligner Object """
-    def __init__(self, loglevel):
-        logger.debug("Initializing %s", self.__class__.__name__)
+    def __init__(self, loglevel, model_filename=None, colorspace="BGR", input_size=256):
+        logger.debug("Initializing %s: (model_filename: '%s', colorspace: '%s'. input_size: %s)",
+                     self.__class__.__name__, model_filename, colorspace, input_size)
         self.loglevel = loglevel
-        self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
+        self.colorspace = colorspace.upper()
+        self.input_size = input_size
         self.extract = Extract()
         self.init = None
         self.error = None
@@ -43,8 +48,8 @@ class Aligner():
         # See lib.queue_manager.QueueManager for getting queues
         self.queues = {"in": None, "out": None}
 
-        #  Path to model if required
-        self.model_path = self.set_model_path()
+        #  Get model if required
+        self.model_path = self.get_model(model_filename)
 
         # Approximate VRAM required for aligner. Used to calculate
         # how many parallel processes / batches can be run.
@@ -54,12 +59,6 @@ class Aligner():
 
     # <<< OVERRIDE METHODS >>> #
     # These methods must be overriden when creating a plugin
-    @staticmethod
-    def set_model_path():
-        """ path to data file/models
-            override for specific detector """
-        raise NotImplementedError()
-
     def initialize(self, *args, **kwargs):
         """ Inititalize the aligner
             Tasks to be run before any alignments are performed.
@@ -71,15 +70,25 @@ class Aligner():
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
-    def align(self, *args, **kwargs):
-        """ Process landmarks
-            Override for specific detector
-            Must return a list of dlib rects"""
-        if not self.init:
-            self.initialize(*args, **kwargs)
-        logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
+    def align_image(self, detected_face, image):
+        """ Align the incoming image for feeding into aligner
+            Override for aligner specific processing """
+        raise NotImplementedError
 
-    # <<< DETECTION WRAPPER >>> #
+    def predict_landmarks(self, feed_dict):
+        """ Predict the 68 point landmarks
+            Override for aligner specific landmark prediction """
+        raise NotImplementedError
+
+    # <<< GET MODEL >>> #
+    @staticmethod
+    def get_model(model_filename):
+        """ Check if model is available, if not, download and unzip it """
+        cache_path = os.path.join(os.path.dirname(__file__), ".cache")
+        model = GetModel(model_filename, cache_path)
+        return model.model_path
+
+    # <<< ALIGNMENT WRAPPER >>> #
     def run(self, *args, **kwargs):
         """ Parent align process.
             This should always be called as the entry point so exceptions
@@ -87,7 +96,7 @@ class Aligner():
             Do not override """
         try:
             self.align(*args, **kwargs)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
             # Display traceback if in initialization stage
             if not self.init.is_set():
@@ -97,6 +106,56 @@ class Aligner():
             exception = {"exception": (os.getpid(), tb_buffer)}
             self.queues["out"].put(exception)
             exit(1)
+
+    def align(self, *args, **kwargs):
+        """ Process landmarks """
+        if not self.init:
+            self.initialize(*args, **kwargs)
+        logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
+
+        for item in self.get_item():
+            if item == "EOF":
+                self.finalize(item)
+                break
+            image = self.convert_color(item["image"])
+
+            logger.trace("Aligning faces")
+            try:
+                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
+                logger.trace("Aligned faces: %s", item["landmarks"])
+            except ValueError as err:
+                logger.warning("Image '%s' could not be processed. This may be due to corrupted "
+                               "data: %s", item["filename"], str(err))
+                item["detected_faces"] = list()
+                item["landmarks"] = list()
+                # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
+                # import sys
+                # exc_info = sys.exc_info()
+                # traceback.print_exception(*exc_info)
+            self.finalize(item)
+        logger.debug("Completed Align")
+
+    def convert_color(self, image):
+        """ Convert the image to the correct colorspace """
+        logger.trace("Converting image to colorspace: %s", self.colorspace)
+        if self.colorspace == "RGB":
+            cvt_image = image[:, :, ::-1].copy()
+        elif self.colorspace == "GRAY":
+            cvt_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)  # pylint:disable=no-member
+        else:
+            cvt_image = image.copy()
+        return cvt_image
+
+    def process_landmarks(self, image, detected_faces):
+        """ Align image and process landmarks """
+        logger.trace("Processing landmarks")
+        retval = list()
+        for detected_face in detected_faces:
+            feed_dict = self.align_image(detected_face, image)
+            landmarks = self.predict_landmarks(feed_dict)
+            retval.append(landmarks)
+        logger.trace("Processed landmarks: %s", retval)
+        return retval
 
     # <<< FINALIZE METHODS>>> #
     def finalize(self, output):

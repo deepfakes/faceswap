@@ -3,7 +3,10 @@
 
 import logging
 import os
+import urllib
 import warnings
+import zipfile
+from socket import timeout as socket_timeout, error as socket_error
 
 from hashlib import sha1
 from pathlib import Path
@@ -11,8 +14,9 @@ from re import finditer
 
 import cv2
 import numpy as np
-
 import dlib
+
+from tqdm import tqdm
 
 from lib.faces_detect import DetectedFace
 from lib.logger import get_loglevel
@@ -215,3 +219,173 @@ def safe_shutdown():
     while not queue_manager._log_queue.empty():  # pylint: disable=protected-access
         continue
     queue_manager.manager.shutdown()
+
+
+class GetModel():
+    """ Check for models in their cache path
+        If available, return the path, if not available, get, unzip and install model
+
+        model_name: The name of the model to be loaded
+        cache_dir: the model cache folder folder of the current plugin calling this class """
+
+    def __init__(self, model_filename, cache_dir):
+        self.model_filename = model_filename
+        self.cache_dir = cache_dir
+        self.url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
+        self.chunk_size = 1024  # Chunk size for downloading and unzipping
+
+        self.get()
+        self.model_path = self._model_path
+
+    @property
+    def _model_id(self):
+        """ Return a mapping of model names to model ids as stored in github """
+        ids = {
+            # EXTRACT (SECTION 1)
+            "face-alignment-network_2d4": 0,
+            "cnn-facial-landmark": 1,
+            # TRAIN (SECTION 2)
+            # CONVERT (SECTION 3)
+            }
+        return ids[self._model_name]
+
+    @property
+    def _model_full_name(self):
+        """ Return the model version from the filename """
+        retval = os.path.splitext(self.model_filename)[0]
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _model_name(self):
+        """ Return the model version from the filename """
+        retval = self._model_full_name[:self._model_full_name.rfind("_")]
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _model_version(self):
+        """ Return the model version from the filename """
+        retval = int(self._model_full_name[self._model_full_name.rfind("_") + 2:])
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _model_path(self):
+        """ Return the model path in the cache folder """
+        retval = os.path.join(self.cache_dir, self.model_filename)
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _model_zip_path(self):
+        """ Full path to downloaded zip file """
+        retval = os.path.join(self.cache_dir, "{}.zip".format(self._model_full_name))
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _model_exists(self):
+        retval = os.path.exists(self._model_path)
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _plugin_section(self):
+        """ Get the plugin section from the config_dir """
+        path = os.path.normpath(self.cache_dir)
+        split = path.split(os.sep)
+        retval = split[split.index("plugins") + 1]
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _url_section(self):
+        """ Return the section ID in github for this plugin type """
+        sections = dict(extract=1, train=2, convert=3)
+        retval = sections[self._plugin_section]
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _url_download(self):
+        """ Base URL for models """
+        tag = "v{}.{}.{}".format(self._url_section, self._model_id, self._model_version)
+        retval = "{}/{}/{}.zip".format(self.url_base, tag, self._model_full_name)
+        logger.trace("Download url: %s", retval)
+        return retval
+
+    def get(self):
+        """ Check the model exists, if not, download and unzip into location """
+        if self._model_exists:
+            logger.debug("Model exists: %s", self._model_path)
+            return
+        self.download_model()
+        self.unzip_model()
+        os.remove(self._model_zip_path)
+
+    def download_model(self):
+        """ Download model zip to cache dir """
+        logger.info("Downloading model: '%s'", self._model_name)
+        attempts = 3
+        for attempt in range(attempts):
+            try:
+                response = urllib.request.urlopen(self._url_download, timeout=10)
+                logger.debug("header info: {%s}", response.info())
+                logger.debug("Return Code: %s", response.getcode())
+                self.write_zipfile(response)
+                break
+            except (socket_error, socket_timeout,
+                    urllib.error.HTTPError, urllib.error.URLError) as err:
+                if attempt + 1 < attempts:
+                    logger.warning("Error downloading model (%s). Retrying %s of %s...",
+                                   str(err), attempt + 2, attempts)
+                else:
+                    logger.error("Failed to download model. Exiting. (Error: '%s', URL: '%s')",
+                                 str(err), self._url_download)
+                    exit(1)
+
+    def write_zipfile(self, response):
+        """ Write the model zip file to disk """
+        length = int(response.getheader("content-length"))
+        with open(self._model_zip_path, "wb") as out_file:
+            pbar = tqdm(desc="Downloading",
+                        unit="B",
+                        total=length,
+                        unit_scale=True,
+                        unit_divisor=1024)
+            while True:
+                buffer = response.read(self.chunk_size)
+                if not buffer:
+                    break
+                pbar.update(len(buffer))
+                out_file.write(buffer)
+
+    def unzip_model(self):
+        """ Unzip the model file to the cachedir """
+        logger.info("Extracting: '%s'", self._model_name)
+        try:
+            zip_file = zipfile.ZipFile(self._model_zip_path, "r")
+            self.write_model(zip_file)
+        except Exception as err:  # pylint:disable=broad-except
+            logger.error("Unable to extract model file: %s", str(err))
+            exit(1)
+
+    def write_model(self, zip_file):
+        """ Extract files from zipfile and write, with progress bar """
+        length = sum(f.file_size for f in zip_file.infolist())
+        fnames = zip_file.namelist()
+        logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
+        pbar = tqdm(desc="Extracting", unit="B", total=length, unit_scale=True, unit_divisor=1024)
+        for fname in fnames:
+            out_fname = os.path.join(self.cache_dir, fname)
+            logger.debug("Extracting from: '%s' to '%s'", self._model_zip_path, out_fname)
+            zipped = zip_file.open(fname)
+            with open(out_fname, "wb") as out_file:
+                while True:
+                    buffer = zipped.read(self.chunk_size)
+                    if not buffer:
+                        break
+                    pbar.update(len(buffer))
+                    out_file.write(buffer)
+        zip_file.close()
