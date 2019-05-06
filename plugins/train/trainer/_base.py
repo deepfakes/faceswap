@@ -412,13 +412,13 @@ class Samples():
         padding = (full_size * (1. - self.coverage_ratio)) // 2
         length = (full_size * self.coverage_ratio) // 4
         t_l, b_r = (padding, full_size - padding)
-        
-        top_left = slice(t_l, t_l + length), slice(t_l, t_l + length)
-        bot_left = slice(b_r - length, b_r), , slice(t_l, t_l + length)
-        top_right = slice(b_r - length, b_r), slice(b_r - length, b_r)
-        bot_right = slice(t_l, t_l + length), slice(b_r - length, b_r)
-        for roi in [top_left, bot_left, top_right, bot_right]
-            frames[:,roi[0],roi[1]] = color
+
+        top_left = [slice(t_l, t_l + length), slice(t_l, t_l + length)]
+        bot_left = [slice(b_r - length, b_r), slice(t_l, t_l + length)]
+        top_right = [slice(b_r - length, b_r), slice(b_r - length, b_r)]
+        bot_right = [slice(t_l, t_l + length), slice(b_r - length, b_r)]
+        for roi in [top_left, bot_left, top_right, bot_right]:
+            frames[:, roi[0], roi[1]] = color
         logger.debug("Overlayed background. Shape: %s", frames.shape)
         return frames
 
@@ -516,10 +516,10 @@ class Timelapse():
         """ Set the timelapse output folder """
         logger.debug("Setting up timelapse")
         if output is None:
-            str_dir = "{}".format(self.model.model_dir))
-            str_name = "{}_timelapse".format(self.model.name))
+            str_dir = "{}".format(self.model.model_dir)
+            str_name = "{}_timelapse".format(self.model.name)
             model_path = Path(str_dir) / str_name
-            output = str(get_folder()
+            output = get_folder(model_path)
         self.output_file = str(output)
         logger.debug("Timelapse output set to '%s'", self.output_file)
 

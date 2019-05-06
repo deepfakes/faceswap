@@ -44,7 +44,7 @@ class Mask():
         self.face = face
         self.type = type
         self.channels = channels
-        self.check_for_models(type)
+        #self.check_for_models(type)
         mask = self.build_mask()
         self.mask = self.merge_mask(mask)
         logger.trace("Initialized %s", self.__class__.__name__)
