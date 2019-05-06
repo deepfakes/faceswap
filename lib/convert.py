@@ -43,11 +43,11 @@ class Converter():
             output_size,
             output_has_mask)
 
-        if self.args.color_adjustment != "none" and self.args.color_adjustment:
+        if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
             self.adjustments["color"] = PluginLoader.get_converter("color",
                                                                    self.args.color_adjustment)()
 
-        if self.args.scaling != "none" and self.args.scaling:
+        if self.args.scaling != "none" and self.args.scaling is not None:
             self.adjustments["scaling"] = PluginLoader.get_converter("scaling",
                                                                      self.args.scaling)()
         logger.debug("Loaded plugins: %s", self.adjustments)
@@ -130,12 +130,12 @@ class Converter():
         """ Run the pre-warp adjustments """
         logger.trace("old_face shape: %s, new_face shape: %s, predicted_mask shape: %s",
                      old_face.shape, new_face.shape,
-                     predicted_mask.shape if predicted_mask else None)
+                     predicted_mask.shape if predicted_mask  is not None else None)
         new_face = self.adjustments["box"].run(new_face)
         new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
-        if self.adjustments["color"]:
+        if self.adjustments["color"] is not None:
             new_face = self.adjustments["color"].run(old_face, new_face, raw_mask)
-        if self.adjustments["seamless"]:
+        if self.adjustments["seamless"] is not None:
             new_face = self.adjustments["seamless"].run(old_face, new_face, raw_mask)
         logger.trace("returning: new_face shape %s", new_face.shape)
         return new_face
@@ -156,7 +156,7 @@ class Converter():
 
     def post_warp_adjustments(self, predicted, new_image):
         """ Apply fixes to the image after warping """
-        if self.adjustments["scaling"]:
+        if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
         mask = new_image[:, :, -1:]
         foreground = new_image[:, :, :3] * 255.
@@ -183,10 +183,10 @@ class Converter():
 
     def scale_image(self, frame):
         """ Scale the image if requested """
-        if self.scale != 1:
+        if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
-            fx = frame.shape[1] * self.scale
-            fy = frame.shape[0] * self.scale
+            fx = self.scale
+            fy = self.scale
             interp = cv2.INTER_CUBIC if self.scale > 1 else cv2.INTER_AREA  # pylint: disable=no-member
             frame = cv2.resize(frame, fx=fx, fy=fy, interpolation=interp)  # pylint: disable=no-member
             logger.trace("resized frame: %s", frame.shape)
