@@ -15,18 +15,19 @@ class Mask(Adjustment):
         each face. """
     def __init__(self, mask_type, output_size, predicted_available=False):
         super().__init__(mask_type, output_size, predicted_available)
-        self.mask = self.get_mask() if not self.skip else None
+        self.mask = None if self.skip else self.get_mask()
 
     def get_mask(self):
         """ The box for every face will be identical, so set the mask just once
             As gaussian blur technically blurs both sides of the mask, reduce the mask ratio by
             half to give a more expected box """
         logger.debug("Building box mask")
-        mask_ratio = self.config["distance"] / 200
-        facesize = self.dummy.shape[0]
-        erode = slice(round(facesize * mask_ratio), -round(facesize * mask_ratio))
-        mask = self.dummy[:, :, -1]
-        mask[erode, erode] = 1.0
+        mask_ratio = self.config["distance"] / 200.
+        face_size = self.dummy.shape[0]
+        erode_size = round(face_size * mask_ratio)
+        erode = slice(erode_size, -erode_size)
+        mask = self.dummy
+        mask[erode, erode] = 1.
 
         mask = BlurMask(self.config["type"],
                         mask,
@@ -37,12 +38,10 @@ class Mask(Adjustment):
 
     def process(self, new_face):
         """ The blend box function. Adds the created mask to the alpha channel """
-        if self.skip:
+        if not self.skip:
+            logger.trace("Blending box")
+            new_face = np.clip(np.concatenate((new_face, self.mask), axis=-1), 0., 1.)
+            logger.trace("Blended box")
+        else:
             logger.trace("Skipping blend box")
-            return new_face
-
-        logger.trace("Blending box")
-        mask = np.expand_dims(self.mask, axis=-1)
-        new_face = np.clip(np.concatenate((new_face, mask), axis=-1), 0.0, 1.0)
-        logger.trace("Blended box")
         return new_face

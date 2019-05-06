@@ -20,7 +20,7 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-
+        self.mask_shape = (self.config["output_size"], self.config["output_size"], 1)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
         kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
@@ -78,23 +78,23 @@ class Model(ModelBase):
     def build_autoencoders(self):
         """ Initialize original model """
         logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = self.config["output_size"], self.config["output_size"], 1
-            inputs.append(Input(shape=mask_shape, name="mask"))
+        face = Input(shape=self.input_shape, name="face")
+        mask = Input(shape=self.mask_shape, name="mask")
+        inputs = [face, mask]
 
         for side in "a", "b":
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inputs[0]))
+            output = decoder(self.networks["encoder"].network(inputs))
             autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):
         """ RealFace Encoder Network """
-        input_ = Input(shape=self.input_shape)
-        var_x = input_
+        face_ = Input(shape=self.input_shape)
+        mask_ = Input(shape=self.mask_shape)
+        var_x = Concatenate(axis=-1)(face_, mask_)
 
         encoder_complexity = self.config['complexity_encoder']
 

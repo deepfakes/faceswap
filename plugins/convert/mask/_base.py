@@ -6,7 +6,7 @@ import logging
 import cv2
 import numpy as np
 
-from lib.model import masks as model_masks
+from lib.model.masks import get_default_mask
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -26,7 +26,7 @@ class Adjustment():
         self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         logger.debug("config: %s", self.config)
         self.mask_type = self.get_mask_type(mask_type, predicted_available)
-        self.dummy = np.zeros((output_size, output_size, 3), dtype='float32')
+        self.dummy = np.zeros((output_size, output_size, 1), dtype='float32')
 
         self.skip = self.config.get("type", None) is None
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -37,7 +37,7 @@ class Adjustment():
             predicted requested but not available """
         logger.debug("Requested mask_type: %s", mask_type)
         if mask_type == "predicted" and not predicted_available:
-            mask_type = model_masks.get_default_mask()
+            mask_type = get_default_mask()
             logger.warning("Predicted selected, but the model was not trained with a mask. "
                            "Switching to '%s'", mask_type)
         logger.debug("Returning mask_type: %s", mask_type)
@@ -86,7 +86,7 @@ class BlurMask():
             ksize = int(kwargs["ksize"][0])
             logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
             blurred = func(blurred, **kwargs)
-            ksize = int(ksize * self.multipass_factor)
+            ksize = round(ksize * self.multipass_factor)
             kwargs["ksize"] = self.get_kernel_tuple(ksize)
         logger.trace("Returning blurred mask. Shape: %s", blurred.shape)
         return blurred
@@ -96,8 +96,7 @@ class BlurMask():
         """ Multipass Factor
             For multiple passes the kernel must be scaled down. This value is
             different for box filter and gaussian """
-        factor = dict(gaussian=0.8,
-                      normalized=0.5)
+        factor = dict(gaussian=0.8, normalized=0.5)
         return factor[self.blur_type]
 
     @property
@@ -127,8 +126,8 @@ class BlurMask():
     def get_kernel_size(self, radius_ratio):
         """ Set the kernel size to absolute """
         mask_diameter = np.sqrt(np.sum(self.mask))
-        radius = max(1, round(mask_diameter * radius_ratio / 100))
-        kernel_size = int((radius * 2) + 1)
+        radius = round(max(1., mask_diameter * radius_ratio / 100.))
+        kernel_size = radius * 2 + 1
         logger.trace("kernel_size: %s", kernel_size)
         return kernel_size
 
