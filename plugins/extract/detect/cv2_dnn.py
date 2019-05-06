@@ -31,10 +31,10 @@ class Detect(Detector):
     def initialize(self, *args, **kwargs):
         """ Calculate batch size """
         super().initialize(*args, **kwargs)
-        logger.info("Initializing CV2-DNN Detector...")
+        logger.info("Initializing cv2 DNN Detector...")
         logger.verbose("Using CPU for detection")
         self.init = True
-        logger.info("Initialized CV2-DNN Detector...")
+        logger.info("Initialized cv2 DNN Detector.")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in grayscale image """

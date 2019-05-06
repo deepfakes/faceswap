@@ -505,8 +505,9 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
             "help": "R|Aligner to use."
-                    "\nL|'dlib': Dlib Pose Predictor. Faster, less "
-                    "resource intensive, but less accurate."
+                    "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
+                    "resource intensive, but less accurate. Only use this if not using a gpu "
+                    " and time is important."
                     "\nL|'fan': Face Alignment Network. Best aligner. "
                     "GPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
