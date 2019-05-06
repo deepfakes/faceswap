@@ -38,10 +38,10 @@ class Mask(Adjustment):
 
     def process(self, new_face):
         """ The blend box function. Adds the created mask to the alpha channel """
-        if not self.skip:
+        if self.skip:
+            logger.trace("Skipping blend box")
+        else:
             logger.trace("Blending box")
             new_face = np.clip(np.concatenate((new_face, self.mask), axis=-1), 0., 1.)
             logger.trace("Blended box")
-        else:
-            logger.trace("Skipping blend box")
         return new_face

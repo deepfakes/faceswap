@@ -130,7 +130,7 @@ class Converter():
         """ Run the pre-warp adjustments """
         logger.trace("old_face shape: %s, new_face shape: %s, predicted_mask shape: %s",
                      old_face.shape, new_face.shape,
-                     predicted_mask.shape if predicted_mask  is not None else None)
+                     predicted_mask.shape if predicted_mask is not None else None)
         new_face = self.adjustments["box"].run(new_face)
         new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
         if self.adjustments["color"] is not None:

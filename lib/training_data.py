@@ -147,10 +147,11 @@ class TrainingDataGenerator():
 
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             src_pts = self.get_landmarks(filename, image, side)
-        if self.mask_class:
-            image = Mask(src_pts, image, self.mask_class, channels=4).mask
-
-        image = image.astype('float32') / 255.0
+        else:
+            src_pts = None
+            self.mask_class = "default"
+        image = image.astype("float32") / 255.
+        image = Mask(src_pts, image, self.mask_class, channels=4).mask
 
         if augmenting:
             image = self.processing.random_transform(image)
@@ -220,12 +221,6 @@ class ImageManipulation():
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
         self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @staticmethod
-    def color_adjust(img):
-        """ Color adjust RGB image """
-        logger.trace("Color adjusting image")
-        return img.astype('float32') / 255.0
 
     @staticmethod
     def separate_mask(image):

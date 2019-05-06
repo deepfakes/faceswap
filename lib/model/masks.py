@@ -167,22 +167,21 @@ class Mask():
 
     def default(self, mask):
         """ Basic facehull mask """
-        mask = 1.
-        print(default.shape)
+        mask += 1.
         return mask
 
     def nirkin_500(self, mask):
         """ Basic facehull mask """
-        mask = 1.
+        mask += 1.
         return mask
 
     def nirkin_300(self, mask):
         """ Basic facehull mask """
-        mask = 1.
+        mask += 1.
         return mask
 
     def ternaus_256(self, mask):
         """ Basic facehull mask """
-        mask = 1.
+        mask += 1.
         return mask
 
