@@ -4,7 +4,7 @@
         code sample + contribs """
 
 from keras.initializers import RandomNormal
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, SpatialDropout2D
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, SpatialDropout2D, Concatenate
 from keras.models import Model as KerasModel
 
 from .original import logger, Model as OriginalModel

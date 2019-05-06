@@ -4,7 +4,7 @@
     Adapted from a model by VillainGuy (https://github.com/VillainGuy) """
 
 from keras.initializers import RandomNormal
-from keras.layers import Add, Conv2D, Dense, Flatten, Input, Reshape
+from keras.layers import Add, Conv2D, Dense, Flatten, Input, Reshape, Concatenate
 from keras.models import Model as KerasModel
 
 from lib.model.layers import PixelShuffler
@@ -38,7 +38,7 @@ class Model(OriginalModel):
         initial_conv = var_x
         for _ in range(res_cycles):
             var_x = self.blocks.res_block(var_x, 128, **kwargs)
-        var_x = Add()[var_x, initial_conv])
+        var_x = Add()([var_x, initial_conv])
         var_x = self.blocks.conv(var_x, 128, **kwargs)
         var_x = PixelShuffler()(var_x)
         var_x = self.blocks.conv(var_x, 128, **kwargs)

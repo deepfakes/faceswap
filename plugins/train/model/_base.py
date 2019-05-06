@@ -11,7 +11,6 @@ import time
 
 from json import JSONDecodeError
 
-import keras
 from keras import losses
 from keras import backend as K
 from keras.models import load_model, Model

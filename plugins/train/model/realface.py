@@ -9,7 +9,7 @@
     """
 
 from keras.initializers import RandomNormal
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, Concatenate
 from keras.models import Model as KerasModel
 
 from ._base import ModelBase, logger
@@ -46,11 +46,11 @@ class Model(ModelBase):
 
     def check_input_output(self):
         """ Confirm valid input and output sized have been provided """
-        if not 64 <= self.config["input_size"] <=128 or self.config["input_size"] % 16 != 0:
+        if not 64 <= self.config["input_size"] <= 128 or self.config["input_size"] % 16 != 0:
             logger.error("Config error: input_size must be between 64 and 128 and be divisible by "
                          "16.")
             exit(1)
-        if not 64 <= self.config["output_size"] <=256 or self.config["output_size"] % 16 != 0:
+        if not 64 <= self.config["output_size"] <= 256 or self.config["output_size"] % 16 != 0:
             logger.error("Config error: output_size must be between 64 and 256 and be divisible by "
                          "16.")
             exit(1)
@@ -102,10 +102,9 @@ class Model(ModelBase):
             var_x = self.blocks.conv(var_x, encoder_complexity * 2**idx)
             var_x = self.blocks.res_block(var_x, encoder_complexity * 2**idx, use_bias=True)
             var_x = self.blocks.res_block(var_x, encoder_complexity * 2**idx, use_bias=True)
+        var_x = self.blocks.conv(var_x, encoder_complexity * 2**self.downscalers_no)
 
-        var_x = self.blocks.conv(var_x, encoder_complexity * 2**(idx + 1))
-
-        return KerasModel(input_, var_x)
+        return KerasModel([face_, mask_], var_x)
 
     def decoder_b(self):
         """ RealFace Decoder Network """
@@ -127,7 +126,7 @@ class Model(ModelBase):
             var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**idx)
             var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2**idx, use_bias=False)
             var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2**idx, use_bias=True)
-        var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**(idx + 1))
+        var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**self.downscalers_no)
 
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
 
@@ -138,7 +137,7 @@ class Model(ModelBase):
             mask_b_complexity = 384
             for idx in range(self.upscalers_no-2):
                 var_y = self.blocks.upscale(var_y, mask_b_complexity // 2**idx)
-            var_y = self.blocks.upscale(var_y, mask_b_complexity // 2**(idx + 1))
+            var_y = self.blocks.upscale(var_y, mask_b_complexity // 2**self.downscalers_no)
 
             var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
 
@@ -168,7 +167,7 @@ class Model(ModelBase):
         decoder_a_complexity = int(self.config['complexity_decoder'] / 1.5)
         for idx in range(self.upscalers_no-2):
             var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**idx)
-        var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**(idx + 1))
+        var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**self.downscalers_no)
 
         var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
 

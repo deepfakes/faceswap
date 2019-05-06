@@ -39,7 +39,8 @@ class Model(ModelBase):
         inter_both = self.networks["inter"].network
         for side in ("a", "b"):
             inter_side = self.networks["intermediate_{}".format(side)].network
-            output = decoder([inter_side(encoder(inputs[0])), inter_both(encoder(inputs[0]))])            autoencoder = KerasModel(inputs, output)
+            output = decoder([inter_side(encoder(inputs[0])), inter_both(encoder(inputs[0]))])
+            autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 

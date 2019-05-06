@@ -22,16 +22,15 @@
 import logging
 import os
 import time
-
 import cv2
 import numpy as np
 
-from tensorflow import keras as tf_keras
-
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator, stack_images
+from lib.training_data import TrainingDataGenerator
 from lib.utils import get_folder, get_image_paths
+from pathlib import Path
+from tensorflow import keras as tf_keras
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -305,53 +304,41 @@ class Samples():
 
     def show_sample(self):
         """ Display preview data """
-        if len(self.images) != 2:
+        if len(self.images) == 2:
+            logger.debug("Showing sample")
+            display = dict()
+            for side, samples in self.images.items():
+                other_side = "a" if side == "b" else "b"
+                _, faces, masks = samples
+                if self.model.input_shape[0] / faces.shape[1] != 1.:
+                    faces = self.resize_samples(side, faces, self.model.input_shape[0])
+                    faces = faces.reshape((-1, ) + self.model.input_shape)
+                model_inputs = [faces, masks]
+
+                logger.debug("Getting Predictions for side %s", side)
+                reconstructions = self.model.predictors[side].predict(model_inputs)[0]
+                swaps = self.model.predictors[other_side].predict(model_inputs)[0]
+                logger.debug("Returning predictions: %s", swaps.shape)
+
+                display = self.patch_into_frame(side, samples, [reconstructions, swaps])
+                header = self.get_headers(side, other_side, display[0].shape[1])
+                figures = np.stack([display[0], display[1], display[2]], axis=1)
+                if self.images[side][0].shape[0] % 2 == 1:
+                    figures = np.concatenate([figures, figures[-1:]])
+
+                first_half, second_half = np.split(figures, 2)
+                doubled_header = np.concatenate([header, header], axis=1)
+                doubled_figures = np.concatenate([first_half, second_half], axis=1)
+                display[side] = np.concatenate([doubled_header, doubled_figures], axis=0)
+
+            full_display = np.concatenate([display["a"], display["b"]], axis=1)
+            full_display = np.clip(full_display * 255., 0., 255.).astype('uint8')
+            logger.debug("Compiled sample")
+        else:
+            full_display = None
             logger.debug("Ping Pong training - Only one side trained. Aborting preview")
-            return None
-        logger.debug("Showing sample")
-        feeds = dict()
-        figures = dict()
-        headers = dict()
-        for side, samples in self.images.items():
-            faces = samples[1]
-            scale = self.model.input_shape[0] / faces.shape[1]
-            if  scale != 1.:
-                feeds[side] = self.resize_sample(side, faces, scale)
-                print(faces.shape)
-                print(feeds[side].shape)
-                feeds[side] = feeds[side].reshape((-1, ) + self.model.input_shape)
-            else:
-                feeds[side] = faces
-            if self.use_mask:
-                mask = samples[-1]
-                feeds[side] = [feeds[side], mask]
 
-        preds = self.get_predictions(feeds["a"], feeds["b"])
-
-        for side, samples in self.images.items():
-            other_side = "a" if side == "b" else "b"
-            predictions = np.stack([preds["{}_{}".format(side, side)],
-                                    preds["{}_{}".format(other_side, side)]])
-            display = self.patch_into_frame(side, samples, predictions)
-            headers[side] = self.get_headers(side, other_side, display[0].shape[1])
-            figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
-            if self.images[side][0].shape[0] % 2 == 1:
-                figures[side] = np.concatenate([figures[side], figures[side][0:1]])
-
-        width = 4
-        side_cols = width // 2
-        if side_cols != 1:
-            headers = self.duplicate_headers(headers, side_cols)
-
-        header = np.concatenate([headers["a"], headers["b"]], axis=1)
-        figure = np.concatenate([figures["a"], figures["b"]], axis=0)
-        height = int(figure.shape[0] / width)
-        figure = figure.reshape((width, height) + figure.shape[1:])
-        figure = stack_images(figure)
-        figure = np.stack((header, figure), axis=0)
-
-        logger.debug("Compiled sample")
-        return np.clip(figure * 255., 0., 255.).astype('uint8')
+        return full_display
 
     @staticmethod
     def resize_samples(side, samples, scale):
@@ -361,7 +348,7 @@ class Samples():
                          side, samples[0].shape, scale)
             interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
             samples = np.stack(np.stack(cv2.resize(img, None, fx=scale, fy=scale,  # pylint: disable=no-member
-                                        interpolation=interp) for img in face_batch) for face_batch in samples)
+                                                   interpolation=interp) for img in face_batch) for face_batch in samples)
             logger.debug("Resized sample: (side: '%s' shape: %s)", side, samples[0].shape)
         return samples
 
@@ -385,12 +372,12 @@ class Samples():
         """ Patch the images into the full frame """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
-                     
+
         frames, original_faces, masks = samples
-        images = np.concatenate([original_faces[None,...], predictions], axis=0)
+        images = np.concatenate([original_faces[None, ...], predictions], axis=0)
         unadjusted_scale = frames.shape[1] / original_faces.shape[1]
-        target_scale = unadjusted_scale * self.coverage_ratio 
-        new_scale = unadjusted_scale * self.scaling 
+        target_scale = unadjusted_scale * self.coverage_ratio
+        new_scale = unadjusted_scale * self.scaling
 
         if self.use_mask:
             images = self.compile_masked(images, masks)
@@ -402,11 +389,10 @@ class Samples():
             images = self.resize_samples(side, images, new_scale)
         return images
 
-    @staticmethod
-    def frame_overlay(frames):
+    def frame_overlay(self, frames):
         """ Add roi frame to a backfround image """
-        logger.debug("full_size: %s, color: %s", frames.shape[1], color)
         color = (0., 0., 1.)
+        logger.debug("full_size: %s, color: %s", frames.shape[1], color)
         full_size = frames.shape[1]
         padding = (full_size * (1. - self.coverage_ratio)) // 2
         length = (full_size * self.coverage_ratio) // 4
@@ -427,7 +413,7 @@ class Samples():
         red_area = (np.rint(masks) == 0.)
         coloring = np.zeros_like(masks)
         coloring[red_area] = 0.3
-        images[...,-1:] += coloring
+        images[..., -1:] += coloring
         logger.debug("masked shapes: %s", [faces.shape for faces in images[0]])
         return images
 
@@ -447,28 +433,28 @@ class Samples():
 
     def get_headers(self, side, other_side, width):
         """ Set headers for images """
-        logger.debug("side: '%s', other_side: '%s', width: %s",
-                     side, other_side, width)
+
+        def t_size(self, text, font):
+            """ Helper function for list comprehension """
+            return cv2.getTextSize(text, font, self.scaling, 1)[0]  # pylint: disable=no-member
+
+        logger.debug("side: '%s', other_side: '%s', width: %s", side, other_side, width)
         side = side.upper()
         other_side = other_side.upper()
-        height = int(64 * self.scaling)
+        height = int(64. * self.scaling)
         widths = [0, width, width * 2]
-        total_width = width * 3
         texts = ["Target {}".format(side),
                  "{} > {}".format(side, side),
                  "{} > {}".format(side, other_side)]
-        logger.debug("height: %s, total_width: %s", height, total_width)
+        logger.debug("height: %s, total_width: %s", height, width * 3)
 
-        def t_size(self, text):
-            font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-            return cv2.getTextSize(text, font, self.scaling, 1)[0]
-
-        text_sizes = [self.t_size(text) for text in texts]  # pylint: disable=no-member
+        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+        text_sizes = [self.t_size(text, font) for text in texts]  # pylint: disable=no-member
         text_y = int((height + text_sizes[0][1]) / 2)
         text_xs = [int((width - text[0]) / 2) + widths for text in text_sizes]
         logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
-                     texts, text_sizes, text_x, text_y)
-        header_box = np.ones((height, total_width, 3), np.float32)
+                     texts, text_sizes, text_xs, text_y)
+        header_box = np.ones((height, width * 3, 3), np.float32)
         for text_x, text in zip(text_xs, texts):
             cv2.putText(header_box,  # pylint: disable=no-member
                         text,

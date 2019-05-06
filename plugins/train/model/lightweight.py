@@ -3,7 +3,7 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contribs """
 
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, Concatenate
 from keras.models import Model as KerasModel
 
 from .original import logger, Model as OriginalModel

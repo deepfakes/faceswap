@@ -393,27 +393,3 @@ class ImageManipulation():
         logger.trace("Randomly warped image and mask")
         return [warped_image, target_image, target_mask]
 
-
-def stack_images(images):
-    """ Stack images """
-    logger.debug("Stack images")
-
-    def get_transpose_axes(num):
-        if num % 2 == 0:
-            logger.debug("Even number of images to stack")
-            y_axes = list(range(1, num - 1, 2))
-            x_axes = list(range(0, num - 1, 2))
-        else:
-            logger.debug("Odd number of images to stack")
-            y_axes = list(range(0, num - 1, 2))
-            x_axes = list(range(1, num - 1, 2))
-        return y_axes, x_axes, [num - 1]
-
-    images_shape = np.array(images.shape)
-    new_axes = get_transpose_axes(len(images_shape))
-    new_shape = [np.prod(images_shape[x]) for x in new_axes]
-    logger.debug("Stacked images")
-    return np.transpose(
-        images,
-        axes=np.concatenate(new_axes)
-        ).reshape(new_shape)
