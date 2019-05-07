@@ -60,10 +60,11 @@ class TrainerBase():
         self.samples = Samples(self.model,
                                self.model.training_opts["coverage_ratio"],
                                self.model.training_opts["preview_scaling"])
-        self.timelapse = Timelapse(self.model,
-                                   self.model.training_opts["coverage_ratio"],
-                                   self.batchers,
-                                   timelapse_kwargs)
+        if timelapse_kwargs:
+            self.timelapse = Timelapse(self.model,
+                                       self.model.training_opts["coverage_ratio"],
+                                       self.batchers,
+                                       timelapse_kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -158,17 +159,14 @@ class TrainerBase():
         """ Preview Samples """
         if viewer:
             for side, batcher in self.batchers.items():
-                #_, _, self.samples.images[side] = batcher[side].get_next("preview")
-                print()
-                print(side, self.batchers.items)
-                one_item = batcher[side].get_next("preview")
+                _, _, self.samples.images[side] = batcher.get_next("preview")
             samples = self.samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
         if timelapse:
             for side, batcher in self.batchers.items():
-                _, _, self.timelapse.samples.images[side] = batcher[side].get_next("timelapse")
+                _, _, self.timelapse.samples.images[side] = batcher.get_next("timelapse")
             self.timelapse.output_timelapse()
 
     def store_history(self, side, loss):
@@ -228,7 +226,7 @@ class Batcher():
         inputs = [batch[1], batch[2]]
         targets = [batch[3], batch[4]]
         samples = None
-        if feed != "training":
+        if purpose != "training":
             samples = [batch[0]] + targets
         return inputs, targets, samples
 
@@ -243,7 +241,6 @@ class Batcher():
                                           output_size,
                                           batch_size,
                                           self.model.training_opts)
-        #name = "{0}_{1}".format(purpose,side)
         self.feed[purpose] = generator.minibatch_ab(images,
                                                     side,
                                                     do_shuffle=do_shuffle,

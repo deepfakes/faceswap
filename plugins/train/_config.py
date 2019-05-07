@@ -59,18 +59,35 @@ class Config(FaceswapConfig):
             section=section, title="image_loss_function", datatype=str,
             default="Mean_Absolute_Error",
             choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
-                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "l_inf_norm"],
-            info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
+                     "Smooth_L1", "L_inf_norm", "SSIM", "GMSD", "Total_Variation"],
+            info="General Loss Discussion \n"
+                 "http://www.cs.cornell.edu/courses/cs4780/2015fa/web/lecturenotes/lecturenote10.html \n"
+                 "\nMean_Absolute_Error ---\n"
+                 "https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0 \n"
+                 "\nMean_Squared_Error ---\n"
+                 "https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0 \n"
+                 "\nLogCosh ---\n"
+                 "https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0 \n"
+                 "\nSmooth_L1 ---\n"
+                 "https://arxiv.org/pdf/1701.03077.pdf \n"
+                 "\nL_inf_norm ---\n"
+                 "https://medium.com/@montjoile/l0-norm-l1-norm-l2-norm-l-infinity-norm-7a7d18a4f40c \n"
+                 "\nSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
                  "for training the neural net's image reconstruction in lieu of \n"
                  "Mean Absolute Error. Potentially better textural, second-order \n"
                  "statistics, and translation invariance than MAE.\n"
-                 "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
+                 "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf \n"
+                 "\nGMSD ---\n"
+                 "https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf \n"
+                 "\nTotal_Variation ---\n"
+                 "https://en.wikipedia.org/wiki/Total_variation_denoising \n"
+                 )
         self.add_item(
-            section=section, title="mask-penalized_loss", datatype=bool, default=True,
+            section=section, title="penalized_mask_loss", datatype=bool, default=True,
             info="\nImage loss function is weighted by mask presence. For areas of \n"
                  "the image without the facial mask, reconstuction errors will be \n"
-                 "ignored. May increase overall quality by focusing attention on \n"
-                 "the core face area.")
+                 "ignored while the masked face area is prioritized. May increase \n"
+                 "overall quality by focusing attention on the core face area.")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"

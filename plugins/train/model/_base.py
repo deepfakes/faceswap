@@ -296,7 +296,7 @@ class ModelBase():
                      'GMSD':                   gmsd_loss,
                      'Total_Variation':        gradient_loss,
                      'Smooth_L1':              generalized_loss,
-                     'l_inf_norm':             l_inf_norm}
+                     'L_inf_norm':             l_inf_norm}
         img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
         mask_loss_config = "Mean_Squared_Error"
 
