@@ -22,15 +22,15 @@
 import logging
 import os
 import time
+from pathlib import Path
 import cv2
 import numpy as np
 
+from tensorflow import keras as tf_keras
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator
 from lib.utils import get_folder, get_image_paths
-from pathlib import Path
-from tensorflow import keras as tf_keras
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -199,9 +199,16 @@ class Batcher():
         self.model = model
         self.batch_size = batch_size
         self.feed = dict()
-        self.set_dataset_feed(side, images, batch_size, "training", True, True)
-        self.set_dataset_feed(side, images, batch_size, "preview", True, False)
-        #self.set_dataset_feed(side, images, batch_size, "timelapse", False, False)
+        dataset_kwargs = {"side":          side,
+                          "images":        images,
+                          "batch_size":    batch_size,
+                          "purpose":       "training",
+                          "do_shuffle":    True,
+                          "augmenting":    True}
+        self.set_dataset_feed(**dataset_kwargs)
+        dataset_kwargs["purpose"] = "preview"
+        dataset_kwargs["augmenting"] = False
+        self.set_dataset_feed(**dataset_kwargs)
 
     def train_one_batch(self):
         """ Train a batch """
@@ -211,7 +218,8 @@ class Batcher():
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self, feed):
+    @staticmethod
+    def get_next(feed):
         """ Return the next batch from the generator
             Items should come out as: (full_coverage_img, warped, target, mask]) """
         batch = next(feed)
@@ -222,23 +230,22 @@ class Batcher():
             samples = [batch[0]] + targets
         return inputs, targets, samples
 
-    def load_generator(self):
-        return generator
-
-    def set_dataset_feed(self, side, images, batch_size, type, do_shuffle, augmenting):
+    def set_dataset_feed(self, side, images, batch_size, purpose, do_shuffle, augmenting):
         """ Set the feed dataset with TrainingDataGenerator """
         logger.debug("Loading '%s' generator: (side: '%s', input_images: '%s', batchsize: %s)",
-                     type, side, images, batch_size)
+                     purpose, side, images, batch_size)
+        input_size = self.model.input_shape[0]
+        output_size = self.model.output_shape[0]
         logger.debug("input_size: %s, output_size: %s", input_size, output_size)
-        generator = TrainingDataGenerator(self.model.input_shape[0],
-                                          self.model.output_shape[0],
+        generator = TrainingDataGenerator(input_size,
+                                          output_size,
                                           batch_size,
                                           self.model.training_opts)
-        self.feed[type] = generator.minibatch_ab(images,
-                                                 side,
-                                                 do_shuffle=do_shuffle,
-                                                 augmenting=augmenting)
-        logger.debug("'%s' dataset created", type)
+        self.feed[purpose] = generator.minibatch_ab(images,
+                                                    side,
+                                                    do_shuffle=do_shuffle,
+                                                    augmenting=augmenting)
+        logger.debug("'%s' dataset created", purpose)
 
 
 class Samples():
@@ -263,23 +270,22 @@ class Samples():
                 if self.model.input_shape[0] / faces.shape[1] != 1.:
                     faces = self.resize_samples(side, faces, self.model.input_shape[0])
                     faces = faces.reshape((-1, ) + self.model.input_shape)
-                model_inputs = [faces, masks]
 
                 logger.debug("Getting Predictions for side %s", side)
-                reconstructions = self.model.predictors[side].predict(model_inputs)[0]
-                swaps = self.model.predictors[other_side].predict(model_inputs)[0]
+                reconstructions = self.model.predictors[side].predict([faces, masks])[0]
+                swaps = self.model.predictors[other_side].predict([faces, masks])[0]
                 logger.debug("Returning predictions: %s", swaps.shape)
 
-                display = self.patch_into_frame(side, samples, [reconstructions, swaps])
-                header = self.get_headers(side, other_side, display[0].shape[1])
-                figures = np.stack([display[0], display[1], display[2]], axis=1)
+                imgs = self.patch_into_frame(side, samples, [reconstructions, swaps])
+                header = self.get_headers(side, other_side, imgs[0].shape[1])
+                figures = np.stack([imgs[0], imgs[1], imgs[2]], axis=1)
                 if self.images[side][0].shape[0] % 2 == 1:
                     figures = np.concatenate([figures, figures[-1:]])
 
-                first_half, second_half = np.split(figures, 2)
-                doubled_header = np.concatenate([header, header], axis=1)
-                doubled_figures = np.concatenate([first_half, second_half], axis=1)
-                display[side] = np.concatenate([doubled_header, doubled_figures], axis=0)
+                halves = np.split(figures, 2)
+                header = np.concatenate([header, header], axis=1)
+                figures = np.concatenate([halves[0], halves[1]], axis=1)
+                display[side] = np.concatenate([header, figures], axis=0)
 
             full_display = np.concatenate([display["a"], display["b"]], axis=1)
             full_display = np.clip(full_display * 255., 0., 255.).astype('uint8')
@@ -301,22 +307,6 @@ class Samples():
                                                    interpolation=interp) for img in face_batch) for face_batch in samples)
             logger.debug("Resized sample: (side: '%s' shape: %s)", side, samples[0].shape)
         return samples
-
-    def get_predictions(self, feed_a, feed_b):
-        """ Return the sample predictions from the model """
-        logger.debug("Getting Predictions")
-        preds = dict()
-        preds["a_a"] = self.model.predictors["a"].predict(feed_a)
-        preds["b_a"] = self.model.predictors["b"].predict(feed_a)
-        preds["a_b"] = self.model.predictors["a"].predict(feed_b)
-        preds["b_b"] = self.model.predictors["b"].predict(feed_b)
-
-        # Get the returned image from predictors that emit multiple items
-        if not isinstance(preds["a_a"], np.ndarray):
-            for key, val in preds.items():
-                preds[key] = val[0]
-        logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
-        return preds
 
     def patch_into_frame(self, side, samples, predictions):
         """ Patch the images into the full frame """
@@ -391,9 +381,9 @@ class Samples():
         other_side = other_side.upper()
         height = int(64. * self.scaling)
         widths = [0, width, width * 2]
-        texts = ["Target {}".format(side),
-                 "{} > {}".format(side, side),
-                 "{} > {}".format(side, other_side)]
+        texts = ["Target {0}".format(side),
+                 "{0} > {0}".format(side),
+                 "{0} > {1}".format(side, other_side)]
         logger.debug("height: %s, total_width: %s", height, width * 3)
 
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
@@ -450,8 +440,8 @@ class Timelapse():
 
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
         batch_size = min(len(images["a"]),
-                        len(images["b"]),
-                        self.model.training_opts.get("preview_images", 14))
+                         len(images["b"]),
+                         self.model.training_opts.get("preview_images", 14))
         for side, images in images.items():
             self.batchers[side].set_dataset_feed(side, images, batch_size,
                                                  "timelapse", False, False)

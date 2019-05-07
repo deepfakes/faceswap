@@ -298,7 +298,7 @@ class ModelBase():
                      'Smooth_L1':              generalized_loss,
                      'l_inf_norm':             l_inf_norm}
         img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
-        mask_loss_config = self.config.get("mask_loss_function", "Mean_Squared_Error")
+        mask_loss_config = "Mean_Squared_Error"
 
         if side == "a" and not self.predict and initialize:
             logger.verbose("Using %s loss function for image", img_loss_config)

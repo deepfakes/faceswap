@@ -66,16 +66,6 @@ class Config(FaceswapConfig):
                  "statistics, and translation invariance than MAE.\n"
                  "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
         self.add_item(
-            section=section, title="mask_loss_function", datatype=str,
-            default="Mean_Squared_Error",
-            choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
-                     "SSIM", "GMSD", "Total_Variation", "Smooth_L1", "l_inf_norm"],
-            info="\nDSSIM ---\n Use Structural Dissimilarity Index as a loss function \n"
-                 "for training the neural net's image reconstruction in lieu of \n"
-                 "Mean Absolute Error. Potentially better textural, second-order \n"
-                 "statistics, and translation invariance than MAE.\n"
-                 "http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf\n")
-        self.add_item(
             section=section, title="mask-penalized_loss", datatype=bool, default=True,
             info="\nImage loss function is weighted by mask presence. For areas of \n"
                  "the image without the facial mask, reconstuction errors will be \n"
