@@ -90,7 +90,7 @@ class Config(FaceswapConfig):
                  "\nLogCosh ---\n"
                  "log(cosh(x)) is approximately equal to MSE / 2 for small errors \n"
                  "and to MAE - log(2) for large errors. Like MSE, it is differentiable \n"
-                 "and has a declining gradient for increasingly small errors, Like MAE, \n"
+                 "and has a declining gradient for increasingly small errors. Like MAE, \n"
                  "it is robust to outliers."
                  "https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0 \n"
                  "\nSmooth_L1 ---\n"
@@ -134,13 +134,17 @@ class Config(FaceswapConfig):
             section=section, title="mask_type", datatype=str, default="dfl_full",
             choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
-            section=section, title="coverage", datatype=float, default=75.0, rounding=1,
+            section=section, title="coverage", datatype=float, default=75., rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(1e-6, 1e-4), rounding=6, fixed=False,
-            info="Learning rate - how fast your network will learn.\n"
-                 "Note that: Higher values might result in RSoD failure.")
+            info="Learning rate - how fast your network will learn (how large are \n"
+                 "the modifications to the model weights after one batch of training).\n"
+                 "Values that are too large might result in model crashes and the \n"
+                 "inability of the model to find the best solution.\n"
+                 "Values that are too small might be unable to escape from dead-ends \n"
+                 "and find the best global minimum.")
 
 
         # << ORIGINAL MODEL OPTIONS >> #
