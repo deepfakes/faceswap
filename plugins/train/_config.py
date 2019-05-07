@@ -40,13 +40,13 @@ class Config(FaceswapConfig):
                  "This strategy is designed for  sub-pixel / pixel shuffler upscaling \n"
                  "and should only be used on upscaling layers. This can help reduce the \n"
                  "'checkerboard effect' when upscaling the image in the decoder.\n"
-                 "https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
+                 "https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf \n")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="\nUse subpixel upscaling rather than pixel shuffler. These techniques \n"
                  "are both designed to produce better resolving upscaling than other \n"
                  "methods. Each perform the same operations, but using different TF opts.\n"
-                 "https://arxiv.org/pdf/1609.05158.pdf")
+                 "https://arxiv.org/pdf/1609.05158.pdf \n")
         self.add_item(
             section=section, title="reflect_padding", datatype=bool, default=False,
             info="\nUse reflection padding rather than zero padding when either \n"
@@ -54,13 +54,13 @@ class Config(FaceswapConfig):
                  "pad the image/feature boundaries to maintain the proper sizing. \n"
                  "More complex padding schemes can reduce artifacts at the border \n"
                  "of the image.\n"
-                 "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
+                 "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt \n")
         self.add_item(
             section=section, title="image_loss_function", datatype=str,
             default="Mean_Absolute_Error",
             choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
                      "Smooth_L1", "L_inf_norm", "SSIM", "GMSD", "Total_Variation"],
-            info="General Loss Discussion \n"
+            info="\nGeneral Loss Discussion \n"
                  "http://www.cs.cornell.edu/courses/cs4780/2015fa/web/lecturenotes/lecturenote10.html \n"
                  "\nMean_Absolute_Error ---\n"
                  "https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0 \n"
@@ -87,7 +87,7 @@ class Config(FaceswapConfig):
             info="\nImage loss function is weighted by mask presence. For areas of \n"
                  "the image without the facial mask, reconstuction errors will be \n"
                  "ignored while the masked face area is prioritized. May increase \n"
-                 "overall quality by focusing attention on the core face area.")
+                 "overall quality by focusing attention on the core face area.\n")
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
