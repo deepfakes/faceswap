@@ -8,7 +8,7 @@
     For each source frame, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of dlib.rectangles>}
+     "detected_faces": <list of BoundingBoxes>} (Class defined in /lib/faces_detect)
     """
 
 import logging
@@ -17,8 +17,8 @@ import traceback
 from io import StringIO
 
 import cv2
-import dlib
 
+from lib.faces_detect import BoundingBox
 from lib.gpu_stats import GPUStats
 from lib.utils import rotate_landmarks, GetModel
 from plugins.extract._config import Config
@@ -82,7 +82,7 @@ class Detector():
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image
             Override for specific detector
-            Must return a list of dlib rects"""
+            Must return a list of BoundingBox's"""
         try:
             if not self.init:
                 self.initialize(*args, **kwargs)
@@ -141,8 +141,7 @@ class Detector():
         """ Filter out any faces smaller than the min size threshold """
         retval = list()
         for face in detected_faces:
-            face_size = ((face.right() - face.left()) ** 2 +
-                         (face.bottom() - face.top()) ** 2) ** 0.5
+            face_size = (face.width ** 2 + face.height ** 2) ** 0.5
             if face_size < self.min_size:
                 logger.debug("Removing detected face: (face_size: %s, min_size: %s",
                              face_size, self.min_size)
@@ -243,11 +242,11 @@ class Detector():
         return self.rotate_image_by_angle(image, angle)
 
     @staticmethod
-    def rotate_rect(d_rect, rotation_matrix):
-        """ Rotate a dlib rect based on the rotation_matrix"""
-        logger.trace("Rotating d_rectangle")
-        d_rect = rotate_landmarks(d_rect, rotation_matrix)
-        return d_rect
+    def rotate_rect(bounding_box, rotation_matrix):
+        """ Rotate a BoundingBox based on the rotation_matrix"""
+        logger.trace("Rotating BoundingBox")
+        bounding_box = rotate_landmarks(bounding_box, rotation_matrix)
+        return bounding_box
 
     @staticmethod
     def rotate_image_by_angle(image, angle,
@@ -311,21 +310,6 @@ class Detector():
         logger.trace("Returning batch size: %s", len(batch))
         return (exhausted, batch)
 
-    # <<< DLIB RECTANGLE METHODS >>> #
-    @staticmethod
-    def is_mmod_rectangle(d_rectangle):
-        """ Return whether the passed in object is
-            a dlib.mmod_rectangle """
-        return isinstance(
-            d_rectangle,
-            dlib.mmod_rectangle)  # pylint: disable=c-extension-no-member
-
-    def convert_to_dlib_rectangle(self, d_rect):
-        """ Convert detected mmod_rects to dlib_rectangle """
-        if self.is_mmod_rectangle(d_rect):
-            return d_rect.rect
-        return d_rect
-
     # <<< MISC METHODS >>> #
     @staticmethod
     def get_vram_free():
@@ -340,10 +324,10 @@ class Detector():
 
     @staticmethod
     def set_predetected(width, height):
-        """ Set a dlib rectangle for predetected faces """
+        """ Set a BoundingBox for predetected faces """
         # Predetected_face is used for sort tool.
         # Landmarks should not be extracted again from predetected faces,
         # because face data is lost, resulting in a large variance
         # against extract from original image
         logger.debug("Setting predetected face")
-        return [dlib.rectangle(0, 0, width, height)]  # pylint: disable=c-extension-no-member
+        return [BoundingBox(0, 0, width, height)]

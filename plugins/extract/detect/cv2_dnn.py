@@ -4,7 +4,7 @@ from time import sleep
 
 import numpy as np
 
-from ._base import cv2, Detector, dlib, logger
+from ._base import BoundingBox, cv2, Detector, logger
 
 
 class Detect(Detector):
@@ -86,14 +86,12 @@ class Detect(Detector):
         logger.trace("Processing Output: (faces: %s, rotation_matrix: %s)",
                      faces, rotation_matrix)
 
-        faces = [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(face[0]), int(face[1]), int(face[2]), int(face[3])) for face in faces]
+        faces = [BoundingBox(face[0], face[1], face[2], face[3]) for face in faces]
         if isinstance(rotation_matrix, np.ndarray):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
-        detected = [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(face.left() / scale), int(face.top() / scale),
-            int(face.right() / scale), int(face.bottom() / scale))
+        detected = [BoundingBox(face.left / scale, face.top / scale,
+                                face.right / scale, face.bottom / scale)
                     for face in faces]
 
         logger.trace("Processed Output: %s", detected)

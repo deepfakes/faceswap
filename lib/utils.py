@@ -14,11 +14,10 @@ from re import finditer
 
 import cv2
 import numpy as np
-import dlib
 
 from tqdm import tqdm
 
-from lib.faces_detect import DetectedFace
+from lib.faces_detect import BoundingBox, DetectedFace
 from lib.logger import get_loglevel
 
 
@@ -120,7 +119,7 @@ def rotate_landmarks(face, rotation_matrix):
     # pylint: disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
-        Pass in a DetectedFace object, Alignments dict or DLib rectangle"""
+        Pass in a DetectedFace object, Alignments dict or BoundingBox"""
     logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
                  rotation_matrix, type(face))
     if isinstance(face, DetectedFace):
@@ -140,12 +139,11 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)]]
         landmarks = face.get("landmarksXY", list())
 
-    elif isinstance(face,
-                    dlib.rectangle):  # pylint: disable=c-extension-no-member
-        bounding_box = [[face.left(), face.top()],
-                        [face.right(), face.top()],
-                        [face.right(), face.bottom()],
-                        [face.left(), face.bottom()]]
+    elif isinstance(face, BoundingBox):
+        bounding_box = [[face.left, face.top],
+                        [face.right, face.top],
+                        [face.right, face.bottom],
+                        [face.left, face.bottom]]
         landmarks = list()
     else:
         raise ValueError("Unsupported face type")
@@ -190,8 +188,7 @@ def rotate_landmarks(face, rotation_matrix):
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
             face["landmarksXY"] = rotated_landmarks
     else:
-        rotated_landmarks = dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(pt_x), int(pt_y), int(pt_x1), int(pt_y1))
+        rotated_landmarks = BoundingBox(pt_x, pt_y, pt_x1, pt_y1)
         face = rotated_landmarks
 
     logger.trace("Rotated landmarks: %s", rotated_landmarks)

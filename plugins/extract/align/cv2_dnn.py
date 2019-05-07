@@ -59,9 +59,8 @@ class Align(Aligner):
         """ Align the incoming image for prediction """
         logger.trace("Aligning image around center")
 
-        box = (detected_face.left(), detected_face.top(),
-               detected_face.right(), detected_face.bottom())
-        diff_height_width = (box[3] - box[1]) - (box[2] - box[0])
+        box = (detected_face.left, detected_face.top, detected_face.right, detected_face.bottom)
+        diff_height_width = detected_face.height - detected_face.width
         offset_y = int(abs(diff_height_width / 2))
         box_moved = self.move_box(box, [0, offset_y])
 
