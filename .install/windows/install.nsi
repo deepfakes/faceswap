@@ -353,7 +353,7 @@ Function SetEnvironment
 #    SetDetailsPrint both
     DetailPrint "Creating Conda Virtual Environment..."
 
-    IfFileExists  "$dirConda\envs\faceswap" DeleteEnv CreateEnv
+    IfFileExists  "$dirConda\envs\$envName" DeleteEnv CreateEnv
         DeleteEnv:
             SetDetailsPrint listonly
             ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda env remove -y -n $\"$envName$\" && conda deactivate" $0

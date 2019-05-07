@@ -2,6 +2,7 @@
 """ Information on available Nvidia GPUs """
 
 import logging
+import os
 import platform
 
 if platform.system() == 'Darwin':
@@ -24,6 +25,7 @@ class GPUStats():
 
         self.initialized = False
         self.device_count = 0
+        self.active_devices = None
         self.handles = None
         self.driver = None
         self.devices = None
@@ -34,7 +36,7 @@ class GPUStats():
         self.driver = self.get_driver()
         self.devices = self.get_devices()
         self.vram = self.get_vram()
-        if self.device_count == 0:
+        if not self.active_devices:
             if self.logger:
                 self.logger.warning("No GPU detected. Switching to CPU mode")
             return
@@ -59,13 +61,14 @@ class GPUStats():
                     if self.logger:
                         self.logger.debug("OS is not macOS. Using pynvml")
                     pynvml.nvmlInit()
-                except (pynvml.NVMLError_LibraryNotFound,
-                        pynvml.NVMLError_DriverNotLoaded,
-                        pynvml.NVMLError_NoPermission):
+                except (pynvml.NVMLError_LibraryNotFound,  # pylint: disable=no-member
+                        pynvml.NVMLError_DriverNotLoaded,  # pylint: disable=no-member
+                        pynvml.NVMLError_NoPermission):  # pylint: disable=no-member
                     self.initialized = True
                     return
             self.initialized = True
             self.get_device_count()
+            self.get_active_devices()
             self.get_handles()
 
     def shutdown(self):
@@ -87,6 +90,18 @@ class GPUStats():
                 self.device_count = 0
         if self.logger:
             self.logger.debug("GPU Device count: %s", self.device_count)
+
+    def get_active_devices(self):
+        """ Return list of active Nvidia devices """
+        devices = os.environ.get("CUDA_VISIBLE_DEVICES", None)
+        if self.device_count == 0:
+            self.active_devices = list()
+        elif devices is not None:
+            self.active_devices = [int(i) for i in devices.split(",") if devices]
+        else:
+            self.active_devices = list(range(self.device_count))
+        if self.logger:
+            self.logger.debug("Active GPU Devices: %s", self.active_devices)
 
     def get_handles(self):
         """ Return all listed Nvidia handles """
@@ -172,20 +187,20 @@ class GPUStats():
         return vram
 
     def get_card_most_free(self):
-        """ Return the card and available VRAM for card with
+        """ Return the card and available VRAM for active card with
             most VRAM free """
         if self.device_count == 0:
             return {"card_id": -1,
                     "device": "No Nvidia devices found",
                     "free": 2048,
                     "total": 2048}
-        free_vram = self.get_free()
+        free_vram = [self.get_free()[i] for i in self.active_devices]
         vram_free = max(free_vram)
-        card_id = free_vram.index(vram_free)
+        card_id = self.active_devices[free_vram.index(vram_free)]
         retval = {"card_id": card_id,
                   "device": self.devices[card_id],
                   "free": vram_free,
                   "total": self.vram[card_id]}
         if self.logger:
-            self.logger.debug("GPU Card with most free VRAM: %s", retval)
+            self.logger.debug("Active GPU Card with most free VRAM: %s", retval)
         return retval

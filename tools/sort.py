@@ -87,7 +87,7 @@ class Sort():
         kwargs = {"in_queue": queue_manager.get_queue("in"),
                   "out_queue": out_queue}
 
-        for plugin in ("fan", "dlib"):
+        for plugin in ("fan", "cv2_dnn"):
             aligner = PluginLoader.get_aligner(plugin)(loglevel=self.args.loglevel)
             process = SpawnProcess(aligner.run, **kwargs)
             event = process.event
@@ -100,11 +100,11 @@ class Sort():
             if not event.is_set():
                 if plugin == "fan":
                     process.join()
-                    logger.error("Error initializing FAN. Trying Dlib")
+                    logger.error("Error initializing FAN. Trying CV2-DNN")
                     continue
                 else:
                     raise ValueError("Error inititalizing Aligner")
-            if plugin == "dlib":
+            if plugin == "cv2_dnn":
                 return
 
             try:
@@ -115,14 +115,14 @@ class Sort():
             if not err:
                 break
             process.join()
-            logger.error("Error initializing FAN. Trying Dlib")
+            logger.error("Error initializing FAN. Trying CV2-DNN")
 
     @staticmethod
     def alignment_dict(image):
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        face = face.to_dlib_rect()
+        face = face.to_bounding_box()
         return {"image": image,
                 "detected_faces": [face]}
 

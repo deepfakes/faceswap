@@ -298,6 +298,7 @@ class PoolProcess():
 
     def set_procs(self, processes):
         """ Set the number of processes to use """
+        processes = mp.cpu_count() if processes is None else processes
         running_processes = len(mp.active_children())
         avail_processes = max(mp.cpu_count() - running_processes, 1)
         processes = min(avail_processes, processes)

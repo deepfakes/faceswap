@@ -20,10 +20,26 @@ class Config(FaceswapConfig):
 #        self.add_section(title=section,
 #                         info="Options that apply to all models")
 
+        # << S3FD DETECTOR OPTIONS >> #
+        section = "detect.cv2_dnn"
+        self.add_section(title=section,
+                         info="CV2 DNN Detector options."
+                              "\nA CPU only extractor, is the least reliable, but uses least "
+                              "resources and runs fast on CPU. Use this if not using a GPU and "
+                              "time is important")
+        self.add_item(
+            section=section, title="confidence", datatype=int, default=50, rounding=5,
+            min_max=(25, 100),
+            info="The confidence level at which the detector has succesfully found a face.\n"
+                 "Higher levels will be more discriminating, lower levels will have more false "
+                 "positives")
+
         # << MTCNN DETECTOR OPTIONS >> #
         section = "detect.mtcnn"
         self.add_section(title=section,
-                         info="MTCNN Detector options")
+                         info="MTCNN Detector options."
+                              "\nFast on GPU, slow on CPU. Uses fewer resources than other GPU "
+                              "detectors but can often return more false positives.")
         self.add_item(
             section=section, title="minsize", datatype=int, default=20, rounding=10,
             min_max=(20, 1000),
@@ -50,7 +66,10 @@ class Config(FaceswapConfig):
         # << S3FD DETECTOR OPTIONS >> #
         section = "detect.s3fd"
         self.add_section(title=section,
-                         info="S3FD Detector options")
+                         info="S3FD Detector options."
+                              "Fast on GPU, slow on CPU. Can detect more faces and fewer false "
+                              "positives than other GPU detectors, but is a lot more resource "
+                              "intensive.")
         self.add_item(
             section=section, title="confidence", datatype=int, default=50, rounding=5,
             min_max=(25, 100),

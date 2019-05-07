@@ -170,7 +170,7 @@ class Converter():
 
     def add_alpha_mask(self, frame, predicted):
         """ Adding a 4th channel should happen after all other channel operations
-            Add the default mask as 4th channel for saving as png with alpha channel """
+            Add the default mask as 4th channel for saving an image with alpha channel """
         if self.draw_transparent:
             logger.trace("Creating transparent image: '%s'", predicted["filename"])
             mask_type = get_default_mask()

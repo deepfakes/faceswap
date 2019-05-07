@@ -414,14 +414,14 @@ class FaceFilter(PostProcessAction):
         """ Filter in/out wanted/unwanted faces """
         if not self.filter:
             return
-
         ret_faces = list()
-        for idx, detected_face in enumerate(output_item["detected_faces"]):
-            if not self.filter.check(detected_face["face"]):
+        for idx, detect_face in enumerate(output_item["detected_faces"]):
+            check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
+            if not self.filter.check(check_item):
                 logger.verbose("Skipping not recognized face! Frame: %s Face %s",
-                               detected_face["file_location"].parts[-1], idx)
+                               output_item["filename"], idx)
                 continue
             logger.trace("Accepting recognised face. Frame: %s. Face: %s",
-                         detected_face["file_location"].parts[-1], idx)
-            ret_faces.append(detected_face)
+                         output_item["filename"], idx)
+            ret_faces.append(detect_face)
         output_item["detected_faces"] = ret_faces

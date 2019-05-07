@@ -489,17 +489,15 @@ class ExtractArgs(ExtractConvertArgs):
             "type": str.lower,
             "choices":  PluginLoader.get_available_extractors("detect"),
             "default": "mtcnn",
-            "help": "R|Detector to use."
-                    "\nL|'dlib-hog': uses least resources, but is the "
-                    "least reliable."
-                    "\nL|'dlib-cnn': faster than mtcnn but detects "
-                    "fewer faces and fewer false positives."
-                    "\nL|'mtcnn': slower than dlib, but uses fewer "
-                    "resources whilst detecting more faces and "
-                    "more false positives. Has superior "
-                    "alignment to dlib"
-                    "\nL|'s3fd': Can detect more faces than mtcnn, but "
-                    "is a lot more resource intensive"})
+            "help": "R|Detector to use. Some of these have configurable settings in "
+                    "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
+                    "\nL|'cv2-dnn': A CPU only extractor, is the least reliable, but uses least "
+                    "resources and runs fast on CPU. Use this if not using a GPU and time is "
+                    "important."
+                    "\nL|'mtcnn': Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
+                    "detectors but can often return more false positives."
+                    "\nL|'s3fd': Fast on GPU, slow on CPU. Can detect more faces and fewer false "
+                    "positives than other GPU detectors, but is a lot more resource intensive."})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "action": Radio,
@@ -507,8 +505,9 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
             "help": "R|Aligner to use."
-                    "\nL|'dlib': Dlib Pose Predictor. Faster, less "
-                    "resource intensive, but less accurate."
+                    "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
+                    "resource intensive, but less accurate. Only use this if not using a gpu "
+                    " and time is important."
                     "\nL|'fan': Face Alignment Network. Best aligner. "
                     "GPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-r", "--rotate-images"),

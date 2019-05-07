@@ -4,7 +4,6 @@ import logging
 
 import numpy as np
 
-from dlib import rectangle as d_rectangle  # pylint: disable=no-name-in-module
 from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -39,28 +38,28 @@ class DetectedFace():
         """ Landmarks as XY """
         return self.landmarksXY
 
-    def to_dlib_rect(self):
-        """ Return Bounding Box as Dlib Rectangle """
+    def to_bounding_box(self):
+        """ Return Bounding Box as BoundingBox """
         left = self.x
         top = self.y
         right = self.x + self.w
         bottom = self.y + self.h
-        retval = d_rectangle(left, top, right, bottom)
+        retval = BoundingBox(left, top, right, bottom)
         logger.trace("Returning: %s", retval)
         return retval
 
-    def from_dlib_rect(self, d_rect, image=None):
-        """ Set Bounding Box from a Dlib Rectangle """
-        logger.trace("Creating from dlib_rectangle: %s", d_rect)
-        if not isinstance(d_rect, d_rectangle):
-            raise ValueError("Supplied Bounding Box is not a dlib.rectangle.")
-        self.x = d_rect.left()
-        self.w = d_rect.right() - d_rect.left()
-        self.y = d_rect.top()
-        self.h = d_rect.bottom() - d_rect.top()
+    def from_bounding_box(self, bounding_box, image=None):
+        """ Set Bounding Box from a BoundingBox """
+        logger.trace("Creating from BoundingBox: %s", bounding_box)
+        if not isinstance(bounding_box, BoundingBox):
+            raise ValueError("Supplied Bounding Box is not a BoundingBox.")
+        self.x = bounding_box.left
+        self.w = bounding_box.width
+        self.y = bounding_box.top
+        self.h = bounding_box.height
         if image is not None and image.any():
             self.image_to_face(image)
-        logger.trace("Created from dlib_rectangle: (x: %s, w: %s, y: %s. h: %s)",
+        logger.trace("Created from BoundingBox: (x: %s, w: %s, y: %s. h: %s)",
                      self.x, self.w, self.y, self.h)
 
     def image_to_face(self, image):
@@ -263,3 +262,42 @@ class DetectedFace():
     def reference_interpolators(self):
         """ Return the interpolators for an output face """
         return get_matrix_scaling(self.reference_matrix)
+
+
+class BoundingBox():
+    """ Bounding box class """
+    def __init__(self, left, top, right, bottom):
+        logger.trace("Initializing %s: (left: %s, top: %s, right: %s, bottom: %s)",
+                     self.__class__.__name__, left, top, right, bottom)
+        self._box = (left, top, right, bottom)
+        logger.trace("Initialized %s", self.__class__.__name__)
+
+    @property
+    def left(self):
+        """ Return left point as int """
+        return int(round(self._box[0]))
+
+    @property
+    def top(self):
+        """ Return top point as int """
+        return int(round(self._box[1]))
+
+    @property
+    def right(self):
+        """ Return right point as int """
+        return int(round(self._box[2]))
+
+    @property
+    def bottom(self):
+        """ Return bottom point as int """
+        return int(round(self._box[3]))
+
+    @property
+    def width(self):
+        """ Return width of bounding box """
+        return self.right - self.left
+
+    @property
+    def height(self):
+        """ Return height of bounding box """
+        return self.bottom - self.top
