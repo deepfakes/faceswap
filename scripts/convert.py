@@ -239,10 +239,10 @@ class DiskIO():
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
         logger.warning("NB: This will use the inferior cv2-dnn for extraction "
-                       "and dlib pose predictor for landmarks. It is recommended "
-                       "to perfom Extract first for superior results")
+                       "and  landmarks. It is recommended to perfom Extract first for "
+                       "superior results")
         extract_args = {"detector": "cv2_dnn",
-                        "aligner": "dlib",
+                        "aligner": "cv2_dnn",
                         "loglevel": self.args.loglevel}
         self.extractor = Extractor(None, converter_args=extract_args)
         self.extractor.launch_detector()
@@ -368,7 +368,7 @@ class DiskIO():
 
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_dlib_rect(face)
+            detected_face.from_bounding_box(face)
             detected_face.landmarksXY = landmarks[idx]
             final_faces.append(detected_face)
         return final_faces
