@@ -83,6 +83,12 @@ class Config(FaceswapConfig):
                  "https://en.wikipedia.org/wiki/Total_variation_denoising \n"
                  )
         self.add_item(
+            section=section, title="mask_type", datatype=str, default="dfl_full",
+            choices=MASK_TYPES, info=MASK_INFO)
+        self.add_item(
+            section=section, title="coverage", datatype=float, default=75.0, rounding=1,
+            min_max=(62.5, 100.0), info=COVERAGE_INFO)
+        self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
             info="\nImage loss function is weighted by mask presence. For areas of \n"
                  "the image without the facial mask, reconstuction errors will be \n"
@@ -94,12 +100,6 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Dfaker Model (Adapted from https://github.com/dfaker/df)" +
                          ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="facehull",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=100.0, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << DFL MODEL OPTIONS >> #
         section = "model.dfl_h128"
@@ -110,24 +110,12 @@ class Config(FaceswapConfig):
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="dfl_full",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << IAE MODEL OPTIONS >> #
         section = "model.iae"
         self.add_section(title=section,
                          info="Intermediate Auto Encoder. Based on Original Model, uses "
                               "intermediate layers to try to better get details" + ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << LIGHTWEIGHT MODEL OPTIONS >> #
         section = "model.lightweight"
@@ -136,12 +124,6 @@ class Config(FaceswapConfig):
                               "run on lower end GPUs (~2GB).\nDon't expect great results, but it "
                               "allows users with lower end cards to play with the "
                               "software." + ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << ORIGINAL MODEL OPTIONS >> #
         section = "model.original"
@@ -151,12 +133,6 @@ class Config(FaceswapConfig):
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << UNBALANCED MODEL OPTIONS >> #
         section = "model.unbalanced"
@@ -173,9 +149,6 @@ class Config(FaceswapConfig):
             section=section, title="clipnorm", datatype=bool, default=False,
             info="Controls gradient clipping of the optimizer. Can prevent model corruption at "
                  "the expense of VRAM")
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
         self.add_item(
             section=section, title="nodes", datatype=int, default=1024, rounding=64,
             min_max=(512, 4096),
@@ -203,9 +176,6 @@ class Config(FaceswapConfig):
                  "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
                  "NB: Your faceset must be at least 1.6x larger than your required input size.\n"
                  "    (e.g. 160 is the maximum input size for a 256x256 faceset)")
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
 
         # << PEGASUS MODEL OPTIONS >> #
         section = "model.realface"
@@ -214,19 +184,6 @@ class Config(FaceswapConfig):
                               "Incorporates ideas from Bryanlyon and inspiration from the Villain "
                               "model.\n"
                               "Requires about 6GB-8GB of VRAM (batchsize 8-16)." + ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=True,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="components",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0),
-            info="{}\nThe model is essentially created for 60-80% coverage as it follows "
-                 "Original paradigm.\nYou may try higher values but good results are not "
-                 "guaranteed.".format(COVERAGE_INFO))
         self.add_item(
             section=section, title="input_size", datatype=int, default=64,
             rounding=16, min_max=(64, 128),
@@ -273,9 +230,3 @@ class Config(FaceswapConfig):
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
-        self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=62.5, rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
