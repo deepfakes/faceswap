@@ -9,10 +9,6 @@ class Detect(Detector):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_model_path(self):
-        """ No model required for Manual Detector """
-        return None
-
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
         super().initialize(*args, **kwargs)

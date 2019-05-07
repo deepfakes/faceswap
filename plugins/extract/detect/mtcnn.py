@@ -29,7 +29,8 @@ def import_tensorflow():
 class Detect(Detector):
     """ MTCNN detector for face recognition """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        model_filename = ["mtcnn_det_v1.1.npy", "mtcnn_det_v1.2.npy", "mtcnn_det_v1.3.npy"]
+        super().__init__(model_filename=model_filename, **kwargs)
         self.kwargs = self.validate_kwargs()
         self.name = "mtcnn"
         self.target = 2073600  # Uses approx 1.30 GB of VRAM
@@ -59,16 +60,6 @@ class Detect(Detector):
             logger.warning("Invalid MTCNN options in config. Running with defaults")
         logger.debug("Using mtcnn kwargs: %s", kwargs)
         return kwargs
-
-    def set_model_path(self):
-        """ Load the mtcnn models """
-        for model in ("det1.npy", "det2.npy", "det3.npy"):
-            model_path = os.path.join(self.cachepath, model)
-            if not os.path.exists(model_path):
-                raise Exception("Error: Unable to find {}, reinstall "
-                                "the lib!".format(model_path))
-            logger.debug("Loading model: '%s'", model_path)
-        return self.cachepath
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
@@ -513,15 +504,15 @@ def create_mtcnn(sess, model_path):
     with tf.variable_scope('pnet'):
         data = tf.placeholder(tf.float32, (None, None, None, 3), 'input')
         pnet = PNet({'data': data})
-        pnet.load(os.path.join(model_path, 'det1.npy'), sess)
+        pnet.load(model_path[0], sess)
     with tf.variable_scope('rnet'):
         data = tf.placeholder(tf.float32, (None, 24, 24, 3), 'input')
         rnet = RNet({'data': data})
-        rnet.load(os.path.join(model_path, 'det2.npy'), sess)
+        rnet.load(model_path[1], sess)
     with tf.variable_scope('onet'):
         data = tf.placeholder(tf.float32, (None, 48, 48, 3), 'input')
         onet = ONet({'data': data})
-        onet.load(os.path.join(model_path, 'det3.npy'), sess)
+        onet.load(model_path[2], sess)
 
     pnet_fun = lambda img: sess.run(('pnet/conv4-2/BiasAdd:0', # noqa
                                      'pnet/prob1:0'),

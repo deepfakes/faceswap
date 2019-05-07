@@ -225,10 +225,29 @@ class GetModel():
     """ Check for models in their cache path
         If available, return the path, if not available, get, unzip and install model
 
-        model_name: The name of the model to be loaded
-        cache_dir: the model cache folder folder of the current plugin calling this class """
+        model_filename: The name of the model to be loaded (see notes below)
+        cache_dir:      The model cache folder of the current plugin calling this class
+                        IE: The folder that holds the model to be loaded.
+
+        NB: Models must have a certain naming convention:
+            IE: <model_name>_v<version_number>.<extension>
+            EG: s3fd_v1.pb
+
+            Multiple models can exist within the model_filename. They should be passed as a list
+            and follow the same naming convention as above. Any differences in filename should
+            occur AFTER the version number.
+            IE: [<model_name>_v<version_number><differentiating_information>.<extension>]
+            EG: [mtcnn_det_v1.1.py, mtcnn_det_v1.2.py, mtcnn_det_v1.3.py]
+                [resnet_ssd_v1.caffemodel, resnet_ssd_v1.prototext]
+
+            Models to be handled by this class must be added to the _model_id property
+            with their appropriate github identier mapped.
+            See https://github.com/deepfakes-models/faceswap-models for more information
+        """
 
     def __init__(self, model_filename, cache_dir):
+        if not isinstance(model_filename, list):
+            model_filename = [model_filename]
         self.model_filename = model_filename
         self.cache_dir = cache_dir
         self.url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
@@ -244,6 +263,9 @@ class GetModel():
             # EXTRACT (SECTION 1)
             "face-alignment-network_2d4": 0,
             "cnn-facial-landmark": 1,
+            "mtcnn_det": 2,
+            "s3fd": 3,
+            "resnet_ssd": 4,
             # TRAIN (SECTION 2)
             # CONVERT (SECTION 3)
             }
@@ -251,29 +273,31 @@ class GetModel():
 
     @property
     def _model_full_name(self):
-        """ Return the model version from the filename """
-        retval = os.path.splitext(self.model_filename)[0]
+        """ Return the model full name from the filename(s) """
+        common_prefix = os.path.commonprefix(self.model_filename)
+        retval = os.path.splitext(common_prefix)[0]
         logger.trace(retval)
         return retval
 
     @property
     def _model_name(self):
-        """ Return the model version from the filename """
+        """ Return the model name from the model full name """
         retval = self._model_full_name[:self._model_full_name.rfind("_")]
         logger.trace(retval)
         return retval
 
     @property
     def _model_version(self):
-        """ Return the model version from the filename """
+        """ Return the model version from the model full name """
         retval = int(self._model_full_name[self._model_full_name.rfind("_") + 2:])
         logger.trace(retval)
         return retval
 
     @property
     def _model_path(self):
-        """ Return the model path in the cache folder """
-        retval = os.path.join(self.cache_dir, self.model_filename)
+        """ Return the model path(s) in the cache folder """
+        retval = [os.path.join(self.cache_dir, fname) for fname in self.model_filename]
+        retval = retval[0] if len(retval) == 1 else retval
         logger.trace(retval)
         return retval
 
@@ -286,7 +310,11 @@ class GetModel():
 
     @property
     def _model_exists(self):
-        retval = os.path.exists(self._model_path)
+        """ Check model(s) exist """
+        if isinstance(self._model_path, list):
+            retval = all(os.path.exists(pth) for pth in self._model_path)
+        else:
+            retval = os.path.exists(self._model_path)
         logger.trace(retval)
         return retval
 
@@ -343,6 +371,8 @@ class GetModel():
                 else:
                     logger.error("Failed to download model. Exiting. (Error: '%s', URL: '%s')",
                                  str(err), self._url_download)
+                    logger.info("You can manually download the model from: %s and unzip the "
+                                "contents to: %s", self._url_download, self.cache_dir)
                     exit(1)
 
     def write_zipfile(self, response):

@@ -6,7 +6,6 @@ Adapted from S3FD Port in FAN:
 https://github.com/1adrianb/face-alignment
 """
 
-import os
 from scipy.special import logsumexp
 
 import numpy as np
@@ -18,21 +17,13 @@ from ._base import Detector, dlib, logger
 class Detect(Detector):
     """ S3FD detector for face recognition """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        model_filename = "s3fd_v1.pb"
+        super().__init__(model_filename=model_filename, **kwargs)
         self.name = "s3fd"
         self.target = (640, 640)  # Uses approx 4 GB of VRAM
         self.vram = 4096
         self.min_vram = 1024  # Will run at this with warnings
         self.model = None
-
-    def set_model_path(self):
-        """ Load the s3fd model """
-        model_path = os.path.join(self.cachepath, "s3fd.pb")
-        if not os.path.exists(model_path):
-            raise Exception("Error: Unable to find {}, reinstall "
-                            "the lib!".format(model_path))
-        logger.debug("Loading model: '%s'", model_path)
-        return model_path
 
     def initialize(self, *args, **kwargs):
         """ Create the s3fd detector """

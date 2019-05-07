@@ -84,6 +84,9 @@ class Aligner():
     @staticmethod
     def get_model(model_filename):
         """ Check if model is available, if not, download and unzip it """
+        if model_filename is None:
+            logger.debug("No model_filename specified. Returning None")
+            return None
         cache_path = os.path.join(os.path.dirname(__file__), ".cache")
         model = GetModel(model_filename, cache_path)
         return model.model_path

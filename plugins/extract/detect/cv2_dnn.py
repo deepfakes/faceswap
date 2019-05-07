@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ OpenCV DNN Face detection plugin """
-import os
 from time import sleep
 
 import numpy as np
@@ -11,22 +10,13 @@ from ._base import cv2, Detector, dlib, logger
 class Detect(Detector):
     """ CV2 DNN detector for face recognition """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        model_filename = ["resnet_ssd_v1.caffemodel", "resnet_ssd_v1.prototxt"]
+        super().__init__(model_filename=model_filename, **kwargs)
         self.parent_is_pool = True
         self.target = (300, 300)  # Doesn't use VRAM
         self.vram = 0
-        self.config_file = os.path.join(self.cachepath, "deploy.prototxt")
         self.detector = None
         self.confidence = self.config["confidence"] / 100
-
-    def set_model_path(self):
-        """ CV2 DNN model file """
-        model_path = os.path.join(self.cachepath, "res10_300x300_ssd_iter_140000_fp16.caffemodel")
-        if not os.path.exists(model_path):
-            raise Exception("Error: Unable to find {}, reinstall "
-                            "the lib!".format(model_path))
-        logger.debug("Loading model: '%s'", model_path)
-        return model_path
 
     def initialize(self, *args, **kwargs):
         """ Calculate batch size """
@@ -39,8 +29,8 @@ class Detect(Detector):
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in grayscale image """
         super().detect_faces(*args, **kwargs)
-        detector = cv2.dnn.readNetFromCaffe(self.config_file,  # pylint: disable=no-member
-                                            self.model_path)
+        detector = cv2.dnn.readNetFromCaffe(self.model_path[1],  # pylint: disable=no-member
+                                            self.model_path[0])
         detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
         while True:
             item = self.get_item()

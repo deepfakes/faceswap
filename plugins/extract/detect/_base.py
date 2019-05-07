@@ -20,7 +20,7 @@ import cv2
 import dlib
 
 from lib.gpu_stats import GPUStats
-from lib.utils import rotate_landmarks
+from lib.utils import rotate_landmarks, GetModel
 from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -33,12 +33,11 @@ def get_config(plugin_name):
 
 class Detector():
     """ Detector object """
-    def __init__(self, loglevel, rotation=None, min_size=0):
-        logger.debug("Initializing %s: (rotation: %s, min_size: %s)",
-                     self.__class__.__name__, rotation, min_size)
+    def __init__(self, loglevel, model_filename=None, rotation=None, min_size=0):
+        logger.debug("Initializing %s: (model_filename: %s, rotation: %s, min_size: %s)",
+                     self.__class__.__name__, model_filename, rotation, min_size)
         self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         self.loglevel = loglevel
-        self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
         self.rotation = self.get_rotation_angles(rotation)
         self.min_size = min_size
         self.parent_is_pool = False
@@ -50,7 +49,7 @@ class Detector():
         self.queues = {"in": None, "out": None}
 
         #  Path to model if required
-        self.model_path = self.set_model_path()
+        self.model_path = self.get_model(model_filename)
 
         # Target image size for passing images through the detector
         # Set to tuple of dimensions (x, y) or int of pixel count
@@ -69,13 +68,6 @@ class Detector():
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
-    # These methods must be overriden when creating a plugin
-    @staticmethod
-    def set_model_path():
-        """ path to data file/models
-            override for specific detector """
-        raise NotImplementedError()
-
     def initialize(self, *args, **kwargs):
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
@@ -98,6 +90,17 @@ class Detector():
             logger.error(err)
             exit(1)
         logger.debug("Detecting Faces (args: %s, kwargs: %s)", args, kwargs)
+
+    # <<< GET MODEL >>> #
+    @staticmethod
+    def get_model(model_filename):
+        """ Check if model is available, if not, download and unzip it """
+        if model_filename is None:
+            logger.debug("No model_filename specified. Returning None")
+            return None
+        cache_path = os.path.join(os.path.dirname(__file__), ".cache")
+        model = GetModel(model_filename, cache_path)
+        return model.model_path
 
     # <<< DETECTION WRAPPER >>> #
     def run(self, *args, **kwargs):
