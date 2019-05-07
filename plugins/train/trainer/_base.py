@@ -138,7 +138,7 @@ class TrainerBase():
         for side, batcher in self.batchers.items():
             if self.pingpong.active and side != self.pingpong.side:
                 continue
-            loss[side] = batcher.train_one_batch()
+            loss[side] = batcher.train_one_batch("training")
 
         self.model.state.increment_iterations()
 
@@ -158,14 +158,17 @@ class TrainerBase():
         """ Preview Samples """
         if viewer:
             for side, batcher in self.batchers.items():
-                _, _, self.samples.images[side] = batcher.get_next("preview")
+                #_, _, self.samples.images[side] = batcher[side].get_next("preview")
+                print()
+                print(side, self.batchers.items)
+                one_item = batcher[side].get_next("preview")
             samples = self.samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
         if timelapse:
             for side, batcher in self.batchers.items():
-                _, _, self.timelapse.samples.images[side] = batcher.get_next("timelapse")
+                _, _, self.timelapse.samples.images[side] = batcher[side].get_next("timelapse")
             self.timelapse.output_timelapse()
 
     def store_history(self, side, loss):
@@ -210,19 +213,18 @@ class Batcher():
         dataset_kwargs["augmenting"] = False
         self.set_dataset_feed(**dataset_kwargs)
 
-    def train_one_batch(self):
+    def train_one_batch(self, purpose):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        inputs, targets, _ = self.get_next(self.feed)
+        inputs, targets, _ = self.get_next(self.feed[purpose])
         loss = self.model.predictors[self.side].train_on_batch(x=inputs, y=targets)
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    @staticmethod
-    def get_next(feed):
+    def get_next(self, purpose):
         """ Return the next batch from the generator
             Items should come out as: (full_coverage_img, warped, target, mask]) """
-        batch = next(feed)
+        batch = next(self.feed[purpose])
         inputs = [batch[1], batch[2]]
         targets = [batch[3], batch[4]]
         samples = None
@@ -241,6 +243,7 @@ class Batcher():
                                           output_size,
                                           batch_size,
                                           self.model.training_opts)
+        #name = "{0}_{1}".format(purpose,side)
         self.feed[purpose] = generator.minibatch_ab(images,
                                                     side,
                                                     do_shuffle=do_shuffle,
@@ -424,7 +427,8 @@ class Timelapse():
         self.model = model
         self.batchers = batchers
         self.output_file = None
-        self.setup(**timelapse_kwargs)
+        if timelapse_kwargs:
+            self.setup(**timelapse_kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def setup(self, input_a=None, input_b=None, output=None):

@@ -11,7 +11,7 @@ import keras.backend as K
 from keras.layers import Lambda, concatenate
 import numpy as np
 import tensorflow as tf
-from tf.distributions import Beta
+from tensorflow.distributions import Beta
 
 from .normalization import InstanceNormalization
 if K.backend() == "plaidml.keras.backend":

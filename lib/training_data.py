@@ -56,7 +56,7 @@ class TrainingDataGenerator():
             shapes=batch_shape,
             in_queue=queue_in,
             out_queue=queue_out,
-            args=(images, side, self.batch_size, augmenting, do_shuffle))
+            args=(images, side, augmenting, do_shuffle))
         load_process.start()
         logger.debug("Batching to queue: (side: '%s', augmenting: %s)", side, augmenting)
         return self.minibatch(side, augmenting, load_process)
