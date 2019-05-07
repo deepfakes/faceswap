@@ -56,6 +56,12 @@ class Config(FaceswapConfig):
                  "of the image.\n"
                  "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt \n")
         self.add_item(
+            section=section, title="penalized_mask_loss", datatype=bool, default=True,
+            info="\nImage loss function is weighted by mask presence. For areas of \n"
+                 "the image without the facial mask, reconstuction errors will be \n"
+                 "ignored while the masked face area is prioritized. May increase \n"
+                 "overall quality by focusing attention on the core face area.\n")
+        self.add_item(
             section=section, title="image_loss_function", datatype=str,
             default="Mean_Absolute_Error",
             choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
@@ -89,11 +95,28 @@ class Config(FaceswapConfig):
             section=section, title="coverage", datatype=float, default=75.0, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="\nImage loss function is weighted by mask presence. For areas of \n"
-                 "the image without the facial mask, reconstuction errors will be \n"
-                 "ignored while the masked face area is prioritized. May increase \n"
-                 "overall quality by focusing attention on the core face area.\n")
+            section=section, title="learning_rate", datatype=float, default=5e-5,
+            min_max=(1e-6, 1e-4), rounding=6, fixed=False,
+            info="Learning rate - how fast your network will learn.\n"
+                 "Note that: Higher values might result in RSoD failure.")
+
+
+        # << ORIGINAL MODEL OPTIONS >> #
+        section = "model.original"
+        self.add_section(title=section,
+                         info="Original Faceswap Model" + ADDITIONAL_INFO)
+        self.add_item(
+            section=section, title="lowmem", datatype=bool, default=False,
+            info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
+                 "with a changed lowmem mode are not compatible with each other.")
+
+        # << LIGHTWEIGHT MODEL OPTIONS >> #
+        section = "model.lightweight"
+        self.add_section(title=section,
+                         info="A lightweight version of the Original Faceswap Model, designed to "
+                              "run on lower end GPUs (~2GB).\nDon't expect great results, but it "
+                              "allows users with lower end cards to play with the "
+                              "software." + ADDITIONAL_INFO)
 
         # << DFAKER OPTIONS >> #
         section = "model.dfaker"
@@ -116,23 +139,6 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Intermediate Auto Encoder. Based on Original Model, uses "
                               "intermediate layers to try to better get details" + ADDITIONAL_INFO)
-
-        # << LIGHTWEIGHT MODEL OPTIONS >> #
-        section = "model.lightweight"
-        self.add_section(title=section,
-                         info="A lightweight version of the Original Faceswap Model, designed to "
-                              "run on lower end GPUs (~2GB).\nDon't expect great results, but it "
-                              "allows users with lower end cards to play with the "
-                              "software." + ADDITIONAL_INFO)
-
-        # << ORIGINAL MODEL OPTIONS >> #
-        section = "model.original"
-        self.add_section(title=section,
-                         info="Original Faceswap Model" + ADDITIONAL_INFO)
-        self.add_item(
-            section=section, title="lowmem", datatype=bool, default=False,
-            info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
-                 "with a changed lowmem mode are not compatible with each other.")
 
         # << UNBALANCED MODEL OPTIONS >> #
         section = "model.unbalanced"
@@ -214,11 +220,6 @@ class Config(FaceswapConfig):
             section=section, title="complexity_decoder", datatype=int, default=512,
             rounding=4, min_max=(512, 544),
             info="Decoder Complexity.")
-        self.add_item(
-            section=section, title="learning_rate", datatype=float, default=5e-5,
-            min_max=(5e-6, 1e-4), rounding=6, fixed=False,
-            info="Learning rate - how fast your network will learn.\n"
-                 "Note that: Higher values might result in RSoD failure.")
 
         # << VILLAIN MODEL OPTIONS >> #
         section = "model.villain"
