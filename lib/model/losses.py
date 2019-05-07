@@ -11,7 +11,7 @@ import keras.backend as K
 from keras.layers import Lambda, concatenate
 import numpy as np
 import tensorflow as tf
-from tensorflow.distributions import Beta
+from tf.distributions import Beta
 
 from .normalization import InstanceNormalization
 if K.backend() == "plaidml.keras.backend":
@@ -285,7 +285,7 @@ def edge_loss(real, fake_abgr, mask_eyes, **weights):
     return loss_g
 
 
-def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weights):
+def perceptual_loss(real, fake_abgr, distorted, vggface_feats, **weights):
     """ Perceptual Loss Function from Shoanlu GAN """
     alpha = Lambda(lambda x: x[:, :, :, :1])(fake_abgr)
     fake_bgr = Lambda(lambda x: x[:, :, :, 1:])(fake_abgr)

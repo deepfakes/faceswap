@@ -11,7 +11,6 @@ import inspect
 
 import tensorflow as tf
 import keras.backend as K
-
 from keras.engine import InputSpec, Layer
 from keras.utils import conv_utils
 from keras.utils.generic_utils import get_custom_objects
@@ -22,6 +21,7 @@ if K.backend() == "plaidml.keras.backend":
     from lib.plaidml_utils import pad
 else:
     from tensorflow import pad
+
 
 class PixelShuffler(Layer):
     """ PixelShuffler layer for Keras

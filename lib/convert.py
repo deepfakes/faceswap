@@ -187,9 +187,8 @@ class Converter():
         """ Scale the image if requested """
         if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
-            fx = self.scale
-            fy = self.scale
             interp = cv2.INTER_CUBIC if self.scale > 1 else cv2.INTER_AREA  # pylint: disable=no-member
-            frame = cv2.resize(frame, fx=fx, fy=fy, interpolation=interp)  # pylint: disable=no-member
+            frame = cv2.resize(frame, fx=self.scale, fy=self.scale,  # pylint: disable=no-member
+                               interpolation=interp)
             logger.trace("resized frame: %s", frame.shape)
         return frame

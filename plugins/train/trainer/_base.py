@@ -223,23 +223,21 @@ class Batcher():
         return inputs, targets, samples
 
     def load_generator(self):
-        """ Pass arguments to TrainingDataGenerator and return object """
-        logger.debug("Loading generator: %s", self.side)
-        input_size = self.model.input_shape[0]
-        output_size = self.model.output_shape[0]
-        logger.debug("input_size: %s, output_size: %s", input_size, output_size)
-        generator = TrainingDataGenerator(input_size, output_size, self.model.training_opts)
         return generator
 
     def set_dataset_feed(self, side, images, batch_size, type, do_shuffle, augmenting):
-        """ Set the feed dataset """
-        logger.debug("Setting '%s' feed: (side: '%s', input_images: '%s', batchsize: %s)",
+        """ Set the feed dataset with TrainingDataGenerator """
+        logger.debug("Loading '%s' generator: (side: '%s', input_images: '%s', batchsize: %s)",
                      type, side, images, batch_size)
-        self.feed[type] = self.load_generator().minibatch_ab(images,
-                                                             batch_size,
-                                                             side,
-                                                             do_shuffle=do_shuffle,
-                                                             augmenting=augmenting)
+        logger.debug("input_size: %s, output_size: %s", input_size, output_size)
+        generator = TrainingDataGenerator(self.model.input_shape[0],
+                                          self.model.output_shape[0],
+                                          batch_size,
+                                          self.model.training_opts)
+        self.feed[type] = generator.minibatch_ab(images,
+                                                 side,
+                                                 do_shuffle=do_shuffle,
+                                                 augmenting=augmenting)
         logger.debug("'%s' dataset created", type)
 
 

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """ Masks functions for faceswap.py """
 
-import inspect
 import logging
-import sys
-import requests
-import cv2
-import numpy as np
 from pathlib import Path
+
+import cv2
+import requests
+import numpy as np
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -37,51 +36,51 @@ class Mask():
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
 
-    def __init__(self, landmarks, face, type, channels=4):
+    def __init__(self, landmarks, face, mask_type, channels=4):
         logger.trace("Initializing %s: (face_shape: %s, channels: %s, landmarks: %s)",
                      self.__class__.__name__, face.shape, channels, landmarks)
         self.landmarks = landmarks
         self.face = face
-        self.type = type
+        self.mask_type = mask_type
         self.channels = channels
-        #self.check_for_models(type)
+        #self.check_for_models(mask_type)
         mask = self.build_mask()
         self.mask = self.merge_mask(mask)
         logger.trace("Initialized %s", self.__class__.__name__)
 
-    def check_for_models(self, type):
+    def check_for_models(self, mask_type):
         """ Check for presence of segmentation models """
         dirname = 'C:/data/models/'
-        URL = 'https://docs.google.com/uc?export=download'
+        url = 'https://docs.google.com/uc?export=download'
         filename = {'vgg_300':     'Nirkin_300_softmax',
                     'vgg_500':     'Nirkin_500_softmax',
                     'unet_256':    'DFL_256_sigmoid'}
-        id = {'vgg_300':     '1_DxWEvcs8UwIBR-d7ga8-9WBlLOKDxa1',
-              'vgg_500':     '1YY1-l4L37VwsWx1MHIaamG0xmnYHQpiT',
-              'unet_256':    '1LSn-jf9O6VjeYexfNdd4hOG6AtbpDA3O'}
-        expected_location = Path(dirname, filename[type]).with_suffix('.h5')
+        file = {'vgg_300':     '1_DxWEvcs8UwIBR-d7ga8-9WBlLOKDxa1',
+                'vgg_500':     '1YY1-l4L37VwsWx1MHIaamG0xmnYHQpiT',
+                'unet_256':    '1LSn-jf9O6VjeYexfNdd4hOG6AtbpDA3O'}
+        expected_location = Path(dirname, filename[mask_type]).with_suffix('.h5')
         if not expected_location.is_file():
             logger.verbose("Model at %s is missing. Downloading from internet", expected_location)
-            download_model(id[type], expected_location, URL)
+            self.download_model(file[mask_type], expected_location, url)
             logger.verbose("Model at %s is downloaded", expected_location)
         #TODO finish
 
     @staticmethod
-    def download_model(id, destination, URL):
+    def download_model(file, destination, url):
         """ Download segmentation models from internet """
         #TODO error handling for no web connection ?
-        CHUNK_SIZE = 32768
+        chunk_size = 32768
         session = requests.Session()
-        response = session.get(URL, params = { 'id' : id }, stream = True)
+        response = session.get(url, params={'id': file}, stream=True)
         for key, value in response.cookies.items():
             token = value if key.startswith('download_warning') else None
         if token:
-            params = { 'id' : id, 'confirm' : token }
-            response = session.get(URL, params = params, stream = True)
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(CHUNK_SIZE):
+            params = {'id': file, 'confirm': token}
+            response = session.get(url, params=params, stream=True)
+        with open(destination, "wb") as dest_file:
+            for chunk in response.iter_content(chunk_size):
                 if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
+                    dest_file.write(chunk)
 
     def merge_mask(self, mask):
         """ Return the mask in requested shape """
@@ -109,7 +108,7 @@ class Mask():
                      'vgg_300':     self.nirkin_300,
                      'vgg_500':     self.nirkin_500,
                      'unet_256':    self.ternaus_256}
-        mask = mask_dict[self.type](mask)
+        mask = mask_dict[self.mask_type](mask)
         return mask
 
     def one_part_facehull(self, mask):
@@ -156,7 +155,8 @@ class Mask():
         mask = self.compute_facehull(mask, parts)
         return mask
 
-    def compute_facehull(self, mask, parts):
+    @staticmethod
+    def compute_facehull(mask, parts):
         """ Compute the facehull """
         for item in parts:
             hull = cv2.convexHull(np.concatenate(item))  # pylint: disable=no-member
@@ -165,21 +165,20 @@ class Mask():
 
     def default(self, mask):
         """ Basic facehull mask """
-        mask += 1.
+        mask = self.one_part_facehull(mask)
         return mask
 
     def nirkin_500(self, mask):
         """ Basic facehull mask """
-        mask += 1.
+        mask = self.one_part_facehull(mask)
         return mask
 
     def nirkin_300(self, mask):
         """ Basic facehull mask """
-        mask += 1.
+        mask = self.one_part_facehull(mask)
         return mask
 
     def ternaus_256(self, mask):
         """ Basic facehull mask """
-        mask += 1.
+        mask = self.one_part_facehull(mask)
         return mask
-

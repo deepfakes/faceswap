@@ -15,7 +15,6 @@ class Mask(Adjustment):
         each face. """
     def __init__(self, mask_type, output_size, predicted_available=False):
         super().__init__(mask_type, output_size, predicted_available)
-        self.mask = None if self.skip else self.get_mask()
 
     def get_mask(self):
         """ The box for every face will be identical, so set the mask just once
@@ -42,6 +41,7 @@ class Mask(Adjustment):
             logger.trace("Skipping blend box")
         else:
             logger.trace("Blending box")
-            new_face = np.clip(np.concatenate((new_face, self.mask), axis=-1), 0., 1.)
+            mask = self.get_mask()
+            new_face = np.clip(np.concatenate((new_face, mask), axis=-1), 0., 1.)
             logger.trace("Blended box")
         return new_face

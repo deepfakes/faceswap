@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, training_opts):
+    def __init__(self, model_input_size, model_output_size, batch_size, training_opts):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
                      "training_opts: %s, landmarks: %s)",
                      self.__class__.__name__, model_input_size, model_output_size,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
                      bool(training_opts.get("landmarks", None)))
-        self.batchsize = 0
+        self.batch_size = batch_size
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
@@ -37,19 +37,18 @@ class TrainingDataGenerator():
                                             training_opts.get("coverage_ratio", 0.625))
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def minibatch_ab(self, images, batchsize, side, do_shuffle=True, augmenting=True):
+    def minibatch_ab(self, images, side, do_shuffle=True, augmenting=True):
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
-                     "augmenting: %s)", len(images), batchsize, side, do_shuffle, augmenting)
-        self.batchsize = batchsize
+                     "augmenting: %s)", len(images), self.batch_size, side, do_shuffle, augmenting)
         queue_in, queue_out = self.make_queues(side, augmenting)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(
-            ((batchsize, training_size, training_size, 3),                   # sample images
-             (batchsize, self.model_input_size, self.model_input_size, 3),   # warped images
-             (batchsize, self.model_output_size, self.model_output_size, 1), # warped masks
-             (batchsize, self.model_output_size, self.model_output_size, 3), # target images
-             (batchsize, self.model_output_size, self.model_output_size, 1)  # target masks
+            ((self.batch_size, training_size, training_size, 3),                   # sample images
+             (self.batch_size, self.model_input_size, self.model_input_size, 3),   # warped images
+             (self.batch_size, self.model_output_size, self.model_output_size, 1), # warped masks
+             (self.batch_size, self.model_output_size, self.model_output_size, 3), # target images
+             (self.batch_size, self.model_output_size, self.model_output_size, 1)  # target masks
             ))
 
         load_process = FixedProducerDispatcher(
@@ -57,7 +56,7 @@ class TrainingDataGenerator():
             shapes=batch_shape,
             in_queue=queue_in,
             out_queue=queue_out,
-            args=(images, side, augmenting, do_shuffle, batchsize))
+            args=(images, side, self.batch_size, augmenting, do_shuffle))
         load_process.start()
         logger.debug("Batching to queue: (side: '%s', augmenting: %s)", side, augmenting)
         return self.minibatch(side, augmenting, load_process)
@@ -71,7 +70,7 @@ class TrainingDataGenerator():
         queues = [queue_manager.get_queue(queue) for queue in q_names]
         return queues
 
-    def load_batches(self, mem_gen, images, side, augmenting, do_shuffle=True, batchsize=0):
+    def load_batches(self, mem_gen, images, side, augmenting, do_shuffle):
         """ Load the warped images and target images to queue """
         logger.debug("Loading batch: (image_count: %s, side: '%s', augmenting: %s, "
                      "do_shuffle: %s)", len(images), side, augmenting, do_shuffle)
@@ -79,12 +78,11 @@ class TrainingDataGenerator():
         # Intialize this for each subprocess
         self._nearest_landmarks = dict()
 
-        def _img_iter(imgs):
+        def _img_iter(images):
             while True:
                 if do_shuffle:
-                    shuffle(imgs)
-                for img in imgs:
-                    yield img
+                    shuffle(images)
+                yield from images
 
         img_iter = _img_iter(images)
         epoch = 0
@@ -97,7 +95,7 @@ class TrainingDataGenerator():
                 for j, img in enumerate(imgs):
                     memory[j][i][:] = img
                 epoch += 1
-                if i == batchsize - 1:
+                if i == self.batch_size - 1:
                     break
             memory_wrapper.ready()
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
@@ -109,8 +107,8 @@ class TrainingDataGenerator():
         length = len(data)
         msg = ("Number of images is lower than batch-size (Note that too few "
                "images may lead to bad training). # images: {}, "
-               "batch-size: {}".format(length, self.batchsize))
-        assert length >= self.batchsize, msg
+               "batch-size: {}".format(length, self.batch_size))
+        assert length >= self.batch_size, msg
 
     @staticmethod
     def minibatch(side, augmenting, load_process):
@@ -200,10 +198,10 @@ class ImageManipulation():
         logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s)",
                      self.__class__.__name__, input_size, output_size, coverage_ratio)
         # Transform args
-        self.rotation_range = 10  # Range to randomly rotate the image by
-        self.zoom_range = 0.05  # Range to randomly zoom the image by
-        self.shift_range = 0.05  # Range to randomly translate the image by
-        self.random_flip = 0.5  # Chance to flip the image horizontally
+        self.t_args = {"rotation":  10.,   # Range to randomly rotate the image by
+                       "zoom":      0.05,  # Range to randomly zoom the image by
+                       "shift":     0.05,  # Range to randomly translate the image by
+                       "flip":      0.5}   # Chance to flip the image horizontally
         # Transform and Warp args
         self.input_size = input_size
         self.output_size = output_size
@@ -230,15 +228,14 @@ class ImageManipulation():
         """ Randomly transform an image """
         logger.trace("Randomly transforming image")
         height, width = image.shape[0:2]
-
-        rotation = np.random.uniform(-self.rotation_range, self.rotation_range)
-        scale = np.random.uniform(1 - self.zoom_range, 1 + self.zoom_range)
-        tnx = np.random.uniform(-self.shift_range, self.shift_range) * width
-        tny = np.random.uniform(-self.shift_range, self.shift_range) * height
+        rotation = np.random.uniform(-self.t_args["rotation"], self.t_args["rotation"])
+        scale = np.random.uniform(1 - self.t_args["zoom"], 1 + self.t_args["zoom"])
+        tn_x = np.random.uniform(-self.t_args["shift"], self.t_args["shift"]) * width
+        tn_y = np.random.uniform(-self.t_args["shift"], self.t_args["shift"]) * height
 
         mat = cv2.getRotationMatrix2D(  # pylint: disable=no-member
             (width // 2, height // 2), rotation, scale)
-        mat[:, 2] += (tnx, tny)
+        mat[:, 2] += (tn_x, tn_y)
         result = cv2.warpAffine(  # pylint: disable=no-member
             image, mat, (width, height),
             borderMode=cv2.BORDER_REPLICATE)  # pylint: disable=no-member
@@ -249,7 +246,7 @@ class ImageManipulation():
     def do_random_flip(self, image):
         """ Perform flip on image if random number is within threshold """
         logger.trace("Randomly flipping image")
-        if np.random.random() < self.random_flip:
+        if np.random.random() < self.t_args["flip"]:
             logger.trace("Flip within threshold. Flipping")
             retval = image[:, ::-1]
         else:
@@ -276,7 +273,6 @@ class ImageManipulation():
         slices = slice(pad // 10, -pad // 10)
         dst_slice = slice(0, (self.output_size + 1), (self.output_size // 4))
         interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
-        ####
 
         for i, map_ in enumerate([mapx, mapy]):
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
@@ -378,4 +374,3 @@ class ImageManipulation():
         logger.trace("Target mask shape: %s", target_mask.shape)
         logger.trace("Randomly warped image and mask")
         return [warped_image, warped_mask, target_image, target_mask]
-
