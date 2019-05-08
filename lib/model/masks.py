@@ -40,22 +40,13 @@ class Mask():
         assert channels in (1, 3, 4), "Channels should be 1, 3 or 4"
         self.mask_type = mask_type
         self.channels = channels
-        self.mask_function = self.build_function()
+        masks = self.build_masks(faces, landmarks)
+        self.masks = self.merge_masks(faces, masks))
         logger.trace("Initialized %s", self.__class__.__name__)
 
-    def build_function(self):
-        """ Build the mask function """
-        build_dict = {"facehull":    (self.facehull, 1),
-                      "dfl_full":    (self.facehull, 3),
-                      "components":  (self.facehull, 8),
-                      None:          (self.facehull, 3),
-                      "vgg_300":     (self.smart, "Nirkin_300_softmax_v1.h5"),
-                      "vgg_500":     (self.smart, "Nirkin_500_softmax_v1.h5"),
-                      "unet_256":    (self.smart, "DFL_256_sigmoid_v1.h5"),
-                      "none":        (self.dummy, None)}
-        build_function, arg = build_dict[self.mask_type]
-        mask_function = build_function(arg)
-        return mask_function
+    def build_masks(self):
+        """ Override to build the mask """
+        raise NotImplementedError
 
     def merge_masks(self, faces, masks):
         """ Return the masks in the requested shape """
@@ -70,14 +61,27 @@ class Mask():
         logger.trace("Final masks shape: %s", retval.shape)
         return retval
 
-    def mask(self, faces, landmarks):
-        logger.trace("Masking: (faces_shape: %s)",faces.shape)
-        masks = self.mask_function(faces, landmarks)
-        merged_masks = self.merge_masks(faces, masks)
-        return merged_masks
 
-    def facehull(self, part_number):
-        """ Compute the facehull """
+class Facehull(Mask):
+
+    def build_mask(self, mask_type, faces, landmarks):
+        """
+        Function for creating facehull masks
+        Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
+        Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
+        """
+        build_dict = {"facehull":    self.one,
+                      "dfl_full":    self.three,
+                      "components":  self.eight,
+                      None:          self.three}
+        parts = build_dict[mask_type]
+        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
+        for mask in masks:
+            for item in parts:
+                # pylint: disable=no-member
+                hull = cv2.convexHull(np.concatenate(item))
+                cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)
+        return masks
 
         def one(self):
             """ Basic facehull mask """
@@ -119,24 +123,37 @@ class Mask():
             parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
             return parts
 
-        part_dict = {1: one, 3: three, 8: eight}
-        part_function = part_dict[part_number]
 
-        def mask_function(self, faces, landmarks):
-            """
-            Function for creating facehull masks
-            Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
-            Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
-            """
-            masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
-            parts = part_function(landmark)
-            for mask in masks:
-                for item in parts:
-                    # pylint: disable=no-member
-                    hull = cv2.convexHull(np.concatenate(item))
-                    cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)
-            return masks
+class Smart(Mask):
 
+    def build_mask(self, mask_type, faces, landmarks):
+        """
+        Function for creating facehull masks
+        Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
+        Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
+        """
+        build_dict = {"facehull":    self.one,
+                      "dfl_full":    self.three,
+                      "components":  self.eight,
+                      None:          self.three}
+        parts = build_dict[mask_type]
+        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
+        for mask in masks:
+            for item in parts:
+                # pylint: disable=no-member
+                hull = cv2.convexHull(np.concatenate(item))
+                cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)
+        return masks
+
+    def build_function(self):
+        """ Build the mask function """
+        build_dict = {None:          (self.facehull, 3),
+                      "vgg_300":     (self.smart, "Nirkin_300_softmax_v1.h5"),
+                      "vgg_500":     (self.smart, "Nirkin_500_softmax_v1.h5"),
+                      "unet_256":    (self.smart, "DFL_256_sigmoid_v1.h5"),
+                      "none":        (self.dummy, None)}
+        build_function, arg = build_dict[self.mask_type]
+        mask_function = build_function(arg)
         return mask_function
 
     def smart(self, model_type):
@@ -155,11 +172,10 @@ class Mask():
 
         return mask_function
 
-    def dummy(self, dummy):
-        """ Basic facehull mask """
-        def mask_function(faces, landmarks):
-            masks = np.ones_like(faces)
-            return masks
+class Dummy(Mask):
 
-        return mask_function
+    def build_mask(self, mask_type, faces, landmarks=None):
+        """ Dummy mask of all ones """
+            masks = np.ones_like(faces)
+        return masks
 
