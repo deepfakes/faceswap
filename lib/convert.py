@@ -8,6 +8,7 @@ import logging
 import cv2
 import numpy as np
 from lib.model.masks import Mask
+
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -163,9 +164,11 @@ class Converter():
         mask = new_image[:, :, -1:]
         foreground = new_image[:, :, :3] * 255.
         background = predicted["image"][:, :, :3]
+
         frame = foreground * mask + background * (1. - mask)
         if self.draw_transparent:
             frame = np.concatenate((frame, mask * 255.), axis=-1)
+
         frame = np.clip(frame, 0., 255.)
         logger.trace("Swapped frame created")
         return frame

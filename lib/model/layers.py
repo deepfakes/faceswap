@@ -352,7 +352,6 @@ class ReflectionPadding2D(Layer):
         base_config = super(ReflectionPadding2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-
 class GlobalMinPooling2D(_GlobalPooling2D):
     """Global minimum pooling operation for spatial data.
     # Arguments
