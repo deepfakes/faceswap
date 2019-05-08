@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from scipy.interpolate import griddata
 
-from lib.model.masks import Mask
+from lib.model.masks import Mask, Facehull
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -30,7 +30,7 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
-        self.masker = Mask(training_opts.get("mask_type", "dfl_full"), channels=4)
+        #self.masker = Facehull(training_opts.get("mask_type", "dfl_full"), channels=4)
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
@@ -140,7 +140,7 @@ class TrainingDataGenerator():
 
         src_pts = self.get_landmarks(filename, image, side)
         image = image.astype("float32") / 255.
-        image = self.masker.mask(src_pts, image)
+        image = Facehull(self.training_opts.get("mask_type", "dfl_full"), image, src_pts, channels=4).masks
 
         if augmenting:
             image = self.processing.random_transform(image)
