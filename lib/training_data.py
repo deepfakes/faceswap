@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, batch_size, training_opts):
+    def __init__(self, model_input_size, model_output_size, training_opts):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
                      "training_opts: %s, landmarks: %s)",
                      self.__class__.__name__, model_input_size, model_output_size,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
                      bool(training_opts.get("landmarks", None)))
-        self.batch_size = batch_size
+        self.batch_size = 0
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.masker = Mask(training_opts.get("mask_type", "dfl_full"), channels=4)
@@ -42,12 +42,13 @@ class TrainingDataGenerator():
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "augmenting: %s)", len(images), batch_size, side, do_shuffle, augmenting)
+        self.batch_size = batch_size
         queue_in, queue_out = self.make_queues(side, augmenting)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(
             ((batch_size, training_size, training_size, 3),                   # sample images
              (batch_size, self.model_input_size, self.model_input_size, 3),   # warped images
-             (batch_size, self.model_output_size, self.model_output_size, 1), # warped masks
+             (batch_size, self.model_input_size, self.model_input_size, 1), # warped masks
              (batch_size, self.model_output_size, self.model_output_size, 3), # target images
              (batch_size, self.model_output_size, self.model_output_size, 1)  # target masks
             ))

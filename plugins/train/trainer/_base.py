@@ -229,16 +229,14 @@ class Batcher():
             samples = [batch[0]] + targets
         return inputs, targets, samples
 
-    def load_generator(self, batch_size):
+    def load_generator(self):
         """ Set the feed dataset with TrainingDataGenerator """
-        logger.debug("Loading generator: (side: '%s', batchsize: %s)",
-                     self.side, batch_size)
+        logger.debug("Loading generator: (side: '%s')",self.side)
         input_size = self.model.input_shape[0]
         output_size = self.model.output_shape[0]
         logger.debug("input_size: %s, output_size: %s", input_size, output_size)
         generator = TrainingDataGenerator(input_size,
                                           output_size,
-                                          batch_size,
                                           self.model.training_opts)
         logger.debug("'%s' dataset created")
         return generator
