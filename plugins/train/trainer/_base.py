@@ -198,16 +198,17 @@ class Batcher():
         self.model = model
         self.batch_size = batch_size
         self.feed = dict()
-        dataset_kwargs = {"side":          side,
-                          "images":        images,
-                          "batch_size":    batch_size,
-                          "purpose":       "training",
-                          "do_shuffle":    True,
-                          "augmenting":    True}
-        self.set_dataset_feed(**dataset_kwargs)
-        dataset_kwargs["purpose"] = "preview"
-        dataset_kwargs["augmenting"] = False
-        self.set_dataset_feed(**dataset_kwargs)
+        self.feed["training"] = self.load_generator().minibatch_ab(images,
+                                                                   batch_size,
+                                                                   side,
+                                                                   do_shuffle=True,
+                                                                   augmenting=True)
+        self.feed["preview"] = self.load_generator().minibatch_ab(images,
+                                                                  batch_size,
+                                                                  side,
+                                                                  do_shuffle=True,
+                                                                  augmenting=False)
+
 
     def train_one_batch(self, purpose):
         """ Train a batch """
@@ -228,10 +229,10 @@ class Batcher():
             samples = [batch[0]] + targets
         return inputs, targets, samples
 
-    def set_dataset_feed(self, side, images, batch_size, purpose, do_shuffle, augmenting):
+    def load_generator(self, batch_size):
         """ Set the feed dataset with TrainingDataGenerator """
-        logger.debug("Loading '%s' generator: (side: '%s', input_images: '%s', batchsize: %s)",
-                     purpose, side, images, batch_size)
+        logger.debug("Loading generator: (side: '%s', batchsize: %s)",
+                     self.side, batch_size)
         input_size = self.model.input_shape[0]
         output_size = self.model.output_shape[0]
         logger.debug("input_size: %s, output_size: %s", input_size, output_size)
@@ -239,11 +240,8 @@ class Batcher():
                                           output_size,
                                           batch_size,
                                           self.model.training_opts)
-        self.feed[purpose] = generator.minibatch_ab(images,
-                                                    side,
-                                                    do_shuffle=do_shuffle,
-                                                    augmenting=augmenting)
-        logger.debug("'%s' dataset created", purpose)
+        logger.debug("'%s' dataset created")
+        return generator
 
 
 class Samples():
@@ -442,8 +440,11 @@ class Timelapse():
                          len(images["b"]),
                          self.model.training_opts.get("preview_images", 14))
         for side, images in images.items():
-            self.batchers[side].set_dataset_feed(side, images, batch_size,
-                                                 "timelapse", False, False)
+            self.batchers[side].feed["timelapse"] = self.batchers[side].load_generator().minibatch_ab(images,
+                                                                                                      batch_size,
+                                                                                                      side,
+                                                                                                      False,
+                                                                                                      False)
         logger.debug("Set up timelapse")
 
     def output_timelapse(self):

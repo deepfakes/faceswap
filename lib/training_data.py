@@ -38,18 +38,18 @@ class TrainingDataGenerator():
                                             training_opts.get("coverage_ratio", 0.625))
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def minibatch_ab(self, images, side, do_shuffle=True, augmenting=True):
+    def minibatch_ab(self, images, batch_size, side, do_shuffle=True, augmenting=True):
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
-                     "augmenting: %s)", len(images), self.batch_size, side, do_shuffle, augmenting)
+                     "augmenting: %s)", len(images), batch_size, side, do_shuffle, augmenting)
         queue_in, queue_out = self.make_queues(side, augmenting)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(
-            ((self.batch_size, training_size, training_size, 3),                   # sample images
-             (self.batch_size, self.model_input_size, self.model_input_size, 3),   # warped images
-             (self.batch_size, self.model_output_size, self.model_output_size, 1), # warped masks
-             (self.batch_size, self.model_output_size, self.model_output_size, 3), # target images
-             (self.batch_size, self.model_output_size, self.model_output_size, 1)  # target masks
+            ((batch_size, training_size, training_size, 3),                   # sample images
+             (batch_size, self.model_input_size, self.model_input_size, 3),   # warped images
+             (batch_size, self.model_output_size, self.model_output_size, 1), # warped masks
+             (batch_size, self.model_output_size, self.model_output_size, 3), # target images
+             (batch_size, self.model_output_size, self.model_output_size, 1)  # target masks
             ))
 
         load_process = FixedProducerDispatcher(
