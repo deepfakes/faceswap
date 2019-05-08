@@ -20,6 +20,7 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+
         self.mask_shape = (self.config["output_size"], self.config["output_size"], 1)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()

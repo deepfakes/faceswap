@@ -15,6 +15,7 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+
         self.lowmem = self.config.get("lowmem", False)
         kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
         kwargs["encoder_dim"] = 512 if self.lowmem else self.config["nodes"]
@@ -37,6 +38,7 @@ class Model(OriginalModel):
         encoder_complexity = 128 if self.lowmem else self.config["complexity_encoder"]
         dense_dim = 384 if self.lowmem else 512
         dense_shape = self.input_shape[0] // 16
+        second_dense_shape = dense_shape * dense_shape * dense_dim
 
         face_ = Input(shape=self.input_shape)
         mask_ = Input(shape=self.mask_shape)
@@ -47,10 +49,8 @@ class Model(OriginalModel):
         var_x = self.blocks.conv(var_x, encoder_complexity * 6, **kwargs)
         var_x = self.blocks.conv(var_x, encoder_complexity * 8, **kwargs)
         var_x = Flatten()(var_x)
-        var_x = Dense(self.encoder_dim,
-                      kernel_initializer=self.kernel_initializer)(var_x)
-        var_x = Dense(dense_shape * dense_shape * dense_dim,
-                      kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = Dense(self.encoder_dim, kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = Dense(second_dense_shape, kernel_initializer=self.kernel_initializer)(var_x)
         var_x = Reshape((dense_shape, dense_shape, dense_dim))(var_x)
         return KerasModel([face_, mask_], var_x)
 

@@ -14,6 +14,7 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+
         kwargs["input_shape"] = (128, 128, 3)
         kwargs["encoder_dim"] = 256 if self.config["lowmem"] else 512
 

@@ -278,6 +278,7 @@ class ModelBase():
             mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
             loss_names, loss_funcs = self.loss_function(mask, side, initialize)
             model.compile(optimizer=optimizer, loss=loss_funcs)
+
             if len(loss_names) > 1:
                 loss_names.insert(0, "total_loss")
             if initialize:

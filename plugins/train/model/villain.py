@@ -16,6 +16,7 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+
         kwargs["input_shape"] = (128, 128, 3)
         kwargs["encoder_dim"] = 512 if self.config["lowmem"] else 1024
         self.kernel_initializer = RandomNormal(0, 0.02)
@@ -35,10 +36,10 @@ class Model(OriginalModel):
         mask_ = Input(shape=self.mask_shape)
         var_x = Concatenate(axis=-1)([face_, mask_])
         var_x = self.blocks.conv(var_x, in_conv_filters, res_block_follows=True, **kwargs)
-        initial_conv = var_x
+        tmp_x = var_x
         for _ in range(res_cycles):
             var_x = self.blocks.res_block(var_x, 128, **kwargs)
-        var_x = Add()([var_x, initial_conv])
+        var_x = Add()([var_x, tmp_x])
         var_x = self.blocks.conv(var_x, 128, **kwargs)
         var_x = PixelShuffler()(var_x)
         var_x = self.blocks.conv(var_x, 128, **kwargs)
@@ -48,6 +49,7 @@ class Model(OriginalModel):
         var_x = self.blocks.conv(var_x, 512, **kwargs)
         if not self.config.get("lowmem", False):
             var_x = self.blocks.conv_sep(var_x, 1024, **kwargs)
+
         var_x = Flatten()(var_x)
         var_x = Dense(self.encoder_dim, **kwargs)(var_x)
         var_x = Dense(dense_shape * dense_shape * 1024, **kwargs)(var_x)
