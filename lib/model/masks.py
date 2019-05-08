@@ -119,7 +119,7 @@ class Facehull(Mask):
         for mask in masks:
             for item in parts:
                 # pylint: disable=no-member
-                hull = cv2.convexHull(np.concatenate(item)) # .astype('uint8')
+                hull = cv2.convexHull(np.concatenate(item))
                 cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)
         return masks
 

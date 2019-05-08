@@ -327,14 +327,15 @@ class Samples():
         color = (0., 0., 1.)
         logger.debug("full_size: %s, color: %s", frames.shape[1], color)
         full_size = frames.shape[1]
-        padding = (full_size * (1. - self.coverage_ratio)) // 2
-        length = (full_size * self.coverage_ratio) // 4
-        t_l, b_r = (padding, full_size - padding)
+        padding = int(full_size * (1. - self.coverage_ratio)) // 2
+        length = int(full_size * self.coverage_ratio) // 4
+        t_l = padding
+        b_r = full_size - padding
 
-        top_left = [slice(t_l, t_l + length), slice(t_l, t_l + length)]
-        bot_left = [slice(b_r - length, b_r), slice(t_l, t_l + length)]
-        top_right = [slice(b_r - length, b_r), slice(b_r - length, b_r)]
-        bot_right = [slice(t_l, t_l + length), slice(b_r - length, b_r)]
+        top_left = slice(t_l, t_l + length), slice(t_l, t_l + length)
+        bot_left = slice(b_r - length, b_r), slice(t_l, t_l + length)
+        top_right = slice(b_r - length, b_r), slice(b_r - length, b_r)
+        bot_right = slice(t_l, t_l + length), slice(b_r - length, b_r)
         for roi in [top_left, bot_left, top_right, bot_right]:
             frames[:, roi[0], roi[1]] = color
         logger.debug("Overlayed background. Shape: %s", frames.shape)
@@ -356,10 +357,10 @@ class Samples():
         offset = (backgrounds.shape[1] - foregrounds.shape[2]) // 2
         slice_y = slice(offset, offset + foregrounds.shape[2])
         slice_x = slice(offset, offset + foregrounds.shape[3])
-        new_images = np.repeat(backgrounds, 3, axis=0)
+        new_images = np.repeat(backgrounds[None, ...], 3, axis=0)  #TODO why expand dims
         for background, foreground in zip(new_images, foregrounds):
             for fore, back in zip(foreground, background):
-                back[slice_y, slice_x] = fore
+                back[slice_y, slice_x, :] = fore
         logger.debug("Overlayed foreground. Shape: %s", new_images.shape)
         return new_images
 
