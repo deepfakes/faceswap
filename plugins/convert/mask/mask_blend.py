@@ -4,7 +4,7 @@
 import cv2
 import numpy as np
 
-from lib.model.masks import Mask as mask_class
+from lib.model.masks import Mask
 from ._base import Adjustment, BlurMask, logger
 
 
@@ -35,7 +35,8 @@ class Mask(Adjustment):
         else:
             landmarks = detected_face.reference_landmarks
             face_img = detected_face.reference_face
-            mask = mask_class(landmarks, face_img, self.mask_type, channels=1).mask
+            masker = Mask(self.mask_type, channels=1)
+            mask = masker.mask(landmarks, face_img)
         np.nan_to_num(mask, copy=False)
         np.clip(mask, 0., 1., out=mask)
         return mask

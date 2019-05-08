@@ -58,7 +58,7 @@ class TrainingDataGenerator():
             shapes=batch_shape,
             in_queue=queue_in,
             out_queue=queue_out,
-            args=(images, side, augmenting, do_shuffle))
+            args=(images, side, batch_size, augmenting, do_shuffle))
         load_process.start()
         logger.debug("Batching to queue: (side: '%s', augmenting: %s)", side, augmenting)
         return self.minibatch(side, augmenting, load_process)
@@ -72,7 +72,7 @@ class TrainingDataGenerator():
         queues = [queue_manager.get_queue(queue) for queue in q_names]
         return queues
 
-    def load_batches(self, mem_gen, images, side, augmenting, do_shuffle):
+    def load_batches(self, mem_gen, images, side, batch_size, augmenting, do_shuffle):
         """ Load the warped images and target images to queue """
         logger.debug("Loading batch: (image_count: %s, side: '%s', augmenting: %s, "
                      "do_shuffle: %s)", len(images), side, augmenting, do_shuffle)
@@ -97,7 +97,7 @@ class TrainingDataGenerator():
                 for j, img in enumerate(imgs):
                     memory[j][i][:] = img
                 epoch += 1
-                if i == self.batch_size - 1:
+                if i == batch_size - 1:
                     break
             memory_wrapper.ready()
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
