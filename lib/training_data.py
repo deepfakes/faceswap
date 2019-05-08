@@ -29,8 +29,8 @@ class TrainingDataGenerator():
         self.batch_size = 0
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
-        self.masker = Mask(training_opts.get("mask_type", "dfl_full"), channels=4)
         self.training_opts = training_opts
+        self.masker = Mask(training_opts.get("mask_type", "dfl_full"), channels=4)
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
@@ -48,7 +48,7 @@ class TrainingDataGenerator():
         batch_shape = list(
             ((batch_size, training_size, training_size, 3),                   # sample images
              (batch_size, self.model_input_size, self.model_input_size, 3),   # warped images
-             (batch_size, self.model_input_size, self.model_input_size, 1), # warped masks
+             (batch_size, self.model_input_size, self.model_input_size, 1),   # warped masks
              (batch_size, self.model_output_size, self.model_output_size, 3), # target images
              (batch_size, self.model_output_size, self.model_output_size, 1)  # target masks
             ))

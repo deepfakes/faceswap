@@ -2,6 +2,7 @@
 """ Masks functions for faceswap.py """
 
 import logging
+
 from pathlib import Path
 import cv2
 import keras
@@ -9,6 +10,7 @@ import numpy as np
 from lib.utils import GetModel
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 def get_available_masks():
     """ Return a list of the available masks for cli """
@@ -18,7 +20,8 @@ def get_available_masks():
 
 def get_default_mask():
     """ Set the default mask for cli """
-    default = "dfl_full"
+    masks = get_available_masks()
+    default = "dfl_full" if "dfl_full" in masks else masks[0]
     logger.debug("Default mask is %s", default)
     return default
 
@@ -73,18 +76,15 @@ class Mask():
         merged_masks = self.merge_masks(faces, masks)
         return merged_masks
 
-    @staticmethod
-    def facehull(part_number):
+    def facehull(self, part_number):
         """ Compute the facehull """
 
-        @staticmethod
-        def one():
+        def one(self):
             """ Basic facehull mask """
             parts = [(self.landmarks)]
             return parts
 
-        @staticmethod
-        def three():
+        def three(self):
             """ DFL facehull mask """
             nose_ridge = (self.landmarks[27:31], self.landmarks[33:34])
             jaw = (self.landmarks[0:17],
@@ -100,8 +100,7 @@ class Mask():
             parts = [jaw, nose_ridge, eyes]
             return parts
 
-        @staticmethod
-        def eight():
+        def eight(self):
             """ Component facehull mask """
             r_jaw = (self.landmarks[0:9], self.landmarks[17:18])
             l_jaw = (self.landmarks[8:17], self.landmarks[26:27])
@@ -123,8 +122,7 @@ class Mask():
         part_dict = {1: one, 3: three, 8: eight}
         part_function = part_dict[part_number]
 
-        @staticmethod
-        def mask_function(faces, landmarks):
+        def mask_function(self, faces, landmarks):
             """
             Function for creating facehull masks
             Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
@@ -141,12 +139,10 @@ class Mask():
 
         return mask_function
 
-    @staticmethod
-    def smart(model_type):
+    def smart(self, model_type):
         """ Compute the facehull """
 
-        @staticmethod
-        def get_model(model_filename):
+        def get_model(self, model_filename):
             """ Check if model is available, if not, download and unzip it """
             cache_path = os.path.join(os.path.dirname(__file__), ".cache")
             model = GetModel(model_filename, cache_path)
@@ -159,8 +155,7 @@ class Mask():
 
         return mask_function
 
-    @staticmethod
-    def dummy(dummy):
+    def dummy(self, dummy):
         """ Basic facehull mask """
         def mask_function(faces, landmarks):
             masks = np.ones_like(faces)
