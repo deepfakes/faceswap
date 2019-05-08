@@ -29,6 +29,7 @@ class TrainingDataGenerator():
         self.batch_size = batch_size
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
+        self.masker = Mask(training_opts.get("mask_type", "dfl_full"), channels=4)
         self.training_opts = training_opts
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
@@ -138,8 +139,7 @@ class TrainingDataGenerator():
 
         src_pts = self.get_landmarks(filename, image, side)
         image = image.astype("float32") / 255.
-        mask_type = self.training_opts.get("mask_type", "dfl_full")
-        image = Mask(src_pts, image, mask_type, channels=4).mask
+        image = self.masker.mask(src_pts, image)
 
         if augmenting:
             image = self.processing.random_transform(image)

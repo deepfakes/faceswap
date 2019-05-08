@@ -7,8 +7,7 @@ import logging
 
 import cv2
 import numpy as np
-from lib.model.masks import get_default_mask
-from lib.model.masks import Mask as mask_class
+from lib.model.masks import Mask
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -133,7 +132,6 @@ class Converter():
         logger.trace("old_face shape: %s, new_face shape: %s, predicted_mask shape: %s",
                      old_face.shape, new_face.shape,
                      predicted_mask.shape if predicted_mask is not None else None)
-        new_face = self.adjustments["box"].run(new_face)
         new_face, raw_mask = self.get_image_mask(new_face, detected_face, predicted_mask)
         if self.adjustments["color"] is not None:
             new_face = self.adjustments["color"].run(old_face, new_face, raw_mask)
@@ -145,6 +143,7 @@ class Converter():
     def get_image_mask(self, new_face, detected_face, predicted_mask):
         """ Get the image mask """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
+        new_face = self.adjustments["box"].run(new_face)
         mask, raw_mask = self.adjustments["mask"].run(detected_face, predicted_mask)
         if new_face.shape[2] == 4:
             logger.trace("Combining mask with alpha channel box mask")
@@ -158,29 +157,17 @@ class Converter():
 
     def post_warp_adjustments(self, predicted, new_image):
         """ Apply fixes to the image after warping """
+        logger.trace("Compositing face into frame")
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
         mask = new_image[:, :, -1:]
         foreground = new_image[:, :, :3] * 255.
         background = predicted["image"][:, :, :3]
         frame = foreground * mask + background * (1. - mask)
-        frame = self.add_alpha_mask(frame, predicted)
-        frame = np.clip(frame, 0., 255.)
-        return frame
-
-    def add_alpha_mask(self, frame, predicted):
-        """ Adding a 4th channel should happen after all other channel operations
-            Add the default mask as 4th channel for saving an image with alpha channel """
         if self.draw_transparent:
-            logger.trace("Creating transparent image: '%s'", predicted["filename"])
-            mask_type = get_default_mask()
-            final_mask = np.zeros(frame.shape[:2] + (1, ), dtype="float32")
-            for detected_face in predicted["detected_faces"]:
-                landmarks = detected_face.landmarks_as_xy
-                mask = mask_class(landmarks, frame, mask_type, channels=1).mask
-                final_mask = np.bitwise_or(final_mask, mask)
-            frame = np.concatenate((frame, np.expand_dims(final_mask, axis=-1)), axis=-1)
-            logger.trace("Created transparent image: '%s'", predicted["filename"])
+            frame = np.concatenate((frame, mask * 255.), axis=-1)
+        frame = np.clip(frame, 0., 255.)
+        logger.trace("Swapped frame created")
         return frame
 
     def scale_image(self, frame):

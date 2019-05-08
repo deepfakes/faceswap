@@ -11,8 +11,6 @@
         preview_scaling:    How much to scale the preview out by
         training_size:      Size of the training images
         coverage_ratio:     Ratio of face to be cropped out for training
-        mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
-                            Set to None for not used
         no_logs:            Disable tensorboard logging
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
         no_flip:            Don't perform a random flip on the image

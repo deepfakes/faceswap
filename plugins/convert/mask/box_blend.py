@@ -22,10 +22,9 @@ class Mask(Adjustment):
             half to give a more expected box """
         logger.debug("Building box mask")
         mask_ratio = self.config["distance"] / 200.
-        face_size = self.dummy.shape[0]
-        erode_size = round(face_size * mask_ratio)
+        erode_size = round(self.output_size * mask_ratio)
         erode = slice(erode_size, -erode_size)
-        mask = self.dummy
+        mask = np.zeros((self.output_size, self.output_size, 1), dtype='float32')
         mask[erode, erode] = 1.
 
         mask = BlurMask(self.config["type"],

@@ -26,7 +26,7 @@ class Adjustment():
         self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         logger.debug("config: %s", self.config)
         self.mask_type = self.get_mask_type(mask_type, predicted_available)
-        self.dummy = np.zeros((output_size, output_size, 1), dtype='float32')
+        self.output_size = output_size
 
         self.skip = self.config.get("type", None) is None
         logger.debug("Initialized %s", self.__class__.__name__)

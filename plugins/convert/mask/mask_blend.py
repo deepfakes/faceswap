@@ -24,17 +24,13 @@ class Mask(Adjustment):
                 mask = self.erode(mask)
             if self.do_blend:
                 mask = self.blend(mask)
-        raw_mask = np.expand_dims(raw_mask, axis=-1) if raw_mask.ndim != 3 else raw_mask
         mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
         logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
         return mask, raw_mask
 
     def get_mask(self, detected_face, predicted_mask):
         """ Return the mask from lib/model/masks and intersect with box """
-        if self.mask_type == "none":
-            # Return a dummy mask of ones if not using a mask
-            mask = self.dummy + 1.
-        elif self.mask_type == "predicted":
+        if self.mask_type == "predicted":
             mask = predicted_mask
         else:
             landmarks = detected_face.reference_landmarks

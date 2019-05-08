@@ -263,8 +263,12 @@ class GetModel():
             "mtcnn_det": 2,
             "s3fd": 3,
             "resnet_ssd": 4,
-            # TRAIN (SECTION 2)
-            # CONVERT (SECTION 3)
+            # SEGMENT (SECTION 2)
+            "face_segmentation_no_occlusions": 5,
+            "face_segmentation_occlusions": 6,
+            "hotdog_segmentation": 7
+            # TRAIN (SECTION 3)
+            # CONVERT (SECTION 4)
             }
         return ids[self._model_name]
 
