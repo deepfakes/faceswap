@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_available_masks():
     """ Return a list of the available masks for cli """
-    masks = ["components", "dfl_full", "facehull", "vgg_300", "vgg_500", "unet_256", "none"]
+    masks = ["components", "dfl_full", "facehull", "none"]  # "vgg_300", "vgg_500", "unet_256",
     logger.debug(masks)
     return masks
 
@@ -126,51 +126,27 @@ class Facehull(Mask):
 
 class Smart(Mask):
 
-    def build_masks(self, mask_type, faces, landmarks):
+    def build_masks(self, mask_type, faces, landmarks=None):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
-        Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
+        Check if model is available, if not, download and unzip it
         """
-        build_dict = {"facehull":    self.one,
-                      "dfl_full":    self.three,
-                      "components":  self.eight,
-                      None:          self.three}
-        parts = build_dict[mask_type]
+
+        build_dict = {"vgg_300":     "Nirkin_300_softmax_v1.h5",
+                      "vgg_500":     "Nirkin_500_softmax_v1.h5",
+                      "unet_256":    "DFL_256_sigmoid_v1.h5",
+                      None:          "Nirkin_500_softmax_v1.h5"}
+        model_name = build_dict[mask_type]
+        cache_path = os.path.join(os.path.dirname(__file__), ".cache")
+        model = GetModel(model_name, cache_path)
+        model = keras.models.load_model(model_path.model_path)
+        
         masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
-        for mask in masks:
-            for item in parts:
-                # pylint: disable=no-member
-                hull = cv2.convexHull(np.concatenate(item))
-                cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)
-        return masks
-
-    def build_function(self):
-        """ Build the mask function """
-        build_dict = {None:          (self.facehull, 3),
-                      "vgg_300":     (self.smart, "Nirkin_300_softmax_v1.h5"),
-                      "vgg_500":     (self.smart, "Nirkin_500_softmax_v1.h5"),
-                      "unet_256":    (self.smart, "DFL_256_sigmoid_v1.h5"),
-                      "none":        (self.dummy, None)}
-        build_function, arg = build_dict[self.mask_type]
-        mask_function = build_function(arg)
-        return mask_function
-
-    def smart(self, model_type):
-        """ Compute the facehull """
-
-        def get_model(self, model_filename):
-            """ Check if model is available, if not, download and unzip it """
-            cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-            model = GetModel(model_filename, cache_path)
-            return model.model_path
-
-        model_path = get_model(model_type)
-        model = keras.models.load_model(model_path)
 
         # TODO finish here
 
-        return mask_function
+        return masks
 
 
 class Dummy(Mask):
