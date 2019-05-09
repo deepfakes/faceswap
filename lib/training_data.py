@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from scipy.interpolate import griddata
 
-from lib.model.masks import Mask, Facehull
+from lib.model.masks import Facehull
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -30,7 +30,6 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
-        # self.masker = Facehull(training_opts.get("mask_type", "dfl_full"), channels=4)
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
@@ -138,18 +137,16 @@ class TrainingDataGenerator():
         except TypeError:
             raise Exception("Error while reading image", filename)
 
-        src_pts = self.get_landmarks(filename, image, side)
         image = image.astype("float32") / 255.
-        mask_type = self.training_opts.get("mask_type", "dfl_full")
-        image = Facehull(mask_type, image, src_pts, channels=4).masks  # TODO logic for smart masks
+        sample = image.copy()[:, :, :3]
 
         if augmenting:
             image = self.processing.random_transform(image)
             if not self.training_opts["no_flip"]:
                 image = self.processing.do_random_flip(image)
-        sample = image.copy()[:, :, :3]
 
         if self.training_opts["warp_to_landmarks"]:
+            src_pts = self.get_landmarks(filename, sample, side)
             dst_pts = self.get_closest_match(filename, side, src_pts)
             processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
         else:

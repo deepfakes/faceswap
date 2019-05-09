@@ -17,6 +17,7 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
 from plugins.plugin_loader import PluginLoader
+from lib.model.masks import Facehull, Smart, Dummy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -65,9 +66,58 @@ class Train():
 
     def get_images(self):
         """ Check the image dirs exist, contain images and return the image
-        objects """
+        datasets with masks added """
         logger.debug("Getting image paths")
+
+        @staticmethod
+        def dataset_setup(img_list, in_size, batch_size):
+            """ Create a mem-mapped image array for training"""
+
+            @staticmethod
+            def loader(img_file, target_size):
+                """ Load and resize images with opencv """
+                # pylint: disable=no-member
+                img = cv2.imread(img_file).astype('float32')
+                if image_size != target_size:
+                    height, width, _ = img.shape
+                    image_size = min(height, width)
+                    method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
+                    img = cv2.resize(img, (target_size, target_size), method)
+                return img
+
+            filename = str(pathlib.Path(img_list[0]).parents[0].joinpath(('Images_Batched.npy')))
+            batch_num = int(math.ceil(len(img_list) / batch_size))
+            img_shape = (batch_num, batch_size, in_size, in_size, 4)
+            dataset = np.lib.format.open_memmap(filename, mode='w+', dtype='float32', shape=img_shape)
+            for i, (img, avg) in enumerate(loader(img_file, in_size) for img_file in img_list):
+                dataset[i // batch_size, i % batch_size, :, :, :3] = img[:, :, 3]
+            means = np.mean(dataset, axis=(0,1,2,3))
+            return dataset, filename, means
+
+        def get_landmarks(self, image, side):
+            """ Return the landmarks for this face """
+            lm_key = sha1(image).hexdigest()
+            logger.trace("Retrieving landmarks: (hash: '%s', side: '%s'", lm_key, side)
+            try:
+                src_points = self.training_opts.get("landmarks", None)[side][lm_key]
+            except KeyError:
+                raise Exception("Landmarks not found for hash: '{}'".format(lm_key))
+            logger.trace("Returning: (src_points: %s)", src_points)
+            return src_points
+            
+            
         images = dict()
+        img_number = dict()
+        mask_args = {None:          (self.args.image_size, Facehull),
+                     "none":        (self.args.image_size, Dummy),
+                     "components":  (self.args.image_size, Facehull),
+                     "dfl_full":    (self.args.image_size, Facehull),
+                     "facehull":    (self.args.image_size, Facehull),
+                     "vgg_300":     (300, Smart),
+                     "vgg_500":     (500, Smart),
+                     "unet_256":    (256, Smart)}
+        mask_type = self.training_opts.get("mask_type", "dfl_full")
+        model_in_size, Mask = mask_args[mask_type]
         for side in ("a", "b"):
             image_dir = getattr(self.args, "input_{}".format(side))
             if not os.path.isdir(image_dir):
@@ -78,18 +128,24 @@ class Train():
                 logger.error("Error: '%s' contains no images", image_dir)
                 exit(1)
 
-            images[side] = get_image_paths(image_dir)
+            image_file_list = get_image_paths(image_dir)
+            logger.debug("Training image size: %s", size)
+            img_dataset, data_file, means = self.dataset_setup(image_file_list,
+                                                               model_in_size,
+                                                               self.args.batch_size)
+            for batch in img_dataset:
+                if Mask == Facehull:
+                    src_pts = np.array(get_landmarks(img, side) for img in batch)
+                else:
+                    src_pts = None
+                batch = Mask(mask_type, batch, src_pts, channels=4).masks
+            images[side] = img_dataset
+            img_number[side] = len(image_file_list)
+
         logger.info("Model A Directory: %s", self.args.input_a)
         logger.info("Model B Directory: %s", self.args.input_b)
-        logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
-                                             for key, val in images.items()])
-                                             
-        
-        image_dataset = self.dataset_setup(image_file_list, image_size, batch_size)
-        image_generator = self.minibatches(image_dataset)
-                                             
-                                             
-                                             
+        logger.debug("Got image paths: %s", [(key, str(val,) + " images")
+                                             for key, val in img_number.items()])
         return images
 
     def process(self):
@@ -174,14 +230,6 @@ class Train():
         # TODO move arguments to trainer as appropriate
         logger.debug("Loaded Model")
         return model
-
-    @property
-    def image_size(self):
-        """ Get the training set image size for storing in model data """
-        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
-        size = image.shape[0]
-        logger.debug("Training image size: %s", size)
-        return size
 
     @property
     def alignments_paths(self):
