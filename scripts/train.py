@@ -83,6 +83,13 @@ class Train():
         logger.info("Model B Directory: %s", self.args.input_b)
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
                                              for key, val in images.items()])
+                                             
+        
+        image_dataset = self.dataset_setup(image_file_list, image_size, batch_size)
+        image_generator = self.minibatches(image_dataset)
+                                             
+                                             
+                                             
         return images
 
     def process(self):
@@ -164,6 +171,7 @@ class Train():
             pingpong=self.args.pingpong,
             memory_saving_gradients=self.args.memory_saving_gradients,
             predict=False)
+        # TODO move arguments to trainer as appropriate
         logger.debug("Loaded Model")
         return model
 
@@ -207,31 +215,26 @@ class Train():
         else:
             display_func = None
 
-        for iteration in range(0, self.args.iterations):
-            logger.trace("Training iteration: %s", iteration)
-            save_iteration = iteration % self.args.save_interval == 0
-            viewer = display_func if save_iteration or self.save_now else None
-            timelapse = self.timelapse if save_iteration else None
-            if viewer or timelapse:
-                trainer.preview(viewer, timelapse)
-
-            trainer.train_one_step()
-            if self.stop:
-                logger.debug("Stop received. Terminating")
-                break
-            elif save_iteration:
-                logger.trace("Save Iteration: (iteration: %s", iteration)
-                if self.args.pingpong:
+        for round in range(self.args.iterations // self.args.save_interval):
+            for iteration in range(self.args.save_interval):
+                total_iterations = iteration + round * self.args.save_interval
+                logger.trace("Training iteration: %s", total_iterations)
+                if self.stop:
+                    logger.debug("Stop received. Terminating")
+                    break
+                elif self.save_now:
+                    logger.trace("Save Requested: (iteration: %s", total_iterations)
+                    self.save_now = False
                     model.save_models()
-                    trainer.pingpong.switch()
-                else:
-                    model.save_models()
-            elif self.save_now:
-                logger.trace("Save Requested: (iteration: %s", iteration)
-                model.save_models()
-                self.save_now = False
+                    trainer.preview(display_func, None)
+                trainer.train_one_step()
+            trainer.preview(display_func, self.timelapse)
+            logger.trace("Save Iteration: (iteration: %s", total_iterations)
+            model.save_models()
+            self.save_now = False
+            if self.args.pingpong:
+                trainer.pingpong.switch()
         logger.debug("Training cycle complete")
-        model.save_models()
         trainer.clear_tensorboard()
         self.stop = True
 

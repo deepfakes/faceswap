@@ -162,7 +162,8 @@ class ModelBase():
         self.add_networks()
         self.load_models(swapped=False)
         self.build_autoencoders()
-        self.log_summary()
+        if not self.predict:
+            self.log_summary()
         self.compile_predictors(initialize=True)
 
     def build_autoencoders(self):
@@ -348,8 +349,6 @@ class ModelBase():
 
     def log_summary(self):
         """ Verbose log the model summaries """
-        if self.predict:
-            return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
             self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))

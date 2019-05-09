@@ -47,12 +47,9 @@ class TrainerBase():
 
         self.process_training_opts()
         self.pingpong = PingPong(model, self.sides)
-
-        self.batchers = {side: Batcher(side,
-                                       images[side],
-                                       self.model,
-                                       batch_size)
-                         for side in self.sides}
+        self.batchers = dict()
+        for side in self.sides:
+            self.batchers[side] = Batcher(side, images[side], self.model, batch_size)
 
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
