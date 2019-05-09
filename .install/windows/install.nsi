@@ -11,7 +11,10 @@ InstallDir $PROFILE\faceswap
 
 # Download sites
 !define wwwGit "https://github.com/git-for-windows/git/releases/download/v2.20.1.windows.1/Git-2.20.1-64-bit.exe"
-!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+
+# Latest miniconda appears to be broken when activating environment. Currently pinned to older version
+#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
 
 
