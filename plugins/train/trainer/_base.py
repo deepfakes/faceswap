@@ -311,7 +311,6 @@ class Samples():
         unadjusted_scale = frames.shape[1] / original_faces.shape[1]
         target_scale = unadjusted_scale * self.coverage_ratio
         new_scale = unadjusted_scale * self.scaling
-        print(frames.shape[1], original_faces.shape[1], unadjusted_scale, target_scale, new_scale, self.scaling)
 
         images = self.tint_masked(images, masks)
         images = self.resize_samples(side, images, target_scale)
