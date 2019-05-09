@@ -168,7 +168,7 @@ class Smart(Mask):
         model_path = get_model(model_type)
         model = keras.models.load_model(model_path)
 
-        #TODO finish here
+        # TODO finish here
 
         return mask_function
 

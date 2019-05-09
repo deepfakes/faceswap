@@ -340,17 +340,19 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return pad(x, [[0, 0],
-                       [padding_top, padding_bot],
-                       [padding_left, padding_right],
-                       [0, 0]],
-                       'REFLECT')
+        return pad(x,
+                   [[0, 0],
+                   [padding_top, padding_bot],
+                   [padding_left, padding_right],
+                   [0, 0]],
+                   'REFLECT')
 
     def get_config(self):
         config = {'stride': self.stride,
                   'kernel_size': self.kernel_size}
         base_config = super(ReflectionPadding2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
 
 class GlobalMinPooling2D(_GlobalPooling2D):
     """Global minimum pooling operation for spatial data.

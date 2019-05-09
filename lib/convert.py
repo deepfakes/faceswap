@@ -99,7 +99,7 @@ class Converter():
         """ Get the new face from the predictor and apply box manipulations """
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
-        #TODO finish
+        # TODO finish
         print(placeholder.dtype)
         placeholder = (predicted["image"] / 255.).astype("float32")
         zeros = np.zeros((frame_size[1], frame_size[0], 1), dtype="float32")
@@ -175,10 +175,10 @@ class Converter():
 
     def scale_image(self, frame):
         """ Scale the image if requested """
+        # pylint: disable=no-member
         if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
-            interp = cv2.INTER_CUBIC if self.scale > 1 else cv2.INTER_AREA  # pylint: disable=no-member
-            frame = cv2.resize(frame, fx=self.scale, fy=self.scale,  # pylint: disable=no-member
-                               interpolation=interp)
+            interp = cv2.INTER_CUBIC if self.scale > 1 else cv2.INTER_AREA
+            frame = cv2.resize(frame, fx=self.scale, fy=self.scale, interpolation=interp)
             logger.trace("resized frame: %s", frame.shape)
         return frame
