@@ -291,11 +291,12 @@ class Samples():
     @staticmethod
     def resize_samples(side, samples, scale):
         """ Resize samples where predictor expects different shape from processed image """
+        # pylint: disable=no-member
         if scale != 1.:
             logger.debug("Resizing samples: (side: '%s', sample.shape: %s, scale: %s)",
                          side, samples[0].shape, scale)
-            interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
-            samples = np.stack(np.stack(cv2.resize(img, None, fx=scale, fy=scale,  # pylint: disable=no-member
+            interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA
+            samples = np.stack(np.stack(cv2.resize(img, None, fx=scale, fy=scale,
                                                    interpolation=interp) for img in face_batch) for face_batch in samples)
             logger.debug("Resized sample: (side: '%s' shape: %s)", side, samples[0].shape)
         return samples
@@ -356,7 +357,7 @@ class Samples():
         offset = (backgrounds.shape[1] - foregrounds.shape[2]) // 2
         slice_y = slice(offset, offset + foregrounds.shape[2])
         slice_x = slice(offset, offset + foregrounds.shape[3])
-        new_images = np.repeat(backgrounds[None, ...], 3, axis=0)  #TODO why expand dims
+        new_images = np.repeat(backgrounds[None, ...], 3, axis=0)  # TODO why expand dims
         for background, foreground in zip(new_images, foregrounds):
             for fore, back in zip(foreground, background):
                 back[slice_y, slice_x, :] = fore
@@ -384,9 +385,9 @@ class Samples():
                  "{0} > {1}".format(side, other_side)]
         font = cv2.FONT_HERSHEY_SIMPLEX
         text_sizes = [text_size(text, font) for text in texts]
-        text_ys = [int((height + text[1]) / 2) for text in text_sizes]
-        text_xs = [int((width - text[0]) / 2 + offset) for offset, text in zip(offsets, text_sizes)]
-        for text_x, text_y, text in zip(text_xs, text_ys, texts):
+        y_texts = [int((height + text[1]) / 2) for text in text_sizes]
+        x_texts = [int((width - text[0]) / 2 + off) for off, text in zip(offsets, text_sizes)]
+        for text_x, text_y, text in zip(x_texts, y_texts, texts):
             cv2.putText(header_box,
                         text,
                         (text_x, text_y),
@@ -441,11 +442,12 @@ class Timelapse():
                          len(images["b"]),
                          self.model.training_opts.get("preview_images", 14))
         for side, images in images.items():
-            self.batchers[side].feed["timelapse"] = self.batchers[side].load_generator().minibatch_ab(images,
-                                                                                                      batch_size,
-                                                                                                      side,
-                                                                                                      False,
-                                                                                                      False)
+            timelapser = self.batchers[side].load_generator().minibatch_ab(images,
+                                                                           batch_size,
+                                                                           side,
+                                                                           False,
+                                                                           False)
+            self.batchers[side].feed["timelapse"] = timelapser
         logger.debug("Set up timelapse")
 
     def output_timelapse(self):
@@ -453,8 +455,7 @@ class Timelapse():
         logger.debug("Ouputting timelapse")
         image = self.samples.show_sample()
         if image is not None:
-            #TODO Path(self.output_file) / "{0}.h5".format(str(int(time.time())))
-            filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
+            filename = str(Path(self.output_file) / "{0}.h5".format(str(int(time.time()))))
             cv2.imwrite(filename, image)  # pylint: disable=no-member
             logger.debug("Created timelapse: '%s'", filename)
 
