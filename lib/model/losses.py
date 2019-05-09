@@ -322,9 +322,7 @@ def perceptual_loss(real, fake_abgr, distorted, vggface_feats, **weights):
     loss_g += weights['w_pl'][3] * calc_loss(instnorm()(fake_feat112),
                                              instnorm()(real_feat112), "l2")
     return loss_g
-
 # <<< END: from Shoanlu GAN >>> #
-
 
 
 def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
@@ -349,6 +347,7 @@ def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
     loss = K.mean(loss, axis=-1) * beta
     return loss
 
+
 def l_p_norm(y_true, y_pred, p_norm=np.inf):
     """
     Calculate the L-p norm as a loss function,
@@ -358,12 +357,14 @@ def l_p_norm(y_true, y_pred, p_norm=np.inf):
     loss = tf.norm(diff, ord=p_norm, axis=-1)
     return loss
 
+
 def l_inf_norm(y_true, y_pred):
     """ Calculate the L-inf norm as a loss function """
     diff = K.abs(y_true - y_pred)
     max_loss = K.max(diff, axis=(1, 2), keepdims=True)
     loss = K.mean(max_loss, axis=-1)
     return loss
+
 
 def gradient_loss(y_true, y_pred):
     """
@@ -413,7 +414,7 @@ def gradient_loss(y_true, y_pred):
         return y_out - 2.0 * img
 
     def diff_xy(img):
-        #xout1
+        # xout1
         top_left = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
         inner_left = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
         bot_left = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
@@ -429,7 +430,7 @@ def gradient_loss(y_true, y_pred):
         bot_right = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
         xy_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
 
-        #Xout2
+        # Xout2
         top_left = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
         inner_left = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
         bot_left = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
@@ -458,9 +459,8 @@ def gradient_loss(y_true, y_pred):
                           generalized_loss(diff_yy(y_true), diff_yy(y_pred), alpha=1.9999) +
                           generalized_loss(diff_xy(y_true), diff_xy(y_pred), alpha=1.9999) * 2.)
     loss = loss / (tv_weight + tv2_weight)
-    #TODO simplify to use MSE instead
+    # TODO simplify to use MSE instead
     return loss
-
 
 
 def scharr_edges(image, magnitude):
@@ -497,7 +497,7 @@ def scharr_edges(image, magnitude):
     padded = tf.pad(image, pad_sizes, mode='REFLECT')
     output = K.depthwise_conv2d(padded, kernels)
 
-    if not magnitude: # direction of edges
+    if not magnitude:  # direction of edges
         # Reshape to [batch_size, h, w, d, num_kernels].
         shape = K.concatenate([image_shape, num_kernels], axis=0)
         output = K.reshape(output, shape=shape)

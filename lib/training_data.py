@@ -30,7 +30,7 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
-        #self.masker = Facehull(training_opts.get("mask_type", "dfl_full"), channels=4)
+        # self.masker = Facehull(training_opts.get("mask_type", "dfl_full"), channels=4)
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
@@ -46,12 +46,12 @@ class TrainingDataGenerator():
         queue_in, queue_out = self.make_queues(side, augmenting)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(
-            ((batch_size, training_size, training_size, 3),                   # sample images
-             (batch_size, self.model_input_size, self.model_input_size, 3),   # warped images
-             (batch_size, self.model_input_size, self.model_input_size, 1),   # warped masks
-             (batch_size, self.model_output_size, self.model_output_size, 3), # target images
-             (batch_size, self.model_output_size, self.model_output_size, 1)  # target masks
-            ))
+            ((batch_size, training_size, training_size, 3),                     # sample images
+             (batch_size, self.model_input_size, self.model_input_size, 3),     # warped images
+             (batch_size, self.model_input_size, self.model_input_size, 1),     # warped masks
+             (batch_size, self.model_output_size, self.model_output_size, 3),   # target images
+             (batch_size, self.model_output_size, self.model_output_size, 1)))  # target masks
+            
 
         load_process = FixedProducerDispatcher(
             method=self.load_batches,
@@ -140,7 +140,8 @@ class TrainingDataGenerator():
 
         src_pts = self.get_landmarks(filename, image, side)
         image = image.astype("float32") / 255.
-        image = Facehull(self.training_opts.get("mask_type", "dfl_full"), image, src_pts, channels=4).masks  #TODO logic for smart masks
+        mast_type = self.training_opts.get("mask_type", "dfl_full")
+        image = Facehull(mast_type, image, src_pts, channels=4).masks  # TODO logic for smart masks
 
         if augmenting:
             image = self.processing.random_transform(image)
