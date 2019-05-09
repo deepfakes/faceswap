@@ -198,13 +198,14 @@ class Batcher():
         self.model = model
         self.batch_size = batch_size
         self.feed = dict()
+        preview_size = model.training_opts.get("preview_images", 14)
         self.feed["training"] = self.load_generator().minibatch_ab(images,
                                                                    batch_size,
                                                                    side,
                                                                    do_shuffle=True,
                                                                    augmenting=True)
         self.feed["preview"] = self.load_generator().minibatch_ab(images,
-                                                                  batch_size,
+                                                                  preview_size,
                                                                   side,
                                                                   do_shuffle=True,
                                                                   augmenting=False)
@@ -213,7 +214,7 @@ class Batcher():
     def train_one_batch(self, purpose):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        inputs, targets, _ = self.get_next(self.feed[purpose])
+        inputs, targets, _ = self.get_next(purpose)
         loss = self.model.predictors[self.side].train_on_batch(x=inputs, y=targets)
         loss = loss if isinstance(loss, list) else [loss]
         return loss
@@ -272,10 +273,8 @@ class Samples():
 
                 imgs = self.patch_into_frame(side, samples, [reconstructions, swaps])
                 header = self.get_headers(side, other_side, imgs[0].shape[1])
-                figures = np.stack([imgs[0], imgs[1], imgs[2]], axis=1)
-                if self.images[side][0].shape[0] % 2 == 1:
-                    figures = np.concatenate([figures, figures[-1:]])
-
+                figures = np.concatenate([imgs[0], imgs[1], imgs[2]], axis=2)
+                figures = np.concatenate([img for img in figures], axis=0)
                 halves = np.split(figures, 2)
                 header = np.concatenate([header, header], axis=1)
                 figures = np.concatenate([halves[0], halves[1]], axis=1)
@@ -312,6 +311,7 @@ class Samples():
         unadjusted_scale = frames.shape[1] / original_faces.shape[1]
         target_scale = unadjusted_scale * self.coverage_ratio
         new_scale = unadjusted_scale * self.scaling
+        print(frames.shape[1], original_faces.shape[1], unadjusted_scale, target_scale, new_scale, self.scaling)
 
         images = self.tint_masked(images, masks)
         images = self.resize_samples(side, images, target_scale)
@@ -319,7 +319,7 @@ class Samples():
             frames = self.frame_overlay(frames)
             images = self.overlay_foreground(frames, images)
         if self.scaling != 1.:
-            images = self.resize_samples(side, images, new_scale)
+            images = self.resize_samples(side, images, self.scaling)
         return images
 
     def frame_overlay(self, frames):
@@ -329,8 +329,8 @@ class Samples():
         full_size = frames.shape[1]
         padding = int(full_size * (1. - self.coverage_ratio)) // 2
         length = int(full_size * self.coverage_ratio) // 4
-        t_l = padding
-        b_r = full_size - padding
+        t_l = padding - 3
+        b_r = full_size - padding + 3
 
         top_left = slice(t_l, t_l + length), slice(t_l, t_l + length)
         bot_left = slice(b_r - length, b_r), slice(t_l, t_l + length)
@@ -354,6 +354,7 @@ class Samples():
     @staticmethod
     def overlay_foreground(backgrounds, foregrounds):
         """ Overlay the training images into the center of the background """
+        backgrounds[..., -1:] += 0.3
         offset = (backgrounds.shape[1] - foregrounds.shape[2]) // 2
         slice_y = slice(offset, offset + foregrounds.shape[2])
         slice_x = slice(offset, offset + foregrounds.shape[3])
@@ -366,37 +367,40 @@ class Samples():
 
     def get_headers(self, side, other_side, width):
         """ Set headers for images """
-
-        def t_size(text, font):
-            """ Helper function for list comprehension """
-            return cv2.getTextSize(text, font, self.scaling, 1)[0]  # pylint: disable=no-member
-
+        # pylint: disable=no-member
         logger.debug("side: '%s', other_side: '%s', width: %s", side, other_side, width)
+
+        def text_size(text, font):
+            """ Helper function for list comprehension """
+            # pylint: disable=no-member
+            [text_width, text_height] = cv2.getTextSize(text, font, self.scaling, 1)[0]
+            return [text_width, text_height]
+
         side = side.upper()
         other_side = other_side.upper()
         height = int(64. * self.scaling)
-        widths = [0, width, width * 2]
+        offsets = [0, width, width * 2]
+        header_box = np.ones((height, width * 3, 3), np.float32)
         texts = ["Target {0}".format(side),
                  "{0} > {0}".format(side),
                  "{0} > {1}".format(side, other_side)]
-        logger.debug("height: %s, total_width: %s", height, width * 3)
-
-        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-        text_sizes = [t_size(text, font) for text in texts]  # pylint: disable=no-member
-        text_y = int((height + text_sizes[0][1]) / 2)
-        text_xs = [int((width - text[0]) / 2) + widths for text in text_sizes]
-        logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
-                     texts, text_sizes, text_xs, text_y)
-        header_box = np.ones((height, width * 3, 3), np.float32)
-        for text_x, text in zip(text_xs, texts):
-            cv2.putText(header_box,  # pylint: disable=no-member
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        text_sizes = [text_size(text, font) for text in texts]
+        text_ys = [int((height + text[1]) / 2) for text in text_sizes]
+        text_xs = [int((width - text[0]) / 2 + offset) for offset, text in zip(offsets, text_sizes)]
+        for text_x, text_y, text in zip(text_xs, text_ys, texts):
+            cv2.putText(header_box,
                         text,
                         (text_x, text_y),
                         font,
                         self.scaling,
                         (0., 0., 0.),
                         1,
-                        lineType=cv2.LINE_AA)  # pylint: disable=no-member
+                        lineType=cv2.LINE_AA)
+
+        logger.debug("height: %s, total_width: %s", height, width * 3)
+        logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
+                     texts, text_sizes, text_xs, text_ys)
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 

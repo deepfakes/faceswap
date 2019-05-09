@@ -140,7 +140,7 @@ class TrainingDataGenerator():
 
         src_pts = self.get_landmarks(filename, image, side)
         image = image.astype("float32") / 255.
-        image = Facehull(self.training_opts.get("mask_type", "dfl_full"), image, src_pts, channels=4).masks
+        image = Facehull(self.training_opts.get("mask_type", "dfl_full"), image, src_pts, channels=4).masks  #TODO logic for smart masks
 
         if augmenting:
             image = self.processing.random_transform(image)
