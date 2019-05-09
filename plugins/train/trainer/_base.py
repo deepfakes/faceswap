@@ -324,12 +324,13 @@ class Samples():
     def frame_overlay(self, frames):
         """ Add roi frame to a backfround image """
         color = (0., 0., 1.)
+        line_width = 3
         logger.debug("full_size: %s, color: %s", frames.shape[1], color)
         full_size = frames.shape[1]
         padding = int(full_size * (1. - self.coverage_ratio)) // 2
         length = int(full_size * self.coverage_ratio) // 4
-        t_l = padding - 3
-        b_r = full_size - padding + 3
+        t_l = padding - line_width
+        b_r = full_size - padding + line_width
 
         top_left = slice(t_l, t_l + length), slice(t_l, t_l + length)
         bot_left = slice(b_r - length, b_r), slice(t_l, t_l + length)
@@ -343,21 +344,23 @@ class Samples():
     @staticmethod
     def tint_masked(images, masks):
         """ Add the mask to the faces for masked preview """
-        red_area = (np.rint(masks) == 0.)
-        coloring = np.zeros_like(masks)
-        coloring[red_area] = 0.3
-        images[..., -1:] += coloring
+        rounded_mask = (np.rint(masks) == 0.)
+        red_area = np.repeat(rounded_mask[None, ...], 3, axis=0)
+        replace_area = np.repeat(rounded_mask, 3, axis=-1)
+        for prediction in images[1:]:
+            prediction[replace_area] = images[0][replace_area]
+        images[..., -1:][red_area] += 0.3
         logger.debug("masked shapes: %s", [faces.shape for faces in images[0]])
         return images
 
     @staticmethod
     def overlay_foreground(backgrounds, foregrounds):
-        """ Overlay the training images into the center of the background """
+        """ Overlay the masked faces into the center of the background """
         backgrounds[..., -1:] += 0.3
         offset = (backgrounds.shape[1] - foregrounds.shape[2]) // 2
         slice_y = slice(offset, offset + foregrounds.shape[2])
         slice_x = slice(offset, offset + foregrounds.shape[3])
-        new_images = np.repeat(backgrounds[None, ...], 3, axis=0)  # TODO why expand dims
+        new_images = np.repeat(backgrounds[None, ...], 3, axis=0)
         for background, foreground in zip(new_images, foregrounds):
             for fore, back in zip(foreground, background):
                 back[slice_y, slice_x, :] = fore
@@ -399,7 +402,7 @@ class Samples():
 
         logger.debug("height: %s, total_width: %s", height, width * 3)
         logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
-                     texts, text_sizes, text_xs, text_ys)
+                     texts, text_sizes, x_texts, y_texts)
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 
