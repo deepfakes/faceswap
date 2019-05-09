@@ -210,7 +210,6 @@ class Batcher():
                                                                   do_shuffle=True,
                                                                   augmenting=False)
 
-
     def train_one_batch(self, purpose):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
