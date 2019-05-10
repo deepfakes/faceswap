@@ -37,8 +37,6 @@ class ModelBase():
                  warp_to_landmarks=False,
                  no_flip=False,
                  training_image_size=256,
-                 alignments_paths=None,
-                 preview_scale=100,
                  input_shape=None,
                  encoder_dim=None,
                  trainer="original",
@@ -46,12 +44,11 @@ class ModelBase():
                  memory_saving_gradients=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, no_logs: %s"
-                     "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
-                     "input_shape: %s, encoder_dim: %s, trainer: %s, pingpong: %s, "
-                     "memory_saving_gradients: %s, predict: %s)",
+                     "training_image_size, %s, input_shape: %s, encoder_dim: %s"
+                     "trainer: %s, pingpong: %s, memory_saving_gradients: %s, predict: %s)",
                      self.__class__.__name__, model_dir, gpus, no_logs, training_image_size,
-                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer,
-                     pingpong, memory_saving_gradients, predict)
+                     input_shape, encoder_dim, trainer, pingpong, memory_saving_gradients,
+                     predict)
 
         self.predict = predict
         self.model_dir = model_dir
@@ -80,9 +77,7 @@ class ModelBase():
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
-        self.training_opts = {"alignments": alignments_paths,
-                              "preview_scaling": preview_scale / 100,
-                              "warp_to_landmarks": warp_to_landmarks,
+        self.training_opts = {"warp_to_landmarks": warp_to_landmarks,
                               "no_flip": no_flip,
                               "pingpong": pingpong}
         self.set_gradient_type(memory_saving_gradients)

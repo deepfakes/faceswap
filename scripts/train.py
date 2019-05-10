@@ -10,9 +10,7 @@ from threading import Lock
 from time import sleep
 
 import cv2
-from pathlib import Path
 import tensorflow as tf
-import numpy as np
 from keras.backend.tensorflow_backend import set_session
 
 from lib.keypress import KBHit
@@ -20,8 +18,6 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
 from plugins.plugin_loader import PluginLoader
-from lib.model.masks import Facehull, Smart, Dummy
-from plugins.train.trainer._base import Landmarks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -164,8 +160,6 @@ class Train():
             warp_to_landmarks=self.args.warp_to_landmarks,
             no_flip=self.args.no_flip,
             training_image_size=self.image_size,
-            alignments_paths=self.alignments_paths,
-            preview_scale=self.args.preview_scale,
             pingpong=self.args.pingpong,
             memory_saving_gradients=self.args.memory_saving_gradients,
             predict=False)
@@ -199,8 +193,11 @@ class Train():
         trainer = PluginLoader.get_trainer(model.trainer)
         trainer = trainer(model,
                           self.images,
+                          self.alignments_paths,
                           self.timelapse,
-                          self.args.batch_size)
+                          self.image_size,
+                          self.args.batch_size,
+                          self.args.preview_scale)
         logger.debug("Loaded Trainer")
         return trainer
 
