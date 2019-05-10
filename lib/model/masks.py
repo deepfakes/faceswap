@@ -114,13 +114,13 @@ class Facehull(Mask):
                       "dfl_full":    self.three,
                       "components":  self.eight,
                       None:          self.three}
-        parts = build_dict[mask_type](landmarks)
         masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndmin=4)
-        for mask in masks:
+        for mask, landmark in zip(masks, landmarks):
+            parts = build_dict[mask_type](landmark)
             for item in parts:
                 # pylint: disable=no-member
                 hull = cv2.convexHull(np.concatenate(item))
-                cv2.fillConvexPoly(mask, hull, 1., lineType=cv2.LINE_AA)
+                cv2.fillConvexPoly(mask, hull.astype('int32'), 1., lineType=cv2.LINE_AA)
         return masks
 
 
