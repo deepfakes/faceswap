@@ -10,6 +10,7 @@ import traceback
 
 from datetime import datetime
 from time import sleep
+from tqdm import tqdm
 
 from lib.queue_manager import queue_manager
 from lib.sysinfo import sysinfo
@@ -62,6 +63,13 @@ class RollingBuffer(collections.deque):
         """ Write line to buffer """
         for line in buffer.rstrip().splitlines():
             self.append(line + "\n")
+
+
+class TqdmHandler(logging.StreamHandler):
+    """ Use TQDM Write for outputting to console """
+    def emit(self, record):
+        msg = self.format(record)
+        tqdm.write(msg)
 
 
 def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
@@ -117,7 +125,7 @@ def stream_handler(loglevel):
     log_format = FaceswapFormatter("%(asctime)s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
 
-    log_console = logging.StreamHandler(sys.stdout)
+    log_console = TqdmHandler(sys.stdout)
     log_console.setFormatter(log_format)
     log_console.setLevel(loglevel)
     return log_console
@@ -158,11 +166,9 @@ def crash_log():
     return filename
 
 
-# Add a flag to logging.LogRecord to not strip formatting from particular records
-old_factory = logging.getLogRecordFactory()
-
-
+old_factory = logging.getLogRecordFactory()  # pylint: disable=invalid-name
 def faceswap_logrecord(*args, **kwargs):
+    """ Add a flag to logging.LogRecord to not strip formatting from particular records """
     record = old_factory(*args, **kwargs)
     record.strip_spaces = True
     return record
