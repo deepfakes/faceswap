@@ -13,13 +13,12 @@ import cv2
 from tqdm import tqdm
 
 # faceswap imports
-import face_recognition
-
 from lib.cli import FullHelpArgumentParser
 from lib import Serializer
 from lib.faces_detect import DetectedFace
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
+from lib.utils import GetModel
 from plugins.plugin_loader import PluginLoader
 
 from . import cli
@@ -34,6 +33,7 @@ class Sort():
         self.args = arguments
         self.changes = None
         self.serializer = None
+        self.vgg_face = VGGFace()
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -181,7 +181,7 @@ class Sort():
 
         logger.info("Sorting by face similarity...")
 
-        img_list = [[img, face_recognition.face_encodings(cv2.imread(img))]
+        img_list = [[img, self.vgg_face.predict(cv2.imread(img))]
                     for img in
                     tqdm(self.find_images(input_dir),
                          desc="Loading",
@@ -196,12 +196,7 @@ class Sort():
             for j in range(i + 1, len(img_list)):
                 f1encs = img_list[i][1]
                 f2encs = img_list[j][1]
-                if f1encs and f2encs:
-                    score = face_recognition.face_distance(f1encs[0],
-                                                           f2encs)[0]
-                else:
-                    score = float("inf")
-
+                score = self.vgg_face.find_cosine_similiarity(f1encs, f2encs)
                 if score < min_score:
                     min_score = score
                     j_min_score = j
@@ -216,7 +211,7 @@ class Sort():
 
         logger.info("Sorting by face dissimilarity...")
 
-        img_list = [[img, face_recognition.face_encodings(cv2.imread(img)), 0]
+        img_list = [[img, self.vgg_face.predict(cv2.imread(img)), 0]
                     for img in
                     tqdm(self.find_images(input_dir),
                          desc="Loading",
@@ -228,13 +223,9 @@ class Sort():
             for j in range(0, img_list_len):
                 if i == j:
                     continue
-                try:
-                    score_total += face_recognition.face_distance(
-                        [img_list[i][1]],
-                        [img_list[j][1]])
-                except:
-                    logger.info("except")
-                    pass
+                score_total += self.vgg_face.find_cosine_similiarity(
+                    img_list[i][1],
+                    img_list[j][1])
 
             img_list[i][2] = score_total
 
@@ -429,7 +420,6 @@ class Sort():
         # Comparison threshold used to decide how similar
         # faces have to be to be grouped together.
         min_threshold = self.args.min_threshold
-
         img_list_len = len(img_list)
 
         for i in tqdm(range(1, img_list_len),
@@ -452,18 +442,16 @@ class Sort():
                     # processed, as the first value is None.
                     try:
                         score = self.get_avg_score_faces(f1encs, references)
-                    except TypeError:
-                        score = float("inf")
-                    except ZeroDivisionError:
+                    except (TypeError, ValueError, ZeroDivisionError):
                         score = float("inf")
                     if score < current_best[1]:
                         current_best[0], current_best[1] = key, score
 
                 if current_best[1] < min_threshold:
-                    reference_groups[current_best[0]].append(f1encs[0])
+                    reference_groups[current_best[0]].append(f1encs)
                     bins[current_best[0]].append(img_list[i][0])
                 else:
-                    reference_groups[len(reference_groups)] = img_list[i][1]
+                    reference_groups[len(reference_groups)] = [img_list[i][1]]
                     bins.append([img_list[i][0]])
 
         return bins
@@ -681,7 +669,7 @@ class Sort():
                               file=sys.stdout)]
         elif group_method == 'group_face':
             temp_list = [
-                [img, face_recognition.face_encodings(cv2.imread(img))]
+                [img, self.vgg_face.predict(cv2.imread(img))]
                 for img in tqdm(self.find_images(input_dir),
                                 desc="Reloading",
                                 file=sys.stdout)]
@@ -867,13 +855,12 @@ class Sort():
             scores.append(score)
         return sum(scores) / len(scores)
 
-    @staticmethod
-    def get_avg_score_faces(f1encs, references):
+    def get_avg_score_faces(self, f1encs, references):
         """ Return the average similarity score between a face and
             reference image """
         scores = []
         for f2encs in references:
-            score = face_recognition.face_distance(f1encs, f2encs)[0]
+            score = self.vgg_face.find_cosine_similiarity(f1encs, f2encs)
             scores.append(score)
         return sum(scores) / len(scores)
 
@@ -908,3 +895,63 @@ if __name__ == "__main__":
     PARSER.set_defaults(func=bad_args)
     ARGUMENTS = PARSER.parse_args()
     ARGUMENTS.func(ARGUMENTS)
+
+
+class VGGFace():
+    """ Temporary drop-in replacement for face_recognition.face_encodings """
+    # TODO: Replace with GPU bound keras-vgg-face
+    def __init__(self):
+        git_model_id = 7
+        model_filename = ["vgg_face_v1.caffemodel", "vgg_face_v1.prototxt"]
+        self.input_size = 224
+        self.model = self.get_model(git_model_id, model_filename)
+
+    @staticmethod
+    def get_model(git_model_id, model_filename):
+        """ Check if model is available, if not, download and unzip it """
+        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
+        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
+        model = GetModel(model_filename, cache_path, git_model_id).model_path
+        vgg_face = cv2.dnn.readNetFromCaffe(model[1], model[0])  # pylint: disable=no-member
+        vgg_face.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
+        return vgg_face
+
+    def predict(self, face):
+        """ Return face encodings from vgg_face """
+        if face.shape[0] != self.input_size:
+            face = self.resize_face(face)
+        blob = cv2.dnn.blobFromImage(face,  # pylint: disable=no-member
+                                     1.0,
+                                     (self.input_size, self.input_size),
+                                     [104, 117, 123],
+                                     False,
+                                     False)
+        logger.trace("vgg_face input shape: %s", blob.shape)
+        self.model.setInput(blob)
+        preds = self.model.forward()[0, :]
+        logger.trace("vgg_face encoding shape: %s", preds.shape)
+        return preds
+
+    def resize_face(self, face):
+        """ Resize incoming face to model_input_size """
+        if face.shape[0] < self.input_size:
+            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
+        else:
+            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
+
+        face = cv2.resize(face,  # pylint:disable=no-member
+                          dsize=(self.input_size, self.input_size),
+                          interpolation=interpolation)
+        return face
+
+    @staticmethod
+    def find_cosine_similiarity(source_face, test_face):
+        """ Find the cosine similarity between a source face and a test face """
+        logger.trace("source_face shape: %s, test_face shape: %s",
+                     source_face.shape, test_face.shape)
+        var_a = np.matmul(np.transpose(source_face), test_face)
+        var_b = np.sum(np.multiply(source_face, source_face))
+        var_c = np.sum(np.multiply(test_face, test_face))
+        retval = 1 - (var_a / (np.sqrt(var_b) * np.sqrt(var_c)))
+        logger.debug("Similarity: %s", retval)
+        return retval
