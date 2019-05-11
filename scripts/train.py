@@ -141,6 +141,7 @@ class Train():
 
             model = self.load_model()
             trainer = self.load_trainer(model)
+            self.save_now = True
             self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:

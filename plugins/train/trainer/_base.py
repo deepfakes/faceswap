@@ -293,8 +293,7 @@ class Samples():
             logger.debug("Resizing samples: (side: '%s', sample.shape: %s, scale: %s)",
                          side, samples[0].shape, scale)
             interp = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA
-            samples = np.stack(np.stack(cv2.resize(img, None, fx=scale, fy=scale,
-                                                   interpolation=interp) for img in face_batch) for face_batch in samples)
+            samples = np.stack([np.stack([cv2.resize(img, None, fx=scale, fy=scale, interpolation=interp) for img in face_batch]) for face_batch in samples])
             logger.debug("Resized sample: (side: '%s' shape: %s)", side, samples[0].shape)
         return samples
 
