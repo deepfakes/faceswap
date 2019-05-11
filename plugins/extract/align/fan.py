@@ -12,8 +12,13 @@ from ._base import Aligner, logger
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs):
+        git_model_id = 0
         model_filename = "face-alignment-network_2d4_v1.pb"
-        super().__init__(model_filename=model_filename, colorspace="RGB", input_size=256, **kwargs)
+        super().__init__(git_model_id=git_model_id,
+                         model_filename=model_filename,
+                         colorspace="RGB",
+                         input_size=256,
+                         **kwargs)
         self.vram = 2240
         self.model = None
         self.reference_scale = 195

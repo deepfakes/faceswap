@@ -33,8 +33,13 @@ from ._base import Aligner, logger
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs):
+        git_model_id = 1
         model_filename = "cnn-facial-landmark_v1.pb"
-        super().__init__(model_filename=model_filename, colorspace="RGB", input_size=128, **kwargs)
+        super().__init__(git_model_id=git_model_id,
+                         model_filename=model_filename,
+                         colorspace="RGB",
+                         input_size=128,
+                         **kwargs)
         self.vram = 0  # Doesn't use GPU
         self.model = None
 

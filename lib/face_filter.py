@@ -31,9 +31,12 @@ class FaceFilter():
                      "detector: %s, aligner: %s. loglevel: %s, multiprocess: %s, threshold: %s)",
                      self.__class__.__name__, reference_file_paths, nreference_file_paths,
                      detector, aligner, loglevel, multiprocess, threshold)
+        git_model_id = 7
+        model_filename = ["vgg_face_v1.caffemodel", "vgg_face_v1.prototxt"]
+
         self.input_size = 224
         self.numeric_loglevel = get_loglevel(loglevel)
-        self.vgg_face = self.get_model(["vgg_face_v1.caffemodel", "vgg_face_v1.prototxt"])
+        self.vgg_face = self.get_model(git_model_id, model_filename)
         self.filters = self.load_images(reference_file_paths, nreference_file_paths)
         self.align_faces(detector, aligner, loglevel, multiprocess)
         self.get_filter_encodings()
@@ -42,11 +45,11 @@ class FaceFilter():
 
     # <<< GET MODEL >>> #
     @staticmethod
-    def get_model(model_filename):
+    def get_model(git_model_id, model_filename):
         """ Check if model is available, if not, download and unzip it """
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
-        model = GetModel(model_filename, cache_path).model_path
+        model = GetModel(model_filename, cache_path, git_model_id).model_path
         vgg_face = cv2.dnn.readNetFromCaffe(model[1], model[0])  # pylint: disable=no-member
         vgg_face.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
         return vgg_face

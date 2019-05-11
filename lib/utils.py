@@ -225,6 +225,9 @@ class GetModel():
         model_filename: The name of the model to be loaded (see notes below)
         cache_dir:      The model cache folder of the current plugin calling this class
                         IE: The folder that holds the model to be loaded.
+        git_model_id:   The second digit in the github tag that identifies this model.
+                        See https://github.com/deepfakes-models/faceswap-models for more
+                        information
 
         NB: Models must have a certain naming convention:
             IE: <model_name>_v<version_number>.<extension>
@@ -236,38 +239,19 @@ class GetModel():
             IE: [<model_name>_v<version_number><differentiating_information>.<extension>]
             EG: [mtcnn_det_v1.1.py, mtcnn_det_v1.2.py, mtcnn_det_v1.3.py]
                 [resnet_ssd_v1.caffemodel, resnet_ssd_v1.prototext]
-
-            Models to be handled by this class must be added to the _model_id property
-            with their appropriate github identier mapped.
-            See https://github.com/deepfakes-models/faceswap-models for more information
         """
 
-    def __init__(self, model_filename, cache_dir):
+    def __init__(self, model_filename, cache_dir, git_model_id):
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
         self.model_filename = model_filename
         self.cache_dir = cache_dir
+        self.git_model_id = git_model_id
         self.url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
         self.chunk_size = 1024  # Chunk size for downloading and unzipping
         self.retries = 6
         self.get()
         self.model_path = self._model_path
-
-    @property
-    def _model_id(self):
-        """ Return a mapping of model names to model ids as stored in github """
-        ids = {
-            # EXTRACT (SECTION 1)
-            "face-alignment-network_2d4": 0,
-            "cnn-facial-landmark": 1,
-            "mtcnn_det": 2,
-            "s3fd": 3,
-            "resnet_ssd": 4,
-            "vgg_face": 7,
-            # TRAIN (SECTION 2)
-            # CONVERT (SECTION 3)
-            }
-        return ids[self._model_name]
 
     @property
     def _model_full_name(self):
@@ -336,7 +320,7 @@ class GetModel():
     @property
     def _url_download(self):
         """ Base URL for models """
-        tag = "v{}.{}.{}".format(self._url_section, self._model_id, self._model_version)
+        tag = "v{}.{}.{}".format(self._url_section, self.git_model_id, self._model_version)
         retval = "{}/{}/{}.zip".format(self.url_base, tag, self._model_full_name)
         logger.trace("Download url: %s", retval)
         return retval
