@@ -32,7 +32,7 @@ class ModelBase():
     """ Base class that all models should inherit from """
     def __init__(self,
                  model_dir,
-                 gpus,
+                 gpus=1,
                  no_logs=False,
                  warp_to_landmarks=False,
                  no_flip=False,

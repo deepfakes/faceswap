@@ -20,12 +20,14 @@ import logging
 import os
 import time
 from pathlib import Path
+from hashlib import sha1
 import cv2
 import numpy as np
 
 from tensorflow import keras as tf_keras
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
+from lib.model.masks import Facehull, Smart, Dummy
 from lib.training_data import TrainingDataGenerator
 from lib.utils import get_folder, get_image_paths
 
@@ -35,18 +37,19 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class TrainerBase():
     """ Base Trainer """
 
-    def __init__(self, model, images, alignments, timelapse_kwargs, image_size, batch_size, preview_scaling=100.):
+    def __init__(self, model, image_size, batch_size, alignments,
+                 images, timelapse_kwargs, preview_scaling=100.):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
         self.model = model
-        self.images = self.setup_image_dataset(images)
-        self.alignments_paths = alignments
         self.image_size = image_size
         self.batch_size = batch_size
+        self.sides = sorted(key for key in images.keys())
+        self.alignments_paths = alignments
+        self.images = self.setup_image_dataset(images)
         self.preview_scaling = preview_scaling / 100.
         self.model.state.add_session_batchsize(batch_size)
-        self.sides = sorted(key for key in images.keys())
-        
+
         self.process_training_opts()
         self.pingpong = PingPong(model, self.sides)
         self.batchers = dict()
@@ -105,29 +108,29 @@ class TrainerBase():
                     img = cv2.resize(img, (target_size, target_size), method)
                 return img, lm_key
 
-            filename = str(Path(img_list[0]).parents[0].joinpath(('Images_Batched.npy')))
+            file = str(Path(img_list[0]).parents[0].joinpath(('Images_Batched.npy')))
             batch_num = (len(img_list) + batch_size -1) // batch_size
             img_shape = (batch_num, batch_size, in_size, in_size, 4)
-            dataset = np.lib.format.open_memmap(filename, mode='w+', dtype='float32', shape=img_shape)
+            dataset = np.lib.format.open_memmap(file, mode='w+', dtype='float32', shape=img_shape)
             hashes = np.empty((batch_num, batch_size), dtype='U40')
             for i, (img, lm_key) in enumerate(loader(img_file, in_size) for img_file in img_list):
                 dataset[i // batch_size, i % batch_size, :, :, :3] = img[:, :, :3]
                 hashes[i // batch_size, i % batch_size] = lm_key
-            means = np.mean(dataset, axis=(0,1,2,3))
-            return dataset, filename, means, hashes
+            means = np.mean(dataset, axis=(0, 1, 2, 3))
+            return dataset, file, means, hashes
 
         def get_landmarks(side, hashes, alignments, landmark_shape):
             """ Return the landmarks for this face """
             landmarks = Landmarks(alignments).landmarks
             src_points = np.empty(landmark_shape, dtype='float32')
             for src_point_batch, hash_batch in zip(src_points, hashes):
-                for src_point, hash in zip(src_point_batch, hash_batch):
-                    logger.trace("Retrieving landmarks: (hash: '%s', side: '%s'", hash, side)
-                    if hash:
+                for src_point, a_hash in zip(src_point_batch, hash_batch):
+                    logger.trace("Retrieving landmarks: (hash: '%s', side: '%s'", a_hash, side)
+                    if a_hash:
                         try:
-                            src_point = landmarks[side][hash]
+                            src_point = landmarks[side][a_hash]
                         except KeyError:
-                            raise Exception("Landmarks not found for hash: '{}'".format(hash))
+                            raise Exception("Landmarks not found for hash: '{}'".format(a_hash))
                         logger.trace("Returning: (src_points: %s)", src_point)
             return src_points
 
@@ -142,7 +145,7 @@ class TrainerBase():
                      "vgg_300":     (300, Smart),
                      "vgg_500":     (500, Smart),
                      "unet_256":    (256, Smart)}
-        mask_type = self.args.mask_type
+        mask_type = self.model.training_opts["mask_type"]
         model_in_size, Mask = mask_args[mask_type]
         for side in self.sides:
             logger.debug("Training image size: %s", model_in_size)
@@ -150,11 +153,11 @@ class TrainerBase():
             alignments[side] = dict()
             alignments[side]["training_size"] = self.image_size
             alignments[side]["alignments"] = self.alignments_paths
-            img_dataset, data_file, means, hashes = dataset_setup(images[side],
-                                                                  model_in_size,
-                                                                  self.args.batch_size)
+            img_dataset, file, means, hashes = dataset_setup(images[side],
+                                                             model_in_size,
+                                                             self.batch_size)
             if Mask == Facehull:
-                landmark_shape = img_dataset.shape[:2] + (68,2)
+                landmark_shape = img_dataset.shape[:2] + (68, 2)
                 landmarks = get_landmarks(side, hashes, alignments[side], landmark_shape)
             else:
                 landmarks = np.empty(landmark_shape, dtype='float32')
@@ -310,7 +313,7 @@ class Batcher():
 
     def load_generator(self):
         """ Set the feed dataset with TrainingDataGenerator """
-        logger.debug("Loading generator: (side: '%s')",self.side)
+        logger.debug("Loading generator: (side: '%s')", self.side)
         input_size = self.model.input_shape[0]
         output_size = self.model.output_shape[0]
         logger.debug("input_size: %s, output_size: %s", input_size, output_size)
@@ -349,9 +352,9 @@ class Samples():
                 swaps = self.model.predictors[other_side].predict([faces, masks])[0]
                 logger.debug("Returning predictions: %s", swaps.shape)
 
-                imgs = self.patch_into_frame(side, samples, [reconstructions, swaps])
-                header = self.get_headers(side, other_side, imgs[0].shape[1])
-                figures = np.concatenate([imgs[0], imgs[1], imgs[2]], axis=2)
+                figures = self.patch_into_frame(side, samples, [reconstructions, swaps])
+                header = self.get_headers(side, other_side, figures[0].shape[1])
+                figures = np.concatenate([figures[0], figures[1], figures[2]], axis=2)
                 figures = np.concatenate([img for img in figures], axis=0)
                 halves = np.split(figures, 2)
                 header = np.concatenate([header, header], axis=1)
@@ -388,7 +391,6 @@ class Samples():
         images = np.concatenate([original_faces[None, ...], predictions], axis=0)
         unadjusted_scale = frames.shape[1] / original_faces.shape[1]
         target_scale = unadjusted_scale * self.coverage_ratio
-        new_scale = unadjusted_scale * self.scaling
 
         images = self.tint_masked(images, masks)
         images = self.resize_samples(side, images, target_scale)

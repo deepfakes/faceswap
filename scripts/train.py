@@ -156,7 +156,7 @@ class Train():
         model_dir = get_folder(self.args.model_dir)
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            self.args.gpus,
+            gpus=self.args.gpus,
             no_logs=self.args.no_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
             no_flip=self.args.no_flip,
@@ -193,11 +193,11 @@ class Train():
         logger.debug("Loading Trainer")
         trainer = PluginLoader.get_trainer(model.trainer)
         trainer = trainer(model,
-                          self.images,
-                          self.alignments_paths,
-                          self.timelapse,
                           self.image_size,
                           self.args.batch_size,
+                          self.alignments_paths,
+                          self.images,
+                          self.timelapse,
                           self.args.preview_scale)
         logger.debug("Loaded Trainer")
         return trainer
@@ -210,9 +210,9 @@ class Train():
         else:
             display_func = None
 
-        for round in range(self.args.iterations // self.args.save_interval):
+        for saves in range(self.args.iterations // self.args.save_interval):
             for iteration in range(self.args.save_interval):
-                total_iterations = iteration + round * self.args.save_interval
+                total_iterations = iteration + saves * self.args.save_interval
                 logger.trace("Training iteration: %s", total_iterations)
                 if self.stop:
                     logger.debug("Stop received. Terminating")
