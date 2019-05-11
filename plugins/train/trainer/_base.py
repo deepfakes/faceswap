@@ -8,7 +8,6 @@
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
         alignments:         dict containing paths to alignments files for keys 'a' and 'b'
-        preview_scaling:    How much to scale the preview out by
         training_size:      Size of the training images
         coverage_ratio:     Ratio of face to be cropped out for training
         no_logs:            Disable tensorboard logging
@@ -36,25 +35,28 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class TrainerBase():
     """ Base Trainer """
 
-    def __init__(self, model, images, timelapse_kwargs, batch_size):
+    def __init__(self, model, images, alignments, timelapse_kwargs, image_size, batch_size, preview_scaling=100.):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
-        self.batch_size = batch_size
         self.model = model
+        self.images = self.setup_image_dataset(images)
+        self.alignments_paths = alignments
+        self.image_size = image_size
+        self.batch_size = batch_size
+        self.preview_scaling = preview_scaling / 100.
         self.model.state.add_session_batchsize(batch_size)
-        self.images = images
-        self.sides = sorted(key for key in self.images.keys())
-
+        self.sides = sorted(key for key in images.keys())
+        
         self.process_training_opts()
         self.pingpong = PingPong(model, self.sides)
         self.batchers = dict()
         for side in self.sides:
-            self.batchers[side] = Batcher(side, images[side], self.model, batch_size)
+            self.batchers[side] = Batcher(side, self.images[side], self.model, batch_size)
 
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
                                self.model.training_opts["coverage_ratio"],
-                               self.model.training_opts["preview_scaling"])
+                               self.preview_scaling)
         if timelapse_kwargs:
             self.timelapse = Timelapse(self.model,
                                        self.model.training_opts["coverage_ratio"],
@@ -81,6 +83,86 @@ class TrainerBase():
         if self.landmarks_required:
             landmarks = Landmarks(self.model.training_opts).landmarks
             self.model.training_opts["landmarks"] = landmarks
+
+    def setup_image_dataset(self, images):
+        """ Check the image dirs exist, contain images and return the image
+        datasets with masks added """
+        logger.debug("Getting image paths")
+
+        def dataset_setup(img_list, in_size, batch_size):
+            """ Create a mem-mapped image array for training"""
+
+            def loader(img_file, target_size):
+                """ Load and resize images with opencv """
+                # pylint: disable=no-member
+                img = cv2.imread(img_file)
+                lm_key = sha1(img).hexdigest()
+                img = img.astype('float32')
+                height, width, _ = img.shape
+                image_size = min(height, width)
+                if image_size != target_size:
+                    method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
+                    img = cv2.resize(img, (target_size, target_size), method)
+                return img, lm_key
+
+            filename = str(Path(img_list[0]).parents[0].joinpath(('Images_Batched.npy')))
+            batch_num = (len(img_list) + batch_size -1) // batch_size
+            img_shape = (batch_num, batch_size, in_size, in_size, 4)
+            dataset = np.lib.format.open_memmap(filename, mode='w+', dtype='float32', shape=img_shape)
+            hashes = np.empty((batch_num, batch_size), dtype='U40')
+            for i, (img, lm_key) in enumerate(loader(img_file, in_size) for img_file in img_list):
+                dataset[i // batch_size, i % batch_size, :, :, :3] = img[:, :, :3]
+                hashes[i // batch_size, i % batch_size] = lm_key
+            means = np.mean(dataset, axis=(0,1,2,3))
+            return dataset, filename, means, hashes
+
+        def get_landmarks(side, hashes, alignments, landmark_shape):
+            """ Return the landmarks for this face """
+            landmarks = Landmarks(alignments).landmarks
+            src_points = np.empty(landmark_shape, dtype='float32')
+            for src_point_batch, hash_batch in zip(src_points, hashes):
+                for src_point, hash in zip(src_point_batch, hash_batch):
+                    logger.trace("Retrieving landmarks: (hash: '%s', side: '%s'", hash, side)
+                    if hash:
+                        try:
+                            src_point = landmarks[side][hash]
+                        except KeyError:
+                            raise Exception("Landmarks not found for hash: '{}'".format(hash))
+                        logger.trace("Returning: (src_points: %s)", src_point)
+            return src_points
+
+        img_number = dict()
+        alignments = dict()
+        image_batches = dict()
+        mask_args = {None:          (self.image_size, Facehull),
+                     "none":        (self.image_size, Dummy),
+                     "components":  (self.image_size, Facehull),
+                     "dfl_full":    (self.image_size, Facehull),
+                     "facehull":    (self.image_size, Facehull),
+                     "vgg_300":     (300, Smart),
+                     "vgg_500":     (500, Smart),
+                     "unet_256":    (256, Smart)}
+        mask_type = self.args.mask_type
+        model_in_size, Mask = mask_args[mask_type]
+        for side in self.sides:
+            logger.debug("Training image size: %s", model_in_size)
+            img_number[side] = len(images[side])
+            alignments[side] = dict()
+            alignments[side]["training_size"] = self.image_size
+            alignments[side]["alignments"] = self.alignments_paths
+            img_dataset, data_file, means, hashes = dataset_setup(images[side],
+                                                                  model_in_size,
+                                                                  self.args.batch_size)
+            if Mask == Facehull:
+                landmark_shape = img_dataset.shape[:2] + (68,2)
+                landmarks = get_landmarks(side, hashes, alignments[side], landmark_shape)
+            else:
+                landmarks = np.empty(landmark_shape, dtype='float32')
+            for img_batch, landmark_batch in zip(img_dataset, landmarks):
+                img_batch = Mask(mask_type, img_batch, landmark_batch, channels=4).masks
+            image_batches[side] = img_dataset
+
+        return image_batches
 
     def set_tensorboard(self):
         """ Set up tensorboard callback """
