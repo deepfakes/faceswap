@@ -249,7 +249,7 @@ class GetModel():
         self.cache_dir = cache_dir
         self.url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
         self.chunk_size = 1024  # Chunk size for downloading and unzipping
-
+        self.retries = 6
         self.get()
         self.model_path = self._model_path
 
@@ -263,6 +263,7 @@ class GetModel():
             "mtcnn_det": 2,
             "s3fd": 3,
             "resnet_ssd": 4,
+            "vgg_face": 7,
             # TRAIN (SECTION 2)
             # CONVERT (SECTION 3)
             }
@@ -340,6 +341,14 @@ class GetModel():
         logger.trace("Download url: %s", retval)
         return retval
 
+    @property
+    def _url_partial_size(self):
+        """ Return how many bytes have already been downloaded """
+        zip_file = self._model_zip_path
+        retval = os.path.getsize(zip_file) if os.path.exists(zip_file) else 0
+        logger.trace(retval)
+        return retval
+
     def get(self):
         """ Check the model exists, if not, download and unzip into location """
         if self._model_exists:
@@ -351,36 +360,46 @@ class GetModel():
 
     def download_model(self):
         """ Download model zip to cache dir """
-        logger.info("Downloading model: '%s'", self._model_name)
-        attempts = 3
-        for attempt in range(attempts):
+        logger.info("Downloading model: '%s' from: %s", self._model_name, self._url_download)
+        for attempt in range(self.retries):
             try:
-                response = urllib.request.urlopen(self._url_download, timeout=10)
+                downloaded_size = self._url_partial_size
+                req = urllib.request.Request(self._url_download)
+                if downloaded_size != 0:
+                    req.add_header("Range", "bytes={}-".format(downloaded_size))
+                response = urllib.request.urlopen(req, timeout=10)
                 logger.debug("header info: {%s}", response.info())
                 logger.debug("Return Code: %s", response.getcode())
-                self.write_zipfile(response)
+                self.write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
                     urllib.error.HTTPError, urllib.error.URLError) as err:
-                if attempt + 1 < attempts:
+                if attempt + 1 < self.retries:
                     logger.warning("Error downloading model (%s). Retrying %s of %s...",
-                                   str(err), attempt + 2, attempts)
+                                   str(err), attempt + 2, self.retries)
                 else:
                     logger.error("Failed to download model. Exiting. (Error: '%s', URL: '%s')",
                                  str(err), self._url_download)
-                    logger.info("You can manually download the model from: %s and unzip the "
-                                "contents to: %s", self._url_download, self.cache_dir)
+                    logger.info("You can try running again to resume the download.")
+                    logger.info("Alternatively, you can manually download the model from: %s and "
+                                "unzip the contents to: %s", self._url_download, self.cache_dir)
                     exit(1)
 
-    def write_zipfile(self, response):
+    def write_zipfile(self, response, downloaded_size):
         """ Write the model zip file to disk """
-        length = int(response.getheader("content-length"))
-        with open(self._model_zip_path, "wb") as out_file:
+        length = int(response.getheader("content-length")) + downloaded_size
+        if length == downloaded_size:
+            logger.info("Zip already exists. Skipping download")
+            return
+        write_type = "wb" if downloaded_size == 0 else "ab"
+        with open(self._model_zip_path, write_type) as out_file:
             pbar = tqdm(desc="Downloading",
                         unit="B",
                         total=length,
                         unit_scale=True,
                         unit_divisor=1024)
+            if downloaded_size != 0:
+                pbar.update(downloaded_size)
             while True:
                 buffer = response.read(self.chunk_size)
                 if not buffer:

@@ -262,7 +262,10 @@ class PostProcess():
         if ((hasattr(self.args, "filter") and self.args.filter is not None) or
                 (hasattr(self.args, "nfilter") and
                  self.args.nfilter is not None)):
-            face_filter = dict()
+            face_filter = dict(detector=self.args.detector.replace("-", "_").lower(),
+                               aligner=self.args.aligner.replace("-", "_").lower(),
+                               loglevel=self.args.loglevel,
+                               multiprocess=self.args.multiprocess)
             filter_lists = dict()
             if hasattr(self.args, "ref_threshold"):
                 face_filter["ref_threshold"] = self.args.ref_threshold
@@ -378,12 +381,12 @@ class FaceFilter(PostProcessAction):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        filter_lists = kwargs["filter_lists"]
-        ref_threshold = kwargs.get("ref_threshold", 0.6)
-        self.filter = self.load_face_filter(filter_lists, ref_threshold)
+        logger.info("Extracting and aligning face for Face Filter...")
+        self.filter = self.load_face_filter(**kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_face_filter(self, filter_lists, ref_threshold):
+    def load_face_filter(self, filter_lists, ref_threshold, aligner, detector, loglevel,
+                         multiprocess):
         """ Load faces to filter out of images """
         if not any(val for val in filter_lists.values()):
             return None
@@ -394,8 +397,12 @@ class FaceFilter(PostProcessAction):
         if any(filters for filters in filter_files):
             facefilter = FilterFunc(filter_files[0],
                                     filter_files[1],
+                                    detector,
+                                    aligner,
+                                    loglevel,
+                                    multiprocess,
                                     ref_threshold)
-        logger.debug("Face filter: %s", facefilter)
+            logger.debug("Face filter: %s", facefilter)
         return facefilter
 
     @staticmethod
@@ -418,7 +425,7 @@ class FaceFilter(PostProcessAction):
         for idx, detect_face in enumerate(output_item["detected_faces"]):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
             if not self.filter.check(check_item):
-                logger.verbose("Skipping not recognized face! Frame: %s Face %s",
+                logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
                                output_item["filename"], idx)
                 continue
             logger.trace("Accepting recognised face. Frame: %s. Face: %s",
