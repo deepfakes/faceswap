@@ -10,7 +10,6 @@ import cv2
 import numpy as np
 from scipy.interpolate import griddata
 
-from lib.model.masks import Facehull
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -50,7 +49,6 @@ class TrainingDataGenerator():
              (batch_size, self.model_input_size, self.model_input_size, 1),     # warped masks
              (batch_size, self.model_output_size, self.model_output_size, 3),   # target images
              (batch_size, self.model_output_size, self.model_output_size, 1)))  # target masks
-            
 
         load_process = FixedProducerDispatcher(
             method=self.load_batches,

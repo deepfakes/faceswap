@@ -5,7 +5,6 @@ import logging
 import os
 import sys
 
-from hashlib import sha1
 from threading import Lock
 from time import sleep
 
