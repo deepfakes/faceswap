@@ -29,8 +29,9 @@ def import_tensorflow():
 class Detect(Detector):
     """ MTCNN detector for face recognition """
     def __init__(self, **kwargs):
+        git_model_id = 2
         model_filename = ["mtcnn_det_v1.1.npy", "mtcnn_det_v1.2.npy", "mtcnn_det_v1.3.npy"]
-        super().__init__(model_filename=model_filename, **kwargs)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.kwargs = self.validate_kwargs()
         self.name = "mtcnn"
         self.target = 2073600  # Uses approx 1.30 GB of VRAM

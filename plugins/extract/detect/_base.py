@@ -33,9 +33,11 @@ def get_config(plugin_name):
 
 class Detector():
     """ Detector object """
-    def __init__(self, loglevel, model_filename=None, rotation=None, min_size=0):
-        logger.debug("Initializing %s: (model_filename: %s, rotation: %s, min_size: %s)",
-                     self.__class__.__name__, model_filename, rotation, min_size)
+    def __init__(self, loglevel,
+                 git_model_id=None, model_filename=None, rotation=None, min_size=0):
+        logger.debug("Initializing %s: (loglevel: %s, git_model_id: %s, model_filename: %s, "
+                     "rotation: %s, min_size: %s)", self.__class__.__name__, loglevel,
+                     git_model_id, model_filename, rotation, min_size)
         self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         self.loglevel = loglevel
         self.rotation = self.get_rotation_angles(rotation)
@@ -49,7 +51,7 @@ class Detector():
         self.queues = {"in": None, "out": None}
 
         #  Path to model if required
-        self.model_path = self.get_model(model_filename)
+        self.model_path = self.get_model(git_model_id, model_filename)
 
         # Target image size for passing images through the detector
         # Set to tuple of dimensions (x, y) or int of pixel count
@@ -93,13 +95,16 @@ class Detector():
 
     # <<< GET MODEL >>> #
     @staticmethod
-    def get_model(model_filename):
+    def get_model(git_model_id, model_filename):
         """ Check if model is available, if not, download and unzip it """
         if model_filename is None:
             logger.debug("No model_filename specified. Returning None")
             return None
+        if git_model_id is None:
+            logger.debug("No git_model_id specified. Returning None")
+            return None
         cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-        model = GetModel(model_filename, cache_path)
+        model = GetModel(model_filename, cache_path, git_model_id)
         return model.model_path
 
     # <<< DETECTION WRAPPER >>> #

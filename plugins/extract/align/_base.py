@@ -34,9 +34,11 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 class Aligner():
     """ Landmarks Aligner Object """
-    def __init__(self, loglevel, model_filename=None, colorspace="BGR", input_size=256):
-        logger.debug("Initializing %s: (model_filename: '%s', colorspace: '%s'. input_size: %s)",
-                     self.__class__.__name__, model_filename, colorspace, input_size)
+    def __init__(self, loglevel,
+                 git_model_id=None, model_filename=None, colorspace="BGR", input_size=256):
+        logger.debug("Initializing %s: (loglevel: %s, git_model_id: %s, model_filename: '%s', "
+                     "colorspace: '%s'. input_size: %s)", self.__class__.__name__, loglevel,
+                     git_model_id, model_filename, colorspace, input_size)
         self.loglevel = loglevel
         self.colorspace = colorspace.upper()
         self.input_size = input_size
@@ -49,7 +51,7 @@ class Aligner():
         self.queues = {"in": None, "out": None}
 
         #  Get model if required
-        self.model_path = self.get_model(model_filename)
+        self.model_path = self.get_model(git_model_id, model_filename)
 
         # Approximate VRAM required for aligner. Used to calculate
         # how many parallel processes / batches can be run.
@@ -82,13 +84,16 @@ class Aligner():
 
     # <<< GET MODEL >>> #
     @staticmethod
-    def get_model(model_filename):
+    def get_model(git_model_id, model_filename):
         """ Check if model is available, if not, download and unzip it """
         if model_filename is None:
             logger.debug("No model_filename specified. Returning None")
             return None
+        if git_model_id is None:
+            logger.debug("No git_model_id specified. Returning None")
+            return None
         cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-        model = GetModel(model_filename, cache_path)
+        model = GetModel(model_filename, cache_path, git_model_id)
         return model.model_path
 
     # <<< ALIGNMENT WRAPPER >>> #

@@ -18,9 +18,8 @@ from lib.faces_detect import DetectedFace
 from lib.multithreading import MultiThread, PoolProcess, total_cpus
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_folder, get_image_paths, hash_image_file
+from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
-
-from .extract import Plugins as Extractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -41,7 +40,6 @@ class Convert():
 
         self.add_queues()
         self.disk_io = DiskIO(self.alignments, self.images, arguments)
-        self.extractor = None
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
@@ -171,9 +169,7 @@ class DiskIO():
         self.imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
 
         # Extractor for on the fly detection
-        self.extractor = None
-        if not self.alignments.have_alignments_file:
-            self.load_extractor()
+        self.extractor = self.load_extractor()
 
         self.load_queue = None
         self.save_queue = None
@@ -236,18 +232,23 @@ class DiskIO():
 
     def load_extractor(self):
         """ Set on the fly extraction """
+        if self.alignments.have_alignments_file:
+            return None
+
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
         logger.warning("NB: This will use the inferior cv2-dnn for extraction "
                        "and  landmarks. It is recommended to perfom Extract first for "
                        "superior results")
-        extract_args = {"detector": "cv2_dnn",
-                        "aligner": "cv2_dnn",
-                        "loglevel": self.args.loglevel}
-        self.extractor = Extractor(None, converter_args=extract_args)
-        self.extractor.launch_detector()
-        self.extractor.launch_aligner()
+        extractor = Extractor(detector="cv2-dnn",
+                              aligner="cv2-dnn",
+                              loglevel=self.args.loglevel,
+                              multiprocess=False,
+                              rotate_images=None,
+                              min_size=20)
+        extractor.launch()
         logger.debug("Loaded extractor")
+        return extractor
 
     def init_threads(self):
         """ Initialize queues and threads """
@@ -283,7 +284,6 @@ class DiskIO():
     def load(self, *args):  # pylint: disable=unused-argument
         """ Load the images with detected_faces"""
         logger.debug("Load Images: Start")
-        extract_queue = queue_manager.get_queue("extract_in") if self.extractor else None
         idx = 0
         for filename, image in self.images.load():
             idx += 1
@@ -302,7 +302,7 @@ class DiskIO():
                     logger.trace("Discarding frame: '%s'", filename)
                 continue
 
-            detected_faces = self.get_detected_faces(filename, image, extract_queue)
+            detected_faces = self.get_detected_faces(filename, image)
             item = dict(filename=filename, image=image, detected_faces=detected_faces)
             self.pre_process.do_actions(item)
             self.load_queue.put(item)
@@ -323,13 +323,13 @@ class DiskIO():
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
         return skipframe
 
-    def get_detected_faces(self, filename, image, extract_queue):
+    def get_detected_faces(self, filename, image):
         """ Return detected faces from alignments or detector """
         logger.trace("Getting faces for: '%s'", filename)
         if not self.extractor:
             detected_faces = self.alignments_faces(os.path.basename(filename), image)
         else:
-            detected_faces = self.detect_faces(extract_queue, filename, image)
+            detected_faces = self.detect_faces(filename, image)
         logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)
         return detected_faces
 
@@ -355,12 +355,12 @@ class DiskIO():
                        "skipping".format(frame))
         return have_alignments
 
-    def detect_faces(self, load_queue, filename, image):
+    def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
         inp = {"filename": filename,
                "image": image}
-        load_queue.put(inp)
-        faces = next(self.extractor.detect_faces())
+        self.extractor.input_queue.put(inp)
+        faces = next(self.extractor.detected_faces())
 
         landmarks = faces["landmarks"]
         detected_faces = faces["detected_faces"]
