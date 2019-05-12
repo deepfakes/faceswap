@@ -68,6 +68,7 @@ Var envName
 Page custom pgPrereqCreate pgPrereqLeave
 
 # Install Faceswap Page
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW InstFilesShow
 !define MUI_PAGE_HEADER_SUBTEXT "Installing Faceswap..."
 !insertmacro MUI_PAGE_INSTFILES
 
@@ -89,9 +90,14 @@ Function .onInit
     StrCpy $gitInf "$dirTemp\git_install.inf"
     StrCpy $envName "faceswap"
     SetOutPath "$dirTemp"
-    File *.whl
     File git_install.inf
     Call CheckPrerequisites
+FunctionEnd
+
+# Enable the cancel button during installation
+Function InstFilesShow
+    GetDlgItem $0 $HWNDPARENT 2
+    EnableWindow $0 1
 FunctionEnd
 
 Function VerifyInstallDir
@@ -281,7 +287,10 @@ Function InstallPrerequisites
             ${If} $0 == "OK"
                 DetailPrint "Installing Git..."
                 SetDetailsPrint listonly
-                ExecWait "$\"$dirTemp\git_installer.exe$\" ${flagsGit} /LOADINF=$\"$gitInf$\"" $0
+                ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\git_installer.exe$\" ${flagsGit} /LOADINF=$\"$gitInf$\""
+                pop $0
+                ExecDos::wait $0
+                pop $0
                 SetDetailsPrint both
                 ${If} $0 != 0
                     DetailPrint "Error Installing Git"
@@ -301,7 +310,10 @@ Function InstallPrerequisites
             ${If} $0 == "OK"
                 DetailPrint "Installing Miniconda3. This will take a few minutes..."
                 SetDetailsPrint listonly
-                ExecWait "$\"$dirTemp\Miniconda3.exe$\" ${flagsConda}" $0
+                ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\Miniconda3.exe$\" ${flagsConda}"
+                pop $0
+                ExecDos::wait $0
+                pop $0
                 StrCpy $dirConda "$dirMiniconda"
                 SetDetailsPrint both
                 ${If} $0 != 0
@@ -329,7 +341,10 @@ Function CloneRepo
     ${Else}
         StrCpy $9 "git"
     ${EndIf}
-    ExecWait "$9 clone ${flagsRepo} $\"$INSTDIR$\"" $0
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$9 clone ${flagsRepo} $\"$INSTDIR$\""
+    pop $0
+    ExecDos::wait $0
+    pop $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Downloading Faceswap"
@@ -341,14 +356,20 @@ Function SetEnvironment
     # Updating Conda breaks setup.py. Commented out in case this issue gets resolved in future
 #    DetailPrint "Initializing Conda..."
 #    SetDetailsPrint listonly
-#    ExecWait "$dirConda\scripts\activate.bat && conda update -y -n base -c defaults conda && conda deactivate" $0
+#    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$dirConda\scripts\activate.bat && conda update -y -n base -c defaults conda && conda deactivate"
+#    pop $0
+#    ExecDos::wait $0
+#    pop $0
 #    SetDetailsPrint both
     DetailPrint "Creating Conda Virtual Environment..."
 
     IfFileExists  "$dirConda\envs\$envName" DeleteEnv CreateEnv
         DeleteEnv:
             SetDetailsPrint listonly
-            ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda env remove -y -n $\"$envName$\" && conda deactivate" $0
+            ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda env remove -y -n $\"$envName$\" && conda deactivate"
+            pop $0
+            ExecDos::wait $0
+            pop $0
             SetDetailsPrint both
             ${If} $0 != 0
                 DetailPrint "Error deleting Conda Virtual Environment"
@@ -357,7 +378,10 @@ Function SetEnvironment
 
     CreateEnv:
         SetDetailsPrint listonly
-        ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate" $0
+        ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate"
+        pop $0
+        ExecDos::wait $0
+        pop $0
         SetDetailsPrint both
         ${If} $0 != 0
             DetailPrint "Error Creating Conda Virtual Environment"
@@ -366,14 +390,17 @@ Function SetEnvironment
 FunctionEnd
 
 Function SetupFaceSwap
-    DetailPrint "Setting up FaceSwap Environment"
+    DetailPrint "Setting up FaceSwap Environment... This may take a while"
     StrCpy $0 "${flagsSetup}"
     ${If} $noNvidia != 1
         StrCpy $0 "$0 --gpu"
     ${EndIf}
 
     SetDetailsPrint listonly
-    ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate" $0
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Setting up Faceswap"

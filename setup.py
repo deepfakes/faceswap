@@ -599,7 +599,7 @@ class Install():
         # install as user to solve perm restriction
         if not self.env.is_admin and not self.env.is_virtualenv:
             pipexe.append("--user")
-            msg = "Installing {}".format(package)
+        msg = "Installing {}".format(package)
         self.output.info(msg)
         pipexe.append(package)
         try:
