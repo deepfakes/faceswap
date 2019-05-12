@@ -14,9 +14,6 @@ ffmpy==0.2.2
 nvidia-ml-py3
 h5py==2.9.0
 Keras==2.2.4
-cmake
-dlib
-face-recognition
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,
