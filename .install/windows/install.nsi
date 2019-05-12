@@ -27,15 +27,6 @@ InstallDir $PROFILE\faceswap
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
 !define flagsEnv "-y python=3.6"
 
-# Dlib Wheel prefix
-!define prefixDlib "dlib-19.16.99-cp36-cp36m-win_amd64"
-!define dlibFinalName "dlib-19.16.99-cp36-cp36m-win_amd64.whl" # Dlib Wheel MUST have this name before installing
-!define cudaDlib "_cuda90"
-!define avxDlib "_avx"
-!define sseDlib "_sse4"
-!define noneDlib "_none"
-
-
 # Folders
 Var ProgramData
 Var dirTemp
@@ -48,7 +39,6 @@ Var dirConda
 # Items to Install
 Var InstallGit
 Var InstallConda
-Var dlibWhl
 
 # Misc
 Var gitInf
@@ -278,7 +268,6 @@ Section Install
     Call InstallPrerequisites
     Call CloneRepo
     Call SetEnvironment
-    Call InstallDlib
     Call SetupFaceSwap
     Call DesktopShortcut
 SectionEnd
@@ -374,37 +363,6 @@ Function SetEnvironment
             DetailPrint "Error Creating Conda Virtual Environment"
             Call Abort
         ${EndIf}
-FunctionEnd
-
-Function InstallDlib
-    DetailPrint "Installing Dlib..."
-    SetDetailsPrint listonly
-
-    StrCpy $dlibWhl ${prefixDlib}
-
-    ${If} $noNvidia != 1
-        StrCpy $dlibWhl "$dlibWhl${cudaDlib}"
-    ${EndIf}
-
-    ${If} $hasAVX == 1
-        StrCpy $dlibWhl "$dlibWhl${avxDlib}"
-    ${ElseIf} $hasSSE4 == 1
-        StrCpy $dlibWhl "$dlibWhl${sseDlib}"
-    ${Else}
-        StrCpy $dlibWhl "$dlibWhl${noneDlib}"
-    ${EndIf}
-
-    StrCpy $dlibWhl "$dlibWhl.whl"
-    DetailPrint "Renaming $dlibWhl to ${dlibFinalName}"
-    Rename  "$dirTemp\$dlibWhl"  "$dirTemp\${dlibFinalName}"
-
-    ExecWait "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && pip install $\"$dirTemp\${dlibFinalName}$\" &&  conda deactivate" $0
-    SetDetailsPrint both
-    ${If} $0 != 0
-        DetailPrint "Error Installing Dlib"
-        Call Abort
-    ${EndIf}
-
 FunctionEnd
 
 Function SetupFaceSwap
