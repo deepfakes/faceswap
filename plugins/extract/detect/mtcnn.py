@@ -170,8 +170,6 @@ class Detect(Detector):
     def recalculate_bounding_box(faces, landmarks):
         """ Recalculate the bounding box for Face Alignment.
 
-            Face Alignment was built to expect a DLIB bounding
-            box and calculates center and scale based on that.
             Resize the bounding box around features to present
             a better box to Face Alignment. Helps its chances
             on edge cases and helps remove 'jitter' """
