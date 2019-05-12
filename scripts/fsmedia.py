@@ -236,8 +236,9 @@ class PostProcess():
             args = args if isinstance(args, tuple) else tuple()
             kwargs = kwargs if isinstance(kwargs, dict) else dict()
             task = globals()[action](*args, **kwargs)
-            logger.debug("Adding Postprocess action: '%s'", task)
-            actions.append(task)
+            if task.valid:
+                logger.debug("Adding Postprocess action: '%s'", task)
+                actions.append(task)
 
         for action in actions:
             action_name = camel_case_split(action.__class__.__name__)
@@ -293,6 +294,7 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
+        self.valid = True  # Set to False if invalid params passed in to disable
         logger.debug("Initialized base class %s", self.__class__.__name__)
 
     def process(self, output_item):
@@ -391,6 +393,7 @@ class FaceFilter(PostProcessAction):
         if not any(val for val in filter_lists.values()):
             return None
 
+        facefilter = None
         filter_files = [self.set_face_filter(f_type, filter_lists[f_type])
                         for f_type in ("filter", "nfilter")]
 
@@ -403,6 +406,8 @@ class FaceFilter(PostProcessAction):
                                     multiprocess,
                                     ref_threshold)
             logger.debug("Face filter: %s", facefilter)
+        else:
+            self.valid = False
         return facefilter
 
     @staticmethod
@@ -414,6 +419,9 @@ class FaceFilter(PostProcessAction):
         logger.info("%s: %s", f_type.title(), f_args)
         filter_files = f_args if isinstance(f_args, list) else [f_args]
         filter_files = list(filter(lambda fpath: Path(fpath).exists(), filter_files))
+        if not filter_files:
+            logger.warning("Face %s files were requested, but no files could be found. This "
+                           "filter will not be applied.", f_type)
         logger.debug("Face Filter files: %s", filter_files)
         return filter_files
 
