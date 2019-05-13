@@ -27,7 +27,10 @@ def get_default_mask():
 
 class Mask():
     """ Parent class for masks
-
+        Faces may be of shape (batch_size, height, width, 3) or (height, width, 3) 
+        of dtype float32 and with range[0., 1.]
+        Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
+        Produced mask will be in range [0, 1.]
         the output mask will be <mask_type>.mask
         channels: 1, 3 or 4:
                     1 - Returns a single channel mask
@@ -51,11 +54,10 @@ class Mask():
     def merge_masks(self, faces, masks):
         """ Return the masks in the requested shape """
         logger.trace("faces_shape: %s, masks_shape: %s", faces.shape, masks.shape)
-        masks = np.squeeze(masks, axis=0) if masks.shape[0] == 1 else masks
         if self.channels == 3:
             retval = np.repeat(masks, 3, axis=-1)
         elif self.channels == 4:
-            retval = np.concatenate((faces, masks), axis=-1)
+            retval = np.concatenate((faces[..., :3], masks), axis=-1)
         else:
             retval = masks
         logger.trace("Final masks shape: %s", retval.shape)
@@ -114,13 +116,20 @@ class Facehull(Mask):
                       "dfl_full":    self.three,
                       "components":  self.eight,
                       None:          self.three}
-        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndmin=4)
-        for mask, landmark in zip(masks, landmarks):
+        masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
+        if landmarks.ndim == 2:
+            landmarks = landmarks[None, ...]
+        for i, landmark in enumerate(landmarks):
+            print("getting parts")
             parts = build_dict[mask_type](landmark)
             for item in parts:
                 # pylint: disable=no-member
                 hull = cv2.convexHull(np.concatenate(item))
-                cv2.fillConvexPoly(mask, hull.astype('int32'), 1., lineType=cv2.LINE_AA)
+                try:
+                    cv2.fillConvexPoly(masks[i], hull, 1.)
+                except:
+                    print("cv2 error")
+            print("mask complete")
         return masks
 
 
@@ -148,24 +157,25 @@ class Smart(Mask):
         def segment(self, model_type, out_dir='C:/data/masked/'):
             """ doc string """
             i = 0
-            for img_batch, avgs in zip(self.memmapped_images, self.means):
+            for img_batch in self.memmapped_images:
                 if model_type=='Nirkin':
-                    results = self.model.predict_on_batch(img_batch)
-                    img_batch += avgs[:, None, None, :]
+                    model_input = (img_batch - self.means) * 255.
+                    results = self.model.predict_on_batch(model_input)
+                    img_batch += self.means
                     mask_batch = np.clip(results.argmax(axis=-1), 0, 1).astype('uint8')
                     mask_batch = np.expand_dims(mask_batch, axis=-1)
                     generator = (self.postprocessing(mask[:, :, 0:1]) for mask in mask_batch)
                     mask_batch = np.array(tuple(generator))
                     img_batch = np.concatenate((img_batch.astype('uint8'), mask_batch), axis=-1)
                 if  model_type=='DFL':
-                    img_batch += avgs[:, None, None, :]
-                    results = self.model.predict(img_batch / 255.)
+                    results = self.model.predict(img_batch)
                     results[results < 0.1] = 0.
                     mask_batch = results * 255.
                     img_batch = np.concatenate((img_batch, mask_batch), axis=-1).astype('uint8')
                 if model_type=='Nirkin_soft':
-                    results = self.model.predict_on_batch(img_batch)[:,:,:,1:2]
-                    img_batch += avgs[:, None, None, :]
+                    model_input = (img_batch - self.means) * 255.
+                    results = self.model.predict_on_batch(model_input)[:,:,:,1:2]
+                    img_batch += self.means
                     generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in results)
                     results = np.expand_dims(np.array(tuple(generator)), axis=-1)
                     low = results < 0.01

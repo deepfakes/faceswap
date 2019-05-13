@@ -133,7 +133,6 @@ class Train():
 
             if self.args.allow_growth:
                 self.set_tf_allow_growth()
-
             model = self.load_model()
             trainer = self.load_trainer(model)
             self.save_now = True
@@ -160,6 +159,7 @@ class Train():
             warp_to_landmarks=self.args.warp_to_landmarks,
             no_flip=self.args.no_flip,
             training_image_size=self.image_size,
+            alignments_paths=self.alignments_paths,
             pingpong=self.args.pingpong,
             memory_saving_gradients=self.args.memory_saving_gradients,
             predict=False)
