@@ -78,12 +78,13 @@ class TrainingDataGenerator():
         self._nearest_landmarks = dict()
 
         def batch_generator(inputs):
+        """ doc string """
             if do_shuffle:
                 rng_state = numpy.random.get_state()
-                numpy.random.set_state(rng_state)
-                numpy.random.shuffle(inputs[1])
-                numpy.random.set_state(rng_state)
-                numpy.random.shuffle(inputs[2])
+                np.random.set_state(rng_state)
+                np.random.shuffle(inputs[1])
+                np.random.set_state(rng_state)
+                np.random.shuffle(inputs[2])
             yield from inputs
 
         batcher = batch_generator(zip(range(batch_size),
@@ -147,18 +148,6 @@ class TrainingDataGenerator():
                      image, side, [img.shape for img in processed])
         return processed
 
-    def get_landmarks(self, filename, image, side):
-        """ Return the landmarks for this face """
-        logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
-        lm_key = sha1(image).hexdigest()
-        try:
-            src_points = self.landmarks[side][lm_key]
-        except KeyError:
-            raise Exception("Landmarks not found for hash: '{}' file: '{}'".format(lm_key,
-                                                                                   filename))
-        logger.trace("Returning: (src_points: %s)", src_points)
-        return src_points
-
     def get_closest_match(self, filename, side, src_points):
         """ Return closest matched landmarks from opposite set """
         logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
@@ -168,8 +157,7 @@ class TrainingDataGenerator():
         if not closest_hashes:
             dst_points_items = list(landmarks.items())
             dst_points = list(x[1] for x in dst_points_items)
-            closest = (np.mean(np.square(src_points - dst_points),
-                               axis=(1, 2))).argsort()[:10]
+            closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
             closest_hashes = tuple(dst_points_items[i][0] for i in closest)
             self._nearest_landmarks[filename] = closest_hashes
         dst_points = landmarks[choice(closest_hashes)]

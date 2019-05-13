@@ -327,6 +327,12 @@ class Batcher():
         batch = next(self.feed[purpose])
         inputs = [batch[1], batch[2]]
         targets = [batch[3], batch[4]]
+        picture = batch[0][0] * 255
+        picture = picture.astype("uint8")
+        cv2,NamedWindow("pict")
+        cv2.imshow("pict", picture)
+        cv2.waitKey()
+        cv2.destroyWindow("pict")
         samples = None
         if purpose != "training":
             samples = [batch[0]] + targets

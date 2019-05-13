@@ -158,7 +158,7 @@ class ModelBase():
     def build(self):
         """ Build the model. Override for custom build methods """
         self.add_networks()
-        self.load_models(swapped=False)
+        self.get_models(swapped=False)
         self.build_autoencoders()
         if not self.predict:
             self.log_summary()
@@ -356,8 +356,8 @@ class ModelBase():
                 logger.verbose("%s:", name.title())
                 nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
 
-    def load_models(self, swapped):
-        """ Load models from file """
+    def get_models(self, swapped):
+        """ Get models from file using load_model """
         logger.debug("Load model: (swapped: %s)", swapped)
 
         if not self.models_exist and not self.predict:
@@ -556,8 +556,11 @@ class NNMeta():
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
+        if len(network.inputs==1):
+            self.network = convert_legacy_models(network)
+        else:
+            self.network = network
         self.config = network.get_config()
-        self.network = network  # Update network with saved model
         self.network.name = self.type
         return True
 
@@ -586,6 +589,28 @@ class NNMeta():
         self.network.load_weights(self.filename)
         self.save(should_backup=False)
         self.network.name = self.type
+        
+    def convert_legacy_models(self, network):
+        """ Convert single input(image) models to two inputs models(image,mask) 
+        """
+        prev_input_shape = network.layers[0].output_shape[1:]
+        _face = Input(shape=prev_input_shape)
+        _mask = Input(shape=prev_input_shape[:-1] + (1,))
+        merge = Concatenate(axis=-1)([_face, _mask])
+        model_stub = Model(inputs=network.layers[1].input, outputs=network.outputs)
+        new_model = Model(inputs=[_face, _mask], outputs=model_stub(merge.output).outputs)
+
+        """
+        prev_input_shape = network.layers[0].output_shape[1:]
+        _face = Input(shape=prev_input_shape)
+        _mask = Input(shape=prev_input_shape[:-1] + (1,))
+        merge = Concatenate(axis=-1)([_face, _mask])
+        network.layers.pop(0)
+        network.layers[0].input = merge
+        new_model = Model(inputs=[_face, _mask], outputs=network.outputs)
+        """
+        return new_model
+
 
 
 class State():
