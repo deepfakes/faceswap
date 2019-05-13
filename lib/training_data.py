@@ -41,10 +41,10 @@ class TrainingDataGenerator():
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "augmenting: %s)", len(images), batch_size, side, do_shuffle, augmenting)
         self.batch_size = batch_size
+        queue_in, queue_out = self.make_queues(side, purpose)
         training_size = self.training_opts.get("training_size", 256)
         in_height = in_width = self.model_input_size
         out_height = out_width = self.model_output_size
-        queue_in, queue_out = self.make_queues(side, purpose)
         batch_shapes = [(batch_size, training_size, training_size, 3),  # sample images
                         (batch_size, in_height, in_width, 3),           # warped images
                         (batch_size, in_height, in_width, 1),           # warped masks
@@ -76,27 +76,28 @@ class TrainingDataGenerator():
         self.validate_samples(images["images"])
         # Intialize this for each subprocess
         self._nearest_landmarks = dict()
-        inputs = zip(images["images"], images["landmarks"])
 
         def batch_generator(inputs):
-            while True:
-                #if do_shuffle:
-                #    shuffle(imgs)
-                yield from inputs
+            if do_shuffle:
+                rng_state = numpy.random.get_state()
+                numpy.random.set_state(rng_state)
+                numpy.random.shuffle(inputs[1])
+                numpy.random.set_state(rng_state)
+                numpy.random.shuffle(inputs[2])
+            yield from inputs
 
+        batcher = batch_generator(zip(range(batch_size),
+                                      images["images"],
+                                      images["landmarks"]))
         epoch = 0
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
             logger.trace("Putting to batch queue: (side: '%s', augmenting: %s)", side, augmenting)
-            for i, (image, landmark) in enumerate(batch_generator(inputs)):
-                imgs = self.process_faces(image, landmark, side, augmenting, i)
-                for j, img in enumerate(imgs):
-                    memory[j][i][:] = img
+            for image_num, image, landmark in batcher:
+                imgs = self.process_faces(image, landmark, side, augmenting, image_num)
+                for process_output_num, img in enumerate(imgs):
+                    memory[process_output_num][image_num][:] = img
                 epoch += 1
-                if i == batch_size - 1:
-                    break
-            # if do_shuffle:
-                # shuffle(inputs)
             memory_wrapper.ready()
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
                      epoch, side, augmenting)
@@ -104,7 +105,7 @@ class TrainingDataGenerator():
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
             the total number of images """
-        length = data.shape[1]
+        length = data.shape[0]
         msg = ("Number of images is lower than batch-size (Note that too few "
                "images may lead to bad training). # images: {}, "
                "batch-size: {}".format(length, self.batch_size))
