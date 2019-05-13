@@ -64,7 +64,7 @@ To extract trump from photos in a folder (Right hand folder icon):
 ![ExtractFolder](https://i.imgur.com/H3h0k36.jpg)
 
 To extract cage from a video file (Left hand folder icon):
-![ExtractVideo](https://i.imgur.com/TK02F0u.jpg)]
+![ExtractVideo](https://i.imgur.com/TK02F0u.jpg)
 
 For input we either specify our photo directory or video file and for output we specify the folder where our extracted faces will be saved. The script will then try its best to recognize face landmarks, crop the images to a consistent size, and save the faces to the output folder. An `alignments.json` file will also be created and saved into your input folder. This file contains information about each of the faces that will be used by FaceSwap.
 
