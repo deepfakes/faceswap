@@ -12,6 +12,8 @@ import os
 
 import cv2
 import numpy as np
+from fastcluster import linkage
+from scipy.spatial.distance import pdist, squareform
 
 from lib.utils import GetModel
 
@@ -77,3 +79,44 @@ class VGGFace():
         var_b = np.sum(np.multiply(source_face, source_face))
         var_c = np.sum(np.multiply(test_face, test_face))
         return 1 - (var_a / (np.sqrt(var_b) * np.sqrt(var_c)))
+
+    def sorted_similarity(self, predictions, method="ward"):
+        """ Sort a matrix of predictions by similarity Adapted from:
+            https://gmarti.gitlab.io/ml/2017/09/07/how-to-sort-distance-matrix.html
+        input:
+            - predictions is a stacked matrix of vgg_face predictions shape: (x, 4096)
+            - method = ["ward","single","average","complete"]
+        output:
+            - result_order is a list of indices with the order implied by the hierarhical tree
+
+        sorted_similarity transforms a distance matrix into a sorted distance matrix according to
+        the order implied by the hierarchical tree (dendrogram)
+        """
+        logger.verbose("Calculating pairwise distances")
+        flat_distance_matrix = pdist(predictions)
+        distance_matrix = squareform(flat_distance_matrix)
+        num_predictions = len(distance_matrix)
+        logger.verbose("Sorting distances")
+        result_linkage = linkage(flat_distance_matrix, method=method, preserve_input=True)
+        result_order = self.seriation(result_linkage,
+                                      num_predictions,
+                                      num_predictions + num_predictions - 2)
+
+        return result_order
+
+    def seriation(self, tree, points, current_index):
+        """ Seriation method for sorted similarity
+            input:
+                - tree is a hierarchical tree (dendrogram)
+                - points is the number of points given to the clustering process
+                - current_index is the position in the tree for the recursive traversal
+            output:
+                - order implied by the hierarchical tree
+
+            seriation computes the order implied by a hierarchical tree (dendrogram)
+        """
+        if current_index < points:
+            return [current_index]
+        left = int(tree[current_index-points, 0])
+        right = int(tree[current_index-points, 1])
+        return self.seriation(tree, points, left) + self.seriation(tree, points, right)
