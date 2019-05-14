@@ -153,7 +153,8 @@ class TrainerBase():
             imgs_npy /= 255.
             del imgs_npy  # flush memmap to disk and save changes
             images[side] = {"images":       file,
-                            "landmarks":    landmarks}
+                            "landmarks":    landmarks,
+                            "data_shape":   (len(img_paths[side]), model_in_size, model_in_size, 4)}
             print("side dataset creation finished...")
         print("all finished...")
         return images
@@ -305,7 +306,7 @@ class Batcher():
         targets = [batch[3], batch[4]]
         picture = batch[0][0] * 255
         picture = picture.astype("uint8")
-        cv2,NamedWindow("pict")
+        cv2.NamedWindow("pict")
         cv2.imshow("pict", picture)
         cv2.waitKey()
         cv2.destroyWindow("pict")
