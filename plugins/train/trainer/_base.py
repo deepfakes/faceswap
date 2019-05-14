@@ -53,11 +53,9 @@ class TrainerBase():
 
         self.pingpong = PingPong(model, self.sides)
         self.batchers = dict()
-        print("create batchers")
         for side in self.sides:
             self.batchers[side] = Batcher(side, self.images[side], self.model, batch_size)
 
-        print("batchers done")
         self.tensorboard = self.set_tensorboard()
         self.samples = Samples(self.model,
                                self.model.training_opts["coverage_ratio"],
@@ -155,8 +153,6 @@ class TrainerBase():
             images[side] = {"images":       file,
                             "landmarks":    landmarks,
                             "data_shape":   (len(img_paths[side]), model_in_size, model_in_size, 4)}
-            print("side dataset creation finished...")
-        print("all finished...")
         return images
 
     def set_tensorboard(self):
@@ -230,10 +226,9 @@ class TrainerBase():
     def preview(self, viewer, timelapse):
         """ Preview Samples """
         if viewer:
+            
             for side, batcher in self.batchers.items():
-                print("\n at preview batcher")
                 _, _, self.samples.images[side] = batcher.get_next("preview")
-                print(self.samples.images[side][0].shape)
             samples = self.samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
@@ -299,17 +294,11 @@ class Batcher():
     def get_next(self, purpose):
         """ Return the next batch from the generator
             Items should come out as: (full_coverage_img, warped, target, mask]) """
-        print("at feed")
+        print("before next")
         batch = next(self.feed[purpose])
-        print("after feed")
+        print("after next")
         inputs = [batch[1], batch[2]]
         targets = [batch[3], batch[4]]
-        picture = batch[0][0] * 255
-        picture = picture.astype("uint8")
-        cv2.NamedWindow("pict")
-        cv2.imshow("pict", picture)
-        cv2.waitKey()
-        cv2.destroyWindow("pict")
         samples = None
         if purpose != "training":
             samples = [batch[0]] + targets

@@ -120,7 +120,6 @@ class Facehull(Mask):
         if landmarks.ndim == 2:
             landmarks = landmarks[None, ...]
         for i, landmark in enumerate(landmarks):
-            print("getting parts")
             parts = build_dict[mask_type](landmark)
             for item in parts:
                 # pylint: disable=no-member
@@ -129,7 +128,6 @@ class Facehull(Mask):
                     cv2.fillConvexPoly(masks[i], hull, 1.)
                 except:
                     print("cv2 error")
-            print("mask complete")
         return masks
 
 
