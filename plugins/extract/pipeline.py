@@ -118,11 +118,11 @@ class Extractor():
         """ Add the required processing queues to Queue Manager """
         queues = dict()
         for task in ("extract_detect_in", "extract_align_in", "extract_align_out"):
-            size = 0
+            # Limit queue size to avoid stacking ram
+            size = 32
             if task == "extract_detect_in" or (not self.is_parallel
                                                and task == "extract_align_in"):
-                # Limit queue size on input queues to avoid stacking ram
-                size = 100
+                size = 64
             queue_manager.add_queue(task, maxsize=size)
             queues[task] = queue_manager.get_queue(task)
         logger.debug("Queues: %s", queues)

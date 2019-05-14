@@ -2,15 +2,12 @@
 """ Face Filterer for extraction in faceswap.py """
 
 import logging
-import os
-import sys
 
 import cv2
-import numpy as np
 
 from lib.faces_detect import DetectedFace
 from lib.logger import get_loglevel
-from lib.utils import GetModel
+from lib.vgg_face import VGGFace
 from plugins.extract.pipeline import Extractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -31,28 +28,13 @@ class FaceFilter():
                      "detector: %s, aligner: %s. loglevel: %s, multiprocess: %s, threshold: %s)",
                      self.__class__.__name__, reference_file_paths, nreference_file_paths,
                      detector, aligner, loglevel, multiprocess, threshold)
-        git_model_id = 7
-        model_filename = ["vgg_face_v1.caffemodel", "vgg_face_v1.prototxt"]
-
-        self.input_size = 224
         self.numeric_loglevel = get_loglevel(loglevel)
-        self.vgg_face = self.get_model(git_model_id, model_filename)
+        self.vgg_face = VGGFace()
         self.filters = self.load_images(reference_file_paths, nreference_file_paths)
         self.align_faces(detector, aligner, loglevel, multiprocess)
         self.get_filter_encodings()
         self.threshold = threshold
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    # <<< GET MODEL >>> #
-    @staticmethod
-    def get_model(git_model_id, model_filename):
-        """ Check if model is available, if not, download and unzip it """
-        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
-        model = GetModel(model_filename, cache_path, git_model_id).model_path
-        vgg_face = cv2.dnn.readNetFromCaffe(model[1], model[0])  # pylint: disable=no-member
-        vgg_face.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
-        return vgg_face
 
     @staticmethod
     def load_images(reference_file_paths, nreference_file_paths):
@@ -136,44 +118,18 @@ class FaceFilter():
         """ Return filter face encodings from Keras VGG Face """
         for filename, face in self.filters.items():
             logger.debug("Getting encodings for: '%s'", filename)
-            encodings = self.predict(face["face"])
+            encodings = self.vgg_face.predict(face["face"])
             logger.debug("Filter Filename: %s, encoding shape: %s", filename, encodings.shape)
             face["encoding"] = encodings
             del face["face"]
-
-    def predict(self, face):
-        """ Return encodings for given image from vgg_face """
-        if face.shape[0] != self.input_size:
-            face = self.resize_face(face)
-        blob = cv2.dnn.blobFromImage(face,  # pylint: disable=no-member
-                                     1.0,
-                                     (self.input_size, self.input_size),
-                                     [104, 117, 123],
-                                     False,
-                                     False)
-        self.vgg_face.setInput(blob)
-        preds = self.vgg_face.forward()[0, :]
-        return preds
-
-    def resize_face(self, face):
-        """ Resize incoming face to model_input_size """
-        if face.shape[0] < self.input_size:
-            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-        else:
-            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-        face = cv2.resize(face,  # pylint:disable=no-member
-                          dsize=(self.input_size, self.input_size),
-                          interpolation=interpolation)
-        return face
 
     def check(self, detected_face):
         """ Check the extracted Face """
         logger.trace("Checking face with FaceFilter")
         distances = {"filter": list(), "nfilter": list()}
-        encodings = self.predict(detected_face.aligned_face)
+        encodings = self.vgg_face.predict(detected_face.aligned_face)
         for filt in self.filters.values():
-            similarity = self.find_cosine_similiarity(filt["encoding"], encodings)
+            similarity = self.vgg_face.find_cosine_similiarity(filt["encoding"], encodings)
             distances[filt["type"]].append(similarity)
 
         avgs = {key: avg(val) if val else None for key, val in distances.items()}
@@ -217,11 +173,3 @@ class FaceFilter():
             logger.trace("Accepted face: (similarity: %s, threshold: %s)",
                          distances, self.threshold)
         return retval
-
-    @staticmethod
-    def find_cosine_similiarity(source_face, test_face):
-        """ Find the cosine similarity between a source face and a test face """
-        var_a = np.matmul(np.transpose(source_face), test_face)
-        var_b = np.sum(np.multiply(source_face, source_face))
-        var_c = np.sum(np.multiply(test_face, test_face))
-        return 1 - (var_a / (np.sqrt(var_b) * np.sqrt(var_c)))
