@@ -73,30 +73,36 @@ class TrainingDataGenerator():
         """ Load the warped images and target images to queue """
         logger.debug("Loading batch: (image_count: %s, side: '%s', augmenting: %s, "
                      "do_shuffle: %s)", len(images), side, augmenting, do_shuffle)
-        self.validate_samples(images["images"])
+
+        def batch_gen(image_nums, images, landmarks):
+            """ doc string """
+            while True:
+                if do_shuffle:
+                    rng_state = np.random.get_state()
+                    np.random.set_state(rng_state)
+                    np.random.shuffle(images)
+                    np.random.set_state(rng_state)
+                    np.random.shuffle(landmarks)
+                gen = zip(image_nums, images, landmarks)
+                for image_num, image, landmark in gen:
+                    yield image_num, image, landmark
+
+        #self.validate_samples(images["images"])
         # Intialize this for each subprocess
         self._nearest_landmarks = dict()
-
-        def batch_generator(inputs):
-        """ doc string """
-            if do_shuffle:
-                rng_state = numpy.random.get_state()
-                np.random.set_state(rng_state)
-                np.random.shuffle(inputs[1])
-                np.random.set_state(rng_state)
-                np.random.shuffle(inputs[2])
-            yield from inputs
-
-        batcher = batch_generator(zip(range(batch_size),
-                                      images["images"],
-                                      images["landmarks"]))
+        img_npy = np.memmap(images["images"], dtype='float32', mode='r+')
+        batcher = batch_gen(range(batch_size), img_npy, images["landmarks"])
         epoch = 0
+        print("outside loop")
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
+            print("inside mem loop")
             logger.trace("Putting to batch queue: (side: '%s', augmenting: %s)", side, augmenting)
             for image_num, image, landmark in batcher:
+                print("inside image loop")
                 imgs = self.process_faces(image, landmark, side, augmenting, image_num)
                 for process_output_num, img in enumerate(imgs):
+                    print("inside assingn loop")
                     memory[process_output_num][image_num][:] = img
                 epoch += 1
             memory_wrapper.ready()
@@ -118,8 +124,10 @@ class TrainingDataGenerator():
             and batchsize of target_img from the load queue """
         logger.debug("Launching minibatch generator for queue (side: '%s', augmenting: %s)",
                      side, augmenting)
+        print("inside minibatch")
         for batch_wrapper in load_process:
             with batch_wrapper as batch:
+                print("inside minibatch loop")
                 logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
                              "augmenting: %s)",
                              len(batch), [item.shape for item in batch], side, augmenting)

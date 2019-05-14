@@ -89,7 +89,7 @@ class TrainerBase():
             landmarks = Landmarks(self.model.training_opts).landmarks
             self.model.training_opts["landmarks"] = landmarks
 
-    def setup_image_dataset(self, images):
+    def setup_image_dataset(self, img_paths):
         """ Check the image dirs exist, contain images and return the image
         datasets with masks added """
         logger.debug("Getting image paths")
@@ -110,41 +110,25 @@ class TrainerBase():
                     img = cv2.resize(img, (target_size, target_size), method)
                 return img, lm_key
 
-            file = str(Path(img_list[0]).parents[0].joinpath(('Images_.npy')))
-            # batch_num = (len(img_list) + batch_size -1) // batch_size
-            # img_shape = (batch_num, batch_size, in_size, in_size, 4)
+            file = str(Path(img_list[0]).parents[0].joinpath(('Images.npy')))
             img_shape = (len(img_list), in_size, in_size, 4)
-            dataset = np.lib.format.open_memmap(file, mode='w+', dtype='float32', shape=img_shape)
-            hashes = np.empty(len(img_list), dtype='U40')
-            for i, (img, lm_key) in enumerate(loader(img_file, in_size) for img_file in img_list):
-                #dataset[i // batch_size, i % batch_size, :, :, :3] = img[:, :, :3]
-                dataset[i, :, :, :3] = img[:, :, :3]
-                hashes[i] = lm_key
-            dataset = dataset / 255.
-            #means = np.mean(dataset, axis=(0, 1, 2, 3))
-            means = np.mean(dataset, axis=(0, 1, 2))
-            return dataset, file, means, hashes
+            landmark_shape = (len(img_list), 68, 2)
+            max_size = self.image_size
+            images = np.memmap(file, dtype='float32', mode='w+', shape=img_shape)
+            landmarks = np.zeros(landmark_shape, dtype='int32')
 
-        def get_landmarks(side, hashes, alignments, landmark_shape):
-            """ Return the landmarks for this face """
-            print("creating landmarks...")
-            landmarks = self.model.training_opts["landmarks"]
-            max_size = alignments["training_size"]
-            src_points = np.zeros(landmark_shape, dtype='int32')
-            for i , a_hash in enumerate(hashes):
-                logger.trace("Retrieving landmarks: (hash: '%s', side: '%s'", a_hash, side)
-                if a_hash:
-                    try:
-                        raw_pts = landmarks[side][a_hash]
-                        src_points[i] = np.clip(raw_pts, 0, max_size)
-                    except KeyError:
-                        raise Exception("Landmarks not found for hash: '{}'".format(a_hash))
-                    logger.trace("Returning: (src_points: %s)", src_points[i])
-            return src_points
+            landmark_file = self.model.training_opts["landmarks"]
+            for i, (img, hash_query) in enumerate(loader(img_file, in_size) for img_file in img_list):
+                images[i, :, :, :3] = img[:, :, :3]
+                try:
+                    raw_pts = landmark_file[side][hash_query]
+                    landmarks[i] = np.clip(raw_pts, 0, max_size)
+                except KeyError:
+                    raise Exception("Landmarks not found for hash: '{}'".format(a_hash))
+            means = np.mean(images, axis=(0, 1, 2))
+            return images, file, means, landmarks
 
-        img_number = dict()
-        alignments = dict()
-        image_batches = dict()
+        images = dict()
         mask_args = {None:          (self.image_size, Facehull),
                      "none":        (self.image_size, Dummy),
                      "components":  (self.image_size, Facehull),
@@ -156,33 +140,23 @@ class TrainerBase():
         mask_type = self.model.training_opts["mask_type"]
         model_in_size, Mask = mask_args[mask_type]
         for side in self.sides:
-            logger.debug("Training image size: %s", model_in_size)
-            print("creating dataset...")
-            img_number[side] = len(images[side])
-            alignments[side] = dict()
-            image_batches[side] = dict()
-            alignments[side]["training_size"] = self.image_size
-            alignments[side]["alignments"] = self.alignments_paths
-            img_dataset, file, means, hashes = dataset_setup(images[side],
-                                                             model_in_size,
-                                                             self.batch_size)
-            # landmark_shape = img_dataset.shape[:2] + (68, 2)
-            landmark_shape = img_dataset.shape[:1] + (68, 2)
-            landmarks = get_landmarks(side, hashes, alignments[side], landmark_shape)
-            print("creating masks...")
-            imgs_and_marks = zip(img_dataset, landmarks)
-            for i, (img, landmark) in enumerate(imgs_and_marks):
-                img_batch = img[None, ...]
-                landmark_batch = landmark[None, ...]
-                img_dataset[i] = np.squeeze(Mask(mask_type,
-                                                 img_batch,
-                                                 landmark_batch,
-                                                 channels=4).masks, axis=0)
-            image_batches[side]["images"] = img_dataset / 255.
-            image_batches[side]["landmarks"] = landmarks
+            logger.info("Creating image dataset for side: %s", side)
+            imgs_npy, file, means, landmarks = dataset_setup(img_paths[side],
+                                                           model_in_size,
+                                                           self.batch_size)
+            imgs_marks = zip(imgs_npy[:, None, ...], landmarks[:, None, ...])
+            for i, (img, landmark) in enumerate(imgs_marks):
+                imgs_npy[i] = np.squeeze(Mask(mask_type,
+                                              img,
+                                              landmark,
+                                              channels=4).masks, axis=0)
+            imgs_npy /= 255.
+            del imgs_npy  # flush memmap to disk and save changes
+            images[side] = {"images":       file,
+                            "landmarks":    landmarks}
             print("side dataset creation finished...")
         print("all finished...")
-        return image_batches
+        return images
 
     def set_tensorboard(self):
         """ Set up tensorboard callback """
@@ -324,7 +298,9 @@ class Batcher():
     def get_next(self, purpose):
         """ Return the next batch from the generator
             Items should come out as: (full_coverage_img, warped, target, mask]) """
+        print("at feed")
         batch = next(self.feed[purpose])
+        print("after feed")
         inputs = [batch[1], batch[2]]
         targets = [batch[3], batch[4]]
         picture = batch[0][0] * 255

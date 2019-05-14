@@ -15,6 +15,7 @@ from keras import losses
 from keras import backend as K
 from keras.models import load_model, Model
 from keras.optimizers import Adam
+from keras.layers import Input, Concatenate
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
@@ -556,8 +557,8 @@ class NNMeta():
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
-        if len(network.inputs==1):
-            self.network = convert_legacy_models(network)
+        if self.type == "encoder" and len(network.inputs)==1:
+            self.network = self.convert_legacy_models(network)
         else:
             self.network = network
         self.config = network.get_config()
@@ -593,12 +594,16 @@ class NNMeta():
     def convert_legacy_models(self, network):
         """ Convert single input(image) models to two inputs models(image,mask) 
         """
+        print(network.layers[0].input_shape,
+              network.layers[0].output_shape,
+              network.layers[1].input_shape,
+              network.layers[1].output_shape)
         prev_input_shape = network.layers[0].output_shape[1:]
         _face = Input(shape=prev_input_shape)
         _mask = Input(shape=prev_input_shape[:-1] + (1,))
         merge = Concatenate(axis=-1)([_face, _mask])
         model_stub = Model(inputs=network.layers[1].input, outputs=network.outputs)
-        new_model = Model(inputs=[_face, _mask], outputs=model_stub(merge.output).outputs)
+        new_model = Model(inputs=[_face, _mask], outputs=model_stub(merge).outputs)
 
         """
         prev_input_shape = network.layers[0].output_shape[1:]
