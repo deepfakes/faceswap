@@ -7,6 +7,7 @@ scikit-image
 Pillow
 scikit-learn
 toposort
+fastcluster
 matplotlib==2.2.2
 imageio
 imageio-ffmpeg
