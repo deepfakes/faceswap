@@ -100,6 +100,7 @@ class TrainingDataGenerator():
                 for process_output_num, img in enumerate(imgs):
                     memory[process_output_num][image_num][:] = img
                 epoch += 1
+                print(image_num)
             memory_wrapper.ready()
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
                      epoch, side, augmenting)
@@ -134,7 +135,6 @@ class TrainingDataGenerator():
         """ Load an image and perform transformation and warping """
         logger.trace("Processing face: (image #: '%s', side: '%s', augmenting: %s)",
                      img_number, side, augmenting)
-        sample = image.copy()[:, :, :3]
         if augmenting:
             image = self.processing.random_transform(image)
             if not self.training_opts["no_flip"]:
@@ -144,7 +144,6 @@ class TrainingDataGenerator():
             processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
         else:
             processed = self.processing.random_warp(image)
-        processed.insert(0, sample)
         logger.trace("Processed face: (image: '%s', side: '%s', shapes: %s)",
                      image, side, [img.shape for img in processed])
         return processed
@@ -232,6 +231,7 @@ class ImageManipulation():
         """ get pair of random warped images from aligned face image """
         # pylint: disable=no-member
         logger.trace("Randomly warping image")
+        sample = image.copy()[:, :, :3]
         height, width = image.shape[0:2]
         coverage = self.get_coverage(image) // 2
         assert height == width and height % 2 == 0
@@ -264,12 +264,13 @@ class ImageManipulation():
         logger.trace("Target image shape: %s", target_image.shape)
         logger.trace("Target mask shape: %s", target_mask.shape)
         logger.trace("Randomly warped image and mask")
-        return [warped_image, warped_mask, target_image, target_mask]
+        return [sample, warped_image, warped_mask, target_image, target_mask]
 
     def random_warp_landmarks(self, image, source=None, destination=None):
         """ get warped image, target image and target mask From DFAKER plugin """
         # pylint: disable=no-member
         logger.trace("Randomly warping landmarks")
+        sample = image.copy()[:, :, :3]
         size = image.shape[0]
         coverage = self.get_coverage(image)
         p_mx = size - 1
@@ -323,4 +324,4 @@ class ImageManipulation():
         logger.trace("Target image shape: %s", target_image.shape)
         logger.trace("Target mask shape: %s", target_mask.shape)
         logger.trace("Randomly warped image and mask")
-        return [warped_image, warped_mask, target_image, target_mask]
+        return [sample, warped_image, warped_mask, target_image, target_mask]

@@ -156,45 +156,32 @@ class Smart(Mask):
             """ doc string """
             i = 0
             for img_batch in self.memmapped_images:
-                if model_type=='Nirkin':
-                    model_input = (img_batch - self.means) * 255.
-                    results = self.model.predict_on_batch(model_input)
-                    img_batch += self.means
-                    mask_batch = np.clip(results.argmax(axis=-1), 0, 1).astype('uint8')
-                    mask_batch = np.expand_dims(mask_batch, axis=-1)
-                    generator = (self.postprocessing(mask[:, :, 0:1]) for mask in mask_batch)
-                    mask_batch = np.array(tuple(generator))
-                    img_batch = np.concatenate((img_batch.astype('uint8'), mask_batch), axis=-1)
                 if  model_type=='DFL':
-                    results = self.model.predict(img_batch)
-                    results[results < 0.1] = 0.
-                    mask_batch = results * 255.
-                    img_batch = np.concatenate((img_batch, mask_batch), axis=-1).astype('uint8')
-                if model_type=='Nirkin_soft':
-                    model_input = (img_batch - self.means) * 255.
-                    results = self.model.predict_on_batch(model_input)[:,:,:,1:2]
-                    img_batch += self.means
-                    generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in results)
-                    results = np.expand_dims(np.array(tuple(generator)), axis=-1)
-                    low = results < 0.01
-                    high = results > 0.975
-                    results[low] = 0.
-                    results[high] = 1.
-                    img_batch = np.concatenate((img_batch, results * 255.), axis=-1).astype('uint8')
+                    model_input = (faces - self.means)
+                    masks = self.model.predict(model_input)
+                    low = masks < 0.1
+                    masks[low] = 0.
+                if model_type=='Nirkin':
+                    model_input = (faces - self.means)
+                    masks = self.model.predict_on_batch(model_input)[..., 1:2]
+                    generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in masks)
+                    # generator = (self.postprocessing(mask[:, :, None]) for mask in masks)
+                    masks = np.array(tuple(generator))[..., None]
+                    low = masks < 0.01
+                    high = masks > 0.975
+                    results[masks] = 0.
+                    results[masks] = 1.
 
-                for four_channel in img_batch:
-                    if i < self.num_images:
-                        path_string = '{0}{1:05d}.png'.format(out_dir, i)
-                        cv2.imwrite(path_string, four_channel)  # pylint: disable=no-member
-                        i += 1
+            return masks
 
         @staticmethod
         def postprocessing(mask):
+            # pylint: disable=no-member
             """ doc string """
             #Select_largest_segment
             pop_small_segments = False # Don't do this right now
             if pop_small_segments:
-                results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)  # pylint: disable=no-member
+                results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
                 _, labels, stats, _ = results
                 segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
                 mask[labels != segments_ranked_by_area[0, 0]] = 0.
@@ -203,22 +190,20 @@ class Smart(Mask):
             smooth_contours = False # Don't do this right now
             if smooth_contours:
                 iters = 2
-                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))  # pylint: disable=no-member
-                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)  # pylint: disable=no-member
-                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)  # pylint: disable=no-member
-                
-                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)  # pylint: disable=no-member
-                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)  # pylint: disable=no-member
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
+                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
+                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
 
-            mask *= 255
             #Fill holes
             fill_holes = True
             if fill_holes:
                 not_holes = mask.copy()
                 not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
-                cv2.floodFill(not_holes, None, (0, 0), 255)  # pylint: disable=no-member
-                holes = cv2.bitwise_not(not_holes)[2:-2,2:-2]  # pylint: disable=no-member
-                mask = cv2.bitwise_or(mask, holes)  # pylint: disable=no-member
+                cv2.floodFill(not_holes, None, (0, 0), 255)
+                holes = cv2.bitwise_not(not_holes)[2:-2,2:-2]
+                mask = cv2.bitwise_or(mask, holes)
                 mask = np.expand_dims(mask, axis=-1)
                 
             return mask

@@ -142,13 +142,13 @@ class TrainerBase():
             imgs_npy, file, means, landmarks = dataset_setup(img_paths[side],
                                                            model_in_size,
                                                            self.batch_size)
+            imgs_npy /= 255.
             imgs_marks = zip(imgs_npy[:, None, ...], landmarks[:, None, ...])
             for i, (img, landmark) in enumerate(imgs_marks):
                 imgs_npy[i] = np.squeeze(Mask(mask_type,
                                               img,
                                               landmark,
                                               channels=4).masks, axis=0)
-            imgs_npy /= 255.
             del imgs_npy  # flush memmap to disk and save changes
             images[side] = {"images":       file,
                             "landmarks":    landmarks,
@@ -208,6 +208,7 @@ class TrainerBase():
             if self.pingpong.active and side != self.pingpong.side:
                 continue
             loss[side] = batcher.train_one_batch("training")
+            print(loss[side])
 
         self.model.state.increment_iterations()
 
@@ -226,14 +227,15 @@ class TrainerBase():
     def preview(self, viewer, timelapse):
         """ Preview Samples """
         if viewer:
-            
             for side, batcher in self.batchers.items():
                 _, _, self.samples.images[side] = batcher.get_next("preview")
+                print(len(self.samples.images[side][0]))
             samples = self.samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
         if timelapse:
+            print("lapse here")
             for side, batcher in self.batchers.items():
                 _, _, self.timelapse.samples.images[side] = batcher.get_next("timelapse")
             self.timelapse.output_timelapse()
@@ -294,9 +296,7 @@ class Batcher():
     def get_next(self, purpose):
         """ Return the next batch from the generator
             Items should come out as: (full_coverage_img, warped, target, mask]) """
-        print("before next")
         batch = next(self.feed[purpose])
-        print("after next")
         inputs = [batch[1], batch[2]]
         targets = [batch[3], batch[4]]
         samples = None

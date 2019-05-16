@@ -135,7 +135,6 @@ class Train():
                 self.set_tf_allow_growth()
             model = self.load_model()
             trainer = self.load_trainer(model)
-            # self.save_now = True
             self.run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
@@ -220,12 +219,10 @@ class Train():
                     logger.trace("Save Requested: (iteration: %s", total_iterations)
                     self.save_now = False
                     model.save_models()
-                    trainer.preview(display_func, None)
                 trainer.train_one_step()
             trainer.preview(display_func, self.timelapse)
             logger.trace("Save Iteration: (iteration: %s", total_iterations)
-            model.save_models()
-            self.save_now = False
+            # model.save_models()
             if self.args.pingpong:
                 trainer.pingpong.switch()
         logger.debug("Training cycle complete")

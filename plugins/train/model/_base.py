@@ -594,6 +594,7 @@ class NNMeta():
     def convert_legacy_models(self, network):
         """ Convert single input(image) models to two inputs models(image,mask) 
         """
+        print("stripping model \n\n")
         print(network.layers[0].input_shape,
               network.layers[0].output_shape,
               network.layers[1].input_shape,
