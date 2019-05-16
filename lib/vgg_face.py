@@ -13,7 +13,6 @@ import os
 import cv2
 import numpy as np
 from fastcluster import linkage
-from scipy.spatial.distance import pdist, squareform
 
 from lib.utils import GetModel
 
@@ -24,27 +23,35 @@ class VGGFace():
     """ VGG Face feature extraction.
         Input images should be in BGR Order """
 
-    def __init__(self):
-        logger.debug("Initializing %s", self.__class__.__name__)
+    def __init__(self, backend="CPU"):
+        logger.debug("Initializing %s: (backend: %s)", self.__class__.__name__, backend)
         git_model_id = 7
         model_filename = ["vgg_face_v1.caffemodel", "vgg_face_v1.prototxt"]
         self.input_size = 224
         # Average image provided in http://www.robots.ox.ac.uk/~vgg/software/vgg_face/
         self.average_img = [129.1863, 104.7624, 93.5940]
 
-        self.model = self.get_model(git_model_id, model_filename)
+        self.model = self.get_model(git_model_id, model_filename, backend)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<< GET MODEL >>> #
-    @staticmethod
-    def get_model(git_model_id, model_filename):
+    def get_model(self, git_model_id, model_filename, backend):
         """ Check if model is available, if not, download and unzip it """
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
         model = GetModel(model_filename, cache_path, git_model_id).model_path
         model = cv2.dnn.readNetFromCaffe(model[1], model[0])  # pylint: disable=no-member
-        model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
+        model.setPreferableTarget(self.get_backend(backend))
         return model
+
+    @staticmethod
+    def get_backend(backend):
+        """ Return the cv2 DNN backend """
+        if backend == "OPENCL":
+            logger.info("Using OpenCL backend. If the process runs, you can safely ignore any of "
+                        "the failure messages.")
+        retval = getattr(cv2.dnn, "DNN_TARGET_{}".format(backend))  # pylint: disable=no-member
+        return retval
 
     def predict(self, face):
         """ Return encodings for given image from vgg_face """
@@ -92,12 +99,9 @@ class VGGFace():
         sorted_similarity transforms a distance matrix into a sorted distance matrix according to
         the order implied by the hierarchical tree (dendrogram)
         """
-        logger.verbose("Calculating pairwise distances")
-        flat_distance_matrix = pdist(predictions)
-        distance_matrix = squareform(flat_distance_matrix)
-        num_predictions = len(distance_matrix)
-        logger.verbose("Sorting distances")
-        result_linkage = linkage(flat_distance_matrix, method=method, preserve_input=True)
+        logger.info("Sorting face distances. Depending on your dataset this may take some time...")
+        num_predictions = predictions.shape[0]
+        result_linkage = linkage(predictions, method=method, preserve_input=False)
         result_order = self.seriation(result_linkage,
                                       num_predictions,
                                       num_predictions + num_predictions - 2)
