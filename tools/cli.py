@@ -34,10 +34,12 @@ class AlignmentsArgs(FaceSwapArgs):
                     "subfolder will be created within the frames folder to hold the output." +
                     frames_dir + align_eyes +
                     "\nL|'extract': Re-extract faces from the source frames/video based on "
-                    "alignment data. This is a lot quicker than re-detecting faces." +
+                    "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
+                    "the '-een' (--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
                     "\nL|'extract-large' - Extract all faces that have not been upscaled. Useful "
-                    "for excluding low-res images from a training set." +
+                    "for excluding low-res images from a training set.. Can pass in the '-een' "
+                    "(--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
                     "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
@@ -114,6 +116,17 @@ class AlignmentsArgs(FaceSwapArgs):
                     " source directory)."
                     "\nL|'move': Move the discovered items to a sub-folder within the source "
                     "directory."})
+        argument_list.append({"opts": ("-een", "--extract-every-n"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "extract_every_n",
+                              "min_max": (1, 100),
+                              "default": 1,
+                              "rounding": 1,
+                              "help": "Extract every 'nth' frame. This option will skip frames "
+                                      "when extracting faces. For example a value of 1 will "
+                                      "extract faces from every frame, a value of 10 will extract "
+                                      "faces from every 10th frame. (extract only)"})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
