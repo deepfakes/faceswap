@@ -33,7 +33,7 @@ class Sort():
         self.args = arguments
         self.changes = None
         self.serializer = None
-        self.vgg_face = VGGFace()
+        self.vgg_face = None
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -49,12 +49,14 @@ class Sort():
         if (self.args.final_process == "folders"
                 and self.args.min_threshold < 0.0):
             method = self.args.group_method.lower()
-            if method == 'face':
-                self.args.min_threshold = 0.6
-            elif method == 'face-cnn':
+            if method == 'face-cnn':
                 self.args.min_threshold = 7.2
             elif method == 'hist':
                 self.args.min_threshold = 0.3
+
+        # Load VGG Face if sorting by face
+        if self.args.sort_method.lower() == "face":
+            self.vgg_face = VGGFace(backend=self.args.backend)
 
         # If logging is enabled, prepare container
         if self.args.log_changes:
@@ -187,19 +189,6 @@ class Sort():
         logger.info("Sorting. Depending on ths size of your dataset, this may take a few "
                     "minutes...")
         indices = self.vgg_face.sorted_similarity(preds, method="ward")
-        img_list = images[indices]
-        return img_list
-
-    def sort_face_dissim(self):
-        """ Sort by face dissimilarity """
-        input_dir = self.args.input_dir
-
-        logger.info("Sorting by face dissimilarity...")
-        images = np.array(self.find_images(input_dir))
-        preds = np.array([self.vgg_face.predict(cv2.imread(img))
-                          for img in tqdm(images, desc="loading", file=sys.stdout)])
-        logger.info("Sorting. Depending on ths size of your dataset, this may take a while...")
-        indices = self.vgg_face.sorted_similarity(preds, method="complete")
         img_list = images[indices]
         return img_list
 
@@ -372,57 +361,6 @@ class Sort():
         # If remainder is 0, nothing gets added to the last bin.
         for i in range(1, remainder + 1):
             bins[-1].append(img_list[-i][0])
-
-        return bins
-
-    def group_face(self, img_list):
-        """ Group into bins by face similarity """
-        logger.info("Grouping by face similarity...")
-
-        # Groups are of the form: group_num -> reference face
-        reference_groups = dict()
-
-        # Bins array, where index is the group number and value is
-        # an array containing the file paths to the images in that group.
-        # The first group (0), is always the non-face group.
-        bins = [[]]
-
-        # Comparison threshold used to decide how similar
-        # faces have to be to be grouped together.
-        min_threshold = self.args.min_threshold
-        img_list_len = len(img_list)
-
-        for i in tqdm(range(1, img_list_len),
-                      desc="Grouping",
-                      file=sys.stdout):
-            f1encs = img_list[i][1]
-
-            # Check if current image is a face, if not then
-            # add it immediately to the non-face list.
-            if f1encs is None or len(f1encs) <= 0:
-                bins[0].append(img_list[i][0])
-
-            else:
-                current_best = [-1, float("inf")]
-
-                for key, references in reference_groups.items():
-                    # Non-faces are not added to reference_groups dict, thus
-                    # removing the need to check that f2encs is a face.
-                    # The try-catch block is to handle the first face that gets
-                    # processed, as the first value is None.
-                    try:
-                        score = self.get_avg_score_faces(f1encs, references)
-                    except (TypeError, ValueError, ZeroDivisionError):
-                        score = float("inf")
-                    if score < current_best[1]:
-                        current_best[0], current_best[1] = key, score
-
-                if current_best[1] < min_threshold:
-                    reference_groups[current_best[0]].append(f1encs)
-                    bins[current_best[0]].append(img_list[i][0])
-                else:
-                    reference_groups[len(reference_groups)] = [img_list[i][1]]
-                    bins.append([img_list[i][0]])
 
         return bins
 
@@ -638,12 +576,6 @@ class Sort():
                          tqdm(self.find_images(input_dir),
                               desc="Reloading",
                               file=sys.stdout)]
-        elif group_method == 'group_face':
-            temp_list = [
-                [img, self.vgg_face.predict(cv2.imread(img))]
-                for img in tqdm(self.find_images(input_dir),
-                                desc="Reloading",
-                                file=sys.stdout)]
         elif group_method == 'group_face_cnn':
             self.launch_aligner()
             temp_list = []
@@ -823,15 +755,6 @@ class Sort():
         scores = []
         for img2 in references:
             score = cv2.compareHist(img1, img2, cv2.HISTCMP_BHATTACHARYYA)
-            scores.append(score)
-        return sum(scores) / len(scores)
-
-    def get_avg_score_faces(self, f1encs, references):
-        """ Return the average similarity score between a face and
-            reference image """
-        scores = []
-        for f2encs in references:
-            score = self.vgg_face.find_cosine_similiarity(f1encs, f2encs)
             scores.append(score)
         return sum(scores) / len(scores)
 
