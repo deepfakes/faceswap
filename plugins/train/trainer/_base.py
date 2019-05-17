@@ -108,14 +108,13 @@ class TrainerBase():
                     img = cv2.resize(img, (target_size, target_size), method)
                 return img, lm_key
 
-            file = str(Path(img_list[0]).parents[0].joinpath(('Images.npy')))
+            img_file = str(Path(img_list[0]).parents[0].joinpath(('Images.npy')))
+            landmark_file = self.model.training_opts["landmarks"]
             img_shape = (len(img_list), in_size, in_size, 4)
             landmark_shape = (len(img_list), 68, 2)
             max_size = self.image_size
-            images = np.memmap(file, dtype='float32', mode='w+', shape=img_shape)
+            images = np.memmap(img_file, dtype='float32', mode='w+', shape=img_shape)
             landmarks = np.zeros(landmark_shape, dtype='int32')
-
-            landmark_file = self.model.training_opts["landmarks"]
             for i, (img, hash_query) in enumerate(loader(img_file, in_size) for img_file in img_list):
                 images[i, :, :, :3] = img[:, :, :3]
                 try:
@@ -124,7 +123,7 @@ class TrainerBase():
                 except KeyError:
                     raise Exception("Landmarks not found for hash: '{}'".format(a_hash))
             means = np.mean(images, axis=(0, 1, 2))
-            return images, file, means, landmarks
+            return images, img_file, means, landmarks
 
         images = dict()
         mask_args = {None:          (self.image_size, Facehull),
@@ -208,7 +207,6 @@ class TrainerBase():
             if self.pingpong.active and side != self.pingpong.side:
                 continue
             loss[side] = batcher.train_one_batch("training")
-            print(loss[side])
 
         self.model.state.increment_iterations()
 
@@ -229,13 +227,11 @@ class TrainerBase():
         if viewer:
             for side, batcher in self.batchers.items():
                 _, _, self.samples.images[side] = batcher.get_next("preview")
-                print(len(self.samples.images[side][0]))
             samples = self.samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
         if timelapse:
-            print("lapse here")
             for side, batcher in self.batchers.items():
                 _, _, self.timelapse.samples.images[side] = batcher.get_next("timelapse")
             self.timelapse.output_timelapse()

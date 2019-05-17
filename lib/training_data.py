@@ -73,35 +73,38 @@ class TrainingDataGenerator():
         """ Load the warped images and target images to queue """
         logger.debug("Loading batch: (image_count: %s, side: '%s', augmenting: %s, "
                      "do_shuffle: %s)", len(images), side, augmenting, do_shuffle)
-        def batch_gen(image_nums, images, landmarks):
+        def batch_gen(images, landmarks, batch_size):
             """ doc string """
-            # while True:
-            if do_shuffle:
-                rng_state = np.random.get_state()
-                np.random.set_state(rng_state)
-                np.random.shuffle(images)
-                np.random.set_state(rng_state)
-                np.random.shuffle(landmarks)
-            gen = zip(image_nums, images, landmarks)
-            for image_num, image, landmark in gen:
-                yield image_num, image, landmark
+            while True:
+                if do_shuffle:
+                    rng_state = np.random.get_state()
+                    np.random.set_state(rng_state)
+                    np.random.shuffle(images)
+                    np.random.set_state(rng_state)
+                    np.random.shuffle(landmarks)
+                gen = zip(images, landmarks)
+                for image_num, (image, landmark) in enumerate(gen):
+                    yield (image_num + 1) % batch_size, image, landmark
 
         #self.validate_samples(images["images"])
         # Intialize this for each subprocess
         self._nearest_landmarks = dict()
         img_npy = np.memmap(images["images"], dtype='float32', mode='c',shape=images["data_shape"])
-        batcher = batch_gen(np.array(range(batch_size)), img_npy, images["landmarks"])
+        batcher = batch_gen(img_npy, images["landmarks"], batch_size)
         epoch = 0
+
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
             logger.trace("Putting to batch queue: (side: '%s', augmenting: %s)", side, augmenting)
             for image_num, image, landmark in batcher:
-                imgs = self.process_faces(image, landmark, side, augmenting, image_num)
+                imgs = self.process_faces(image, landmark, side, augmenting, epoch)
                 for process_output_num, img in enumerate(imgs):
-                    memory[process_output_num][image_num][:] = img
+                    memory[process_output_num][image_num - 1][:] = img
                 epoch += 1
-                print(image_num)
-            memory_wrapper.ready()
+                if image_num == 0:
+                    print(epoch, " here\n")
+                    memory_wrapper.ready()
+
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
                      epoch, side, augmenting)
 
