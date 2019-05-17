@@ -36,7 +36,7 @@ class TrainingDataGenerator():
                                             training_opts.get("coverage_ratio", 0.625))
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def batcher_setup(self, images, batch_size, side, purpose, do_shuffle=True, augmenting=True):
+    def setup_batcher(self, images, batch_size, side, purpose, do_shuffle=True, augmenting=True):
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "augmenting: %s)", len(images), batch_size, side, do_shuffle, augmenting)
