@@ -461,8 +461,8 @@ class Manual():
         """ Iterate through frames """
         # pylint: disable=no-member
         logger.debug("Display frames")
-        is_windows = True if platform.system() == "Windows" else False
-        is_conda = True if "conda" in sys.version.lower() else False
+        is_windows = platform.system() == "Windows"
+        is_conda = "conda" in sys.version.lower()
         logger.debug("is_windows: %s, is_conda: %s", is_windows, is_conda)
         cv2.namedWindow("Frame")
         cv2.namedWindow("Faces")
@@ -784,7 +784,7 @@ class MouseHandler():
         d_event = detect_process.event
         detect_process.start()
 
-        for plugin in ("fan", "dlib"):
+        for plugin in ("fan", "cv2_dnn"):
             aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
             align_process = SpawnProcess(aligner.run, **a_kwargs)
             a_event = align_process.event
@@ -797,11 +797,11 @@ class MouseHandler():
             if not a_event.is_set():
                 if plugin == "fan":
                     align_process.join()
-                    logger.error("Error initializing FAN. Trying Dlib")
+                    logger.error("Error initializing FAN. Trying CV2-DNN")
                     continue
                 else:
                     raise ValueError("Error inititalizing Aligner")
-            if plugin == "dlib":
+            if plugin == "cv2_dnn":
                 break
 
             try:
@@ -812,7 +812,7 @@ class MouseHandler():
             if not err:
                 break
             align_process.join()
-            logger.error("Error initializing FAN. Trying Dlib")
+            logger.error("Error initializing FAN. Trying CV2-DNN")
 
         d_event.wait(10)
         if not d_event.is_set():
@@ -984,10 +984,10 @@ class MouseHandler():
     def extracted_to_alignment(extract_data):
         """ Convert Extracted Tuple to Alignments data """
         alignment = dict()
-        d_rect, landmarks = extract_data
-        alignment["x"] = d_rect.left()
-        alignment["w"] = d_rect.right() - d_rect.left()
-        alignment["y"] = d_rect.top()
-        alignment["h"] = d_rect.bottom() - d_rect.top()
+        bbox, landmarks = extract_data
+        alignment["x"] = bbox.left
+        alignment["w"] = bbox.width
+        alignment["y"] = bbox.top
+        alignment["h"] = bbox.height
         alignment["landmarksXY"] = landmarks
         return alignment

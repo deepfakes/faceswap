@@ -330,13 +330,20 @@ class Extract():
     def export_faces(self):
         """ Export the faces """
         extracted_faces = 0
-
-        for frame in tqdm(self.frames.file_list_sorted, desc="Saving extracted faces"):
+        skip_num = self.arguments.extract_every_n
+        if skip_num != 1:
+            logger.info("Skipping every %s frames", skip_num)
+        for idx, frame in enumerate(tqdm(self.frames.file_list_sorted,
+                                         desc="Saving extracted faces")):
             frame_name = frame["frame_fullname"]
+            if idx % skip_num != 0:
+                logger.trace("Skipping '%s' due to extract_every_n = %s", frame_name, skip_num)
+                continue
 
             if not self.alignments.frame_exists(frame_name):
                 logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
+
             extracted_faces += self.output_faces(frame)
 
         if extracted_faces != 0 and self.type != "large":

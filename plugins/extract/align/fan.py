@@ -3,7 +3,6 @@
     Code adapted and modified from:
     https://github.com/1adrianb/face-alignment
 """
-import os
 import cv2
 import numpy as np
 
@@ -13,20 +12,16 @@ from ._base import Aligner, logger
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        git_model_id = 0
+        model_filename = "face-alignment-network_2d4_v1.pb"
+        super().__init__(git_model_id=git_model_id,
+                         model_filename=model_filename,
+                         colorspace="RGB",
+                         input_size=256,
+                         **kwargs)
         self.vram = 2240
-        self.reference_scale = 195.0
         self.model = None
-        self.test = None
-
-    def set_model_path(self):
-        """ Load the mtcnn models """
-        model_path = os.path.join(self.cachepath, "2DFAN-4.pb")
-        if not os.path.exists(model_path):
-            raise Exception("Error: Unable to find {}, reinstall "
-                            "the lib!".format(model_path))
-        logger.debug("Loading model: '%s'", model_path)
-        return model_path
+        self.reference_scale = 195
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
@@ -51,76 +46,78 @@ class Align(Aligner):
             self.error.set()
             raise err
 
-    def align(self, *args, **kwargs):
-        """ Perform alignments on detected faces """
-        super().align(*args, **kwargs)
-        for item in self.get_item():
-            if item == "EOF":
-                self.finalize(item)
-                break
-            image = item["image"][:, :, ::-1].copy()
-
-            logger.trace("Aligning faces")
-            try:
-                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
-                logger.trace("Aligned faces: %s", item["landmarks"])
-            except ValueError as err:
-                logger.warning("Image '%s' could not be processed. This may be due to corrupted "
-                               "data: %s", item["filename"], str(err))
-                item["detected_faces"] = list()
-                item["landmarks"] = list()
-            self.finalize(item)
-        logger.debug("Completed Align")
-
-    def process_landmarks(self, image, detected_faces):
-        """ Align image and process landmarks """
-        logger.trace("Processing landmarks")
-        retval = list()
-        for detected_face in detected_faces:
-            center, scale = self.get_center_scale(detected_face)
-            aligned_image = self.align_image(image, center, scale)
-            landmarks = self.predict_landmarks(aligned_image, center, scale)
-            retval.append(landmarks)
-        logger.trace("Processed landmarks: %s", retval)
-        return retval
+    # DETECTED FACE BOUNDING BOX PROCESSING
+    def align_image(self, detected_face, image):
+        """ Get center and scale, crop and align image around center """
+        logger.trace("Aligning image around center")
+        center, scale = self.get_center_scale(detected_face)
+        image = self.crop(image, center, scale)
+        logger.trace("Aligned image around center")
+        return dict(image=image, center=center, scale=scale)
 
     def get_center_scale(self, detected_face):
         """ Get the center and set scale of bounding box """
         logger.trace("Calculating center and scale")
-        center = np.array([(detected_face.left()
-                            + detected_face.right()) / 2.0,
-                           (detected_face.top()
-                            + detected_face.bottom()) / 2.0])
+        center = np.array([(detected_face.left + detected_face.right) / 2.0,
+                           (detected_face.top + detected_face.bottom) / 2.0])
 
-        center[1] -= (detected_face.bottom()
-                      - detected_face.top()) * 0.12
+        center[1] -= detected_face.height * 0.12
 
-        scale = (detected_face.right()
-                 - detected_face.left()
-                 + detected_face.bottom()
-                 - detected_face.top()) / self.reference_scale
+        scale = (detected_face.width + detected_face.height) / self.reference_scale
 
         logger.trace("Calculated center and scale: %s, %s", center, scale)
         return center, scale
 
-    def align_image(self, image, center, scale):
-        """ Crop and align image around center """
-        logger.trace("Aligning image around center")
-        image = self.crop(
-            image,
-            center,
-            scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
-        logger.trace("Aligned image around center")
-        return np.expand_dims(image, 0)
+    def crop(self, image, center, scale):  # pylint:disable=too-many-locals
+        """ Crop image around the center point """
+        logger.trace("Cropping image")
+        is_color = image.ndim > 2
+        v_ul = self.transform([1, 1], center, scale, self.input_size).astype(np.int)
+        v_br = self.transform([self.input_size, self.input_size],
+                              center,
+                              scale,
+                              self.input_size).astype(np.int)
+        if is_color:
+            new_dim = np.array([v_br[1] - v_ul[1],
+                                v_br[0] - v_ul[0],
+                                image.shape[2]],
+                               dtype=np.int32)
+            new_img = np.zeros(new_dim, dtype=np.uint8)
+        else:
+            new_dim = np.array([v_br[1] - v_ul[1],
+                                v_br[0] - v_ul[0]],
+                               dtype=np.int)
+            new_img = np.zeros(new_dim, dtype=np.uint8)
+        height = image.shape[0]
+        width = image.shape[1]
+        new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
+                         dtype=np.int32)
+        new_y = np.array([max(1, -v_ul[1] + 1),
+                          min(v_br[1], height) - v_ul[1]],
+                         dtype=np.int32)
+        old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
+                         dtype=np.int32)
+        old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
+                         dtype=np.int32)
+        if is_color:
+            new_img[new_y[0] - 1:new_y[1],
+                    new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
+                                                   old_x[0] - 1:old_x[1], :]
+        else:
+            new_img[new_y[0] - 1:new_y[1],
+                    new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
+                                                   old_x[0] - 1:old_x[1]]
 
-    def predict_landmarks(self, image, center, scale):
-        """ Predict the 68 point landmarks """
-        logger.trace("Predicting Landmarks")
-        prediction = self.model.predict(image)[-1]
-        pts_img = self.get_pts_from_predict(prediction, center, scale)
-        retval = [(int(pt[0]), int(pt[1])) for pt in pts_img]
-        logger.trace("Predicted Landmarks: %s", retval)
-        return retval
+        if new_img.shape[0] < self.input_size:
+            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
+        else:
+            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
+
+        new_img = cv2.resize(new_img,  # pylint:disable=no-member
+                             dsize=(int(self.input_size), int(self.input_size)),
+                             interpolation=interpolation)
+        logger.trace("Cropped image")
+        return new_img
 
     @staticmethod
     def transform(point, center, scale, resolution):
@@ -138,75 +135,44 @@ class Align(Aligner):
         logger.trace("Transformed Points: %s", retval)
         return retval
 
-    def crop(self, image, center, scale, resolution=256.0):  # pylint: disable=too-many-locals
-        """ Crop image around the center point """
-        logger.trace("Cropping image")
-        v_ul = self.transform([1, 1], center, scale, resolution).astype(np.int)
-        v_br = self.transform([resolution, resolution],
-                              center,
-                              scale,
-                              resolution).astype(np.int)
-        if image.ndim > 2:
-            new_dim = np.array([v_br[1] - v_ul[1],
-                                v_br[0] - v_ul[0],
-                                image.shape[2]],
-                               dtype=np.int32)
-            self.test = new_dim
-            new_img = np.zeros(new_dim, dtype=np.uint8)
-        else:
-            new_dim = np.array([v_br[1] - v_ul[1],
-                                v_br[0] - v_ul[0]],
-                               dtype=np.int)
-            self.test = new_dim
-            new_img = np.zeros(new_dim, dtype=np.uint8)
-        height = image.shape[0]
-        width = image.shape[1]
-        new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
-                         dtype=np.int32)
-        new_y = np.array([max(1, -v_ul[1] + 1),
-                          min(v_br[1], height) - v_ul[1]],
-                         dtype=np.int32)
-        old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
-                         dtype=np.int32)
-        old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
-                         dtype=np.int32)
-        new_img[new_y[0] - 1:new_y[1],
-                new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
-                                               old_x[0] - 1:old_x[1], :]
-        # pylint: disable=no-member
-        new_img = cv2.resize(new_img,
-                             dsize=(int(resolution), int(resolution)),
-                             interpolation=cv2.INTER_LINEAR)
-        logger.trace("Cropped image")
-        return new_img
+    def predict_landmarks(self, feed_dict):
+        """ Predict the 68 point landmarks """
+        logger.trace("Predicting Landmarks")
+        image = np.expand_dims(
+            feed_dict["image"].transpose((2, 0, 1)).astype(np.float32) / 255.0, 0)
+        prediction = self.model.predict(image)[-1]
+        pts_img = self.get_pts_from_predict(prediction, feed_dict["center"], feed_dict["scale"])
+        retval = [(int(pt[0]), int(pt[1])) for pt in pts_img]
+        logger.trace("Predicted Landmarks: %s", retval)
+        return retval
 
-    def get_pts_from_predict(self, var_a, center, scale):
+    def get_pts_from_predict(self, prediction, center, scale):
         """ Get points from predictor """
         logger.trace("Obtain points from prediction")
-        var_b = var_a.reshape((var_a.shape[0],
-                               var_a.shape[1] * var_a.shape[2]))
-        var_c = var_b.argmax(1).reshape((var_a.shape[0],
+        var_b = prediction.reshape((prediction.shape[0],
+                                    prediction.shape[1] * prediction.shape[2]))
+        var_c = var_b.argmax(1).reshape((prediction.shape[0],
                                          1)).repeat(2,
                                                     axis=1).astype(np.float)
-        var_c[:, 0] %= var_a.shape[2]
+        var_c[:, 0] %= prediction.shape[2]
         var_c[:, 1] = np.apply_along_axis(
-            lambda x: np.floor(x / var_a.shape[2]),
+            lambda x: np.floor(x / prediction.shape[2]),
             0,
             var_c[:, 1])
 
-        for i in range(var_a.shape[0]):
+        for i in range(prediction.shape[0]):
             pt_x, pt_y = int(var_c[i, 0]), int(var_c[i, 1])
             if pt_x > 0 and pt_x < 63 and pt_y > 0 and pt_y < 63:
-                diff = np.array([var_a[i, pt_y, pt_x+1]
-                                 - var_a[i, pt_y, pt_x-1],
-                                 var_a[i, pt_y+1, pt_x]
-                                 - var_a[i, pt_y-1, pt_x]])
+                diff = np.array([prediction[i, pt_y, pt_x+1]
+                                 - prediction[i, pt_y, pt_x-1],
+                                 prediction[i, pt_y+1, pt_x]
+                                 - prediction[i, pt_y-1, pt_x]])
 
                 var_c[i] += np.sign(diff)*0.25
 
         var_c += 0.5
-        retval = [self.transform(var_c[i], center, scale, var_a.shape[2])
-                  for i in range(var_a.shape[0])]
+        retval = [self.transform(var_c[i], center, scale, prediction.shape[2])
+                  for i in range(prediction.shape[0])]
         logger.trace("Obtained points from prediction: %s", retval)
 
         return retval

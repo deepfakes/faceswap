@@ -438,29 +438,32 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "rounding": 2,
                               "type": float,
                               "dest": "ref_threshold",
-                              "default": 0.6,
+                              "default": 0.4,
                               "help": "Threshold for positive face recognition. For use with "
-                                      "nfilter or filter. Lower values are stricter."})
+                                      "nfilter or filter. Lower values are stricter. NB: Using "
+                                      "face filter will significantly decrease extraction speed."})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "action": FilesFullPaths,
                               "filetypes": "image",
                               "dest": "nfilter",
                               "nargs": "+",
                               "default": None,
-                              "help": "Reference image for the persons you do "
-                                      "not want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
+                              "help": "Reference image for the persons you do not want to "
+                                      "process. Should be a front portrait with a single person "
+                                      "in the image. Multiple images can be added space "
+                                      "separated. NB: Using face filter will significantly "
+                                      "decrease extraction speed."})
         argument_list.append({"opts": ("-f", "--filter"),
                               "action": FilesFullPaths,
                               "filetypes": "image",
                               "dest": "filter",
                               "nargs": "+",
                               "default": None,
-                              "help": "Reference images for the person you "
-                                      "want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
+                              "help": "Reference images for the person you want to process. "
+                                      "Should be a front portrait with a single person in the "
+                                      "image. Multiple images can be added space separated. NB: "
+                                      "Using face filter will significantly decrease extraction "
+                                      "speed."})
         return argument_list
 
 
@@ -505,8 +508,9 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
             "help": "R|Aligner to use."
-                    "\nL|'dlib': Dlib Pose Predictor. Faster, less "
-                    "resource intensive, but less accurate."
+                    "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
+                    "resource intensive, but less accurate. Only use this if not using a gpu "
+                    " and time is important."
                     "\nL|'fan': Face Alignment Network. Best aligner. "
                     "GPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-r", "--rotate-images"),

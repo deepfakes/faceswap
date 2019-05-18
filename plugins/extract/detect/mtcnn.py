@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from lib.multithreading import MultiThread
-from ._base import Detector, dlib, logger
+from ._base import BoundingBox, Detector, logger
 
 
 # Must import tensorflow inside the spawned process
@@ -29,7 +29,9 @@ def import_tensorflow():
 class Detect(Detector):
     """ MTCNN detector for face recognition """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        git_model_id = 2
+        model_filename = ["mtcnn_det_v1.1.npy", "mtcnn_det_v1.2.npy", "mtcnn_det_v1.3.npy"]
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.kwargs = self.validate_kwargs()
         self.name = "mtcnn"
         self.target = 2073600  # Uses approx 1.30 GB of VRAM
@@ -59,16 +61,6 @@ class Detect(Detector):
             logger.warning("Invalid MTCNN options in config. Running with defaults")
         logger.debug("Using mtcnn kwargs: %s", kwargs)
         return kwargs
-
-    def set_model_path(self):
-        """ Load the mtcnn models """
-        for model in ("det1.npy", "det2.npy", "det3.npy"):
-            model_path = os.path.join(self.cachepath, model)
-            if not os.path.exists(model_path):
-                raise Exception("Error: Unable to find {}, reinstall "
-                                "the lib!".format(model_path))
-            logger.debug("Loading model: '%s'", model_path)
-        return self.cachepath
 
     def initialize(self, *args, **kwargs):
         """ Create the mtcnn detector """
@@ -164,17 +156,12 @@ class Detect(Detector):
         logger.trace("Processing Output: (faces: %s, points: %s, rotation_matrix: %s)",
                      faces, points, rotation_matrix)
         faces = self.recalculate_bounding_box(faces, points)
-        faces = [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(face[0]), int(face[1]), int(face[2]), int(face[3]))
-                 for face in faces]
+        faces = [BoundingBox(face[0], face[1], face[2], face[3]) for face in faces]
         if isinstance(rotation_matrix, np.ndarray):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
-        detected = [dlib.rectangle(  # pylint: disable=c-extension-no-member
-            int(face.left() / scale),
-            int(face.top() / scale),
-            int(face.right() / scale),
-            int(face.bottom() / scale))
+        detected = [BoundingBox(face.left / scale, face.top / scale,
+                                face.right / scale, face.bottom / scale)
                     for face in faces]
         logger.trace("Processed Output: %s", detected)
         return detected
@@ -183,8 +170,6 @@ class Detect(Detector):
     def recalculate_bounding_box(faces, landmarks):
         """ Recalculate the bounding box for Face Alignment.
 
-            Face Alignment was built to expect a DLIB bounding
-            box and calculates center and scale based on that.
             Resize the bounding box around features to present
             a better box to Face Alignment. Helps its chances
             on edge cases and helps remove 'jitter' """
@@ -513,15 +498,15 @@ def create_mtcnn(sess, model_path):
     with tf.variable_scope('pnet'):
         data = tf.placeholder(tf.float32, (None, None, None, 3), 'input')
         pnet = PNet({'data': data})
-        pnet.load(os.path.join(model_path, 'det1.npy'), sess)
+        pnet.load(model_path[0], sess)
     with tf.variable_scope('rnet'):
         data = tf.placeholder(tf.float32, (None, 24, 24, 3), 'input')
         rnet = RNet({'data': data})
-        rnet.load(os.path.join(model_path, 'det2.npy'), sess)
+        rnet.load(model_path[1], sess)
     with tf.variable_scope('onet'):
         data = tf.placeholder(tf.float32, (None, 48, 48, 3), 'input')
         onet = ONet({'data': data})
-        onet.load(os.path.join(model_path, 'det3.npy'), sess)
+        onet.load(model_path[2], sess)
 
     pnet_fun = lambda img: sess.run(('pnet/conv4-2/BiasAdd:0', # noqa
                                      'pnet/prob1:0'),

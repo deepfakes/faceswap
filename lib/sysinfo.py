@@ -217,6 +217,8 @@ class SysInfo():
     def cudnn_checkfiles_linux():
         """ Return the checkfile locations for linux """
         chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
+        if "libcudnn.so." not in chk:
+            return list()
         chk = chk.strip().replace("libcudnn.so.", "")
         cudnn_vers = chk[0]
         cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]

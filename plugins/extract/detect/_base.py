@@ -8,7 +8,7 @@
     For each source frame, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of dlib.rectangles>}
+     "detected_faces": <list of BoundingBoxes>} (Class defined in /lib/faces_detect)
     """
 
 import logging
@@ -17,10 +17,10 @@ import traceback
 from io import StringIO
 
 import cv2
-import dlib
 
+from lib.faces_detect import BoundingBox
 from lib.gpu_stats import GPUStats
-from lib.utils import rotate_landmarks
+from lib.utils import rotate_landmarks, GetModel
 from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -33,12 +33,13 @@ def get_config(plugin_name):
 
 class Detector():
     """ Detector object """
-    def __init__(self, loglevel, rotation=None, min_size=0):
-        logger.debug("Initializing %s: (rotation: %s, min_size: %s)",
-                     self.__class__.__name__, rotation, min_size)
+    def __init__(self, loglevel,
+                 git_model_id=None, model_filename=None, rotation=None, min_size=0):
+        logger.debug("Initializing %s: (loglevel: %s, git_model_id: %s, model_filename: %s, "
+                     "rotation: %s, min_size: %s)", self.__class__.__name__, loglevel,
+                     git_model_id, model_filename, rotation, min_size)
         self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         self.loglevel = loglevel
-        self.cachepath = os.path.join(os.path.dirname(__file__), ".cache")
         self.rotation = self.get_rotation_angles(rotation)
         self.min_size = min_size
         self.parent_is_pool = False
@@ -50,7 +51,7 @@ class Detector():
         self.queues = {"in": None, "out": None}
 
         #  Path to model if required
-        self.model_path = self.set_model_path()
+        self.model_path = self.get_model(git_model_id, model_filename)
 
         # Target image size for passing images through the detector
         # Set to tuple of dimensions (x, y) or int of pixel count
@@ -69,13 +70,6 @@ class Detector():
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
-    # These methods must be overriden when creating a plugin
-    @staticmethod
-    def set_model_path():
-        """ path to data file/models
-            override for specific detector """
-        raise NotImplementedError()
-
     def initialize(self, *args, **kwargs):
         """ Inititalize the detector
             Tasks to be run before any detection is performed.
@@ -90,7 +84,7 @@ class Detector():
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image
             Override for specific detector
-            Must return a list of dlib rects"""
+            Must return a list of BoundingBox's"""
         try:
             if not self.init:
                 self.initialize(*args, **kwargs)
@@ -98,6 +92,20 @@ class Detector():
             logger.error(err)
             exit(1)
         logger.debug("Detecting Faces (args: %s, kwargs: %s)", args, kwargs)
+
+    # <<< GET MODEL >>> #
+    @staticmethod
+    def get_model(git_model_id, model_filename):
+        """ Check if model is available, if not, download and unzip it """
+        if model_filename is None:
+            logger.debug("No model_filename specified. Returning None")
+            return None
+        if git_model_id is None:
+            logger.debug("No git_model_id specified. Returning None")
+            return None
+        cache_path = os.path.join(os.path.dirname(__file__), ".cache")
+        model = GetModel(model_filename, cache_path, git_model_id)
+        return model.model_path
 
     # <<< DETECTION WRAPPER >>> #
     def run(self, *args, **kwargs):
@@ -138,8 +146,7 @@ class Detector():
         """ Filter out any faces smaller than the min size threshold """
         retval = list()
         for face in detected_faces:
-            face_size = ((face.right() - face.left()) ** 2 +
-                         (face.bottom() - face.top()) ** 2) ** 0.5
+            face_size = (face.width ** 2 + face.height ** 2) ** 0.5
             if face_size < self.min_size:
                 logger.debug("Removing detected face: (face_size: %s, min_size: %s",
                              face_size, self.min_size)
@@ -195,8 +202,8 @@ class Detector():
         dims = (int(width * scale), int(height * scale))
 
         if scale < 1.0:
-            logger.verbose("Resizing image from %sx%s to %s.",
-                           width, height, "x".join(str(i) for i in dims))
+            logger.trace("Resizing image from %sx%s to %s.",
+                         width, height, "x".join(str(i) for i in dims))
 
         image = cv2.resize(image, dims, interpolation=interpln)
         return image
@@ -240,11 +247,11 @@ class Detector():
         return self.rotate_image_by_angle(image, angle)
 
     @staticmethod
-    def rotate_rect(d_rect, rotation_matrix):
-        """ Rotate a dlib rect based on the rotation_matrix"""
-        logger.trace("Rotating d_rectangle")
-        d_rect = rotate_landmarks(d_rect, rotation_matrix)
-        return d_rect
+    def rotate_rect(bounding_box, rotation_matrix):
+        """ Rotate a BoundingBox based on the rotation_matrix"""
+        logger.trace("Rotating BoundingBox")
+        bounding_box = rotate_landmarks(bounding_box, rotation_matrix)
+        return bounding_box
 
     @staticmethod
     def rotate_image_by_angle(image, angle,
@@ -308,21 +315,6 @@ class Detector():
         logger.trace("Returning batch size: %s", len(batch))
         return (exhausted, batch)
 
-    # <<< DLIB RECTANGLE METHODS >>> #
-    @staticmethod
-    def is_mmod_rectangle(d_rectangle):
-        """ Return whether the passed in object is
-            a dlib.mmod_rectangle """
-        return isinstance(
-            d_rectangle,
-            dlib.mmod_rectangle)  # pylint: disable=c-extension-no-member
-
-    def convert_to_dlib_rectangle(self, d_rect):
-        """ Convert detected mmod_rects to dlib_rectangle """
-        if self.is_mmod_rectangle(d_rect):
-            return d_rect.rect
-        return d_rect
-
     # <<< MISC METHODS >>> #
     @staticmethod
     def get_vram_free():
@@ -337,10 +329,10 @@ class Detector():
 
     @staticmethod
     def set_predetected(width, height):
-        """ Set a dlib rectangle for predetected faces """
+        """ Set a BoundingBox for predetected faces """
         # Predetected_face is used for sort tool.
         # Landmarks should not be extracted again from predetected faces,
         # because face data is lost, resulting in a large variance
         # against extract from original image
         logger.debug("Setting predetected face")
-        return [dlib.rectangle(0, 0, width, height)]  # pylint: disable=c-extension-no-member
+        return [BoundingBox(0, 0, width, height)]

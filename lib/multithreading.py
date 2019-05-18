@@ -371,7 +371,8 @@ class SpawnProcess(mp.context.SpawnProcess):
         """ Add logging to join function """
         logger.debug("Joining Process: (name: '%s', PID: %s)", self._name, self.pid)
         super().join(timeout=timeout)
-        _launched_processes.remove(self)
+        if self in _launched_processes:
+            _launched_processes.remove(self)
         logger.debug("Joined Process: (name: '%s', PID: %s)", self._name, self.pid)
 
 
