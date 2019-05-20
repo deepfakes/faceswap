@@ -122,6 +122,14 @@ class Align(Aligner):
             if diff % 2 == 1:
                 bottom += 1
 
+        # Shift the box if any points fall below zero
+        if left < 0:
+            right += abs(left)
+            left += abs(left)
+        if top < 0:
+            bottom += abs(top)
+            top += abs(top)
+
         # Make sure box is always square.
         assert ((right - left) == (bottom - top)), 'Box is not square.'
 

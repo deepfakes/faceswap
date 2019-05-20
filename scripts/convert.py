@@ -16,7 +16,7 @@ from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.multithreading import MultiThread, PoolProcess, total_cpus
-from lib.queue_manager import queue_manager, QueueEmpty
+from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
 from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
@@ -67,6 +67,7 @@ class Convert():
             retval = 1
         else:
             retval = min(total_cpus(), self.images.images_found)
+        retval = 1 if retval == 0 else retval
         logger.debug(retval)
         return retval
 
@@ -91,7 +92,7 @@ class Convert():
     def process(self):
         """ Process the conversion """
         logger.debug("Starting Conversion")
-        # queue_manager.debug_monitor(2)
+        # queue_manager.debug_monitor(3)
         self.convert_images()
         self.disk_io.save_thread.join()
         queue_manager.terminate_queues()
@@ -116,6 +117,7 @@ class Convert():
             sleep(1)
         pool.join()
 
+        logger.debug("Putting EOF")
         save_queue.put("EOF")
         logger.debug("Converted images")
 
@@ -123,31 +125,6 @@ class Convert():
         """ Check and raise thread errors """
         for thread in (self.predictor.thread, self.disk_io.load_thread, self.disk_io.save_thread):
             thread.check_and_raise_error()
-
-    def patch_iterator(self, processes):
-        """ Prepare the images for conversion """
-        out_queue = queue_manager.get_queue("out")
-        completed = 0
-
-        while True:
-            try:
-                item = out_queue.get(True, 1)
-            except QueueEmpty:
-                self.check_thread_error()
-                continue
-            self.check_thread_error()
-
-            if item == "EOF":
-                completed += 1
-                logger.debug("Got EOF %s of %s", completed, processes)
-                if completed == processes:
-                    break
-                continue
-
-            logger.trace("Yielding: '%s'", item[0])
-            yield item
-        logger.debug("iterator exhausted")
-        return "EOF"
 
 
 class DiskIO():
@@ -162,11 +139,11 @@ class DiskIO():
         self.args = arguments
         self.pre_process = PostProcess(arguments)
         self.completion_event = Event()
-        self.frame_ranges = self.get_frame_ranges()
-        self.writer = self.get_writer()
 
         # For frame skipping
         self.imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
+        self.frame_ranges = self.get_frame_ranges()
+        self.writer = self.get_writer()
 
         # Extractor for on the fly detection
         self.extractor = self.load_extractor()
@@ -223,10 +200,28 @@ class DiskIO():
             logger.debug("No frame range set")
             return None
 
-        minmax = {"min": 0,  # never any frames less than 0
-                  "max": float("inf")}
-        retval = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-")))
-                  for v in self.args.frame_ranges]
+        minframe, maxframe = None, None
+        if self.images.is_video:
+            minframe, maxframe = 1, self.images.images_found
+        else:
+            indices = [int(self.imageidxre.findall(os.path.basename(filename))[0])
+                       for filename in self.images.input_images]
+            if indices:
+                minframe, maxframe = min(indices), max(indices)
+        logger.debug("minframe: %s, maxframe: %s", minframe, maxframe)
+
+        if minframe is None or maxframe is None:
+            logger.error("Frame Ranges specified, but could not determine frame numbering "
+                         "from filenames")
+            exit(1)
+
+        retval = list()
+        for rng in self.args.frame_ranges:
+            if "-" not in rng:
+                logger.error("Frame Ranges not specified in the correct format")
+                exit(1)
+            start, end = rng.split("-")
+            retval.append((max(int(start), minframe), min(int(end), maxframe)))
         logger.debug("frame ranges: %s", retval)
         return retval
 
@@ -307,6 +302,7 @@ class DiskIO():
             self.pre_process.do_actions(item)
             self.load_queue.put(item)
 
+        logger.debug("Putting EOF")
         self.load_queue.put("EOF")
         logger.debug("Load Images: Complete")
 
@@ -383,6 +379,7 @@ class DiskIO():
                 break
             item = self.save_queue.get()
             if item == "EOF":
+                logger.debug("EOF Received")
                 break
             filename, image = item
             self.writer.write(filename, image)
@@ -515,9 +512,11 @@ class Predict():
             faces_seen = 0
             batch = list()
             if item == "EOF":
-                logger.debug("Load queue complete")
+                logger.debug("EOF Received")
                 break
+        logger.debug("Putting EOF")
         self.out_queue.put("EOF")
+        logger.debug("Load queue complete")
 
     def load_aligned(self, item):
         """ Load the feed faces and reference output faces """

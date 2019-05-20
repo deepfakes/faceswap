@@ -170,6 +170,8 @@ class SysInfo():
             version = self.cuda_version_windows()
         else:
             version = "Unsupported OS"
+            if self.is_conda:
+                version += ". Check Conda packages for Conda Cuda"
         return version
 
     @property
@@ -179,6 +181,11 @@ class SysInfo():
             cudnn_checkfiles = self.cudnn_checkfiles_linux()
         elif self.is_windows:
             cudnn_checkfiles = self.cudnn_checkfiles_windows()
+        else:
+            retval = "Unsupported OS"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda cuDNN"
+            return retval
 
         cudnn_checkfile = None
         for checkfile in cudnn_checkfiles:

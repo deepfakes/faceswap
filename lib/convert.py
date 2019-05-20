@@ -59,8 +59,10 @@ class Converter():
         while True:
             item = in_queue.get()
             if item == "EOF":
+                logger.debug("EOF Received")
                 logger.debug("Patch queue finished")
                 # Signal EOF to other processes in pool
+                logger.debug("Putting EOF back to in_queue")
                 in_queue.put(item)
                 break
             logger.trace("Patch queue got: '%s'", item["filename"])
