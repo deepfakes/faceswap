@@ -12,11 +12,15 @@ Sketch:
 import logging
 import random
 import sys
+import tkinter as tk
+from tkinter import ttk
 import os
 
 import cv2
 import numpy as np
+from PIL import Image, ImageTk
 
+from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
@@ -45,9 +49,6 @@ class Convset():
         self.arguments = self.generate_converter_arguments(arguments)
         self.configs = self.get_configs()
 
-        print(self.arguments)
-        print(self.configs)
-
         self.converter = Converter(output_dir=None,
                                    output_size=self.faces.predictor.output_size,
                                    output_has_mask=self.faces.predictor.has_predicted_mask,
@@ -55,7 +56,12 @@ class Convset():
                                    pre_encode=None,
                                    arguments=self.arguments)
 
-        # self.display = FacesDisplay(self.faces.faces_source, self.faces.faces_predicted, 256)
+        self.root = tk.Tk()
+        self.display = FacesDisplay(256, 64)
+        self.root.convset_display = self.display
+        self.image_canvas = None
+        self.opts_canvas = None
+        # TODO Padding + Size dynamic
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -87,31 +93,6 @@ class Convset():
         logger.debug(arguments)
         return arguments
 
-    def process(self):
-        """ The convset process """
-        self.faces.generate()
-        self.converter.process(self.queue_patch_in, self.queue_patch_out)
-        idx = 0
-        while idx < self.faces.sample_size:
-            logger.debug("Patching image %s of %s", idx + 1, self.faces.sample_size)
-            item = self.queue_patch_out.get()
-            self.faces.selected_frames[idx]["swapped_image"] = item[1]
-            logger.debug("Patched image %s of %s", idx + 1, self.faces.sample_size)
-            idx += 1
-        logger.debug("Patched faces")
-        for frame in self.faces.selected_frames:
-            print(frame["filename"],
-                  frame["image"].shape,
-                  frame["source_face"].shape,
-                  frame["swapped_face"].shape,
-                  frame["swapped_image"].shape)
-        print([key for key in self.faces.selected_frames[0].keys()])
-        exit(0)
-
-        cv2.imshow("test", self.display.image)
-        cv2.waitKey()
-        exit(0)
-
     def get_configs(self):
         """ Return all of the convert configs """
         modules = self.get_modules()
@@ -134,6 +115,54 @@ class Convset():
                    if os.path.basename(dirpath) not in ("convert", "__pycache__", "writer")}
         logger.debug("Modules: %s", modules)
         return modules
+
+    def process(self):
+        """ The convset process """
+        self.faces.generate()
+        self.converter.process(self.queue_patch_in, self.queue_patch_out)
+        idx = 0
+        while idx < self.faces.sample_size:
+            logger.debug("Patching image %s of %s", idx + 1, self.faces.sample_size)
+            item = self.queue_patch_out.get()
+            self.faces.selected_frames[idx]["swapped_image"] = item[1]
+            logger.debug("Patched image %s of %s", idx + 1, self.faces.sample_size)
+            idx += 1
+        logger.debug("Patched faces")
+        self.display.build_faces_image(self.faces.selected_frames)
+        self.image_canvas = ImagesCanvas(self.root)
+
+        self.root.mainloop()
+
+
+class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ Canvas to hold the images """
+    def __init__(self, parent):
+        logger.debug("Initializing : %s", self.__class__.__name__)
+        super().__init__(parent)
+        self.pack(expand=True, fill=tk.BOTH, padx=2, pady=2)
+
+        self.display = parent.convset_display
+        self.display.update_tk_image()
+        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.displaycanvas = self.canvas.create_image(0, 0,
+                                                      image=self.display.tk_image,
+                                                      anchor=tk.NW)
+        self.bind("<Configure>", self.resize)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def resize(self, event):
+        """  Resize the image to fit the frame, maintaining aspect ratio """
+        logger.trace("Resizing preview image")
+        framesize = (event.width, event.height)
+        self.display.display_dims = framesize
+        self.display.update_tk_image()
+        self.reload()
+
+    def reload(self):
+        """ Reload the preview image """
+        logger.trace("Reloading preview image")
+        self.canvas.itemconfig(self.displaycanvas, image=self.display.tk_image)
 
 
 class TestSet():
@@ -184,7 +213,8 @@ class TestSet():
             pertaining to the file file list """
         # Remove start and end values to get a list divisible by self.sample_size
         crop = self.images.images_found % self.sample_size
-        top_tail = list(range(self.images.images_found))[crop // 2:- (crop - (crop // 2))]
+        top_tail = list(range(self.images.images_found))[
+            crop // 2:self.images.images_found - (crop - (crop // 2))]
         # Partition the indices
         size = len(top_tail)
         retval = [top_tail[start:start + size // self.sample_size]
@@ -207,6 +237,7 @@ class TestSet():
             if idx not in selection:
                 continue
             filename, image = item
+            filename = os.path.basename(filename)
             face = self.alignments.get_faces_in_frame(filename)[0]
             detected_face = DetectedFace()
             detected_face.from_alignment(face, image=image)
@@ -238,49 +269,111 @@ class TestSet():
 
 class FacesDisplay():
     """ Compiled faces into a single image """
-    def __init__(self, source_faces, predicted_faces, size):
-        logger.trace("Initializing %s: (source_faces shape: %s, predicted_faces shape: %s, size: "
-                     "%s)",
-                     self.__class__.__name__, source_faces.shape, predicted_faces.shape, size)
+    def __init__(self, size, padding):
+        logger.trace("Initializing %s: (size: %s, padding: %s)",
+                     self.__class__.__name__, size, padding)
         self.size = size
-        self.faces_src = source_faces
-        self.faces_pred = predicted_faces
-
-        self.image = self.build_faces_image()
+        self.display_dims = (1, 1)
+        self.padding = padding
+        self.faces_source = None
+        self.faces_dest = None
+        self.tk_image = None
         logger.trace("Initialized %s", self.__class__.__name__)
 
-    def build_faces_image(self):
-        """ Display associated faces """
-        assert self.faces_src.shape[0] == self.faces_pred.shape[0]
-        total_faces = self.faces_src.shape[0]
-        logger.trace("Building faces panel. (total_faces: %s", total_faces)
+    def update_tk_image(self):
+        """ Return compiled images images in TK PIL format resized for frame """
+        img = np.vstack((self.faces_source, self.faces_dest))
+        size = self.get_scale_size(img)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # pylint:disable=no-member
+        img = Image.fromarray(img)
+        img = img.resize(size, Image.ANTIALIAS)
+        self.tk_image = ImageTk.PhotoImage(img)
 
-        source = np.hstack([self.normalize_thumbnail(face) for face in self.faces_src])
-        mask = np.hstack([self.normalize_thumbnail(face[:, :, -1]) for face in self.faces_pred])
-        predicted = np.hstack([self.normalize_thumbnail(face[:, :, :3])
-                               for face in self.faces_pred])
-        image = np.vstack((source, mask, predicted))
-        logger.debug("source row shape: %s, mask row shape: %s, predicted row shape: %s, final "
-                     "image shape: %s", source.shape, mask.shape, predicted.shape, image.shape)
-        return image
+    def get_scale_size(self, image):
+        """ Return the scale and size for passed in display image """
+        frameratio = float(self.display_dims[0]) / float(self.display_dims[1])
+        imgratio = float(image.shape[1]) / float(image.shape[0])
 
-    def normalize_thumbnail(self, image):
-        """ Resize image and draw border """
-        if image.shape[0] < self.size:
-            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
+        if frameratio <= imgratio:
+            scale = self.display_dims[0] / float(image.shape[1])
+            size = (self.display_dims[0], max(1, int(image.shape[0] * scale)))
         else:
-            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-        output = cv2.resize(image,  # pylint:disable=no-member
-                            (self.size, self.size),
-                            interpolation=interpolation)
-        cv2.rectangle(output,    # pylint:disable=no-member
+            scale = self.display_dims[1] / float(image.shape[0])
+            size = (max(1, int(image.shape[1] * scale)), self.display_dims[1])
+        logger.trace("scale: %s, size: %s", scale, size)
+        return size
+
+    def build_faces_image(self, images):
+        """ Display associated faces """
+        total_faces = len(images)
+        faces = self.faces_from_frames(images)
+        header = self.header_text(faces["filenames"], total_faces)
+        source = np.hstack([self.draw_rect(face) for face in faces["src"]])
+        self.faces_dest = np.hstack([self.draw_rect(face) for face in faces["dst"]])
+        self.faces_source = np.vstack((header, source))
+        logger.debug("source row shape: %s, swapped row shape: %s",
+                     self.faces_dest.shape, self.faces_source.shape)
+
+    def faces_from_frames(self, images):
+        """ Compile faces from the original images and return a row for each of source and dest """
+        # TODO Padding from coverage
+        logger.debug("Extracting faces from frames")
+        faces = dict()
+        for image in images:
+            detected_face = image["detected_faces"][0]
+            src_img = image["image"]
+            swp_img = image["swapped_image"]
+            detected_face.load_aligned(src_img, self.size, align_eyes=False)
+            faces.setdefault("src", list()).append(AlignerExtract().transform(
+                src_img,
+                detected_face.aligned["matrix"],
+                self.size,
+                self.padding))
+            faces.setdefault("dst", list()).append(AlignerExtract().transform(
+                swp_img,
+                detected_face.aligned["matrix"],
+                self.size,
+                self.padding))
+            faces.setdefault("filenames", list()).append(os.path.splitext(image["filename"])[0])
+        logger.debug("Extracted faces from frames: %s", {k: len(v) for k, v in faces.items()})
+        return faces
+
+    def header_text(self, filenames, total_faces):
+        """ Create header text for output image """
+        font_scale = self.size / 640
+        height = self.size // 8
+        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+        # Get size of placed text for positioning
+        text_sizes = [cv2.getTextSize(filenames[idx],  # pylint: disable=no-member
+                                      font,
+                                      font_scale,
+                                      1)[0]
+                      for idx in range(total_faces)]
+        # Get X and Y co-ords for each text item
+        text_y = int((height + text_sizes[0][1]) / 2)
+        text_x = [int((self.size - text_sizes[idx][0]) / 2) + self.size * idx
+                  for idx in range(total_faces)]
+        logger.debug("filenames: %s, text_sizes: %s, text_x: %s, text_y: %s",
+                     filenames, text_sizes, text_x, text_y)
+        header_box = np.ones((height, self.size * total_faces, 3), np.uint8) * 255
+        for idx, text in enumerate(filenames):
+            cv2.putText(header_box,  # pylint: disable=no-member
+                        text,
+                        (text_x[idx], text_y),
+                        font,
+                        font_scale,
+                        (0, 0, 0),
+                        1,
+                        lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        logger.debug("header_box.shape: %s", header_box.shape)
+        return header_box
+
+    def draw_rect(self, image):
+        """ draw border """
+        cv2.rectangle(image,    # pylint:disable=no-member
                       (0, 0),
                       (self.size - 1, self.size - 1),
                       (255, 255, 255),
                       1)
-        if output.ndim == 2:
-            output = np.expand_dims(output, axis=-1)
-        if output.shape[-1] == 1:
-            output = np.tile(output, 3)
-        output = np.clip(output, 0.0, 255.0)
-        return output
+        image = np.clip(image, 0.0, 255.0)
+        return image.astype("uint8")
