@@ -5,6 +5,7 @@ import logging
 
 from pathlib import Path
 import cv2
+import os
 import keras
 import numpy as np
 from lib.utils import GetModel
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_available_masks():
     """ Return a list of the available masks for cli """
-    masks = ["components", "dfl_full", "facehull", "none"]  # "vgg_300", "vgg_500", "unet_256",
+    masks = ["components", "dfl_full", "facehull", "none", "vgg_300", "vgg_500", "unet_256"]
     logger.debug(masks)
     return masks
 

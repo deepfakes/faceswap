@@ -102,7 +102,7 @@ class TrainingDataGenerator():
                     memory[process_output_num][image_num - 1][:] = img
                 epoch += 1
                 if image_num == 0:
-                    print(epoch, " here\n")
+                    print(epoch, " batch number created")
                     memory_wrapper.ready()
 
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
