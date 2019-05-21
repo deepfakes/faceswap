@@ -268,18 +268,18 @@ class Batcher():
         self.batch_size = batch_size
         self.feed = dict()
         preview_size = model.training_opts.get("preview_images", 14)
-        self.feed["training"] = self.load_generator().batcher_setup(images,
-                                                                    batch_size,
+        self.feed["training"] = self.setup_generator().setup_batcher(images,
+                                                                     batch_size,
+                                                                     side,
+                                                                     "training",
+                                                                     do_shuffle=True,
+                                                                     augmenting=True)
+        self.feed["preview"] = self.setup_generator().setup_batcher(images,
+                                                                    preview_size,
                                                                     side,
-                                                                    "training",
+                                                                    "preview",
                                                                     do_shuffle=True,
-                                                                    augmenting=True)
-        self.feed["preview"] = self.load_generator().batcher_setup(images,
-                                                                   preview_size,
-                                                                   side,
-                                                                   "preview",
-                                                                   do_shuffle=True,
-                                                                   augmenting=False)
+                                                                    augmenting=False)
 
     def train_one_batch(self, purpose):
         """ Train a batch """
@@ -300,7 +300,7 @@ class Batcher():
             samples = [batch[0]] + targets
         return inputs, targets, samples
 
-    def load_generator(self):
+    def setup_generator(self):
         """ Set the feed dataset with TrainingDataGenerator """
         logger.debug("Loading generator: (side: '%s')", self.side)
         input_size = self.model.input_shape[0]
