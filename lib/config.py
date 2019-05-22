@@ -111,7 +111,7 @@ class FaceswapConfig():
         self.defaults[title]["helptext"] = info
 
     def add_item(self, section=None, title=None, datatype=str, default=None, info=None,
-                 rounding=None, min_max=None, choices=None, fixed=True):
+                 rounding=None, min_max=None, choices=None, gui_radio=False, fixed=True):
         """ Add a default item to a config section
 
             For int or float values, rounding and min_max must be set
@@ -122,6 +122,9 @@ class FaceswapConfig():
             For str values choices can be set to validate input and create a combo box
             in the GUI
 
+            is_radio is to indicate to the GUI that it should display Radio Buttons rather than
+            combo boxes for multiple choice options.
+
             The 'fixed' parameter is only for training configs. Training configurations
             are set when the model is created, and then reloaded from the state file.
             Marking an item as fixed=False indicates that this value can be changed for
@@ -130,8 +133,9 @@ class FaceswapConfig():
 
         """
         logger.debug("Add item: (section: '%s', title: '%s', datatype: '%s', default: '%s', "
-                     "info: '%s', rounding: '%s', min_max: %s, choices: %s, fixed: %s)",
-                     section, title, datatype, default, info, rounding, min_max, choices, fixed)
+                     "info: '%s', rounding: '%s', min_max: %s, choices: %s, gui_radio: %s, "
+                     "fixed: %s)", section, title, datatype, default, info, rounding, min_max,
+                     choices, gui_radio, fixed)
 
         choices = list() if not choices else choices
 
@@ -156,6 +160,7 @@ class FaceswapConfig():
                                          "rounding": rounding,
                                          "min_max": min_max,
                                          "choices": choices,
+                                         "gui_radio": gui_radio,
                                          "fixed": fixed}
 
     @staticmethod

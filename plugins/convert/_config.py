@@ -34,7 +34,7 @@ class Config(FaceswapConfig):
                               "background image")
         self.add_item(
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="gaussian",
-            info=BLUR_INFO)
+            info=BLUR_INFO, gui_radio=True)
         self.add_item(
             section=section, title="distance", datatype=float, default=11.0, rounding=1,
             min_max=(0.1, 25.0),
@@ -69,7 +69,7 @@ class Config(FaceswapConfig):
                               "background image")
         self.add_item(
             section=section, title="type", datatype=str, choices=BLUR_TYPES, default="normalized",
-            info=BLUR_INFO)
+            info=BLUR_INFO, gui_radio=True)
         self.add_item(
             section=section, title="radius", datatype=float, default=3.0, rounding=1,
             min_max=(0.1, 25.0),
@@ -135,6 +135,7 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="method", datatype=str,
             choices=["box", "gaussian", "unsharp_mask"], default="unsharp_mask",
+            gui_radio=True,
             info="The type of sharpening to use: "
                  "\n\t box: Fastest, but weakest method. Uses a box filter to assess edges."
                  "\n\t gaussian: Slower, but better than box. Uses a gaussian filter to assess "
@@ -202,6 +203,7 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="format", datatype=str, default="png",
             choices=["bmp", "jpg", "jp2", "png", "ppm"],
+            gui_radio=True,
             info="Image format to use:"
                  "\n\t bmp: Windows bitmap"
                  "\n\t jpg: JPEG format"
@@ -232,6 +234,7 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="format", datatype=str, default="png",
             choices=["bmp", "gif", "jpg", "jp2", "png", "ppm", "tif"],
+            gui_radio=True,
             info="Image format to use:"
                  "\n\t bmp: Windows bitmap"
                  "\n\t gif: Graphics Interchange Format (NB: Not animated)"
@@ -276,10 +279,12 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="container", datatype=str, default="mp4",
             choices=[ext.replace(".", "") for ext in _video_extensions],
+            gui_radio=True,
             info="Video container to use.")
         self.add_item(
             section=section, title="codec", datatype=str,
             choices=["libx264", "libx265"], default="libx264",
+            gui_radio=True,
             info="Video codec to use:"
                  "\n\t libx264: H.264. A widely supported and commonly used codec."
                  "\n\t libx265: H.265 / HEVC video encoder application library.")
@@ -298,6 +303,7 @@ class Config(FaceswapConfig):
             section=section, title="preset", datatype=str, default="medium",
             choices=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow",
                      "slower", "veryslow"],
+            gui_radio=True,
             info="A preset is a collection of options that will provide a certain encoding speed "
                  "to compression ratio.\nA slower preset will provide better compression "
                  "(compression is quality per filesize).\nUse the slowest preset that you have "
