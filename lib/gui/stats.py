@@ -98,7 +98,8 @@ class TensorBoardLogs():
 class Session():
     """ The Loaded or current training session """
     def __init__(self, model_dir=None, model_name=None):
-        logger.debug("Initializing %s", self.__class__.__name__)
+        logger.debug("Initializing %s, model_dir: %s, model_name: %s)",
+                     self.__class__.__name__, model_dir, model_name)
         self.serializer = JSONSerializer
         self.state = None
         self.modeldir = model_dir  # Set and reset by wrapper for training sessions
@@ -236,6 +237,10 @@ class Session():
         except IOError as err:
             logger.warning("Unable to load state file. Graphing disabled: %s", str(err))
 
+    def get_iterations_for_session(self, session_id):
+        """ Return the number of iterations for the given session id """
+        return self.state["sessions"][str(session_id)]["iterations"]
+
 
 class SessionsSummary():
     """ Calculations for analysis summary stats """
@@ -251,7 +256,7 @@ class SessionsSummary():
         ts_data = self.session.tb_logs.get_timestamps()
         time_stats = {sess_id: {"start_time": min(timestamps),
                                 "end_time": max(timestamps),
-                                "iterations": len(timestamps)}
+                                "datapoints": len(timestamps)}
                       for sess_id, timestamps in ts_data.items()}
         return time_stats
 
@@ -260,15 +265,16 @@ class SessionsSummary():
         """ Return compiled stats """
         compiled = list()
         for sess_idx, ts_data in self.time_stats.items():
+            iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = ts_data["end_time"] - ts_data["start_time"]
             batchsize = self.session.total_batchsize[sess_idx]
             compiled.append({"session": sess_idx,
                              "start": ts_data["start_time"],
                              "end": ts_data["end_time"],
                              "elapsed": elapsed,
-                             "rate": (batchsize * ts_data["iterations"]) / elapsed,
+                             "rate": (batchsize * iterations) / elapsed,
                              "batch": batchsize,
-                             "iterations": ts_data["iterations"]})
+                             "iterations": iterations})
         compiled = sorted(compiled, key=lambda k: k["session"])
         return compiled
 

@@ -17,8 +17,9 @@ from ._base import BoundingBox, Detector, logger
 class Detect(Detector):
     """ S3FD detector for face recognition """
     def __init__(self, **kwargs):
+        git_model_id = 3
         model_filename = "s3fd_v1.pb"
-        super().__init__(model_filename=model_filename, **kwargs)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "s3fd"
         self.target = (640, 640)  # Uses approx 4 GB of VRAM
         self.vram = 4096

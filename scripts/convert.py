@@ -16,11 +16,10 @@ from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.multithreading import MultiThread, PoolProcess, total_cpus
-from lib.queue_manager import queue_manager, QueueEmpty
+from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
+from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
-
-from .extract import Plugins as Extractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -41,7 +40,6 @@ class Convert():
 
         self.add_queues()
         self.disk_io = DiskIO(self.alignments, self.images, arguments)
-        self.extractor = None
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
@@ -69,6 +67,7 @@ class Convert():
             retval = 1
         else:
             retval = min(total_cpus(), self.images.images_found)
+        retval = 1 if retval == 0 else retval
         logger.debug(retval)
         return retval
 
@@ -93,7 +92,7 @@ class Convert():
     def process(self):
         """ Process the conversion """
         logger.debug("Starting Conversion")
-        # queue_manager.debug_monitor(2)
+        # queue_manager.debug_monitor(3)
         self.convert_images()
         self.disk_io.save_thread.join()
         queue_manager.terminate_queues()
@@ -118,6 +117,7 @@ class Convert():
             sleep(1)
         pool.join()
 
+        logger.debug("Putting EOF")
         save_queue.put("EOF")
         logger.debug("Converted images")
 
@@ -125,31 +125,6 @@ class Convert():
         """ Check and raise thread errors """
         for thread in (self.predictor.thread, self.disk_io.load_thread, self.disk_io.save_thread):
             thread.check_and_raise_error()
-
-    def patch_iterator(self, processes):
-        """ Prepare the images for conversion """
-        out_queue = queue_manager.get_queue("out")
-        completed = 0
-
-        while True:
-            try:
-                item = out_queue.get(True, 1)
-            except QueueEmpty:
-                self.check_thread_error()
-                continue
-            self.check_thread_error()
-
-            if item == "EOF":
-                completed += 1
-                logger.debug("Got EOF %s of %s", completed, processes)
-                if completed == processes:
-                    break
-                continue
-
-            logger.trace("Yielding: '%s'", item[0])
-            yield item
-        logger.debug("iterator exhausted")
-        return "EOF"
 
 
 class DiskIO():
@@ -164,16 +139,14 @@ class DiskIO():
         self.args = arguments
         self.pre_process = PostProcess(arguments)
         self.completion_event = Event()
-        self.frame_ranges = self.get_frame_ranges()
-        self.writer = self.get_writer()
 
         # For frame skipping
         self.imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
+        self.frame_ranges = self.get_frame_ranges()
+        self.writer = self.get_writer()
 
         # Extractor for on the fly detection
-        self.extractor = None
-        if not self.alignments.have_alignments_file:
-            self.load_extractor()
+        self.extractor = self.load_extractor()
 
         self.load_queue = None
         self.save_queue = None
@@ -227,27 +200,50 @@ class DiskIO():
             logger.debug("No frame range set")
             return None
 
-        minmax = {"min": 0,  # never any frames less than 0
-                  "max": float("inf")}
-        retval = [tuple(map(lambda q: minmax[q] if q in minmax.keys() else int(q), v.split("-")))
-                  for v in self.args.frame_ranges]
+        minframe, maxframe = None, None
+        if self.images.is_video:
+            minframe, maxframe = 1, self.images.images_found
+        else:
+            indices = [int(self.imageidxre.findall(os.path.basename(filename))[0])
+                       for filename in self.images.input_images]
+            if indices:
+                minframe, maxframe = min(indices), max(indices)
+        logger.debug("minframe: %s, maxframe: %s", minframe, maxframe)
+
+        if minframe is None or maxframe is None:
+            logger.error("Frame Ranges specified, but could not determine frame numbering "
+                         "from filenames")
+            exit(1)
+
+        retval = list()
+        for rng in self.args.frame_ranges:
+            if "-" not in rng:
+                logger.error("Frame Ranges not specified in the correct format")
+                exit(1)
+            start, end = rng.split("-")
+            retval.append((max(int(start), minframe), min(int(end), maxframe)))
         logger.debug("frame ranges: %s", retval)
         return retval
 
     def load_extractor(self):
         """ Set on the fly extraction """
+        if self.alignments.have_alignments_file:
+            return None
+
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
         logger.warning("NB: This will use the inferior cv2-dnn for extraction "
                        "and  landmarks. It is recommended to perfom Extract first for "
                        "superior results")
-        extract_args = {"detector": "cv2_dnn",
-                        "aligner": "cv2_dnn",
-                        "loglevel": self.args.loglevel}
-        self.extractor = Extractor(None, converter_args=extract_args)
-        self.extractor.launch_detector()
-        self.extractor.launch_aligner()
+        extractor = Extractor(detector="cv2-dnn",
+                              aligner="cv2-dnn",
+                              loglevel=self.args.loglevel,
+                              multiprocess=False,
+                              rotate_images=None,
+                              min_size=20)
+        extractor.launch()
         logger.debug("Loaded extractor")
+        return extractor
 
     def init_threads(self):
         """ Initialize queues and threads """
@@ -283,7 +279,6 @@ class DiskIO():
     def load(self, *args):  # pylint: disable=unused-argument
         """ Load the images with detected_faces"""
         logger.debug("Load Images: Start")
-        extract_queue = queue_manager.get_queue("extract_in") if self.extractor else None
         idx = 0
         for filename, image in self.images.load():
             idx += 1
@@ -302,11 +297,12 @@ class DiskIO():
                     logger.trace("Discarding frame: '%s'", filename)
                 continue
 
-            detected_faces = self.get_detected_faces(filename, image, extract_queue)
+            detected_faces = self.get_detected_faces(filename, image)
             item = dict(filename=filename, image=image, detected_faces=detected_faces)
             self.pre_process.do_actions(item)
             self.load_queue.put(item)
 
+        logger.debug("Putting EOF")
         self.load_queue.put("EOF")
         logger.debug("Load Images: Complete")
 
@@ -323,13 +319,13 @@ class DiskIO():
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
         return skipframe
 
-    def get_detected_faces(self, filename, image, extract_queue):
+    def get_detected_faces(self, filename, image):
         """ Return detected faces from alignments or detector """
         logger.trace("Getting faces for: '%s'", filename)
         if not self.extractor:
             detected_faces = self.alignments_faces(os.path.basename(filename), image)
         else:
-            detected_faces = self.detect_faces(extract_queue, filename, image)
+            detected_faces = self.detect_faces(filename, image)
         logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)
         return detected_faces
 
@@ -355,12 +351,12 @@ class DiskIO():
                        "skipping".format(frame))
         return have_alignments
 
-    def detect_faces(self, load_queue, filename, image):
+    def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
         inp = {"filename": filename,
                "image": image}
-        load_queue.put(inp)
-        faces = next(self.extractor.detect_faces())
+        self.extractor.input_queue.put(inp)
+        faces = next(self.extractor.detected_faces())
 
         landmarks = faces["landmarks"]
         detected_faces = faces["detected_faces"]
@@ -383,6 +379,7 @@ class DiskIO():
                 break
             item = self.save_queue.get()
             if item == "EOF":
+                logger.debug("EOF Received")
                 break
             filename, image = item
             self.writer.write(filename, image)
@@ -514,9 +511,11 @@ class Predict():
             faces_seen = 0
             batch = list()
             if item == "EOF":
-                logger.debug("Load queue complete")
+                logger.debug("EOF Received")
                 break
+        logger.debug("Putting EOF")
         self.out_queue.put("EOF")
+        logger.debug("Load queue complete")
 
     def load_aligned(self, item):
         """ Load the feed faces and reference output faces """

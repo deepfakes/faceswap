@@ -10,8 +10,9 @@ from ._base import BoundingBox, cv2, Detector, logger
 class Detect(Detector):
     """ CV2 DNN detector for face recognition """
     def __init__(self, **kwargs):
+        git_model_id = 4
         model_filename = ["resnet_ssd_v1.caffemodel", "resnet_ssd_v1.prototxt"]
-        super().__init__(model_filename=model_filename, **kwargs)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.parent_is_pool = True
         self.target = (300, 300)  # Doesn't use VRAM
         self.vram = 0

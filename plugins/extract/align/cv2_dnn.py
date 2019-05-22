@@ -33,8 +33,13 @@ from ._base import Aligner, logger
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs):
+        git_model_id = 1
         model_filename = "cnn-facial-landmark_v1.pb"
-        super().__init__(model_filename=model_filename, colorspace="RGB", input_size=128, **kwargs)
+        super().__init__(git_model_id=git_model_id,
+                         model_filename=model_filename,
+                         colorspace="RGB",
+                         input_size=128,
+                         **kwargs)
         self.vram = 0  # Doesn't use GPU
         self.model = None
 
@@ -116,6 +121,14 @@ class Align(Aligner):
             bottom += delta
             if diff % 2 == 1:
                 bottom += 1
+
+        # Shift the box if any points fall below zero
+        if left < 0:
+            right += abs(left)
+            left += abs(left)
+        if top < 0:
+            bottom += abs(top)
+            top += abs(top)
 
         # Make sure box is always square.
         assert ((right - left) == (bottom - top)), 'Box is not square.'

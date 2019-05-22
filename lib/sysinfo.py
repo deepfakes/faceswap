@@ -170,6 +170,8 @@ class SysInfo():
             version = self.cuda_version_windows()
         else:
             version = "Unsupported OS"
+            if self.is_conda:
+                version += ". Check Conda packages for Conda Cuda"
         return version
 
     @property
@@ -179,6 +181,11 @@ class SysInfo():
             cudnn_checkfiles = self.cudnn_checkfiles_linux()
         elif self.is_windows:
             cudnn_checkfiles = self.cudnn_checkfiles_windows()
+        else:
+            retval = "Unsupported OS"
+            if self.is_conda:
+                retval += ". Check Conda packages for Conda cuDNN"
+            return retval
 
         cudnn_checkfile = None
         for checkfile in cudnn_checkfiles:
@@ -217,6 +224,8 @@ class SysInfo():
     def cudnn_checkfiles_linux():
         """ Return the checkfile locations for linux """
         chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
+        if "libcudnn.so." not in chk:
+            return list()
         chk = chk.strip().replace("libcudnn.so.", "")
         cudnn_vers = chk[0]
         cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]

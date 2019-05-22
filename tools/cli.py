@@ -34,10 +34,12 @@ class AlignmentsArgs(FaceSwapArgs):
                     "subfolder will be created within the frames folder to hold the output." +
                     frames_dir + align_eyes +
                     "\nL|'extract': Re-extract faces from the source frames/video based on "
-                    "alignment data. This is a lot quicker than re-detecting faces." +
+                    "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
+                    "the '-een' (--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
                     "\nL|'extract-large' - Extract all faces that have not been upscaled. Useful "
-                    "for excluding low-res images from a training set." +
+                    "for excluding low-res images from a training set.. Can pass in the '-een' "
+                    "(--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
                     "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
@@ -114,6 +116,17 @@ class AlignmentsArgs(FaceSwapArgs):
                     " source directory)."
                     "\nL|'move': Move the discovered items to a sub-folder within the source "
                     "directory."})
+        argument_list.append({"opts": ("-een", "--extract-every-n"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "extract_every_n",
+                              "min_max": (1, 100),
+                              "default": 1,
+                              "rounding": 1,
+                              "help": "Extract every 'nth' frame. This option will skip frames "
+                                      "when extracting faces. For example a value of 1 will "
+                                      "extract faces from every frame, a value of 10 will extract "
+                                      "faces from every 10th frame. (extract only)"})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
@@ -389,21 +402,35 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-s', '--sort-by'),
                               "action": Radio,
                               "type": str,
-                              "choices": ("blur", "face", "face-cnn",
-                                          "face-cnn-dissim", "face-dissim",
-                                          "face-yaw", "hist",
-                                          "hist-dissim"),
+                              "choices": ("blur", "face", "face-cnn", "face-cnn-dissim",
+                                          "face-yaw", "hist", "hist-dissim"),
                               "dest": 'sort_method',
                               "default": "hist",
-                              "help": "Sort by method. "
-                                      "Choose how images are sorted. "
-                                      "Default: hist"})
+                              "help": "R|Sort by method. Choose how images are sorted. "
+                                      "\nL|'blur': Sort faces by blurriness."
+                                      "\nL|'face': Use VGG Face to sort by face similarity. This "
+                                      "uses a pairwise clustering algorithm to check the "
+                                      "distances between 4096 features on every face in your set "
+                                      "and order them appropriately. WARNING: On very large "
+                                      "datasets it is possible to run out of memory performing "
+                                      "this calculation."
+                                      "\nL|'face-cnn': Sort faces by their landmarks. You can "
+                                      "adjust the threshold with the '-t' (--ref_threshold) "
+                                      "option."
+                                      "\nL|'face-cnn-dissim': Like 'face-cnn' but sorts by "
+                                      "dissimilarity."
+                                      "\nL|'face-yaw': Sort faces by Yaw (rotation left to right)."
+                                      "\nL|'hist': Sort faces by their color histogram. You can "
+                                      "adjust the threshold with the '-t' (--ref_threshold) "
+                                      "option."
+                                      "\nL|'hist-dissim': Like 'hist' but sorts by "
+                                      "dissimilarity."
+                                      "\nDefault: hist"})
 
         argument_list.append({"opts": ('-g', '--group-by'),
                               "action": Radio,
                               "type": str,
-                              "choices": ("blur", "face", "face-cnn",
-                                          "face-yaw", "hist"),
+                              "choices": ("blur", "face-cnn", "face-yaw", "hist"),
                               "dest": 'group_method',
                               "default": "hist",
                               "help": "Group by method. "
@@ -420,24 +447,16 @@ class SortArgs(FaceSwapArgs):
                               "dest": 'min_threshold',
                               "default": -1.0,
                               "help": "Float value. "
-                                      "Minimum threshold to use for grouping "
-                                      "comparison with 'face' and 'hist' "
-                                      "methods. The lower the value the more "
-                                      "discriminating the grouping is. "
-                                      "Leaving -1.0 will make the program "
-                                      "set the default value automatically. "
-                                      "For face 0.6 should be enough, with "
-                                      "0.5 being very discriminating. "
-                                      "For face-cnn 7.2 should be enough, "
-                                      "with 4 being very discriminating. "
-                                      "For hist 0.3 should be enough, with "
-                                      "0.2 being very discriminating. "
-                                      "Be careful setting a value that's too "
-                                      "low in a directory with many images, "
-                                      "as this could result in a lot of "
-                                      "directories being created. "
-                                      "Defaults: face 0.6, face-cnn 7.2, "
-                                      "hist 0.3"})
+                                      "Minimum threshold to use for grouping comparison with "
+                                      "'face-cnn' and 'hist' methods. The lower the value the "
+                                      "more discriminating the grouping is. Leaving -1.0 will "
+                                      "allow the program set the default value automatically. "
+                                      "For face-cnn 7.2 should be enough, with 4 being very "
+                                      "discriminating. For hist 0.3 should be enough, with 0.2 "
+                                      "being very discriminating. Be careful setting a value "
+                                      "that's too low in a directory with many images, as this "
+                                      "could result in a lot of directories being created. "
+                                      "Defaults: face-cnn 7.2, hist 0.3"})
 
         argument_list.append({"opts": ('-b', '--bins'),
                               "action": Slider,
@@ -465,6 +484,15 @@ class SortArgs(FaceSwapArgs):
                                       "bins, the remaining images get put in "
                                       "the last bin."
                                       "Default value: 5"})
+
+        argument_list.append({"opts": ("-be", "--backend"),
+                              "action": Radio,
+                              "type": str.upper,
+                              "choices": ("CPU", "OPENCL"),
+                              "default": "CPU",
+                              "help": "Backend to use for VGG Face inference. OpenCL is slightly "
+                                      "faster but may not be available on all systems. Only used "
+                                      "for sort by 'face'."})
 
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',

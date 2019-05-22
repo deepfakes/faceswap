@@ -419,7 +419,8 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "required": True,
                               "help": "Input directory or video. Either a directory containing "
                                       "the image files you wish to process or path to a video "
-                                      "file."})
+                                      "file. NB: This should be the source video/frames NOT the "
+                                      "source faces."})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",
@@ -438,29 +439,32 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "rounding": 2,
                               "type": float,
                               "dest": "ref_threshold",
-                              "default": 0.6,
+                              "default": 0.4,
                               "help": "Threshold for positive face recognition. For use with "
-                                      "nfilter or filter. Lower values are stricter."})
+                                      "nfilter or filter. Lower values are stricter. NB: Using "
+                                      "face filter will significantly decrease extraction speed."})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "action": FilesFullPaths,
                               "filetypes": "image",
                               "dest": "nfilter",
                               "nargs": "+",
                               "default": None,
-                              "help": "Reference image for the persons you do "
-                                      "not want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
+                              "help": "Reference image for the persons you do not want to "
+                                      "process. Should be a front portrait with a single person "
+                                      "in the image. Multiple images can be added space "
+                                      "separated. NB: Using face filter will significantly "
+                                      "decrease extraction speed."})
         argument_list.append({"opts": ("-f", "--filter"),
                               "action": FilesFullPaths,
                               "filetypes": "image",
                               "dest": "filter",
                               "nargs": "+",
                               "default": None,
-                              "help": "Reference images for the person you "
-                                      "want to process. Should be a front "
-                                      "portrait. Multiple images can be added "
-                                      "space separated"})
+                              "help": "Reference images for the person you want to process. "
+                                      "Should be a front portrait with a single person in the "
+                                      "image. Multiple images can be added space separated. NB: "
+                                      "Using face filter will significantly decrease extraction "
+                                      "speed."})
         return argument_list
 
 
@@ -911,14 +915,13 @@ class TrainArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "preview",
                               "default": False,
-                              "help": "Show preview output. If not specified, "
-                                      "write progress to file"})
+                              "help": "Show training preview output. in a separate window."})
         argument_list.append({"opts": ("-w", "--write-image"),
                               "action": "store_true",
                               "dest": "write_image",
                               "default": False,
-                              "help": "Writes the training result to a file "
-                                      "even on preview mode"})
+                              "help": "Writes the training result to a file. The image will be "
+                                      "stored in the root of your FaceSwap folder."})
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",

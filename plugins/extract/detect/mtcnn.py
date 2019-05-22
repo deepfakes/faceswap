@@ -29,8 +29,9 @@ def import_tensorflow():
 class Detect(Detector):
     """ MTCNN detector for face recognition """
     def __init__(self, **kwargs):
+        git_model_id = 2
         model_filename = ["mtcnn_det_v1.1.npy", "mtcnn_det_v1.2.npy", "mtcnn_det_v1.3.npy"]
-        super().__init__(model_filename=model_filename, **kwargs)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.kwargs = self.validate_kwargs()
         self.name = "mtcnn"
         self.target = 2073600  # Uses approx 1.30 GB of VRAM
@@ -169,8 +170,6 @@ class Detect(Detector):
     def recalculate_bounding_box(faces, landmarks):
         """ Recalculate the bounding box for Face Alignment.
 
-            Face Alignment was built to expect a DLIB bounding
-            box and calculates center and scale based on that.
             Resize the bounding box around features to present
             a better box to Face Alignment. Helps its chances
             on edge cases and helps remove 'jitter' """
