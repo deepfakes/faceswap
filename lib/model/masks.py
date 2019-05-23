@@ -129,6 +129,7 @@ class Facehull(Mask):
                     cv2.fillConvexPoly(masks[i], hull, 1.)
                 except:
                     print("cv2 error")
+
         return masks
 
 
@@ -141,39 +142,33 @@ class Smart(Mask):
         Check if model is available, if not, download and unzip it
         """
 
-        build_dict = {"vgg_300":     "Nirkin_300_softmax_v1.h5",
-                      "vgg_500":     "Nirkin_500_softmax_v1.h5",
-                      "unet_256":    "DFL_256_sigmoid_v1.h5",
-                      None:          "Nirkin_500_softmax_v1.h5"}
-        model_name = build_dict[mask_type]
+        build_dict = {"vgg_300":     (8, "Nirkin_300_softmax_v1.h5"),
+                      "vgg_500":     (5, "Nirkin_500_softmax_v1.h5"),
+                      "unet_256":    (6, "DFL_256_sigmoid_v1.h5"),
+                      None:          (5,  "Nirkin_500_softmax_v1.h5")}
+        git_model_id, model_filename = build_dict[mask_type]
         cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-        model = GetModel(model_name, cache_path)
-        model = keras.models.load_model(model_path.model_path)
-        
+        model = GetModel(model_filename, cache_path, git_model_id)
+        mask_model = keras.models.load_model(model.model_path)
+
         masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
+        if  model_type=='DFL':
+            model_input = faces
+            masks = mask_model.predict(model_input)
+            low = masks < 0.1
+            high = masks > 0.9
+        if model_type=='Nirkin':
+            model_input = (faces - self.means)
+            masks = mask_model.predict_on_batch(model_input)[..., 1:2]
+            generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in masks)
+            # generator = (self.postprocessing(mask[:, :, None]) for mask in masks)
+            masks = np.array(tuple(generator))[..., None]
+            low = masks < 0.025
+            high = masks > 0.975
+        masks[low] = 0.
+        masks[high] = 1.
 
-        # TODO finish here
-        def segment(self, model_type, out_dir='C:/data/masked/'):
-            """ doc string """
-            i = 0
-            for img_batch in self.memmapped_images:
-                if  model_type=='DFL':
-                    model_input = (faces - self.means)
-                    masks = self.model.predict(model_input)
-                    low = masks < 0.1
-                    masks[low] = 0.
-                if model_type=='Nirkin':
-                    model_input = (faces - self.means)
-                    masks = self.model.predict_on_batch(model_input)[..., 1:2]
-                    generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in masks)
-                    # generator = (self.postprocessing(mask[:, :, None]) for mask in masks)
-                    masks = np.array(tuple(generator))[..., None]
-                    low = masks < 0.01
-                    high = masks > 0.975
-                    results[masks] = 0.
-                    results[masks] = 1.
-
-            return masks
+        return masks
 
         @staticmethod
         def postprocessing(mask):
@@ -217,5 +212,6 @@ class Dummy(Mask):
     def build_masks(self, mask_type, faces, landmarks=None):
         """ Dummy mask of all ones """
         masks = np.ones_like(faces)
+
         return masks
 
