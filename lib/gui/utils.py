@@ -683,7 +683,7 @@ class ControlBuilder():
 
         self.frame = self.control_frame(parent, helptext)
         self.control = self.set_control(dtype, choices, is_radio)
-        self.tk_var = self.set_tk_var(selected_value)
+        self.tk_var = self.set_tk_var(dtype, selected_value)
 
         self.build_control(choices, dtype, rounding, min_max, radio_columns)
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -723,10 +723,18 @@ class ControlBuilder():
         logger.debug("Setting control '%s' to %s", self.title, control)
         return control
 
-    def set_tk_var(self, selected_value):
+    def set_tk_var(self, dtype, selected_value):
         """ Correct variable type for control """
-        logger.debug("Setting tk variable: '%s'", self.title)
-        var = tk.BooleanVar if self.control == ttk.Checkbutton else tk.StringVar
+        logger.debug("Setting tk variable: (title: '%s', dtype: %s, selected_value: %s)",
+                     self.title, dtype, selected_value)
+        if dtype == bool:
+            var = tk.BooleanVar
+        elif dtype == int:
+            var = tk.IntVar
+        elif dtype == float:
+            var = tk.DoubleVar
+        else:
+            var = tk.StringVar
         var = var(self.frame)
         val = self.default if selected_value is None else selected_value
         var.set(val)

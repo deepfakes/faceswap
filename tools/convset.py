@@ -11,7 +11,6 @@ Sketch:
 """
 import logging
 import random
-import sys
 import tkinter as tk
 from tkinter import ttk
 import os
@@ -22,13 +21,16 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
+from lib.gui.utils import ControlBuilder
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
+from lib.model.masks import get_available_masks
 from lib.utils import set_system_verbosity
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict
 
+from plugins.plugin_loader import PluginLoader
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -47,7 +49,7 @@ class Convset():
 
         self.faces = TestSet(arguments, self.queue_patch_in)
         self.arguments = self.generate_converter_arguments(arguments)
-        self.configs = self.get_configs()
+        self.config = Config(None)
 
         self.converter = Converter(output_dir=None,
                                    output_size=self.faces.predictor.output_size,
@@ -58,7 +60,6 @@ class Convset():
 
         self.root = tk.Tk()
         self.display = FacesDisplay(256, 64)
-        self.root.convset_display = self.display
         self.image_canvas = None
         self.opts_canvas = None
         # TODO Padding + Size dynamic
@@ -93,29 +94,6 @@ class Convset():
         logger.debug(arguments)
         return arguments
 
-    def get_configs(self):
-        """ Return all of the convert configs """
-        modules = self.get_modules()
-        configs = {".".join((key, plugin)): Config(".".join((key, plugin)))
-                   for key, val in modules.items()
-                   for plugin in val}
-        logger.debug(configs)
-        return configs
-
-    @staticmethod
-    def get_modules():
-        """ Return all available convert plugins """
-        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        plugins_path = os.path.join(root_path, "plugins", "convert")
-        modules = {os.path.basename(dirpath): [os.path.splitext(module)[0]
-                                               for module in filenames
-                                               if os.path.splitext(module)[1] == ".py"
-                                               and module not in ("__init__.py", "_base.py")]
-                   for dirpath, _, filenames in os.walk(plugins_path)
-                   if os.path.basename(dirpath) not in ("convert", "__pycache__", "writer")}
-        logger.debug("Modules: %s", modules)
-        return modules
-
     def process(self):
         """ The convset process """
         self.faces.generate()
@@ -129,40 +107,23 @@ class Convset():
             idx += 1
         logger.debug("Patched faces")
         self.display.build_faces_image(self.faces.selected_frames)
-        self.image_canvas = ImagesCanvas(self.root)
-
+        self.build_ui()
         self.root.mainloop()
 
+    def build_ui(self):
+        """ Build the UI elements for displaying preview and options """
+        container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
+        container.pack(fill=tk.BOTH, expand=True)
+        container.convset_display = self.display
+        container.add(ImagesCanvas(container))
 
-class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ Canvas to hold the images """
-    def __init__(self, parent):
-        logger.debug("Initializing : %s", self.__class__.__name__)
-        super().__init__(parent)
-        self.pack(expand=True, fill=tk.BOTH, padx=2, pady=2)
-
-        self.display = parent.convset_display
-        self.display.update_tk_image()
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.displaycanvas = self.canvas.create_image(0, 0,
-                                                      image=self.display.tk_image,
-                                                      anchor=tk.NW)
-        self.bind("<Configure>", self.resize)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def resize(self, event):
-        """  Resize the image to fit the frame, maintaining aspect ratio """
-        logger.trace("Resizing preview image")
-        framesize = (event.width, event.height)
-        self.display.display_dims = framesize
-        self.display.update_tk_image()
-        self.reload()
-
-    def reload(self):
-        """ Reload the preview image """
-        logger.trace("Reloading preview image")
-        self.canvas.itemconfig(self.displaycanvas, image=self.display.tk_image)
+        options_frame = ttk.Frame(container)
+        ActionFrame(options_frame,
+                    self.arguments.color_adjustment.replace("-", "_"),
+                    self.arguments.mask_type.replace("-", "_"),
+                    self.arguments.scaling.replace("-", "_"))
+        OptionsBook(options_frame, self.config)
+        container.add(options_frame)
 
 
 class TestSet():
@@ -377,3 +338,245 @@ class FacesDisplay():
                       1)
         image = np.clip(image, 0.0, 255.0)
         return image.astype("uint8")
+
+
+class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ Canvas to hold the images """
+    def __init__(self, parent):
+        logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
+        super().__init__(parent)
+        self.pack(expand=True, fill=tk.BOTH, padx=2, pady=2)
+
+        self.display = parent.convset_display
+        self.display.update_tk_image()
+        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.displaycanvas = self.canvas.create_image(0, 0,
+                                                      image=self.display.tk_image,
+                                                      anchor=tk.NW)
+        self.bind("<Configure>", self.resize)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def resize(self, event):
+        """  Resize the image to fit the frame, maintaining aspect ratio """
+        logger.trace("Resizing preview image")
+        framesize = (event.width, event.height)
+        self.display.display_dims = framesize
+        self.display.update_tk_image()
+        self.reload()
+
+    def reload(self):
+        """ Reload the preview image """
+        logger.trace("Reloading preview image")
+        self.canvas.itemconfig(self.displaycanvas, image=self.display.tk_image)
+
+
+class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+    """ Frame that holds the left hand side options panel """
+    def __init__(self, parent, selected_color_method, selected_mask, selected_scaling):
+        logger.debug("Initializing %s: (selected_color_method: %s, selected_mask: %s, "
+                     "selected_scaling: %s)", self.__class__.__name__, selected_color_method,
+                     selected_mask, selected_scaling)
+        super().__init__(parent)
+        self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
+
+        self.color_var = tk.StringVar()
+        self.color_var.set(self.format_to_display(selected_color_method))
+
+        self.mask_var = tk.StringVar()
+        self.mask_var.set(self.format_to_display(selected_mask))
+
+        self.scaling_var = tk.StringVar()
+        self.scaling_var.set(self.format_to_display(selected_scaling))
+
+        self.add_color_combobox()
+        self.add_mask_combobox()
+        self.add_scaling_combobox()
+        self.add_refresh_button()
+
+    @staticmethod
+    def format_from_display(var):
+        """ Format a variable from display version """
+        return var.replace(" ", "_").lower()
+
+    @staticmethod
+    def format_to_display(var):
+        """ Format a variable from display version """
+        return var.replace("_", " ").title()
+
+    def add_color_combobox(self):
+        """ Add the color adjustment method Combo Box """
+        logger.debug("Adding color method Combo Box")
+        color_methods = PluginLoader.get_available_convert_plugins("color", True)
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP)
+        lbl = ttk.Label(frame, text="Color Adjustment", width=16, anchor=tk.W)
+        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+
+        ctl = ttk.Combobox(frame, textvariable=self.color_var, width=12)
+        ctl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+        ctl["values"] = sorted([self.format_to_display(choice) for choice in color_methods])
+        logger.debug("Added color method Combo Box")
+
+    def add_mask_combobox(self):
+        """ Add the mask Combo Box """
+        logger.debug("Adding mask Combo Box")
+        masks = get_available_masks() + ["predicted"]
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP)
+        lbl = ttk.Label(frame, text="Mask", width=16, anchor=tk.W)
+        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+
+        ctl = ttk.Combobox(frame, textvariable=self.mask_var, width=12)
+        ctl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+        ctl["values"] = sorted([self.format_to_display(choice) for choice in masks])
+        logger.debug("Added mask Combo Box")
+
+    def add_scaling_combobox(self):
+        """ Add the scaling method Combo Box """
+        logger.debug("Adding scaling method Combo Box")
+        scaling = PluginLoader.get_available_convert_plugins("scaling", True)
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP)
+        lbl = ttk.Label(frame, text="Scaling", width=16, anchor=tk.W)
+        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+
+        ctl = ttk.Combobox(frame, textvariable=self.scaling_var, width=12)
+        ctl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
+        ctl["values"] = sorted([self.format_to_display(choice) for choice in scaling])
+        logger.debug("Added scaling Combo Box")
+
+    def add_refresh_button(self):
+        """ Add button to refresh the images """
+        btn = ttk.Button(self, text="Refresh Images", command=self.callback)
+        btn.pack(padx=5, pady=10, side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
+
+    @staticmethod
+    def callback():
+        # TODO Change this to do something
+        print("click!")
+
+
+class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
+    """ Convert settings Options Frame """
+    def __init__(self, parent, config):
+        logger.debug("Initializing %s: (parent: %s, config: %s)",
+                     self.__class__.__name__, parent, config)
+        super().__init__(parent)
+        self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
+        self.config = config
+        self.config_dicts = self.get_config_dicts(config)
+
+        self.tabs = dict()
+        self.build_tabs()
+        self.build_sub_tabs()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def sections(self):
+        """ Return the sorted unique section names from the configs """
+        return sorted(set(plugin.split(".")[0] for plugin in self.config.config.sections()
+                          if plugin.split(".")[0] != "writer"))
+
+    @property
+    def plugins_dict(self):
+        """ Return dict of sections with sorted list of containing plugins """
+        return {section: sorted([plugin.split(".")[1] for plugin in self.config.config.sections()
+                                 if plugin.split(".")[0] == section])
+                for section in self.sections}
+
+    def get_config_dicts(self, config):
+        """ Hold a custom config dict for the config """
+        config_dicts = dict()
+        for section in self.config.config.sections():
+            if section == "writer":
+                continue
+            default_dict = config.defaults[section]
+            for key in default_dict.keys():
+                if key == "helptext":
+                    continue
+                default_dict[key]["value"] = config.get(section, key)
+            config_dicts[section] = default_dict
+        return config_dicts
+
+    def build_tabs(self):
+        """ Build the tabs for the relevant section """
+        logger.debug("Build Tabs")
+        for section in self.sections:
+            tab = ttk.Notebook(self)
+            self.tabs[section] = {"tab": tab}
+            self.add(tab, text=section.replace("_", " ").title())
+
+    def build_sub_tabs(self):
+        """ Build the sub tabs for the relevant plugin """
+        for section, plugins in self.plugins_dict.items():
+            for plugin in plugins:
+                config_dict = self.config_dicts[".".join((section, plugin))]
+                tab = ConfigFrame(self,
+                                  config_dict)
+                self.tabs[section][plugin] = tab
+                self.tabs[section]["tab"].add(tab, text=plugin.replace("_", " ").title())
+
+
+class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+    """ Config Frame - Holds the Options for config """
+
+    def __init__(self, parent, options):
+        logger.debug("Initializing %s", self.__class__.__name__)
+        super().__init__(parent)
+        self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.options = options
+
+        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.optsframe = ttk.Frame(self.canvas)
+        self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
+
+        self.build_frame()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def build_frame(self):
+        """ Build the options frame for this command """
+        logger.debug("Add Config Frame")
+        self.add_scrollbar()
+        self.canvas.bind("<Configure>", self.resize_frame)
+
+        for key, val in self.options.items():
+            if key == "helptext":
+                continue
+            value = val.get("value", val["default"])
+            ctl = ControlBuilder(self.optsframe,
+                                 key,
+                                 val["type"],
+                                 value,
+                                 selected_value=None,
+                                 choices=val["choices"],
+                                 is_radio=val["gui_radio"],
+                                 rounding=val["rounding"],
+                                 min_max=val["min_max"],
+                                 helptext=val["helptext"],
+                                 radio_columns=4)
+            val["selected"] = ctl.tk_var
+        logger.debug("Added Config Frame")
+
+    def add_scrollbar(self):
+        """ Add a scrollbar to the options frame """
+        logger.debug("Add Config Scrollbar")
+        scrollbar = ttk.Scrollbar(self, command=self.canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.config(yscrollcommand=scrollbar.set)
+        self.optsframe.bind("<Configure>", self.update_scrollbar)
+        logger.debug("Added Config Scrollbar")
+
+    def update_scrollbar(self, event):  # pylint: disable=unused-argument
+        """ Update the options frame scrollbar """
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def resize_frame(self, event):
+        """ Resize the options frame to fit the canvas """
+        logger.debug("Resize Config Frame")
+        canvas_width = event.width
+        self.canvas.itemconfig(self.optscanvas, width=canvas_width)
+        logger.debug("Resized Config Frame")
