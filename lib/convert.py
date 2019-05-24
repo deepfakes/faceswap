@@ -26,22 +26,31 @@ class Converter():
         self.draw_transparent = draw_transparent
         self.writer_pre_encode = pre_encode
         self.scale = arguments.output_scale / 100
+        self.output_size = output_size
+        self.output_has_mask = output_has_mask
         self.args = arguments
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
-        self.load_plugins(output_size, output_has_mask)
+        self.load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_plugins(self, output_size, output_has_mask):
+    def reinitialize(self):
+        """ reinitialize converter """
+        logger.debug("Reinitializing converter")
+        self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
+        self.load_plugins()
+        logger.debug("Reinitialized converter")
+
+    def load_plugins(self):
         """ Load the requested adjustment plugins """
         logger.debug("Loading plugins")
         self.adjustments["box"] = PluginLoader.get_converter("mask", "box_blend")(
             "none",
-            output_size)
+            self.output_size)
 
         self.adjustments["mask"] = PluginLoader.get_converter("mask", "mask_blend")(
             self.args.mask_type,
-            output_size,
-            output_has_mask)
+            self.output_size,
+            self.output_has_mask)
 
         if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
             self.adjustments["color"] = PluginLoader.get_converter("color",

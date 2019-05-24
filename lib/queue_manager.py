@@ -78,12 +78,19 @@ class QueueManager():
             To be called if there is an error """
         logger.debug("QueueManager terminating all queues")
         self.shutdown.set()
+        self.flush_queues()
         for q_name, queue in self.queues.items():
             logger.debug("QueueManager terminating: '%s'", q_name)
-            while not queue.empty():
-                queue.get(True, 1)
             queue.put("EOF")
         logger.debug("QueueManager terminated all queues")
+
+    def flush_queues(self):
+        """ Empty out all queues """
+        for q_name, queue in self.queues.items():
+            logger.debug("QueueManager flushing: '%s'", q_name)
+            while not queue.empty():
+                queue.get(True, 1)
+        logger.debug("QueueManager flushed all queues")
 
     def debug_monitor(self, update_secs=2):
         """ Debug tool for monitoring queues """

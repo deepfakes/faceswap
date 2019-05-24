@@ -668,15 +668,20 @@ class ControlBuilder():
         Sets the tooltip text
     radio_columns: int, optional
         Sets the number of columns to use for grouping radio buttons
+    label_width: int, optional
+        Sets the width of the control label. Defaults to 20
+    control_width: int, optional
+        Sets the width of the control. Default is to auto expand
     """
     def __init__(self, parent, title, dtype, default,
                  selected_value=None, choices=None, is_radio=False, rounding=None,
-                 min_max=None, helptext=None, radio_columns=3):
+                 min_max=None, helptext=None, radio_columns=3, label_width=20, control_width=None):
         logger.debug("Initializing %s: (parent: %s, title: %s, dtype: %s, default: %s, "
                      "selected_value: %s, choices: %s, is_radio: %s, rounding: %s, min_max: %s, "
-                     "helptext: %s, radio_columns: %s)", self.__class__.__name__, parent, title,
-                     dtype, default, selected_value, choices, is_radio, rounding, min_max,
-                     helptext, radio_columns)
+                     "helptext: %s, radio_columns: %s, label_width: %s, control_width: %s)",
+                     self.__class__.__name__, parent, title, dtype, default, selected_value,
+                     choices, is_radio, rounding, min_max, helptext, radio_columns, label_width,
+                     control_width)
 
         self.title = title
         self.default = default
@@ -685,7 +690,13 @@ class ControlBuilder():
         self.control = self.set_control(dtype, choices, is_radio)
         self.tk_var = self.set_tk_var(dtype, selected_value)
 
-        self.build_control(choices, dtype, rounding, min_max, radio_columns)
+        self.build_control(choices,
+                           dtype,
+                           rounding,
+                           min_max,
+                           radio_columns,
+                           label_width,
+                           control_width)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     # Frame, control type and varable
@@ -693,7 +704,7 @@ class ControlBuilder():
         """ Frame to hold control and it's label """
         logger.debug("Build control frame")
         frame = ttk.Frame(parent)
-        frame.pack(fill=tk.X, expand=True)
+        frame.pack(side=tk.TOP, fill=tk.X)
         if helptext is not None:
             helptext = self.format_helptext(helptext)
             Tooltip(frame, text=helptext, wraplength=720)
@@ -743,34 +754,44 @@ class ControlBuilder():
         return var
 
     # Build the full control
-    def build_control(self, choices, dtype, rounding, min_max, radio_columns):
+    def build_control(self, choices, dtype, rounding, min_max, radio_columns,
+                      label_width, control_width):
         """ Build the correct control type for the option passed through """
         logger.debug("Build confog option control")
-        self.build_control_label()
-        self.build_one_control(choices, dtype, rounding, min_max, radio_columns)
+        self.build_control_label(label_width)
+        self.build_one_control(choices, dtype, rounding, min_max, radio_columns, control_width)
         logger.debug("Built option control")
 
-    def build_control_label(self):
+    def build_control_label(self, label_width):
         """ Label for control """
-        logger.debug("Build control label: '%s'", self.title)
+        logger.debug("Build control label: (title: '%s', label_width: %s)",
+                     self.title, label_width)
         title = self.title.replace("_", " ").title()
-        lbl = ttk.Label(self.frame, text=title, width=20, anchor=tk.W)
+        lbl = ttk.Label(self.frame, text=title, width=label_width, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         logger.debug("Built control label: '%s'", self.title)
 
-    def build_one_control(self, choices, dtype, rounding, min_max, radio_columns):
+    def build_one_control(self, choices, dtype, rounding, min_max, radio_columns, control_width):
         """ Build and place the option controls """
         logger.debug("Build control: (title: '%s', control: %s, choices: %s, dtype: %s, "
-                     "rounding: %s, min_max: %s)", self.title, self.control, choices, dtype,
-                     rounding, min_max)
+                     "rounding: %s, min_max: %s: radio_columns: %s, control_width: %s)",
+                     self.title, self.control, choices, dtype, rounding, min_max, radio_columns,
+                     control_width)
         if self.control == ttk.Scale:
             ctl = self.slider_control(dtype, rounding, min_max)
         elif self.control == ttk.Radiobutton:
             ctl = self.radio_control(choices, radio_columns)
         else:
             ctl = self.control_to_optionsframe(choices)
+        self.set_control_width(ctl, control_width)
         ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
         logger.debug("Built control: '%s'", self.title)
+
+    @staticmethod
+    def set_control_width(ctl, control_width):
+        """ Set the control width if required """
+        if control_width is not None:
+            ctl.config(width=control_width)
 
     def radio_control(self, choices, columns):
         """ Create a group of radio buttons """

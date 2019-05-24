@@ -48,7 +48,6 @@ class Convset():
                        "patch_out": queue_manager.get_queue("convset_patch_out")}
 
         self.faces = TestSet(arguments, self.queue_patch_in)
-        self.arguments = self.generate_converter_arguments(arguments)
         self.config = Config(None)
 
         self.converter = Converter(output_dir=None,
@@ -56,12 +55,13 @@ class Convset():
                                    output_has_mask=self.faces.predictor.has_predicted_mask,
                                    draw_transparent=False,
                                    pre_encode=None,
-                                   arguments=self.arguments)
+                                   arguments=self.generate_converter_arguments(arguments))
 
         self.root = tk.Tk()
         self.display = FacesDisplay(256, 64)
         self.image_canvas = None
         self.opts_canvas = None
+        self.cli_frame = None  # cli frame holds cli options
         # TODO Padding + Size dynamic
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -97,31 +97,61 @@ class Convset():
     def process(self):
         """ The convset process """
         self.faces.generate()
-        self.converter.process(self.queue_patch_in, self.queue_patch_out)
-        idx = 0
-        while idx < self.faces.sample_size:
-            logger.debug("Patching image %s of %s", idx + 1, self.faces.sample_size)
-            item = self.queue_patch_out.get()
-            self.faces.selected_frames[idx]["swapped_image"] = item[1]
-            logger.debug("Patched image %s of %s", idx + 1, self.faces.sample_size)
-            idx += 1
-        logger.debug("Patched faces")
+        self.patch_faces()
         self.display.build_faces_image(self.faces.selected_frames)
         self.build_ui()
         self.root.mainloop()
+
+    def patch_faces(self):
+        """ Patch faces """
+        logger.trace("Patching faces")
+        self.converter.process(self.queue_patch_in, self.queue_patch_out)
+        idx = 0
+        while idx < self.faces.sample_size:
+            logger.trace("Patching image %s of %s", idx + 1, self.faces.sample_size)
+            item = self.queue_patch_out.get()
+            self.faces.selected_frames[idx]["swapped_image"] = item[1]
+            logger.trace("Patched image %s of %s", idx + 1, self.faces.sample_size)
+            idx += 1
+        logger.trace("Patched faces")
+
+    def refresh(self, *args):
+        """ Refresh the display """
+        # Update converter arguments
+        logger.trace("Refreshing swapped faces. args: %s", args)
+        queue_manager.flush_queues()
+        for key, val in self.cli_frame.convert_args.items():
+            setattr(self.converter.args, key, val)
+        self.converter.reinitialize()
+        self.feed_swapped_faces()
+        self.patch_faces()
+        self.display.refresh_dest_image(self.faces.selected_frames)
+        self.image_canvas.reload()
+        logger.trace("Refreshed swapped faces")
+
+    def feed_swapped_faces(self):
+        """ Feed swapped faces to the converter """
+        logger.trace("feeding swapped faces to converter")
+        for item in self.faces.predicted_items:
+            self.queue_patch_in.put(item)
+        logger.trace("fed %s swapped faces to converter", len(self.faces.predicted_items))
+        logger.trace("Putting EOF to converter")
+        self.queue_patch_in.put("EOF")
 
     def build_ui(self):
         """ Build the UI elements for displaying preview and options """
         container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
         container.convset_display = self.display
-        container.add(ImagesCanvas(container))
+        self.image_canvas = ImagesCanvas(container)
+        container.add(self.image_canvas)
 
         options_frame = ttk.Frame(container)
-        ActionFrame(options_frame,
-                    self.arguments.color_adjustment.replace("-", "_"),
-                    self.arguments.mask_type.replace("-", "_"),
-                    self.arguments.scaling.replace("-", "_"))
+        self.cli_frame = ActionFrame(options_frame,
+                                     self.converter.args.color_adjustment.replace("-", "_"),
+                                     self.converter.args.mask_type.replace("-", "_"),
+                                     self.converter.args.scaling.replace("-", "_"),
+                                     self.refresh)
         OptionsBook(options_frame, self.config)
         container.add(options_frame)
 
@@ -143,6 +173,7 @@ class TestSet():
         self.indices = self.get_indices()
         self.predictor = Predict(self.queues["predict_in"], 4, arguments)
 
+        self.predicted_items = list()
         self.selected_frames = list()
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -209,6 +240,7 @@ class TestSet():
 
     def predict(self):
         """ Predict from the loaded frames """
+        self.predicted_items = list()
         for frame in self.selected_frames:
             self.queue_predict_in.put(frame)
         self.queue_predict_in.put("EOF")
@@ -220,6 +252,7 @@ class TestSet():
                 logger.debug("Received EOF")
                 break
             self.queue_patch_in.put(item)
+            self.predicted_items.append(item)
             self.selected_frames[idx]["source_face"] = item["detected_faces"][0].reference_face
             self.selected_frames[idx]["swapped_face"] = item["swapped_faces"][0]
             logger.debug("Predicted face %s of %s", idx + 1, self.sample_size)
@@ -236,6 +269,7 @@ class FacesDisplay():
         self.size = size
         self.display_dims = (1, 1)
         self.padding = padding
+        self.faces = dict()
         self.faces_source = None
         self.faces_dest = None
         self.tk_image = None
@@ -267,37 +301,52 @@ class FacesDisplay():
     def build_faces_image(self, images):
         """ Display associated faces """
         total_faces = len(images)
-        faces = self.faces_from_frames(images)
-        header = self.header_text(faces["filenames"], total_faces)
-        source = np.hstack([self.draw_rect(face) for face in faces["src"]])
-        self.faces_dest = np.hstack([self.draw_rect(face) for face in faces["dst"]])
+        self.faces_from_frames(images)
+        header = self.header_text(self.faces["filenames"], total_faces)
+        source = np.hstack([self.draw_rect(face) for face in self.faces["src"]])
+        self.faces_dest = np.hstack([self.draw_rect(face) for face in self.faces["dst"]])
         self.faces_source = np.vstack((header, source))
         logger.debug("source row shape: %s, swapped row shape: %s",
                      self.faces_dest.shape, self.faces_source.shape)
 
+    def refresh_dest_image(self, images):
+        """ Refresh the destination image
+            Most times, only the destination image needs to be updated, so kept separate """
+        for idx, image in enumerate(images):
+            self.faces["dst"][idx] = AlignerExtract().transform(
+                image["swapped_image"],
+                self.faces["matrix"][idx],
+                self.size,
+                self.padding)
+        self.faces_dest = np.hstack([self.draw_rect(face) for face in self.faces["dst"]])
+        logger.debug("swapped row shape: %s", self.faces_source.shape)
+
     def faces_from_frames(self, images):
         """ Compile faces from the original images and return a row for each of source and dest """
         # TODO Padding from coverage
-        logger.debug("Extracting faces from frames")
-        faces = dict()
+        logger.debug("Extracting faces from frames: Number images: %s", len(images))
+        logger.trace("images keys: %s", [key for key in images[0].keys()])
+        self.faces = dict()
         for image in images:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
             swp_img = image["swapped_image"]
             detected_face.load_aligned(src_img, self.size, align_eyes=False)
-            faces.setdefault("src", list()).append(AlignerExtract().transform(
+            matrix = detected_face.aligned["matrix"]
+            self.faces.setdefault("matrix", list()).append(matrix)
+            self.faces.setdefault("src", list()).append(AlignerExtract().transform(
                 src_img,
-                detected_face.aligned["matrix"],
+                matrix,
                 self.size,
                 self.padding))
-            faces.setdefault("dst", list()).append(AlignerExtract().transform(
+            self.faces.setdefault("dst", list()).append(AlignerExtract().transform(
                 swp_img,
-                detected_face.aligned["matrix"],
+                matrix,
                 self.size,
                 self.padding))
-            faces.setdefault("filenames", list()).append(os.path.splitext(image["filename"])[0])
-        logger.debug("Extracted faces from frames: %s", {k: len(v) for k, v in faces.items()})
-        return faces
+            self.faces.setdefault("filenames",
+                                  list()).append(os.path.splitext(image["filename"])[0])
+        logger.debug("Extracted faces from frames: %s", {k: len(v) for k, v in self.faces.items()})
 
     def header_text(self, filenames, total_faces):
         """ Create header text for output image """
@@ -362,37 +411,39 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.trace("Resizing preview image")
         framesize = (event.width, event.height)
         self.display.display_dims = framesize
-        self.display.update_tk_image()
         self.reload()
 
     def reload(self):
         """ Reload the preview image """
         logger.trace("Reloading preview image")
+        self.display.update_tk_image()
         self.canvas.itemconfig(self.displaycanvas, image=self.display.tk_image)
 
 
 class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame that holds the left hand side options panel """
-    def __init__(self, parent, selected_color_method, selected_mask, selected_scaling):
-        logger.debug("Initializing %s: (selected_color_method: %s, selected_mask: %s, "
-                     "selected_scaling: %s)", self.__class__.__name__, selected_color_method,
-                     selected_mask, selected_scaling)
+    def __init__(self, parent, selected_color, selected_mask, selected_scaling, patch_callback):
+        logger.debug("Initializing %s: (selected_color: %s, selected_mask: %s, "
+                     "selected_scaling: %s, refresh_callback: %s)", self.__class__.__name__,
+                     selected_color, selected_mask, selected_scaling, patch_callback)
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
+        self.options = ["color", "mask", "scaling"]
+        self.tk_vars = dict()
 
-        self.color_var = tk.StringVar()
-        self.color_var.set(self.format_to_display(selected_color_method))
-
-        self.mask_var = tk.StringVar()
-        self.mask_var.set(self.format_to_display(selected_mask))
-
-        self.scaling_var = tk.StringVar()
-        self.scaling_var.set(self.format_to_display(selected_scaling))
-
-        self.add_color_combobox()
-        self.add_mask_combobox()
-        self.add_scaling_combobox()
+        d_locals = locals()
+        defaults = {opt: self.format_to_display(d_locals["selected_{}".format(opt)])
+                    for opt in self.options}
+        self.add_comboboxes(defaults)
         self.add_refresh_button()
+        self.add_patch_callback(patch_callback)
+
+    @property
+    def convert_args(self):
+        """ Return a dict of cli arguments for converter based on selected options """
+        return {opt if opt != "color" else "color_adjustment":
+                self.format_from_display(self.tk_vars[opt].get())
+                for opt in self.options}
 
     @staticmethod
     def format_from_display(var):
@@ -402,49 +453,25 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     @staticmethod
     def format_to_display(var):
         """ Format a variable from display version """
-        return var.replace("_", " ").title()
+        return var.replace("_", " ").replace("-", " ").title()
 
-    def add_color_combobox(self):
-        """ Add the color adjustment method Combo Box """
-        logger.debug("Adding color method Combo Box")
-        color_methods = PluginLoader.get_available_convert_plugins("color", True)
-        frame = ttk.Frame(self)
-        frame.pack(side=tk.TOP)
-        lbl = ttk.Label(frame, text="Color Adjustment", width=16, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-
-        ctl = ttk.Combobox(frame, textvariable=self.color_var, width=12)
-        ctl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        ctl["values"] = sorted([self.format_to_display(choice) for choice in color_methods])
-        logger.debug("Added color method Combo Box")
-
-    def add_mask_combobox(self):
-        """ Add the mask Combo Box """
-        logger.debug("Adding mask Combo Box")
-        masks = get_available_masks() + ["predicted"]
-        frame = ttk.Frame(self)
-        frame.pack(side=tk.TOP)
-        lbl = ttk.Label(frame, text="Mask", width=16, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-
-        ctl = ttk.Combobox(frame, textvariable=self.mask_var, width=12)
-        ctl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        ctl["values"] = sorted([self.format_to_display(choice) for choice in masks])
-        logger.debug("Added mask Combo Box")
-
-    def add_scaling_combobox(self):
-        """ Add the scaling method Combo Box """
-        logger.debug("Adding scaling method Combo Box")
-        scaling = PluginLoader.get_available_convert_plugins("scaling", True)
-        frame = ttk.Frame(self)
-        frame.pack(side=tk.TOP)
-        lbl = ttk.Label(frame, text="Scaling", width=16, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-
-        ctl = ttk.Combobox(frame, textvariable=self.scaling_var, width=12)
-        ctl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        ctl["values"] = sorted([self.format_to_display(choice) for choice in scaling])
-        logger.debug("Added scaling Combo Box")
+    def add_comboboxes(self, defaults):
+        """ Add the comboboxes to the Action Frame """
+        for opt in self.options:
+            if opt == "mask":
+                choices = get_available_masks() + ["predicted"]
+            else:
+                choices = PluginLoader.get_available_convert_plugins(opt, True)
+            choices = [self.format_to_display(choice) for choice in choices]
+            ctl = ControlBuilder(self,
+                                 opt,
+                                 str,
+                                 defaults[opt],
+                                 choices=choices,
+                                 is_radio=False,
+                                 label_width=8,
+                                 control_width=12)
+            self.tk_vars[opt] = ctl.tk_var
 
     def add_refresh_button(self):
         """ Add button to refresh the images """
@@ -455,6 +482,11 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def callback():
         # TODO Change this to do something
         print("click!")
+
+    def add_patch_callback(self, patch_callback):
+        """ Add callback to repatch images on action option change """
+        for tk_var in self.tk_vars.values():
+            tk_var.trace("w", patch_callback)
 
 
 class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
