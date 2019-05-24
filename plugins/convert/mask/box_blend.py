@@ -13,8 +13,8 @@ class Mask(Adjustment):
         For actions that occur identically for each frame (e.g. blend_box), constants can
         be placed into self.func_constants to be compiled at launch, then referenced for
         each face. """
-    def __init__(self, mask_type, output_size, predicted_available=False):
-        super().__init__(mask_type, output_size, predicted_available)
+    def __init__(self, mask_type, output_size, predicted_available=False, config=None):
+        super().__init__(mask_type, output_size, predicted_available, config)
         self.mask = self.get_mask() if not self.skip else None
 
     def get_mask(self):

@@ -33,32 +33,36 @@ class Converter():
         self.load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def reinitialize(self):
+    def reinitialize(self, config):
         """ reinitialize converter """
         logger.debug("Reinitializing converter")
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
-        self.load_plugins()
+        self.load_plugins(config=config)
         logger.debug("Reinitialized converter")
 
-    def load_plugins(self):
+    def load_plugins(self, config=None):
         """ Load the requested adjustment plugins """
-        logger.debug("Loading plugins")
+        logger.debug("Loading plugins. config: %s", config)
         self.adjustments["box"] = PluginLoader.get_converter("mask", "box_blend")(
             "none",
-            self.output_size)
+            self.output_size,
+            config=config)
 
         self.adjustments["mask"] = PluginLoader.get_converter("mask", "mask_blend")(
             self.args.mask_type,
             self.output_size,
-            self.output_has_mask)
+            self.output_has_mask,
+            config=config)
 
         if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
-            self.adjustments["color"] = PluginLoader.get_converter("color",
-                                                                   self.args.color_adjustment)()
+            self.adjustments["color"] = PluginLoader.get_converter(
+                "color",
+                self.args.color_adjustment)(config=config)
 
         if self.args.scaling != "none" and self.args.scaling is not None:
-            self.adjustments["scaling"] = PluginLoader.get_converter("scaling",
-                                                                     self.args.scaling)()
+            self.adjustments["scaling"] = PluginLoader.get_converter(
+                "scaling",
+                self.args.scaling)(config=config)
         logger.debug("Loaded plugins: %s", self.adjustments)
 
     def process(self, in_queue, out_queue):

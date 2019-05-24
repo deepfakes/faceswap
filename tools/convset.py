@@ -60,7 +60,7 @@ class Convset():
         self.root = tk.Tk()
         self.display = FacesDisplay(256, 64)
         self.image_canvas = None
-        self.opts_canvas = None
+        self.opts_book = None
         self.cli_frame = None  # cli frame holds cli options
         # TODO Padding + Size dynamic
 
@@ -122,7 +122,8 @@ class Convset():
         queue_manager.flush_queues()
         for key, val in self.cli_frame.convert_args.items():
             setattr(self.converter.args, key, val)
-        self.converter.reinitialize()
+        self.opts_book.update_config()
+        self.converter.reinitialize(config=self.config)
         self.feed_swapped_faces()
         self.patch_faces()
         self.display.refresh_dest_image(self.faces.selected_frames)
@@ -152,7 +153,7 @@ class Convset():
                                      self.converter.args.mask_type.replace("-", "_"),
                                      self.converter.args.scaling.replace("-", "_"),
                                      self.refresh)
-        OptionsBook(options_frame, self.config)
+        self.opts_book = OptionsBook(options_frame, self.config, self.refresh)
         container.add(options_frame)
 
 
@@ -491,17 +492,19 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Convert settings Options Frame """
-    def __init__(self, parent, config):
+    def __init__(self, parent, config, patch_callback):
         logger.debug("Initializing %s: (parent: %s, config: %s)",
                      self.__class__.__name__, parent, config)
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config = config
         self.config_dicts = self.get_config_dicts(config)
+        self.tk_vars = dict()
 
         self.tabs = dict()
         self.build_tabs()
         self.build_sub_tabs()
+        self.add_patch_callback(patch_callback)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -516,6 +519,17 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         return {section: sorted([plugin.split(".")[1] for plugin in self.config.config.sections()
                                  if plugin.split(".")[0] == section])
                 for section in self.sections}
+
+    def update_config(self):
+        """ Update config with selected values """
+        for section, items in self.tk_vars.items():
+            for item, value in items.items():
+                new_value = str(value.get())
+                old_value = self.config.config[section][item]
+                if new_value != old_value:
+                    logger.trace("Updating config: %s, %s from %s to %s",
+                                 section, item, old_value, new_value)
+                    self.config.config[section][item] = str(value.get())
 
     def get_config_dicts(self, config):
         """ Hold a custom config dict for the config """
@@ -543,17 +557,25 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         """ Build the sub tabs for the relevant plugin """
         for section, plugins in self.plugins_dict.items():
             for plugin in plugins:
-                config_dict = self.config_dicts[".".join((section, plugin))]
+                config_key = ".".join((section, plugin))
+                config_dict = self.config_dicts[config_key]
                 tab = ConfigFrame(self,
+                                  config_key,
                                   config_dict)
                 self.tabs[section][plugin] = tab
                 self.tabs[section]["tab"].add(tab, text=plugin.replace("_", " ").title())
+
+    def add_patch_callback(self, patch_callback):
+        """ Add callback to repatch images on config option change """
+        for plugins in self.tk_vars.values():
+            for tk_var in plugins.values():
+                tk_var.trace("w", patch_callback)
 
 
 class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Config Frame - Holds the Options for config """
 
-    def __init__(self, parent, options):
+    def __init__(self, parent, config_key, options):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -566,10 +588,10 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.optsframe = ttk.Frame(self.canvas)
         self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
 
-        self.build_frame()
+        self.build_frame(parent, config_key)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build_frame(self):
+    def build_frame(self, parent, config_key):
         """ Build the options frame for this command """
         logger.debug("Add Config Frame")
         self.add_scrollbar()
@@ -590,7 +612,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  min_max=val["min_max"],
                                  helptext=val["helptext"],
                                  radio_columns=4)
-            val["selected"] = ctl.tk_var
+            parent.tk_vars.setdefault(config_key, dict())[key] = ctl.tk_var
         logger.debug("Added Config Frame")
 
     def add_scrollbar(self):
