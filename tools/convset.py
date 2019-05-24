@@ -43,7 +43,6 @@ class Convset():
 
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
-        queue_manager.debug_monitor(2)
         set_system_verbosity(arguments.loglevel)
         self.queues = {"patch_in": queue_manager.get_queue("convset_patch_in"),
                        "patch_out": queue_manager.get_queue("convset_patch_out")}
