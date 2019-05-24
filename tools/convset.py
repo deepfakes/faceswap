@@ -43,6 +43,7 @@ class Convset():
 
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
+        queue_manager.debug_monitor(2)
         set_system_verbosity(arguments.loglevel)
         self.queues = {"patch_in": queue_manager.get_queue("convset_patch_in"),
                        "patch_out": queue_manager.get_queue("convset_patch_out")}
@@ -96,11 +97,20 @@ class Convset():
 
     def process(self):
         """ The convset process """
+        self.get_random_set(refresh=False)
+        self.build_ui()
+        self.root.mainloop()
+
+    def get_random_set(self, refresh=True):
+        """ Generate a set of face samples from the frames pool """
+        logger.debug("Generating a random face set. refresh: %s", refresh)
         self.faces.generate()
         self.patch_faces()
         self.display.build_faces_image(self.faces.selected_frames)
-        self.build_ui()
-        self.root.mainloop()
+        if refresh:
+            self.image_canvas.reload()
+        queue_manager.flush_queues()
+        logger.debug("Generated a random face set.")
 
     def patch_faces(self):
         """ Patch faces """
@@ -119,7 +129,6 @@ class Convset():
         """ Refresh the display """
         # Update converter arguments
         logger.trace("Refreshing swapped faces. args: %s", args)
-        queue_manager.flush_queues()
         for key, val in self.cli_frame.convert_args.items():
             setattr(self.converter.args, key, val)
         self.opts_book.update_config()
@@ -128,6 +137,7 @@ class Convset():
         self.patch_faces()
         self.display.refresh_dest_image(self.faces.selected_frames)
         self.image_canvas.reload()
+        queue_manager.flush_queues()
         logger.trace("Refreshed swapped faces")
 
     def feed_swapped_faces(self):
@@ -152,7 +162,8 @@ class Convset():
                                      self.converter.args.color_adjustment.replace("-", "_"),
                                      self.converter.args.mask_type.replace("-", "_"),
                                      self.converter.args.scaling.replace("-", "_"),
-                                     self.refresh)
+                                     self.refresh,
+                                     self.get_random_set)
         self.opts_book = OptionsBook(options_frame, self.config, self.refresh)
         container.add(options_frame)
 
@@ -221,16 +232,12 @@ class TestSet():
         self.predict()
 
     def load_frames(self):
-        """ Load 'self.sample_size' random frames """
-        # TODO Only read frames we need rather than all of them and discarding
-        # TODO Handle frames without faces
+        """ Load a sample of random frames """
         self.selected_frames = list()
         selection = self.random_choice
-        for idx, item in enumerate(self.images.load()):
-            if idx not in selection:
-                continue
-            filename, image = item
-            filename = os.path.basename(filename)
+
+        for pool, frame_id in enumerate(selection):
+            filename, image = self.get_frame_with_face(pool, frame_id)
             face = self.alignments.get_faces_in_frame(filename)[0]
             detected_face = DetectedFace()
             detected_face.from_alignment(face, image=image)
@@ -239,12 +246,35 @@ class TestSet():
                                          "detected_faces": [detected_face]})
         logger.debug("Selected frames: %s", [frame["filename"] for frame in self.selected_frames])
 
+    def get_frame_with_face(self, pool, frame_id):
+        """ Return the first available frame from current pool that has a face """
+        while True:
+            filename = frame_id + 1 if self.images.is_video else self.images.input_images[frame_id]
+            image = self.images.load_one_image(filename)
+
+            if self.images.is_video:
+                # Dummy out a filename for videos
+                filename, image = image
+
+            filename = os.path.basename(filename)
+
+            if self.alignments.frame_has_faces(filename):
+                return filename, image
+
+            logger.debug("'%s' has no faces, removing from pool", filename)
+            location = self.indices[pool].index(frame_id)
+            del self.indices[pool][location]
+
+            indices = self.indices[pool]
+            new_frame_id = indices[location] if location + 1 <= len(indices) else indices[0]
+            logger.debug("Discarded frame_id: %s, new frame_id: %s", frame_id, new_frame_id)
+            frame_id = new_frame_id
+
     def predict(self):
         """ Predict from the loaded frames """
         self.predicted_items = list()
         for frame in self.selected_frames:
             self.queue_predict_in.put(frame)
-        self.queue_predict_in.put("EOF")
         idx = 0
         while idx < self.sample_size:
             logger.debug("Predicting face %s of %s", idx + 1, self.sample_size)
@@ -423,10 +453,12 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame that holds the left hand side options panel """
-    def __init__(self, parent, selected_color, selected_mask, selected_scaling, patch_callback):
+    def __init__(self, parent, selected_color, selected_mask, selected_scaling,
+                 patch_callback, refresh_callback):
         logger.debug("Initializing %s: (selected_color: %s, selected_mask: %s, "
-                     "selected_scaling: %s, refresh_callback: %s)", self.__class__.__name__,
-                     selected_color, selected_mask, selected_scaling, patch_callback)
+                     "selected_scaling: %s, patch_callback: %s, refresh_callback: %s)",
+                     self.__class__.__name__, selected_color, selected_mask, selected_scaling,
+                     patch_callback, refresh_callback)
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
         self.options = ["color", "mask", "scaling"]
@@ -436,7 +468,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         defaults = {opt: self.format_to_display(d_locals["selected_{}".format(opt)])
                     for opt in self.options}
         self.add_comboboxes(defaults)
-        self.add_refresh_button()
+        self.add_refresh_button(refresh_callback)
         self.add_patch_callback(patch_callback)
 
     @property
@@ -474,15 +506,10 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  control_width=12)
             self.tk_vars[opt] = ctl.tk_var
 
-    def add_refresh_button(self):
+    def add_refresh_button(self, refresh_callback):
         """ Add button to refresh the images """
-        btn = ttk.Button(self, text="Refresh Images", command=self.callback)
+        btn = ttk.Button(self, text="Refresh Images", command=refresh_callback)
         btn.pack(padx=5, pady=10, side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
-
-    @staticmethod
-    def callback():
-        # TODO Change this to do something
-        print("click!")
 
     def add_patch_callback(self, patch_callback):
         """ Add callback to repatch images on action option change """
@@ -529,6 +556,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 if new_value != old_value:
                     logger.trace("Updating config: %s, %s from %s to %s",
                                  section, item, old_value, new_value)
+                    print(new_value)
                     self.config.config[section][item] = str(value.get())
 
     def get_config_dicts(self, config):

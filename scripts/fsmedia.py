@@ -210,11 +210,31 @@ class Images():
             yield filename, frame
         cap.release()
 
-    @staticmethod
-    def load_one_image(filename):
-        """ load requested image """
+    def load_one_image(self, filename):
+        """ load requested image
+            pass in the filename if loading from images
+            pass in the frame number (int) if loading from video
+        """
         logger.trace("Loading image: '%s'", filename)
-        return cv2.imread(filename)  # pylint: disable=no-member
+        if self.is_video:
+            retval = self.load_one_video_frame(filename)
+        else:
+            retval = cv2.imread(filename)  # pylint: disable=no-member
+        return retval
+
+    def load_one_video_frame(self, frame_no):
+        """ Load a single frame from a video file """
+        logger.trace("Loading video frame: %s", frame_no)
+        vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
+        cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no - 1)  # pylint: disable=no-member
+        ret, frame = cap.read()
+        if not ret:
+            logger.error("Unable to read from %s from video %s", frame_no, self.args.input_dir)
+            exit(1)
+        filename = "{}_{:06d}.png".format(vidname, frame_no)
+        cap.release()
+        return filename, frame
 
 
 class PostProcess():

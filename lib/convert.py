@@ -37,32 +37,38 @@ class Converter():
         """ reinitialize converter """
         logger.debug("Reinitializing converter")
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
-        self.load_plugins(config=config)
+        self.load_plugins(config=config, disable_logging=True)
         logger.debug("Reinitialized converter")
 
-    def load_plugins(self, config=None):
+    def load_plugins(self, config=None, disable_logging=False):
         """ Load the requested adjustment plugins """
         logger.debug("Loading plugins. config: %s", config)
-        self.adjustments["box"] = PluginLoader.get_converter("mask", "box_blend")(
-            "none",
-            self.output_size,
-            config=config)
+        self.adjustments["box"] = PluginLoader.get_converter(
+            "mask",
+            "box_blend",
+            disable_logging=disable_logging)("none",
+                                             self.output_size,
+                                             config=config)
 
-        self.adjustments["mask"] = PluginLoader.get_converter("mask", "mask_blend")(
-            self.args.mask_type,
-            self.output_size,
-            self.output_has_mask,
-            config=config)
+        self.adjustments["mask"] = PluginLoader.get_converter(
+            "mask",
+            "mask_blend",
+            disable_logging=disable_logging)(self.args.mask_type,
+                                             self.output_size,
+                                             self.output_has_mask,
+                                             config=config)
 
         if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
             self.adjustments["color"] = PluginLoader.get_converter(
                 "color",
-                self.args.color_adjustment)(config=config)
+                self.args.color_adjustment,
+                disable_logging=disable_logging)(config=config)
 
         if self.args.scaling != "none" and self.args.scaling is not None:
             self.adjustments["scaling"] = PluginLoader.get_converter(
                 "scaling",
-                self.args.scaling)(config=config)
+                self.args.scaling,
+                disable_logging=disable_logging)(config=config)
         logger.debug("Loaded plugins: %s", self.adjustments)
 
     def process(self, in_queue, out_queue):
