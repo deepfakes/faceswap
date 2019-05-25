@@ -3,9 +3,8 @@
 
 import logging
 
-from pathlib import Path
-import cv2
 import os
+import cv2
 import keras
 import numpy as np
 from lib.utils import GetModel
@@ -28,7 +27,7 @@ def get_default_mask():
 
 class Mask():
     """ Parent class for masks
-        Faces may be of shape (batch_size, height, width, 3) or (height, width, 3) 
+        Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
         of dtype float32 and with range[0., 1.]
         Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
         Produced mask will be in range [0, 1.]
@@ -38,17 +37,17 @@ class Mask():
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
 
-    def __init__(self, mask_type, faces, landmarks, channels=4):
+    def __init__(self, mask_type, faces, landmarks=None, means=None, channels=4):
         logger.trace("Initializing %s: (mask_type: %s, channels: %s)",
                      self.__class__.__name__, mask_type, channels)
         assert channels in (1, 3, 4), "Channels should be 1, 3 or 4"
         self.mask_type = mask_type
         self.channels = channels
-        masks = self.build_masks(mask_type, faces, landmarks)
+        masks = self.build_masks(mask_type, faces, means, landmarks)
         self.masks = self.merge_masks(faces, masks)
         logger.trace("Initialized %s", self.__class__.__name__)
 
-    def build_masks(self, mask_type, faces, landmarks):
+    def build_masks(self, mask_type, faces, means, landmarks):
         """ Override to build the mask """
         raise NotImplementedError
 
@@ -66,13 +65,16 @@ class Mask():
 
 
 class Facehull(Mask):
+    """ Face masks designed from facehulls of facial landmark points """
 
-    def one(self, landmarks):
+    @staticmethod
+    def one(landmarks):
         """ Basic facehull mask """
         parts = [(landmarks)]
         return parts
 
-    def three(self, landmarks):
+    @staticmethod
+    def three(landmarks):
         """ DFL facehull mask """
         nose_ridge = (landmarks[27:31], landmarks[33:34])
         jaw = (landmarks[0:17],
@@ -88,7 +90,8 @@ class Facehull(Mask):
         parts = [jaw, nose_ridge, eyes]
         return parts
 
-    def eight(self, landmarks):
+    @staticmethod
+    def eight(landmarks):
         """ Component facehull mask """
         r_jaw = (landmarks[0:9], landmarks[17:18])
         l_jaw = (landmarks[8:17], landmarks[26:27])
@@ -107,7 +110,7 @@ class Facehull(Mask):
         parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
         return parts
 
-    def build_masks(self, mask_type, faces, landmarks):
+    def build_masks(self, mask_type, faces, means, landmarks):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
@@ -127,15 +130,18 @@ class Facehull(Mask):
                 hull = cv2.convexHull(np.concatenate(item))
                 try:
                     cv2.fillConvexPoly(masks[i], hull, 1.)
-                except:
-                    print("cv2 error")
+                except Exception as error:
+                    print("CV2 Error '{0}' occured. Arguments {1}.".format(error.message, error.args))
+                # else:
+                    # trace block
 
         return masks
 
 
 class Smart(Mask):
+    """ Neural net trained segmentation masks for face areas """
 
-    def build_masks(self, mask_type, faces, landmarks=None):
+    def build_masks(self, mask_type, faces, means, landmarks):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
@@ -145,23 +151,27 @@ class Smart(Mask):
         build_dict = {"vgg_300":     (8, "Nirkin_300_softmax_v1.h5"),
                       "vgg_500":     (5, "Nirkin_500_softmax_v1.h5"),
                       "unet_256":    (6, "DFL_256_sigmoid_v1.h5"),
-                      None:          (5,  "Nirkin_500_softmax_v1.h5")}
+                      None:          (5, "Nirkin_500_softmax_v1.h5")}
         git_model_id, model_filename = build_dict[mask_type]
         cache_path = os.path.join(os.path.dirname(__file__), ".cache")
         model = GetModel(model_filename, cache_path, git_model_id)
         mask_model = keras.models.load_model(model.model_path)
 
+        postprocess_test = False
+
         masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
-        if  model_type=='DFL':
+        if  model_filename.startswith('DFL'):
             model_input = faces
             masks = mask_model.predict(model_input)
             low = masks < 0.1
             high = masks > 0.9
-        if model_type=='Nirkin':
-            model_input = (faces - self.means)
+        if model_filename.startswith('Nirkin'):
+            # pylint: disable=no-member
+            model_input = (faces - means)
             masks = mask_model.predict_on_batch(model_input)[..., 1:2]
-            generator = (cv2.GaussianBlur(mask, (7,7), 0) for mask in masks)
-            # generator = (self.postprocessing(mask[:, :, None]) for mask in masks)
+            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in masks)
+            if postprocess_test:
+                generator = (self.postprocessing(mask[:, :, None]) for mask in masks)
             masks = np.array(tuple(generator))[..., None]
             low = masks < 0.025
             high = masks > 0.975
@@ -173,7 +183,7 @@ class Smart(Mask):
         @staticmethod
         def postprocessing(mask):
             # pylint: disable=no-member
-            """ doc string """
+            """ Post-processing of Nirkin style segmentation masks """
             #Select_largest_segment
             pop_small_segments = False # Don't do this right now
             if pop_small_segments:
@@ -198,20 +208,20 @@ class Smart(Mask):
                 not_holes = mask.copy()
                 not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
                 cv2.floodFill(not_holes, None, (0, 0), 255)
-                holes = cv2.bitwise_not(not_holes)[2:-2,2:-2]
+                holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]
                 mask = cv2.bitwise_or(mask, holes)
                 mask = np.expand_dims(mask, axis=-1)
-                
+
             return mask
 
         return masks
 
 
 class Dummy(Mask):
+    """ Dummy mask to enable full crop training of face and background """
 
-    def build_masks(self, mask_type, faces, landmarks=None):
+    def build_masks(self, mask_type, faces, means, landmarks):
         """ Dummy mask of all ones """
         masks = np.ones_like(faces)
 
         return masks
-

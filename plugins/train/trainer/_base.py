@@ -142,11 +142,12 @@ class TrainerBase():
                                                            model_in_size,
                                                            self.batch_size)
             imgs_npy /= 255.
-            imgs_marks = zip(imgs_npy[:, None, ...], landmarks[:, None, ...])
-            for i, (img, landmark) in enumerate(imgs_marks):
+            imgs_marks = zip(imgs_npy[:, None, ...], landmarks[:, None, ...], means[:, None, ...])
+            for i, (img, landmark, mean) in enumerate(imgs_marks):
                 imgs_npy[i] = np.squeeze(Mask(mask_type,
                                               img,
                                               landmark,
+                                              mean,
                                               channels=4).masks, axis=0)
             del imgs_npy  # flush memmap to disk and save changes
             images[side] = {"images":       file,
