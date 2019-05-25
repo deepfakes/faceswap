@@ -32,13 +32,13 @@ def get_config():
     return _CONFIG
 
 
-def initialize_images():
-    """ Initialize the config and add to global constant """
+def initialize_images(pathcache=None):
+    """ Initialize the images and add to global constant """
     global _IMAGES  # pylint: disable=global-statement
     if _IMAGES is not None:
         return
     logger.debug("Initializing images")
-    _IMAGES = Images()
+    _IMAGES = Images(pathcache)
 
 
 def get_images():
@@ -219,9 +219,9 @@ class Images():
         Don't call directly. Call get_images()
     """
 
-    def __init__(self):
+    def __init__(self, pathcache=None):
         logger.debug("Initializing %s", self.__class__.__name__)
-        pathcache = get_config().pathcache
+        pathcache = get_config().pathcache if pathcache is None else pathcache
         self.pathicons = os.path.join(pathcache, "icons")
         self.pathpreview = os.path.join(pathcache, "preview")
         self.pathoutput = None

@@ -9,11 +9,16 @@ Sketch:
     - live update on settings change
     - apply + save config
 """
+
+# TODO put processing in background with indicator when refreshing
+# Each time processing triggers, just run with latest value, not with every value passed
 import logging
 import random
 import tkinter as tk
 from tkinter import ttk
 import os
+import sys
+from configparser import ConfigParser
 
 import cv2
 import numpy as np
@@ -21,7 +26,8 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.utils import ControlBuilder
+from lib.gui.utils import ControlBuilder, get_images, initialize_images
+from lib.gui.tooltip import Tooltip
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.model.masks import get_available_masks
@@ -58,6 +64,10 @@ class Convset():
                                    arguments=self.generate_converter_arguments(arguments))
 
         self.root = tk.Tk()
+        pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
+        pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
+        initialize_images(pathcache=pathcache)
+
         self.display = FacesDisplay(256, 64)
         self.image_canvas = None
         self.opts_book = None
@@ -555,7 +565,6 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 if new_value != old_value:
                     logger.trace("Updating config: %s, %s from %s to %s",
                                  section, item, old_value, new_value)
-                    print(new_value)
                     self.config.config[section][item] = str(value.get())
 
     def get_config_dicts(self, config):
@@ -598,6 +607,55 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
             for tk_var in plugins.values():
                 tk_var.trace("w", patch_callback)
 
+    def reset_config_saved(self, section):
+        """ Reset config to saved values """
+        logger.debug("Resetting to saved config: %s", section)
+        for item, options in self.config_dicts[section].items():
+            if item == "helptext":
+                continue
+            val = options["value"]
+            if val != self.tk_vars[section][item].get():
+                self.tk_vars[section][item].set(val)
+                logger.debug("Setting %s - %s to saved value %s", section, item, val)
+        logger.debug("Reset to saved config: %s", section)
+
+    def reset_config_default(self, section):
+        """ Reset config to default values """
+        logger.debug("Resetting to default: %s", section)
+        for item, options in self.config.defaults[section].items():
+            if item == "helptext":
+                continue
+            default = options["default"]
+            if default != self.tk_vars[section][item].get():
+                self.tk_vars[section][item].set(default)
+                logger.debug("Setting %s - %s to default value %s", section, item, default)
+        logger.debug("Reset to default: %s", section)
+
+    def save_config(self, section):
+        """ Save config """
+        logger.debug("Saving %s config", section)
+        new_config = ConfigParser(allow_no_value=True)
+        for config_section, items in self.config_dicts.items():
+            logger.debug("Adding section: '%s')", config_section)
+            self.config.insert_config_section(config_section, items["helptext"], config=new_config)
+            for item, options in items.items():
+                if item == "helptext":
+                    continue
+                if config_section != section:
+                    new_opt = options["value"]  # Keep saved item for other sections
+                    logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
+                else:
+                    new_opt = self.tk_vars[section][item].get()
+                    logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
+                helptext = options["helptext"]
+                helptext = self.config.format_help(helptext, is_section=False)
+                new_config.set(config_section, helptext)
+                new_config.set(config_section, item, str(new_opt))
+        self.config.config = new_config
+        self.config.save_config()
+        print("Saved config: '{}'".format(self.config.configfile))
+        logger.debug("Saved config")
+
 
 class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Config Frame - Holds the Options for config """
@@ -609,7 +667,10 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.options = options
 
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        self.canvas_frame = ttk.Frame(self)
+        self.canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.canvas = tk.Canvas(self.canvas_frame, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.optsframe = ttk.Frame(self.canvas)
@@ -640,12 +701,14 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  helptext=val["helptext"],
                                  radio_columns=4)
             parent.tk_vars.setdefault(config_key, dict())[key] = ctl.tk_var
+        self.add_frame_separator()
+        self.add_actions(parent, config_key)
         logger.debug("Added Config Frame")
 
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
         logger.debug("Add Config Scrollbar")
-        scrollbar = ttk.Scrollbar(self, command=self.canvas.yview)
+        scrollbar = ttk.Scrollbar(self.canvas_frame, command=self.canvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.config(yscrollcommand=scrollbar.set)
         self.optsframe.bind("<Configure>", self.update_scrollbar)
@@ -661,3 +724,37 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         canvas_width = event.width
         self.canvas.itemconfig(self.optscanvas, width=canvas_width)
         logger.debug("Resized Config Frame")
+
+    def add_frame_separator(self):
+        """ Add a separator between top and bottom frames """
+        logger.debug("Add frame seperator")
+        sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
+        sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
+        logger.debug("Added frame seperator")
+
+    def add_actions(self, parent, config_key):
+        """ Add Actio Buttons """
+        logger.debug("Adding util buttons")
+        action_frame = ttk.Frame(self)
+        action_frame.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.Y, expand=True, anchor=tk.E)
+
+        title = config_key.split(".")[1].replace("_", " ").title()
+        for utl in ("save", "clear", "reset"):
+            logger.debug("Adding button: '%s'", utl)
+            img = get_images().icons[utl]
+            if utl == "save":
+                text = "Save {} config".format(title)
+                action = parent.save_config
+            elif utl == "clear":
+                text = "Reset {} config to default values".format(title)
+                action = parent.reset_config_default
+            elif utl == "reset":
+                text = "Reset {} config to saved values".format(title)
+                action = parent.reset_config_saved
+
+            btnutl = ttk.Button(action_frame,
+                                image=img,
+                                command=lambda cmd=action: cmd(config_key))
+            btnutl.pack(padx=2, side=tk.RIGHT)
+            Tooltip(btnutl, text=text, wraplength=200)
+        logger.debug("Added util buttons")
