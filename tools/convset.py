@@ -10,8 +10,7 @@ Sketch:
     - apply + save config
 """
 
-# TODO put processing in background with indicator when refreshing
-# Each time processing triggers, just run with latest value, not with every value passed
+# TODO Add indicator when refreshing
 import logging
 import random
 import tkinter as tk
@@ -19,6 +18,7 @@ from tkinter import ttk
 import os
 import sys
 from configparser import ConfigParser
+from threading import Event, Lock
 
 import cv2
 import numpy as np
@@ -31,6 +31,7 @@ from lib.gui.tooltip import Tooltip
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.model.masks import get_available_masks
+from lib.multithreading import MultiThread
 from lib.utils import set_system_verbosity
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
@@ -50,25 +51,23 @@ class Convset():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         set_system_verbosity(arguments.loglevel)
-        self.queues = {"patch_in": queue_manager.get_queue("convset_patch_in"),
-                       "patch_out": queue_manager.get_queue("convset_patch_out")}
-
-        self.faces = TestSet(arguments, self.queue_patch_in)
         self.config = Config(None)
+        self.lock = Lock()
+        self.trigger_patch = Event()
 
-        self.converter = Converter(output_dir=None,
-                                   output_size=self.faces.predictor.output_size,
-                                   output_has_mask=self.faces.predictor.has_predicted_mask,
-                                   draw_transparent=False,
-                                   pre_encode=None,
-                                   arguments=self.generate_converter_arguments(arguments))
+        self.root = self.initialize_tkinter()
+        self.refresh_tk = tk.BooleanVar()
+        self.refresh_tk.set(False)
+        self.display = FacesDisplay(256, 64, self.refresh_tk)
+        self.samples = Samples(arguments, 4, self.display, self.lock, self.trigger_patch)
+        self.patch = Patch(arguments,
+                           self.samples,
+                           self.display,
+                           self.lock,
+                           self.trigger_patch,
+                           self.config,
+                           self.refresh_tk)
 
-        self.root = tk.Tk()
-        pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
-        pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        initialize_images(pathcache=pathcache)
-
-        self.display = FacesDisplay(256, 64)
         self.image_canvas = None
         self.opts_book = None
         self.cli_frame = None  # cli frame holds cli options
@@ -76,15 +75,195 @@ class Convset():
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @property
-    def queue_patch_in(self):
-        """ Patch in queue """
-        return self.queues["patch_in"]
+    @staticmethod
+    def initialize_tkinter():
+        """ Initialize tkinter for standalone or GUI """
+        logger.debug("Initializing tkinter")
+        root = tk.Tk()
+        pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
+        pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
+        initialize_images(pathcache=pathcache)
+        logger.debug("Initialized tkinter")
+        return root
+
+    def process(self):
+        """ The convset process """
+        self.build_ui()
+        self.root.mainloop()
+
+    def refresh(self, *args):
+        """ Refresh the display """
+        logger.trace("Refreshing swapped faces. args: %s", args)
+        self.opts_book.update_config()
+        with self.lock:
+            self.patch.converter_arguments = self.cli_frame.convert_args
+            self.patch.current_config = self.config
+        self.patch.trigger.set()
+        logger.trace("Refreshed swapped faces")
+
+    def build_ui(self):
+        """ Build the UI elements for displaying preview and options """
+        container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
+        container.pack(fill=tk.BOTH, expand=True)
+        container.convset_display = self.display
+        self.image_canvas = ImagesCanvas(container, self.refresh_tk)
+        container.add(self.image_canvas)
+
+        options_frame = ttk.Frame(container)
+        self.cli_frame = ActionFrame(options_frame,
+                                     self.patch.converter.args.color_adjustment.replace("-", "_"),
+                                     self.patch.converter.args.mask_type.replace("-", "_"),
+                                     self.patch.converter.args.scaling.replace("-", "_"),
+                                     self.refresh,
+                                     self.samples.generate)
+        self.opts_book = OptionsBook(options_frame, self.config, self.refresh)
+        container.add(options_frame)
+
+
+class Samples():
+    """ Holds 4 random test faces """
+
+    def __init__(self, arguments, sample_size, display, lock, trigger_patch):
+        logger.debug("Initializing %s: (arguments: '%s', sample_size: %s, display: %s, lock: %s, "
+                     "trigger_patch: %s)", self.__class__.__name__, arguments, sample_size,
+                     display, lock, trigger_patch)
+        self.sample_size = sample_size
+        self.display = display
+        self.lock = lock
+        self.trigger_patch = trigger_patch
+        self.input_images = list()
+        self.predicted_images = list()
+
+        self.images = Images(arguments)
+        self.alignments = Alignments(arguments,
+                                     is_extract=False,
+                                     input_is_video=self.images.is_video)
+        self.filelist = self.get_filelist()
+        self.indices = self.get_indices()
+
+        self.predictor = Predict(queue_manager.get_queue("convset_predict_in"),
+                                 sample_size,
+                                 arguments)
+        self.generate()
+
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def queue_patch_out(self):
-        """ Patch out queue """
-        return self.queues["patch_out"]
+    def random_choice(self):
+        """ Return for random indices from the indices group """
+        retval = [random.choice(indices) for indices in self.indices]
+        logger.debug(retval)
+        return retval
+
+    def get_filelist(self):
+        """ Return a list of files, filtering out those frames which do not contain faces """
+        logger.debug("Filtering file list to frames with faces")
+        if self.images.is_video:
+            filelist = ["{}_{:06d}.png".format(os.path.splitext(self.images.input_images)[0],
+                                               frame_no)
+                        for frame_no in range(1, self.images.images_found + 1)]
+        else:
+            filelist = self.images.input_images
+
+        retval = [filename for filename in filelist
+                  if self.alignments.frame_has_faces(os.path.basename(filename))]
+        logger.debug("Filtered out frames: %s", self.images.images_found - len(retval))
+        return retval
+
+    def get_indices(self):
+        """ Returns a list of 'self.sample_size' evenly sized partition indices
+            pertaining to the filtered file list """
+        # Remove start and end values to get a list divisible by self.sample_size
+        no_files = len(self.filelist)
+        crop = no_files % self.sample_size
+        top_tail = list(range(no_files))[
+            crop // 2:no_files - (crop - (crop // 2))]
+        # Partition the indices
+        size = len(top_tail)
+        retval = [top_tail[start:start + size // self.sample_size]
+                  for start in range(0, size, size // self.sample_size)]
+        logger.debug("Indices pools: %s", ["{}: (start: {}, end: {}, size: {})".format(idx,
+                                                                                       min(pool),
+                                                                                       max(pool),
+                                                                                       len(pool))
+                                           for idx, pool in enumerate(retval)])
+        return retval
+
+    def generate(self):
+        """ Generate a random test set """
+        self.load_frames()
+        self.predict()
+        self.trigger_patch.set()
+
+    def load_frames(self):
+        """ Load a sample of random frames """
+        self.input_images = list()
+        for selection in self.random_choice:
+            filename = os.path.basename(self.filelist[selection])
+            image = self.images.load_one_image(self.filelist[selection])
+            # Get first face only
+            face = self.alignments.get_faces_in_frame(filename)[0]
+            detected_face = DetectedFace()
+            detected_face.from_alignment(face, image=image)
+            self.input_images.append({"filename": filename,
+                                      "image": image,
+                                      "detected_faces": [detected_face]})
+        self.display.source = self.input_images
+        self.display.update_source = True
+        logger.debug("Selected frames: %s", [frame["filename"] for frame in self.input_images])
+
+    def predict(self):
+        """ Predict from the loaded frames """
+        with self.lock:
+            self.predicted_images = list()
+            for frame in self.input_images:
+                self.predictor.in_queue.put(frame)
+            idx = 0
+            while idx < self.sample_size:
+                logger.debug("Predicting face %s of %s", idx + 1, self.sample_size)
+                item = self.predictor.out_queue.get()
+                if item == "EOF":
+                    logger.debug("Received EOF")
+                    break
+                self.predicted_images.append(item)
+                logger.debug("Predicted face %s of %s", idx + 1, self.sample_size)
+                idx += 1
+        logger.debug("Predicted faces")
+
+
+class Patch():
+    """ The patch pipeline
+        To be run within it's own thread """
+    def __init__(self, arguments, samples, display, lock, trigger, config, refresh_tkvar):
+        logger.debug("Initializing %s: (arguments: '%s', samples: %s: display: %s, lock: %s,"
+                     " trigger: %s, config: %s, refresh_tkvar %s)", self.__class__.__name__,
+                     arguments, samples, display, lock, trigger, config, refresh_tkvar)
+        self.samples = samples
+        self.queue_patch_in = queue_manager.get_queue("convset_patch_in")
+        self.display = display
+        self.lock = lock
+        self.trigger = trigger
+        self.current_config = config
+        self.converter_arguments = None  # Updated converter arguments dict
+
+        self.converter = Converter(output_dir=None,
+                                   output_size=self.samples.predictor.output_size,
+                                   output_has_mask=self.samples.predictor.has_predicted_mask,
+                                   draw_transparent=False,
+                                   pre_encode=None,
+                                   arguments=self.generate_converter_arguments(arguments))
+
+        self.shutdown = Event()
+
+        self.thread = MultiThread(self.process,
+                                  self.trigger,
+                                  self.shutdown,
+                                  self.queue_patch_in,
+                                  self.samples,
+                                  refresh_tkvar,
+                                  thread_count=1,
+                                  name="patch_thread")
+        self.thread.start()
 
     @staticmethod
     def generate_converter_arguments(arguments):
@@ -104,225 +283,104 @@ class Convset():
         logger.debug(arguments)
         return arguments
 
-    def process(self):
-        """ The convset process """
-        self.get_random_set(refresh=False)
-        self.build_ui()
-        self.root.mainloop()
+    def process(self, trigger_event, shutdown_event, patch_queue_in, samples, refresh_tkvar):
+        """ Wait for event trigger and run when process when set """
+        patch_queue_out = queue_manager.get_queue("convset_patch_out")
+        while True:
+            trigger = trigger_event.wait(1)
+            if shutdown_event.is_set():
+                logger.debug("Shutdown received")
+                break
+            if not trigger:
+                continue
+            # Clear trigger so calling process can set it during this run
+            trigger_event.clear()
 
-    def get_random_set(self, refresh=True):
-        """ Generate a set of face samples from the frames pool """
-        logger.debug("Generating a random face set. refresh: %s", refresh)
-        self.faces.generate()
-        self.patch_faces()
-        self.display.build_faces_image(self.faces.selected_frames)
-        if refresh:
-            self.image_canvas.reload()
-        queue_manager.flush_queues()
-        logger.debug("Generated a random face set.")
+            queue_manager.flush_queue("convset_patch_in")
+            self.feed_swapped_faces(patch_queue_in, samples)
+            with self.lock:
+                self.update_converter_arguments()
+                self.converter.reinitialize(config=self.current_config)
+            swapped = self.patch_faces(patch_queue_in, patch_queue_out, samples.sample_size)
+            with self.lock:
+                self.display.destination = swapped
+            refresh_tkvar.set(True)
 
-    def patch_faces(self):
+    def update_converter_arguments(self):
+        """ Update the converter arguments """
+        logger.debug("Updating Converter cli arguments")
+        if self.converter_arguments is None:
+            return
+        for key, val in self.converter_arguments.items():
+            setattr(self.converter.args, key, val)
+        logger.debug("Updated Converter cli arguments")
+
+    @staticmethod
+    def feed_swapped_faces(patch_queue_in, samples):
+        """ Feed swapped faces to the converter and trigger a run """
+        logger.trace("feeding swapped faces to converter")
+        for item in samples.predicted_images:
+            patch_queue_in.put(item)
+        logger.trace("fed %s swapped faces to converter", len(samples.predicted_images))
+        logger.trace("Putting EOF to converter")
+        patch_queue_in.put("EOF")
+
+    def patch_faces(self, queue_in, queue_out, sample_size):
         """ Patch faces """
         logger.trace("Patching faces")
-        self.converter.process(self.queue_patch_in, self.queue_patch_out)
+        self.converter.process(queue_in, queue_out)
+        swapped = list()
         idx = 0
-        while idx < self.faces.sample_size:
-            logger.trace("Patching image %s of %s", idx + 1, self.faces.sample_size)
-            item = self.queue_patch_out.get()
-            self.faces.selected_frames[idx]["swapped_image"] = item[1]
-            logger.trace("Patched image %s of %s", idx + 1, self.faces.sample_size)
+        while idx < sample_size:
+            logger.trace("Patching image %s of %s", idx + 1, sample_size)
+            item = queue_out.get()
+            swapped.append(item[1])
+            logger.trace("Patched image %s of %s", idx + 1, sample_size)
             idx += 1
         logger.trace("Patched faces")
-
-    def refresh(self, *args):
-        """ Refresh the display """
-        # Update converter arguments
-        logger.trace("Refreshing swapped faces. args: %s", args)
-        for key, val in self.cli_frame.convert_args.items():
-            setattr(self.converter.args, key, val)
-        self.opts_book.update_config()
-        self.converter.reinitialize(config=self.config)
-        self.feed_swapped_faces()
-        self.patch_faces()
-        self.display.refresh_dest_image(self.faces.selected_frames)
-        self.image_canvas.reload()
-        queue_manager.flush_queues()
-        logger.trace("Refreshed swapped faces")
-
-    def feed_swapped_faces(self):
-        """ Feed swapped faces to the converter """
-        logger.trace("feeding swapped faces to converter")
-        for item in self.faces.predicted_items:
-            self.queue_patch_in.put(item)
-        logger.trace("fed %s swapped faces to converter", len(self.faces.predicted_items))
-        logger.trace("Putting EOF to converter")
-        self.queue_patch_in.put("EOF")
-
-    def build_ui(self):
-        """ Build the UI elements for displaying preview and options """
-        container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
-        container.pack(fill=tk.BOTH, expand=True)
-        container.convset_display = self.display
-        self.image_canvas = ImagesCanvas(container)
-        container.add(self.image_canvas)
-
-        options_frame = ttk.Frame(container)
-        self.cli_frame = ActionFrame(options_frame,
-                                     self.converter.args.color_adjustment.replace("-", "_"),
-                                     self.converter.args.mask_type.replace("-", "_"),
-                                     self.converter.args.scaling.replace("-", "_"),
-                                     self.refresh,
-                                     self.get_random_set)
-        self.opts_book = OptionsBook(options_frame, self.config, self.refresh)
-        container.add(options_frame)
-
-
-class TestSet():
-    """ Holds 4 random test faces """
-
-    def __init__(self, arguments, patch_queue):
-        logger.debug("Initializing %s: (arguments: '%s', patch_queue: %s)",
-                     self.__class__.__name__, arguments, patch_queue)
-        self.sample_size = 4
-
-        self.images = Images(arguments)
-        self.alignments = Alignments(arguments,
-                                     is_extract=False,
-                                     input_is_video=self.images.is_video)
-        self.queues = {"predict_in": queue_manager.get_queue("convset_predict_in"),
-                       "patch_in": patch_queue}
-        self.indices = self.get_indices()
-        self.predictor = Predict(self.queues["predict_in"], 4, arguments)
-
-        self.predicted_items = list()
-        self.selected_frames = list()
-
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def random_choice(self):
-        """ Return for random indices from the indices group """
-        retval = [random.choice(indices) for indices in self.indices]
-        logger.debug(retval)
-        return retval
-
-    @property
-    def queue_predict_in(self):
-        """ Predict in queue """
-        return self.queues["predict_in"]
-
-    @property
-    def queue_predict_out(self):
-        """ Predict in queue """
-        return self.predictor.out_queue
-
-    @property
-    def queue_patch_in(self):
-        """ Patch in queue """
-        return self.queues["patch_in"]
-
-    def get_indices(self):
-        """ Returns a list of 'self.sample_size' evenly sized partition indices
-            pertaining to the file file list """
-        # Remove start and end values to get a list divisible by self.sample_size
-        crop = self.images.images_found % self.sample_size
-        top_tail = list(range(self.images.images_found))[
-            crop // 2:self.images.images_found - (crop - (crop // 2))]
-        # Partition the indices
-        size = len(top_tail)
-        retval = [top_tail[start:start + size // self.sample_size]
-                  for start in range(0, size, size // self.sample_size)]
-        logger.debug(retval)
-        return retval
-
-    def generate(self):
-        """ Generate a random test set """
-        self.load_frames()
-        self.predict()
-
-    def load_frames(self):
-        """ Load a sample of random frames """
-        self.selected_frames = list()
-        selection = self.random_choice
-
-        for pool, frame_id in enumerate(selection):
-            filename, image = self.get_frame_with_face(pool, frame_id)
-            face = self.alignments.get_faces_in_frame(filename)[0]
-            detected_face = DetectedFace()
-            detected_face.from_alignment(face, image=image)
-            self.selected_frames.append({"filename": filename,
-                                         "image": image,
-                                         "detected_faces": [detected_face]})
-        logger.debug("Selected frames: %s", [frame["filename"] for frame in self.selected_frames])
-
-    def get_frame_with_face(self, pool, frame_id):
-        """ Return the first available frame from current pool that has a face """
-        while True:
-            filename = frame_id + 1 if self.images.is_video else self.images.input_images[frame_id]
-            image = self.images.load_one_image(filename)
-
-            if self.images.is_video:
-                # Dummy out a filename for videos
-                filename, image = image
-
-            filename = os.path.basename(filename)
-
-            if self.alignments.frame_has_faces(filename):
-                return filename, image
-
-            logger.debug("'%s' has no faces, removing from pool", filename)
-            location = self.indices[pool].index(frame_id)
-            del self.indices[pool][location]
-
-            indices = self.indices[pool]
-            new_frame_id = indices[location] if location + 1 <= len(indices) else indices[0]
-            logger.debug("Discarded frame_id: %s, new frame_id: %s", frame_id, new_frame_id)
-            frame_id = new_frame_id
-
-    def predict(self):
-        """ Predict from the loaded frames """
-        self.predicted_items = list()
-        for frame in self.selected_frames:
-            self.queue_predict_in.put(frame)
-        idx = 0
-        while idx < self.sample_size:
-            logger.debug("Predicting face %s of %s", idx + 1, self.sample_size)
-            item = self.queue_predict_out.get()
-            if item == "EOF":
-                logger.debug("Received EOF")
-                break
-            self.queue_patch_in.put(item)
-            self.predicted_items.append(item)
-            self.selected_frames[idx]["source_face"] = item["detected_faces"][0].reference_face
-            self.selected_frames[idx]["swapped_face"] = item["swapped_faces"][0]
-            logger.debug("Predicted face %s of %s", idx + 1, self.sample_size)
-            idx += 1
-        self.queue_patch_in.put("EOF")
-        logger.debug("Predicted faces")
+        return swapped
 
 
 class FacesDisplay():
     """ Compiled faces into a single image """
-    def __init__(self, size, padding):
-        logger.trace("Initializing %s: (size: %s, padding: %s)",
-                     self.__class__.__name__, size, padding)
+    # TODO update source images from samples, dest images from patch queue
+    def __init__(self, size, padding, refresh_tkvar):
+        logger.trace("Initializing %s: (size: %s, padding: %s, refresh_tkvar: %s)",
+                     self.__class__.__name__, size, padding, refresh_tkvar)
         self.size = size
         self.display_dims = (1, 1)
+        self.refresh_tkvar = refresh_tkvar
         self.padding = padding
+
+        # Set from Samples
+        self.update_source = False
+        self.source = list()  # Source images, filenames + detected faces
+        # Set from Patch
+        self.destination = list()  # Swapped + patched images
+
         self.faces = dict()
         self.faces_source = None
         self.faces_dest = None
         self.tk_image = None
         logger.trace("Initialized %s", self.__class__.__name__)
 
+    @property
+    def total_columns(self):
+        """ Return the total number of images that are being displayed """
+        return len(self.source)
+
     def update_tk_image(self):
         """ Return compiled images images in TK PIL format resized for frame """
+        logger.trace("Updating tk image")
+        self.build_faces_image()
         img = np.vstack((self.faces_source, self.faces_dest))
         size = self.get_scale_size(img)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # pylint:disable=no-member
         img = Image.fromarray(img)
         img = img.resize(size, Image.ANTIALIAS)
         self.tk_image = ImageTk.PhotoImage(img)
+        self.refresh_tkvar.set(False)
+        logger.trace("Updated tk image")
 
     def get_scale_size(self, image):
         """ Return the scale and size for passed in display image """
@@ -338,75 +396,81 @@ class FacesDisplay():
         logger.trace("scale: %s, size: %s", scale, size)
         return size
 
-    def build_faces_image(self, images):
+    def build_faces_image(self):
         """ Display associated faces """
-        total_faces = len(images)
-        self.faces_from_frames(images)
-        header = self.header_text(self.faces["filenames"], total_faces)
-        source = np.hstack([self.draw_rect(face) for face in self.faces["src"]])
+        logger.trace("Building Faces Image")
+        update_all = self.update_source
+        self.faces_from_frames()
+        if update_all:
+            header = self.header_text()
+            source = np.hstack([self.draw_rect(face) for face in self.faces["src"]])
+            self.faces_source = np.vstack((header, source))
         self.faces_dest = np.hstack([self.draw_rect(face) for face in self.faces["dst"]])
-        self.faces_source = np.vstack((header, source))
         logger.debug("source row shape: %s, swapped row shape: %s",
                      self.faces_dest.shape, self.faces_source.shape)
 
-    def refresh_dest_image(self, images):
-        """ Refresh the destination image
-            Most times, only the destination image needs to be updated, so kept separate """
-        for idx, image in enumerate(images):
-            self.faces["dst"][idx] = AlignerExtract().transform(
-                image["swapped_image"],
-                self.faces["matrix"][idx],
-                self.size,
-                self.padding)
-        self.faces_dest = np.hstack([self.draw_rect(face) for face in self.faces["dst"]])
-        logger.debug("swapped row shape: %s", self.faces_source.shape)
-
-    def faces_from_frames(self, images):
+    def faces_from_frames(self):
         """ Compile faces from the original images and return a row for each of source and dest """
         # TODO Padding from coverage
-        logger.debug("Extracting faces from frames: Number images: %s", len(images))
-        logger.trace("images keys: %s", [key for key in images[0].keys()])
+        logger.debug("Extracting faces from frames: Number images: %s", len(self.source))
+        if self.update_source:
+            self.crop_source_faces()
+        self.crop_destination_faces()
+        logger.debug("Extracted faces from frames: %s", {k: len(v) for k, v in self.faces.items()})
+
+    def crop_source_faces(self):
+        """ Update the main faces dict with new source faces and matrices """
+        logger.debug("Updating source faces")
         self.faces = dict()
-        for image in images:
+        for image in self.source:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
-            swp_img = image["swapped_image"]
             detected_face.load_aligned(src_img, self.size, align_eyes=False)
             matrix = detected_face.aligned["matrix"]
+            self.faces.setdefault("filenames",
+                                  list()).append(os.path.splitext(image["filename"])[0])
             self.faces.setdefault("matrix", list()).append(matrix)
             self.faces.setdefault("src", list()).append(AlignerExtract().transform(
                 src_img,
                 matrix,
                 self.size,
                 self.padding))
-            self.faces.setdefault("dst", list()).append(AlignerExtract().transform(
-                swp_img,
-                matrix,
+        self.update_source = False
+        logger.debug("Updated source faces")
+
+    def crop_destination_faces(self):
+        """ Update the main faces dict with new destination faces based on source matrices """
+        logger.debug("Updating destination faces")
+        self.faces["dst"] = list()
+        destination = self.destination if self.destination else [np.ones_like(src["image"])
+                                                                 for src in self.source]
+        for idx, image in enumerate(destination):
+            self.faces["dst"].append(AlignerExtract().transform(
+                image,
+                self.faces["matrix"][idx],
                 self.size,
                 self.padding))
-            self.faces.setdefault("filenames",
-                                  list()).append(os.path.splitext(image["filename"])[0])
-        logger.debug("Extracted faces from frames: %s", {k: len(v) for k, v in self.faces.items()})
+        logger.debug("Updated destination faces")
 
-    def header_text(self, filenames, total_faces):
+    def header_text(self):
         """ Create header text for output image """
         font_scale = self.size / 640
         height = self.size // 8
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
         # Get size of placed text for positioning
-        text_sizes = [cv2.getTextSize(filenames[idx],  # pylint: disable=no-member
+        text_sizes = [cv2.getTextSize(self.faces["filenames"][idx],  # pylint: disable=no-member
                                       font,
                                       font_scale,
                                       1)[0]
-                      for idx in range(total_faces)]
+                      for idx in range(self.total_columns)]
         # Get X and Y co-ords for each text item
         text_y = int((height + text_sizes[0][1]) / 2)
         text_x = [int((self.size - text_sizes[idx][0]) / 2) + self.size * idx
-                  for idx in range(total_faces)]
+                  for idx in range(self.total_columns)]
         logger.debug("filenames: %s, text_sizes: %s, text_x: %s, text_y: %s",
-                     filenames, text_sizes, text_x, text_y)
-        header_box = np.ones((height, self.size * total_faces, 3), np.uint8) * 255
-        for idx, text in enumerate(filenames):
+                     self.faces["filenames"], text_sizes, text_x, text_y)
+        header_box = np.ones((height, self.size * self.total_columns, 3), np.uint8) * 255
+        for idx, text in enumerate(self.faces["filenames"]):
             cv2.putText(header_box,  # pylint: disable=no-member
                         text,
                         (text_x[idx], text_y),
@@ -431,13 +495,15 @@ class FacesDisplay():
 
 class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Canvas to hold the images """
-    def __init__(self, parent):
-        logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
+    def __init__(self, parent,  refresh_tkvar):
+        logger.debug("Initializing %s: (parent: %s,  refresh_tkvar: %s)",
+                     self.__class__.__name__, parent, refresh_tkvar)
         super().__init__(parent)
         self.pack(expand=True, fill=tk.BOTH, padx=2, pady=2)
 
+        refresh_tkvar.trace("w", self.refresh_display_callback)
+        self.refresh_display_trigger = refresh_tkvar
         self.display = parent.convset_display
-        self.display.update_tk_image()
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.displaycanvas = self.canvas.create_image(0, 0,
@@ -445,6 +511,13 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
                                                       anchor=tk.NW)
         self.bind("<Configure>", self.resize)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def refresh_display_callback(self, *args):
+        """ Add a trace to refresh display on callback """
+        if not self.refresh_display_trigger.get():
+            return
+        logger.trace("Refresh display trigger received: %s", args)
+        self.reload()
 
     def resize(self, event):
         """  Resize the image to fit the frame, maintaining aspect ratio """
@@ -517,7 +590,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def add_refresh_button(self, refresh_callback):
         """ Add button to refresh the images """
-        btn = ttk.Button(self, text="Refresh Images", command=refresh_callback)
+        btn = ttk.Button(self, text="Update Samples", command=refresh_callback)
         btn.pack(padx=5, pady=10, side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
 
     def add_patch_callback(self, patch_callback):
@@ -534,7 +607,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config = config
-        self.config_dicts = self.get_config_dicts(config)
+        self.config_dicts = self.get_config_dicts(config)  # Holds currently saved config
         self.tk_vars = dict()
 
         self.tabs = dict()
@@ -654,6 +727,8 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.config.config = new_config
         self.config.save_config()
         print("Saved config: '{}'".format(self.config.configfile))
+        # Update config dict to newly saved
+        self.config_dicts = self.get_config_dicts(self.config)
         logger.debug("Saved config")
 
 

@@ -86,11 +86,16 @@ class QueueManager():
 
     def flush_queues(self):
         """ Empty out all queues """
-        for q_name, queue in self.queues.items():
-            logger.debug("QueueManager flushing: '%s'", q_name)
-            while not queue.empty():
-                queue.get(True, 1)
+        for q_name in self.queues.keys():
+            self.flush_queue(q_name)
         logger.debug("QueueManager flushed all queues")
+
+    def flush_queue(self, q_name):
+        """ Empty out a specific queue """
+        logger.debug("QueueManager flushing: '%s'", q_name)
+        queue = self.queues[q_name]
+        while not queue.empty():
+            queue.get(True, 1)
 
     def debug_monitor(self, update_secs=2):
         """ Debug tool for monitoring queues """
