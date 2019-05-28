@@ -1,16 +1,6 @@
 #!/usr/bin/env python3
-""" Tool to preview swaps and tweak the config prior to running a convert
+""" Tool to preview swaps and tweak the config prior to running a convert """
 
-Sketch:
-
-    - predict 4 random faces (full set distribution)
-    - keep mask + face separate
-    - show faces swapped into padded square of final image
-    - live update on settings change
-    - apply + save config
-"""
-
-# TODO Add indicator when refreshing
 import logging
 import random
 import tkinter as tk
@@ -44,7 +34,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Convset():
-    """ Loads up 4 semi-random face swaps and displays them, cropped, in place in the final frame.
+    """ Loads up 5 semi-random face swaps and displays them, cropped, in place in the final frame.
         Allows user to live tweak settings, before saving the final config to
         ./config/convert.ini """
 
@@ -55,36 +45,56 @@ class Convset():
         self.lock = Lock()
         self.trigger_patch = Event()
 
-        self.root = self.initialize_tkinter()
-        self.refresh_tk = tk.BooleanVar()
-        self.refresh_tk.set(False)
-        self.display = FacesDisplay(256, 64, self.refresh_tk)
-        self.samples = Samples(arguments, 4, self.display, self.lock, self.trigger_patch)
+        self.root = tk.Tk()
+        self.scaling = self.get_scaling()
+
+        self.tk_vars = dict(refresh=tk.BooleanVar(), busy=tk.BooleanVar())
+        for val in self.tk_vars.values():
+            val.set(False)
+        self.display = FacesDisplay(256, 64, self.tk_vars)
+        self.samples = Samples(arguments, 5, self.display, self.lock, self.trigger_patch)
         self.patch = Patch(arguments,
                            self.samples,
                            self.display,
                            self.lock,
                            self.trigger_patch,
                            self.config,
-                           self.refresh_tk)
+                           self.tk_vars)
 
+        self.initialize_tkinter()
         self.image_canvas = None
         self.opts_book = None
         self.cli_frame = None  # cli frame holds cli options
-        # TODO Padding + Size dynamic
-
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def initialize_tkinter():
+    def initialize_tkinter(self):
         """ Initialize tkinter for standalone or GUI """
         logger.debug("Initializing tkinter")
-        root = tk.Tk()
         pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
         initialize_images(pathcache=pathcache)
+        self.set_geometry()
+        self.root.title("Faceswap.py - Convert Settings")
+        self.root.tk.call(
+            "wm",
+            "iconphoto",
+            self.root._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
-        return root
+
+    def get_scaling(self):
+        """ Get dpi and update scaling for the display """
+        dpi = self.root.winfo_fpixels("1i")
+        scaling = dpi / 72.0
+        logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
+        return scaling
+
+    def set_geometry(self):
+        """ Set GUI geometry """
+        self.root.tk.call("tk", "scaling", self.scaling)
+        width = int(960 * self.scaling)
+        height = int(600 * self.scaling)
+        logger.debug("Geometry: %sx%s", width, height)
+        self.root.geometry("{}x{}+80+80".format(str(width), str(height)))
 
     def process(self):
         """ The convset process """
@@ -94,6 +104,7 @@ class Convset():
     def refresh(self, *args):
         """ Refresh the display """
         logger.trace("Refreshing swapped faces. args: %s", args)
+        self.tk_vars["busy"].set(True)
         self.opts_book.update_config()
         with self.lock:
             self.patch.converter_arguments = self.cli_frame.convert_args
@@ -106,8 +117,8 @@ class Convset():
         container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
         container.convset_display = self.display
-        self.image_canvas = ImagesCanvas(container, self.refresh_tk)
-        container.add(self.image_canvas)
+        self.image_canvas = ImagesCanvas(container, self.tk_vars)
+        container.add(self.image_canvas, height=400 * self.scaling)
 
         options_frame = ttk.Frame(container)
         self.cli_frame = ActionFrame(options_frame,
@@ -115,13 +126,14 @@ class Convset():
                                      self.patch.converter.args.mask_type.replace("-", "_"),
                                      self.patch.converter.args.scaling.replace("-", "_"),
                                      self.refresh,
-                                     self.samples.generate)
-        self.opts_book = OptionsBook(options_frame, self.config, self.refresh)
+                                     self.samples.generate,
+                                     self.tk_vars)
+        self.opts_book = OptionsBook(options_frame, self.config, self.refresh, self.scaling)
         container.add(options_frame)
 
 
 class Samples():
-    """ Holds 4 random test faces """
+    """ Holds 5 random test faces """
 
     def __init__(self, arguments, sample_size, display, lock, trigger_patch):
         logger.debug("Initializing %s: (arguments: '%s', sample_size: %s, display: %s, lock: %s, "
@@ -234,10 +246,10 @@ class Samples():
 class Patch():
     """ The patch pipeline
         To be run within it's own thread """
-    def __init__(self, arguments, samples, display, lock, trigger, config, refresh_tkvar):
+    def __init__(self, arguments, samples, display, lock, trigger, config, tk_vars):
         logger.debug("Initializing %s: (arguments: '%s', samples: %s: display: %s, lock: %s,"
-                     " trigger: %s, config: %s, refresh_tkvar %s)", self.__class__.__name__,
-                     arguments, samples, display, lock, trigger, config, refresh_tkvar)
+                     " trigger: %s, config: %s, tk_vars %s)", self.__class__.__name__,
+                     arguments, samples, display, lock, trigger, config, tk_vars)
         self.samples = samples
         self.queue_patch_in = queue_manager.get_queue("convset_patch_in")
         self.display = display
@@ -260,7 +272,7 @@ class Patch():
                                   self.shutdown,
                                   self.queue_patch_in,
                                   self.samples,
-                                  refresh_tkvar,
+                                  tk_vars,
                                   thread_count=1,
                                   name="patch_thread")
         self.thread.start()
@@ -283,7 +295,7 @@ class Patch():
         logger.debug(arguments)
         return arguments
 
-    def process(self, trigger_event, shutdown_event, patch_queue_in, samples, refresh_tkvar):
+    def process(self, trigger_event, shutdown_event, patch_queue_in, samples, tk_vars):
         """ Wait for event trigger and run when process when set """
         patch_queue_out = queue_manager.get_queue("convset_patch_out")
         while True:
@@ -295,7 +307,7 @@ class Patch():
                 continue
             # Clear trigger so calling process can set it during this run
             trigger_event.clear()
-
+            tk_vars["busy"].set(True)
             queue_manager.flush_queue("convset_patch_in")
             self.feed_swapped_faces(patch_queue_in, samples)
             with self.lock:
@@ -304,7 +316,8 @@ class Patch():
             swapped = self.patch_faces(patch_queue_in, patch_queue_out, samples.sample_size)
             with self.lock:
                 self.display.destination = swapped
-            refresh_tkvar.set(True)
+            tk_vars["refresh"].set(True)
+            tk_vars["busy"].set(False)
 
     def update_converter_arguments(self):
         """ Update the converter arguments """
@@ -343,13 +356,12 @@ class Patch():
 
 class FacesDisplay():
     """ Compiled faces into a single image """
-    # TODO update source images from samples, dest images from patch queue
-    def __init__(self, size, padding, refresh_tkvar):
-        logger.trace("Initializing %s: (size: %s, padding: %s, refresh_tkvar: %s)",
-                     self.__class__.__name__, size, padding, refresh_tkvar)
+    def __init__(self, size, padding, tk_vars):
+        logger.trace("Initializing %s: (size: %s, padding: %s, tk_vars: %s)",
+                     self.__class__.__name__, size, padding, tk_vars)
         self.size = size
         self.display_dims = (1, 1)
-        self.refresh_tkvar = refresh_tkvar
+        self.tk_vars = tk_vars
         self.padding = padding
 
         # Set from Samples
@@ -379,7 +391,7 @@ class FacesDisplay():
         img = Image.fromarray(img)
         img = img.resize(size, Image.ANTIALIAS)
         self.tk_image = ImageTk.PhotoImage(img)
-        self.refresh_tkvar.set(False)
+        self.tk_vars["refresh"].set(False)
         logger.trace("Updated tk image")
 
     def get_scale_size(self, image):
@@ -411,7 +423,6 @@ class FacesDisplay():
 
     def faces_from_frames(self):
         """ Compile faces from the original images and return a row for each of source and dest """
-        # TODO Padding from coverage
         logger.debug("Extracting faces from frames: Number images: %s", len(self.source))
         if self.update_source:
             self.crop_source_faces()
@@ -495,14 +506,14 @@ class FacesDisplay():
 
 class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Canvas to hold the images """
-    def __init__(self, parent,  refresh_tkvar):
-        logger.debug("Initializing %s: (parent: %s,  refresh_tkvar: %s)",
-                     self.__class__.__name__, parent, refresh_tkvar)
+    def __init__(self, parent, tk_vars):
+        logger.debug("Initializing %s: (parent: %s,  tk_vars: %s)",
+                     self.__class__.__name__, parent, tk_vars)
         super().__init__(parent)
         self.pack(expand=True, fill=tk.BOTH, padx=2, pady=2)
 
-        refresh_tkvar.trace("w", self.refresh_display_callback)
-        self.refresh_display_trigger = refresh_tkvar
+        self.refresh_display_trigger = tk_vars["refresh"]
+        self.refresh_display_trigger.trace("w", self.refresh_display_callback)
         self.display = parent.convset_display
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -536,20 +547,22 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame that holds the left hand side options panel """
     def __init__(self, parent, selected_color, selected_mask, selected_scaling,
-                 patch_callback, refresh_callback):
+                 patch_callback, refresh_callback, tk_vars):
         logger.debug("Initializing %s: (selected_color: %s, selected_mask: %s, "
-                     "selected_scaling: %s, patch_callback: %s, refresh_callback: %s)",
-                     self.__class__.__name__, selected_color, selected_mask, selected_scaling,
-                     patch_callback, refresh_callback)
+                     "selected_scaling: %s, patch_callback: %s, refresh_callback: %s, tk_vars: "
+                     "%s)", self.__class__.__name__, selected_color, selected_mask,
+                     selected_scaling, patch_callback, refresh_callback, tk_vars)
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
         self.options = ["color", "mask", "scaling"]
+        self.busy_tkvar = tk_vars["busy"]
         self.tk_vars = dict()
 
         d_locals = locals()
         defaults = {opt: self.format_to_display(d_locals["selected_{}".format(opt)])
                     for opt in self.options}
         self.add_comboboxes(defaults)
+        self.busy_indicator = self.add_busy_indicator()
         self.add_refresh_button(refresh_callback)
         self.add_patch_callback(patch_callback)
 
@@ -591,22 +604,52 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def add_refresh_button(self, refresh_callback):
         """ Add button to refresh the images """
         btn = ttk.Button(self, text="Update Samples", command=refresh_callback)
-        btn.pack(padx=5, pady=10, side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
+        btn.pack(padx=5, pady=(0, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
 
     def add_patch_callback(self, patch_callback):
         """ Add callback to repatch images on action option change """
         for tk_var in self.tk_vars.values():
             tk_var.trace("w", patch_callback)
 
+    def add_busy_indicator(self):
+        """ Place progress bar into bottom bar to indicate when processing """
+        logger.debug("Placing busy indicator")
+        pbar = ttk.Progressbar(self, mode="indeterminate")
+        pbar.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        pbar.pack_forget()
+        self.busy_tkvar.trace("w", self.busy_indicator_trace)
+        return pbar
+
+    def busy_indicator_trace(self, *args):
+        """ Show or hide busy indicator """
+        logger.trace("Busy indicator trace: %s", args)
+        if self.busy_tkvar.get():
+            self.start_busy_indicator()
+        else:
+            self.stop_busy_indicator()
+
+    def stop_busy_indicator(self):
+        """ Stop and hide progress bar """
+        logger.debug("Stopping busy indicator")
+        self.busy_indicator.stop()
+        self.busy_indicator.pack_forget()
+
+    def start_busy_indicator(self):
+        """ Start and display progress bar """
+        logger.debug("Starting busy indicator")
+        self.busy_indicator.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        self.busy_indicator.start()
+
 
 class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Convert settings Options Frame """
-    def __init__(self, parent, config, patch_callback):
-        logger.debug("Initializing %s: (parent: %s, config: %s)",
-                     self.__class__.__name__, parent, config)
+    def __init__(self, parent, config, patch_callback, scaling):
+        logger.debug("Initializing %s: (parent: %s, config: %s, scaling: %s)",
+                     self.__class__.__name__, parent, config, scaling)
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config = config
+        self.scaling = scaling
         self.config_dicts = self.get_config_dicts(config)  # Holds currently saved config
         self.tk_vars = dict()
 
@@ -745,8 +788,11 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.canvas_frame = ttk.Frame(self)
         self.canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.canvas = tk.Canvas(self.canvas_frame, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.canvas = tk.Canvas(self.canvas_frame,
+                                bd=0,
+                                highlightthickness=0,
+                                height=80 * parent.scaling)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH)
 
         self.optsframe = ttk.Frame(self.canvas)
         self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
@@ -811,7 +857,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Add Actio Buttons """
         logger.debug("Adding util buttons")
         action_frame = ttk.Frame(self)
-        action_frame.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.Y, expand=True, anchor=tk.E)
+        action_frame.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
 
         title = config_key.split(".")[1].replace("_", " ").title()
         for utl in ("save", "clear", "reset"):
