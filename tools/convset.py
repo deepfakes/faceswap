@@ -784,27 +784,32 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.options = options
+        self.static_dims = [0, 0]
 
         self.canvas_frame = ttk.Frame(self)
         self.canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.canvas = tk.Canvas(self.canvas_frame,
-                                bd=0,
-                                highlightthickness=0,
-                                height=80 * parent.scaling)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH)
+        self.canvas = tk.Canvas(self.canvas_frame, bd=0, highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.Y)
 
         self.optsframe = ttk.Frame(self.canvas)
         self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
 
+        self.scrollbar = self.add_scrollbar()
+
+        self.frame_separator = self.add_frame_separator()
+        self.action_frame = ttk.Frame(self)
+        self.action_frame.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
+
         self.build_frame(parent, config_key)
+
+        self.bind("<Configure>", self.resize_frame)
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def build_frame(self, parent, config_key):
         """ Build the options frame for this command """
         logger.debug("Add Config Frame")
-        self.add_scrollbar()
-        self.canvas.bind("<Configure>", self.resize_frame)
 
         for key, val in self.options.items():
             if key == "helptext":
@@ -834,6 +839,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.canvas.config(yscrollcommand=scrollbar.set)
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Config Scrollbar")
+        return scrollbar
 
     def update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the options frame scrollbar """
@@ -842,8 +848,11 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def resize_frame(self, event):
         """ Resize the options frame to fit the canvas """
         logger.debug("Resize Config Frame")
-        canvas_width = event.width
-        self.canvas.itemconfig(self.optscanvas, width=canvas_width)
+        canvas_width = event.width - self.scrollbar.winfo_reqwidth()
+        canvas_height = event.height - (self.action_frame.winfo_reqheight() +
+                                        self.frame_separator.winfo_reqheight() + 16)
+        self.canvas.configure(width=canvas_width, height=canvas_height)
+        self.canvas.itemconfig(self.optscanvas, width=canvas_width, height=canvas_height)
         logger.debug("Resized Config Frame")
 
     def add_frame_separator(self):
@@ -852,12 +861,11 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
         logger.debug("Added frame seperator")
+        return sep
 
     def add_actions(self, parent, config_key):
         """ Add Actio Buttons """
         logger.debug("Adding util buttons")
-        action_frame = ttk.Frame(self)
-        action_frame.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
 
         title = config_key.split(".")[1].replace("_", " ").title()
         for utl in ("save", "clear", "reset"):
@@ -873,7 +881,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                 text = "Reset {} config to saved values".format(title)
                 action = parent.reset_config_saved
 
-            btnutl = ttk.Button(action_frame,
+            btnutl = ttk.Button(self.action_frame,
                                 image=img,
                                 command=lambda cmd=action: cmd(config_key))
             btnutl.pack(padx=2, side=tk.RIGHT)
