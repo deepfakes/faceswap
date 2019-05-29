@@ -30,8 +30,8 @@ if __name__ == "__main__":
                                "alignments",
                                "This command lets you perform various tasks pertaining to an "
                                "alignments file.")
-    CONVSET = cli.ConvsetArgs(SUBPARSER,
-                              "convset",
+    PREVIEW = cli.PreviewArgs(SUBPARSER,
+                              "preview",
                               "This command allows you to preview swaps to tweak convert "
                               "settings.")
     EFFMPEG = cli.EffmpegArgs(SUBPARSER,

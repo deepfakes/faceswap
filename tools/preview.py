@@ -33,7 +33,7 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Convset():
+class Preview():
     """ Loads up 5 semi-random face swaps and displays them, cropped, in place in the final frame.
         Allows user to live tweak settings, before saving the final config to
         ./config/convert.ini """
@@ -97,7 +97,7 @@ class Convset():
         self.root.geometry("{}x{}+80+80".format(str(width), str(height)))
 
     def process(self):
-        """ The convset process """
+        """ The preview process """
         self.build_ui()
         self.root.mainloop()
 
@@ -116,7 +116,7 @@ class Convset():
         """ Build the UI elements for displaying preview and options """
         container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
-        container.convset_display = self.display
+        container.preview_display = self.display
         self.image_canvas = ImagesCanvas(container, self.tk_vars)
         container.add(self.image_canvas, height=400 * self.scaling)
 
@@ -154,7 +154,7 @@ class Samples():
         self.filelist = self.get_filelist()
         self.indices = self.get_indices()
 
-        self.predictor = Predict(queue_manager.get_queue("convset_predict_in"),
+        self.predictor = Predict(queue_manager.get_queue("preview_predict_in"),
                                  sample_size,
                                  arguments)
         self.generate()
@@ -252,7 +252,7 @@ class Patch():
                      " trigger: %s, config_tools: %s, tk_vars %s)", self.__class__.__name__,
                      arguments, samples, display, lock, trigger, config_tools, tk_vars)
         self.samples = samples
-        self.queue_patch_in = queue_manager.get_queue("convset_patch_in")
+        self.queue_patch_in = queue_manager.get_queue("preview_patch_in")
         self.display = display
         self.lock = lock
         self.trigger = trigger
@@ -298,7 +298,7 @@ class Patch():
 
     def process(self, trigger_event, shutdown_event, patch_queue_in, samples, tk_vars):
         """ Wait for event trigger and run when process when set """
-        patch_queue_out = queue_manager.get_queue("convset_patch_out")
+        patch_queue_out = queue_manager.get_queue("preview_patch_out")
         while True:
             trigger = trigger_event.wait(1)
             if shutdown_event.is_set():
@@ -309,7 +309,7 @@ class Patch():
             # Clear trigger so calling process can set it during this run
             trigger_event.clear()
             tk_vars["busy"].set(True)
-            queue_manager.flush_queue("convset_patch_in")
+            queue_manager.flush_queue("preview_patch_in")
             self.feed_swapped_faces(patch_queue_in, samples)
             with self.lock:
                 self.update_converter_arguments()
@@ -617,7 +617,7 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self.refresh_display_trigger = tk_vars["refresh"]
         self.refresh_display_trigger.trace("w", self.refresh_display_callback)
-        self.display = parent.convset_display
+        self.display = parent.preview_display
         self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.displaycanvas = self.canvas.create_image(0, 0,

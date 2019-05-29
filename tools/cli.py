@@ -152,8 +152,8 @@ class AlignmentsArgs(FaceSwapArgs):
         return argument_list
 
 
-class ConvsetArgs(FaceSwapArgs):
-    """ Class to parse the command line arguments for ConvSet (Convert Settings) tool """
+class PreviewArgs(FaceSwapArgs):
+    """ Class to parse the command line arguments for Preview (Convert Settings) tool """
     def get_argument_list(self):
 
         argument_list = list()
