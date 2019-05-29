@@ -91,7 +91,7 @@ class Preview():
     def set_geometry(self):
         """ Set GUI geometry """
         self.root.tk.call("tk", "scaling", self.scaling)
-        width = int(960 * self.scaling)
+        width = int(940 * self.scaling)
         height = int(600 * self.scaling)
         logger.debug("Geometry: %sx%s", width, height)
         self.root.geometry("{}x{}+80+80".format(str(width), str(height)))
