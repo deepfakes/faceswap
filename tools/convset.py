@@ -41,7 +41,7 @@ class Convset():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         set_system_verbosity(arguments.loglevel)
-        self.config = Config(None)
+        self.config_tools = ConfigTools()
         self.lock = Lock()
         self.trigger_patch = Event()
 
@@ -58,7 +58,7 @@ class Convset():
                            self.display,
                            self.lock,
                            self.trigger_patch,
-                           self.config,
+                           self.config_tools,
                            self.tk_vars)
 
         self.initialize_tkinter()
@@ -105,10 +105,10 @@ class Convset():
         """ Refresh the display """
         logger.trace("Refreshing swapped faces. args: %s", args)
         self.tk_vars["busy"].set(True)
-        self.opts_book.update_config()
+        self.config_tools.update_config()
         with self.lock:
             self.patch.converter_arguments = self.cli_frame.convert_args
-            self.patch.current_config = self.config
+            self.patch.current_config = self.config_tools.config
         self.patch.trigger.set()
         logger.trace("Refreshed swapped faces")
 
@@ -125,10 +125,11 @@ class Convset():
                                      self.patch.converter.args.color_adjustment.replace("-", "_"),
                                      self.patch.converter.args.mask_type.replace("-", "_"),
                                      self.patch.converter.args.scaling.replace("-", "_"),
+                                     self.config_tools,
                                      self.refresh,
                                      self.samples.generate,
                                      self.tk_vars)
-        self.opts_book = OptionsBook(options_frame, self.config, self.refresh, self.scaling)
+        self.opts_book = OptionsBook(options_frame, self.config_tools, self.refresh, self.scaling)
         container.add(options_frame)
 
 
@@ -246,16 +247,16 @@ class Samples():
 class Patch():
     """ The patch pipeline
         To be run within it's own thread """
-    def __init__(self, arguments, samples, display, lock, trigger, config, tk_vars):
+    def __init__(self, arguments, samples, display, lock, trigger, config_tools, tk_vars):
         logger.debug("Initializing %s: (arguments: '%s', samples: %s: display: %s, lock: %s,"
-                     " trigger: %s, config: %s, tk_vars %s)", self.__class__.__name__,
-                     arguments, samples, display, lock, trigger, config, tk_vars)
+                     " trigger: %s, config_tools: %s, tk_vars %s)", self.__class__.__name__,
+                     arguments, samples, display, lock, trigger, config_tools, tk_vars)
         self.samples = samples
         self.queue_patch_in = queue_manager.get_queue("convset_patch_in")
         self.display = display
         self.lock = lock
         self.trigger = trigger
-        self.current_config = config
+        self.current_config = config_tools.config
         self.converter_arguments = None  # Updated converter arguments dict
 
         self.converter = Converter(output_dir=None,
@@ -504,6 +505,108 @@ class FacesDisplay():
         return image.astype("uint8")
 
 
+class ConfigTools():
+    """ Saving and resetting config values and stores selected variables """
+    def __init__(self):
+        self.config = Config(None)
+        self.config_dicts = self.get_config_dicts()  # Holds currently saved config
+        self.tk_vars = dict()
+
+    @property
+    def sections(self):
+        """ Return the sorted unique section names from the configs """
+        return sorted(set(plugin.split(".")[0] for plugin in self.config.config.sections()
+                          if plugin.split(".")[0] != "writer"))
+
+    @property
+    def plugins_dict(self):
+        """ Return dict of sections with sorted list of containing plugins """
+        return {section: sorted([plugin.split(".")[1] for plugin in self.config.config.sections()
+                                 if plugin.split(".")[0] == section])
+                for section in self.sections}
+
+    def update_config(self):
+        """ Update config with selected values """
+        for section, items in self.tk_vars.items():
+            for item, value in items.items():
+                new_value = str(value.get())
+                old_value = self.config.config[section][item]
+                if new_value != old_value:
+                    logger.trace("Updating config: %s, %s from %s to %s",
+                                 section, item, old_value, new_value)
+                    self.config.config[section][item] = str(value.get())
+
+    def get_config_dicts(self):
+        """ Hold a custom config dict for the config """
+        config_dicts = dict()
+        for section in self.config.config.sections():
+            if section == "writer":
+                continue
+            default_dict = self.config.defaults[section]
+            for key in default_dict.keys():
+                if key == "helptext":
+                    continue
+                default_dict[key]["value"] = self.config.get(section, key)
+            config_dicts[section] = default_dict
+        return config_dicts
+
+    def reset_config_saved(self, section=None):
+        """ Reset config to saved values """
+        logger.debug("Resetting to saved config: %s", section)
+        sections = [section] if section is not None else [key for key in self.tk_vars.keys()]
+        for config_section in sections:
+            for item, options in self.config_dicts[config_section].items():
+                if item == "helptext":
+                    continue
+                val = options["value"]
+                if val != self.tk_vars[config_section][item].get():
+                    self.tk_vars[config_section][item].set(val)
+                    logger.debug("Setting %s - %s to saved value %s", config_section, item, val)
+        logger.debug("Reset to saved config: %s", section)
+
+    def reset_config_default(self, section=None):
+        """ Reset config to default values """
+        logger.debug("Resetting to default: %s", section)
+        sections = [section] if section is not None else [key for key in self.tk_vars.keys()]
+        for config_section in sections:
+            for item, options in self.config.defaults[config_section].items():
+                if item == "helptext":
+                    continue
+                default = options["default"]
+                if default != self.tk_vars[config_section][item].get():
+                    self.tk_vars[config_section][item].set(default)
+                    logger.debug("Setting %s - %s to default value %s",
+                                 config_section, item, default)
+        logger.debug("Reset to default: %s", section)
+
+    def save_config(self, section=None):
+        """ Save config """
+        logger.debug("Saving %s config", section)
+        new_config = ConfigParser(allow_no_value=True)
+        for config_section, items in self.config_dicts.items():
+            logger.debug("Adding section: '%s')", config_section)
+            self.config.insert_config_section(config_section, items["helptext"], config=new_config)
+            for item, options in items.items():
+                if item == "helptext":
+                    continue
+                if section is not None and config_section != section:
+                    new_opt = options["value"]  # Keep saved item for other sections
+                    logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
+                else:
+                    new_opt = self.tk_vars[config_section][item].get()
+                    logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
+                helptext = options["helptext"]
+                helptext = self.config.format_help(helptext, is_section=False)
+                new_config.set(config_section, helptext)
+                new_config.set(config_section, item, str(new_opt))
+        self.config.config = new_config
+        self.config.save_config()
+        print("Saved config: '{}'".format(self.config.configfile))
+        # Update config dict to newly saved
+        self.config_dicts = self.get_config_dicts()
+        logger.debug("Saved config")
+
+
 class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Canvas to hold the images """
     def __init__(self, parent, tk_vars):
@@ -547,11 +650,13 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame that holds the left hand side options panel """
     def __init__(self, parent, selected_color, selected_mask, selected_scaling,
-                 patch_callback, refresh_callback, tk_vars):
+                 config_tools, patch_callback, refresh_callback, tk_vars):
         logger.debug("Initializing %s: (selected_color: %s, selected_mask: %s, "
-                     "selected_scaling: %s, patch_callback: %s, refresh_callback: %s, tk_vars: "
-                     "%s)", self.__class__.__name__, selected_color, selected_mask,
-                     selected_scaling, patch_callback, refresh_callback, tk_vars)
+                     "selected_scaling: %s, config_tools, patch_callback: %s, "
+                     "refresh_callback: %s, tk_vars: %s)", self.__class__.__name__, selected_color,
+                     selected_mask, selected_scaling, patch_callback, refresh_callback, tk_vars)
+        self.config_tools = config_tools
+
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
         self.options = ["color", "mask", "scaling"]
@@ -561,10 +666,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         d_locals = locals()
         defaults = {opt: self.format_to_display(d_locals["selected_{}".format(opt)])
                     for opt in self.options}
-        self.add_comboboxes(defaults)
-        self.busy_indicator = self.add_busy_indicator()
-        self.add_refresh_button(refresh_callback)
-        self.add_patch_callback(patch_callback)
+        self.busy_indicator = self.build_frame(defaults, refresh_callback, patch_callback)
 
     @property
     def convert_args(self):
@@ -583,7 +685,23 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Format a variable from display version """
         return var.replace("_", " ").replace("-", " ").title()
 
-    def add_comboboxes(self, defaults):
+    def build_frame(self, defaults, refresh_callback, patch_callback):
+        """ Build the action frame """
+        logger.debug("Building Action frame")
+        top_frame = ttk.Frame(self)
+        top_frame.pack(side=tk.TOP, fill=tk.BOTH, anchor=tk.N, expand=True)
+        bottom_frame = ttk.Frame(self)
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
+
+        self.add_comboboxes(top_frame, defaults)
+        busy_indicator = self.add_busy_indicator(top_frame)
+        self.add_refresh_button(top_frame, refresh_callback)
+        self.add_patch_callback(patch_callback)
+        self.add_actions(bottom_frame)
+        logger.debug("Built Action frame")
+        return busy_indicator
+
+    def add_comboboxes(self, parent, defaults):
         """ Add the comboboxes to the Action Frame """
         for opt in self.options:
             if opt == "mask":
@@ -591,7 +709,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             else:
                 choices = PluginLoader.get_available_convert_plugins(opt, True)
             choices = [self.format_to_display(choice) for choice in choices]
-            ctl = ControlBuilder(self,
+            ctl = ControlBuilder(parent,
                                  opt,
                                  str,
                                  defaults[opt],
@@ -601,20 +719,21 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  control_width=12)
             self.tk_vars[opt] = ctl.tk_var
 
-    def add_refresh_button(self, refresh_callback):
+    @staticmethod
+    def add_refresh_button(parent, refresh_callback):
         """ Add button to refresh the images """
-        btn = ttk.Button(self, text="Update Samples", command=refresh_callback)
-        btn.pack(padx=5, pady=(0, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
+        btn = ttk.Button(parent, text="Update Samples", command=refresh_callback)
+        btn.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
 
     def add_patch_callback(self, patch_callback):
         """ Add callback to repatch images on action option change """
         for tk_var in self.tk_vars.values():
             tk_var.trace("w", patch_callback)
 
-    def add_busy_indicator(self):
+    def add_busy_indicator(self, parent):
         """ Place progress bar into bottom bar to indicate when processing """
         logger.debug("Placing busy indicator")
-        pbar = ttk.Progressbar(self, mode="indeterminate")
+        pbar = ttk.Progressbar(parent, mode="indeterminate")
         pbar.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
         pbar.pack_forget()
         self.busy_tkvar.trace("w", self.busy_indicator_trace)
@@ -640,18 +759,42 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.busy_indicator.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
         self.busy_indicator.start()
 
+    def add_actions(self, parent):
+        """ Add Actio Buttons """
+        logger.debug("Adding util buttons")
+        frame = ttk.Frame(parent)
+        frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
+
+        for utl in ("save", "clear", "reset"):
+            logger.debug("Adding button: '%s'", utl)
+            img = get_images().icons[utl]
+            if utl == "save":
+                text = "Save full config"
+                action = self.config_tools.save_config
+            elif utl == "clear":
+                text = "Reset full config to default values"
+                action = self.config_tools.reset_config_default
+            elif utl == "reset":
+                text = "Reset full config to saved values"
+                action = self.config_tools.reset_config_saved
+
+            btnutl = ttk.Button(frame,
+                                image=img,
+                                command=action)
+            btnutl.pack(padx=2, side=tk.RIGHT)
+            Tooltip(btnutl, text=text, wraplength=200)
+        logger.debug("Added util buttons")
+
 
 class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Convert settings Options Frame """
-    def __init__(self, parent, config, patch_callback, scaling):
+    def __init__(self, parent, config_tools, patch_callback, scaling):
         logger.debug("Initializing %s: (parent: %s, config: %s, scaling: %s)",
-                     self.__class__.__name__, parent, config, scaling)
+                     self.__class__.__name__, parent, config_tools, scaling)
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
-        self.config = config
+        self.config_tools = config_tools
         self.scaling = scaling
-        self.config_dicts = self.get_config_dicts(config)  # Holds currently saved config
-        self.tk_vars = dict()
 
         self.tabs = dict()
         self.build_tabs()
@@ -659,58 +802,20 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.add_patch_callback(patch_callback)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @property
-    def sections(self):
-        """ Return the sorted unique section names from the configs """
-        return sorted(set(plugin.split(".")[0] for plugin in self.config.config.sections()
-                          if plugin.split(".")[0] != "writer"))
-
-    @property
-    def plugins_dict(self):
-        """ Return dict of sections with sorted list of containing plugins """
-        return {section: sorted([plugin.split(".")[1] for plugin in self.config.config.sections()
-                                 if plugin.split(".")[0] == section])
-                for section in self.sections}
-
-    def update_config(self):
-        """ Update config with selected values """
-        for section, items in self.tk_vars.items():
-            for item, value in items.items():
-                new_value = str(value.get())
-                old_value = self.config.config[section][item]
-                if new_value != old_value:
-                    logger.trace("Updating config: %s, %s from %s to %s",
-                                 section, item, old_value, new_value)
-                    self.config.config[section][item] = str(value.get())
-
-    def get_config_dicts(self, config):
-        """ Hold a custom config dict for the config """
-        config_dicts = dict()
-        for section in self.config.config.sections():
-            if section == "writer":
-                continue
-            default_dict = config.defaults[section]
-            for key in default_dict.keys():
-                if key == "helptext":
-                    continue
-                default_dict[key]["value"] = config.get(section, key)
-            config_dicts[section] = default_dict
-        return config_dicts
-
     def build_tabs(self):
         """ Build the tabs for the relevant section """
         logger.debug("Build Tabs")
-        for section in self.sections:
+        for section in self.config_tools.sections:
             tab = ttk.Notebook(self)
             self.tabs[section] = {"tab": tab}
             self.add(tab, text=section.replace("_", " ").title())
 
     def build_sub_tabs(self):
         """ Build the sub tabs for the relevant plugin """
-        for section, plugins in self.plugins_dict.items():
+        for section, plugins in self.config_tools.plugins_dict.items():
             for plugin in plugins:
                 config_key = ".".join((section, plugin))
-                config_dict = self.config_dicts[config_key]
+                config_dict = self.config_tools.config_dicts[config_key]
                 tab = ConfigFrame(self,
                                   config_key,
                                   config_dict)
@@ -719,60 +824,9 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
 
     def add_patch_callback(self, patch_callback):
         """ Add callback to repatch images on config option change """
-        for plugins in self.tk_vars.values():
+        for plugins in self.config_tools.tk_vars.values():
             for tk_var in plugins.values():
                 tk_var.trace("w", patch_callback)
-
-    def reset_config_saved(self, section):
-        """ Reset config to saved values """
-        logger.debug("Resetting to saved config: %s", section)
-        for item, options in self.config_dicts[section].items():
-            if item == "helptext":
-                continue
-            val = options["value"]
-            if val != self.tk_vars[section][item].get():
-                self.tk_vars[section][item].set(val)
-                logger.debug("Setting %s - %s to saved value %s", section, item, val)
-        logger.debug("Reset to saved config: %s", section)
-
-    def reset_config_default(self, section):
-        """ Reset config to default values """
-        logger.debug("Resetting to default: %s", section)
-        for item, options in self.config.defaults[section].items():
-            if item == "helptext":
-                continue
-            default = options["default"]
-            if default != self.tk_vars[section][item].get():
-                self.tk_vars[section][item].set(default)
-                logger.debug("Setting %s - %s to default value %s", section, item, default)
-        logger.debug("Reset to default: %s", section)
-
-    def save_config(self, section):
-        """ Save config """
-        logger.debug("Saving %s config", section)
-        new_config = ConfigParser(allow_no_value=True)
-        for config_section, items in self.config_dicts.items():
-            logger.debug("Adding section: '%s')", config_section)
-            self.config.insert_config_section(config_section, items["helptext"], config=new_config)
-            for item, options in items.items():
-                if item == "helptext":
-                    continue
-                if config_section != section:
-                    new_opt = options["value"]  # Keep saved item for other sections
-                    logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
-                else:
-                    new_opt = self.tk_vars[section][item].get()
-                    logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
-                helptext = options["helptext"]
-                helptext = self.config.format_help(helptext, is_section=False)
-                new_config.set(config_section, helptext)
-                new_config.set(config_section, item, str(new_opt))
-        self.config.config = new_config
-        self.config.save_config()
-        print("Saved config: '{}'".format(self.config.configfile))
-        # Update config dict to newly saved
-        self.config_dicts = self.get_config_dicts(self.config)
-        logger.debug("Saved config")
 
 
 class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
@@ -826,7 +880,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  min_max=val["min_max"],
                                  helptext=val["helptext"],
                                  radio_columns=4)
-            parent.tk_vars.setdefault(config_key, dict())[key] = ctl.tk_var
+            parent.config_tools.tk_vars.setdefault(config_key, dict())[key] = ctl.tk_var
         self.add_frame_separator()
         self.add_actions(parent, config_key)
         logger.debug("Added Config Frame")
@@ -873,13 +927,13 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             img = get_images().icons[utl]
             if utl == "save":
                 text = "Save {} config".format(title)
-                action = parent.save_config
+                action = parent.config_tools.save_config
             elif utl == "clear":
                 text = "Reset {} config to default values".format(title)
-                action = parent.reset_config_default
+                action = parent.config_tools.reset_config_default
             elif utl == "reset":
                 text = "Reset {} config to saved values".format(title)
-                action = parent.reset_config_saved
+                action = parent.config_tools.reset_config_saved
 
             btnutl = ttk.Button(self.action_frame,
                                 image=img,
