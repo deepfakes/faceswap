@@ -419,7 +419,8 @@ class ExtractConvertArgs(FaceSwapArgs):
                               "required": True,
                               "help": "Input directory or video. Either a directory containing "
                                       "the image files you wish to process or path to a video "
-                                      "file."})
+                                      "file. NB: This should be the source video/frames NOT the "
+                                      "source faces."})
         argument_list.append({"opts": ("-o", "--output-dir"),
                               "action": DirFullPaths,
                               "dest": "output_dir",
@@ -884,14 +885,13 @@ class TrainArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "preview",
                               "default": False,
-                              "help": "Show preview output. If not specified, "
-                                      "write progress to file"})
+                              "help": "Show training preview output. in a separate window."})
         argument_list.append({"opts": ("-w", "--write-image"),
                               "action": "store_true",
                               "dest": "write_image",
                               "default": False,
-                              "help": "Writes the training result to a file "
-                                      "even on preview mode"})
+                              "help": "Writes the training result to a file. The image will be "
+                                      "stored in the root of your FaceSwap folder."})
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",
