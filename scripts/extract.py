@@ -191,7 +191,7 @@ class Extract():
                 if self.extractor.final_pass:
                     self.output_processing(faces, align_eyes, size, filename)
                     self.output_faces(filename, faces)
-                    if self.save_interval and idx + 1 % self.save_interval == 0:
+                    if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
                 else:
                     del faces["image"]
