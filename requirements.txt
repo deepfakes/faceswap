@@ -9,7 +9,7 @@ scikit-learn
 toposort
 fastcluster
 matplotlib==2.2.2
-imageio
+imageio==2.5.0
 imageio-ffmpeg
 ffmpy==0.2.2
 nvidia-ml-py3

@@ -212,7 +212,7 @@ INFO    1. Install Docker
             deepfakes-gpu
         
         5. Open a new terminal to interact with the project
-        docker exec faceswap-gpu python /srv/tools.py gui
+        docker exec faceswap-gpu python /srv/faceswap.py gui
 ```
 
 A successful setup log, without docker.
