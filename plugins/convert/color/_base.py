@@ -16,11 +16,23 @@ def get_config(plugin_name):
 
 class Adjustment():
     """ Parent class for adjustments """
-    def __init__(self):
-        logger.debug("Initializing %s", self.__class__.__name__)
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]))
+    def __init__(self, config=None):
+        logger.debug("Initializing %s: (config: %s)", self.__class__.__name__, config)
+        self.config = self.set_config(config)
         logger.debug("config: %s", self.config)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_config(self, config):
+        """ Set the config to either global config or passed in config """
+        section = ".".join(self.__module__.split(".")[-2:])
+        if config is None:
+            retval = get_config(section)
+        else:
+            config.section = section
+            retval = config.config_dict
+            config.section = None
+        logger.debug("Config: %s", retval)
+        return retval
 
     def process(self, old_face, new_face, raw_mask):
         """ Override for specific color adjustment process """

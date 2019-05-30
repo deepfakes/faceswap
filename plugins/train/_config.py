@@ -64,7 +64,7 @@ class Config(FaceswapConfig):
                          ADDITIONAL_INFO)
         self.add_item(
             section=section, title="mask_type", datatype=str, default="facehull",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=100.0, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
@@ -80,7 +80,7 @@ class Config(FaceswapConfig):
                  "with a changed lowmem mode are not compatible with each other.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="dfl_full",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
@@ -92,7 +92,7 @@ class Config(FaceswapConfig):
                               "intermediate layers to try to better get details" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
@@ -106,7 +106,7 @@ class Config(FaceswapConfig):
                               "software." + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
@@ -121,7 +121,7 @@ class Config(FaceswapConfig):
                  "with a changed lowmem mode are not compatible with each other.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)
@@ -143,7 +143,7 @@ class Config(FaceswapConfig):
                  "the expense of VRAM")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="nodes", datatype=int, default=1024, rounding=64,
             min_max=(512, 4096),
@@ -183,12 +183,8 @@ class Config(FaceswapConfig):
                               "model.\n"
                               "Requires about 6GB-8GB of VRAM (batchsize 8-16)." + ADDITIONAL_INFO)
         self.add_item(
-            section=section, title="dssim_loss", datatype=bool, default=True,
-            info="Use DSSIM for Loss rather than Mean Absolute Error\n"
-                 "May increase overall quality.")
-        self.add_item(
             section=section, title="mask_type", datatype=str, default="components",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0),
@@ -243,7 +239,7 @@ class Config(FaceswapConfig):
                  "with a changed lowmem mode are not compatible with each other.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=MASK_TYPES, info=MASK_INFO)
+            choices=MASK_TYPES, gui_radio=True, info=MASK_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=62.5, rounding=1,
             min_max=(62.5, 100.0), info=COVERAGE_INFO)

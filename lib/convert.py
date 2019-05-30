@@ -26,30 +26,49 @@ class Converter():
         self.draw_transparent = draw_transparent
         self.writer_pre_encode = pre_encode
         self.scale = arguments.output_scale / 100
+        self.output_size = output_size
+        self.output_has_mask = output_has_mask
         self.args = arguments
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
-        self.load_plugins(output_size, output_has_mask)
+        self.load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_plugins(self, output_size, output_has_mask):
-        """ Load the requested adjustment plugins """
-        logger.debug("Loading plugins")
-        self.adjustments["box"] = PluginLoader.get_converter("mask", "box_blend")(
-            "none",
-            output_size)
+    def reinitialize(self, config):
+        """ reinitialize converter """
+        logger.debug("Reinitializing converter")
+        self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
+        self.load_plugins(config=config, disable_logging=True)
+        logger.debug("Reinitialized converter")
 
-        self.adjustments["mask"] = PluginLoader.get_converter("mask", "mask_blend")(
-            self.args.mask_type,
-            output_size,
-            output_has_mask)
+    def load_plugins(self, config=None, disable_logging=False):
+        """ Load the requested adjustment plugins """
+        logger.debug("Loading plugins. config: %s", config)
+        self.adjustments["box"] = PluginLoader.get_converter(
+            "mask",
+            "box_blend",
+            disable_logging=disable_logging)("none",
+                                             self.output_size,
+                                             config=config)
+
+        self.adjustments["mask"] = PluginLoader.get_converter(
+            "mask",
+            "mask_blend",
+            disable_logging=disable_logging)(self.args.mask_type,
+                                             self.output_size,
+                                             self.output_has_mask,
+                                             config=config)
 
         if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
-            self.adjustments["color"] = PluginLoader.get_converter("color",
-                                                                   self.args.color_adjustment)()
+            self.adjustments["color"] = PluginLoader.get_converter(
+                "color",
+                self.args.color_adjustment,
+                disable_logging=disable_logging)(config=config)
 
         if self.args.scaling != "none" and self.args.scaling is not None:
-            self.adjustments["scaling"] = PluginLoader.get_converter("scaling",
-                                                                     self.args.scaling)()
+            self.adjustments["scaling"] = PluginLoader.get_converter(
+                "scaling",
+                self.args.scaling,
+                disable_logging=disable_logging)(config=config)
         logger.debug("Loaded plugins: %s", self.adjustments)
 
     def process(self, in_queue, out_queue):

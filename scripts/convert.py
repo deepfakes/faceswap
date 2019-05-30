@@ -443,13 +443,14 @@ class Predict():
             logger.error("%s does not exist.", self.args.model_dir)
             exit(1)
         trainer = self.get_trainer(model_dir)
-        model = PluginLoader.get_model(trainer)(model_dir, self.args.gpus, predict=True)
+        gpus = 1 if not hasattr(self.args, "gpus") else self.args.gpus
+        model = PluginLoader.get_model(trainer)(model_dir, gpus, predict=True)
         logger.debug("Loaded Model")
         return model
 
     def get_trainer(self, model_dir):
         """ Return the trainer name if provided, or read from state file """
-        if self.args.trainer:
+        if hasattr(self.args, "trainer") and self.args.trainer:
             logger.debug("Trainer name provided: '%s'", self.args.trainer)
             return self.args.trainer
 
