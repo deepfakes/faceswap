@@ -8,10 +8,10 @@ from tkinter import ttk
 from .tooltip import Tooltip
 from .utils import ContextMenu, FileHandler, get_images, get_config, set_slider_rounding
 
-logger = logging.getLogger(__name__)  #pylint:disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class CommandNotebook(ttk.Notebook):  #pylint:disable=too-many-ancestors
+class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent):
@@ -68,14 +68,14 @@ class CommandNotebook(ttk.Notebook):  #pylint:disable=too-many-ancestors
             Tooltip(btnact, text=hlp, wraplength=200)
 
 
-class ToolsNotebook(ttk.Notebook):  #pylint:disable=too-many-ancestors
+class ToolsNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Tools sit in their own tab, but need to inherit objects from the main command notebook """
     def __init__(self, parent):
         super().__init__(parent)
         self.actionbtns = parent.actionbtns
 
 
-class CommandTab(ttk.Frame):  #pylint:disable=too-many-ancestors
+class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent, category, command):
@@ -108,7 +108,7 @@ class CommandTab(ttk.Frame):  #pylint:disable=too-many-ancestors
         logger.debug("Added frame seperator")
 
 
-class OptionsFrame(ttk.Frame):  #pylint:disable=too-many-ancestors
+class OptionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Options Frame - Holds the Options for each command """
 
     def __init__(self, parent):
@@ -178,7 +178,7 @@ class OptionsFrame(ttk.Frame):  #pylint:disable=too-many-ancestors
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Options Scrollbar")
 
-    def update_scrollbar(self, event):  #pylint:disable=unused-argument
+    def update_scrollbar(self, event):  # pylint:disable=unused-argument
         """ Update the options frame scrollbar """
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
@@ -415,7 +415,7 @@ class OptionControl():
             filepath.set(filename)
 
     @staticmethod
-    def ask_nothing(filepath, filetypes=None):  #pylint:disable=unused-argument
+    def ask_nothing(filepath, filetypes=None):  # pylint:disable=unused-argument
         """ Method that does nothing, used for disabling open/save pop up """
         return
 
@@ -434,7 +434,7 @@ class OptionControl():
             filepath.set(filename)
 
 
-class ActionFrame(ttk.Frame):  #pylint:disable=too-many-ancestors
+class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """Action Frame - Displays action controls for the command tab """
 
     def __init__(self, parent):
