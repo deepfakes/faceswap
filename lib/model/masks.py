@@ -127,5 +127,5 @@ class facehull(Mask):  # pylint: disable=invalid-name
         mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
         hull = cv2.convexHull(  # pylint: disable=no-member
             np.array(self.landmarks).reshape((-1, 2)))
-        cv2.fillConvexPoly(mask, hull, 1.0, lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        cv2.fillConvexPoly(mask, hull, 255.0, lineType=cv2.LINE_AA)  # pylint: disable=no-member
         return mask

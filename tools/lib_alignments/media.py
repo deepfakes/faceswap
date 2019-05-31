@@ -134,7 +134,7 @@ class MediaLoader():
     def valid_extension(filename):
         """ Check whether passed in file has a valid extension """
         extension = os.path.splitext(filename)[1]
-        retval = extension in _image_extensions
+        retval = extension.lower() in _image_extensions
         logger.trace("Filename has valid extension: '%s': %s", filename, retval)
         return retval
 

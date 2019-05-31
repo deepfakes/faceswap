@@ -126,7 +126,7 @@ class Config(FaceswapConfig):
             section=section, title="colorspace", datatype=str, default="HSV", gui_radio=True,
             choices=["RGB", "HSV", "LAB", "YCrCb"],
             info="The colorspace to use for adjustment: The three adjustment sliders will effect "
-                  "the image differently depending on which colorspace is selected:"
+                 "the image differently depending on which colorspace is selected:"
                  "\n\t RGB: Red, Green, Blue. An additive colorspace where colors are obtained by "
                  "a linear combination of Red, Green, and Blue values. The three channels are "
                  "correlated by the amount of light hitting the surface. In RGB color space the "
@@ -144,7 +144,7 @@ class Config(FaceswapConfig):
                  "blue component from Luma. Separates the luminance and chrominance components "
                  "into different channels.")
         self.add_item(
-            section=section, title="balance_1",  datatype=float, default=0.0, rounding=1,
+            section=section, title="balance_1", datatype=float, default=0.0, rounding=1,
             min_max=(-100.0, 100.0),
             info="Balance of channel 1: "
                  "\n\tRGB: Red "
@@ -152,7 +152,7 @@ class Config(FaceswapConfig):
                  "\n\tLAB: Lightness "
                  "\n\tYCrCb: Luma ")
         self.add_item(
-            section=section, title="balance_2",  datatype=float, default=0.0, rounding=1,
+            section=section, title="balance_2", datatype=float, default=0.0, rounding=1,
             min_max=(-100.0, 100.0),
             info="Balance of channel 2: "
                  "\n\tRGB: Green "
@@ -160,7 +160,7 @@ class Config(FaceswapConfig):
                  "\n\tLAB: Green > Magenta "
                  "\n\tYCrCb: Distance of red from Luma")
         self.add_item(
-            section=section, title="balance_3",  datatype=float, default=0.0, rounding=1,
+            section=section, title="balance_3", datatype=float, default=0.0, rounding=1,
             min_max=(-100.0, 100.0),
             info="Balance of channel 3: "
                  "\n\tRGB: Blue "
