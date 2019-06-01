@@ -457,15 +457,28 @@ class Legacy():
 class Merge():
     """ Merge two alignments files into one """
     def __init__(self, alignments, arguments):
+        self.alignments = alignments
+        self.faces = self.get_faces(arguments)
         self.final_alignments = alignments[0]
         self.process_alignments = alignments[1:]
+
+    @staticmethod
+    def get_faces(arguments):
+        """ If faces argument is specified, load faces_dir
+            otherwise return None """
+        if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
+            return None
+        return Faces(arguments.faces_dir)
 
     def process(self):
         """Process the alignments file merge """
         logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
+        if self.faces is not None:
+            self.remove_faces()
         skip_count = 0
         merge_count = 0
         total_count = sum([alignments.frames_count for alignments in self.process_alignments])
+
         with tqdm(desc="Merging Alignments", total=total_count) as pbar:
             for alignments in self.process_alignments:
                 for _, src_alignments, _, frame in alignments.yield_faces():
@@ -485,6 +498,33 @@ class Merge():
         if merge_count != 0:
             self.set_destination_filename()
             self.final_alignments.save()
+
+    def remove_faces(self):
+        """ Process to remove faces from an alignments file """
+        face_hashes = list(self.faces.items.keys())
+        del_faces_count = 0
+        del_frames_count = 0
+        if not face_hashes:
+            logger.error("No face hashes. This would remove all faces from your alignments file.")
+            return
+        for alignments in tqdm(self.alignments, desc="Filtering out faces"):
+            pre_face_count = alignments.faces_count
+            pre_frames_count = alignments.frames_count
+            alignments.filter_hashes(face_hashes, filter_out=False)
+            # Remove frames with no faces
+            frames = list(alignments.data.keys())
+            for frame in frames:
+                if not alignments.frame_has_faces(frame):
+                    del alignments.data[frame]
+            post_face_count = alignments.faces_count
+            post_frames_count = alignments.frames_count
+            removed_faces = pre_face_count - post_face_count
+            removed_frames = pre_frames_count - post_frames_count
+            del_faces_count += removed_faces
+            del_frames_count += removed_frames
+            logger.verbose("Removed %s faces and %s frames from %s",
+                           removed_faces, removed_frames, os.path.basename(alignments.file))
+        logger.info("Total removed - faces: %s, frames: %s", del_faces_count, del_frames_count)
 
     def check_exists(self, frame, alignment, idx):
         """ Check whether this face already exists """

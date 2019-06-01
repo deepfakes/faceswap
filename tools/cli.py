@@ -43,7 +43,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     frames_and_faces_dir + align_eyes +
                     "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
-                    "separated list of alignments files with the -a flag."
+                    "separated list of alignments files with the -a flag. Optionally specify a "
+                    "faces (-fc) folder to filter the final alignments file to only those faces "
+                    "that appear within the provided folder."
                     "\nL|'missing-alignments': Identify frames that do not exist in the "
                     "alignments file." + output_opts + frames_dir +
                     "\nL|'missing-frames': Identify frames in the alignments file that do not "
@@ -95,8 +97,9 @@ class AlignmentsArgs(FaceSwapArgs):
                               "dest": "faces_dir",
                               "help": "Directory containing extracted faces."})
         argument_list.append({"opts": ("-fr", "-frames_folder"),
-                              "action": DirFullPaths,
+                              "action": DirOrFileFullPaths,
                               "dest": "frames_dir",
+                              "filetypes": "video",
                               "help": "Directory containing source frames "
                                       "that faces were extracted from."})
         argument_list.append({"opts": ("-fmt", "--alignment_format"),
