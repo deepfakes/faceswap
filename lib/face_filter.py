@@ -164,6 +164,9 @@ class FaceFilter():
                 msg = ("Rejecting face as k-nearest neighbors classification is less than "
                        "0.5: {}".format(round(ratio, 2)))
                 retval = False
+            else:
+                msg = None
+                retval = True
         else:
             msg = None
             retval = True
