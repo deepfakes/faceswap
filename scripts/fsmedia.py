@@ -15,7 +15,7 @@ import numpy as np
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
-from lib.utils import (camel_case_split, get_folder, get_image_paths,
+from lib.utils import (camel_case_split, cv2_read_img, get_folder, get_image_paths,
                        set_system_verbosity, _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -184,11 +184,8 @@ class Images():
         """ Load frames from disk """
         logger.debug("Input is separate Frames. Loading images")
         for filename in self.input_images:
-            logger.trace("Loading image: '%s'", filename)
-            try:
-                image = cv2.imread(filename)  # pylint: disable=no-member
-            except Exception as err:  # pylint: disable=broad-except
-                logger.error("Failed to load image '%s'. Original Error: %s", filename, err)
+            image = cv2_read_img(filename, raise_error=False)
+            if image is None:
                 continue
             yield filename, image
 
@@ -221,7 +218,7 @@ class Images():
                 logger.trace("Extracted frame_no %s from filename '%s'", frame_no, filename)
             retval = self.load_one_video_frame(int(frame_no))
         else:
-            retval = cv2.imread(filename)  # pylint: disable=no-member
+            retval = cv2_read_img(filename, raise_error=True)
         return retval
 
     def load_one_video_frame(self, frame_no):

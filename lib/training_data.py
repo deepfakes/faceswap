@@ -14,6 +14,7 @@ from lib.model import masks
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
+from lib.utils import cv2_read_img
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -145,11 +146,7 @@ class TrainingDataGenerator():
         """ Load an image and perform transformation and warping """
         logger.trace("Process face: (filename: '%s', side: '%s', is_timelapse: %s)",
                      filename, side, is_timelapse)
-        try:
-            image = cv2.imread(filename)  # pylint: disable=no-member
-        except TypeError:
-            raise Exception("Error while reading image", filename)
-
+        image = cv2_read_img(filename, raise_error=True)
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             src_pts = self.get_landmarks(filename, image, side)
         if self.mask_class:

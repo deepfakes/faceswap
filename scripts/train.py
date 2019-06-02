@@ -15,7 +15,7 @@ from keras.backend.tensorflow_backend import set_session
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
+from lib.utils import cv2_read_img, get_folder, get_image_paths, set_system_verbosity
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -170,7 +170,7 @@ class Train():
     @property
     def image_size(self):
         """ Get the training set image size for storing in model data """
-        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
+        image = cv2_read_img(self.images["a"][0], raise_error=True)
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
