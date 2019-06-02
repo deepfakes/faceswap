@@ -324,8 +324,10 @@ class Patch():
         """ Update the converter arguments """
         logger.debug("Updating Converter cli arguments")
         if self.converter_arguments is None:
+            logger.debug("No arguments to update")
             return
         for key, val in self.converter_arguments.items():
+            logger.debug("Updating %s to %s", key, val)
             setattr(self.converter.args, key, val)
         logger.debug("Updated Converter cli arguments")
 
@@ -649,17 +651,18 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame that holds the left hand side options panel """
-    def __init__(self, parent, selected_color, selected_mask, selected_scaling,
+    def __init__(self, parent, selected_color, selected_mask_type, selected_scaling,
                  config_tools, patch_callback, refresh_callback, tk_vars):
-        logger.debug("Initializing %s: (selected_color: %s, selected_mask: %s, "
+        logger.debug("Initializing %s: (selected_color: %s, selected_mask_type: %s, "
                      "selected_scaling: %s, config_tools, patch_callback: %s, "
                      "refresh_callback: %s, tk_vars: %s)", self.__class__.__name__, selected_color,
-                     selected_mask, selected_scaling, patch_callback, refresh_callback, tk_vars)
+                     selected_mask_type, selected_scaling, patch_callback, refresh_callback,
+                     tk_vars)
         self.config_tools = config_tools
 
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
-        self.options = ["color", "mask", "scaling"]
+        self.options = ["color", "mask_type", "scaling"]
         self.busy_tkvar = tk_vars["busy"]
         self.tk_vars = dict()
 
@@ -704,7 +707,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def add_comboboxes(self, parent, defaults):
         """ Add the comboboxes to the Action Frame """
         for opt in self.options:
-            if opt == "mask":
+            if opt == "mask_type":
                 choices = get_available_masks() + ["predicted"]
             else:
                 choices = PluginLoader.get_available_convert_plugins(opt, True)
@@ -715,7 +718,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  defaults[opt],
                                  choices=choices,
                                  is_radio=False,
-                                 label_width=8,
+                                 label_width=10,
                                  control_width=12)
             self.tk_vars[opt] = ctl.tk_var
 
