@@ -680,7 +680,7 @@ class Tips():
             "\t-e UID=`id -u` \\ \n"
             "\tdeepfakes-gpu\n\n"
             "6. Open a new terminal to interact with the project\n"
-            "docker exec deepfakes-gpu python /srv/tools.py gui\n".format(
+            "docker exec deepfakes-gpu python /srv/faceswap.py gui\n".format(
                 path=os.path.dirname(os.path.realpath(__file__))))
 
     def macos(self):
