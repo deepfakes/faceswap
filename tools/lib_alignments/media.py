@@ -10,7 +10,8 @@ import cv2
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import _image_extensions, _video_extensions, hash_image_file, hash_encode_image
+from lib.utils import (_image_extensions, _video_extensions, cv2_read_img, hash_image_file,
+                       hash_encode_image)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -160,7 +161,7 @@ class MediaLoader():
         else:
             src = os.path.join(self.folder, filename)
             logger.trace("Loading image: '%s'", src)
-            image = cv2.imread(src)  # pylint: disable=no-member
+            image = cv2_read_img(src, raise_error=True)
         return image
 
     def load_video_frame(self, filename):

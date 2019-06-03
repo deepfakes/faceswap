@@ -15,7 +15,7 @@ from keras.backend.tensorflow_backend import set_session
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
+from lib.utils import cv2_read_img, get_folder, get_image_paths, set_system_verbosity
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -140,7 +140,7 @@ class Train():
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.save_models()
+                model.save_models(False)
                 trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
@@ -170,7 +170,7 @@ class Train():
     @property
     def image_size(self):
         """ Get the training set image size for storing in model data """
-        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
+        image = cv2_read_img(self.images["a"][0], raise_error=True)
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
@@ -208,6 +208,10 @@ class Train():
 
         for iteration in range(0, self.args.iterations):
             logger.trace("Training iteration: %s", iteration)
+            snapshot_interval = self.args.save_interval * self.args.snapshot_interval
+            snapshot_iteration = bool(snapshot_interval != 0 and
+                                      iteration >= snapshot_interval and
+                                      iteration % snapshot_interval == 0)
             save_iteration = iteration % self.args.save_interval == 0
             viewer = display_func if save_iteration or self.save_now else None
             timelapse = self.timelapse if save_iteration else None
@@ -215,19 +219,19 @@ class Train():
             if self.stop:
                 logger.debug("Stop received. Terminating")
                 break
-            elif save_iteration:
+            if save_iteration:
                 logger.trace("Save Iteration: (iteration: %s", iteration)
                 if self.args.pingpong:
-                    model.save_models()
+                    model.save_models(snapshot_iteration)
                     trainer.pingpong.switch()
                 else:
-                    model.save_models()
+                    model.save_models(snapshot_iteration)
             elif self.save_now:
                 logger.trace("Save Requested: (iteration: %s", iteration)
-                model.save_models()
+                model.save_models(False)
                 self.save_now = False
         logger.debug("Training cycle complete")
-        model.save_models()
+        model.save_models(False)
         trainer.clear_tensorboard()
         self.stop = True
 

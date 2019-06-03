@@ -851,6 +851,16 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "save_interval",
                               "default": 100,
                               "help": "Sets the number of iterations before saving the model"})
+        argument_list.append({"opts": ("-ss", "--snapshot-interval"),
+                              "type": int,
+                              "action": Slider,
+                              "min_max": (0, 100000),
+                              "rounding": 5000,
+                              "dest": "snapshot_interval",
+                              "default": 25000,
+                              "help": "Sets the number of iterations before saving a backup "
+                                      "snapshot of the model in it's current state. Set to 0 for "
+                                      "off."})
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "action": Slider,
