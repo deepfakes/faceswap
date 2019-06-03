@@ -10,6 +10,7 @@ import sys
 import time
 
 from json import JSONDecodeError
+from shutil import copyfile, copytree
 
 import keras
 from keras import losses
@@ -22,6 +23,7 @@ from lib import Serializer
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
+from lib.utils import get_folder
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -391,16 +393,20 @@ class ModelBase():
             logger.info("Loaded model from disk: '%s'", self.model_dir)
         return is_loaded
 
-    def save_models(self):
+    def save_models(self, snapshot_iteration):
         """ Backup and save the models """
         logger.debug("Backing up and saving models")
         should_backup = self.get_save_averages()
         save_threads = list()
         for network in self.networks.values():
             name = "save_{}".format(network.name)
-            save_threads.append(MultiThread(network.save, name=name, should_backup=should_backup))
+            save_threads.append(MultiThread(network.save,
+                                            name=name,
+                                            should_backup=should_backup))
         save_threads.append(MultiThread(self.state.save,
-                                        name="save_state", should_backup=should_backup))
+                                        name="save_state",
+                                        should_backup=should_backup,
+                                        snapshot=snapshot_iteration))
         for thread in save_threads:
             thread.start()
         for thread in save_threads:
@@ -408,7 +414,6 @@ class ModelBase():
                 logger.error(thread.errors[0])
             thread.join()
         # Put in a line break to avoid jumbled console
-        print("\n")
         logger.info("saved models")
 
     def get_save_averages(self):
@@ -697,7 +702,7 @@ class State():
         except JSONDecodeError as err:
             logger.debug("JSONDecodeError: %s:", str(err))
 
-    def save(self, should_backup=False):
+    def save(self, should_backup=False, snapshot=False):
         """ Save iteration number to state file """
         logger.debug("Saving State")
         if should_backup:
@@ -716,6 +721,8 @@ class State():
         except IOError as err:
             logger.error("Unable to save model state: %s", str(err.strerror))
         logger.debug("Saved State")
+        if snapshot:
+            self.snapshot_model()
 
     def backup(self):
         """ Backup state file """
@@ -726,6 +733,21 @@ class State():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
+
+    def snapshot_model(self):
+        """ Take a snapshot of the model at current state and back up """
+        logger.info("Saving snapshot")
+        src = os.path.dirname(self.filename)
+        dst = get_folder("{}_{}".format(src, self.iterations))
+        for filename in os.listdir(src):
+            if filename.endswith(".bk"):
+                continue
+            srcfile = os.path.join(src, filename)
+            dstfile = os.path.join(dst, filename)
+            copyfunc = copytree if os.path.isdir(srcfile) else copyfile
+            logger.debug("Saving snapshot: '%s' > '%s'", srcfile, dstfile)
+            copyfunc(srcfile, dstfile)
+        logger.info("Saved snapshot")
 
     def replace_config(self, config_changeable_items):
         """ Replace the loaded config with the one contained within the state file
