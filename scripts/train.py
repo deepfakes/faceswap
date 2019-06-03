@@ -208,10 +208,9 @@ class Train():
 
         for iteration in range(0, self.args.iterations):
             logger.trace("Training iteration: %s", iteration)
-            snapshot_interval = self.args.save_interval * self.args.snapshot_interval
-            snapshot_iteration = bool(snapshot_interval != 0 and
-                                      iteration >= snapshot_interval and
-                                      iteration % snapshot_interval == 0)
+            snapshot_iteration = bool(self.args.snapshot_interval != 0 and
+                                      iteration >= self.args.snapshot_interval and
+                                      iteration % self.args.snapshot_interval == 0)
             save_iteration = iteration % self.args.save_interval == 0
             viewer = display_func if save_iteration or self.save_now else None
             timelapse = self.timelapse if save_iteration else None
