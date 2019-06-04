@@ -15,6 +15,7 @@ from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
+from lib.gpu_stats import GPUStats
 from lib.multithreading import MultiThread, PoolProcess, total_cpus
 from lib.queue_manager import queue_manager
 from lib.utils import get_folder, get_image_paths, hash_image_file
@@ -393,7 +394,7 @@ class Predict():
     def __init__(self, in_queue, queue_size, arguments):
         logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
                      self.__class__.__name__, arguments, queue_size, in_queue)
-        self.batchsize = min(queue_size, 16)
+        self.batchsize = self.get_batchsize(queue_size)
         self.args = arguments
         self.in_queue = in_queue
         self.out_queue = queue_manager.get_queue("patch")
@@ -434,6 +435,15 @@ class Predict():
     def has_predicted_mask(self):
         """ Return whether this model has a predicted mask """
         return bool(self.model.state.mask_shapes)
+
+    @staticmethod
+    def get_batchsize(queue_size):
+        """ Get the batchsize """
+        is_cpu = GPUStats().device_count == 0
+        batchsize = 1 if is_cpu else 16
+        batchsize = min(queue_size, batchsize)
+        logger.debug("Batchsize: %s", batchsize)
+        return batchsize
 
     def load_model(self):
         """ Load the model requested for conversion """

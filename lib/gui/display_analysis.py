@@ -100,6 +100,8 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             return
         msg = "Currently running training session"
         self.session = session
+        # Reload the state file to get approx currently training iterations
+        self.session.load_state_file()
         self.set_session_summary(msg)
 
     def set_session_summary(self, message):
