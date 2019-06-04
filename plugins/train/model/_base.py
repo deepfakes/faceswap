@@ -405,16 +405,31 @@ class ModelBase():
                                             should_backup=should_backup))
         save_threads.append(MultiThread(self.state.save,
                                         name="save_state",
-                                        should_backup=should_backup,
-                                        snapshot=snapshot_iteration))
+                                        should_backup=should_backup))
         for thread in save_threads:
             thread.start()
         for thread in save_threads:
             if thread.has_error:
                 logger.error(thread.errors[0])
             thread.join()
-        # Put in a line break to avoid jumbled console
         logger.info("saved models")
+        if snapshot_iteration:
+            self.snapshot_models()
+    
+    def snapshot_models(self):
+        """ Take a snapshot of the model at current state and back up """
+        logger.info("Saving snapshot")
+        src = self.model_dir
+        dst = get_folder("{}_{}".format(self.model_dir, self.iterations))
+        for filename in os.listdir(src):
+            if filename.endswith(".bk"):
+                continue
+            srcfile = os.path.join(src, filename)
+            dstfile = os.path.join(dst, filename)
+            copyfunc = copytree if os.path.isdir(srcfile) else copyfile
+            logger.debug("Saving snapshot: '%s' > '%s'", srcfile, dstfile)
+            copyfunc(srcfile, dstfile)
+        logger.info("Saved snapshot")
 
     def get_save_averages(self):
         """ Return the loss averages since last save and reset historical losses
@@ -702,7 +717,7 @@ class State():
         except JSONDecodeError as err:
             logger.debug("JSONDecodeError: %s:", str(err))
 
-    def save(self, should_backup=False, snapshot=False):
+    def save(self, should_backup=False):
         """ Save iteration number to state file """
         logger.debug("Saving State")
         if should_backup:
@@ -721,8 +736,6 @@ class State():
         except IOError as err:
             logger.error("Unable to save model state: %s", str(err.strerror))
         logger.debug("Saved State")
-        if snapshot:
-            self.snapshot_model()
 
     def backup(self):
         """ Backup state file """
@@ -733,21 +746,6 @@ class State():
             os.remove(backupfile)
         if os.path.exists(origfile):
             os.rename(origfile, backupfile)
-
-    def snapshot_model(self):
-        """ Take a snapshot of the model at current state and back up """
-        logger.info("Saving snapshot")
-        src = os.path.dirname(self.filename)
-        dst = get_folder("{}_{}".format(src, self.iterations))
-        for filename in os.listdir(src):
-            if filename.endswith(".bk"):
-                continue
-            srcfile = os.path.join(src, filename)
-            dstfile = os.path.join(dst, filename)
-            copyfunc = copytree if os.path.isdir(srcfile) else copyfile
-            logger.debug("Saving snapshot: '%s' > '%s'", srcfile, dstfile)
-            copyfunc(srcfile, dstfile)
-        logger.info("Saved snapshot")
 
     def replace_config(self, config_changeable_items):
         """ Replace the loaded config with the one contained within the state file
