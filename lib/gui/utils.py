@@ -556,6 +556,10 @@ class Config():
         """ Pop up load dialog for a saved config file """
         logger.debug("Loading config: (command: '%s')", command)
         if filename:
+            if not os.path.isfile(filename):
+                msg = "File does not exist: '{}'".format(filename)
+                logger.error(msg)
+                return
             with open(filename, "r") as cfgfile:
                 cfg = self.serializer.unmarshal(cfgfile.read())
         else:
