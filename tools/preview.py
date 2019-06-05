@@ -591,7 +591,8 @@ class ConfigTools():
             for item, options in items.items():
                 if item == "helptext":
                     continue
-                if section is not None and config_section != section:
+                if ((section is not None and config_section != section)
+                        or config_section not in self.tk_vars):
                     new_opt = options["value"]  # Keep saved item for other sections
                     logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
                 else:
