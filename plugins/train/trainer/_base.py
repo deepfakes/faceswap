@@ -15,6 +15,7 @@
                             Set to None for not used
         no_logs:            Disable tensorboard logging
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
+        augment_color:      Perform random shifting of RGB colors +/- 15%
         no_flip:            Don't perform a random flip on the image
         pingpong:           Train each side seperately per save iteration rather than together
 """
@@ -144,8 +145,8 @@ class TrainerBase():
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
-        do_preview = False if viewer is None else True
-        do_timelapse = False if timelapse_kwargs is None else True
+        do_preview = viewer is not None
+        do_timelapse = timelapse_kwargs is not None
         loss = dict()
         for side, batcher in self.batchers.items():
             if self.pingpong.active and side != self.pingpong.side:

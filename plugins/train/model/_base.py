@@ -37,6 +37,7 @@ class ModelBase():
                  gpus,
                  no_logs=False,
                  warp_to_landmarks=False,
+                 augment_color=False,
                  no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
@@ -48,12 +49,12 @@ class ModelBase():
                  memory_saving_gradients=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, no_logs: %s"
-                     "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
-                     "input_shape: %s, encoder_dim: %s, trainer: %s, pingpong: %s, "
-                     "memory_saving_gradients: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, gpus, no_logs, training_image_size,
-                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer,
-                     pingpong, memory_saving_gradients, predict)
+                     "warp_to_landmarks: %s, augment_color: %s, no_flip: %s, training_image_size, "
+                     "%s, alignments_paths: %s, preview_scale: %s, input_shape: %s, encoder_dim: "
+                     "%s, trainer: %s, pingpong: %s, memory_saving_gradients: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, gpus, no_logs, warp_to_landmarks,
+                     augment_color, no_flip, training_image_size, alignments_paths, preview_scale,
+                     input_shape, encoder_dim, trainer, pingpong, memory_saving_gradients, predict)
 
         self.predict = predict
         self.model_dir = model_dir
@@ -85,6 +86,7 @@ class ModelBase():
         self.training_opts = {"alignments": alignments_paths,
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
+                              "augment_color": augment_color,
                               "no_flip": no_flip,
                               "pingpong": pingpong}
 
@@ -415,7 +417,7 @@ class ModelBase():
         logger.info("saved models")
         if snapshot_iteration:
             self.snapshot_models()
-    
+
     def snapshot_models(self):
         """ Take a snapshot of the model at current state and back up """
         logger.info("Saving snapshot")

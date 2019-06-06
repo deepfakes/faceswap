@@ -4,7 +4,7 @@
 import logging
 
 from hashlib import sha1
-from random import shuffle, choice
+from random import random, shuffle, choice
 
 import cv2
 import numpy as np
@@ -152,7 +152,7 @@ class TrainingDataGenerator():
         if self.mask_class:
             image = self.mask_class(src_pts, image, channels=4).mask
 
-        image = self.processing.color_adjust(image)
+        image = self.processing.color_adjust(image, self.training_opts["augment_color"])
 
         if not is_timelapse:
             image = self.processing.random_transform(image)
@@ -223,10 +223,37 @@ class ImageManipulation():
         self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def color_adjust(img):
+    def color_adjust(self, img, augment_color):
         """ Color adjust RGB image """
         logger.trace("Color adjusting image")
+        if augment_color:
+            logger.trace("Augmenting color")
+            face, _ = self.separate_mask(img)
+            face = face.astype("uint8")
+
+            # Normalize
+            clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint:disable=no-member
+                                    tileGridSize=(face.shape[0] // 64, face.shape[0] // 64))
+            for chan in range(3):
+                face[:, :, chan] = clahe.apply(face[:, :, chan])
+
+            # Random LAB adjustment
+            randoms = [(random() * 0.6) - 0.3,  # L adjust +/- 30%
+                       (random() * 0.2) - 0.1,  # A adjust +/- 10%
+                       (random() * 0.2) - 0.1]  # B adjust +/- 10%
+
+            logger.trace("Random LAB adjustments: %s", randoms)
+            face = cv2.cvtColor(  # pylint:disable=no-member
+                face, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
+
+            for idx, adjustment in enumerate(randoms):
+                if adjustment >= 0:
+                    face[:, :, idx] = ((1 - face[:, :, idx]) * adjustment) + face[:, :, idx]
+                else:
+                    face[:, :, idx] = face[:, :, idx] * (1 + adjustment)
+            face = cv2.cvtColor((face * 255.0).astype("uint8"),  # pylint:disable=no-member
+                                cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
+            img[:, :, :3] = face
         return img.astype('float32') / 255.0
 
     @staticmethod
@@ -257,12 +284,12 @@ class ImageManipulation():
         tnx = np.random.uniform(-self.shift_range, self.shift_range) * width
         tny = np.random.uniform(-self.shift_range, self.shift_range) * height
 
-        mat = cv2.getRotationMatrix2D(  # pylint: disable=no-member
+        mat = cv2.getRotationMatrix2D(  # pylint:disable=no-member
             (width // 2, height // 2), rotation, scale)
         mat[:, 2] += (tnx, tny)
-        result = cv2.warpAffine(  # pylint: disable=no-member
+        result = cv2.warpAffine(  # pylint:disable=no-member
             image, mat, (width, height),
-            borderMode=cv2.BORDER_REPLICATE)  # pylint: disable=no-member
+            borderMode=cv2.BORDER_REPLICATE)  # pylint:disable=no-member
 
         logger.trace("Randomly transformed image")
         return result
@@ -301,16 +328,16 @@ class ImageManipulation():
 
         for i, map_ in enumerate([mapx, mapy]):
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint: disable=no-member
+            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint:disable=no-member
 
-        warped_image = cv2.remap(  # pylint: disable=no-member
-            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint: disable=no-member
+        warped_image = cv2.remap(  # pylint:disable=no-member
+            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint:disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
         dst_points = np.mgrid[dst_slice, dst_slice]
         mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
-        target_image = cv2.warpAffine(  # pylint: disable=no-member
+        target_image = cv2.warpAffine(  # pylint:disable=no-member
             image, mat, (self.output_size, self.output_size))
         logger.trace("Target image shape: %s", target_image.shape)
 
@@ -344,7 +371,7 @@ class ImageManipulation():
                        np.random.normal(size=dst_points.shape, scale=2.0))
         destination = destination.astype('uint8')
 
-        face_core = cv2.convexHull(np.concatenate(  # pylint: disable=no-member
+        face_core = cv2.convexHull(np.concatenate(  # pylint:disable=no-member
             [source[17:], destination[17:]], axis=0).astype(int))
 
         source = [(pty, ptx) for ptx, pty in source] + edge_anchors
@@ -355,7 +382,7 @@ class ImageManipulation():
             for idx, (pty, ptx) in enumerate(fpl):
                 if idx > 17:
                     break
-                elif cv2.pointPolygonTest(face_core,  # pylint: disable=no-member
+                elif cv2.pointPolygonTest(face_core,  # pylint:disable=no-member
                                           (pty, ptx),
                                           False) >= 0:
                     indicies_to_remove.add(idx)
@@ -370,23 +397,23 @@ class ImageManipulation():
         map_x_32 = map_x.astype('float32')
         map_y_32 = map_y.astype('float32')
 
-        warped_image = cv2.remap(image,  # pylint: disable=no-member
+        warped_image = cv2.remap(image,  # pylint:disable=no-member
                                  map_x_32,
                                  map_y_32,
-                                 cv2.INTER_LINEAR,  # pylint: disable=no-member
-                                 cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
+                                 cv2.INTER_LINEAR,  # pylint:disable=no-member
+                                 cv2.BORDER_TRANSPARENT)  # pylint:disable=no-member
         target_image = image
 
         # TODO Make sure this replacement is correct
         slices = slice(size // 2 - coverage // 2, size // 2 + coverage // 2)
 #        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
-        warped_image = cv2.resize(  # pylint: disable=no-member
+        warped_image = cv2.resize(  # pylint:disable=no-member
             warped_image[slices, slices, :], (self.input_size, self.input_size),
-            cv2.INTER_AREA)  # pylint: disable=no-member
+            cv2.INTER_AREA)  # pylint:disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
-        target_image = cv2.resize(  # pylint: disable=no-member
+        target_image = cv2.resize(  # pylint:disable=no-member
             target_image[slices, slices, :], (self.output_size, self.output_size),
-            cv2.INTER_AREA)  # pylint: disable=no-member
+            cv2.INTER_AREA)  # pylint:disable=no-member
         logger.trace("Target image shape: %s", target_image.shape)
 
         warped_image, warped_mask = self.separate_mask(warped_image)

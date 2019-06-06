@@ -157,6 +157,7 @@ class Train():
             self.args.gpus,
             no_logs=self.args.no_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
+            augment_color=self.args.augment_color,
             no_flip=self.args.no_flip,
             training_image_size=self.image_size,
             alignments_paths=self.alignments_paths,
