@@ -230,31 +230,46 @@ class ImageManipulation():
             logger.trace("Augmenting color")
             face, _ = self.separate_mask(img)
             face = face.astype("uint8")
-
-            # Normalize
-            clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint:disable=no-member
-                                    tileGridSize=(face.shape[0] // 64, face.shape[0] // 64))
-            for chan in range(3):
-                face[:, :, chan] = clahe.apply(face[:, :, chan])
-
-            # Random LAB adjustment
-            randoms = [(random() * 0.6) - 0.3,  # L adjust +/- 30%
-                       (random() * 0.2) - 0.1,  # A adjust +/- 10%
-                       (random() * 0.2) - 0.1]  # B adjust +/- 10%
-
-            logger.trace("Random LAB adjustments: %s", randoms)
-            face = cv2.cvtColor(  # pylint:disable=no-member
-                face, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
-
-            for idx, adjustment in enumerate(randoms):
-                if adjustment >= 0:
-                    face[:, :, idx] = ((1 - face[:, :, idx]) * adjustment) + face[:, :, idx]
-                else:
-                    face[:, :, idx] = face[:, :, idx] * (1 + adjustment)
-            face = cv2.cvtColor((face * 255.0).astype("uint8"),  # pylint:disable=no-member
-                                cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
+            face = self.random_clahe(face)
+            face = self.random_lab(face)
             img[:, :, :3] = face
         return img.astype('float32') / 255.0
+
+    @staticmethod
+    def random_clahe(image):
+        """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
+        base_contrast = image.shape[0] // 128
+        contrast_random = random()
+        if contrast_random <= 0.5:
+            contrast_adjustment = int((contrast_random * 10.0) * (base_contrast / 2))
+            grid_size = base_contrast + contrast_adjustment
+            logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+
+            clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+                                    tileGridSize=(grid_size, grid_size))
+            for chan in range(3):
+                image[:, :, chan] = clahe.apply(image[:, :, chan])
+        return image
+
+    @staticmethod
+    def random_lab(image):
+        """ Perform random color/lightness adjustment in LAB colorspace """
+        randoms = [(random() * 0.6) - 0.3,  # L adjust +/- 30%
+                   (random() * 0.16) - 0.08,  # A adjust +/- 8%
+                   (random() * 0.16) - 0.08]  # B adjust +/- 8%
+
+        logger.trace("Random LAB adjustments: %s", randoms)
+        image = cv2.cvtColor(  # pylint:disable=no-member
+            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
+
+        for idx, adjustment in enumerate(randoms):
+            if adjustment >= 0:
+                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+            else:
+                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+        image = cv2.cvtColor((image * 255.0).astype("uint8"),  # pylint:disable=no-member
+                             cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
+        return image
 
     @staticmethod
     def separate_mask(image):
