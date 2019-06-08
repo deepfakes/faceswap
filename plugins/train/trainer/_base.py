@@ -213,11 +213,13 @@ class Batcher():
         self.model = model
         self.use_mask = use_mask
         self.side = side
+        self.images = images
         self.target = None
         self.samples = None
         self.mask = None
 
         self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side)
+        self.preview_feed = None
         self.timelapse_feed = None
 
     def load_generator(self):
@@ -241,11 +243,10 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        self.samples = batch[0] if do_preview else None
         batch = batch[1:]   # Remove full size samples from batch
         if self.use_mask:
             batch = self.compile_mask(batch)
-        self.target = batch[1] if do_preview else None
+        self.generate_preview(do_preview)
         return batch
 
     def compile_mask(self, batch):
@@ -257,6 +258,33 @@ class Batcher():
             image = batch[idx]
             retval.append([image, mask])
         return retval
+
+    def generate_preview(self, do_preview):
+        """ Generate the preview if a preview iteration """
+        if not do_preview:
+            self.samples = None
+            self.target = None
+            return
+        logger.debug("Generating preview")
+        if self.preview_feed is None:
+            self.set_preview_feed()
+        batch = next(self.preview_feed)
+        self.samples = batch[0]
+        batch = batch[1:]   # Remove full size samples from batch
+        if self.use_mask:
+            batch = self.compile_mask(batch)
+        self.target = batch[1]
+
+    def set_preview_feed(self):
+        """ Set the preview dictionary """
+        logger.debug("Setting preview feed: (side: '%s')", self.side)
+        batchsize = self.model.training_opts.get("preview_images", 14)
+        self.preview_feed = self.load_generator().minibatch_ab(self.images,
+                                                               batchsize,
+                                                               self.side,
+                                                               do_shuffle=True,
+                                                               is_preview=True)
+        logger.debug("Set preview feed. Batchsize: %s", batchsize)
 
     def compile_sample(self, batch_size, samples=None, images=None):
         """ Training samples to display in the viewer """
