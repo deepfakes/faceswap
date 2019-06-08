@@ -4,7 +4,7 @@
 import logging
 
 from hashlib import sha1
-from random import shuffle, choice
+from random import random, shuffle, choice
 
 import cv2
 import numpy as np
@@ -50,12 +50,15 @@ class TrainingDataGenerator():
         logger.debug("Mask class: %s", mask_class)
         return mask_class
 
-    def minibatch_ab(self, images, batchsize, side, do_shuffle=True, is_timelapse=False):
+    def minibatch_ab(self, images, batchsize, side,
+                     do_shuffle=True, is_preview=False, is_timelapse=False):
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
-                     "is_timelapse: %s)", len(images), batchsize, side, do_shuffle, is_timelapse)
+                     "is_preview, %s, is_timelapse: %s)", len(images), batchsize, side, do_shuffle,
+                     is_preview, is_timelapse)
         self.batchsize = batchsize
-        queue_in, queue_out = self.make_queues(side, is_timelapse)
+        is_display = is_preview or is_timelapse
+        queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list((
             (batchsize, training_size, training_size, 3),  # sample images
@@ -69,25 +72,31 @@ class TrainingDataGenerator():
             shapes=batch_shape,
             in_queue=queue_in,
             out_queue=queue_out,
-            args=(images, side, is_timelapse, do_shuffle, batchsize))
+            args=(images, side, is_display, do_shuffle, batchsize))
         load_process.start()
-        logger.debug("Batching to queue: (side: '%s', is_timelapse: %s)", side, is_timelapse)
-        return self.minibatch(side, is_timelapse, load_process)
+        logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
+        return self.minibatch(side, is_display, load_process)
 
     @staticmethod
-    def make_queues(side, is_timelapse):
+    def make_queues(side, is_preview, is_timelapse):
         """ Create the buffer token queues for Fixed Producer Dispatcher """
-        q_name = "timelapse_{}".format(side) if is_timelapse else "train_{}".format(side)
+        q_name = "_{}".format(side)
+        if is_preview:
+            q_name = "{}{}".format("preview", q_name)
+        elif is_timelapse:
+            q_name = "{}{}".format("timelapse", q_name)
+        else:
+            q_name = "{}{}".format("train", q_name)
         q_names = ["{}_{}".format(q_name, direction) for direction in ("in", "out")]
         logger.debug(q_names)
         queues = [queue_manager.get_queue(queue) for queue in q_names]
         return queues
 
-    def load_batches(self, mem_gen, images, side, is_timelapse,
+    def load_batches(self, mem_gen, images, side, is_display,
                      do_shuffle=True, batchsize=0):
         """ Load the warped images and target images to queue """
-        logger.debug("Loading batch: (image_count: %s, side: '%s', is_timelapse: %s, "
-                     "do_shuffle: %s)", len(images), side, is_timelapse, do_shuffle)
+        logger.debug("Loading batch: (image_count: %s, side: '%s', is_display: %s, "
+                     "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
         self.validate_samples(images)
         # Intialize this for each subprocess
         self._nearest_landmarks = dict()
@@ -103,18 +112,18 @@ class TrainingDataGenerator():
         epoch = 0
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
-            logger.trace("Putting to batch queue: (side: '%s', is_timelapse: %s)",
-                         side, is_timelapse)
+            logger.trace("Putting to batch queue: (side: '%s', is_display: %s)",
+                         side, is_display)
             for i, img_path in enumerate(img_iter):
-                imgs = self.process_face(img_path, side, is_timelapse)
+                imgs = self.process_face(img_path, side, is_display)
                 for j, img in enumerate(imgs):
                     memory[j][i][:] = img
                 epoch += 1
                 if i == batchsize - 1:
                     break
             memory_wrapper.ready()
-        logger.debug("Finished batching: (epoch: %s, side: '%s', is_timelapse: %s)",
-                     epoch, side, is_timelapse)
+        logger.debug("Finished batching: (epoch: %s, side: '%s', is_display: %s)",
+                     epoch, side, is_display)
 
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
@@ -126,35 +135,37 @@ class TrainingDataGenerator():
         assert length >= self.batchsize, msg
 
     @staticmethod
-    def minibatch(side, is_timelapse, load_process):
+    def minibatch(side, is_display, load_process):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
-        logger.debug("Launching minibatch generator for queue (side: '%s', is_timelapse: %s)",
-                     side, is_timelapse)
+        logger.debug("Launching minibatch generator for queue (side: '%s', is_display: %s)",
+                     side, is_display)
         for batch_wrapper in load_process:
             with batch_wrapper as batch:
                 logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
-                             "is_timelapse: %s)",
-                             len(batch), [item.shape for item in batch], side, is_timelapse)
+                             "is_display: %s)",
+                             len(batch), [item.shape for item in batch], side, is_display)
                 yield batch
         load_process.stop()
-        logger.debug("Finished minibatch generator for queue: (side: '%s', is_timelapse: %s)",
-                     side, is_timelapse)
+        logger.debug("Finished minibatch generator for queue: (side: '%s', is_display: %s)",
+                     side, is_display)
         load_process.join()
 
-    def process_face(self, filename, side, is_timelapse):
+    def process_face(self, filename, side, is_display):
         """ Load an image and perform transformation and warping """
-        logger.trace("Process face: (filename: '%s', side: '%s', is_timelapse: %s)",
-                     filename, side, is_timelapse)
+        logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
+                     filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             src_pts = self.get_landmarks(filename, image, side)
         if self.mask_class:
             image = self.mask_class(src_pts, image, channels=4).mask
 
-        image = self.processing.color_adjust(image)
+        image = self.processing.color_adjust(image,
+                                             self.training_opts["augment_color"],
+                                             is_display)
 
-        if not is_timelapse:
+        if not is_display:
             image = self.processing.random_transform(image)
             if not self.training_opts["no_flip"]:
                 image = self.processing.do_random_flip(image)
@@ -223,11 +234,53 @@ class ImageManipulation():
         self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def color_adjust(img):
+    def color_adjust(self, img, augment_color, is_display):
         """ Color adjust RGB image """
         logger.trace("Color adjusting image")
+        if not is_display and augment_color:
+            logger.trace("Augmenting color")
+            face, _ = self.separate_mask(img)
+            face = face.astype("uint8")
+            face = self.random_clahe(face)
+            face = self.random_lab(face)
+            img[:, :, :3] = face
         return img.astype('float32') / 255.0
+
+    @staticmethod
+    def random_clahe(image):
+        """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
+        base_contrast = image.shape[0] // 128
+        contrast_random = random()
+        if contrast_random <= 0.5:
+            contrast_adjustment = int((contrast_random * 10.0) * (base_contrast / 2))
+            grid_size = base_contrast + contrast_adjustment
+            logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+
+            clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+                                    tileGridSize=(grid_size, grid_size))
+            for chan in range(3):
+                image[:, :, chan] = clahe.apply(image[:, :, chan])
+        return image
+
+    @staticmethod
+    def random_lab(image):
+        """ Perform random color/lightness adjustment in LAB colorspace """
+        randoms = [(random() * 0.6) - 0.3,  # L adjust +/- 30%
+                   (random() * 0.16) - 0.08,  # A adjust +/- 8%
+                   (random() * 0.16) - 0.08]  # B adjust +/- 8%
+
+        logger.trace("Random LAB adjustments: %s", randoms)
+        image = cv2.cvtColor(  # pylint:disable=no-member
+            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
+
+        for idx, adjustment in enumerate(randoms):
+            if adjustment >= 0:
+                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+            else:
+                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+        image = cv2.cvtColor((image * 255.0).astype("uint8"),  # pylint:disable=no-member
+                             cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
+        return image
 
     @staticmethod
     def separate_mask(image):
@@ -257,12 +310,12 @@ class ImageManipulation():
         tnx = np.random.uniform(-self.shift_range, self.shift_range) * width
         tny = np.random.uniform(-self.shift_range, self.shift_range) * height
 
-        mat = cv2.getRotationMatrix2D(  # pylint: disable=no-member
+        mat = cv2.getRotationMatrix2D(  # pylint:disable=no-member
             (width // 2, height // 2), rotation, scale)
         mat[:, 2] += (tnx, tny)
-        result = cv2.warpAffine(  # pylint: disable=no-member
+        result = cv2.warpAffine(  # pylint:disable=no-member
             image, mat, (width, height),
-            borderMode=cv2.BORDER_REPLICATE)  # pylint: disable=no-member
+            borderMode=cv2.BORDER_REPLICATE)  # pylint:disable=no-member
 
         logger.trace("Randomly transformed image")
         return result
@@ -301,16 +354,16 @@ class ImageManipulation():
 
         for i, map_ in enumerate([mapx, mapy]):
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint: disable=no-member
+            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint:disable=no-member
 
-        warped_image = cv2.remap(  # pylint: disable=no-member
-            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint: disable=no-member
+        warped_image = cv2.remap(  # pylint:disable=no-member
+            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint:disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
         dst_points = np.mgrid[dst_slice, dst_slice]
         mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
-        target_image = cv2.warpAffine(  # pylint: disable=no-member
+        target_image = cv2.warpAffine(  # pylint:disable=no-member
             image, mat, (self.output_size, self.output_size))
         logger.trace("Target image shape: %s", target_image.shape)
 
@@ -344,7 +397,7 @@ class ImageManipulation():
                        np.random.normal(size=dst_points.shape, scale=2.0))
         destination = destination.astype('uint8')
 
-        face_core = cv2.convexHull(np.concatenate(  # pylint: disable=no-member
+        face_core = cv2.convexHull(np.concatenate(  # pylint:disable=no-member
             [source[17:], destination[17:]], axis=0).astype(int))
 
         source = [(pty, ptx) for ptx, pty in source] + edge_anchors
@@ -355,7 +408,7 @@ class ImageManipulation():
             for idx, (pty, ptx) in enumerate(fpl):
                 if idx > 17:
                     break
-                elif cv2.pointPolygonTest(face_core,  # pylint: disable=no-member
+                elif cv2.pointPolygonTest(face_core,  # pylint:disable=no-member
                                           (pty, ptx),
                                           False) >= 0:
                     indicies_to_remove.add(idx)
@@ -370,23 +423,23 @@ class ImageManipulation():
         map_x_32 = map_x.astype('float32')
         map_y_32 = map_y.astype('float32')
 
-        warped_image = cv2.remap(image,  # pylint: disable=no-member
+        warped_image = cv2.remap(image,  # pylint:disable=no-member
                                  map_x_32,
                                  map_y_32,
-                                 cv2.INTER_LINEAR,  # pylint: disable=no-member
-                                 cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
+                                 cv2.INTER_LINEAR,  # pylint:disable=no-member
+                                 cv2.BORDER_TRANSPARENT)  # pylint:disable=no-member
         target_image = image
 
         # TODO Make sure this replacement is correct
         slices = slice(size // 2 - coverage // 2, size // 2 + coverage // 2)
 #        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
-        warped_image = cv2.resize(  # pylint: disable=no-member
+        warped_image = cv2.resize(  # pylint:disable=no-member
             warped_image[slices, slices, :], (self.input_size, self.input_size),
-            cv2.INTER_AREA)  # pylint: disable=no-member
+            cv2.INTER_AREA)  # pylint:disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
-        target_image = cv2.resize(  # pylint: disable=no-member
+        target_image = cv2.resize(  # pylint:disable=no-member
             target_image[slices, slices, :], (self.output_size, self.output_size),
-            cv2.INTER_AREA)  # pylint: disable=no-member
+            cv2.INTER_AREA)  # pylint:disable=no-member
         logger.trace("Target image shape: %s", target_image.shape)
 
         warped_image, warped_mask = self.separate_mask(warped_image)

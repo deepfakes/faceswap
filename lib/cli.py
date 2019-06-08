@@ -951,6 +951,17 @@ class TrainArgs(FaceSwapArgs):
                                       "horizontally. Sometimes it is desirable for this not to "
                                       "occur. Generally this should be left off except for "
                                       "during 'fit training'."})
+        argument_list.append({"opts": ("-ac", "--augment-color"),
+                              "action": "store_true",
+                              "dest": "augment_color",
+                              "default": False,
+                              "help": "Perform color augmentation on training images. This has "
+                                      "a 50%% chance of performing Contrast Limited Adaptive "
+                                      "Histogram Equilization on the image. Then it randomly "
+                                      "shifts the color balance +/- 8%% and the lighting +/- 30%% "
+                                      "on each face fed to the model. Should help make the model "
+                                      "less susceptible to color differences between the A and B "
+                                      "set, but may increase training time."})
         argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
                               "action": DirFullPaths,
                               "dest": "timelapse_input_a",
