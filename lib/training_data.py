@@ -152,7 +152,9 @@ class TrainingDataGenerator():
         if self.mask_class:
             image = self.mask_class(src_pts, image, channels=4).mask
 
-        image = self.processing.color_adjust(image, self.training_opts["augment_color"])
+        image = self.processing.color_adjust(image,
+                                             self.training_opts["augment_color"],
+                                             is_timelapse)
 
         if not is_timelapse:
             image = self.processing.random_transform(image)
@@ -223,10 +225,10 @@ class ImageManipulation():
         self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def color_adjust(self, img, augment_color):
+    def color_adjust(self, img, augment_color, is_timelapse):
         """ Color adjust RGB image """
         logger.trace("Color adjusting image")
-        if augment_color:
+        if not is_timelapse and augment_color:
             logger.trace("Augmenting color")
             face, _ = self.separate_mask(img)
             face = face.astype("uint8")

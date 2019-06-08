@@ -956,7 +956,7 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "augment_color",
                               "default": False,
                               "help": "Perform color augmentation on training images. This has "
-                                      "has a 50%% chance of performing Contrast Limited Adaptive "
+                                      "a 50%% chance of performing Contrast Limited Adaptive "
                                       "Histogram Equilization on the image. Then it randomly "
                                       "shifts the color balance +/- 8%% and the lighting +/- 30%% "
                                       "on each face fed to the model. Should help make the model "
