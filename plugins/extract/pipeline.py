@@ -90,10 +90,14 @@ class Extractor():
         """ Set whether to run detect and align together or separately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
-        gpu_stats = GPUStats()
-        if detector_vram == 0 or aligner_vram == 0 or gpu_stats.device_count == 0:
+        if detector_vram == 0 or aligner_vram == 0:
             logger.debug("At least one of aligner or detector have no VRAM requirement. "
                          "Enabling parallel processing.")
+            return True
+
+        gpu_stats = GPUStats()
+        if gpu_stats.device_count == 0:
+            logger.debug("No GPU detected. Enabling parallel processing.")
             return True
 
         if not multiprocess:

@@ -513,6 +513,12 @@ class Config():
         return {self.command_notebook.tab(tab_id, "text").lower(): tab_id
                 for tab_id in range(0, self.command_notebook.index("end"))}
 
+    @property
+    def tools_command_tabs(self):
+        """ Return dict of tools command tab titles with their IDs """
+        return {self.command_notebook.tools_notebook.tab(tab_id, "text").lower(): tab_id
+                for tab_id in range(0, self.command_notebook.tools_notebook.index("end"))}
+
     @staticmethod
     def set_tk_vars():
         """ TK Variables to be triggered by to indicate
@@ -579,8 +585,11 @@ class Config():
             self.set_command_args(cmd, opts)
 
         if command:
-            self.command_notebook.select(self.command_tabs[command])
-
+            if command in self.command_tabs:
+                self.command_notebook.select(self.command_tabs[command])
+            else:
+                self.command_notebook.select(self.command_tabs["tools"])
+                self.command_notebook.tools_notebook.select(self.tools_command_tabs[command])
         self.add_to_recent(cfgfile.name, command)
         logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
 

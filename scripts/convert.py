@@ -439,10 +439,12 @@ class Predict():
     @staticmethod
     def get_batchsize(queue_size):
         """ Get the batchsize """
+        logger.debug("Getting batchsize")
         is_cpu = GPUStats().device_count == 0
         batchsize = 1 if is_cpu else 16
         batchsize = min(queue_size, batchsize)
         logger.debug("Batchsize: %s", batchsize)
+        logger.debug("Got batchsize: %s", batchsize)
         return batchsize
 
     def load_model(self):
