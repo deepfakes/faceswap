@@ -138,9 +138,9 @@ class Environment():
         self.output.info("Installed Python: {0} {1}".format(self.py_version[0],
                                                             self.py_version[1]))
         if not (self.py_version[0].split(".")[0] == "3"
-                and self.py_version[0].split(".")[1] in ("3", "4", "5", "6")
+                and self.py_version[0].split(".")[1] in ("3", "4", "5", "6", "7")
                 and self.py_version[1] == "64bit"):
-            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5 or 3.6 "
+            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5, 3.6 or 3.7 "
                               "64bit and try again.")
             exit(1)
 
