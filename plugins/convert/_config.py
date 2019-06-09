@@ -139,7 +139,7 @@ class Config(FaceswapConfig):
                  "magenta. B - Color range from blue to yellow. The L channel is independent of "
                  "color information and encodes brightness only. The other two channels encode "
                  "color."
-                 "\n\t YCrCb: Y – Luminance or Luma component obtained from RGB after gamma "
+                 "\n\t YCrCb: Y - Luminance or Luma component obtained from RGB after gamma "
                  "correction. Cr - how far is the red component from Luma. Cb - how far is the "
                  "blue component from Luma. Separates the luminance and chrominance components "
                  "into different channels.")

@@ -668,6 +668,8 @@ class ConvertArgs(ExtractConvertArgs):
                     "\nL|color-transfer: Transfers the color distribution from the source to the "
                     "target image using the mean and standard deviations of the L*a*b* "
                     "color space."
+                    "\nL|manual-balance: Manually adjust the balance of the image in a variety of "
+                    "color spaces. Best used with the Preview tool to set correct values."
                     "\nL|match-hist: Adjust the histogram of each color channel in the swapped "
                     "reconstruction to equal the histogram of the masked area in the orginal "
                     "image."

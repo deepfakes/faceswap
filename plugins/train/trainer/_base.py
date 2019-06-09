@@ -278,7 +278,7 @@ class Batcher():
     def set_preview_feed(self):
         """ Set the preview dictionary """
         logger.debug("Setting preview feed: (side: '%s')", self.side)
-        batchsize = self.model.training_opts.get("preview_images", 14)
+        batchsize = min(len(self.images), self.model.training_opts.get("preview_images", 14))
         self.preview_feed = self.load_generator().minibatch_ab(self.images,
                                                                batchsize,
                                                                self.side,
