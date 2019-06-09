@@ -471,13 +471,9 @@ class Checks():
     @staticmethod
     def cudnn_checkfiles_linux():
         """ Return the checkfile locations for linux """
-        chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
-        chk = chk.strip().replace("libcudnn.so.", "")
-        cudnn_vers = chk[0]
-        cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
-        cudnn_path = cudnn_path.replace("lib", "include")
-        cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
-                            os.path.join(cudnn_path, "cudnn.h")]
+        chk = os.popen("for i in `echo '' | gcc -v -E - 2>&1 | grep '^ /[^ ]\+$'`; do ls $i/cudnn_v*.h 2>/dev/null; done").readline()
+        cudnn_checkfiles = [chk.strip()]
+
         return cudnn_checkfiles
 
     def cudnn_checkfiles_windows(self):
