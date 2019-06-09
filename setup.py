@@ -140,8 +140,8 @@ class Environment():
         if not (self.py_version[0].split(".")[0] == "3"
                 and self.py_version[0].split(".")[1] in ("3", "4", "5", "6", "7")
                 and self.py_version[1] == "64bit"):
-            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5, 3.6 or 3.7 "
-                              "64bit and try again.")
+            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5, 3.6 "
+                              "or 3.7 64bit and try again.")
             exit(1)
 
     def output_runtime_info(self):
@@ -471,7 +471,8 @@ class Checks():
     @staticmethod
     def cudnn_checkfiles_linux():
         """ Return the checkfile locations for linux """
-        chk = os.popen("for i in `echo '' | gcc -v -E - 2>&1 | grep '^ /[^ ]\+$'`; do ls $i/cudnn_v*.h 2>/dev/null; done").readline()
+        chk = os.popen("for i in `echo '' | gcc -v -E - 2>&1 | grep '^ /[^ ]\\+$'`; "
+                       "do ls $i/cudnn_v*.h 2>/dev/null; done").readline()
         cudnn_checkfiles = [chk.strip()]
 
         return cudnn_checkfiles
