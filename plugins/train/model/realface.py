@@ -21,6 +21,7 @@ class Model(ModelBase):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
+        self.configfile = kwargs.get("configfile", None)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
         kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
@@ -46,13 +47,13 @@ class Model(ModelBase):
 
     def check_input_output(self):
         """ Confirm valid input and output sized have been provided """
-        if not 64 <= self.config["input_size"] <=128 or self.config["input_size"] % 16 != 0:
+        if not 64 <= self.config["input_size"] <= 128 or self.config["input_size"] % 16 != 0:
             logger.error("Config error: input_size must be between 64 and 128 and be divisible by "
                          "16.")
             exit(1)
-        if not 64 <= self.config["output_size"] <=256 or self.config["output_size"] % 16 != 0:
-            logger.error("Config error: output_size must be between 64 and 256 and be divisible by "
-                         "16.")
+        if not 64 <= self.config["output_size"] <= 256 or self.config["output_size"] % 16 != 0:
+            logger.error("Config error: output_size must be between 64 and 256 and be divisible "
+                         "by 16.")
             exit(1)
         logger.debug("Input and output sizes are valid")
 

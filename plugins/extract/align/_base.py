@@ -34,11 +34,12 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 class Aligner():
     """ Landmarks Aligner Object """
-    def __init__(self, loglevel,
+    def __init__(self, loglevel, configfile=None,
                  git_model_id=None, model_filename=None, colorspace="BGR", input_size=256):
-        logger.debug("Initializing %s: (loglevel: %s, git_model_id: %s, model_filename: '%s', "
-                     "colorspace: '%s'. input_size: %s)", self.__class__.__name__, loglevel,
-                     git_model_id, model_filename, colorspace, input_size)
+        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, git_model_id: %s, "
+                     "model_filename: '%s', colorspace: '%s'. input_size: %s)",
+                     self.__class__.__name__, loglevel, configfile, git_model_id, model_filename,
+                     colorspace, input_size)
         self.loglevel = loglevel
         self.colorspace = colorspace.upper()
         self.input_size = input_size

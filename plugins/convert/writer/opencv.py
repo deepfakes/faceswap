@@ -9,8 +9,8 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Images output writer using cv2 """
-    def __init__(self, output_folder):
-        super().__init__(output_folder)
+    def __init__(self, output_folder, **kwargs):
+        super().__init__(output_folder, **kwargs)
         self.extension = ".{}".format(self.config["format"])
         self.check_transparency_format()
         self.args = self.get_save_args()

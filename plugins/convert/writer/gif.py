@@ -10,8 +10,8 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, output_folder, total_count):
-        super().__init__(output_folder)
+    def __init__(self, output_folder, total_count, **kwargs):
+        super().__init__(output_folder, **kwargs)
         self.frame_order = list(range(1, total_count + 1))
         self.output_dimensions = None  # Fix dims of 1st frame in case of different sized images
         self.writer = None  # Need to know dimensions of first frame, so set writer then

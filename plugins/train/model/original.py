@@ -16,6 +16,7 @@ class Model(ModelBase):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
+        self.configfile = kwargs.get("configfile", None)
         if "input_shape" not in kwargs:
             kwargs["input_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:

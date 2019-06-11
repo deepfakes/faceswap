@@ -10,17 +10,17 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def get_config(plugin_name):
+def get_config(plugin_name, configfile=None):
     """ Return the config for the requested model """
-    return Config(plugin_name).config_dict
+    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class Output():
     """ Parent class for scaling adjustments """
-    def __init__(self, output_folder):
+    def __init__(self, output_folder, configfile=None):
         logger.debug("Initializing %s: (output_folder: '%s')",
                      self.__class__.__name__, output_folder)
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]))
+        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         logger.debug("config: %s", self.config)
         self.output_folder = output_folder
         self.output_dimensions = None

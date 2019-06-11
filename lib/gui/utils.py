@@ -105,13 +105,14 @@ class FileHandler():
                                     ("Pickle", "*.p"),
                                     ("YAML", "*.yaml" "*.yml"),  # pylint: disable=W1403
                                     all_files],
-                     "config": [("Faceswap config files", "*.fsw"), all_files],
+                     "config": [("Faceswap GUI config files", "*.fsw"), all_files],
                      "csv": [("Comma separated values", "*.csv"), all_files],
                      "image": [("Bitmap", "*.bmp"),
                                ("JPG", "*.jpeg" "*.jpg"),  # pylint: disable=W1403
                                ("PNG", "*.png"),
                                ("TIFF", "*.tif" "*.tiff"),  # pylint: disable=W1403
                                all_files],
+                     "ini": [("Faceswap config files", "*.ini"), all_files],
                      "state": [("State files", "*.json"), all_files],
                      "log": [("Log files", "*.log"), all_files],
                      "video": [("Audio Video Interleave", "*.avi"),

@@ -42,12 +42,15 @@ class Convert():
         self.add_queues()
         self.disk_io = DiskIO(self.alignments, self.images, arguments)
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
+
+        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
                                    self.predictor.has_predicted_mask,
                                    self.disk_io.draw_transparent,
                                    self.disk_io.pre_encode,
-                                   arguments)
+                                   arguments,
+                                   configfile=configfile)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -193,7 +196,8 @@ class DiskIO():
             else:
                 args.append(self.args.reference_video)
         logger.debug("Writer args: %s", args)
-        return PluginLoader.get_converter("writer", self.args.writer)(*args)
+        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
+        return PluginLoader.get_converter("writer", self.args.writer)(*args, configfile=configfile)
 
     def get_frame_ranges(self):
         """ split out the frame ranges and parse out 'min' and 'max' values """

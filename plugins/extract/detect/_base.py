@@ -26,19 +26,20 @@ from plugins.extract._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def get_config(plugin_name):
+def get_config(plugin_name, configfile=None):
     """ Return the config for the requested model """
-    return Config(plugin_name).config_dict
+    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class Detector():
     """ Detector object """
-    def __init__(self, loglevel,
+    def __init__(self, loglevel, configfile=None,
                  git_model_id=None, model_filename=None, rotation=None, min_size=0):
-        logger.debug("Initializing %s: (loglevel: %s, git_model_id: %s, model_filename: %s, "
-                     "rotation: %s, min_size: %s)", self.__class__.__name__, loglevel,
-                     git_model_id, model_filename, rotation, min_size)
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]))
+        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, git_model_id: %s, "
+                     "model_filename: %s, rotation: %s, min_size: %s)",
+                     self.__class__.__name__, loglevel, configfile, git_model_id,
+                     model_filename, rotation, min_size)
+        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         self.loglevel = loglevel
         self.rotation = self.get_rotation_angles(rotation)
         self.min_size = min_size

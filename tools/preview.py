@@ -151,6 +151,9 @@ class Samples():
         self.alignments = Alignments(arguments,
                                      is_extract=False,
                                      input_is_video=self.images.is_video)
+        if not self.alignments.have_alignments_file:
+            logger.error("Alignments file not found at: '%s'", self.alignments.file)
+            exit(1)
         self.filelist = self.get_filelist()
         self.indices = self.get_indices()
 
@@ -259,11 +262,13 @@ class Patch():
         self.current_config = config_tools.config
         self.converter_arguments = None  # Updated converter arguments dict
 
+        configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self.converter = Converter(output_dir=None,
                                    output_size=self.samples.predictor.output_size,
                                    output_has_mask=self.samples.predictor.has_predicted_mask,
                                    draw_transparent=False,
                                    pre_encode=None,
+                                   configfile=configfile,
                                    arguments=self.generate_converter_arguments(arguments))
 
         self.shutdown = Event()

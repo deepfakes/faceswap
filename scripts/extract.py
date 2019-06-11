@@ -30,9 +30,11 @@ class Extract():
         self.images = Images(self.args)
         self.alignments = Alignments(self.args, True, self.images.is_video)
         self.post_process = PostProcess(arguments)
+        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
                                    self.args.loglevel,
+                                   configfile,
                                    self.args.multiprocess,
                                    self.args.rotate_images,
                                    self.args.min_size)

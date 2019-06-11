@@ -352,6 +352,12 @@ class FaceSwapArgs():
         """ Arguments that are used in ALL parts of Faceswap
             DO NOT override this """
         global_args = list()
+        global_args.append({"opts": ("-C", "--configfile"),
+                            "action": FileFullPaths,
+                            "filetypes": "ini",
+                            "type": str,
+                            "help": "Optionally overide the saved config with the path to a "
+                                    "custom config file."})
         global_args.append({"opts": ("-L", "--loglevel"),
                             "type": str.upper,
                             "dest": "loglevel",

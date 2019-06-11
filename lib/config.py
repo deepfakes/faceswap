@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Default configurations for faceswap
-    Extends out configparser funcionality
-    by checking for default config updates
+    Extends out configparser funcionality by checking for default config updates
     and returning data in it's correct format """
 
 import logging
@@ -15,10 +14,10 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class FaceswapConfig():
     """ Config Items """
-    def __init__(self, section):
+    def __init__(self, section, configfile=None):
         """ Init Configuration  """
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self.configfile = self.get_config_file()
+        self.configfile = self.get_config_file(configfile)
         self.config = ConfigParser(allow_no_value=True)
         self.defaults = OrderedDict()
         self.config.optionxform = str
@@ -93,8 +92,14 @@ class FaceswapConfig():
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
         return retval
 
-    def get_config_file(self):
-        """ Return the config file from the calling folder """
+    def get_config_file(self, configfile):
+        """ Return the config file from the calling folder or the provided file """
+        if configfile is not None:
+            if not os.path.isfile(configfile):
+                err = "Config file does not exist at: {}".format(configfile)
+                logger.error(err)
+                raise ValueError(err)
+            return configfile
         dirname = os.path.dirname(sys.modules[self.__module__].__file__)
         folder, fname = os.path.split(dirname)
         retval = os.path.join(os.path.dirname(folder), "config", "{}.ini".format(fname))

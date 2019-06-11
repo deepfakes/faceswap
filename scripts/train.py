@@ -152,9 +152,11 @@ class Train():
         """ Load the model requested for training """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
+        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
             self.args.gpus,
+            configfile=configfile,
             no_logs=self.args.no_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
             augment_color=self.args.augment_color,
