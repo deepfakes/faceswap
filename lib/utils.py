@@ -65,6 +65,24 @@ def get_image_paths(directory):
     return dir_contents
 
 
+def full_path_split(path):
+    """ Split a given path into all of it's separate components """
+    allparts = list()
+    while True:
+        parts = os.path.split(path)
+        if parts[0] == path:   # sentinel for absolute paths
+            allparts.insert(0, parts[0])
+            break
+        elif parts[1] == path:  # sentinel for relative paths
+            allparts.insert(0, parts[1])
+            break
+        else:
+            path = parts[0]
+            allparts.insert(0, parts[1])
+    logger.trace("path: %s, allparts: %s", path, allparts)
+    return allparts
+
+
 def cv2_read_img(filename, raise_error=False):
     """ Read an image with cv2 and check that an image was actually loaded.
         Logs an error if the image returned is None. or an error has occured.

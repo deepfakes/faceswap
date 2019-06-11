@@ -8,6 +8,7 @@ import sys
 from importlib import import_module
 
 from lib.config import FaceswapConfig
+from lib.utils import full_path_split
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -24,7 +25,7 @@ class Config(FaceswapConfig):
             if not default_files:
                 continue
             base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
-            import_path = dirpath.replace(base_path, "").replace("/", ".")[1:]
+            import_path = ".".join(full_path_split(dirpath.replace(base_path, ""))[1:])
             plugin_type = import_path.split(".")[-1]
             for filename in default_files:
                 self.load_module(filename, import_path, plugin_type)

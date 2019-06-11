@@ -492,12 +492,19 @@ class Predict():
     def predict_faces(self):
         """ Get detected faces from images """
         faces_seen = 0
+        consecutive_no_faces = 0
         batch = list()
         while True:
             item = self.in_queue.get()
             if item != "EOF":
                 logger.trace("Got from queue: '%s'", item["filename"])
                 faces_count = len(item["detected_faces"])
+
+                # Safety measure. If a large stream of frames appear that do not have faces,
+                # these will stack up into RAM. Keep a count of consecutive frames with no faces.
+                # If self.batchsize number of frames appear, force the current batch through
+                # to clear RAM.
+                consecutive_no_faces = consecutive_no_faces + 1 if faces_count == 0 else 0
                 self.faces_count += faces_count
                 if faces_count > 1:
                     self.verify_output = True
@@ -509,8 +516,10 @@ class Predict():
                 faces_seen += faces_count
                 batch.append(item)
 
-            if faces_seen < self.batchsize and item != "EOF":
-                logger.trace("Continuing. Current batchsize: %s", faces_seen)
+            if item != "EOF" and (faces_seen < self.batchsize and
+                                  consecutive_no_faces < self.batchsize):
+                logger.trace("Continuing. Current batchsize: %s, consecutive_no_faces: %s",
+                             faces_seen, consecutive_no_faces)
                 continue
 
             if batch:
@@ -526,6 +535,7 @@ class Predict():
 
                 self.queue_out_frames(batch, predicted)
 
+            consecutive_no_faces = 0
             faces_seen = 0
             batch = list()
             if item == "EOF":

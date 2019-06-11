@@ -426,7 +426,7 @@ class ModelBase():
         """ Take a snapshot of the model at current state and back up """
         logger.info("Saving snapshot")
         src = self.model_dir
-        dst = get_folder("{}_{}".format(self.model_dir, self.iterations))
+        dst = get_folder("{}_snapshot_{}_iters".format(self.model_dir, self.iterations))
         for filename in os.listdir(src):
             if filename.endswith(".bk"):
                 continue
