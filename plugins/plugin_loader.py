@@ -56,6 +56,7 @@ class PluginLoader():
         extractors = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(extractpath)
                             if not item.name.startswith("_")
+                            and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py")
                             and item.name != "manual.py")
         return extractors
@@ -67,6 +68,7 @@ class PluginLoader():
         models = sorted(item.name.replace(".py", "").replace("_", "-")
                         for item in os.scandir(modelpath)
                         if not item.name.startswith("_")
+                        and not item.name.endswith("defaults.py")
                         and item.name.endswith(".py"))
         return models
 
@@ -85,6 +87,7 @@ class PluginLoader():
         converters = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(convertpath)
                             if not item.name.startswith("_")
+                            and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py"))
         if add_none:
             converters.insert(0, "none")
