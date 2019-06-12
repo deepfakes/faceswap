@@ -133,7 +133,7 @@ class TrainerBase():
                       batch_size=64,
                       write_graph=True,
                       write_grads=True)
-        tf_version = [int(ver) for ver in tf.__version__.split(".")]
+        tf_version = [int(ver) for ver in tf.__version__.split(".") if ver.isdigit()]
         logger.debug("Tensorflow version: %s", tf_version)
         if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
             kwargs["update_freq"] = "batch"
