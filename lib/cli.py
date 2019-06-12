@@ -706,6 +706,8 @@ class ConvertArgs(ExtractConvertArgs):
                     "\nL|components: An improved face hull mask using a facehull of 8 facial "
                     "parts."
                     "\nL|dfl_full: An improved face hull mask using a facehull of 3 facial parts."
+                    "\nL|extended: Based on components mask. Extends the eyebrow points to "
+                    "further up the forehead. May perform badly on difficult angles."
                     "\nL|facehull: Face cutout based on landmarks."
                     "\nL|predicted: The predicted mask generated from the model. If the model was "
                     "not trained with a mask then this will fallback to "

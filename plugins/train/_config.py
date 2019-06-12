@@ -49,6 +49,8 @@ class Config(FaceswapConfig):
                            "facial parts"
                            "\n\t dfl_full: An improved face hull mask using a facehull of 3 "
                            "facial parts"
+                           "\n\t extended: Based on components mask. Extends the eyebrow points to "
+                           "further up the forehead. May perform badly on difficult angles."
                            "\n\t facehull: Face cutout based on landmarks")
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
