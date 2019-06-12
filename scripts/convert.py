@@ -474,7 +474,7 @@ class Predict():
                      if fname.endswith("_state.json")]
         if len(statefile) != 1:
             logger.error("There should be 1 state file in your model folder. %s were found. "
-                         "Specify a trainer with the '-t', '--trainer' option.")
+                         "Specify a trainer with the '-t', '--trainer' option.", len(statefile))
             exit(1)
         statefile = os.path.join(str(model_dir), statefile[0])
 
