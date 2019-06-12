@@ -21,7 +21,7 @@ class Environment():
     """ The current install environment """
     def __init__(self):
         self.macos_required_packages = ["pynvx==0.0.4"]
-        self.conda_required_packages = [("ffmpeg", "conda-forge"), ("tk", )]
+        self.conda_required_packages = [("tk", )]
         self.output = Output()
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer = False
@@ -138,10 +138,10 @@ class Environment():
         self.output.info("Installed Python: {0} {1}".format(self.py_version[0],
                                                             self.py_version[1]))
         if not (self.py_version[0].split(".")[0] == "3"
-                and self.py_version[0].split(".")[1] in ("3", "4", "5", "6")
+                and self.py_version[0].split(".")[1] in ("3", "4", "5", "6", "7")
                 and self.py_version[1] == "64bit"):
-            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5 or 3.6 "
-                              "64bit and try again.")
+            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5, 3.6 or "
+                              "3.7 64bit and try again.")
             exit(1)
 
     def output_runtime_info(self):
@@ -253,9 +253,9 @@ class Environment():
     def update_tf_dep_conda(self):
         """ Update Conda TF Dependency """
         if not self.enable_cuda:
-            self.required_packages.append("tensorflow==1.12.0")
+            self.required_packages.append("tensorflow==1.13.1")
         else:
-            self.required_packages.append("tensorflow-gpu==1.12.0")
+            self.required_packages.append("tensorflow-gpu==1.13.1")
 
 
 class Output():

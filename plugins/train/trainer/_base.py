@@ -27,7 +27,7 @@ import time
 import cv2
 import numpy as np
 
-from tensorflow import keras as tf_keras
+import tensorflow as tf
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
@@ -113,21 +113,32 @@ class TrainerBase():
 
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
+
         for side in self.sides:
             logger.debug("Setting up TensorBoard Logging. Side: %s", side)
             log_dir = os.path.join(str(self.model.model_dir),
                                    "{}_logs".format(self.model.name),
                                    side,
                                    "session_{}".format(self.model.state.session_id))
-            tbs = tf_keras.callbacks.TensorBoard(log_dir=log_dir,
-                                                 histogram_freq=0,  # Must be 0 or hangs
-                                                 batch_size=self.batch_size,
-                                                 write_graph=True,
-                                                 write_grads=True)
+            tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir, **self.tensorboard_kwargs)
             tbs.set_model(self.model.predictors[side])
             tensorboard[side] = tbs
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
+
+    @property
+    def tensorboard_kwargs(self):
+        """ TF 1.13 + needs an additional kwarg which is not valid for earlier versions """
+        kwargs = dict(histogram_freq=0,  # Must be 0 or hangs
+                      batch_size=64,
+                      write_graph=True,
+                      write_grads=True)
+        tf_version = [int(ver) for ver in tf.__version__.split(".")]
+        logger.debug("Tensorflow version: %s", tf_version)
+        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
+            kwargs["update_freq"] = "batch"
+        logger.debug(kwargs)
+        return kwargs
 
     def print_loss(self, loss):
         """ Override for specific model loss formatting """

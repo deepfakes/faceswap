@@ -142,7 +142,7 @@ It's good to keep faceswap up to date as new features are added and bugs are fix
 
 # General Install Guide
 ## Installing dependencies
-- Python >= 3.2-3.6 64-bit (cannot be 3.7.x as Tensorflow has not been updated to provide support)
+- Python >= 3.2-3.7 64-bit
   - apt/yum install python3 (Linux)
   - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
   - [brew](https://brew.sh/) install python3 (macOS)
@@ -181,13 +181,13 @@ INFO    CUDA Enabled
 INFO    1. Install Docker
         https://www.docker.com/community-edition
         
-        2. Install Nvidia-Docker & Restart Docker Service
+        1. Install Nvidia-Docker & Restart Docker Service
         https://github.com/NVIDIA/nvidia-docker
         
-        3. Build Docker Image For Faceswap
+        1. Build Docker Image For Faceswap
         docker build -t deepfakes-gpu -f Dockerfile.gpu .
         
-        4. Mount faceswap volume and Run it
+        1. Mount faceswap volume and Run it
         # without gui. tools.py gui not working.
         nvidia-docker run --rm -it -p 8888:8888 \
             --hostname faceswap-gpu --name faceswap-gpu \
@@ -211,7 +211,7 @@ INFO    1. Install Docker
             -e UID=`id -u` \
             deepfakes-gpu
         
-        5. Open a new terminal to interact with the project
+        1. Open a new terminal to interact with the project
         docker exec faceswap-gpu python /srv/faceswap.py gui
 ```
 
