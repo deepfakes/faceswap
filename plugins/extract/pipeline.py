@@ -23,14 +23,16 @@ class Extractor():
             Extractor.input_queue
     """
     def __init__(self, detector, aligner, loglevel,
-                 configfile=None, multiprocess=False, rotate_images=None, min_size=20):
+                 configfile=None, multiprocess=False, rotate_images=None, min_size=20,
+                 normalize_method=None):
         logger.debug("Initializing %s: (detector: %s, aligner: %s, loglevel: %s, configfile: %s, "
-                     "multiprocess: %s, rotate_images: %s, min_size: %s)", self.__class__.__name__,
-                     detector, aligner, loglevel, configfile, multiprocess, rotate_images,
-                     min_size)
+                     "multiprocess: %s, rotate_images: %s, min_size: %s, "
+                     "normalize_method: %s)", self.__class__.__name__, detector, aligner,
+                     loglevel, configfile, multiprocess, rotate_images, min_size,
+                     normalize_method)
         self.phase = "detect"
         self.detector = self.load_detector(detector, loglevel, rotate_images, min_size, configfile)
-        self.aligner = self.load_aligner(aligner, loglevel, configfile)
+        self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
         self.is_parallel = self.set_parallel_processing(multiprocess)
         self.processes = list()
         self.queues = self.add_queues()
@@ -81,11 +83,13 @@ class Extractor():
         return detector
 
     @staticmethod
-    def load_aligner(aligner, loglevel, configfile):
+    def load_aligner(aligner, loglevel, configfile, normalize_method):
         """ Set global arguments and load aligner plugin """
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
-        aligner = PluginLoader.get_aligner(aligner_name)(loglevel=loglevel, configfile=configfile)
+        aligner = PluginLoader.get_aligner(aligner_name)(loglevel=loglevel,
+                                                         configfile=configfile,
+                                                         normalize_method=normalize_method)
         return aligner
 
     def set_parallel_processing(self, multiprocess):

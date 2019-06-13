@@ -31,14 +31,15 @@ class Extract():
         self.alignments = Alignments(self.args, True, self.images.is_video)
         self.post_process = PostProcess(arguments)
         configfile = self.args.configfile if hasattr(self.args, "configfile") else None
+        normalization = None if self.args.normalization == "none" else self.args.normalization
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
                                    self.args.loglevel,
-                                   configfile,
-                                   self.args.multiprocess,
-                                   self.args.rotate_images,
-                                   self.args.min_size)
-
+                                   configfile=configfile,
+                                   multiprocess=not self.args.singleprocess,
+                                   rotate_images=self.args.rotate_images,
+                                   min_size=self.args.min_size,
+                                   normalize_method=normalization)
         self.save_queue = queue_manager.get_queue("extract_save")
         self.verify_output = False
         self.save_interval = None

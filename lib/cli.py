@@ -520,6 +520,21 @@ class ExtractArgs(ExtractConvertArgs):
                     " and time is important."
                     "\nL|'fan': Face Alignment Network. Best aligner. "
                     "GPU heavy, slow when not running on GPU"})
+        argument_list.append({"opts": ("-nm", "--normalization"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "dest": "normalization",
+                              "choices": ["none", "clahe", "hist", "mean"],
+                              "default": "none",
+                              "help": "R|Performing normalization can help the aligner better "
+                                      "align faces with difficult lighting conditions at an "
+                                      "extraction speed cost. Different methods will yield "
+                                      "different results on different sets."
+                                      "\nL|'none': Don't perform normalization on the face."
+                                      "\nL|`clahe`: Perform Contrast Limited Adaptive Histogram "
+                                      "Equalization on the face."
+                                      "\nL|'hist': Equalize the histograms on the RGB channels."
+                                      "\nL|'mean': Normalize the face colors to the mean."})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -542,15 +557,13 @@ class ExtractArgs(ExtractConvertArgs):
                                       "threshold. Discarded images are moved into a \"blurry\" "
                                       "sub-folder. Lower values allow more blur. Set to 0.0 to "
                                       "turn off."})
-        argument_list.append({"opts": ("-mp", "--multiprocess"),
+        argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,
-                              "help": "Run extraction in parallel. Offers "
-                                      "speed up for some extractor/detector "
-                                      "combinations, less so for others. "
-                                      "Only has an effect if both the "
-                                      "aligner and detector use the GPU, "
-                                      "otherwise this is automatic."})
+                              "help": "Don't run extraction in parallel. Will run detection first "
+                                      "then alignment (2 passes). Useful if VRAM is at a premium. "
+                                      "Only has an effect if both the aligner and detector use "
+                                      "the GPU, otherwise this is automatically off."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,

@@ -785,7 +785,8 @@ class MouseHandler():
         detect_process.start()
 
         for plugin in ("fan", "cv2_dnn"):
-            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
+            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel,
+                                                       normalize_method="hist")
             align_process = SpawnProcess(aligner.run, **a_kwargs)
             a_event = align_process.event
             align_process.start()
