@@ -102,7 +102,8 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        log_setup(arguments.loglevel, arguments.logfile, self.command)
+        is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
+        log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         try:
             script = self.import_script()

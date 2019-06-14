@@ -82,7 +82,7 @@ def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
     rootlogger.setLevel(loglevel)
 
 
-def log_setup(loglevel, logfile, command):
+def log_setup(loglevel, logfile, command, is_gui=False):
     """ initial log set up. """
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
@@ -91,7 +91,7 @@ def log_setup(loglevel, logfile, command):
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
     f_handler = file_handler(numeric_loglevel, logfile, log_format, command)
-    s_handler = stream_handler(numeric_loglevel)
+    s_handler = stream_handler(numeric_loglevel, is_gui)
     c_handler = crash_handler(log_format)
 
     q_listener = QueueListener(LOG_QUEUE, f_handler, s_handler, c_handler,
@@ -118,14 +118,19 @@ def file_handler(loglevel, logfile, log_format, command):
     return log_file
 
 
-def stream_handler(loglevel):
+def stream_handler(loglevel, is_gui):
     """ Add a logging cli handler """
     # Don't set stdout to lower than verbose
     loglevel = max(loglevel, 15)
     log_format = FaceswapFormatter("%(asctime)s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
 
-    log_console = TqdmHandler(sys.stdout)
+    if is_gui:
+        # tqdm.write inserts extra lines in the GUI, so use standard output as
+        # it is not needed there.
+        log_console = logging.StreamHandler(sys.stdout)
+    else:
+        log_console = TqdmHandler(sys.stdout)
     log_console.setFormatter(log_format)
     log_console.setLevel(loglevel)
     return log_console
@@ -167,6 +172,8 @@ def crash_log():
 
 
 old_factory = logging.getLogRecordFactory()  # pylint: disable=invalid-name
+
+
 def faceswap_logrecord(*args, **kwargs):
     """ Add a flag to logging.LogRecord to not strip formatting from particular records """
     record = old_factory(*args, **kwargs)
