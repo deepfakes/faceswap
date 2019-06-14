@@ -7,7 +7,6 @@ import logging
 
 import cv2
 import numpy as np
-from lib.model import masks as model_masks
 
 from plugins.plugin_loader import PluginLoader
 
@@ -185,33 +184,17 @@ class Converter():
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
 
-        mask = np.repeat(new_image[:, :, -1][:, :, np.newaxis], 3, axis=-1)
-        foreground = new_image[:, :, :3]
-        background = (predicted["image"][:, :, :3] / 255.0) * (1.0 - mask)
+        if self.draw_transparent:
+            frame = new_image
+        else:
+            mask = np.repeat(new_image[:, :, -1][:, :, np.newaxis], 3, axis=-1)
+            foreground = new_image[:, :, :3]
+            background = (predicted["image"][:, :, :3] / 255.0) * (1.0 - mask)
 
-        foreground *= mask
-        frame = foreground + background
-        frame = self.add_alpha_mask(frame, predicted)
+            foreground *= mask
+            frame = foreground + background
 
         np.clip(frame, 0.0, 1.0, out=frame)
-        return frame
-
-    def add_alpha_mask(self, frame, predicted):
-        """ Adding a 4th channel should happen after all other channel operations
-            Add the default mask as 4th channel for saving as image with alpha channel """
-        if not self.draw_transparent:
-            return frame
-        logger.trace("Creating transparent image: '%s'", predicted["filename"])
-        mask_type = getattr(model_masks, model_masks.get_default_mask())
-        final_mask = np.zeros(frame.shape[:2] + (1, ), dtype="float32")
-
-        for detected_face in predicted["detected_faces"]:
-            landmarks = detected_face.landmarks_as_xy
-            final_mask = cv2.bitwise_or(final_mask,  # pylint: disable=no-member
-                                        mask_type(landmarks, frame, channels=1).mask)
-        final_mask = np.expand_dims(final_mask, axis=-1) if final_mask.ndim == 2 else final_mask
-        frame = np.concatenate((frame, final_mask), axis=-1)
-        logger.trace("Created transparent image: '%s'", predicted["filename"])
         return frame
 
     def scale_image(self, frame):
