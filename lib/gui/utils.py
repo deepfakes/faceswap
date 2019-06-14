@@ -5,8 +5,10 @@ import os
 import platform
 import sys
 import tkinter as tk
-
 from tkinter import filedialog, ttk
+
+import numpy as np
+
 from PIL import Image, ImageTk
 
 from lib.Serializer import JSONSerializer
@@ -276,21 +278,62 @@ class Images():
         logger.trace("Image files: %s", files)
         return files
 
-    def load_latest_preview(self):
+    def load_latest_preview(self, thumbnail_size, frame_dims):
         """ Load the latest preview image for extract and convert """
-        logger.trace("Loading preview image")
+        logger.trace("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
+                     thumbnail_size, frame_dims)
         imagefiles = self.get_images(self.pathoutput)
         if not imagefiles or len(imagefiles) == 1:
             logger.debug("No preview to display")
             self.previewoutput = None
             return
-        # Get penultimate file so we don't accidentally
-        # load a file that is being saved
-        show_file = sorted(imagefiles, key=os.path.getctime)[-2]
-        img = Image.open(show_file)
-        img.thumbnail((768, 432))
-        logger.trace("Displaying preview: '%s'", show_file)
-        self.previewoutput = (img, ImageTk.PhotoImage(img))
+        logger.trace("Image Files: %s", len(imagefiles))
+        num_images = (frame_dims[0] // thumbnail_size) * (frame_dims[1] // thumbnail_size)
+        if num_images > len(imagefiles):
+            logger.debug("Not enough images to generate display. (to display: %s, available "
+                         "images: %s)", num_images, len(imagefiles))
+            self.previewoutput = None
+            return
+        filenames, samples = self.get_preview_samples(imagefiles, num_images, thumbnail_size)
+        show_image = self.place_previews(samples, frame_dims)
+        logger.trace("Displaying preview: '%s'", filenames)
+        self.previewoutput = (show_image, ImageTk.PhotoImage(show_image))
+
+    @staticmethod
+    def get_preview_samples(imagefiles, num_images, thumbnail_size):
+        """ Return a subset of the imagefiles images
+            Exclude final file so we don't accidentally load a file that is being saved """
+        logger.trace("num_images: %s", num_images)
+        samples = list()
+        start_idx = len(imagefiles) - (num_images + 1)
+        end_idx = len(imagefiles) - 1
+        logger.trace("start_idx: %s, end_idx: %s", start_idx, end_idx)
+        show_files = sorted(imagefiles, key=os.path.getctime)[start_idx: end_idx]
+        for fname in show_files:
+            img = Image.open(fname)
+            img.thumbnail((thumbnail_size, thumbnail_size))
+            if img.size[0] != img.size[1]:
+                # Pad to square
+                new_img = Image.new("RGB", (thumbnail_size, thumbnail_size))
+                new_img.paste(img, ((thumbnail_size - img.size[0])//2,
+                                    (thumbnail_size - img.size[1])//2))
+                img = new_img
+            samples.append(np.array(img))
+        samples = np.array(samples)
+        logger.trace("Samples shape: %s", samples.shape)
+        return show_files, samples
+
+    @staticmethod
+    def place_previews(samples, frame_dims):
+        """ Stack the preview images to fit display """
+        num_images, thumbnail_size = samples.shape[:2]
+        logger.trace("num_images: %s, thumbnail_size: %s", num_images, thumbnail_size)
+        cols, rows = frame_dims[0] // thumbnail_size, frame_dims[1] // thumbnail_size
+        logger.trace("cols: %s, rows: %s", cols, rows)
+        display = np.vstack([np.hstack(samples[row * cols: (row + 1) * cols])
+                             for row in range(rows)])
+        logger.trace("display shape: %s", display.shape)
+        return Image.fromarray(display)
 
     def load_training_preview(self):
         """ Load the training preview images """

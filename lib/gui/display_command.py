@@ -23,7 +23,9 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_set(self):
         """ Load the latest preview if available """
         logger.trace("Loading latest preview")
-        get_images().load_latest_preview()
+        size = 256 if self.command == "convert" else 128
+        get_images().load_latest_preview(thumbnail_size=int(size * get_config().scaling_factor),
+                                         frame_dims=(self.winfo_width(), self.winfo_height()))
         self.display_item = get_images().previewoutput
 
     def display_item_process(self):

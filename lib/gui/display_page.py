@@ -150,9 +150,10 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
-    def __init__(self, parent, tabname, helptext, waittime):
+    def __init__(self, parent, tabname, helptext, waittime, command=None):
         DisplayPage.__init__(self, parent, tabname, helptext)
 
+        self.command = command
         self.display_item = None
 
         self.set_info_text()

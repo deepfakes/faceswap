@@ -107,8 +107,7 @@ class Extractor():
             return True
 
         if not multiprocess:
-            logger.info("NB: Parallel processing disabled.You may get faster "
-                        "extraction speeds by enabling it with the -mp switch")
+            logger.debug("Parallel processing disabled by cli.")
             return False
 
         required_vram = detector_vram + aligner_vram + 320  # 320MB buffer
