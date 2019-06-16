@@ -128,26 +128,26 @@ class extended(Mask):  # pylint: disable=invalid-name
     def build_mask(self):
         mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
 
-        landmarks = self.landmarks
+        landmarks = self.landmarks.copy()
         # mid points between the side of face and eye point
-        ml_pnt = (np.array(landmarks[36]) + np.array(landmarks[0])) // 2
-        mr_pnt = (np.array(landmarks[16]) + np.array(landmarks[45])) // 2
+        ml_pnt = (landmarks[36] + landmarks[0]) // 2
+        mr_pnt = (landmarks[16] + landmarks[45]) // 2
 
         # mid points between the mid points and eye
-        ql_pnt = (np.array(landmarks[36]) + ml_pnt) // 2
-        qr_pnt = (np.array(landmarks[45]) + mr_pnt) // 2
+        ql_pnt = (landmarks[36] + ml_pnt) // 2
+        qr_pnt = (landmarks[45] + mr_pnt) // 2
 
         # Top of the eye arrays
         bot_l = np.array((ql_pnt, landmarks[36], landmarks[37], landmarks[38], landmarks[39]))
         bot_r = np.array((landmarks[42], landmarks[43], landmarks[44], landmarks[45], qr_pnt))
 
         # Eyebrow arrays
-        top_l = np.array(landmarks[17:22])
-        top_r = np.array(landmarks[22:27])
+        top_l = landmarks[17:22]
+        top_r = landmarks[22:27]
 
         # Adjust eyebrow arrays
-        landmarks[17:22] = (top_l + ((top_l - bot_l) // 2)).tolist()
-        landmarks[22:27] = (top_r + ((top_r - bot_r) // 2)).tolist()
+        landmarks[17:22] = top_l + ((top_l - bot_l) // 2)
+        landmarks[22:27] = top_r + ((top_r - bot_r) // 2)
 
         r_jaw = (landmarks[0:9], landmarks[17:18])
         l_jaw = (landmarks[8:17], landmarks[26:27])
