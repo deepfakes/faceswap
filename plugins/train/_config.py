@@ -49,8 +49,8 @@ class Config(FaceswapConfig):
                            "facial parts"
                            "\n\t dfl_full: An improved face hull mask using a facehull of 3 "
                            "facial parts"
-                           "\n\t extended: Based on components mask. Extends the eyebrow points to "
-                           "further up the forehead. May perform badly on difficult angles."
+                           "\n\t extended: Based on components mask. Extends the eyebrow points "
+                           "to further up the forehead. May perform badly on difficult angles."
                            "\n\t facehull: Face cutout based on landmarks")
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
@@ -74,6 +74,10 @@ class Config(FaceswapConfig):
             info="If using a mask, This penalizes the loss for the masked area, to give higher "
                  "priority to the face area. \nShould increase overall quality and speed up "
                  "training. This should probably be left at True")
+        self.add_item(
+            section=section, title="preview_images", datatype=int, default=14, min_max=(2, 16),
+            rounding=2, fixed=False,
+            info="Number of sample faces to display for each side in the preview when training.")
         logger.debug("Set global config")
 
     def load_module(self, filename, module_path, plugin_type):
