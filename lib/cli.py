@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """ Command Line Arguments """
+
+# pylint: disable=too-many-lines
+
 import argparse
 import logging
 import os
@@ -532,7 +535,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "extraction speed cost. Different methods will yield "
                                       "different results on different sets."
                                       "\nL|'none': Don't perform normalization on the face."
-                                      "\nL|`clahe`: Perform Contrast Limited Adaptive Histogram "
+                                      "\nL|'clahe': Perform Contrast Limited Adaptive Histogram "
                                       "Equalization on the face."
                                       "\nL|'hist': Equalize the histograms on the RGB channels."
                                       "\nL|'mean': Normalize the face colors to the mean."})
@@ -734,7 +737,7 @@ class ConvertArgs(ExtractConvertArgs):
                                                                                     False),
                               "default": "opencv",
                               "help": "R|The plugin to use to output the converted images. The "
-                                      "writers are configurable in '/config/convert.ini' or `Edit "
+                                      "writers are configurable in '/config/convert.ini' or 'Edit "
                                       "> Configure Convert Plugins:'"
                                       "\nL|ffmpeg: [video] Writes out the convert straight to "
                                       "video. When the input is a series of images then the "

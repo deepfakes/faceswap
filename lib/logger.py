@@ -137,7 +137,7 @@ def stream_handler(loglevel, is_gui):
 
 
 def crash_handler(log_format):
-    """ Add a handler that sores the last 50 debug lines to `debug_buffer`
+    """ Add a handler that sores the last 50 debug lines to 'debug_buffer'
         for use in crash reports """
     log_crash = logging.StreamHandler(debug_buffer)
     log_crash.setFormatter(log_format)
