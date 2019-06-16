@@ -166,7 +166,7 @@ class TrainerBase():
             if not do_preview and not do_timelapse:
                 continue
             if do_preview:
-                self.samples.images[side] = batcher.compile_sample(self.batch_size)
+                self.samples.images[side] = batcher.compile_sample(None)
             if do_timelapse:
                 self.timelapse.get_sample(side, timelapse_kwargs)
 
@@ -300,7 +300,7 @@ class Batcher():
     def compile_sample(self, batch_size, samples=None, images=None):
         """ Training samples to display in the viewer """
         num_images = self.model.training_opts.get("preview_images", 14)
-        num_images = min(batch_size, num_images)
+        num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
         samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
