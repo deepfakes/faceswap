@@ -109,8 +109,8 @@ class ScriptExecutor():
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         if hasattr(arguments, "amd") and arguments.amd:
-            from lib.plaidml_tools import plaidml_setup
-            plaidml_setup(arguments.loglevel)
+            from lib.plaidml_tools import setup_plaidml
+            setup_plaidml(arguments.loglevel)
         try:
             script = self.import_script()
             process = script(arguments)
