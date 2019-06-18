@@ -71,7 +71,7 @@ class PlaidMLStats():
         plaidml.settings.experimental = experimental_setting
 
         supported = [device for device in devices
-                     if json.loads(device.details.decode())["type"].lower() != "cpu"]
+                     if json.loads(device.details.decode()).get("type", "cpu").lower() == "gpu"]
         logger.debug(supported)
         return supported
 
@@ -83,7 +83,7 @@ class PlaidMLStats():
         plaidml.settings.experimental = experimental_setting
 
         experimental = [device for device in devices
-                        if json.loads(device.details.decode())["type"].lower() != "cpu"]
+                        if json.loads(device.details.decode()).get("type", "cpu").lower() == "gpu"]
         logger.debug("Experimental Devices: %s", experimental)
         all_devices = experimental + self.supported_devices
         logger.debug(all_devices)
