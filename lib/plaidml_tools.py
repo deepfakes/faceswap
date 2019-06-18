@@ -53,6 +53,22 @@ class PlaidMLStats():
         """ Return all PlaidML Device IDs """
         return [device.id.decode() for device in self.devices]
 
+    @property
+    def supported_indices(self):
+        """ Return the indices from self.devices of GPUs categorized as supported """
+        retval = [idx for idx, device in enumerate(self.devices)
+                  if device in self.supported_devices]
+        logger.debug(retval)
+        return retval
+
+    @property
+    def experimental_indices(self):
+        """ Return the indices from self.devices of GPUs categorized as experimental """
+        retval = [idx for idx, device in enumerate(self.devices)
+                  if device not in self.supported_devices]
+        logger.debug(retval)
+        return retval
+
     @staticmethod
     def set_plaidml_logger():
         """ Set PlaidMLs default logger to Faceswap Logger and prevent propagation """
@@ -113,30 +129,28 @@ class PlaidMLStats():
             logger.debug("Setting PlaidML devices from user_settings")
 
     def set_largest_gpu(self):
-        """ Get the GPU with largest VRAM. Prioritise supported over experimental """
-        max_vram = max(self.vram)
-        indices = [idx for idx, vram in enumerate(self.vram) if vram == max_vram]
-        logger.debug("Device indices with max vram (%s): %s", max_vram, indices)
-        selected_gpu = None
-        for idx in indices:
-            device = self.devices[idx]
-            if device in self.supported_devices:
-                selected_gpu = self.ids[idx]
-                break
+        """ Get a supported GPU with largest VRAM. If no supported, get largest experimental """
+        category = "supported" if self.supported_devices else "experimental"
+        logger.debug("Obtaining largest %s device", category)
+        indices = getattr(self, "{}_indices".format(category))
+        max_vram = max([self.vram[idx] for idx in indices])
+        logger.debug("Max VRAM: %s", max_vram)
+        gpu_idx = min([idx for idx, vram in enumerate(self.vram)
+                       if vram == max_vram and idx in indices])
+        logger.debug("GPU IDX: %s", gpu_idx)
 
-        if not selected_gpu:
-            logger.debug("No GPUs found in supported. Setting to Experimental")
-            plaidml.settings.experimental = True
-            selected_gpu = self.ids[indices[0]]
-        logger.info("Setting GPU to largest available. If you want to override this selection, "
-                    "run `plaidml-setup` from the command line.")
+        selected_gpu = self.ids[gpu_idx]
+        logger.info("Setting GPU to largest available %s device. If you want to override this "
+                    "selection, run `plaidml-setup` from the command line.", category)
+
+        plaidml.settings.experimental = category == "experimental"
         plaidml.settings.device_ids = [selected_gpu]
 
 
 def setup_plaidml(loglevel):
     """ Setup plaidml for AMD Cards """
     logger.info("Setting up for PlaidML")
-    logger.info("Setting Keras Backend to PlaidML")
+    logger.verbose("Setting Keras Backend to PlaidML")
     os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
     plaid = PlaidMLStats(loglevel)
     plaid.load_active_devices()
