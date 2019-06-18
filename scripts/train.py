@@ -241,13 +241,15 @@ class Train():
         """ Monitor the console, and generate + monitor preview if requested """
         is_preview = self.args.preview
         logger.debug("Launching Monitor")
-        logger.info("R|===============================================")
-        logger.info("R|- Starting                                    -")
+        logger.info("R|===================================================")
+        logger.info("R|  Starting")
         if is_preview:
-            logger.info("R|- Using live preview                          -")
-        logger.info("R|- Press 'ENTER' to save and quit              -")
-        logger.info("R|- Press 'S' to save model weights immediately -")
-        logger.info("R|===============================================")
+            logger.info("R|  Using live preview")
+        logger.info("R|  Press '%s' to save and quit",
+                    "Terminate" if self.args.redirect_gui else "ENTER")
+        if not self.args.redirect_gui:
+            logger.info("R|  Press 'S' to save model weights immediately")
+        logger.info("R|===================================================")
 
         keypress = KBHit(is_gui=self.args.redirect_gui)
         err = False
