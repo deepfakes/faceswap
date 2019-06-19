@@ -283,7 +283,7 @@ class PostProcess():
             face_filter = dict(detector=self.args.detector.replace("-", "_").lower(),
                                aligner=self.args.aligner.replace("-", "_").lower(),
                                loglevel=self.args.loglevel,
-                               multiprocess=self.args.multiprocess)
+                               multiprocess=not self.args.singleprocess)
             filter_lists = dict()
             if hasattr(self.args, "ref_threshold"):
                 face_filter["ref_threshold"] = self.args.ref_threshold
