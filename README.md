@@ -12,35 +12,35 @@ FaceSwap is a tool that utilizes deep learning to recognize and swap faces in pi
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
 - [deepfakes_faceswap](#deepfakesfaceswap)
-- [Manifesto](#manifesto)
-  - [FaceSwap is not porn.](#faceswap-is-not-porn)
-- [How To setup and run the project](#how-to-setup-and-run-the-project)
-- [Overview](#overview)
-  - [Extract](#extract)
-  - [Train](#train)
-  - [Convert](#convert)
-  - [GUI](#gui)
-- [General notes:](#general-notes)
-- [Help I need support!](#help-i-need-support)
-  - [Discord Server](#discord-server)
-  - [FaceSwap-Playground](#faceswap-playground)
-- [Donate](#donate)
+- [Manifesto](#Manifesto)
+  - [FaceSwap is not porn.](#FaceSwap-is-not-porn)
+- [How To setup and run the project](#How-To-setup-and-run-the-project)
+- [Overview](#Overview)
+  - [Extract](#Extract)
+  - [Train](#Train)
+  - [Convert](#Convert)
+  - [GUI](#GUI)
+- [General notes:](#General-notes)
+- [Help I need support!](#Help-I-need-support)
+  - [Discord Server](#Discord-Server)
+  - [FaceSwap-Playground](#FaceSwap-Playground)
+- [Donate](#Donate)
   - [@torzdf](#torzdf)
   - [@andenixa](#andenixa)
   - [@kvrooman](#kvrooman)
-- [How to contribute](#how-to-contribute)
-  - [For people interested in the generative models](#for-people-interested-in-the-generative-models)
-  - [For devs](#for-devs)
-  - [For non-dev advanced users](#for-non-dev-advanced-users)
-  - [For end-users](#for-end-users)
-  - [For haters](#for-haters)
-- [About github.com/deepfakes](#about-githubcomdeepfakes)
-  - [What is this repo?](#what-is-this-repo)
-  - [Why this repo?](#why-this-repo)
-  - [Why is it named 'deepfakes' if it is not /u/deepfakes?](#why-is-it-named-deepfakes-if-it-is-not-udeepfakes)
-  - [What if /u/deepfakes feels bad about that?](#what-if-udeepfakes-feels-bad-about-that)
-- [About machine learning](#about-machine-learning)
-  - [How does a computer know how to recognize/shape faces? How does machine learning work? What is a neural network?](#how-does-a-computer-know-how-to-recognizeshape-faces-how-does-machine-learning-work-what-is-a-neural-network)
+- [How to contribute](#How-to-contribute)
+  - [For people interested in the generative models](#For-people-interested-in-the-generative-models)
+  - [For devs](#For-devs)
+  - [For non-dev advanced users](#For-non-dev-advanced-users)
+  - [For end-users](#For-end-users)
+  - [For haters](#For-haters)
+- [About github.com/deepfakes](#About-githubcomdeepfakes)
+  - [What is this repo?](#What-is-this-repo)
+  - [Why this repo?](#Why-this-repo)
+  - [Why is it named 'deepfakes' if it is not /u/deepfakes?](#Why-is-it-named-deepfakes-if-it-is-not-udeepfakes)
+  - [What if /u/deepfakes feels bad about that?](#What-if-udeepfakes-feels-bad-about-that)
+- [About machine learning](#About-machine-learning)
+  - [How does a computer know how to recognize/shape faces? How does machine learning work? What is a neural network?](#How-does-a-computer-know-how-to-recognizeshape-faces-How-does-machine-learning-work-What-is-a-neural-network)
 
 # Manifesto
 
@@ -64,7 +64,7 @@ We are very troubled by the fact that FaceSwap can be used for unethical and dis
 # How To setup and run the project
 FaceSwap is a Python program that will run on multiple Operating Systems including Windows, Linux, and MacOS.
 
-See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a modern GPU with CUDA support for best performance.
+See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a modern GPU with CUDA support for best performance. AMD GPUs are partially supported.
 
 # Overview
 The project has multiple entry points. You will have to:
@@ -135,7 +135,6 @@ Responsible for consolidating the converters, adding a lot of code to fix model 
 ## For devs
  - Read this README entirely
  - Fork the repo
- - Download the data with the link provided above
  - Play with it
  - Check issues with the 'dev' tag
  - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvements
@@ -143,7 +142,6 @@ Responsible for consolidating the converters, adding a lot of code to fix model 
 ## For non-dev advanced users
  - Read this README entirely
  - Clone the repo
- - Download the data with the link provided above
  - Play with it
  - Check issues with the 'advuser' tag
  - Also go to the 'faceswap-playground' repo and help others.
