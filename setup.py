@@ -102,7 +102,7 @@ class Environment():
         for arg in argv:
             if arg == "--installer":
                 self.is_installer = True
-            if arg == "--gpu":
+            if arg == "--nvidia":
                 self.enable_cuda = True
             if arg == "--amd":
                 self.enable_amd = True
