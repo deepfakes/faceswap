@@ -3,6 +3,7 @@
 
 import logging
 import os
+import sys
 import urllib
 import warnings
 import zipfile
@@ -18,10 +19,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.faces_detect import BoundingBox, DetectedFace
-from lib.logger import get_loglevel
 
-
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # Global variables
 _image_extensions = [  # pylint: disable=invalid-name
@@ -32,6 +30,7 @@ _video_extensions = [  # pylint: disable=invalid-name
 
 def get_folder(path, make_folder=True):
     """ Return a path to a folder, creating it if it doesn't exist """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     logger.debug("Requested path: '%s'", path)
     output_dir = Path(path)
     if not make_folder and not output_dir.exists():
@@ -44,6 +43,7 @@ def get_folder(path, make_folder=True):
 
 def get_image_paths(directory):
     """ Return a list of images that reside in a folder """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     image_extensions = _image_extensions
     dir_contents = list()
 
@@ -67,6 +67,7 @@ def get_image_paths(directory):
 
 def full_path_split(path):
     """ Split a given path into all of it's separate components """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     allparts = list()
     while True:
         parts = os.path.split(path)
@@ -88,6 +89,7 @@ def cv2_read_img(filename, raise_error=False):
         Logs an error if the image returned is None. or an error has occured.
 
         Pass raise_error=True if error should be raised """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     logger.trace("Requested image: '%s'", filename)
     success = True
     image = None
@@ -120,6 +122,7 @@ def cv2_read_img(filename, raise_error=False):
 
 def hash_image_file(filename):
     """ Return an image file's sha1 hash """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     img = cv2_read_img(filename, raise_error=True)
     img_hash = sha1(img).hexdigest()
     logger.trace("filename: '%s', hash: %s", filename, img_hash)
@@ -137,6 +140,7 @@ def hash_encode_image(image, extension):
 
 def backup_file(directory, filename):
     """ Backup a given file by appending .bk to the end """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     logger.trace("Backing up: '%s'", filename)
     origfile = os.path.join(directory, filename)
     backupfile = origfile + '.bk'
@@ -146,6 +150,16 @@ def backup_file(directory, filename):
     if os.path.exists(origfile):
         logger.trace("Renaming: '%s' to '%s'", origfile, backup_file)
         os.rename(origfile, backupfile)
+
+
+def keras_backend_quiet():
+    """ Suppresses the "Using x backend" message when importing
+        backend from keras """
+    stderr = sys.stderr
+    sys.stderr = open(os.devnull, 'w')
+    from keras import backend as K
+    sys.stderr = stderr
+    return K
 
 
 def set_system_verbosity(loglevel):
@@ -159,6 +173,8 @@ def set_system_verbosity(loglevel):
         2 - filter out WARNING logs
         3 - filter out ERROR logs  """
 
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+    from lib.logger import get_loglevel
     numeric_level = get_loglevel(loglevel)
     loglevel = "2" if numeric_level > 15 else "0"
     logger.debug("System Verbosity level: %s", loglevel)
@@ -173,6 +189,7 @@ def rotate_landmarks(face, rotation_matrix):
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
         Pass in a DetectedFace object, Alignments dict or BoundingBox"""
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
                  rotation_matrix, type(face))
     if isinstance(face, DetectedFace):
@@ -259,6 +276,7 @@ def camel_case_split(identifier):
 
 def safe_shutdown():
     """ Close queues, threads and processes in event of crash """
+    logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
     logger.debug("Safely shutting down")
     from lib.queue_manager import queue_manager
     from lib.multithreading import terminate_processes
@@ -295,6 +313,7 @@ class GetModel():
         """
 
     def __init__(self, model_filename, cache_dir, git_model_id):
+        self.logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
         self.model_filename = model_filename
@@ -311,21 +330,21 @@ class GetModel():
         """ Return the model full name from the filename(s) """
         common_prefix = os.path.commonprefix(self.model_filename)
         retval = os.path.splitext(common_prefix)[0]
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
     def _model_name(self):
         """ Return the model name from the model full name """
         retval = self._model_full_name[:self._model_full_name.rfind("_")]
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
     def _model_version(self):
         """ Return the model version from the model full name """
         retval = int(self._model_full_name[self._model_full_name.rfind("_") + 2:])
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
@@ -333,14 +352,14 @@ class GetModel():
         """ Return the model path(s) in the cache folder """
         retval = [os.path.join(self.cache_dir, fname) for fname in self.model_filename]
         retval = retval[0] if len(retval) == 1 else retval
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
     def _model_zip_path(self):
         """ Full path to downloaded zip file """
         retval = os.path.join(self.cache_dir, "{}.zip".format(self._model_full_name))
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
@@ -350,7 +369,7 @@ class GetModel():
             retval = all(os.path.exists(pth) for pth in self._model_path)
         else:
             retval = os.path.exists(self._model_path)
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
@@ -359,7 +378,7 @@ class GetModel():
         path = os.path.normpath(self.cache_dir)
         split = path.split(os.sep)
         retval = split[split.index("plugins") + 1]
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
@@ -367,7 +386,7 @@ class GetModel():
         """ Return the section ID in github for this plugin type """
         sections = dict(extract=1, train=2, convert=3)
         retval = sections[self._plugin_section]
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     @property
@@ -375,7 +394,7 @@ class GetModel():
         """ Base URL for models """
         tag = "v{}.{}.{}".format(self._url_section, self.git_model_id, self._model_version)
         retval = "{}/{}/{}.zip".format(self.url_base, tag, self._model_full_name)
-        logger.trace("Download url: %s", retval)
+        self.logger.trace("Download url: %s", retval)
         return retval
 
     @property
@@ -383,13 +402,13 @@ class GetModel():
         """ Return how many bytes have already been downloaded """
         zip_file = self._model_zip_path
         retval = os.path.getsize(zip_file) if os.path.exists(zip_file) else 0
-        logger.trace(retval)
+        self.logger.trace(retval)
         return retval
 
     def get(self):
         """ Check the model exists, if not, download and unzip into location """
         if self._model_exists:
-            logger.debug("Model exists: %s", self._model_path)
+            self.logger.debug("Model exists: %s", self._model_path)
             return
         self.download_model()
         self.unzip_model()
@@ -397,7 +416,7 @@ class GetModel():
 
     def download_model(self):
         """ Download model zip to cache dir """
-        logger.info("Downloading model: '%s' from: %s", self._model_name, self._url_download)
+        self.logger.info("Downloading model: '%s' from: %s", self._model_name, self._url_download)
         for attempt in range(self.retries):
             try:
                 downloaded_size = self._url_partial_size
@@ -405,28 +424,29 @@ class GetModel():
                 if downloaded_size != 0:
                     req.add_header("Range", "bytes={}-".format(downloaded_size))
                 response = urllib.request.urlopen(req, timeout=10)
-                logger.debug("header info: {%s}", response.info())
-                logger.debug("Return Code: %s", response.getcode())
+                self.logger.debug("header info: {%s}", response.info())
+                self.logger.debug("Return Code: %s", response.getcode())
                 self.write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
                     urllib.error.HTTPError, urllib.error.URLError) as err:
                 if attempt + 1 < self.retries:
-                    logger.warning("Error downloading model (%s). Retrying %s of %s...",
-                                   str(err), attempt + 2, self.retries)
+                    self.logger.warning("Error downloading model (%s). Retrying %s of %s...",
+                                        str(err), attempt + 2, self.retries)
                 else:
-                    logger.error("Failed to download model. Exiting. (Error: '%s', URL: '%s')",
-                                 str(err), self._url_download)
-                    logger.info("You can try running again to resume the download.")
-                    logger.info("Alternatively, you can manually download the model from: %s and "
-                                "unzip the contents to: %s", self._url_download, self.cache_dir)
+                    self.logger.error("Failed to download model. Exiting. (Error: '%s', URL: "
+                                      "'%s')", str(err), self._url_download)
+                    self.logger.info("You can try running again to resume the download.")
+                    self.logger.info("Alternatively, you can manually download the model from: %s "
+                                     "and unzip the contents to: %s",
+                                     self._url_download, self.cache_dir)
                     exit(1)
 
     def write_zipfile(self, response, downloaded_size):
         """ Write the model zip file to disk """
         length = int(response.getheader("content-length")) + downloaded_size
         if length == downloaded_size:
-            logger.info("Zip already exists. Skipping download")
+            self.logger.info("Zip already exists. Skipping download")
             return
         write_type = "wb" if downloaded_size == 0 else "ab"
         with open(self._model_zip_path, write_type) as out_file:
@@ -446,23 +466,23 @@ class GetModel():
 
     def unzip_model(self):
         """ Unzip the model file to the cachedir """
-        logger.info("Extracting: '%s'", self._model_name)
+        self.logger.info("Extracting: '%s'", self._model_name)
         try:
             zip_file = zipfile.ZipFile(self._model_zip_path, "r")
             self.write_model(zip_file)
         except Exception as err:  # pylint:disable=broad-except
-            logger.error("Unable to extract model file: %s", str(err))
+            self.logger.error("Unable to extract model file: %s", str(err))
             exit(1)
 
     def write_model(self, zip_file):
         """ Extract files from zipfile and write, with progress bar """
         length = sum(f.file_size for f in zip_file.infolist())
         fnames = zip_file.namelist()
-        logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
+        self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
         pbar = tqdm(desc="Extracting", unit="B", total=length, unit_scale=True, unit_divisor=1024)
         for fname in fnames:
             out_fname = os.path.join(self.cache_dir, fname)
-            logger.debug("Extracting from: '%s' to '%s'", self._model_zip_path, out_fname)
+            self.logger.debug("Extracting from: '%s' to '%s'", self._model_zip_path, out_fname)
             zipped = zip_file.open(fname)
             with open(out_fname, "wb") as out_file:
                 while True:
