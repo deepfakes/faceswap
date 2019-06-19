@@ -1,5 +1,6 @@
 !include MUI2.nsh
 !include nsDialogs.nsh
+!include winmessages.nsh
 !include LogicLib.nsh
 !include CPUFeatures.nsh
 !include MultiDetailPrint.nsi
@@ -46,7 +47,8 @@ Var InstallFailed
 Var lblPos
 Var hasAVX
 Var hasSSE4
-Var noNvidia
+Var setupType
+Var ctlRadio
 Var ctlCondaText
 Var ctlCondaButton
 Var Log
@@ -139,13 +141,26 @@ Function pgPrereqCreate
             intOp $lblPos $lblPos + 7
         ${EndIf}
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
+        Pop $0
 
         StrCpy $lblPos 46
     # Info Custom Options
     ${NSD_CreateGroupBox} 5% 40% 90% 60% "Custom Items"
     Pop $0
-        ${NSD_CreateCheckBox} 10% $lblPos% 80% 11u " IMPORTANT! Check here if you do NOT have an NVIDIA graphics card"
-        Pop $noNvidia
+        ${NSD_CreateRadioButton} 10% $lblPos% 27% 11u "Setup for NVIDIA GPU"
+            Pop $ctlRadio
+		    ${NSD_AddStyle} $ctlRadio ${WS_GROUP}
+            nsDialogs::SetUserData $ctlRadio "nvidia"
+            ${NSD_OnClick} $ctlRadio RadioClick
+        ${NSD_CreateRadioButton} 40% $lblPos% 25% 11u "Setup for AMD GPU"
+            Pop $ctlRadio
+            nsDialogs::SetUserData $ctlRadio "amd"
+            ${NSD_OnClick} $ctlRadio RadioClick
+        ${NSD_CreateRadioButton} 70% $lblPos% 20% 11u "Setup for CPU"
+            Pop $ctlRadio
+            nsDialogs::SetUserData $ctlRadio "cpu"
+            ${NSD_OnClick} $ctlRadio RadioClick
+
         intOp $lblPos $lblPos + 10
 
         ${NSD_CreateLabel} 10% $lblPos% 80% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
@@ -172,6 +187,12 @@ Function pgPrereqCreate
     nsDialogs::Show
 FunctionEnd
 
+Function RadioClick
+    Pop $R0
+	nsDialogs::GetUserData $R0
+    Pop $setupType
+FunctionEnd
+
 Function fnc_hCtl_test_DirRequest1_Click
 	Pop $R0
 	${If} $R0 == $ctlCondaButton
@@ -185,11 +206,20 @@ Function fnc_hCtl_test_DirRequest1_Click
 FunctionEnd
 
 Function pgPrereqLeave
+	call CheckSetupType
     Call CheckCustomCondaPath
-    ${NSD_GetState} $noNvidia $noNvidia
     ${NSD_GetText} $envName $envName
 
 FunctionEnd
+
+Function CheckSetupType
+    ${If} $setupType == ""
+	    MessageBox MB_OK "Please specify whether to setup for Nvidia, AMD or CPU."
+	    Abort
+	${EndIf}
+    StrCpy $Log "$log(check) Setting up for: $setupType$\n"
+FunctionEnd
+
 
 Function CheckCustomCondaPath
     ${NSD_GetText} $ctlCondaText $2
@@ -392,8 +422,8 @@ FunctionEnd
 Function SetupFaceSwap
     DetailPrint "Setting up FaceSwap Environment... This may take a while"
     StrCpy $0 "${flagsSetup}"
-    ${If} $noNvidia != 1
-        StrCpy $0 "$0 --gpu"
+    ${If} $setupType != "cpu"
+        StrCpy $0 "$0 --$setupType"
     ${EndIf}
 
     SetDetailsPrint listonly

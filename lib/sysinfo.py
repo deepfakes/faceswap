@@ -194,7 +194,7 @@ class SysInfo():
                 break
 
         if not cudnn_checkfile:
-            retval = "Not Found"
+            retval = "No global version found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
             return retval
@@ -214,7 +214,7 @@ class SysInfo():
                 if found == 3:
                     break
         if found != 3:
-            retval = "Not Found"
+            retval = "No global version found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
             return retval
@@ -286,7 +286,7 @@ class SysInfo():
                 if chk:
                     break
         if not chk:
-            retval = "Not Found"
+            retval = "No global version found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda Cuda"
             return retval
@@ -299,7 +299,7 @@ class SysInfo():
                      for key in os.environ.keys()
                      if key.lower().startswith("cuda_path_v")]
         if not cuda_keys:
-            retval = "Not Found"
+            retval = "No global version found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda Cuda"
             return retval

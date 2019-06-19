@@ -108,6 +108,9 @@ class ScriptExecutor():
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
+        if hasattr(arguments, "amd") and arguments.amd:
+            from lib.plaidml_tools import setup_plaidml
+            setup_plaidml(arguments.loglevel)
         try:
             script = self.import_script()
             process = script(arguments)
@@ -356,6 +359,11 @@ class FaceSwapArgs():
         """ Arguments that are used in ALL parts of Faceswap
             DO NOT override this """
         global_args = list()
+        global_args.append({"opts": ("-amd", "--amd"),
+                            "action": "store_true",
+                            "dest": "amd",
+                            "default": False,
+                            "help": "AMD GPU users must enable this option for PlaidML support"})
         global_args.append({"opts": ("-C", "--configfile"),
                             "action": FileFullPaths,
                             "filetypes": "ini",

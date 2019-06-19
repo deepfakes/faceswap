@@ -28,6 +28,7 @@ class Environment():
         self.cuda_path = ""
         self.cuda_version = ""
         self.cudnn_version = ""
+        self.enable_amd = False
         self.enable_docker = False
         self.enable_cuda = False
         self.required_packages = self.get_required_packages()
@@ -101,8 +102,10 @@ class Environment():
         for arg in argv:
             if arg == "--installer":
                 self.is_installer = True
-            if arg == "--gpu":
+            if arg == "--nvidia":
                 self.enable_cuda = True
+            if arg == "--amd":
+                self.enable_amd = True
 
     @staticmethod
     def get_required_packages():
@@ -207,7 +210,7 @@ class Environment():
             return
 
         if not self.enable_cuda:
-            self.required_packages.append("tensorflow")
+            self.required_packages.append("tensorflow==1.13.1")
             return
 
         tf_ver = None
@@ -256,6 +259,11 @@ class Environment():
             self.required_packages.append("tensorflow==1.13.1")
         else:
             self.required_packages.append("tensorflow-gpu==1.13.1")
+
+    def update_amd_dep(self):
+        """ Update amd dependency for AMD cards """
+        if self.enable_amd:
+            self.required_packages.append("plaidml-keras")
 
 
 class Output():
@@ -313,11 +321,14 @@ class Checks():
     # Checks not required for installer
         if self.env.is_installer:
             self.env.update_tf_dep()
+            self.env.update_amd_dep()
             return
 
-    # Ask Docker/Cuda
-        self.docker_ask_enable()
-        self.cuda_ask_enable()
+    # Ask AMD/Docker/Cuda
+        self.amd_ask_enable()
+        if not self.env.enable_amd:
+            self.docker_ask_enable()
+            self.cuda_ask_enable()
         if self.env.os_version[0] != "Linux" and self.env.enable_docker and self.env.enable_cuda:
             self.docker_confirm()
         if self.env.enable_docker:
@@ -336,8 +347,21 @@ class Checks():
             self.env.cuda_version = input("Manually specify CUDA version: ")
 
         self.env.update_tf_dep()
+        self.env.update_amd_dep()
         if self.env.os_version[0] == "Windows":
             self.tips.pip()
+
+    def amd_ask_enable(self):
+        """ Enable or disable Plaidml for AMD"""
+        self.output.info("AMD Support: AMD GPU support is currently limited.\r\n"
+                         "Nvidia Users MUST answer 'no' to this option.")
+        i = input("Enable AMD Support? [y/N] ")
+        if i in ("Y", "y"):
+            self.output.info("AMD Support Enabled")
+            self.env.enable_amd = True
+        else:
+            self.output.info("AMD Support Disabled")
+            self.env.enable_amd = False
 
     def docker_ask_enable(self):
         """ Enable or disable Docker """
@@ -584,7 +608,7 @@ class Install():
                     run(condaexe, stdout=devnull, stderr=devnull, check=True)
         except CalledProcessError:
             if not conda_only:
-                self.output.info("Couldn't install {} with Conda. Trying pip".format(package))
+                self.output.info("{} not available in Conda. Installing with pip".format(package))
             else:
                 self.output.warning("Couldn't install {} with Conda. "
                                     "Please install this package manually".format(package))
