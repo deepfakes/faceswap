@@ -11,22 +11,29 @@ import os
 
 import plaidml
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_INIT = False
+_LOGGER = None
 
 
 class PlaidMLStats():
     """ Stats for plaidML """
-    def __init__(self, loglevel=logging.INFO):
-        logger.debug("Initializing: %s: (loglevel: %s)", self.__class__.__name__, loglevel)
-        self.set_plaidml_logger()
+    def __init__(self, loglevel="INFO", log=True):
+        if not _INIT and log:
+            # Logger is held internally, as we don't want to log
+            # when obtaining system stats on crash
+            global _LOGGER  # pylint:disable=global-statement
+            _LOGGER = logging.getLogger(__name__)  # pylint:disable=invalid-name
+            _LOGGER.debug("Initializing: %s: (loglevel: %s)", self.__class__.__name__, loglevel)
+        self.initialize(loglevel)
         self.ctx = plaidml.Context()
-        self.set_verbosity(loglevel)
         self.supported_devices = self.get_supported_devices()
         self.devices = self.get_all_devices()
 
         self.device_details = [json.loads(device.details.decode()) for device in self.devices]
-        logger.debug("Initialized: %s", self.__class__.__name__)
+        if _LOGGER:
+            _LOGGER.debug("Initialized: %s", self.__class__.__name__)
 
+    # PROPERTIES
     @property
     def active_devices(self):
         """ Return the active device IDs """
@@ -45,6 +52,12 @@ class PlaidMLStats():
     @property
     def vram(self):
         """ Return Total VRAM for all PlaidML Devices """
+        return [int(device.get("globalMemSize", 0)) / (1024 * 1024)
+                for device in self.device_details]
+
+    @property
+    def max_alloc(self):
+        """ Return Maximum allowed VRAM allocation for all PlaidML Devices """
         return [int(device.get("maxMemAllocSize", 0)) / (1024 * 1024)
                 for device in self.device_details]
 
@@ -54,11 +67,18 @@ class PlaidMLStats():
         return [device.id.decode() for device in self.devices]
 
     @property
+    def names(self):
+        """ Return all PlaidML Device Names """
+        return ["{} - {}".format(device.get("vendor", "unknown"), device.get("name", "unknown"))
+                for device in self.device_details]
+
+    @property
     def supported_indices(self):
         """ Return the indices from self.devices of GPUs categorized as supported """
         retval = [idx for idx, device in enumerate(self.devices)
                   if device in self.supported_devices]
-        logger.debug(retval)
+        if _LOGGER:
+            _LOGGER.debug(retval)
         return retval
 
     @property
@@ -66,49 +86,41 @@ class PlaidMLStats():
         """ Return the indices from self.devices of GPUs categorized as experimental """
         retval = [idx for idx, device in enumerate(self.devices)
                   if device not in self.supported_devices]
-        logger.debug(retval)
+        if _LOGGER:
+            _LOGGER.debug(retval)
         return retval
+
+    # INITIALIZATION
+    def initialize(self, loglevel):
+        """ Initialize PlaidML """
+        global _INIT  # pylint:disable=global-statement
+        if _INIT:
+            if _LOGGER:
+                _LOGGER.debug("PlaidML already initialized")
+            return
+        if _LOGGER:
+            _LOGGER.debug("Initializing PlaidML")
+        self.set_plaidml_logger()
+        self.set_verbosity(loglevel)
+        _INIT = True
+        if _LOGGER:
+            _LOGGER.debug("Initialized PlaidML")
 
     @staticmethod
     def set_plaidml_logger():
         """ Set PlaidMLs default logger to Faceswap Logger and prevent propagation """
-        if plaidml.DEFAULT_LOG_HANDLER == logger:
-            return
-        logger.debug("Setting PlaidML Default Logger")
+        if _LOGGER:
+            _LOGGER.debug("Setting PlaidML Default Logger")
         plaidml.DEFAULT_LOG_HANDLER = logging.getLogger("plaidml_root")
         plaidml.DEFAULT_LOG_HANDLER.propagate = 0
-        logger.debug("Set PlaidML Default Logger")
-
-    def get_supported_devices(self):
-        """ Return a list of supported devices """
-        experimental_setting = plaidml.settings.experimental
-        plaidml.settings.experimental = False
-        devices, _ = plaidml.devices(self.ctx, limit=100, return_all=True)
-        plaidml.settings.experimental = experimental_setting
-
-        supported = [device for device in devices
-                     if json.loads(device.details.decode()).get("type", "cpu").lower() == "gpu"]
-        logger.debug(supported)
-        return supported
-
-    def get_all_devices(self):
-        """ Return list of supported and experimental devices """
-        experimental_setting = plaidml.settings.experimental
-        plaidml.settings.experimental = True
-        devices, _ = plaidml.devices(self.ctx, limit=100, return_all=True)
-        plaidml.settings.experimental = experimental_setting
-
-        experimental = [device for device in devices
-                        if json.loads(device.details.decode()).get("type", "cpu").lower() == "gpu"]
-        logger.debug("Experimental Devices: %s", experimental)
-        all_devices = experimental + self.supported_devices
-        logger.debug(all_devices)
-        return all_devices
+        if _LOGGER:
+            _LOGGER.debug("Set PlaidML Default Logger")
 
     @staticmethod
     def set_verbosity(loglevel):
         """ Set the PlaidML Verbosity """
-        logger.debug("Setting PlaidML Loglevel: %s", loglevel)
+        if _LOGGER:
+            _LOGGER.debug("Setting PlaidML Loglevel: %s", loglevel)
         numeric_level = getattr(logging, loglevel.upper(), None)
         if numeric_level < 10:
             # DEBUG Logging
@@ -120,28 +132,63 @@ class PlaidMLStats():
             # WARNING Logging
             plaidml.quiet()
 
+    def get_supported_devices(self):
+        """ Return a list of supported devices """
+        experimental_setting = plaidml.settings.experimental
+        plaidml.settings.experimental = False
+        devices, _ = plaidml.devices(self.ctx, limit=100, return_all=True)
+        plaidml.settings.experimental = experimental_setting
+
+        supported = [device for device in devices
+                     if json.loads(device.details.decode()).get("type", "cpu").lower() == "gpu"]
+        if _LOGGER:
+            _LOGGER.debug(supported)
+        return supported
+
+    def get_all_devices(self):
+        """ Return list of supported and experimental devices """
+        experimental_setting = plaidml.settings.experimental
+        plaidml.settings.experimental = True
+        devices, _ = plaidml.devices(self.ctx, limit=100, return_all=True)
+        plaidml.settings.experimental = experimental_setting
+
+        experimental = [device for device in devices
+                        if json.loads(device.details.decode()).get("type", "cpu").lower() == "gpu"]
+        if _LOGGER:
+            _LOGGER.debug("Experimental Devices: %s", experimental)
+        all_devices = experimental + self.supported_devices
+        if _LOGGER:
+            _LOGGER.debug(all_devices)
+        return all_devices
+
     def load_active_devices(self):
         """ Load settings from PlaidML.settings.usersettings or select biggest gpu """
         if not os.path.exists(plaidml.settings.user_settings):  # pylint:disable=no-member
-            logger.debug("Setting largest PlaidML device")
+            if _LOGGER:
+                _LOGGER.debug("Setting largest PlaidML device")
             self.set_largest_gpu()
         else:
-            logger.debug("Setting PlaidML devices from user_settings")
+            if _LOGGER:
+                _LOGGER.debug("Setting PlaidML devices from user_settings")
 
     def set_largest_gpu(self):
         """ Get a supported GPU with largest VRAM. If no supported, get largest experimental """
         category = "supported" if self.supported_devices else "experimental"
-        logger.debug("Obtaining largest %s device", category)
+        if _LOGGER:
+            _LOGGER.debug("Obtaining largest %s device", category)
         indices = getattr(self, "{}_indices".format(category))
         max_vram = max([self.vram[idx] for idx in indices])
-        logger.debug("Max VRAM: %s", max_vram)
+        if _LOGGER:
+            _LOGGER.debug("Max VRAM: %s", max_vram)
         gpu_idx = min([idx for idx, vram in enumerate(self.vram)
                        if vram == max_vram and idx in indices])
-        logger.debug("GPU IDX: %s", gpu_idx)
+        if _LOGGER:
+            _LOGGER.debug("GPU IDX: %s", gpu_idx)
 
         selected_gpu = self.ids[gpu_idx]
-        logger.info("Setting GPU to largest available %s device. If you want to override this "
-                    "selection, run `plaidml-setup` from the command line.", category)
+        if _LOGGER:
+            _LOGGER.info("Setting GPU to largest available %s device. If you want to override "
+                         "this selection, run `plaidml-setup` from the command line.", category)
 
         plaidml.settings.experimental = category == "experimental"
         plaidml.settings.device_ids = [selected_gpu]
@@ -149,6 +196,7 @@ class PlaidMLStats():
 
 def setup_plaidml(loglevel):
     """ Setup plaidml for AMD Cards """
+    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.info("Setting up for PlaidML")
     logger.verbose("Setting Keras Backend to PlaidML")
     os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
