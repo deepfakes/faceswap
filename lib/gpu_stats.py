@@ -56,6 +56,11 @@ class GPUStats():
         if self.logger:
             self.logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def is_plaidml(self):
+        """ Return whether running on plaidML backend """
+        return self.plaid is not None
+
     def initialize(self, log=False):
         """ Initialize pynvml """
         if not self.initialized:
@@ -192,10 +197,9 @@ class GPUStats():
         self.initialize()
         if self.plaid:
             # NB There is no useful way to get allocated VRAM on PlaidML.
-            # OpenCL loads and unloads VRAM as required, so this returns the global memory size
-            # less the maximum allowed allocation size. It's not particularly useful
-            vram = [self.plaid.vram[idx] - self.plaid.max_alloc[idx]
-                    for idx in range(self.device_count)]
+            # OpenCL loads and unloads VRAM as required, so this returns 0
+            # It's not particularly useful
+            vram = [0 for idx in range(self.device_count)]
 
         elif IS_MACOS:
             vram = [pynvx.cudaGetMemUsed(handle, ignore=True) / (1024 * 1024)
@@ -214,9 +218,9 @@ class GPUStats():
         self.initialize()
         if self.plaid:
             # NB There is no useful way to get free VRAM on PlaidML.
-            # OpenCL loads and unloads VRAM as required, so this returns the maximum allowed
-            # allocation size. It's not particularly useful
-            vram = self.plaid.max_alloc
+            # OpenCL loads and unloads VRAM as required, so this returns the total memory
+            # It's not particularly useful
+            vram = self.plaid.vram
         elif IS_MACOS:
             vram = [pynvx.cudaGetMemFree(handle, ignore=True) / (1024 * 1024)
                     for handle in self.handles]
@@ -228,10 +232,10 @@ class GPUStats():
             self.logger.debug("GPU VRAM free: %s", vram)
         return vram
 
-    def get_card_most_free(self):
+    def get_card_most_free(self, supports_plaidml=True):
         """ Return the card and available VRAM for active card with
             most VRAM free """
-        if self.device_count == 0:
+        if self.device_count == 0 or (self.is_plaidml and not supports_plaidml):
             return {"card_id": -1,
                     "device": "No Nvidia devices found",
                     "free": 2048,

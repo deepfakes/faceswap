@@ -96,19 +96,26 @@ class Extractor():
         """ Set whether to run detect and align together or separately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
+
         if detector_vram == 0 or aligner_vram == 0:
             logger.debug("At least one of aligner or detector have no VRAM requirement. "
                          "Enabling parallel processing.")
             return True
 
-        gpu_stats = GPUStats()
-        if gpu_stats.device_count == 0:
-            logger.debug("No GPU detected. Enabling parallel processing.")
-            return True
-
         if not multiprocess:
             logger.debug("Parallel processing disabled by cli.")
             return False
+
+        gpu_stats = GPUStats()
+        if gpu_stats.is_plaidml and (not self.detector.supports_plaidml or
+                                     not self.aligner.supports_plaidml):
+            logger.debug("At least one of aligner or detector does not support plaidML. "
+                         "Enabling parallel processing.")
+            return True
+
+        if gpu_stats.device_count == 0:
+            logger.debug("No GPU detected. Enabling parallel processing.")
+            return True
 
         required_vram = detector_vram + aligner_vram + 320  # 320MB buffer
         stats = gpu_stats.get_card_most_free()

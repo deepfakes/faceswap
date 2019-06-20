@@ -37,7 +37,7 @@ class PlaidMLStats():
     @property
     def active_devices(self):
         """ Return the active device IDs """
-        return plaidml.settings.device_ids
+        return [idx for idx, d_id in enumerate(self.ids) if d_id in plaidml.settings.device_ids]
 
     @property
     def device_count(self):

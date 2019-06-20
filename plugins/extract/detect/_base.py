@@ -63,6 +63,9 @@ class Detector():
         # Be conservative to avoid OOM.
         self.vram = None
 
+        # Set to true if the plugin supports PlaidML
+        self.supports_plaidml = False
+
         # For detectors that support batching, this should be set to
         # the calculated batch size that the amount of available VRAM
         # will support. It is also used for holding the number of threads/
@@ -317,11 +320,10 @@ class Detector():
         return (exhausted, batch)
 
     # <<< MISC METHODS >>> #
-    @staticmethod
-    def get_vram_free():
+    def get_vram_free(self):
         """ Return free and total VRAM on card with most VRAM free"""
         stats = GPUStats()
-        vram = stats.get_card_most_free()
+        vram = stats.get_card_most_free(supports_plaidml=self.supports_plaidml)
         logger.verbose("Using device %s with %sMB free of %sMB",
                        vram["device"],
                        int(vram["free"]),
