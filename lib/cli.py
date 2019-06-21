@@ -46,6 +46,7 @@ class ScriptExecutor():
     def test_for_tf_version():
         """ Check that the minimum required Tensorflow version is installed """
         min_ver = 1.12
+        max_ver = 1.13
         try:
             import tensorflow as tf
         except ImportError:
@@ -55,6 +56,10 @@ class ScriptExecutor():
         if tf_ver < min_ver:
             logger.error("The minimum supported Tensorflow is version %s but you have version "
                          "%s installed. Please upgrade Tensorflow.", min_ver, tf_ver)
+            exit(1)
+        if tf_ver > max_ver:
+            logger.error("The maximumum supported Tensorflow is version %s but you have version "
+                         "%s installed. Please upgrade Tensorflow.", max_ver, tf_ver)
             exit(1)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
