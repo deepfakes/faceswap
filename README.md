@@ -13,7 +13,7 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
 - [deepfakes_faceswap](#deepfakesfaceswap)
 - [Manifesto](#manifesto)
-  - [FaceSwap is not porn.](#faceswap-is-not-porn)
+  - [FaceSwap has ethical uses.](#faceswap-has-ethical-uses)
 - [How To setup and run the project](#how-to-setup-and-run-the-project)
 - [Overview](#overview)
   - [Extract](#extract)
