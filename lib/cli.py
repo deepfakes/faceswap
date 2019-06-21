@@ -59,7 +59,7 @@ class ScriptExecutor():
             exit(1)
         if tf_ver > max_ver:
             logger.error("The maximumum supported Tensorflow is version %s but you have version "
-                         "%s installed. Please upgrade Tensorflow.", max_ver, tf_ver)
+                         "%s installed. Please downgrade Tensorflow.", max_ver, tf_ver)
             exit(1)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
