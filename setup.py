@@ -14,7 +14,7 @@ from subprocess import CalledProcessError, run, PIPE, Popen
 INSTALL_FAILED = False
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
 TENSORFLOW_REQUIREMENTS = {"==1.12.0": ["9.0", "7.2"],
-                           ">=1.13.1": ["10.0", "7.4"]}
+                           ">=1.13.1,<1.14": ["10.0", "7.4"]}  # TF 1.14+ Not currently supported
 
 
 class Environment():

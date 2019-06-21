@@ -157,7 +157,7 @@ class Images():
             logger.error("Input location %s not found.", self.args.input_dir)
             exit(1)
         if (os.path.isfile(self.args.input_dir) and
-                os.path.splitext(self.args.input_dir)[1] in _video_extensions):
+                os.path.splitext(self.args.input_dir)[1].lower() in _video_extensions):
             logger.info("Input Video: %s", self.args.input_dir)
             retval = True
         else:
