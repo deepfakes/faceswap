@@ -202,5 +202,5 @@ def setup_plaidml(loglevel):
     os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
     plaid = PlaidMLStats(loglevel)
     plaid.load_active_devices()
-    logger.info("Using GPU: %s", plaid.active_devices)
+    logger.info("Using GPU: %s", [plaid.ids[i] for i in plaid.active_devices])
     logger.info("Successfully set up for PlaidML")

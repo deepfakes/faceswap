@@ -24,6 +24,7 @@ class Align(Aligner):
         self.vram = 2240
         self.model = None
         self.reference_scale = 195
+        self.supports_plaidml = True
 
     def initialize(self, *args, **kwargs):
         """ Initialization tasks to run prior to alignments """
