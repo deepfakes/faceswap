@@ -4,7 +4,7 @@ import os
 import logging
 import re
 import signal
-from subprocess import PIPE, Popen, TimeoutExpired
+from subprocess import PIPE, Popen
 import sys
 from threading import Thread
 from time import time
@@ -12,6 +12,10 @@ from time import time
 import psutil
 
 from .utils import get_config, get_images
+
+if os.name == "nt":
+    import win32console
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -332,27 +336,35 @@ class FaceswapControl():
             timeout = get_config().tk_vars["traintimeout"].get()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
+            now = time()
             if os.name == "nt":
-                try:
-                    logger.debug("Sending carriage return to process")
-                    self.process.communicate(input="\n", timeout=timeout)
-                except TimeoutExpired:
-                    logger.error("Timeout reached sending Exit Signal")
-                    self.terminate_all_children()
+                logger.debug("Sending carriage return to process")
+                con_in = win32console.GetStdHandle(  # pylint:disable=c-extension-no-member
+                    win32console.STD_INPUT_HANDLE)  # pylint:disable=c-extension-no-member
+                keypress = self.generate_windows_keypress("\n")
+                con_in.WriteConsoleInput([keypress])
             else:
                 logger.debug("Sending SIGINT to process")
-                now = time()
                 self.process.send_signal(signal.SIGINT)
-                while True:
-                    timeelapsed = time() - now
-                    if self.process.poll() is not None:
-                        break
-                    if timeelapsed > timeout:
-                        logger.error("Timeout reached sending Exit Signal")
-                        self.terminate_all_children()
-                return
+            while True:
+                timeelapsed = time() - now
+                if self.process.poll() is not None:
+                    break
+                if timeelapsed > timeout:
+                    logger.error("Timeout reached sending Exit Signal")
+                    self.terminate_all_children()
         else:
             self.terminate_all_children()
+
+    @staticmethod
+    def generate_windows_keypress(character):
+        """ Generate an 'Enter' keypress to terminate Windows training """
+        buf = win32console.PyINPUT_RECORDType(  # pylint:disable=c-extension-no-member
+            win32console.KEY_EVENT)  # pylint:disable=c-extension-no-member
+        buf.KeyDown = 1
+        buf.RepeatCount = 1
+        buf.Char = character
+        return buf
 
     @staticmethod
     def terminate_all_children():
