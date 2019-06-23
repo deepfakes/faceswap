@@ -13,6 +13,7 @@ from subprocess import Popen, PIPE, STDOUT
 from lib.multithreading import MultiThread
 from lib.Serializer import JSONSerializer
 
+import update_deps
 from .utils import get_config
 from .popup_configure import popup_config
 
@@ -188,16 +189,20 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
     def update(self):
         """ Check for updates and clone repo """
-        logger.debug("Updating Faceswap")
+        logger.debug("Updating Faceswap...")
         self.root.config(cursor="watch")
-        self.clear_console()
         encoding = locale.getpreferredencoding()
         logger.debug("Encoding: %s", encoding)
+        success = False
         if self.check_for_updates(encoding):
-            self.do_update(encoding)
+            success = self.do_update(encoding)
+        update_deps.main(logger=logger)
+        if success:
+            logger.info("Please restart Faceswap to complete the update.")
         self.root.config(cursor="")
 
-    def check_for_updates(self, encoding):
+    @staticmethod
+    def check_for_updates(encoding):
         """ Check whether an update is required """
         # Do the check
         logger.info("Checking for updates...")
@@ -227,7 +232,6 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                 if "have diverged" in line.lower():
                     msg = "Your branch has diverged from the remote repo. Not updating"
                     break
-        self.clear_console()
         if not update:
             logger.info(msg)
         logger.debug("Checked for update. Update required: %s", update)
@@ -249,7 +253,8 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         retcode = cmd.poll()
         logger.debug("'%s' returncode: %s", gitcmd, retcode)
         if retcode != 0:
-            msg = "An error occurred during update. return code: {}".format(retcode)
+            logger.info("An error occurred during update. return code: %s", retcode)
+            retval = False
         else:
-            msg = "Please restart Faceswap to complete the update."
-        logger.info(msg)
+            retval = True
+        return retval

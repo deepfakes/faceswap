@@ -516,6 +516,7 @@ class Install():
         if self.env.enable_cuda and self.env.is_macos:
             self.env.required_packages.extend(self.env.macos_required_packages)
         for pkg in self.env.required_packages:
+            pkg = self.check_os_requirements(pkg)
             key = pkg.split("==")[0]
             if key not in self.env.installed_packages:
                 self.env.missing_packages.append(pkg)
@@ -525,6 +526,19 @@ class Install():
                     if pkg.split("==")[1] != self.env.installed_packages.get(key):
                         self.env.missing_packages.append(pkg)
                         continue
+
+    @staticmethod
+    def check_os_requirements(package):
+        """ Check that the required package is required for this OS """
+        if ";" not in package and "sys_platform" not in package:
+            return package
+        package = "".join(package.split())
+        pkg, tags = package.split(";")
+        tags = tags.split("==")
+        sys_platform = tags[tags.index("sys_platform") + 1].replace('"', "").replace("'", "")
+        if sys_platform == sys.platform:
+            return pkg
+        return None
 
     def check_conda_missing_dep(self):
         """ Check for conda missing dependencies """

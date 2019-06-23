@@ -135,10 +135,11 @@ A desktop shortcut can be added to easily launch straight into the faceswap GUI:
 
 ## Updating faceswap
 It's good to keep faceswap up to date as new features are added and bugs are fixed. To do so:
+- If using the GUI you can go to the Tools Menu and select "Check for Updates...". This will update Faceswap to the latest code and update your dependencies.
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
 - Enter the faceswap folder: `cd faceswap`
 - Enter the following `git pull --all`
-- Once the latest version has downloaded, make sure your requirements are up to date: `pip install --upgrade -r requirements.txt`
+- Once the latest version has downloaded, make sure your dependencies are up to date. There is a script to help with this: `python update_deps.py`
 
 # General Install Guide
 ## Installing dependencies
