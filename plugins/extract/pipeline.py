@@ -113,8 +113,7 @@ class Extractor():
                          "Enabling parallel processing.")
             return True
 
-        if gpu_stats.is_plaidml and (self.detector.supports_plaidml and
-                                     self.aligner.supports_plaidml):
+        if self.detector.supports_plaidml and self.aligner.supports_plaidml:
             logger.debug("Both aligner and detector support plaidML. Disabling parallel "
                          "processing.")
             return False
