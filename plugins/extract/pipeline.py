@@ -113,6 +113,12 @@ class Extractor():
                          "Enabling parallel processing.")
             return True
 
+        if gpu_stats.is_plaidml and (self.detector.supports_plaidml and
+                                     self.aligner.supports_plaidml):
+            logger.debug("Both aligner and detector support plaidML. Disabling parallel "
+                         "processing.")
+            return False
+
         if gpu_stats.device_count == 0:
             logger.debug("No GPU detected. Enabling parallel processing.")
             return True

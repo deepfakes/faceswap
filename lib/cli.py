@@ -114,8 +114,10 @@ class ScriptExecutor():
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
         if hasattr(arguments, "amd") and arguments.amd:
-            from lib.plaidml_tools import setup_plaidml
-            setup_plaidml(arguments.loglevel)
+            plaidml_found = self.setup_amd(arguments.loglevel)
+            if not plaidml_found:
+                safe_shutdown()
+                exit(1)
         try:
             script = self.import_script()
             process = script(arguments)
@@ -133,6 +135,20 @@ class ScriptExecutor():
 
         finally:
             safe_shutdown()
+
+    @staticmethod
+    def setup_amd(loglevel):
+        """ Test for plaidml and setup for AMD """
+        logger.debug("Setting up for AMD")
+        try:
+            import plaidml  # noqa pylint:disable=unused-import
+        except ImportError:
+            logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
+            return False
+        from lib.plaidml_tools import setup_plaidml
+        setup_plaidml(loglevel)
+        logger.debug("setup up for PlaidML")
+        return True
 
 
 class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
@@ -516,7 +532,8 @@ class ExtractArgs(ExtractConvertArgs):
             "type": str.lower,
             "choices":  PluginLoader.get_available_extractors("detect"),
             "default": "mtcnn",
-            "help": "R|Detector to use. Some of these have configurable settings in "
+            "help": "R|Detector to use. NB: Unless stated, all aligners will run on CPU for AMD "
+                    "GPUs. Some of these have configurable settings in "
                     "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
                     "\nL|'cv2-dnn': A CPU only extractor, is the least reliable, but uses least "
                     "resources and runs fast on CPU. Use this if not using a GPU and time is "
@@ -531,12 +548,15 @@ class ExtractArgs(ExtractConvertArgs):
             "type": str.lower,
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
-            "help": "R|Aligner to use."
+            "help": "R|Aligner to use. NB: Unless stated, all aligners will run on CPU for AMD "
+                    "GPUs."
                     "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
                     "resource intensive, but less accurate. Only use this if not using a gpu "
                     " and time is important."
-                    "\nL|'fan': Face Alignment Network. Best aligner. "
-                    "GPU heavy, slow when not running on GPU"})
+                    "\nL|'fan': Face Alignment Network. Best aligner. GPU heavy, slow when not "
+                    "running on GPU"
+                    "\nL|'fan-amd': Face Alignment Network. Uses Keras backend to support AMD "
+                    "Cards. Best aligner. GPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
                               "type": str.lower,
@@ -580,7 +600,10 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Don't run extraction in parallel. Will run detection first "
                                       "then alignment (2 passes). Useful if VRAM is at a premium. "
                                       "Only has an effect if both the aligner and detector use "
-                                      "the GPU, otherwise this is automatically off."})
+                                      "the GPU, otherwise this is automatically off. NB: AMD "
+                                      "cards do not support parallel processing, so if both "
+                                      "aligner and detector use an AMD GPU this will "
+                                      "automatically be enabled."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,

@@ -23,7 +23,8 @@ class PlaidMLStats():
             # when obtaining system stats on crash
             global _LOGGER  # pylint:disable=global-statement
             _LOGGER = logging.getLogger(__name__)  # pylint:disable=invalid-name
-            _LOGGER.debug("Initializing: %s: (loglevel: %s)", self.__class__.__name__, loglevel)
+            _LOGGER.debug("Initializing: %s: (loglevel: %s, log: %s)",
+                          self.__class__.__name__, loglevel, log)
         self.initialize(loglevel)
         self.ctx = plaidml.Context()
         self.supported_devices = self.get_supported_devices()
@@ -121,7 +122,10 @@ class PlaidMLStats():
         """ Set the PlaidML Verbosity """
         if _LOGGER:
             _LOGGER.debug("Setting PlaidML Loglevel: %s", loglevel)
-        numeric_level = getattr(logging, loglevel.upper(), None)
+        if isinstance(loglevel, int):
+            numeric_level = loglevel
+        else:
+            numeric_level = getattr(logging, loglevel.upper(), None)
         if numeric_level < 10:
             # DEBUG Logging
             plaidml._internal_set_vlog(1)  # pylint:disable=protected-access

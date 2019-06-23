@@ -65,9 +65,11 @@ class GPUStats():
         """ Initialize pynvml """
         if not self.initialized:
             if K.backend() == "plaidml.keras.backend":
+                loglevel = "INFO"
                 if self.logger:
                     self.logger.debug("plaidML Detected. Using plaidMLStats")
-                self.plaid = plaidlib(log=log)
+                    loglevel = self.logger.getEffectiveLevel()
+                self.plaid = plaidlib(loglevel=loglevel, log=log)
             elif IS_MACOS:
                 if self.logger:
                     self.logger.debug("macOS Detected. Using pynvx")
