@@ -15,7 +15,7 @@ from tensorflow.contrib.distributions import Beta
 
 from .normalization import InstanceNormalization
 if K.backend() == "plaidml.keras.backend":
-    from lib.plaidml_utils import extract_image_patches
+    from plaidml.op import extract_image_patches
 else:
     from tensorflow import extract_image_patches  # pylint: disable=ungrouped-imports
 
@@ -163,11 +163,14 @@ def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-na
     mask = (mask * mask_prop) + mask_as_k_inv_prop
 
     def inner_loss(y_true, y_pred):
-        # Workaround until https://github.com/plaidml/plaidml/pull/284 is accepted
+        # Branching because tensorflows broadcasting is wonky and
+        # plaidmls concatenate is implemented ineficient.
         if K.backend() == "plaidml.keras.backend":
-            y_true = K.reshape(y_true, y_pred.shape.dims)
-        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+            n_true = y_true * mask
+            n_pred = y_pred * mask
+        else:
+            n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+            n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
         return loss_func(n_true, n_pred)
     return inner_loss
 # <<< END: from Dfaker >>> #
