@@ -153,13 +153,14 @@ class Train():
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
         configfile = self.args.configfile if hasattr(self.args, "configfile") else None
+        augment_color = not self.args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
             self.args.gpus,
             configfile=configfile,
             no_logs=self.args.no_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
-            augment_color=self.args.augment_color,
+            augment_color=augment_color,
             no_flip=self.args.no_flip,
             training_image_size=self.image_size,
             alignments_paths=self.alignments_paths,
