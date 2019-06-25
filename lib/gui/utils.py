@@ -19,14 +19,15 @@ _CONFIG = None
 _IMAGES = None
 
 
-def initialize_config(cli_opts, scaling_factor, pathcache, statusbar, session):
+def initialize_config(root, cli_opts, scaling_factor, pathcache, statusbar, session):
     """ Initialize the config and add to global constant """
     global _CONFIG  # pylint: disable=global-statement
     if _CONFIG is not None:
         return
-    logger.debug("Initializing config: (cli_opts: %s, tk_vars: %s, pathcache: %s, statusbar: %s, "
-                 "session: %s)", cli_opts, scaling_factor, pathcache, statusbar, session)
-    _CONFIG = Config(cli_opts, scaling_factor, pathcache, statusbar, session)
+    logger.debug("Initializing config: (root: %s, cli_opts: %s, tk_vars: %s, pathcache: %s, "
+                 "statusbar: %s, session: %s)", root, cli_opts, scaling_factor, pathcache,
+                 statusbar, session)
+    _CONFIG = Config(root, cli_opts, scaling_factor, pathcache, statusbar, session)
 
 
 def get_config():
@@ -274,7 +275,7 @@ class Images():
             logger.debug("Folder does not exist")
             return None
         files = [os.path.join(imgpath, f)
-                 for f in os.listdir(imgpath) if f.endswith((".png", ".jpg"))]
+                 for f in os.listdir(imgpath) if f.lower().endswith((".png", ".jpg"))]
         logger.trace("Image files: %s", files)
         return files
 
@@ -537,10 +538,11 @@ class Config():
         Don't call directly. Call get_config()
     """
 
-    def __init__(self, cli_opts, scaling_factor, pathcache, statusbar, session):
-        logger.debug("Initializing %s: (cli_opts: %s, scaling_factor: %s, pathcache: %s, "
-                     "statusbar: %s, session: %s)", self.__class__.__name__, cli_opts,
+    def __init__(self, root, cli_opts, scaling_factor, pathcache, statusbar, session):
+        logger.debug("Initializing %s: (root %s, cli_opts: %s, scaling_factor: %s, pathcache: %s, "
+                     "statusbar: %s, session: %s)", self.__class__.__name__, root, cli_opts,
                      scaling_factor, pathcache, statusbar, session)
+        self.root = root
         self.cli_opts = cli_opts
         self.scaling_factor = scaling_factor
         self.pathcache = pathcache
@@ -562,6 +564,16 @@ class Config():
         """ Return dict of tools command tab titles with their IDs """
         return {self.command_notebook.tools_notebook.tab(tab_id, "text").lower(): tab_id
                 for tab_id in range(0, self.command_notebook.tools_notebook.index("end"))}
+
+    def set_cursor_busy(self):
+        """ Set the root cursor to busy """
+        logger.trace("Setting cursor to busy")
+        self.root.config(cursor="watch")
+
+    def set_cursor_default(self):
+        """ Set the root cursor to default """
+        logger.trace("Setting cursor to default")
+        self.root.config(cursor="")
 
     @staticmethod
     def set_tk_vars():

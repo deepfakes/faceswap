@@ -60,15 +60,18 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def load_session(self):
         """ Load previously saved sessions """
         logger.debug("Loading session")
+        get_config().set_cursor_busy()
         self.clear_session()
         fullpath = FileHandler("filename", "state").retfile
         if not fullpath:
+            get_config().set_cursor_default()
             return
         logger.debug("state_file: '%s'", fullpath)
         model_dir, state_file = os.path.split(fullpath)
         logger.debug("model_dir: '%s'", model_dir)
         model_name = self.get_model_name(model_dir, state_file)
         if not model_name:
+            get_config().set_cursor_default()
             return
         self.session = Session(model_dir=model_dir, model_name=model_name)
         self.session.initialize_session(is_training=False)
@@ -76,6 +79,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         if len(msg) > 70:
             msg = "...{}".format(msg[-70:])
         self.set_session_summary(msg)
+        get_config().set_cursor_default()
 
     @staticmethod
     def get_model_name(model_dir, state_file):
@@ -92,17 +96,20 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def reset_session(self):
         """ Reset currently training sessions """
         logger.debug("Reset current training session")
+        get_config().set_cursor_busy()
         self.clear_session()
-        session = get_config().session
+        session = get_config()().session
         if not session.initialized:
             logger.debug("Training not running")
             print("Training not running")
+            get_config().set_cursor_default()
             return
         msg = "Currently running training session"
         self.session = session
         # Reload the state file to get approx currently training iterations
         self.session.load_state_file()
         self.set_session_summary(msg)
+        get_config().set_cursor_default()
 
     def set_session_summary(self, message):
         """ Set the summary data and info message """
@@ -123,13 +130,16 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def save_session(self):
         """ Save sessions stats to csv """
         logger.debug("Saving session")
+        get_config().set_cursor_busy()
         if not self.summary:
             logger.debug("No summary data loaded. Nothing to save")
             print("No summary data loaded. Nothing to save")
+            get_config().set_cursor_default()
             return
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
             logger.debug("No save file. Returning")
+            get_config().set_cursor_default()
             return
 
         write_dicts = [val for val in self.summary.values()]
@@ -141,6 +151,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             csvout.writeheader()
             for row in write_dicts:
                 csvout.writerow(row)
+        get_config().set_cursor_default()
 
 
 class Options():
@@ -264,7 +275,10 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         for item in sessions_summary:
             values = [item[column] for column in self.columns]
-            kwargs = {"values": values, "image": get_images().icons["graph"]}
+            kwargs = {"values": values}
+            if self.check_valid_data(values):
+                # Don't show graph icon for non-existent sessions
+                kwargs["image"] = get_images().icons["graph"]
             if values[0] == "Total":
                 kwargs["tags"] = "total"
             self.tree.insert("", "end", **kwargs)
@@ -284,18 +298,39 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         if values:
             logger.debug("Selected values: %s", values)
             self.selected_id.set(values[0])
-            if region == "tree":
-                self.data_popup()
+            if region == "tree" and self.check_valid_data(values):
+                datapoints = int(values[self.columns.index("iterations")])
+                self.data_popup(datapoints)
 
-    def data_popup(self):
-        """ Pop up a window and control it's position """
+    def check_valid_data(self, values):
+        """ Check there is valid data available for popping up a graph """
+        col_indices = [self.columns.index("batch"), self.columns.index("iterations")]
+        for idx in col_indices:
+            if (isinstance(values[idx], int) or values[idx].isdigit()) and int(values[idx]) == 0:
+                logger.warning("No data to graph for selected session")
+                return False
+        return True
+
+    def data_popup(self, datapoints):
+        """ Pop up a window and control it's position
+
+            The default view is rolling average over 500 points.
+            If there are fewer data points than this, switch the default
+            to raw
+        """
+        get_config().set_cursor_busy()
+        get_config().root.update_idletasks()
         logger.debug("Popping up data window")
         scaling_factor = get_config().scaling_factor
         toplevel = SessionPopUp(self.session.modeldir,
                                 self.session.modelname,
-                                self.selected_id.get())
+                                self.selected_id.get(),
+                                datapoints)
         toplevel.title(self.data_popup_title())
-        toplevel.tk.call('wm', 'iconphoto', toplevel._w, get_images().icons["favicon"])
+        toplevel.tk.call(
+            'wm',
+            'iconphoto',
+            toplevel._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         position = self.data_popup_get_position()
         height = int(720 * scaling_factor)
         width = int(400 * scaling_factor)
@@ -304,6 +339,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                                                str(position[0]),
                                                str(position[1])))
         toplevel.update()
+        get_config().set_cursor_default()
 
     def data_popup_title(self):
         """ Set the data popup title """
@@ -345,11 +381,14 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed graph/stats for selected session """
-    def __init__(self, model_dir, model_name, session_id):
-        logger.debug("Initializing: %s: (model_dir: %s, model_name: %s, session_id: %s)",
-                     self.__class__.__name__, model_dir, model_name, session_id)
+    def __init__(self, model_dir, model_name, session_id, datapoints):
+        logger.debug("Initializing: %s: (model_dir: %s, model_name: %s, session_id: %s, "
+                     "datapoints: %s)", self.__class__.__name__, model_dir, model_name, session_id,
+                     datapoints)
         super().__init__()
 
+        self.default_avg = 500
+        self.default_view = "avg" if datapoints > self.default_avg * 2 else "raw"
         self.session_id = session_id
         self.session = Session(model_dir=model_dir, model_name=model_name)
         self.initialize_session()
@@ -455,9 +494,9 @@ class SessionPopUp(tk.Toplevel):
                 text = "Show {}".format(item.title())
             var = tk.BooleanVar()
 
-            if item == "raw":
+            if item == self.default_view:
                 var.set(True)
-            var.trace("w", self.optbtn_reset)
+
             self.vars[item] = var
 
             ctl = ttk.Checkbutton(frame, variable=var, text=text)
@@ -476,8 +515,8 @@ class SessionPopUp(tk.Toplevel):
             text = loss_key.replace("_", " ").title()
             helptext = "Display {}".format(text)
             var = tk.BooleanVar()
-            var.set(True)
-            var.trace("w", self.optbtn_reset)
+            if loss_key.startswith("loss"):
+                var.set(True)
             lk_vars[loss_key] = var
 
             if len(loss_keys) == 1:
@@ -497,7 +536,7 @@ class SessionPopUp(tk.Toplevel):
         for item in ("avgiterations", ):
             if item == "avgiterations":
                 text = "Iterations to Average:"
-                default = "10"
+                default = "500"
 
             entframe = ttk.Frame(frame)
             entframe.pack(fill=tk.X, pady=5, padx=5, side=tk.TOP)
@@ -603,6 +642,7 @@ class SessionPopUp(tk.Toplevel):
         selections = self.selections_to_list()
 
         if not self.check_valid_selection(loss_keys, selections):
+            logger.warning("No data to display. Not refreshing")
             return False
         self.display_data = Calculations(session=self.session,
                                          display=self.vars["display"].get(),
@@ -611,6 +651,9 @@ class SessionPopUp(tk.Toplevel):
                                          avg_samples=self.vars["avgiterations"].get(),
                                          flatten_outliers=self.vars["outliers"].get(),
                                          is_totals=self.is_totals)
+        if not self.check_valid_data():
+            logger.warning("No valid data to display. Not refreshing")
+            return False
         logger.debug("Compiled Display Data")
         return True
 
@@ -620,9 +663,17 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Validating selection. (loss_keys: %s, selections: %s, display: %s)",
                      loss_keys, selections, display)
         if not selections or (display == "loss" and not loss_keys):
-            msg = "No data to display. Not refreshing"
-            logger.debug(msg)
-            print(msg)
+            return False
+        return True
+
+    def check_valid_data(self):
+        """ Check that the selections holds valid data to display
+            NB: len-as-condition is used as data could be a list or a numpy array
+        """
+        logger.debug("Validating data. %s",
+                     {key: len(val) for key, val in self.display_data.stats.items()})
+        if any(len(val) == 0  # pylint:disable=len-as-condition
+               for val in self.display_data.stats.values()):
             return False
         return True
 

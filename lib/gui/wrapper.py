@@ -14,7 +14,7 @@ import psutil
 from .utils import get_config, get_images
 
 if os.name == "nt":
-    import win32console
+    import win32console  # pylint: disable=import-error
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -144,7 +144,7 @@ class FaceswapControl():
         self.train_stats = {"iterations": 0, "timestamp": None}
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
-            "tqdm": re.compile(r".*?(?P<pct>\d+%).*?(?P<itm>\d+/\d+)\W\["
+            "tqdm": re.compile(r"(?P<dsc>.*?)(?P<pct>\d+%).*?(?P<itm>\S+/\S+)\W\["
                                r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
             "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -296,15 +296,18 @@ class FaceswapControl():
         if any("?" in val for val in tqdm.values()):
             logger.trace("tqdm initializing. Skipping")
             return True
+        description = tqdm["dsc"].strip()
+        description = description if description == "" else "{}  |  ".format(description[:-1])
         processtime = "Elapsed: {}  Remaining: {}".format(tqdm["tme"].split("<")[0],
                                                           tqdm["tme"].split("<")[1])
-        message = "{}  |  {}  |  {}  |  {}".format(processtime,
-                                                   tqdm["rte"],
-                                                   tqdm["itm"],
-                                                   tqdm["pct"])
+        message = "{}{}  |  {}  |  {}  |  {}".format(description,
+                                                     processtime,
+                                                     tqdm["rte"],
+                                                     tqdm["itm"],
+                                                     tqdm["pct"])
 
-        current, total = tqdm["itm"].split("/")
-        position = int((float(current) / float(total)) * 1000)
+        position = tqdm["pct"].replace("%", "")
+        position = int(position) if position.isdigit() else 0
 
         self.statusbar.progress_update(message, position, True)
         logger.trace("Succesfully captured tqdm message: %s", message)

@@ -479,7 +479,11 @@ class GetModel():
         length = sum(f.file_size for f in zip_file.infolist())
         fnames = zip_file.namelist()
         self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
-        pbar = tqdm(desc="Extracting", unit="B", total=length, unit_scale=True, unit_divisor=1024)
+        pbar = tqdm(desc="Decompressing",
+                    unit="B",
+                    total=length,
+                    unit_scale=True,
+                    unit_divisor=1024)
         for fname in fnames:
             out_fname = os.path.join(self.cache_dir, fname)
             self.logger.debug("Extracting from: '%s' to '%s'", self._model_zip_path, out_fname)

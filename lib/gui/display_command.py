@@ -237,6 +237,9 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def close(self):
         """ Clear the plots from RAM """
+        if self.subnotebook is None:
+            logger.debug("No graphs to clear. Returning")
+            return
         for name, graph in self.subnotebook.children.items():
             logger.debug("Clearing: %s", name)
             graph.clear()

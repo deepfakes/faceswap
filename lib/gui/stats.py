@@ -163,7 +163,7 @@ class Session():
     @property
     def session(self):
         """ Return current session dictionary """
-        return self.state["sessions"][str(self.session_id)]
+        return self.state["sessions"].get(str(self.session_id), dict())
 
     @property
     def session_ids(self):
@@ -239,7 +239,11 @@ class Session():
 
     def get_iterations_for_session(self, session_id):
         """ Return the number of iterations for the given session id """
-        return self.state["sessions"][str(session_id)]["iterations"]
+        session = self.state["sessions"].get(str(session_id), None)
+        if session is None:
+            logger.warning("No session data found for session id: %s", session_id)
+            return 0
+        return session["iterations"]
 
 
 class SessionsSummary():
@@ -267,7 +271,7 @@ class SessionsSummary():
         for sess_idx, ts_data in self.time_stats.items():
             iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = ts_data["end_time"] - ts_data["start_time"]
-            batchsize = self.session.total_batchsize[sess_idx]
+            batchsize = self.session.total_batchsize.get(sess_idx, 0)
             compiled.append({"session": sess_idx,
                              "start": ts_data["start_time"],
                              "end": ts_data["end_time"],
