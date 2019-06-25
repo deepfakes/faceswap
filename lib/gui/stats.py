@@ -456,7 +456,7 @@ class Calculations():
             if (mean - limit) <= item <= (mean + limit):
                 retdata.append(item)
             else:
-                logger.debug("Item idx: %s, value: %s flattened to %s", idx, item, mean)
+                logger.trace("Item idx: %s, value: %s flattened to %s", idx, item, mean)
                 retdata.append(mean)
         logger.debug("Flattened outliers")
         return retdata

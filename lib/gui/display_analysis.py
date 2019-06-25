@@ -75,7 +75,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             return
         self.session = Session(model_dir=model_dir, model_name=model_name)
         self.session.initialize_session(is_training=False)
-        msg = os.path.split(state_file)[0]
+        msg = fullpath
         if len(msg) > 70:
             msg = "...{}".format(msg[-70:])
         self.set_session_summary(msg)
@@ -460,8 +460,6 @@ class SessionPopUp(tk.Toplevel):
 
         for item in ["Display", "Scale"]:
             var = tk.StringVar()
-            cmd = self.optbtn_reset if item == "Display" else self.graph_scale
-            var.trace("w", cmd)
 
             cmbframe = ttk.Frame(frame)
             cmbframe.pack(fill=tk.X, pady=5, padx=5, side=tk.TOP)
@@ -476,6 +474,8 @@ class SessionPopUp(tk.Toplevel):
             cmb.current(0)
             cmb.pack(fill=tk.X, side=tk.RIGHT)
 
+            cmd = self.optbtn_reset if item == "Display" else self.graph_scale
+            var.trace("w", cmd)
             self.vars[item.lower().strip()] = var
 
             hlp = self.set_help(item)
@@ -572,9 +572,11 @@ class SessionPopUp(tk.Toplevel):
     def optbtn_save(self):
         """ Action for save button press """
         logger.debug("Saving File")
+        self.config(cursor="watch")
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
             logger.debug("Save Cancelled")
+            self.config(cursor="")
             return
         logger.debug("Saving to: %s", savefile)
         save_data = self.display_data.stats
@@ -584,26 +586,34 @@ class SessionPopUp(tk.Toplevel):
             csvout = csv.writer(outfile, delimiter=",")
             csvout.writerow(fieldnames)
             csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
+        self.config(cursor="")
 
     def optbtn_reset(self, *args):  # pylint: disable=unused-argument
         """ Action for reset button press and checkbox changes"""
         logger.debug("Refreshing Graph")
         if not self.graph_initialised:
             return
+        self.config(cursor="watch")
+        self.update_idletasks()
         valid = self.compile_display_data()
         if not valid:
             logger.debug("Invalid data")
+            self.config(cursor="")
             return
         self.graph.refresh(self.display_data,
                            self.vars["display"].get(),
                            self.vars["scale"].get())
+        self.config(cursor="")
         logger.debug("Refreshed Graph")
 
     def graph_scale(self, *args):  # pylint: disable=unused-argument
         """ Action for changing graph scale """
         if not self.graph_initialised:
             return
+        self.config(cursor="watch")
+        self.update_idletasks()
         self.graph.set_yscale_type(self.vars["scale"].get())
+        self.config(cursor="")
 
     @staticmethod
     def set_help(control):

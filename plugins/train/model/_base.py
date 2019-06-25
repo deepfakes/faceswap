@@ -38,7 +38,7 @@ class ModelBase():
                  configfile=None,
                  no_logs=False,
                  warp_to_landmarks=False,
-                 augment_color=False,
+                 augment_color=True,
                  no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
