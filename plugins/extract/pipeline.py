@@ -113,6 +113,13 @@ class Extractor():
                          "Enabling parallel processing.")
             return True
 
+        if not gpu_stats.is_plaidml and (
+                (self.detector.supports_plaidml and aligner_vram != 0) or
+                (self.aligner.supports_plaidml and detector_vram != 0)):
+            logger.warning("Keras + non-Keras aligner/detector combination does not support "
+                           "parallel processing. Switching to serial.")
+            return False
+
         if self.detector.supports_plaidml and self.aligner.supports_plaidml:
             logger.debug("Both aligner and detector support plaidML. Disabling parallel "
                          "processing.")
