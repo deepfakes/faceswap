@@ -13,7 +13,6 @@ from time import sleep
 from tqdm import tqdm
 
 from lib.queue_manager import queue_manager
-from lib.sysinfo import sysinfo
 
 LOG_QUEUE = queue_manager._log_queue  # pylint: disable=protected-access
 
@@ -156,6 +155,7 @@ def get_loglevel(loglevel):
 
 def crash_log():
     """ Write debug_buffer to a crash log on crash """
+    from lib.sysinfo import sysinfo
     path = os.getcwd()
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
 

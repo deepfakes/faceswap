@@ -1,32 +1,32 @@
 # Installing Faceswap
-- [Installing Faceswap](#installing-faceswap)
-- [Prerequisites](#prerequisites)
-  - [Hardware Requirements](#hardware-requirements)
-  - [Supported operating systems](#supported-operating-systems)
-- [Important before you proceed](#important-before-you-proceed)
-- [Windows Install Guide](#windows-install-guide)
-  - [Installer](#installer)
-  - [Manual Install](#manual-install)
-  - [Prerequisites](#prerequisites-1)
-    - [Anaconda](#anaconda)
-    - [Git](#git)
-  - [Setup](#setup)
-    - [Anaconda](#anaconda-1)
-      - [Set up a virtual environment](#set-up-a-virtual-environment)
-      - [Entering your virtual environment](#entering-your-virtual-environment)
-    - [Faceswap](#faceswap)
-      - [Easy install](#easy-install)
-      - [Manual install](#manual-install)
-  - [Running Faceswap](#running-faceswap)
-  - [Create a desktop shortcut](#create-a-desktop-shortcut)
-  - [Updating faceswap](#updating-faceswap)
-- [General Install Guide](#general-install-guide)
-  - [Installing dependencies](#installing-dependencies)
-  - [Getting the faceswap code](#getting-the-faceswap-code)
-  - [Setup](#setup-1)
-    - [About some of the options](#about-some-of-the-options)
-  - [Run the project](#run-the-project)
-  - [Notes](#notes)
+- [Installing Faceswap](#Installing-Faceswap)
+- [Prerequisites](#Prerequisites)
+  - [Hardware Requirements](#Hardware-Requirements)
+  - [Supported operating systems](#Supported-operating-systems)
+- [Important before you proceed](#Important-before-you-proceed)
+- [Windows Install Guide](#Windows-Install-Guide)
+  - [Installer](#Installer)
+  - [Manual Install](#Manual-Install)
+  - [Prerequisites](#Prerequisites-1)
+    - [Anaconda](#Anaconda)
+    - [Git](#Git)
+  - [Setup](#Setup)
+    - [Anaconda](#Anaconda-1)
+      - [Set up a virtual environment](#Set-up-a-virtual-environment)
+      - [Entering your virtual environment](#Entering-your-virtual-environment)
+    - [Faceswap](#Faceswap)
+      - [Easy install](#Easy-install)
+      - [Manual install](#Manual-install)
+  - [Running Faceswap](#Running-Faceswap)
+  - [Create a desktop shortcut](#Create-a-desktop-shortcut)
+  - [Updating faceswap](#Updating-faceswap)
+- [General Install Guide](#General-Install-Guide)
+  - [Installing dependencies](#Installing-dependencies)
+  - [Getting the faceswap code](#Getting-the-faceswap-code)
+  - [Setup](#Setup-1)
+    - [About some of the options](#About-some-of-the-options)
+  - [Run the project](#Run-the-project)
+  - [Notes](#Notes)
 
 # Prerequisites
 Machine learning essentially involves a ton of trial and error. You're letting a program try millions of different settings to land on an algorithm that sort of does what you want it to do. This process is really really slow unless you have the hardware required to speed this up. 
@@ -39,9 +39,8 @@ The type of computations that the process does are well suited for graphics card
 - **A powerful CPU**
     - Laptop CPUs can often run the software, but will not be fast enough to train at reasonable speeds
 - **A powerful GPU**
-    - Currently, only Nvidia GPUs are supported. AMD graphics cards are not supported.
-      This is not something that we have control over. It is a requirement of the Tensorflow library.
-    - The GPU needs to support at least CUDA Compute Capability 3.0 or higher.
+    - Currently, Nvidia GPUs are fully supported. and AMD graphics cards are partially supported through plaidML.
+    - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.0 or higher.
       To see which version your GPU supports, consult this list: https://developer.nvidia.com/cuda-gpus
       Desktop cards later than the 7xx series are most likely supported.
 - **A lot of patience**
@@ -112,11 +111,12 @@ To enter the virtual environment:
 - If you have issues/errors follow the Manual install steps below.
 
 #### Manual install
+Do not follow these steps if the Easy Install above completed succesfully.
 - Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements: `pip install -r requirements.txt`
 - Install Tensorflow (either GPU or CPU version depending on your setup):
-    - GPU Version: `pip install tensorflow-gpu`
-    - Non GPU Version: `pip install tensorflow`
+    - GPU Version: `conda install tensorflow-gpu`
+    - Non GPU Version: `conda install tensorflow`
 
 ## Running Faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
