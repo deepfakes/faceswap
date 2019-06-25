@@ -98,7 +98,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Reset current training session")
         get_config().set_cursor_busy()
         self.clear_session()
-        session = get_config()().session
+        session = get_config().session
         if not session.initialized:
             logger.debug("Training not running")
             print("Training not running")
