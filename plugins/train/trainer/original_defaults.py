@@ -74,7 +74,7 @@ _DEFAULTS = {
                 "vertically.",
         "datatype": int,
         "rounding": 1,
-        "min_max": (0, 0),
+        "min_max": (0, 25),
     },
     "flip_chance": {
         "default": 50,
