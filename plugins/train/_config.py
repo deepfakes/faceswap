@@ -74,10 +74,6 @@ class Config(FaceswapConfig):
             info="If using a mask, This penalizes the loss for the masked area, to give higher "
                  "priority to the face area. \nShould increase overall quality and speed up "
                  "training. This should probably be left at True")
-        self.add_item(
-            section=section, title="preview_images", datatype=int, default=14, min_max=(2, 16),
-            rounding=2, fixed=False,
-            info="Number of sample faces to display for each side in the preview when training.")
         logger.debug("Set global config")
 
     def load_module(self, filename, module_path, plugin_type):
@@ -88,7 +84,8 @@ class Config(FaceswapConfig):
         section = ".".join((plugin_type, module.replace("_defaults", "")))
         logger.debug("Importing defaults module: %s.%s", module_path, module)
         mod = import_module("{}.{}".format(module_path, module))
-        helptext = mod._HELPTEXT + ADDITIONAL_INFO  # pylint:disable=protected-access
+        helptext = mod._HELPTEXT  # pylint:disable=protected-access
+        helptext += ADDITIONAL_INFO if module_path.endswith("model") else ""
         self.add_section(title=section, info=helptext)
         for key, val in mod._DEFAULTS.items():  # pylint:disable=protected-access
             self.add_item(section=section, title=key, **val)

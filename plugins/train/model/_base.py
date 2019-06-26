@@ -152,9 +152,6 @@ class ModelBase():
             super() this method for defaults otherwise be sure to add """
         logger.debug("Setting training data")
         # Force number of preview images to between 2 and 16
-        preview_images = self.config.get("preview_images", 14)
-        preview_images = min(max(preview_images, 2), 16)
-        self.training_opts["preview_images"] = preview_images
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
         self.training_opts["mask_type"] = self.config.get("mask_type", None)

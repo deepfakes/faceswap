@@ -15,7 +15,7 @@
                             Set to None for not used
         no_logs:            Disable tensorboard logging
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
-        augment_color:      Perform random shifting of LAB colors
+        augment_color:      Perform random shifting of L*a*b* colors
         no_flip:            Don't perform a random flip on the image
         pingpong:           Train each side seperately per save iteration rather than together
 """
@@ -33,16 +33,23 @@ from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
 from lib.utils import get_folder, get_image_paths
+from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+def get_config(plugin_name, configfile=None):
+    """ Return the config for the requested model """
+    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class TrainerBase():
     """ Base Trainer """
 
-    def __init__(self, model, images, batch_size):
+    def __init__(self, model, images, batch_size, configfile):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
+        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         self.batch_size = batch_size
         self.model = model
         self.model.state.add_session_batchsize(batch_size)
@@ -56,7 +63,8 @@ class TrainerBase():
                                        images[side],
                                        self.model,
                                        self.use_mask,
-                                       batch_size)
+                                       batch_size,
+                                       self.config)
                          for side in self.sides}
 
         self.tensorboard = self.set_tensorboard()
@@ -67,6 +75,7 @@ class TrainerBase():
         self.timelapse = Timelapse(self.model,
                                    self.use_mask,
                                    self.model.training_opts["coverage_ratio"],
+                                   self.config.get("preview_images", 14),
                                    self.batchers)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -218,13 +227,14 @@ class TrainerBase():
 
 class Batcher():
     """ Batch images from a single side """
-    def __init__(self, side, images, model, use_mask, batch_size):
-        logger.debug("Initializing %s: side: '%s', num_images: %s, batch_size: %s)",
-                     self.__class__.__name__, side, len(images), batch_size)
+    def __init__(self, side, images, model, use_mask, batch_size, config):
+        logger.debug("Initializing %s: side: '%s', num_images: %s, batch_size: %s, config: %s)",
+                     self.__class__.__name__, side, len(images), batch_size, config)
         self.model = model
         self.use_mask = use_mask
         self.side = side
         self.images = images
+        self.config = config
         self.target = None
         self.samples = None
         self.mask = None
@@ -239,7 +249,10 @@ class Batcher():
         input_size = self.model.input_shape[0]
         output_size = self.model.output_shape[0]
         logger.debug("input_size: %s, output_size: %s", input_size, output_size)
-        generator = TrainingDataGenerator(input_size, output_size, self.model.training_opts)
+        generator = TrainingDataGenerator(input_size,
+                                          output_size,
+                                          self.model.training_opts,
+                                          self.config)
         return generator
 
     def train_one_batch(self, do_preview):
@@ -289,7 +302,9 @@ class Batcher():
     def set_preview_feed(self):
         """ Set the preview dictionary """
         logger.debug("Setting preview feed: (side: '%s')", self.side)
-        batchsize = min(len(self.images), self.model.training_opts.get("preview_images", 14))
+        preview_images = self.config.get("preview_images", 14)
+        preview_images = min(max(preview_images, 2), 16)
+        batchsize = min(len(self.images), preview_images)
         self.preview_feed = self.load_generator().minibatch_ab(self.images,
                                                                batchsize,
                                                                self.side,
@@ -299,7 +314,7 @@ class Batcher():
 
     def compile_sample(self, batch_size, samples=None, images=None):
         """ Training samples to display in the viewer """
-        num_images = self.model.training_opts.get("preview_images", 14)
+        num_images = self.config.get("preview_images", 14)
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
@@ -561,10 +576,11 @@ class Samples():
 
 class Timelapse():
     """ Create the timelapse """
-    def __init__(self, model, use_mask, coverage_ratio, batchers):
+    def __init__(self, model, use_mask, coverage_ratio, preview_images, batchers):
         logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
-                     "batchers: '%s')", self.__class__.__name__, model, use_mask,
-                     coverage_ratio, batchers)
+                     "preview_images: %s, batchers: '%s')", self.__class__.__name__, model,
+                     use_mask, coverage_ratio, preview_images, batchers)
+        self.preview_images = preview_images
         self.samples = Samples(model, use_mask, coverage_ratio)
         self.model = model
         self.batchers = batchers
@@ -591,7 +607,7 @@ class Timelapse():
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
         batchsize = min(len(images["a"]),
                         len(images["b"]),
-                        self.model.training_opts.get("preview_images", 14))
+                        self.preview_images)
         for side, image_files in images.items():
             self.batchers[side].set_timelapse_feed(image_files, batchsize)
         logger.debug("Set up timelapse")

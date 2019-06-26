@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, training_opts):
+    def __init__(self, model_input_size, model_output_size, training_opts, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
-                     "training_opts: %s, landmarks: %s)",
+                     "training_opts: %s, landmarks: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_size,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
-                     bool(training_opts.get("landmarks", None)))
+                     bool(training_opts.get("landmarks", None)), config)
         self.batchsize = 0
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
@@ -36,7 +36,8 @@ class TrainingDataGenerator():
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
-                                            training_opts.get("coverage_ratio", 0.625))
+                                            training_opts.get("coverage_ratio", 0.625),
+                                            config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_mask_class(self):
@@ -214,18 +215,15 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, input_size, output_size, coverage_ratio):
+    def __init__(self, input_size, output_size, coverage_ratio, config):
         """ input_size: Size of the face input into the model
             output_size: Size of the face that comes out of the modell
             coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
-        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s)",
-                     self.__class__.__name__, input_size, output_size, coverage_ratio)
-        # Transform args
-        self.rotation_range = 10  # Range to randomly rotate the image by
-        self.zoom_range = 0.05  # Range to randomly zoom the image by
-        self.shift_range = 0.05  # Range to randomly translate the image by
-        self.random_flip = 0.5  # Chance to flip the image horizontally
+        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s, "
+                     "config: %s)", self.__class__.__name__, input_size, output_size,
+                     coverage_ratio, config)
+        self.config = config
         # Transform and Warp args
         self.input_size = input_size
         self.output_size = output_size
@@ -246,28 +244,32 @@ class ImageManipulation():
             img[:, :, :3] = face
         return img.astype('float32') / 255.0
 
-    @staticmethod
-    def random_clahe(image):
+    def random_clahe(self, image):
         """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
-        base_contrast = image.shape[0] // 128
         contrast_random = random()
-        if contrast_random <= 0.5:
-            contrast_adjustment = int((contrast_random * 10.0) * (base_contrast / 2))
-            grid_size = base_contrast + contrast_adjustment
-            logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+        if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
+            return image
 
-            clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
-                                    tileGridSize=(grid_size, grid_size))
-            for chan in range(3):
-                image[:, :, chan] = clahe.apply(image[:, :, chan])
+        base_contrast = image.shape[0] // 128
+        grid_base = random() * self.config.get("color_clahe_max_size", 4)
+        contrast_adjustment = int(grid_base * (base_contrast / 2))
+        grid_size = base_contrast + contrast_adjustment
+        logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+
+        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+                                tileGridSize=(grid_size, grid_size))
+        for chan in range(3):
+            image[:, :, chan] = clahe.apply(image[:, :, chan])
         return image
 
-    @staticmethod
-    def random_lab(image):
-        """ Perform random color/lightness adjustment in LAB colorspace """
-        randoms = [(random() * 0.6) - 0.3,  # L adjust +/- 30%
-                   (random() * 0.16) - 0.08,  # A adjust +/- 8%
-                   (random() * 0.16) - 0.08]  # B adjust +/- 8%
+    def random_lab(self, image):
+        """ Perform random color/lightness adjustment in L*a*b* colorspace """
+        amount_l = self.config.get("color_lightness", 30) / 100
+        amount_ab = self.config.get("color_ab", 8) / 100
+
+        randoms = [(random() * amount_l * 2) - amount_l,  # L adjust
+                   (random() * amount_ab * 2) - amount_ab,  # A adjust
+                   (random() * amount_ab * 2) - amount_ab]  # B adjust
 
         logger.trace("Random LAB adjustments: %s", randoms)
         image = cv2.cvtColor(  # pylint:disable=no-member
@@ -305,10 +307,15 @@ class ImageManipulation():
         logger.trace("Randomly transforming image")
         height, width = image.shape[0:2]
 
-        rotation = np.random.uniform(-self.rotation_range, self.rotation_range)
-        scale = np.random.uniform(1 - self.zoom_range, 1 + self.zoom_range)
-        tnx = np.random.uniform(-self.shift_range, self.shift_range) * width
-        tny = np.random.uniform(-self.shift_range, self.shift_range) * height
+        rotation_range = self.config.get("rotation_range", 10)
+        rotation = np.random.uniform(-rotation_range, rotation_range)
+
+        zoom_range = self.config.get("zoom_range", 5) / 100
+        scale = np.random.uniform(1 - zoom_range, 1 + zoom_range)
+
+        shift_range = self.config.get("shift_range", 5) / 100
+        tnx = np.random.uniform(-shift_range, shift_range) * width
+        tny = np.random.uniform(-shift_range, shift_range) * height
 
         mat = cv2.getRotationMatrix2D(  # pylint:disable=no-member
             (width // 2, height // 2), rotation, scale)
@@ -323,7 +330,8 @@ class ImageManipulation():
     def do_random_flip(self, image):
         """ Perform flip on image if random number is within threshold """
         logger.trace("Randomly flipping image")
-        if np.random.random() < self.random_flip:
+        random_flip = self.config.get("random_flip", 50) / 100
+        if np.random.random() < random_flip:
             logger.trace("Flip within threshold. Flipping")
             retval = image[:, ::-1]
         else:
