@@ -428,8 +428,8 @@ class ModelBase():
     def snapshot_models(self):
         """ Take a snapshot of the model at current state and back up """
         logger.info("Saving snapshot")
-        src = self.model_dir
-        dst = get_folder("{}_snapshot_{}_iters".format(self.model_dir, self.iterations))
+        src = str(self.model_dir)
+        dst = str(get_folder("{}_snapshot_{}_iters".format(src, self.iterations)))
         for filename in os.listdir(src):
             if filename.endswith(".bk"):
                 continue
