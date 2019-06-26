@@ -338,11 +338,11 @@ class SessionsSummary():
 class Calculations():
     """ Class to pull raw data for given session(s) and perform calculations """
     def __init__(self, session, display="loss", loss_keys=["loss"], selections=["raw"],
-                 avg_samples=10, flatten_outliers=False, is_totals=False):
+                 avg_samples=500, smooth_amount=0.90, flatten_outliers=False, is_totals=False):
         logger.debug("Initializing %s: (session: %s, display: %s, loss_keys: %s, selections: %s, "
-                     "avg_samples: %s, flatten_outliers: %s, is_totals: %s",
+                     "avg_samples: %s, smooth_amount: %s, flatten_outliers: %s, is_totals: %s",
                      self.__class__.__name__, session, display, loss_keys, selections, avg_samples,
-                     flatten_outliers, is_totals)
+                     smooth_amount, flatten_outliers, is_totals)
 
         warnings.simplefilter("ignore", np.RankWarning)
 
@@ -351,7 +351,8 @@ class Calculations():
         self.loss_keys = loss_keys
         self.selections = selections
         self.is_totals = is_totals
-        self.args = {"avg_samples": int(avg_samples),
+        self.args = {"avg_samples": avg_samples,
+                     "smooth_amount": smooth_amount,
                      "flatten_outliers": flatten_outliers}
         self.iterations = 0
         self.stats = None
@@ -495,6 +496,18 @@ class Calculations():
                 avgs.append(avg)
         logger.debug("Calculated Average")
         return avgs
+
+    def calc_smoothed(self, data):
+        """ Smooth the data """
+        last = data[0]  # First value in the plot (first timestep)
+        weight = self.args["smooth_amount"]
+        smoothed = list()
+        for point in data:
+            smoothed_val = last * weight + (1 - weight) * point  # Calculate smoothed value
+            smoothed.append(smoothed_val)                        # Save it
+            last = smoothed_val                                  # Anchor the last smoothed value
+
+        return smoothed
 
     @staticmethod
     def calc_trend(data):

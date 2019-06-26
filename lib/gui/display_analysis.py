@@ -11,7 +11,7 @@ from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
 from .tooltip import Tooltip
-from .utils import FileHandler, get_config, get_images
+from .utils import ControlBuilder, FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -61,11 +61,11 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         """ Load previously saved sessions """
         logger.debug("Loading session")
         get_config().set_cursor_busy()
-        self.clear_session()
         fullpath = FileHandler("filename", "state").retfile
         if not fullpath:
             get_config().set_cursor_default()
             return
+        self.clear_session()
         logger.debug("state_file: '%s'", fullpath)
         model_dir, state_file = os.path.split(fullpath)
         logger.debug("model_dir: '%s'", model_dir)
@@ -316,7 +316,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
 
             The default view is rolling average over 500 points.
             If there are fewer data points than this, switch the default
-            to raw
+            to smoothed
         """
         get_config().set_cursor_busy()
         get_config().root.update_idletasks()
@@ -388,7 +388,7 @@ class SessionPopUp(tk.Toplevel):
         super().__init__()
 
         self.default_avg = 500
-        self.default_view = "avg" if datapoints > self.default_avg * 2 else "raw"
+        self.default_view = "avg" if datapoints > self.default_avg * 2 else "smoothed"
         self.session_id = session_id
         self.session = Session(model_dir=model_dir, model_name=model_name)
         self.initialize_session()
@@ -446,7 +446,7 @@ class SessionPopUp(tk.Toplevel):
         self.opts_combobox(frame)
         self.opts_checkbuttons(frame)
         self.opts_loss_keys(frame)
-        self.opts_entry(frame)
+        self.opts_slider(frame)
         self.opts_buttons(frame)
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
@@ -482,10 +482,20 @@ class SessionPopUp(tk.Toplevel):
             Tooltip(cmbframe, text=hlp, wraplength=200)
         logger.debug("Built Combo boxes")
 
+    @staticmethod
+    def add_section(frame, title):
+        """ Add a seperator and section title """
+        sep = ttk.Frame(frame, height=2, relief=tk.SOLID)
+        sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
+        lbl = ttk.Label(frame, text=title)
+        lbl.pack(side=tk.TOP, padx=5, pady=0, anchor=tk.CENTER)
+
     def opts_checkbuttons(self, frame):
         """ Add the options check buttons """
         logger.debug("Building Check Buttons")
-        for item in ("raw", "trend", "avg", "outliers"):
+
+        self.add_section(frame, "Display")
+        for item in ("raw", "trend", "avg", "smoothed", "outliers"):
             if item == "avg":
                 text = "Show Rolling Average"
             elif item == "outliers":
@@ -511,6 +521,7 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Building Loss Key Check Buttons")
         loss_keys = self.session.loss_keys
         lk_vars = dict()
+        section_added = False
         for loss_key in sorted(loss_keys):
             text = loss_key.replace("_", " ").title()
             helptext = "Display {}".format(text)
@@ -523,6 +534,10 @@ class SessionPopUp(tk.Toplevel):
                 # Don't display if there's only one item
                 break
 
+            if not section_added:
+                self.add_section(frame, "Keys")
+                section_added = True
+
             ctl = ttk.Checkbutton(frame, variable=var, text=text)
             ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
             Tooltip(ctl, text=helptext, wraplength=200)
@@ -530,28 +545,35 @@ class SessionPopUp(tk.Toplevel):
         self.vars["loss_keys"] = lk_vars
         logger.debug("Built Loss Key Check Buttons")
 
-    def opts_entry(self, frame):
+    def opts_slider(self, frame):
         """ Add the options entry boxes """
-        logger.debug("Building Entry Boxes")
-        for item in ("avgiterations", ):
+
+        self.add_section(frame, "Parameters")
+        logger.debug("Building Slider Controls")
+        for item in ("avgiterations", "smoothamount"):
             if item == "avgiterations":
+                dtype = int
                 text = "Iterations to Average:"
-                default = "500"
+                default = 500
+                rounding = 25
+                min_max = (25, 2500)
+            elif item == "smoothamount":
+                dtype = float
+                text = "Smoothing Amount:"
+                default = 0.90
+                rounding = 2
+                min_max = (0, 0.99)
 
-            entframe = ttk.Frame(frame)
-            entframe.pack(fill=tk.X, pady=5, padx=5, side=tk.TOP)
-            lbl = ttk.Label(entframe, text=text, anchor=tk.W)
-            lbl.pack(padx=(0, 2), side=tk.LEFT)
-
-            ctl = ttk.Entry(entframe, width=4, justify=tk.RIGHT)
-            ctl.pack(side=tk.RIGHT, anchor=tk.W)
-            ctl.insert(0, default)
-
-            hlp = self.set_help(item)
-            Tooltip(entframe, text=hlp, wraplength=200)
-
-            self.vars[item] = ctl
-        logger.debug("Built Entry Boxes")
+            ctl = ControlBuilder(frame,
+                                 text,
+                                 dtype,
+                                 default,
+                                 label_width=19,
+                                 rounding=rounding,
+                                 min_max=min_max,
+                                 helptext=self.set_help(item))
+            self.vars[item] = ctl.tk_var
+        logger.debug("Built Sliders")
 
     def opts_buttons(self, frame):
         """ Add the option buttons """
@@ -626,11 +648,15 @@ class SessionPopUp(tk.Toplevel):
             hlp = "Save display data to csv"
         elif control == "avgiterations":
             hlp = "Number of data points to sample for rolling average"
+        elif control == "smoothamount":
+            hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing"
         elif control == "outliers":
             hlp = "Flatten data points that fall more than 1 standard " \
                   "deviation from the mean to the mean value."
         elif control == "avg":
             hlp = "Display rolling average of the data"
+        elif control == "smoothed":
+            hlp = "Smooth the data"
         elif control == "raw":
             hlp = "Display raw data"
         elif control == "trend":
@@ -659,6 +685,7 @@ class SessionPopUp(tk.Toplevel):
                                          loss_keys=loss_keys,
                                          selections=selections,
                                          avg_samples=self.vars["avgiterations"].get(),
+                                         smooth_amount=self.vars["smoothamount"].get(),
                                          flatten_outliers=self.vars["outliers"].get(),
                                          is_totals=self.is_totals)
         if not self.check_valid_data():

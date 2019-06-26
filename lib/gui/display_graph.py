@@ -185,10 +185,10 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         sorted_lines = list()
         for key in sorted(keys):
             title = key.replace("_", " ").title()
-            if key.startswith(("avg", "trend")):
-                sorted_lines.append([key, title])
-            else:
+            if key.startswith("raw"):
                 raw_lines.append([key, title])
+            else:
+                sorted_lines.append([key, title])
 
         groupsize = self.lines_groupsize(raw_lines, sorted_lines)
         sorted_lines = raw_lines + sorted_lines
@@ -203,11 +203,10 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         groupsize = 1
         if raw_lines:
             groupsize = len(raw_lines)
-        else:
-            for check in ("avg", "trend"):
-                if any(item[0].startswith(check) for item in sorted_lines):
-                    groupsize = len([item for item in sorted_lines if item[0].startswith(check)])
-                    break
+        elif sorted_lines:
+            keys = [key[0][:key[0].find("_")] for key in sorted_lines]
+            distinct_keys = set(keys)
+            groupsize = len(keys) // len(distinct_keys)
         logger.trace(groupsize)
         return groupsize
 

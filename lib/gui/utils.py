@@ -597,6 +597,9 @@ class Config():
         refreshgraph = tk.BooleanVar()
         refreshgraph.set(False)
 
+        smoothgraph = tk.DoubleVar()
+        smoothgraph.set(0.90)
+
         updatepreview = tk.BooleanVar()
         updatepreview.set(False)
 
@@ -609,6 +612,7 @@ class Config():
                    "generate": generatecommand,
                    "consoleclear": consoleclear,
                    "refreshgraph": refreshgraph,
+                   "smoothgraph": smoothgraph,
                    "updatepreview": updatepreview,
                    "traintimeout": traintimeout}
         logger.debug(tk_vars)

@@ -12,7 +12,7 @@ from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
 from .stats import Calculations
-from .utils import FileHandler, get_config, get_images
+from .utils import FileHandler, get_config, get_images, set_slider_rounding
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -172,11 +172,15 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
+    def __init__(self, parent, tabname, helptext, waittime, command=None):
+        self.trace_var = None
+        super().__init__(parent, tabname, helptext, waittime, command)
 
     def add_options(self):
         """ Add the additional options """
         self.add_option_refresh()
         super().add_options()
+        self.add_option_smoothing()
 
     def add_option_refresh(self):
         """ Add refresh button to refresh graph immediately """
@@ -189,25 +193,61 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         Tooltip(btnrefresh,
                 text="Graph updates every 100 iterations. Click to refresh now.",
                 wraplength=200)
+        logger.debug("Added refresh option")
+
+    def add_option_smoothing(self):
+        """ Add refresh button to refresh graph immediately """
+        logger.debug("Adding Smoothing Slider")
+        tk_var = get_config().tk_vars["smoothgraph"]
+        min_max = (0, 0.99)
+
+        ctl_frame = ttk.Frame(self.optsframe)
+        ctl_frame.pack(padx=2, side=tk.RIGHT)
+
+        lbl = ttk.Label(ctl_frame, text="Smoothing Amount:", anchor=tk.W)
+        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N, expand=True)
+
+        tbox = ttk.Entry(ctl_frame, width=8, textvariable=tk_var, justify=tk.RIGHT)
+        tbox.pack(padx=(0, 5), side=tk.RIGHT)
+        ctl = ttk.Scale(
+            ctl_frame,
+            variable=tk_var,
+            command=lambda val, var=tk_var, dt=float, rn=2, mm=(0, 0.99):
+            set_slider_rounding(val, var, dt, rn, mm))
+        ctl["from_"] = min_max[0]
+        ctl["to"] = min_max[1]
+        ctl.pack()
+        Tooltip(ctl,
+                text="Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing.",
+                wraplength=200)
+        logger.debug("Added Smoothing Slider")
 
     def display_item_set(self):
         """ Load the graph(s) if available """
         session = get_config().session
+        smooth_amount_var = get_config().tk_vars["smoothgraph"]
         if session.initialized and session.logging_disabled:
             logger.trace("Logs disabled. Hiding graph")
             self.set_info("Graph is disabled as 'no-logs' or 'pingpong' has been selected")
             self.display_item = None
+            if self.trace_var is not None:
+                smooth_amount_var.trace_vdelete("w", self.trace_var)
+                self.trace_var = None
         elif session.initialized:
             logger.trace("Loading graph")
             self.display_item = session
+            if self.trace_var is None:
+                self.trace_var = smooth_amount_var.trace("w", self.smooth_amount_callback)
         else:
             self.display_item = None
+            if self.trace_var is not None:
+                smooth_amount_var.trace_vdelete("w", self.trace_var)
+                self.trace_var = None
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
         logger.trace("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-
         for loss_key in self.display_item.loss_keys:
             tabname = loss_key.replace("_", " ").title()
             if tabname in existing:
@@ -216,8 +256,17 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             data = Calculations(session=get_config().session,
                                 display="loss",
                                 loss_keys=[loss_key],
-                                selections=["raw", "trend"])
+                                selections=["raw", "smoothed"],
+                                smooth_amount=get_config().tk_vars["smoothgraph"].get())
             self.add_child(tabname, data)
+
+    def smooth_amount_callback(self, *args):
+        """ Update each graph's smooth amount on variable change """
+        smooth_amount = get_config().tk_vars["smoothgraph"].get()
+        logger.debug("Updating graph smooth_amount: (new_value: %s, args: %s)",
+                     smooth_amount, args)
+        for graph in self.subnotebook.children.values():
+            graph.calcs.args["smooth_amount"] = smooth_amount
 
     def add_child(self, name, data):
         """ Add the graph for the selected keys """
@@ -237,6 +286,9 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def close(self):
         """ Clear the plots from RAM """
+        if self.trace_var is not None:
+            get_config().tk_vars["smoothgraph"].trace_vdelete("w", self.trace_var)
+            self.trace_var = None
         if self.subnotebook is None:
             logger.debug("No graphs to clear. Returning")
             return
