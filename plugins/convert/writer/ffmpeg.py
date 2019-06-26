@@ -84,6 +84,7 @@ class Writer(Output):
                                   fps=self.video_fps,
                                   ffmpeg_log_level="error",
                                   quality=None,
+                                  macro_block_size=8,
                                   output_params=self.output_params)
 
     def write(self, filename, image):
