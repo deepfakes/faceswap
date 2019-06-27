@@ -11,7 +11,7 @@ from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
 from .tooltip import Tooltip
-from .utils import ControlBuilder, FileHandler, get_config, get_images
+from .utils import ControlBuilder, FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,6 +27,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self.session = None
         self.add_options()
         self.add_main_frame()
+        self.thread = None  # Thread for compiling stats data in background
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def set_vars(self):
@@ -60,10 +61,8 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def load_session(self):
         """ Load previously saved sessions """
         logger.debug("Loading session")
-        get_config().set_cursor_busy()
         fullpath = FileHandler("filename", "state").retfile
         if not fullpath:
-            get_config().set_cursor_default()
             return
         self.clear_session()
         logger.debug("state_file: '%s'", fullpath)
@@ -71,7 +70,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("model_dir: '%s'", model_dir)
         model_name = self.get_model_name(model_dir, state_file)
         if not model_name:
-            get_config().set_cursor_default()
             return
         self.session = Session(model_dir=model_dir, model_name=model_name)
         self.session.initialize_session(is_training=False)
@@ -79,7 +77,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         if len(msg) > 70:
             msg = "...{}".format(msg[-70:])
         self.set_session_summary(msg)
-        get_config().set_cursor_default()
 
     @staticmethod
     def get_model_name(model_dir, state_file):
@@ -96,28 +93,40 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def reset_session(self):
         """ Reset currently training sessions """
         logger.debug("Reset current training session")
-        get_config().set_cursor_busy()
         self.clear_session()
         session = get_config().session
         if not session.initialized:
             logger.debug("Training not running")
             print("Training not running")
-            get_config().set_cursor_default()
             return
         msg = "Currently running training session"
         self.session = session
         # Reload the state file to get approx currently training iterations
         self.session.load_state_file()
         self.set_session_summary(msg)
-        get_config().set_cursor_default()
 
     def set_session_summary(self, message):
         """ Set the summary data and info message """
-        logger.debug("Setting session summary. (message: '%s')", message)
-        self.summary = self.session.full_summary
-        self.set_info("Session: {}".format(message))
-        self.stats.session = self.session
-        self.stats.tree_insert_data(self.summary)
+        if self.thread is None:
+            logger.debug("Setting session summary. (message: '%s')", message)
+            self.thread = LongRunningTask(target=self.summarise_data, args=(self.session, ))
+            self.thread.start()
+            self.after(1000, lambda msg=message: self.set_session_summary(msg))
+        elif not self.thread.complete.is_set():
+            logger.debug("Data not yet available")
+            self.after(1000, lambda msg=message: self.set_session_summary(msg))
+        else:
+            logger.debug("Retrieving data from thread")
+            self.summary = self.thread.get_result()
+            self.thread = None
+            self.set_info("Session: {}".format(message))
+            self.stats.session = self.session
+            self.stats.tree_insert_data(self.summary)
+
+    @staticmethod
+    def summarise_data(session):
+        """ Summarise data in a LongRunningThread as it can take a while """
+        return session.full_summary
 
     def clear_session(self):
         """ Clear sessions stats """
@@ -130,16 +139,13 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def save_session(self):
         """ Save sessions stats to csv """
         logger.debug("Saving session")
-        get_config().set_cursor_busy()
         if not self.summary:
             logger.debug("No summary data loaded. Nothing to save")
             print("No summary data loaded. Nothing to save")
-            get_config().set_cursor_default()
             return
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
             logger.debug("No save file. Returning")
-            get_config().set_cursor_default()
             return
 
         write_dicts = [val for val in self.summary.values()]
@@ -151,7 +157,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             csvout.writeheader()
             for row in write_dicts:
                 csvout.writerow(row)
-        get_config().set_cursor_default()
 
 
 class Options():
@@ -202,6 +207,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
         self.session = None  # set when loading or clearing from parent
+        self.thread = None  # Thread for loading data popup
         self.selected_id = selected_id
         self.popup_positions = list()
 
@@ -318,8 +324,6 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
             If there are fewer data points than this, switch the default
             to smoothed
         """
-        get_config().set_cursor_busy()
-        get_config().root.update_idletasks()
         logger.debug("Popping up data window")
         scaling_factor = get_config().scaling_factor
         toplevel = SessionPopUp(self.session.modeldir,
@@ -339,7 +343,6 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                                                str(position[0]),
                                                str(position[1])))
         toplevel.update()
-        get_config().set_cursor_default()
 
     def data_popup_title(self):
         """ Set the data popup title """
@@ -386,17 +389,18 @@ class SessionPopUp(tk.Toplevel):
                      "datapoints: %s)", self.__class__.__name__, model_dir, model_name, session_id,
                      datapoints)
         super().__init__()
-
+        self.thread = None  # Thread for loading data in a background task
         self.default_avg = 500
         self.default_view = "avg" if datapoints > self.default_avg * 2 else "smoothed"
         self.session_id = session_id
         self.session = Session(model_dir=model_dir, model_name=model_name)
         self.initialize_session()
 
+        self.graph_frame = None
         self.graph = None
         self.display_data = None
 
-        self.vars = dict()
+        self.vars = {"status": tk.StringVar()}
         self.graph_initialised = False
         self.build()
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -418,12 +422,19 @@ class SessionPopUp(tk.Toplevel):
     def build(self):
         """ Build the popup window """
         logger.debug("Building popup")
-        optsframe, graphframe = self.layout_frames()
-
+        optsframe = self.layout_frames()
+        self.set_callback()
         self.opts_build(optsframe)
         self.compile_display_data()
-        self.graph_build(graphframe)
         logger.debug("Built popup")
+
+    def set_callback(self):
+        """ Set a tk boolean var to callback when graph is ready to build """
+        logger.debug("Setting tk graph build variable")
+        var = tk.BooleanVar()
+        var.set(False)
+        var.trace("w", self.graph_build)
+        self.vars["buildgraph"] = var
 
     def layout_frames(self):
         """ Top level container frames """
@@ -434,11 +445,11 @@ class SessionPopUp(tk.Toplevel):
         sep = ttk.Frame(self, width=2, relief=tk.RIDGE)
         sep.pack(fill=tk.Y, side=tk.LEFT)
 
-        rightframe = ttk.Frame(self)
-        rightframe.pack(side=tk.RIGHT, fill=tk.BOTH, pady=5, expand=True)
+        self.graph_frame = ttk.Frame(self)
+        self.graph_frame.pack(side=tk.RIGHT, fill=tk.BOTH, pady=5, expand=True)
         logger.debug("Laid out frames")
 
-        return leftframe, rightframe
+        return leftframe
 
     def opts_build(self, frame):
         """ Build Options into the options frame """
@@ -581,6 +592,12 @@ class SessionPopUp(tk.Toplevel):
         btnframe = ttk.Frame(frame)
         btnframe.pack(fill=tk.X, pady=5, padx=5, side=tk.BOTTOM)
 
+        lblstatus = ttk.Label(btnframe,
+                              width=40,
+                              textvariable=self.vars["status"],
+                              anchor=tk.W)
+        lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
+
         for btntype in ("reset", "save"):
             cmd = getattr(self, "optbtn_{}".format(btntype))
             btn = ttk.Button(btnframe,
@@ -594,11 +611,9 @@ class SessionPopUp(tk.Toplevel):
     def optbtn_save(self):
         """ Action for save button press """
         logger.debug("Saving File")
-        self.config(cursor="watch")
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
             logger.debug("Save Cancelled")
-            self.config(cursor="")
             return
         logger.debug("Saving to: %s", savefile)
         save_data = self.display_data.stats
@@ -608,34 +623,26 @@ class SessionPopUp(tk.Toplevel):
             csvout = csv.writer(outfile, delimiter=",")
             csvout.writerow(fieldnames)
             csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
-        self.config(cursor="")
 
     def optbtn_reset(self, *args):  # pylint: disable=unused-argument
         """ Action for reset button press and checkbox changes"""
         logger.debug("Refreshing Graph")
         if not self.graph_initialised:
             return
-        self.config(cursor="watch")
-        self.update_idletasks()
         valid = self.compile_display_data()
         if not valid:
             logger.debug("Invalid data")
-            self.config(cursor="")
             return
         self.graph.refresh(self.display_data,
                            self.vars["display"].get(),
                            self.vars["scale"].get())
-        self.config(cursor="")
         logger.debug("Refreshed Graph")
 
     def graph_scale(self, *args):  # pylint: disable=unused-argument
         """ Action for changing graph scale """
         if not self.graph_initialised:
             return
-        self.config(cursor="watch")
-        self.update_idletasks()
         self.graph.set_yscale_type(self.vars["scale"].get())
-        self.config(cursor="")
 
     @staticmethod
     def set_help(control):
@@ -669,30 +676,48 @@ class SessionPopUp(tk.Toplevel):
 
     def compile_display_data(self):
         """ Compile the data to be displayed """
-        logger.debug("Compiling Display Data")
+        if self.thread is None:
+            logger.debug("Compiling Display Data in background thread")
+            loss_keys = [key for key, val in self.vars["loss_keys"].items()
+                         if val.get()]
+            logger.debug("Selected loss_keys: %s", loss_keys)
 
-        loss_keys = [key for key, val in self.vars["loss_keys"].items()
-                     if val.get()]
-        logger.debug("Selected loss_keys: %s", loss_keys)
+            selections = self.selections_to_list()
 
-        selections = self.selections_to_list()
+            if not self.check_valid_selection(loss_keys, selections):
+                logger.warning("No data to display. Not refreshing")
+                return False
+            self.vars["status"].set("Loading Data...")
+            kwargs = dict(session=self.session,
+                          display=self.vars["display"].get(),
+                          loss_keys=loss_keys,
+                          selections=selections,
+                          avg_samples=self.vars["avgiterations"].get(),
+                          smooth_amount=self.vars["smoothamount"].get(),
+                          flatten_outliers=self.vars["outliers"].get(),
+                          is_totals=self.is_totals)
+            self.thread = LongRunningTask(target=self.get_display_data, kwargs=kwargs, widget=self)
+            self.thread.start()
+            self.after(1000, self.compile_display_data)
+        elif not self.thread.complete.is_set():
+            logger.debug("Popup Data not yet available")
+            self.after(1000, self.compile_display_data)
+        else:
+            logger.debug("Getting Popup from background Thread")
+            self.display_data = self.thread.get_result()
+            self.thread = None
+            if not self.check_valid_data():
+                logger.warning("No valid data to display. Not refreshing")
+                self.vars["status"].set("")
+                return False
+            logger.debug("Compiled Display Data")
+            self.vars["buildgraph"].set(True)
+            return True
 
-        if not self.check_valid_selection(loss_keys, selections):
-            logger.warning("No data to display. Not refreshing")
-            return False
-        self.display_data = Calculations(session=self.session,
-                                         display=self.vars["display"].get(),
-                                         loss_keys=loss_keys,
-                                         selections=selections,
-                                         avg_samples=self.vars["avgiterations"].get(),
-                                         smooth_amount=self.vars["smoothamount"].get(),
-                                         flatten_outliers=self.vars["outliers"].get(),
-                                         is_totals=self.is_totals)
-        if not self.check_valid_data():
-            logger.warning("No valid data to display. Not refreshing")
-            return False
-        logger.debug("Compiled Display Data")
-        return True
+    @staticmethod
+    def get_display_data(**kwargs):
+        """ Get the display data in a LongRunningTask """
+        return Calculations(**kwargs)
 
     def check_valid_selection(self, loss_keys, selections):
         """ Check that there will be data to display """
@@ -726,14 +751,24 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Compiling selections to list: %s", selections)
         return selections
 
-    def graph_build(self, frame):
+    def graph_build(self, *args):  # pylint:disable=unused-argument
         """ Build the graph in the top right paned window """
+        if not self.vars["buildgraph"].get():
+            return
+        self.vars["status"].set("Loading Data...")
         logger.debug("Building Graph")
-        self.graph = SessionGraph(frame,
-                                  self.display_data,
-                                  self.vars["display"].get(),
-                                  self.vars["scale"].get())
-        self.graph.pack(expand=True, fill=tk.BOTH)
-        self.graph.build()
-        self.graph_initialised = True
+        if self.graph is None:
+            self.graph = SessionGraph(self.graph_frame,
+                                      self.display_data,
+                                      self.vars["display"].get(),
+                                      self.vars["scale"].get())
+            self.graph.pack(expand=True, fill=tk.BOTH)
+            self.graph.build()
+            self.graph_initialised = True
+        else:
+            self.graph.refresh(self.display_data,
+                               self.vars["display"].get(),
+                               self.vars["scale"].get())
+        self.vars["status"].set("")
+        self.vars["buildgraph"].set(False)
         logger.debug("Built Graph")

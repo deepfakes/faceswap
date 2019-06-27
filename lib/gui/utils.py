@@ -568,14 +568,14 @@ class Config():
 
     def set_cursor_busy(self, widget=None):
         """ Set the root or widget cursor to busy """
-        logger.trace("Setting cursor to busy")
+        logger.debug("Setting cursor to busy. widget: %s", widget)
         widget = self.root if widget is None else widget
         widget.config(cursor="watch")
         widget.update_idletasks()
 
     def set_cursor_default(self, widget=None):
         """ Set the root or widget cursor to default """
-        logger.trace("Setting cursor to default")
+        logger.debug("Setting cursor to default. widget: %s", widget)
         widget = self.root if widget is None else widget
         widget.config(cursor="")
         widget.update_idletasks()
@@ -940,7 +940,7 @@ class LongRunningTask(Thread):
         self.widget = widget
         self._config = get_config()
         self._config.set_cursor_busy(widget=self.widget)
-        self._complete = Event()
+        self.complete = Event()
         self._queue = Queue()
         logger.debug("Initialized %s", self.__class__.__name__,)
 
@@ -950,7 +950,7 @@ class LongRunningTask(Thread):
             if self._target:
                 retval = self._target(*self._args, **self._kwargs)
                 self._queue.put(retval)
-                self._complete.set()
+                self.complete.set()
         finally:
             # Avoid a refcycle if the thread is running a function with
             # an argument that has a member that points to the thread.
@@ -958,7 +958,7 @@ class LongRunningTask(Thread):
 
     def get_result(self):
         """ Return the result from the queue """
-        if self._complete.is_set():
+        if self.complete.is_set():
             logger.debug("Getting result from thread")
             retval = self._queue.get()
         logger.debug("Got result from thread")

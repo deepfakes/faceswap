@@ -88,7 +88,8 @@ class TensorBoardLogs():
                 continue
             for logfile in sides.values():
                 timestamps = [event.wall_time
-                              for event in tf.train.summary_iterator(logfile)]
+                              for event in tf.train.summary_iterator(logfile)
+                              if event.summary.value]
                 logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
                 all_timestamps[sess] = timestamps
                 break  # break after first file read
@@ -276,7 +277,7 @@ class SessionsSummary():
                              "start": ts_data["start_time"],
                              "end": ts_data["end_time"],
                              "elapsed": elapsed,
-                             "rate": (batchsize * iterations) / elapsed,
+                             "rate": (batchsize * iterations) / elapsed if elapsed != 0 else 0,
                              "batch": batchsize,
                              "iterations": iterations})
         compiled = sorted(compiled, key=lambda k: k["session"])
@@ -439,6 +440,9 @@ class Calculations():
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
             iterations = range(len(timestamps) - 1)
+            print("===========\n")
+            print(timestamps[:100])
+            print([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations][:100])
             rate.extend([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations])
         logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
