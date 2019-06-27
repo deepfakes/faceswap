@@ -73,10 +73,10 @@ class Converter():
                 disable_logging=disable_logging)(configfile=self.configfile, config=config)
         logger.debug("Loaded plugins: %s", self.adjustments)
 
-    def process(self, in_queue, out_queue):
+    def process(self, in_queue, out_queue, completion_queue=None):
         """ Process items from the queue """
-        logger.debug("Starting convert process. (in_queue: %s, out_queue: %s)",
-                     in_queue, out_queue)
+        logger.debug("Starting convert process. (in_queue: %s, out_queue: %s, completion_queue: "
+                     "%s)", in_queue, out_queue, completion_queue)
         while True:
             item = in_queue.get()
             if item == "EOF":
@@ -104,6 +104,9 @@ class Converter():
             logger.trace("Out queue put: %s", item["filename"])
             out_queue.put((item["filename"], image))
         logger.debug("Completed convert process")
+        # Signal that this process has finished
+        if completion_queue is not None:
+            completion_queue.put(1)
 
     def patch_image(self, predicted):
         """ Patch the image """

@@ -7,6 +7,7 @@ import os
 from tqdm import tqdm
 
 import cv2
+import imageio_ffmpeg as im_ffm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
@@ -102,7 +103,7 @@ class MediaLoader():
     def count(self):
         """ Number of faces or frames """
         if self.vid_cap:
-            retval = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
+            retval = int(im_ffm.count_frames_and_secs(self.folder)[0])
         else:
             retval = len(self.file_list_sorted)
         return retval

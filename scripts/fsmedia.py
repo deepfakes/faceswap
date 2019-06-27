@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 import cv2
+import imageio_ffmpeg as im_ffm
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract
@@ -144,9 +145,7 @@ class Images():
     def images_found(self):
         """ Number of images or frames """
         if self.is_video:
-            cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-            retval = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
-            cap.release()
+            retval = int(im_ffm.count_frames_and_secs(self.args.input_dir)[0])
         else:
             retval = len(self.input_images)
         return retval

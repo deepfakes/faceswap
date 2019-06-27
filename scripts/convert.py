@@ -5,7 +5,6 @@ import logging
 import re
 import os
 import sys
-from time import sleep
 from threading import Event
 
 import numpy as np
@@ -17,7 +16,7 @@ from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.multithreading import MultiThread, PoolProcess, total_cpus
-from lib.queue_manager import queue_manager
+from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_folder, get_image_paths, hash_image_file
 from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
@@ -111,14 +110,26 @@ class Convert():
         logger.debug("Converting images")
         save_queue = queue_manager.get_queue("convert_out")
         patch_queue = queue_manager.get_queue("patch")
+        completion_queue = queue_manager.get_queue("patch_completed")
         pool = PoolProcess(self.converter.process, patch_queue, save_queue,
+                           completion_queue=completion_queue,
                            processes=self.pool_processes)
         pool.start()
+        completed_count = 0
         while True:
             self.check_thread_error()
             if self.disk_io.completion_event.is_set():
+                logger.debug("DiskIO completion event set. Joining Pool")
                 break
-            sleep(1)
+            try:
+                completed = completion_queue.get(True, 1)
+            except QueueEmpty:
+                continue
+            completed_count += completed
+            logger.debug("Total process pools completed: %s of %s", completed_count, pool.procs)
+            if completed_count == pool.procs:
+                logger.debug("All processes completed. Joining Pool")
+                break
         pool.join()
 
         logger.debug("Putting EOF")
