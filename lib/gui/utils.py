@@ -6,7 +6,8 @@ import platform
 import sys
 import tkinter as tk
 from tkinter import filedialog, ttk
-
+from threading import Event, Thread
+from queue import Queue
 import numpy as np
 
 from PIL import Image, ImageTk
@@ -565,15 +566,19 @@ class Config():
         return {self.command_notebook.tools_notebook.tab(tab_id, "text").lower(): tab_id
                 for tab_id in range(0, self.command_notebook.tools_notebook.index("end"))}
 
-    def set_cursor_busy(self):
-        """ Set the root cursor to busy """
+    def set_cursor_busy(self, widget=None):
+        """ Set the root or widget cursor to busy """
         logger.trace("Setting cursor to busy")
-        self.root.config(cursor="watch")
+        widget = self.root if widget is None else widget
+        widget.config(cursor="watch")
+        widget.update_idletasks()
 
-    def set_cursor_default(self):
-        """ Set the root cursor to default """
+    def set_cursor_default(self, widget=None):
+        """ Set the root or widget cursor to default """
         logger.trace("Setting cursor to default")
-        self.root.config(cursor="")
+        widget = self.root if widget is None else widget
+        widget.config(cursor="")
+        widget.update_idletasks()
 
     @staticmethod
     def set_tk_vars():
@@ -920,3 +925,42 @@ class ControlBuilder():
             ctl["values"] = [choice for choice in choices]
         logger.debug("Added control to Options Frame: %s", self.title)
         return ctl
+
+
+class LongRunningTask(Thread):
+    """ For long running tasks, to stop the GUI becoming unresponsive
+        Run in a thread and handle cursor events """
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, *, daemon=True,
+                 widget=None):
+        logger.debug("Initializing %s: (group: %s, target: %s, name: %s, args: %s, kwargs: %s, "
+                     "daemon: %s)", self.__class__.__name__, group, target, name, args, kwargs,
+                     daemon)
+        super().__init__(group=group, target=target, name=name, args=args, kwargs=kwargs,
+                         daemon=daemon)
+        self.widget = widget
+        self._config = get_config()
+        self._config.set_cursor_busy(widget=self.widget)
+        self._complete = Event()
+        self._queue = Queue()
+        logger.debug("Initialized %s", self.__class__.__name__,)
+
+    def run(self):
+        """ Run the target in a thread """
+        try:
+            if self._target:
+                retval = self._target(*self._args, **self._kwargs)
+                self._queue.put(retval)
+                self._complete.set()
+        finally:
+            # Avoid a refcycle if the thread is running a function with
+            # an argument that has a member that points to the thread.
+            del self._target, self._args, self._kwargs
+
+    def get_result(self):
+        """ Return the result from the queue """
+        if self._complete.is_set():
+            logger.debug("Getting result from thread")
+            retval = self._queue.get()
+        logger.debug("Got result from thread")
+        self._config.set_cursor_default(widget=self.widget)
+        return retval
