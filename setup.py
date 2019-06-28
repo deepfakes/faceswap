@@ -351,6 +351,11 @@ class Checks():
         if self.env.os_version[0] == "Windows":
             self.tips.pip()
 
+    @property
+    def cuda_keys_windows(self):
+        """ Return the OS Environ CUDA Keys for Windows """
+        return [key for key in os.environ.keys() if key.lower().startswith("cuda_path_v")]
+
     def amd_ask_enable(self):
         """ Enable or disable Plaidml for AMD"""
         self.output.info("AMD Support: AMD GPU support is currently limited.\r\n"
@@ -439,16 +444,14 @@ class Checks():
 
     def cuda_check_windows(self):
         """ Check Windows CUDA Version """
-        cuda_keys = [key
-                     for key in os.environ.keys()
-                     if key.lower().startswith("cuda_path_v")]
+        cuda_keys = self.cuda_keys_windows
         if not cuda_keys:
             self.output.error("CUDA not found. See "
                               "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cuda "
                               "for instructions")
             return
 
-        self.env.cuda_version = cuda_keys[0].replace("CUDA_PATH_V", "").replace("_", ".")
+        self.env.cuda_version = cuda_keys[0].lower().replace("cuda_path_v", "").replace("_", ".")
         self.env.cuda_path = os.environ[cuda_keys[0]]
         self.output.info("CUDA version: " + self.env.cuda_version)
 
@@ -457,6 +460,14 @@ class Checks():
         if self.env.os_version[0] == "Linux":
             cudnn_checkfiles = self.cudnn_checkfiles_linux()
         elif self.env.os_version[0] == "Windows":
+            if not self.env.cuda_path and not self.cuda_keys_windows:
+                self.output.error(
+                    "CUDA not found. See "
+                    "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cuda "
+                    "for instructions")
+                return
+            if not self.env.cuda_path:
+                self.env.cuda_path = os.environ[self.cuda_keys_windows[0]]
             cudnn_checkfiles = self.cudnn_checkfiles_windows()
 
         cudnn_checkfile = None
@@ -541,6 +552,8 @@ class Install():
             self.env.required_packages.extend(self.env.macos_required_packages)
         for pkg in self.env.required_packages:
             pkg = self.check_os_requirements(pkg)
+            if pkg is None:
+                continue
             key = pkg.split("==")[0]
             if key not in self.env.installed_packages:
                 self.env.missing_packages.append(pkg)
