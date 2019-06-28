@@ -114,9 +114,10 @@ class Train():
             log = logger.critical
         else:
             msg = ("Exit requested! The trainer will complete its current cycle, "
-                   "save the models and quit (it can take up a couple of seconds "
-                   "depending on your training speed). If you want to kill it now, "
-                   "press Ctrl + c")
+                   "save the models and quit (This can take a couple of minutes "
+                   "depending on your training speed).")
+            if not self.args.redirect_gui:
+                msg += " If you want to kill it now, press Ctrl + c"
             log = logger.info
         log(msg)
         self.stop = True

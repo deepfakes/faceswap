@@ -28,7 +28,27 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self.add_options()
         self.add_main_frame()
         self.thread = None  # Thread for compiling stats data in background
+        self.set_training_callback()
         logger.debug("Initialized: %s", self.__class__.__name__)
+
+    def set_training_callback(self):
+        """ Add a callback to update analysis when the training graph is updated """
+        get_config().tk_vars["refreshgraph"].trace("w", self.update_current_session)
+        get_config().tk_vars["istraining"].trace("w", self.remove_current_session)
+
+    def update_current_session(self, *args):  # pylint:disable=unused-argument
+        """ Update the current session data on a graph update callback """
+        if not get_config().tk_vars["refreshgraph"].get():
+            return
+        logger.debug("Analysis update callback received")
+        self.reset_session()
+
+    def remove_current_session(self, *args):  # pylint:disable=unused-argument
+        """ Remove the current session data on a istraining=False callback """
+        if get_config().tk_vars["istraining"].get():
+            return
+        logger.debug("Remove current training Analysis callback received")
+        self.clear_session()
 
     def set_vars(self):
         """ Analysis specific vars """
@@ -109,7 +129,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         """ Set the summary data and info message """
         if self.thread is None:
             logger.debug("Setting session summary. (message: '%s')", message)
-            self.thread = LongRunningTask(target=self.summarise_data, args=(self.session, ))
+            self.thread = LongRunningTask(target=self.summarise_data,
+                                          args=(self.session, ),
+                                          widget=self)
             self.thread.start()
             self.after(1000, lambda msg=message: self.set_session_summary(msg))
         elif not self.thread.complete.is_set():
@@ -173,7 +195,7 @@ class Options():
 
     def add_buttons(self):
         """ Add the option buttons """
-        for btntype in ("reset", "clear", "save", "load"):
+        for btntype in ("clear", "save", "load"):
             logger.debug("Adding button: '%s'", btntype)
             cmd = getattr(self.parent, "{}_session".format(btntype))
             btn = ttk.Button(self.optsframe,
@@ -699,20 +721,22 @@ class SessionPopUp(tk.Toplevel):
             self.thread = LongRunningTask(target=self.get_display_data, kwargs=kwargs, widget=self)
             self.thread.start()
             self.after(1000, self.compile_display_data)
-        elif not self.thread.complete.is_set():
+            return True
+        if not self.thread.complete.is_set():
             logger.debug("Popup Data not yet available")
             self.after(1000, self.compile_display_data)
-        else:
-            logger.debug("Getting Popup from background Thread")
-            self.display_data = self.thread.get_result()
-            self.thread = None
-            if not self.check_valid_data():
-                logger.warning("No valid data to display. Not refreshing")
-                self.vars["status"].set("")
-                return False
-            logger.debug("Compiled Display Data")
-            self.vars["buildgraph"].set(True)
             return True
+
+        logger.debug("Getting Popup from background Thread")
+        self.display_data = self.thread.get_result()
+        self.thread = None
+        if not self.check_valid_data():
+            logger.warning("No valid data to display. Not refreshing")
+            self.vars["status"].set("")
+            return False
+        logger.debug("Compiled Display Data")
+        self.vars["buildgraph"].set(True)
+        return True
 
     @staticmethod
     def get_display_data(**kwargs):

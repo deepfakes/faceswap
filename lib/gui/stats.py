@@ -259,9 +259,9 @@ class SessionsSummary():
     def time_stats(self):
         """ Return session time stats """
         ts_data = self.session.tb_logs.get_timestamps()
-        time_stats = {sess_id: {"start_time": min(timestamps),
-                                "end_time": max(timestamps),
-                                "datapoints": len(timestamps)}
+        time_stats = {sess_id: {"start_time": min(timestamps) if timestamps else 0,
+                                "end_time": max(timestamps) if timestamps else 0,
+                                "datapoints": len(timestamps) if timestamps else 0}
                       for sess_id, timestamps in ts_data.items()}
         return time_stats
 
@@ -365,12 +365,13 @@ class Calculations():
         logger.debug("Refreshing")
         if not self.session.initialized:
             logger.warning("Session data is not initialized. Not refreshing")
-            return
+            return None
         self.iterations = 0
         self.stats = self.get_raw()
         self.get_calculations()
         self.remove_raw()
         logger.debug("Refreshed")
+        return self
 
     def get_raw(self):
         """ Add raw data to stats dict """

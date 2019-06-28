@@ -200,15 +200,17 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Adding Smoothing Slider")
         tk_var = get_config().tk_vars["smoothgraph"]
         min_max = (0, 0.99)
+        hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing."
 
         ctl_frame = ttk.Frame(self.optsframe)
         ctl_frame.pack(padx=2, side=tk.RIGHT)
 
         lbl = ttk.Label(ctl_frame, text="Smoothing Amount:", anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N, expand=True)
+        lbl.pack(pady=5, side=tk.LEFT, anchor=tk.N, expand=True)
 
-        tbox = ttk.Entry(ctl_frame, width=8, textvariable=tk_var, justify=tk.RIGHT)
+        tbox = ttk.Entry(ctl_frame, width=6, textvariable=tk_var, justify=tk.RIGHT)
         tbox.pack(padx=(0, 5), side=tk.RIGHT)
+
         ctl = ttk.Scale(
             ctl_frame,
             variable=tk_var,
@@ -216,10 +218,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             set_slider_rounding(val, var, dt, rn, mm))
         ctl["from_"] = min_max[0]
         ctl["to"] = min_max[1]
-        ctl.pack()
-        Tooltip(ctl,
-                text="Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing.",
-                wraplength=200)
+        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
+        for item in (tbox, ctl):
+            Tooltip(item,
+                    text=hlp,
+                    wraplength=200)
         logger.debug("Added Smoothing Slider")
 
     def display_item_set(self):

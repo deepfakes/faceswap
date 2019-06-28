@@ -590,6 +590,9 @@ class Config():
         runningtask = tk.BooleanVar()
         runningtask.set(False)
 
+        istraining = tk.BooleanVar()
+        istraining.set(False)
+
         actioncommand = tk.StringVar()
         actioncommand.set(None)
 
@@ -613,6 +616,7 @@ class Config():
 
         tk_vars = {"display": display,
                    "runningtask": runningtask,
+                   "istraining": istraining,
                    "action": actioncommand,
                    "generate": generatecommand,
                    "consoleclear": consoleclear,
@@ -937,6 +941,7 @@ class LongRunningTask(Thread):
                      daemon)
         super().__init__(group=group, target=target, name=name, args=args, kwargs=kwargs,
                          daemon=daemon)
+        self.err = None
         self.widget = widget
         self._config = get_config()
         self._config.set_cursor_busy(widget=self.widget)
@@ -950,17 +955,29 @@ class LongRunningTask(Thread):
             if self._target:
                 retval = self._target(*self._args, **self._kwargs)
                 self._queue.put(retval)
-                self.complete.set()
+        except Exception:  # pylint: disable=broad-except
+            self.err = sys.exc_info()
+            logger.debug("Error in thread (%s): %s", self._name,
+                         self.err[1].with_traceback(self.err[2]))
         finally:
+            self.complete.set()
             # Avoid a refcycle if the thread is running a function with
             # an argument that has a member that points to the thread.
             del self._target, self._args, self._kwargs
 
     def get_result(self):
         """ Return the result from the queue """
-        if self.complete.is_set():
-            logger.debug("Getting result from thread")
-            retval = self._queue.get()
+        if not self.complete.is_set():
+            logger.warning("Aborting attempt to retrieve result from a LongRunningTask that is "
+                           "still running")
+            return None
+        if self.err:
+            logger.debug("Error caught in thread")
+            self._config.set_cursor_default(widget=self.widget)
+            raise self.err[1].with_traceback(self.err[2])
+
+        logger.debug("Getting result from thread")
+        retval = self._queue.get()
         logger.debug("Got result from thread")
         self._config.set_cursor_default(widget=self.widget)
         return retval

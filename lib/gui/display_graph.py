@@ -18,7 +18,7 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)  # noqa
 
 from .tooltip import Tooltip  # noqa
-from .utils import get_config, get_images  # noqa
+from .utils import get_config, get_images, LongRunningTask  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -255,6 +255,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent, data, ylabel):
         GraphBase.__init__(self, parent, data, ylabel)
+        self.thread = None  # Thread for LongRunningTask
         self.add_callback()
 
     def add_callback(self):
@@ -269,11 +270,25 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def refresh(self, *args):  # pylint: disable=unused-argument
         """ Read loss data and apply to graph """
-        logger.debug("Updating plot")
-        self.calcs.refresh()
-        self.update_plot(initiate=False)
-        self.plotcanvas.draw()
-        get_config().tk_vars["refreshgraph"].set(False)
+        refresh_var = get_config().tk_vars["refreshgraph"]
+        if not refresh_var.get() and self.thread is None:
+            return
+
+        if self.thread is None:
+            logger.debug("Updating plot data")
+            self.thread = LongRunningTask(target=self.calcs.refresh)
+            self.thread.start()
+            self.after(1000, self.refresh)
+        elif not self.thread.complete.is_set():
+            logger.debug("Graph Data not yet available")
+            self.after(1000, self.refresh)
+        else:
+            logger.debug("Updating plot with data from background thread")
+            self.calcs = self.thread.get_result()  # Terminate the LongRunningTask object
+            self.thread = None
+            self.update_plot(initiate=False)
+            self.plotcanvas.draw()
+            refresh_var.set(False)
 
     def save_fig(self, location):
         """ Save the figure to file """

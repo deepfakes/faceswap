@@ -11,7 +11,7 @@ from time import time
 
 import psutil
 
-from .utils import get_config, get_images
+from .utils import get_config, get_images, LongRunningTask
 
 if os.name == "nt":
     import win32console  # pylint: disable=import-error
@@ -47,6 +47,8 @@ class ProcessWrapper():
         category, command = self.tk_vars["action"].get().split(",")
 
         if self.tk_vars["runningtask"].get():
+            if self.task.command == "train":
+                self.tk_vars["istraining"].set(False)
             self.task.terminate()
         else:
             self.command = command
@@ -70,6 +72,8 @@ class ProcessWrapper():
         logger.debug("Preparing for execution")
         self.tk_vars["runningtask"].set(True)
         self.tk_vars["consoleclear"].set(True)
+        if self.command == "train":
+            self.tk_vars["istraining"].set(True)
         print("Loading...")
 
         self.statusbar.status_message.set("Executing - {}.py".format(self.command))
@@ -141,6 +145,7 @@ class FaceswapControl():
         self.command = None
         self.args = None
         self.process = None
+        self.thread = None  # Thread for LongRunningTask termination
         self.train_stats = {"iterations": 0, "timestamp": None}
         self.consoleregex = {
             "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
@@ -333,9 +338,26 @@ class FaceswapControl():
         return True
 
     def terminate(self):
+        """ Terminate the running process in a LongRunningTask so we can still
+            output to console """
+        root = get_config().root
+        if self.thread is None:
+            logger.debug("Terminating wrapper in LongRunningTask")
+            self.thread = LongRunningTask(target=self.terminate_in_thread,
+                                          args=(self.command, self.process))
+            self.thread.start()
+            root.after(1000, self.terminate)
+        elif not self.thread.complete.is_set():
+            logger.debug("Not finished terminating")
+            root.after(1000, self.terminate)
+        else:
+            logger.debug("Termination Complete. Cleaning up")
+            _ = self.thread.get_result()  # Terminate the LongRunningTask object
+
+    def terminate_in_thread(self, command, process):
         """ Terminate the subprocess """
         logger.debug("Terminating wrapper")
-        if self.command == "train":
+        if command == "train":
             timeout = get_config().tk_vars["traintimeout"].get()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
@@ -348,16 +370,17 @@ class FaceswapControl():
                 con_in.WriteConsoleInput([keypress])
             else:
                 logger.debug("Sending SIGINT to process")
-                self.process.send_signal(signal.SIGINT)
+                process.send_signal(signal.SIGINT)
             while True:
                 timeelapsed = time() - now
-                if self.process.poll() is not None:
+                if process.poll() is not None:
                     break
                 if timeelapsed > timeout:
                     logger.error("Timeout reached sending Exit Signal")
                     self.terminate_all_children()
         else:
             self.terminate_all_children()
+        return True
 
     @staticmethod
     def generate_windows_keypress(character):
