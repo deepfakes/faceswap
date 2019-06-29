@@ -13,9 +13,9 @@ InstallDir $PROFILE\faceswap
 # Download sites
 !define wwwGit "https://github.com/git-for-windows/git/releases/download/v2.20.1.windows.1/Git-2.20.1-64-bit.exe"
 
-# Latest miniconda appears to be broken when activating environment. Currently pinned to older version
-#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
-!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
+# Sometimes miniconda breaks. Uncomment/comment the following 2 lines to pin
+!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
 
 
@@ -383,14 +383,13 @@ Function CloneRepo
 FunctionEnd
 
 Function SetEnvironment
-    # Updating Conda breaks setup.py. Commented out in case this issue gets resolved in future
-#    DetailPrint "Initializing Conda..."
-#    SetDetailsPrint listonly
-#    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$dirConda\scripts\activate.bat && conda update -y -n base -c defaults conda && conda deactivate"
-#    pop $0
-#    ExecDos::wait $0
-#    pop $0
-#    SetDetailsPrint both
+    DetailPrint "Initializing Conda..."
+    SetDetailsPrint listonly
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda update -y -n base -c defaults conda && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
+    SetDetailsPrint both
     DetailPrint "Creating Conda Virtual Environment..."
 
     IfFileExists  "$dirConda\envs\$envName" DeleteEnv CreateEnv

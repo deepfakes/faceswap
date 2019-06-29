@@ -627,12 +627,13 @@ class Install():
             condaexe.extend(["-c", channel])
         condaexe.append(package)
         self.output.info("Installing {}".format(package))
+        shell = self.env.os.version[0] == "Windows"
         try:
             if verbose:
-                run(condaexe, check=True)
+                run(condaexe, check=True, shell=shell)
             else:
                 with open(os.devnull, "w") as devnull:
-                    run(condaexe, stdout=devnull, stderr=devnull, check=True)
+                    run(condaexe, stdout=devnull, stderr=devnull, check=True, shell=shell)
         except CalledProcessError:
             if not conda_only:
                 self.output.info("{} not available in Conda. Installing with pip".format(package))
