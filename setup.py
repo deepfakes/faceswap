@@ -627,7 +627,7 @@ class Install():
             condaexe.extend(["-c", channel])
         condaexe.append(package)
         self.output.info("Installing {}".format(package))
-        shell = self.env.os.version[0] == "Windows"
+        shell = self.env.os_version[0] == "Windows"
         try:
             if verbose:
                 run(condaexe, check=True, shell=shell)
