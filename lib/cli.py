@@ -121,7 +121,8 @@ class ScriptExecutor():
             process = script(arguments)
             process.process()
         except FaceswapError as err:
-            logger.error(str(err))
+            for line in str(err).splitlines():
+                logger.error(line)
             crash_file = crash_log()
             logger.info("To get more information on this error see the crash report written to "
                         "%s", crash_file)

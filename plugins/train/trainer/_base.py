@@ -28,11 +28,12 @@ import cv2
 import numpy as np
 
 import tensorflow as tf
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
-from lib.utils import get_folder, get_image_paths
+from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -259,7 +260,19 @@ class Batcher():
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
         batch = self.get_next(do_preview)
-        loss = self.model.predictors[self.side].train_on_batch(*batch)
+        try:
+            loss = self.model.predictors[self.side].train_on_batch(*batch)
+        except tf_errors.ResourceExhaustedError as err:
+            msg = ("You do not have enough GPU memory available to train the selected model at "
+                   "the selected settings. You can try a number of things:"
+                   "\n1) Close any other application that is using your GPU (web browsers are "
+                   "particularly bad for this)."
+                   "\n2) Lower the batchsize (the amount of images fed into the model each "
+                   "iteration)."
+                   "\n3) Try Memory Saving Gradients and/or Ping Pong Training."
+                   "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
+                   "(in config) if it has one.")
+            raise FaceswapError(msg) from err
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
