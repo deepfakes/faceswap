@@ -15,6 +15,11 @@ INSTALL_FAILED = False
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
 TENSORFLOW_REQUIREMENTS = {"==1.12.0": ["9.0", "7.2"],
                            ">=1.13.1,<1.14": ["10.0", "7.4"]}  # TF 1.14+ Not currently supported
+# Mapping of Python packages to their conda names if different from pypi or in non-default channel
+CONDA_MAPPING = {"opencv-python": ("opencv", "conda-forge"),
+                 "fastcluster": ("fastcluster", "conda-forge"),
+                 "toposort": ("toposort", "conda-forge"),
+                 "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge")}
 
 
 class Environment():
@@ -606,7 +611,12 @@ class Install():
         for pkg in self.env.missing_packages:
             if self.env.is_conda:
                 verbose = pkg.startswith("tensorflow")
-                if self.conda_installer(pkg, verbose=verbose):
+                pkg = CONDA_MAPPING.get(pkg, pkg)
+                channel = None
+                if isinstance(pkg, (tuple, list)):
+                    channel = None if len(pkg) != 2 else pkg[1]
+                    pkg = pkg[0]
+                if self.conda_installer(pkg, verbose=verbose, channel=channel, conda_only=False):
                     continue
             self.pip_installer(pkg)
 
