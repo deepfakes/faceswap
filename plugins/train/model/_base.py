@@ -23,7 +23,7 @@ from lib import Serializer
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
-from lib.utils import get_folder
+from lib.utils import FaceswapError, get_folder
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -171,7 +171,15 @@ class ModelBase():
         """ Build the model. Override for custom build methods """
         self.add_networks()
         self.load_models(swapped=False)
-        self.build_autoencoders()
+        try:
+            self.build_autoencoders()
+        except ValueError as err:
+            if "must be from the same graph" in str(err).lower():
+                msg = ("The were was an error loading saved weights. This is most likely due to "
+                       "model corruption during a previous save."
+                       "\nYou should restore weights from a snapshot or from the .bk files "
+                       "located in your model folder: '{}'".format(self.model_dir))
+                raise FaceswapError(msg) from err
         self.log_summary()
         self.compile_predictors(initialize=True)
 

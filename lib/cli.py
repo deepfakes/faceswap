@@ -125,7 +125,7 @@ class ScriptExecutor():
                 logger.error(line)
             crash_file = crash_log()
             logger.info("To get more information on this error see the crash report written to "
-                        "%s", crash_file)
+                        "'%s'", crash_file)
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise
         except SystemExit:
@@ -133,7 +133,7 @@ class ScriptExecutor():
         except Exception:  # pylint: disable=broad-except
             crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
-            logger.critical("An unexpected crash has occurred. Crash report written to %s. "
+            logger.critical("An unexpected crash has occurred. Crash report written to '%s'. "
                             "Please verify you are running the latest version of faceswap "
                             "before reporting", crash_file)
 
