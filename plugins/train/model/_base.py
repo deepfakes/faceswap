@@ -175,7 +175,7 @@ class ModelBase():
             self.build_autoencoders()
         except ValueError as err:
             if "must be from the same graph" in str(err).lower():
-                msg = ("The were was an error loading saved weights. This is most likely due to "
+                msg = ("There was an error loading saved weights. This is most likely due to "
                        "model corruption during a previous save."
                        "\nYou should restore weights from a snapshot or from the .bk files "
                        "located in your model folder: '{}'".format(self.model_dir))
