@@ -14,6 +14,7 @@
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
         no_logs:            Disable tensorboard logging
+        snapshot_interval:  Interval for saving model snapshots
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
         augment_color:      Perform random shifting of L*a*b* colors
         no_flip:            Don't perform a random flip on the image
@@ -153,13 +154,11 @@ class TrainerBase():
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
         logger.trace(loss)
-        output = list()
-        for side in sorted(list(loss.keys())):
-            display = ", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
-                                                        side.capitalize(),
-                                                        this_loss)
-                                 for idx, this_loss in enumerate(loss[side])])
-            output.append(display)
+        output = [", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
+                                                    side.capitalize(),
+                                                    this_loss)
+                             for idx, this_loss in enumerate(loss[side])])
+                  for side in sorted(list(loss.keys()))]
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
@@ -168,6 +167,10 @@ class TrainerBase():
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
         do_preview = viewer is not None
         do_timelapse = timelapse_kwargs is not None
+        snapshot_interval = self.model.training_opts.get("snapshot_interval", 0)
+        do_snapshot = (snapshot_interval != 0 and
+                       self.model.iterations >= snapshot_interval and
+                       self.model.iterations % snapshot_interval == 0)
         loss = dict()
         for side, batcher in self.batchers.items():
             if self.pingpong.active and side != self.pingpong.side:
@@ -200,6 +203,9 @@ class TrainerBase():
 
         if do_timelapse:
             self.timelapse.output_timelapse()
+
+        if do_snapshot:
+            self.model.do_snapshot()
 
     def store_history(self, side, loss):
         """ Store the history of this step """

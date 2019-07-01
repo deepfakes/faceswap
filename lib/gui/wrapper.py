@@ -186,7 +186,7 @@ class FaceswapControl():
                         (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
                         (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
-                if self.command == "train" and output.strip().endswith("saved models"):
+                if self.command == "train" and "[saved models]" in output.strip().lower():
                     logger.debug("Trigger update preview")
                     self.wrapper.tk_vars["updatepreview"].set(True)
                 print(output.strip())

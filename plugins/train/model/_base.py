@@ -10,7 +10,6 @@ import sys
 import time
 
 from json import JSONDecodeError
-from shutil import copyfile, copytree
 
 import keras
 from keras import losses
@@ -20,10 +19,11 @@ from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
+from lib.model.backup_restore import Backup
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
-from lib.utils import FaceswapError, get_folder
+from lib.utils import FaceswapError
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -36,6 +36,7 @@ class ModelBase():
                  model_dir,
                  gpus,
                  configfile=None,
+                 snapshot_interval=0,
                  no_logs=False,
                  warp_to_landmarks=False,
                  augment_color=True,
@@ -50,17 +51,18 @@ class ModelBase():
                  memory_saving_gradients=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
-                     "no_logs: %s, warp_to_landmarks: %s, augment_color: %s, no_flip: %s, "
-                     "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
-                     "input_shape: %s, encoder_dim: %s, trainer: %s, pingpong: %s, "
-                     "memory_saving_gradients: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, gpus, configfile, no_logs,
-                     warp_to_landmarks, augment_color, no_flip, training_image_size,
+                     "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
+                     "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
+                     "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
+                     "pingpong: %s, memory_saving_gradients: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
+                     no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
                      alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
                      memory_saving_gradients, predict)
 
         self.predict = predict
         self.model_dir = model_dir
+        self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
         self.configfile = configfile
         self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
@@ -92,7 +94,8 @@ class ModelBase():
                               "warp_to_landmarks": warp_to_landmarks,
                               "augment_color": augment_color,
                               "no_flip": no_flip,
-                              "pingpong": pingpong}
+                              "pingpong": pingpong,
+                              "snapshot_interval": snapshot_interval}
 
         self.set_gradient_type(memory_saving_gradients)
         self.build()
@@ -177,8 +180,8 @@ class ModelBase():
             if "must be from the same graph" in str(err).lower():
                 msg = ("There was an error loading saved weights. This is most likely due to "
                        "model corruption during a previous save."
-                       "\nYou should restore weights from a snapshot or from the .bk files "
-                       "located in your model folder: '{}'".format(self.model_dir))
+                       "\nYou should restore weights from a snapshot or from backup files. "
+                       "You can use the 'Restore' Tool to restore from backup.")
                 raise FaceswapError(msg) from err
         self.log_summary()
         self.compile_predictors(initialize=True)
@@ -382,6 +385,12 @@ class ModelBase():
                 logger.verbose("%s:", name.title())
                 nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
 
+    def do_snapshot(self):
+        """ Perform a model snapshot """
+        logger.debug("Performing snapshot")
+        self.backup.snapshot_models(self.iterations)
+        logger.debug("Performed snapshot")
+
     def load_models(self, swapped):
         """ Load models from file """
         logger.debug("Load model: (swapped: %s)", swapped)
@@ -407,80 +416,79 @@ class ModelBase():
             logger.info("Loaded model from disk: '%s'", self.model_dir)
         return is_loaded
 
-    def save_models(self, snapshot_iteration):
+    def save_models(self):
         """ Backup and save the models """
         logger.debug("Backing up and saving models")
-        should_backup = self.get_save_averages()
+        save_averages = self.get_save_averages()
+        backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
+        if backup_func:
+            logger.info("Backing up models...")
         save_threads = list()
         for network in self.networks.values():
             name = "save_{}".format(network.name)
             save_threads.append(MultiThread(network.save,
                                             name=name,
-                                            should_backup=should_backup))
+                                            backup_func=backup_func))
         save_threads.append(MultiThread(self.state.save,
                                         name="save_state",
-                                        should_backup=should_backup))
+                                        backup_func=backup_func))
         for thread in save_threads:
             thread.start()
         for thread in save_threads:
             if thread.has_error:
                 logger.error(thread.errors[0])
             thread.join()
-        logger.info("saved models")
-        if snapshot_iteration:
-            self.snapshot_models()
-
-    def snapshot_models(self):
-        """ Take a snapshot of the model at current state and back up """
-        logger.info("Saving snapshot")
-        src = str(self.model_dir)
-        dst = str(get_folder("{}_snapshot_{}_iters".format(src, self.iterations)))
-        for filename in os.listdir(src):
-            if filename.endswith(".bk"):
-                continue
-            srcfile = os.path.join(src, filename)
-            dstfile = os.path.join(dst, filename)
-            copyfunc = copytree if os.path.isdir(srcfile) else copyfile
-            logger.debug("Saving snapshot: '%s' > '%s'", srcfile, dstfile)
-            copyfunc(srcfile, dstfile)
-        logger.info("Saved snapshot")
+        msg = "[Saved models]"
+        if save_averages:
+            lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],
+                                              side.capitalize(),
+                                              save_averages[side])
+                       for side in sorted(list(save_averages.keys()))]
+            msg += " - Average since last save: {}".format(", ".join(lossmsg))
+        logger.info(msg)
 
     def get_save_averages(self):
-        """ Return the loss averages since last save and reset historical losses
+        """ Return the average loss since the last save iteration and reset historical loss """
+        logger.debug("Getting save averages")
+        avgs = dict()
+        for side, loss in self.history.items():
+            if not loss:
+                logger.debug("No loss in self.history: %s", side)
+                break
+            avgs[side] = sum(loss) / len(loss)
+            self.history[side] = list()  # Reset historical loss
+        logger.debug("Average losses since last save: %s", avgs)
+        return avgs
+
+    def should_backup(self, save_averages):
+        """ Check whether the loss averages for all losses is the lowest that has been seen.
 
             This protects against model corruption by only backing up the model
             if any of the loss values have fallen.
             TODO This is not a perfect system. If the model corrupts on save_iteration - 1
             then model may still backup
         """
-        logger.debug("Getting Average loss since last save")
-        avgs = dict()
         backup = True
 
-        for side, loss in self.history.items():
-            if not loss:
-                backup = False
-                break
+        if not save_averages:
+            logger.debug("No save averages. Not backing up")
+            return
 
-            avgs[side] = sum(loss) / len(loss)
-            self.history[side] = list()  # Reset historical loss
-
+        for side, loss in save_averages.items():
             if not self.state.lowest_avg_loss.get(side, None):
                 logger.debug("Setting initial save iteration loss average for '%s': %s",
-                             side, avgs[side])
-                self.state.lowest_avg_loss[side] = avgs[side]
+                             side, loss)
+                self.state.lowest_avg_loss[side] = loss
                 continue
-
             if backup:
                 # Only run this if backup is true. All losses must have dropped for a valid backup
-                backup = self.check_loss_drop(side, avgs[side])
+                backup = self.check_loss_drop(side, loss)
 
         logger.debug("Lowest historical save iteration loss average: %s",
                      self.state.lowest_avg_loss)
-        logger.debug("Average loss since last save: %s", avgs)
 
         if backup:  # Update lowest loss values to the state
-            for side, avg_loss in avgs.items():
+            for side, avg_loss in save_averages.items():
                 logger.debug("Updating lowest save iteration average for '%s': %s", side, avg_loss)
                 self.state.lowest_avg_loss[side] = avg_loss
 
@@ -605,30 +613,20 @@ class NNMeta():
         self.network.name = self.type
         return True
 
-    def save(self, fullpath=None, should_backup=False):
+    def save(self, fullpath=None, backup_func=None):
         """ Save model """
         fullpath = fullpath if fullpath else self.filename
-        if should_backup:
-            self.backup(fullpath=fullpath)
+        if backup_func:
+            backup_func(fullpath)
         logger.debug("Saving model: '%s'", fullpath)
         self.weights = self.network.get_weights()
         self.network.save(fullpath)
-
-    def backup(self, fullpath=None):
-        """ Backup Model """
-        origfile = fullpath if fullpath else self.filename
-        backupfile = origfile + ".bk"
-        logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
-        if os.path.exists(backupfile):
-            os.remove(backupfile)
-        if os.path.exists(origfile):
-            os.rename(origfile, backupfile)
 
     def convert_legacy_weights(self):
         """ Convert legacy weights files to hold the model topology """
         logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
         self.network.load_weights(self.filename)
-        self.save(should_backup=False)
+        self.save(backup_func=None)
         self.network.name = self.type
 
 
@@ -731,11 +729,11 @@ class State():
         except JSONDecodeError as err:
             logger.debug("JSONDecodeError: %s:", str(err))
 
-    def save(self, should_backup=False):
+    def save(self, backup_func=None):
         """ Save iteration number to state file """
         logger.debug("Saving State")
-        if should_backup:
-            self.backup()
+        if backup_func:
+            backup_func(self.filename)
         try:
             with open(self.filename, "wb") as out:
                 state = {"name": self.name,
@@ -750,16 +748,6 @@ class State():
         except IOError as err:
             logger.error("Unable to save model state: %s", str(err.strerror))
         logger.debug("Saved State")
-
-    def backup(self):
-        """ Backup state file """
-        origfile = self.filename
-        backupfile = origfile + ".bk"
-        logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
-        if os.path.exists(backupfile):
-            os.remove(backupfile)
-        if os.path.exists(origfile):
-            os.rename(origfile, backupfile)
 
     def replace_config(self, config_changeable_items):
         """ Replace the loaded config with the one contained within the state file

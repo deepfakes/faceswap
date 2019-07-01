@@ -37,6 +37,9 @@ if __name__ == "__main__":
     EFFMPEG = cli.EffmpegArgs(SUBPARSER,
                               "effmpeg",
                               "This command allows you to easily execute common ffmpeg tasks.")
+    RESTORE = cli.RestoreArgs(SUBPARSER,
+                              "restore",
+                              "This command lets you restore models from backup.")
     SORT = cli.SortArgs(SUBPARSER,
                         "sort",
                         "This command lets you sort images using various methods.")

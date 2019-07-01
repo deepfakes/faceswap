@@ -390,13 +390,28 @@ class EffmpegArgs(FaceSwapArgs):
         return argument_list
 
 
+class RestoreArgs(FaceSwapArgs):
+    """ Class to restore model files from backup """
+
+    @staticmethod
+    def get_argument_list():
+        """ Put the arguments in a list so that they are accessible from both argparse and gui """
+        argument_list = list()
+        argument_list.append({"opts": ("-m", "--model-dir"),
+                              "action": DirFullPaths,
+                              "dest": "model_dir",
+                              "required": True,
+                              "help": "Model directory. A directory containing the model "
+                                      "you wish to restore from backup."})
+        return argument_list
+
+
 class SortArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for sort tool """
 
     @staticmethod
     def get_argument_list():
-        """ Put the arguments in a list so that they are accessible from both
-        argparse and gui """
+        """ Put the arguments in a list so that they are accessible from both argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ('-i', '--input'),
                               "action": DirFullPaths,
