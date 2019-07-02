@@ -190,6 +190,7 @@ class FaceswapControl():
                     logger.debug("Trigger update preview")
                     self.wrapper.tk_vars["updatepreview"].set(True)
                 print(output.strip())
+        self.thread = None
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
         self.wrapper.terminate(message)
