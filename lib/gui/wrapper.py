@@ -157,6 +157,7 @@ class FaceswapControl():
     def execute_script(self, command, args):
         """ Execute the requested Faceswap Script """
         logger.debug("Executing Faceswap: (command: '%s', args: %s)", command, args)
+        self.thread = None
         self.command = command
         kwargs = {"stdout": PIPE,
                   "stderr": PIPE,
@@ -190,7 +191,6 @@ class FaceswapControl():
                     logger.debug("Trigger update preview")
                     self.wrapper.tk_vars["updatepreview"].set(True)
                 print(output.strip())
-        self.thread = None
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
         self.wrapper.terminate(message)
@@ -354,6 +354,7 @@ class FaceswapControl():
         else:
             logger.debug("Termination Complete. Cleaning up")
             _ = self.thread.get_result()  # Terminate the LongRunningTask object
+            self.thread = None
 
     def terminate_in_thread(self, command, process):
         """ Terminate the subprocess """
