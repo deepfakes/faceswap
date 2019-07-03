@@ -522,6 +522,8 @@ class Checks():
         """ Return the checkfile locations for linux """
         chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
         chk = chk.strip().replace("libcudnn.so.", "")
+        if not chk:
+            return list()
         cudnn_vers = chk[0]
         cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
         cudnn_path = cudnn_path.replace("lib", "include")
