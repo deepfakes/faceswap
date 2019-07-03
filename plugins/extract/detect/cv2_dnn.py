@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ OpenCV DNN Face detection plugin """
-from time import sleep
 
 import numpy as np
 
@@ -13,7 +12,6 @@ class Detect(Detector):
         git_model_id = 4
         model_filename = ["resnet_ssd_v1.caffemodel", "resnet_ssd_v1.prototxt"]
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.parent_is_pool = True
         self.target = (300, 300)  # Doesn't use VRAM
         self.vram = 0
         self.detector = None
@@ -24,15 +22,15 @@ class Detect(Detector):
         super().initialize(*args, **kwargs)
         logger.info("Initializing cv2 DNN Detector...")
         logger.verbose("Using CPU for detection")
-        self.init = True
+        self.detector = cv2.dnn.readNetFromCaffe(self.model_path[1],  # pylint: disable=no-member
+                                                 self.model_path[0])
+        self.detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
+        self.init.set()
         logger.info("Initialized cv2 DNN Detector.")
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in grayscale image """
         super().detect_faces(*args, **kwargs)
-        detector = cv2.dnn.readNetFromCaffe(self.model_path[1],  # pylint: disable=no-member
-                                            self.model_path[0])
-        detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
         while True:
             item = self.get_item()
             if item == "EOF":
@@ -52,8 +50,8 @@ class Detect(Detector):
                                              [104, 117, 123],
                                              False,
                                              False)
-                detector.setInput(blob)
-                detected = detector.forward()
+                self.detector.setInput(blob)
+                detected = self.detector.forward()
                 faces = list()
                 for i in range(detected.shape[2]):
                     confidence = detected[0, 0, i, 2]
@@ -77,9 +75,7 @@ class Detect(Detector):
             item["detected_faces"] = detected_faces
             self.finalize(item)
 
-        if item == "EOF":
-            sleep(3)  # Wait for all processes to finish before EOF (hacky!)
-            self.queues["out"].put("EOF")
+        self.queues["out"].put("EOF")
         logger.debug("Detecting Faces Complete")
 
     def process_output(self, faces, rotation_matrix, scale):
