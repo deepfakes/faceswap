@@ -167,7 +167,7 @@ def crash_log():
     with open(filename, "w") as outfile:
         outfile.writelines(freeze_log)
         traceback.print_exc(file=outfile)
-        outfile.write(sysinfo.full_info())
+        outfile.write(sysinfo)
     return filename
 
 

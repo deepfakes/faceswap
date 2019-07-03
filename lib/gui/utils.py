@@ -481,7 +481,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     def build_console(self):
         """ Build and place the console """
         logger.debug("Build console")
-        self.console.config(width=100, height=6, bg="#1E1E1E", fg="white")
+        self.console.config(width=100, height=6, bg="gray90", fg="black")
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self, command=self.console.yview)
@@ -494,11 +494,11 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     def add_tags(self):
         """ Add tags to text widget to color based on output """
         logger.debug("Adding text color tags")
-        self.console.tag_config("default", foreground="#A6A7A8")
+        self.console.tag_config("default", foreground="#1E1E1E")
         self.console.tag_config("stderr", foreground="#E25056")
-        self.console.tag_config("info", foreground="#98CCFD")
-        self.console.tag_config("verbose", foreground="#6A9955")
-        self.console.tag_config("warning", foreground="#CE9178")
+        self.console.tag_config("info", foreground="#2B445E")
+        self.console.tag_config("verbose", foreground="#008140")
+        self.console.tag_config("warning", foreground="#F77B00")
         self.console.tag_config("critical", foreground="red")
         self.console.tag_config("error", foreground="red")
 

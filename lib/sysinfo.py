@@ -358,4 +358,13 @@ class SysInfo():
         return ", ".join(retval)
 
 
-sysinfo = SysInfo()  # pylint: disable=invalid-name
+def get_sysinfo():
+    """ Return sys info or error message if there is an error """
+    try:
+        retval = SysInfo().full_info()
+    except Exception as err:  # pylint: disable=broad-except
+        retval = "Exception occured trying to retrieve sysinfo: {}".format(err)
+    return retval
+
+
+sysinfo = get_sysinfo()  # pylint: disable=invalid-name
