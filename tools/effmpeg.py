@@ -15,8 +15,9 @@ import subprocess
 import datetime
 from collections import OrderedDict
 
+import imageio
 import imageio_ffmpeg as im_ffm
-from ffmpy import FFprobe, FFmpeg, FFRuntimeError
+from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
 from lib.cli import FullHelpArgumentParser
@@ -248,7 +249,7 @@ class Effmpeg():
                 _error_str += "hence it's not possible to "
                 _error_str += "'{}'.".format(self.args.action)
                 raise ValueError(_error_str)
-            elif self.output.fps is not None and self.__check_have_fps(['r', 'i']):
+            if self.output.fps is not None and self.__check_have_fps(['r', 'i']):
                 self.args.fps = self.output.fps
             elif self.ref_vid.fps is not None and self.__check_have_fps(['i']):
                 self.args.fps = self.ref_vid.fps
@@ -310,8 +311,8 @@ class Effmpeg():
         action(**kwargs)
 
     @staticmethod
-    def extract(input_=None, output=None, fps=None, extract_ext=None, start=None, duration=None,
-                **kwargs):
+    def extract(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
+                extract_ext=None, start=None, duration=None, **kwargs):
         """ Extract video to image frames """
         logger.debug("input_: %s, output: %s, fps: %s, extract_ext: '%s', start: %s, duration: %s",
                      input_, output, fps, extract_ext, start, duration)
@@ -327,8 +328,8 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(inputs=_input, outputs=_output)
 
     @staticmethod
-    def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
-                ref_vid=None, preview=False, exe=None, **kwargs):
+    def gen_vid(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
+                mux_audio=False, ref_vid=None, preview=False, exe=None, **kwargs):
         """ Generate Video """
         logger.debug("input: %s, output: %s, fps: %s, mux_audio: %s, ref_vid: '%s', preview: %s, "
                      "exe: '%s'", input, output, fps, mux_audio, ref_vid, preview, exe)
@@ -356,41 +357,37 @@ class Effmpeg():
     @staticmethod
     def get_fps(input_=None, print_=False, **kwargs):
         """ Get Frames per Second """
-        _input_opts = '-v error -select_streams v -of '
-        _input_opts += 'default=noprint_wrappers=1:nokey=1 '
-        _input_opts += '-show_entries stream=r_frame_rate'
-        if isinstance(input_, str):
-            _inputs = {input_: _input_opts}
-        else:
-            _inputs = {input_.path: _input_opts}
-        logger.debug(_inputs)
-        ffp = FFprobe(inputs=_inputs)
-        _fps = ffp.run(stdout=subprocess.PIPE)[0].decode("utf-8")
-        _fps = _fps.strip()
-        if "/" in _fps:
-            _fps = _fps.split("/")
-            _fps = str(round(int(_fps[0])/int(_fps[1]), 2))
+        logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
+        input_ = input_ if isinstance(input_, str) else input_.path
+        logger.debug("input: %s", input_)
+        reader = imageio.get_reader(input_)
+        _fps = reader.get_meta_data()["fps"]
+        logger.debug(_fps)
+        reader.close()
         if print_:
             logger.info("Video fps: %s", _fps)
-        logger.debug(_fps)
         return _fps
 
     @staticmethod
     def get_info(input_=None, print_=False, **kwargs):
         """ Get video Info """
-        _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _inputs = {input_.path: _input_opts}
-        ffp = FFprobe(inputs=_inputs)
-        out = ffp.run(stdout=subprocess.PIPE,
-                      stderr=subprocess.STDOUT)[0].decode('utf-8')
-        if print_:
-            logger.info(out)
+        logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
+        input_ = input_ if isinstance(input_, str) else input_.path
+        logger.debug("input: %s", input_)
+        reader = imageio.get_reader(input_)
+        out = reader.get_meta_data()
         logger.debug(out)
+        reader.close()
+        if print_:
+            logger.info("======== Video Info ========",)
+            logger.info("path: %s", input_)
+            for key, val in out.items():
+                logger.info("%s: %s", key, val)
         return out
 
     @staticmethod
-    def rescale(input_=None, output=None, scale=None, preview=False, exe=None,
-                **kwargs):
+    def rescale(input_=None, output=None, scale=None,  # pylint:disable=unused-argument
+                preview=False, exe=None, **kwargs):
         """ Rescale Video """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _output_opts = '-vf scale="' + str(scale) + '"'
@@ -401,8 +398,8 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def rotate(input_=None, output=None, degrees=None, transpose=None,
-               preview=None, exe=None, **kwargs):
+    def rotate(input_=None, output=None, degrees=None,  # pylint:disable=unused-argument
+               transpose=None, preview=None, exe=None, **kwargs):
         """ Rotate Video """
         if transpose is None and degrees is None:
             raise ValueError("You have not supplied a valid transpose or "
@@ -427,8 +424,8 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def mux_audio(input_=None, output=None, ref_vid=None, preview=None,
-                  exe=None, **kwargs):
+    def mux_audio(input_=None, output=None, ref_vid=None,  # pylint:disable=unused-argument
+                  preview=None, exe=None, **kwargs):
         """ Mux Audio """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _ref_vid_opts = None
@@ -442,8 +439,8 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def slice(input_=None, output=None, start=None, duration=None,
-              preview=None, exe=None, **kwargs):
+    def slice(input_=None, output=None, start=None,  # pylint:disable=unused-argument
+              duration=None, preview=None, exe=None, **kwargs):
         """ Slice Video """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
