@@ -25,6 +25,7 @@ class Check():
         self.alignments = alignments
         self.job = arguments.job
         self.type = None
+        self.is_video = False  # Set when getting items
         self.output = arguments.output
         self.source_dir = self.get_source_dir(arguments)
         self.validate()
@@ -54,6 +55,7 @@ class Check():
     def get_items(self):
         """ Set the correct items to process """
         items = globals()[self.type.title()]
+        self.is_video = items.is_video
         return items(self.source_dir).file_list_sorted
 
     def process(self):
@@ -165,13 +167,18 @@ class Check():
 
     def output_results(self, items_output):
         """ Output the results in the requested format """
+        logger.trace("items_output: %s", items_output)
+        if self.output == "move" and self.is_video:
+            logger.warning("Move was selected with an input video. This is not possible so "
+                           "falling back to console output")
+            self.output = "console"
         if not items_output:
             logger.info("No %s were found meeting the criteria", self.type)
             return
         if self.output == "move":
             self.move_file(items_output)
             return
-        if self.job in ("multi-faces", "leftover-faces"):
+        if self.job in ("multi-faces", "leftover-faces") and self.type == "faces":
             # Strip the index for printed/file output
             items_output = [item[0] for item in items_output]
         output_message = "-----------------------------------------------\r\n"
@@ -185,11 +192,25 @@ class Check():
         if self.output == "file":
             self.output_file(output_message, len(items_output))
 
+    def get_output_folder(self):
+        """ Return output folder. Needs to be in the root if input is a video """
+        dst_dir = os.path.dirname(self.source_dir) if self.is_video else self.source_dir
+        return dst_dir
+
+    def get_filename_prefix(self):
+        """ Video name needs to be prefixed to filename if input is a video """
+        if not self.is_video:
+            return ""
+        return "{}_".format(os.path.basename(self.source_dir))
+
     def output_file(self, output_message, items_discovered):
         """ Save the output to a text file in the frames directory """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = "{}_{}.txt".format(self.output_message.replace(" ", "_").lower(), now)
-        output_file = os.path.join(self.source_dir, filename)
+        dst_dir = self.get_output_folder()
+        filename = "{}{}_{}.txt".format(self.get_filename_prefix(),
+                                        self.output_message.replace(" ", "_").lower(),
+                                        now)
+        output_file = os.path.join(dst_dir, filename)
         logger.info("Saving %s result(s) to '%s'", items_discovered, output_file)
         with open(output_file, "w") as f_output:
             f_output.write(output_message)
@@ -197,8 +218,10 @@ class Check():
     def move_file(self, items_output):
         """ Move the identified frames to a new subfolder """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = "{}_{}".format(self.output_message.replace(" ", "_").lower(), now)
-        output_folder = os.path.join(self.source_dir, folder_name)
+        folder_name = "{}{}_{}".format(self.get_filename_prefix,
+                                       self.output_message.replace(" ", "_").lower(), now)
+        dst_dir = self.get_output_folder()
+        output_folder = os.path.join(dst_dir, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
         move = getattr(self, "move_{}".format(self.type))
@@ -244,8 +267,8 @@ class Draw():
         """ Set the output folder path """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "drawn_landmarks_{}".format(now)
-        if self.frames.vid_cap:
-            dest_folder = os.path.split(self.frames.folder)[0]
+        if self.frames.is_video:
+            dest_folder = os.path.dirname(self.frames.folder)
         else:
             dest_folder = self.frames.folder
         output_folder = os.path.join(dest_folder, folder_name)

@@ -101,9 +101,14 @@ class MediaLoader():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
+    def is_video(self):
+        """ Return whether source is a video or not """
+        return self.vid_reader is not None
+
+    @property
     def count(self):
         """ Number of faces or frames """
-        if self.vid_reader is not None:
+        if self.is_video:
             retval = int(im_ffm.count_frames_and_secs(self.folder)[0])
         else:
             retval = len(self.file_list_sorted)
@@ -126,7 +131,7 @@ class MediaLoader():
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
                 os.path.splitext(self.folder)[1] in _video_extensions):
-            logger.verbose("Video exists at : '%s'", self.folder)
+            logger.verbose("Video exists at: '%s'", self.folder)
             retval = imageio.get_reader(self.folder)
         else:
             logger.verbose("Folder exists at '%s'", self.folder)
@@ -158,7 +163,7 @@ class MediaLoader():
 
     def load_image(self, filename):
         """ Load an image """
-        if self.vid_reader is not None:
+        if self.is_video:
             image = self.load_video_frame(filename)
         else:
             src = os.path.join(self.folder, filename)
@@ -224,7 +229,7 @@ class Frames(MediaLoader):
 
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
-        iterator = self.process_video if self.vid_reader is not None else self.process_frames
+        iterator = self.process_video if self.is_video else self.process_frames
         for item in iterator():
             yield item
 
