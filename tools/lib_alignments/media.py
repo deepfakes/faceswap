@@ -7,7 +7,8 @@ import os
 from tqdm import tqdm
 
 import cv2
-import imageio
+# TODO imageio single frame seek seems slow. Look into this
+# import imageio
 import imageio_ffmpeg as im_ffm
 
 from lib.alignments import Alignments
@@ -132,7 +133,9 @@ class MediaLoader():
                 os.path.isfile(self.folder) and
                 os.path.splitext(self.folder)[1] in _video_extensions):
             logger.verbose("Video exists at: '%s'", self.folder)
-            retval = imageio.get_reader(self.folder)
+            retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
+            # TODO ImageIO single frame seek seems slow. Look into this
+            # retval = imageio.get_reader(self.folder)
         else:
             logger.verbose("Folder exists at '%s'", self.folder)
             retval = None
@@ -176,8 +179,11 @@ class MediaLoader():
         frame = os.path.splitext(filename)[0]
         logger.trace("Loading video frame: '%s'", frame)
         frame_no = int(frame[frame.rfind("_") + 1:]) - 1
-        self.vid_reader.set_image_index(frame_no)
-        image = self.vid_reader.get_next_data()[:, :, ::-1]
+        self.vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
+        _, image = self.vid_reader.read()
+        # TODO imageio single frame seek seems slow. Look into this
+        # self.vid_reader.set_image_index(frame_no)
+        # image = self.vid_reader.get_next_data()[:, :, ::-1]
         return image
 
     @staticmethod
