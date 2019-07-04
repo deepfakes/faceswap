@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 import cv2
+import imageio
 import imageio_ffmpeg as im_ffm
 import numpy as np
 
@@ -192,19 +193,14 @@ class Images():
         """ Return frames from a video file """
         logger.debug("Input is video. Capturing frames")
         vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
-        cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-        i = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                logger.debug("Video terminated")
-                break
-            i += 1
-            # Keep filename format for outputted face
-            filename = "{}_{:06d}.png".format(vidname, i)
+        reader = imageio.get_reader(self.args.input_dir)
+        for i, frame in enumerate(reader):
+            # Convert to BGR for cv2 compatibility
+            frame = frame[:, :, ::-1]
+            filename = "{}_{:06d}.png".format(vidname, i + 1)
             logger.trace("Loading video frame: '%s'", filename)
             yield filename, frame
-        cap.release()
+        reader.close()
 
     def load_one_image(self, filename):
         """ load requested image """
@@ -223,13 +219,10 @@ class Images():
     def load_one_video_frame(self, frame_no):
         """ Load a single frame from a video file """
         logger.trace("Loading video frame: %s", frame_no)
-        cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no - 1)  # pylint: disable=no-member
-        ret, frame = cap.read()
-        if not ret:
-            logger.error("Unable to read from %s from video %s", frame_no, self.args.input_dir)
-            exit(1)
-        cap.release()
+        reader = imageio.get_reader(self.args.input_dir)
+        reader.set_image_index(frame_no - 1)
+        frame = reader.get_next_data()[:, :, ::-1]
+        reader.close()
         return frame
 
 

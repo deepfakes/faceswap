@@ -7,6 +7,7 @@ import os
 from tqdm import tqdm
 
 import cv2
+import imageio
 import imageio_ffmpeg as im_ffm
 
 from lib.alignments import Alignments
@@ -93,7 +94,7 @@ class MediaLoader():
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self.folder = folder
-        self.vid_cap = self.check_input_folder()
+        self.vid_reader = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
         logger.verbose("%s items loaded", self.count)
@@ -102,7 +103,7 @@ class MediaLoader():
     @property
     def count(self):
         """ Number of faces or frames """
-        if self.vid_cap:
+        if self.vid_reader is not None:
             retval = int(im_ffm.count_frames_and_secs(self.folder)[0])
         else:
             retval = len(self.file_list_sorted)
@@ -110,7 +111,7 @@ class MediaLoader():
 
     def check_input_folder(self):
         """ makes sure that the frames or faces folder exists
-            If frames folder contains a video file return video capture object """
+            If frames folder contains a video file return imageio reader object """
         err = None
         loadtype = self.__class__.__name__
         if not self.folder:
@@ -126,7 +127,7 @@ class MediaLoader():
                 os.path.isfile(self.folder) and
                 os.path.splitext(self.folder)[1] in _video_extensions):
             logger.verbose("Video exists at : '%s'", self.folder)
-            retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
+            retval = imageio.get_reader(self.folder)
         else:
             logger.verbose("Folder exists at '%s'", self.folder)
             retval = None
@@ -157,7 +158,7 @@ class MediaLoader():
 
     def load_image(self, filename):
         """ Load an image """
-        if self.vid_cap:
+        if self.vid_reader is not None:
             image = self.load_video_frame(filename)
         else:
             src = os.path.join(self.folder, filename)
@@ -170,8 +171,8 @@ class MediaLoader():
         frame = os.path.splitext(filename)[0]
         logger.trace("Loading video frame: '%s'", frame)
         frame_no = int(frame[frame.rfind("_") + 1:]) - 1
-        self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
-        _, image = self.vid_cap.read()
+        self.vid_reader.set_image_index(frame_no)
+        image = self.vid_reader.get_next_data()[:, :, ::-1]
         return image
 
     @staticmethod
@@ -223,7 +224,7 @@ class Frames(MediaLoader):
 
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
-        iterator = self.process_video if self.vid_cap else self.process_frames
+        iterator = self.process_video if self.vid_reader is not None else self.process_frames
         for item in iterator():
             yield item
 
