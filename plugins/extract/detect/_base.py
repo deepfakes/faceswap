@@ -20,7 +20,7 @@ import cv2
 
 from lib.faces_detect import BoundingBox
 from lib.gpu_stats import GPUStats
-from lib.utils import rotate_landmarks, GetModel
+from lib.utils import deprecation_warning, rotate_landmarks, GetModel
 from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -71,6 +71,12 @@ class Detector():
         # will support. It is also used for holding the number of threads/
         # processes for parallel processing plugins
         self.batch_size = 1
+
+        if rotation is not None:
+            deprecation_warning("Rotation ('-r', '--rotation')",
+                                additional_info="It is not necessary for most detectors and will "
+                                                "be moved to plugin config for those detectors "
+                                                "that require it.")
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
@@ -80,6 +86,11 @@ class Detector():
             Override for specific detector """
         logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
+        # Sometimes BoundingBox doesn't get imported from the parent process
+        # Hacky fix to import it inside the process
+        global BoundingBox  # pylint:disable=global-statement,invalid-name
+        from lib.faces_detect import BoundingBox as bb  # pylint:disable=reimported
+        BoundingBox = bb
         self.init = kwargs.get("event", False)
         self.error = kwargs.get("error", False)
         self.queues["in"] = kwargs["in_queue"]

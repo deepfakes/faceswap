@@ -186,6 +186,16 @@ def set_system_verbosity(loglevel):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
+def deprecation_warning(func_name, additional_info=None):
+    """ Log at warning level that a function will be removed in future """
+    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger.debug("func_name: %s, additional_info: %s", func_name, additional_info)
+    msg = "{}  has been deprecated and will be removed from a future update.".format(func_name)
+    if additional_info is not None:
+        msg += " {}".format(additional_info)
+    logger.warning(msg)
+
+
 def rotate_landmarks(face, rotation_matrix):
     # pylint:disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces

@@ -23,7 +23,7 @@ from lib.model.backup_restore import Backup
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
-from lib.utils import FaceswapError
+from lib.utils import deprecation_warning, FaceswapError
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -62,6 +62,7 @@ class ModelBase():
 
         self.predict = predict
         self.model_dir = model_dir
+
         self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
         self.configfile = configfile
@@ -98,6 +99,11 @@ class ModelBase():
                               "snapshot_interval": snapshot_interval}
 
         self.set_gradient_type(memory_saving_gradients)
+        if self.multiple_models_in_folder:
+            deprecation_warning("Support for multiple model types within the same folder",
+                                additional_info="Please split each model into separate folders to "
+                                                "avoid issues in future.")
+
         self.build()
         self.set_training_data()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
@@ -138,6 +144,14 @@ class ModelBase():
         """ Return if all files exist and clear session """
         retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
         logger.debug("Pre-existing models exist: %s", retval)
+        return retval
+
+    @property
+    def multiple_models_in_folder(self):
+        """ Return true if there are multiple model types in the same folder, else false """
+        model_files = [fname for fname in os.listdir(self.model_dir) if fname.endswith(".h5")]
+        retval = os.path.commonprefix(model_files) == ""
+        logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
 
     @staticmethod

@@ -133,7 +133,12 @@ class TrainingDataGenerator():
         msg = ("Number of images is lower than batch-size (Note that too few "
                "images may lead to bad training). # images: {}, "
                "batch-size: {}".format(length, self.batchsize))
-        assert length >= self.batchsize, msg
+        try:
+            assert length >= self.batchsize, msg
+        except AssertionError as err:
+            msg += ("\nYou should increase the number of images in your training set or lower "
+                    "your batch-size.")
+            raise FaceswapError(msg) from err
 
     @staticmethod
     def minibatch(side, is_display, load_process):
@@ -352,7 +357,15 @@ class ImageManipulation():
         logger.trace("Randomly warping image")
         height, width = image.shape[0:2]
         coverage = self.get_coverage(image)
-        assert height == width and height % 2 == 0
+        try:
+            assert height == width and height % 2 == 0
+        except AssertionError as err:
+            msg = ("Training images should be square with an even number of pixels across each "
+                   "side. An image was found with width: {}, height: {}."
+                   "\nMost likely this is a frame rather than a face within your training set. "
+                   "\nMake sure that the only images within your training set are faces generated "
+                   "from the Extract process.".format(width, height))
+            raise FaceswapError(msg) from err
 
         range_ = np.linspace(height // 2 - coverage // 2,
                              height // 2 + coverage // 2,
