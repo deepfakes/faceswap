@@ -14,7 +14,7 @@ from lib.model import masks
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
-from lib.utils import cv2_read_img
+from lib.utils import cv2_read_img, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -189,9 +189,16 @@ class TrainingDataGenerator():
         lm_key = sha1(image).hexdigest()
         try:
             src_points = self.landmarks[side][lm_key]
-        except KeyError:
-            raise Exception("Landmarks not found for hash: '{}' file: '{}'".format(lm_key,
-                                                                                   filename))
+        except KeyError as err:
+            msg = ("At least one of your images does not have a matching entry in your alignments "
+                   "file."
+                   "\nIf you are training with a mask or using 'warp to landmarks' then every "
+                   "face you intend to train on must exist within the alignments file."
+                   "\nThe specific file that caused the failure was '{}' which has a hash of {}."
+                   "\nMost likely there will be more than just this file missing from the "
+                   "alignments file. You can use the Alignments Tool to help identify missing "
+                   "alignments".format(lm_key, filename))
+            raise FaceswapError(msg) from err
         logger.trace("Returning: (src_points: %s)", src_points)
         return src_points
 
