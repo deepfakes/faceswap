@@ -990,9 +990,9 @@ class MouseHandler():
         """ Convert Extracted Tuple to Alignments data """
         alignment = dict()
         bbox, landmarks = extract_data
-        alignment["x"] = bbox.left
-        alignment["w"] = bbox.width
-        alignment["y"] = bbox.top
-        alignment["h"] = bbox.height
+        alignment["x"] = bbox["left"]
+        alignment["w"] = bbox["right"] - bbox["left"]
+        alignment["y"] = bbox["top"]
+        alignment["h"] = bbox["bottom"] - bbox["top"]
         alignment["landmarksXY"] = landmarks
         return alignment
