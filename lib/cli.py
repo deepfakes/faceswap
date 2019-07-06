@@ -797,6 +797,21 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Scale the final output frames by this amount. 100%% will "
                                       "output the frames at source dimensions. 50%% at half size "
                                       "200%% at double size"})
+        argument_list.append({"opts": ("-j", "--jobs"),
+                              "dest": "jobs",
+                              "action": Slider,
+                              "type": int,
+                              "default": 0,
+                              "min_max": (0, 40),
+                              "rounding": 1,
+                              "help": "The maximum number of parallel processes for performing "
+                                      "conversion. Converting images is system RAM heavy so it is "
+                                      "possible to run out of memory if you have a lot of "
+                                      "processes and not enough RAM to accomodate them all. "
+                                      "Setting this to 0 will use the maximum available. No "
+                                      "matter what you set this to, it will never attempt to use "
+                                      "more processes than are available on your system. If "
+                                      "singleprocess is enabled this setting will be ignored."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
