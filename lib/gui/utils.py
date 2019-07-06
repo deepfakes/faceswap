@@ -11,7 +11,7 @@ from threading import Event, Thread
 from queue import Queue
 import numpy as np
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
 from lib.Serializer import JSONSerializer
 from .tooltip import Tooltip
@@ -314,13 +314,18 @@ class Images():
         show_files = sorted(imagefiles, key=os.path.getctime)[start_idx: end_idx]
         for fname in show_files:
             img = Image.open(fname)
-            img.thumbnail((thumbnail_size, thumbnail_size))
+            width, height = img.size
+            scaling = thumbnail_size / max(width, height)
+            logger.debug("image width: %s, height: %s, scaling: %s", width, height, scaling)
+            img = img.resize((int(width * scaling), int(height * scaling)))
             if img.size[0] != img.size[1]:
                 # Pad to square
                 new_img = Image.new("RGB", (thumbnail_size, thumbnail_size))
                 new_img.paste(img, ((thumbnail_size - img.size[0])//2,
                                     (thumbnail_size - img.size[1])//2))
                 img = new_img
+            draw = ImageDraw.Draw(img)
+            draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
             samples.append(np.array(img))
         samples = np.array(samples)
         logger.trace("Samples shape: %s", samples.shape)

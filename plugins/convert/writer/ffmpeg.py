@@ -6,7 +6,7 @@ from math import ceil
 
 import imageio
 import imageio_ffmpeg as im_ffm
-from ffmpy import FFmpeg
+from ffmpy import FFmpeg, FFRuntimeError
 
 from ._base import Output, logger
 
@@ -139,6 +139,22 @@ class Writer(Output):
                      inputs=inputs,
                      outputs=outputs)
         logger.debug("Executing: %s", ffm.cmd)
-        ffm.run()
+        # Sometimes ffmpy exits for no discernible reason, but then works on a later attempt,
+        # so take 5 shots at this
+        attempts = 5
+        for attempt in range(attempts):
+            logger.debug("Muxing attempt: %s", attempt + 1)
+            try:
+                ffm.run()
+            except FFRuntimeError as err:
+                logger.debug("ffmpy runtime error: %s", str(err))
+                if attempt != attempts - 1:
+                    continue
+                logger.error("There was a problem muxing audio. The output video has been "
+                             "created but you will need to mux audio yourself either with the "
+                             "EFFMpeg tool or an external application.")
+                os.rename(self.video_tmp_file, self.video_file)
+            break
         logger.debug("Removing temp file")
-        os.remove(self.video_tmp_file)
+        if os.path.isfile(self.video_tmp_file):
+            os.remove(self.video_tmp_file)

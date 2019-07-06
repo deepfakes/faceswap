@@ -136,7 +136,6 @@ class Align(Aligner):
             top += abs(top)
 
         # Make sure box is always square.
-        print(right, left, bottom, top)
         assert ((right - left) == (bottom - top)), 'Box is not square.'
 
         return [left, top, right, bottom]
