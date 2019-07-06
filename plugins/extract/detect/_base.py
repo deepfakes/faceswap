@@ -157,7 +157,9 @@ class Detector():
         """ Filter out any faces smaller than the min size threshold """
         retval = list()
         for face in detected_faces:
-            face_size = (face.width ** 2 + face.height ** 2) ** 0.5
+            width = face["right"] - face["left"]
+            height = face["bottom"] - face["top"]
+            face_size = (width ** 2 + height ** 2) ** 0.5
             if face_size < self.min_size:
                 logger.debug("Removing detected face: (face_size: %s, min_size: %s",
                              face_size, self.min_size)
