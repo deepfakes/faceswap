@@ -3,7 +3,7 @@
 
 import numpy as np
 
-from ._base import BoundingBox, cv2, Detector, logger
+from ._base import cv2, Detector, logger
 
 
 class Detect(Detector):
@@ -83,12 +83,12 @@ class Detect(Detector):
         logger.trace("Processing Output: (faces: %s, rotation_matrix: %s)",
                      faces, rotation_matrix)
 
-        faces = [BoundingBox(face[0], face[1], face[2], face[3]) for face in faces]
+        faces = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3]) for face in faces]
         if isinstance(rotation_matrix, np.ndarray):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
-        detected = [BoundingBox(face.left / scale, face.top / scale,
-                                face.right / scale, face.bottom / scale)
+        detected = [self.to_bounding_box_dict(face["left"] / scale, face["top"] / scale,
+                                              face["right"] / scale, face["bottom"] / scale)
                     for face in faces]
 
         logger.trace("Processed Output: %s", detected)

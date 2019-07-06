@@ -125,7 +125,7 @@ class Sort():
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        face = face.to_bounding_box()
+        face = face.to_bounding_box_dict()
         return {"image": image,
                 "detected_faces": [face]}
 

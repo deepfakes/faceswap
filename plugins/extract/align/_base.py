@@ -8,12 +8,12 @@
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of BoundingBoxes>}
+     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>}
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of BoundingBoxes>, (Class defined in /lib/faces_detect)
+     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>,
      "landmarks": <list of landmarks>}
     """
 

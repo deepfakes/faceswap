@@ -64,8 +64,13 @@ class Align(Aligner):
         """ Align the incoming image for prediction """
         logger.trace("Aligning image around center")
 
-        box = (detected_face.left, detected_face.top, detected_face.right, detected_face.bottom)
-        diff_height_width = detected_face.height - detected_face.width
+        box = (detected_face["left"],
+               detected_face["top"],
+               detected_face["right"],
+               detected_face["bottom"])
+        height = detected_face["bottom"] - detected_face["top"]
+        width = detected_face["right"] - detected_face["left"]
+        diff_height_width = height - width
         offset_y = int(abs(diff_height_width / 2))
         box_moved = self.move_box(box, [0, offset_y])
 
@@ -131,6 +136,7 @@ class Align(Aligner):
             top += abs(top)
 
         # Make sure box is always square.
+        print(right, left, bottom, top)
         assert ((right - left) == (bottom - top)), 'Box is not square.'
 
         return [left, top, right, bottom]

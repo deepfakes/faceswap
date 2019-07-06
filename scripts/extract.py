@@ -228,7 +228,7 @@ class Extract():
         detected_faces = faces["detected_faces"]
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box(face, image)
+            detected_face.from_bounding_box_dict(face, image)
             detected_face.landmarksXY = landmarks[idx]
             detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,

@@ -380,7 +380,7 @@ class DiskIO():
 
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box(face)
+            detected_face.from_bounding_box_dict(face)
             detected_face.landmarksXY = landmarks[idx]
             final_faces.append(detected_face)
         return final_faces

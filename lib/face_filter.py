@@ -105,7 +105,7 @@ class FaceFilter():
             landmarks = face["landmarks"][0]
 
             detected_face = DetectedFace()
-            detected_face.from_bounding_box(bounding_box, image)
+            detected_face.from_bounding_box_dict(bounding_box, image)
             detected_face.landmarksXY = landmarks
             detected_face.load_aligned(image, size=224)
             face["face"] = detected_face.aligned_face

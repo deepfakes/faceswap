@@ -51,12 +51,15 @@ class Align(Aligner):
     def get_center_scale(self, detected_face):
         """ Get the center and set scale of bounding box """
         logger.trace("Calculating center and scale")
-        center = np.array([(detected_face.left + detected_face.right) / 2.0,
-                           (detected_face.top + detected_face.bottom) / 2.0])
+        center = np.array([(detected_face["left"] + detected_face["right"]) / 2.0,
+                           (detected_face["top"] + detected_face["bottom"]) / 2.0])
 
-        center[1] -= detected_face.height * 0.12
+        height = detected_face["bottom"] - detected_face["top"]
+        width = detected_face["right"] - detected_face["left"]
 
-        scale = (detected_face.width + detected_face.height) / self.reference_scale
+        center[1] -= height * 0.12
+
+        scale = (width + height) / self.reference_scale
 
         logger.trace("Calculated center and scale: %s, %s", center, scale)
         return center, scale
@@ -244,7 +247,7 @@ class TorchBatchNorm2D(keras.engine.base_layer.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class FAN(object):
+class FAN():
     """
     Converted from pyTorch from
     https://github.com/1adrianb/face-alignment
@@ -264,5 +267,5 @@ class FAN(object):
 
     def predict(self, feed_item):
         """ Predict landmarks in session """
-        d = self.model.predict(feed_item)
-        return [d[-1].reshape((68, 64, 64))]
+        pred = self.model.predict(feed_item)
+        return [pred[-1].reshape((68, 64, 64))]

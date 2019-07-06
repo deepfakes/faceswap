@@ -8,7 +8,9 @@
     For each source frame, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of BoundingBoxes>} (Class defined in /lib/faces_detect)
+     "detected_faces": <list of dicts containing bounding box points>}}
+
+    - Use the function self.to_bounding_box_dict(left, right, top, bottom) to define the dict
     """
 
 import logging
@@ -18,7 +20,6 @@ from io import StringIO
 
 import cv2
 
-from lib.faces_detect import BoundingBox
 from lib.gpu_stats import GPUStats
 from lib.utils import deprecation_warning, rotate_landmarks, GetModel
 from plugins.extract._config import Config
@@ -86,11 +87,6 @@ class Detector():
             Override for specific detector """
         logger.debug("initialize %s (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
-        # Sometimes BoundingBox doesn't get imported from the parent process
-        # Hacky fix to import it inside the process
-        global BoundingBox  # pylint:disable=global-statement,invalid-name
-        from lib.faces_detect import BoundingBox as bb  # pylint:disable=reimported
-        BoundingBox = bb
         self.init = kwargs.get("event", False)
         self.error = kwargs.get("error", False)
         self.queues["in"] = kwargs["in_queue"]
@@ -99,7 +95,7 @@ class Detector():
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image
             Override for specific detector
-            Must return a list of BoundingBox's"""
+            Must return a list of bounding box dicts (See module docstring)"""
         try:
             if not self.init:
                 self.initialize(*args, **kwargs)
@@ -263,8 +259,8 @@ class Detector():
 
     @staticmethod
     def rotate_rect(bounding_box, rotation_matrix):
-        """ Rotate a BoundingBox based on the rotation_matrix"""
-        logger.trace("Rotating BoundingBox")
+        """ Rotate a bounding box dict based on the rotation_matrix"""
+        logger.trace("Rotating bounding box")
         bounding_box = rotate_landmarks(bounding_box, rotation_matrix)
         return bounding_box
 
@@ -342,11 +338,18 @@ class Detector():
         return int(vram["card_id"]), int(vram["free"]), int(vram["total"])
 
     @staticmethod
-    def set_predetected(width, height):
-        """ Set a BoundingBox for predetected faces """
+    def to_bounding_box_dict(left, top, right, bottom):
+        """ Return a dict for the bounding box """
+        return dict(left=int(round(left)),
+                    right=int(round(right)),
+                    top=int(round(top)),
+                    bottom=int(round(bottom)))
+
+    def set_predetected(self, width, height):
+        """ Set a bounding box dict for predetected faces """
         # Predetected_face is used for sort tool.
         # Landmarks should not be extracted again from predetected faces,
         # because face data is lost, resulting in a large variance
         # against extract from original image
         logger.debug("Setting predetected face")
-        return [BoundingBox(0, 0, width, height)]
+        return [self.to_bounding_box_dict(0, 0, width, height)]

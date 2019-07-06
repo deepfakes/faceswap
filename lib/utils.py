@@ -18,7 +18,7 @@ import numpy as np
 import cv2
 
 
-from lib.faces_detect import BoundingBox, DetectedFace
+from lib.faces_detect import DetectedFace
 
 
 # Global variables
@@ -200,10 +200,12 @@ def rotate_landmarks(face, rotation_matrix):
     # pylint:disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
-        Pass in a DetectedFace object, Alignments dict or BoundingBox"""
+        Pass in a DetectedFace object, Alignments dict or bounding box dict
+        (as defined in lib/plugins/extract/detect/_base.py) """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
                  rotation_matrix, type(face))
+    # Detected Face Object
     if isinstance(face, DetectedFace):
         bounding_box = [[face.x, face.y],
                         [face.x + face.w, face.y],
@@ -211,7 +213,8 @@ def rotate_landmarks(face, rotation_matrix):
                         [face.x, face.y + face.h]]
         landmarks = face.landmarksXY
 
-    elif isinstance(face, dict):
+    # Alignments Dict
+    elif isinstance(face, dict) and "x" in face:
         bounding_box = [[face.get("x", 0), face.get("y", 0)],
                         [face.get("x", 0) + face.get("w", 0),
                          face.get("y", 0)],
@@ -221,12 +224,14 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)]]
         landmarks = face.get("landmarksXY", list())
 
-    elif isinstance(face, BoundingBox):
-        bounding_box = [[face.left, face.top],
-                        [face.right, face.top],
-                        [face.right, face.bottom],
-                        [face.left, face.bottom]]
+    # Bounding Box Dict
+    elif isinstance(face, dict) and "left" in face:
+        bounding_box = [[face["left"], face["top"]],
+                        [face["right"], face["top"]],
+                        [face["right"], face["bottom"]],
+                        [face["left"], face["bottom"]]]
         landmarks = list()
+
     else:
         raise ValueError("Unsupported face type")
 
@@ -250,28 +255,32 @@ def rotate_landmarks(face, rotation_matrix):
     pt_y = min([pnt[1] for pnt in rotated[0]])
     pt_x1 = max([pnt[0] for pnt in rotated[0]])
     pt_y1 = max([pnt[1] for pnt in rotated[0]])
+    width = pt_x1 - pt_x
+    height = pt_y1 - pt_y
 
     if isinstance(face, DetectedFace):
         face.x = int(pt_x)
         face.y = int(pt_y)
-        face.w = int(pt_x1 - pt_x)
-        face.h = int(pt_y1 - pt_y)
+        face.w = int(width)
+        face.h = int(height)
         face.r = 0
         if len(rotated) > 1:
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
             face.landmarksXY = rotated_landmarks
-    elif isinstance(face, dict):
+    elif isinstance(face, dict) and "x" in face:
         face["x"] = int(pt_x)
         face["y"] = int(pt_y)
-        face["w"] = int(pt_x1 - pt_x)
-        face["h"] = int(pt_y1 - pt_y)
+        face["w"] = int(width)
+        face["h"] = int(height)
         face["r"] = 0
         if len(rotated) > 1:
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
             face["landmarksXY"] = rotated_landmarks
     else:
-        rotated_landmarks = BoundingBox(pt_x, pt_y, pt_x1, pt_y1)
-        face = rotated_landmarks
+        face["left"] = int(pt_x)
+        face["top"] = int(pt_y)
+        face["right"] = int(pt_x1)
+        face["bottom"] = int(pt_y1)
 
     logger.trace("Rotated landmarks: %s", rotated_landmarks)
     return face
