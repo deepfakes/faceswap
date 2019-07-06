@@ -97,7 +97,7 @@ class Convert():
     def process(self):
         """ Process the conversion """
         logger.debug("Starting Conversion")
-        queue_manager.debug_monitor(5)
+        # queue_manager.debug_monitor(5)
         try:
             self.convert_images()
             self.disk_io.save_thread.join()
