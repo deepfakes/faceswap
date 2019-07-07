@@ -110,8 +110,9 @@ class Model(ModelBase):
 
     def decoder_b(self):
         """ RealFace Decoder Network """
+        input_filters = self.config['complexity_encoder'] * 2**(self.downscalers_no-1)
         input_width = self.config['input_size'] // self._downscale_ratio
-        input_ = Input(shape=(input_width, input_width, 1024))
+        input_ = Input(shape=(input_width, input_width, input_filters))
 
         var_xy = input_
 
@@ -149,8 +150,9 @@ class Model(ModelBase):
 
     def decoder_a(self):
         """ RealFace Decoder (A) Network """
+        input_filters = self.config['complexity_encoder'] * 2**(self.downscalers_no-1)
         input_width = self.config['input_size'] // self._downscale_ratio
-        input_ = Input(shape=(input_width, input_width, 1024))
+        input_ = Input(shape=(input_width, input_width, input_filters))
 
         var_xy = input_
 
