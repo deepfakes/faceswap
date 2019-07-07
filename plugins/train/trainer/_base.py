@@ -172,40 +172,46 @@ class TrainerBase():
                        self.model.iterations >= snapshot_interval and
                        self.model.iterations % snapshot_interval == 0)
         loss = dict()
-        for side, batcher in self.batchers.items():
-            if self.pingpong.active and side != self.pingpong.side:
-                continue
-            loss[side] = batcher.train_one_batch(do_preview)
-            if not do_preview and not do_timelapse:
-                continue
+        try:
+            for side, batcher in self.batchers.items():
+                if self.pingpong.active and side != self.pingpong.side:
+                    continue
+                loss[side] = batcher.train_one_batch(do_preview)
+                if not do_preview and not do_timelapse:
+                    continue
+                if do_preview:
+                    self.samples.images[side] = batcher.compile_sample(None)
+                if do_timelapse:
+                    self.timelapse.get_sample(side, timelapse_kwargs)
+
+            self.model.state.increment_iterations()
+
+            for side, side_loss in loss.items():
+                self.store_history(side, side_loss)
+                self.log_tensorboard(side, side_loss)
+
+            if not self.pingpong.active:
+                self.print_loss(loss)
+            else:
+                for key, val in loss.items():
+                    self.pingpong.loss[key] = val
+                self.print_loss(self.pingpong.loss)
+
             if do_preview:
-                self.samples.images[side] = batcher.compile_sample(None)
+                samples = self.samples.show_sample()
+                if samples is not None:
+                    viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
+
             if do_timelapse:
-                self.timelapse.get_sample(side, timelapse_kwargs)
+                self.timelapse.output_timelapse()
 
-        self.model.state.increment_iterations()
-
-        for side, side_loss in loss.items():
-            self.store_history(side, side_loss)
-            self.log_tensorboard(side, side_loss)
-
-        if not self.pingpong.active:
-            self.print_loss(loss)
-        else:
-            for key, val in loss.items():
-                self.pingpong.loss[key] = val
-            self.print_loss(self.pingpong.loss)
-
-        if do_preview:
-            samples = self.samples.show_sample()
-            if samples is not None:
-                viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
-
-        if do_timelapse:
-            self.timelapse.output_timelapse()
-
-        if do_snapshot:
-            self.model.do_snapshot()
+            if do_snapshot:
+                self.model.do_snapshot()
+        except Exception as err:
+            #  Shutdown the FixedProducerDispatchers then continue to raise error
+            for batcher in self.batchers.values():
+                batcher.shutdown_feed()
+            raise err
 
     def store_history(self, side, loss):
         """ Store the history of this step """
@@ -246,7 +252,10 @@ class Batcher():
         self.samples = None
         self.mask = None
 
-        self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side)
+        generator = self.load_generator()
+        self.feed = generator.minibatch_ab(images, batch_size, self.side)
+        self.shutdown_feed = generator.join_subprocess
+
         self.preview_feed = None
         self.timelapse_feed = None
 

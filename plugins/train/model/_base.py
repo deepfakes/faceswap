@@ -150,7 +150,7 @@ class ModelBase():
     def multiple_models_in_folder(self):
         """ Return true if there are multiple model types in the same folder, else false """
         model_files = [fname for fname in os.listdir(self.model_dir) if fname.endswith(".h5")]
-        retval = os.path.commonprefix(model_files) == ""
+        retval = False if not model_files else os.path.commonprefix(model_files) == ""
         logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
 
@@ -486,7 +486,7 @@ class ModelBase():
 
         if not save_averages:
             logger.debug("No save averages. Not backing up")
-            return
+            return False
 
         for side, loss in save_averages.items():
             if not self.state.lowest_avg_loss.get(side, None):

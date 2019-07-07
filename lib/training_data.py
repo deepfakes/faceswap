@@ -33,6 +33,7 @@ class TrainingDataGenerator():
         self.training_opts = training_opts
         self.mask_class = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
+        self.fixed_producer_dispatcher = None  # Set by FPD when loading
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
@@ -68,15 +69,24 @@ class TrainingDataGenerator():
         if self.mask_class:
             batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
 
-        load_process = FixedProducerDispatcher(
+        self.fixed_producer_dispatcher = FixedProducerDispatcher(
             method=self.load_batches,
             shapes=batch_shape,
             in_queue=queue_in,
             out_queue=queue_out,
             args=(images, side, is_display, do_shuffle, batchsize))
-        load_process.start()
+        self.fixed_producer_dispatcher.start()
         logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
-        return self.minibatch(side, is_display, load_process)
+        return self.minibatch(side, is_display, self.fixed_producer_dispatcher)
+
+    def join_subprocess(self):
+        """ Join the FixedProduceerDispatcher subprocess from outside this module """
+        logger.debug("Joining FixedProducerDispatcher")
+        if self.fixed_producer_dispatcher is None:
+            logger.debug("FixedProducerDispatcher not yet initialized. Exiting")
+            return
+        self.fixed_producer_dispatcher.join()
+        logger.debug("Joined FixedProducerDispatcher")
 
     @staticmethod
     def make_queues(side, is_preview, is_timelapse):
