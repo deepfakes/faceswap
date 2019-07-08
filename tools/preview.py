@@ -22,7 +22,7 @@ from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.model.masks import get_available_masks
 from lib.multithreading import MultiThread
-from lib.utils import set_system_verbosity
+from lib.utils import FaceswapError, set_system_verbosity
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict
@@ -184,6 +184,13 @@ class Samples():
         retval = [filename for filename in filelist
                   if self.alignments.frame_has_faces(os.path.basename(filename))]
         logger.debug("Filtered out frames: %s", self.images.images_found - len(retval))
+        try:
+            assert retval
+        except AssertionError as err:
+            msg = ("No faces were found in any of the frames passed in. Make sure you are passing "
+                   "in a frames source rather than extracted faces, and that you have provided "
+                   "the correct alignments file.")
+            raise FaceswapError(msg) from err
         return retval
 
     def get_indices(self):

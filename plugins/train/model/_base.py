@@ -197,6 +197,9 @@ class ModelBase():
                        "\nYou should restore weights from a snapshot or from backup files. "
                        "You can use the 'Restore' Tool to restore from backup.")
                 raise FaceswapError(msg) from err
+            if "multi_gpu_model" in str(err).lower():
+                raise FaceswapError(str(err)) from err
+            raise err
         self.log_summary()
         self.compile_predictors(initialize=True)
 
