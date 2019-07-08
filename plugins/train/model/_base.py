@@ -149,7 +149,7 @@ class ModelBase():
     @property
     def multiple_models_in_folder(self):
         """ Return true if there are multiple model types in the same folder, else false """
-        model_files = [fname for fname in os.listdir(self.model_dir) if fname.endswith(".h5")]
+        model_files = [fname for fname in os.listdir(str(self.model_dir)) if fname.endswith(".h5")]
         retval = False if not model_files else os.path.commonprefix(model_files) == ""
         logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
