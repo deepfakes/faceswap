@@ -30,6 +30,14 @@ class Output():
         self.cache = dict()  # Cache for when frames must be written in correct order
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def is_stream(self):
+        """ Return whether the writer is a stream or images
+            Writers that write to a stream have a frame_order paramater to dictate
+            the order in which frames should be written out (eg. gif/ffmpeg) """
+        retval = hasattr(self, "frame_order")
+        return retval
+
     def output_filename(self, filename):
         """ Return the output filename with the correct folder and extension
             NB: The plugin must have a config item 'format' that contains the

@@ -7,6 +7,7 @@ import os
 import sys
 from threading import Event
 
+from cv2 import imwrite  # pylint:disable=no-name-in-module
 import numpy as np
 from tqdm import tqdm
 
@@ -399,7 +400,10 @@ class DiskIO():
     def save(self, completion_event):
         """ Save the converted images """
         logger.debug("Save Images: Start")
-        for _ in tqdm(range(self.total_count), desc="Converting", file=sys.stdout):
+        write_preview = self.args.redirect_gui and self.writer.is_stream
+        preview_image = os.path.join(self.writer.output_folder, ".gui_preview.jpg")
+        logger.debug("Write preview for gui: %s", write_preview)
+        for idx in tqdm(range(self.total_count), desc="Converting", file=sys.stdout):
             if self.save_queue.shutdown.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
                 break
@@ -408,6 +412,10 @@ class DiskIO():
                 logger.debug("EOF Received")
                 break
             filename, image = item
+            # Write out preview image for the GUI every 10 frames if writing to stream
+            if write_preview and idx % 10 == 0 and not os.path.exists(preview_image):
+                logger.debug("Writing GUI Preview image: '%s'", preview_image)
+                imwrite(preview_image, image)
             self.writer.write(filename, image)
         self.writer.close()
         completion_event.set()
