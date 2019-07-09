@@ -170,7 +170,7 @@ class Check():
     def output_results(self, items_output):
         """ Output the results in the requested format """
         logger.trace("items_output: %s", items_output)
-        if self.output == "move" and self.is_video:
+        if self.output == "move" and self.is_video and self.type == "frames":
             logger.warning("Move was selected with an input video. This is not possible so "
                            "falling back to console output")
             self.output = "console"
@@ -195,15 +195,18 @@ class Check():
             self.output_file(output_message, len(items_output))
 
     def get_output_folder(self):
-        """ Return output folder. Needs to be in the root if input is a video """
-        dst_dir = os.path.dirname(self.source_dir) if self.is_video else self.source_dir
-        return dst_dir
+        """ Return output folder. Needs to be in the root if input is a
+            video and processing frames """
+        if self.is_video and self.type == "frames":
+            return os.path.dirname(self.source_dir)
+        return self.source_dir
 
     def get_filename_prefix(self):
-        """ Video name needs to be prefixed to filename if input is a video """
-        if not self.is_video:
-            return ""
-        return "{}_".format(os.path.basename(self.source_dir))
+        """ Video name needs to be prefixed to filename if input is a
+            video and processing frames """
+        if self.is_video and self.type == "frames":
+            return "{}_".format(os.path.basename(self.source_dir))
+        return ""
 
     def output_file(self, output_message, items_discovered):
         """ Save the output to a text file in the frames directory """
@@ -220,7 +223,7 @@ class Check():
     def move_file(self, items_output):
         """ Move the identified frames to a new subfolder """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = "{}{}_{}".format(self.get_filename_prefix,
+        folder_name = "{}{}_{}".format(self.get_filename_prefix(),
                                        self.output_message.replace(" ", "_").lower(), now)
         dst_dir = self.get_output_folder()
         output_folder = os.path.join(dst_dir, folder_name)
