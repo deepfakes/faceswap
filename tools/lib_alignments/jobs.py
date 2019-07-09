@@ -114,11 +114,12 @@ class Check():
         """ Return Faces when there are multiple faces in a frame """
         self.output_message = "Multiple faces in frame"
         seen_hash_dupes = set()
+        hashes_to_frame = self.alignments.hashes_to_frame
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
             frame_idx = [(frame, idx)
-                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
+                         for frame, idx in hashes_to_frame[f_hash].items()]
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -138,7 +139,7 @@ class Check():
     def get_missing_alignments(self):
         """ yield each frame that does not exist in alignments file """
         self.output_message = "Frames missing from alignments file"
-        exclude_filetypes = ["yaml", "yml", "p", "json", "txt"]
+        exclude_filetypes = set(["yaml", "yml", "p", "json", "txt"])
         for frame in tqdm(self.items, desc=self.output_message):
             frame_name = frame["frame_fullname"]
             if (frame["frame_extension"] not in exclude_filetypes
@@ -150,7 +151,7 @@ class Check():
         """ yield each frame in alignments that does
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
-        frames = [item["frame_fullname"] for item in self.items]
+        frames = set([item["frame_fullname"] for item in self.items])
         for frame in tqdm(self.alignments.data.keys(), desc=self.output_message):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)
@@ -159,9 +160,10 @@ class Check():
     def get_leftover_faces(self):
         """yield each face that isn't in the alignments file."""
         self.output_message = "Faces missing from the alignments file"
+        hashes_to_frame = self.alignments.hashes_to_frame
         for face in tqdm(self.items, desc=self.output_message):
             f_hash = face["face_hash"]
-            if not self.alignments.hashes_to_frame.get(f_hash, None):
+            if f_hash not in hashes_to_frame:
                 logger.debug("Returning: '%s'", face["face_fullname"])
                 yield face["face_fullname"], -1
 
@@ -484,6 +486,7 @@ class Merge():
         self.faces = self.get_faces(arguments)
         self.final_alignments = alignments[0]
         self.process_alignments = alignments[1:]
+        self._hashes_to_frame = None
 
     @staticmethod
     def get_faces(arguments):
@@ -498,6 +501,7 @@ class Merge():
         logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
         if self.faces is not None:
             self.remove_faces()
+        self._hashes_to_frame = self.final_alignments.hashes_to_frame
         skip_count = 0
         merge_count = 0
         total_count = sum([alignments.frames_count for alignments in self.process_alignments])
@@ -551,7 +555,7 @@ class Merge():
 
     def check_exists(self, frame, alignment, idx):
         """ Check whether this face already exists """
-        existing_frame = self.final_alignments.hashes_to_frame.get(alignment["hash"], None)
+        existing_frame = self._hashes_to_frame.get(alignment["hash"], None)
         if not existing_frame:
             return False
         if frame in existing_frame.keys():
@@ -566,6 +570,7 @@ class Merge():
         """ Merge the source alignment into the destination """
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
+        self.hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
         self.final_alignments.data.setdefault(frame, list()).append(alignment)
 
     def set_destination_filename(self):
@@ -678,7 +683,7 @@ class RemoveAlignments():
         """ Set the correct items to process """
         retval = None
         if self.type == "frames":
-            retval = list(Frames(arguments.frames_dir).items.keys())
+            retval = Frames(arguments.frames_dir).items
         elif self.type == "faces":
             retval = Faces(arguments.faces_dir)
         return retval
@@ -725,7 +730,7 @@ class RemoveAlignments():
 
     def remove_faces(self):
         """ Process to remove faces from an alignments file """
-        face_hashes = list(self.items.items.keys())
+        face_hashes = self.items.items
         if not face_hashes:
             logger.error("No face hashes. This would remove all faces from your alignments file.")
             return 0
@@ -733,23 +738,6 @@ class RemoveAlignments():
         self.alignments.filter_hashes(face_hashes, filter_out=False)
         post_face_count = self.alignments.faces_count
         return pre_face_count - post_face_count
-
-    def remove_alignment(self, item):
-        """ Remove the alignment from the alignments file """
-        del_count = 0
-        frame_name, alignments, number_alignments = item[:3]
-        for idx in self.alignments.yield_original_index_reverse(alignments, number_alignments):
-            face_indexes = self.items.items.get(frame_name, [-1])
-            if idx not in face_indexes:
-                del alignments[idx]
-                self.removed.add(frame_name)
-                logger.verbose("Removed alignment data for image: '%s' index: %s",
-                               frame_name, str(idx))
-                del_count += 1
-            else:
-                logger.trace("Not removing alignment data for image: '%s' index: %s",
-                             frame_name, str(idx))
-        return del_count
 
 
 class Rename():
@@ -766,22 +754,18 @@ class Rename():
         """ Process the face renaming """
         logger.info("[RENAME FACES]")  # Tidy up cli output
         rename_count = 0
-        for frame, _, _, frame_fullname in tqdm(self.alignments.yield_faces(),
+        for frame, details, _, frame_fullname in tqdm(self.alignments.yield_faces(),
                                                 desc="Renaming Faces",
                                                 total=self.alignments.frames_count):
-            rename_count += self.rename_faces(frame, frame_fullname)
+            rename_count += self.rename_faces(frame, frame_fullname, details)
         logger.info("%s faces renamed", rename_count)
 
-    def rename_faces(self, frame, frame_fullname):
+    def rename_faces(self, frame, frame_fullname, details):
         """ Rename faces
             Done in 2 iterations as two files cannot share the same name """
         logger.trace("Renaming faces for frame: '%s'", frame_fullname)
         temp_ext = ".temp_move"
-        frame_faces = list()
-        frame_faces = [(f_hash, idx)
-                       for f_hash, details in self.alignments.hashes_to_frame.items()
-                       for frame_name, idx in details.items()
-                       if frame_name == frame_fullname]
+        frame_faces = [(x["hash"], idx) for idx, x in enumerate(details)]
         rename_count = 0
         rename_files = list()
         for f_hash, idx in frame_faces:
