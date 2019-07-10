@@ -15,13 +15,13 @@ import keras
 from keras import losses
 from keras import backend as K
 from keras.models import load_model, Model
-from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.backup_restore import Backup
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
+from lib.model.optimizers import Adam
 from lib.multithreading import MultiThread
 from lib.utils import deprecation_warning, FaceswapError
 from plugins.train._config import Config
@@ -49,16 +49,18 @@ class ModelBase():
                  trainer="original",
                  pingpong=False,
                  memory_saving_gradients=False,
+                 optimizer_savings="none",
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
                      "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
                      "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
                      "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
-                     "pingpong: %s, memory_saving_gradients: %s, predict: %s)",
+                     "pingpong: %s, memory_saving_gradients: %s, optimizer_savings: %s, "
+                     "predict: %s)",
                      self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
                      no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
                      alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
-                     memory_saving_gradients, predict)
+                     memory_saving_gradients, optimizer_savings, predict)
 
         self.predict = predict
         self.model_dir = model_dir
@@ -98,6 +100,7 @@ class ModelBase():
                               "pingpong": pingpong,
                               "snapshot_interval": snapshot_interval}
 
+        self.optimizer_savings = optimizer_savings
         self.set_gradient_type(memory_saving_gradients)
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -328,7 +331,7 @@ class ModelBase():
             # TODO: Remove this as soon it is fixed in PlaidML.
             opt_kwargs["clipnorm"] = 1.0
         logger.debug("Optimizer kwargs: %s", opt_kwargs)
-        return Adam(**opt_kwargs)
+        return Adam(**opt_kwargs, cpu_mode=self.optimizer_savings)
 
     def loss_function(self, mask, side, initialize):
         """ Set the loss function
@@ -600,6 +603,11 @@ class NNMeta():
         self.config = network.get_config()  # For pingpong restore
         self.weights = network.get_weights()  # For pingpong restore
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def output_shapes(self):
+        """ Return the output shapes from the stored network """
+        return [K.int_shape(output) for output in self.network.outputs]
 
     def set_name(self):
         """ Set the network name """

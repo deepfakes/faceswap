@@ -169,6 +169,7 @@ class Train():
             preview_scale=self.args.preview_scale,
             pingpong=self.args.pingpong,
             memory_saving_gradients=self.args.memory_saving_gradients,
+            optimizer_savings=self.args.optimizer_savings,
             predict=False)
         logger.debug("Loaded Model")
         return model

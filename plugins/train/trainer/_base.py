@@ -284,7 +284,8 @@ class Batcher():
                    "particularly bad for this)."
                    "\n2) Lower the batchsize (the amount of images fed into the model each "
                    "iteration)."
-                   "\n3) Try Memory Saving Gradients and/or Ping Pong Training."
+                   "\n3) Try 'Memory Saving Gradients' and/or 'Optimizer Savings' and/or 'Ping "
+                   "Pong Training'."
                    "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
