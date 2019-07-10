@@ -272,8 +272,18 @@ class PostProcess():
         if ((hasattr(self.args, "filter") and self.args.filter is not None) or
                 (hasattr(self.args, "nfilter") and
                  self.args.nfilter is not None)):
-            face_filter = dict(detector=self.args.detector.replace("-", "_").lower(),
-                               aligner=self.args.aligner.replace("-", "_").lower(),
+
+            if hasattr(self.args, "detector"):
+                detector = self.args.detector.replace("-", "_").lower()
+            else:
+                detector = "cv2_dnn"
+            if hasattr(self.args, "aligner"):
+                aligner = self.args.aligner.replace("-", "_").lower()
+            else:
+                aligner = "cv2_dnn"
+
+            face_filter = dict(detector=detector,
+                               aligner=aligner,
                                loglevel=self.args.loglevel,
                                multiprocess=not self.args.singleprocess)
             filter_lists = dict()

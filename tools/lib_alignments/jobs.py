@@ -151,7 +151,7 @@ class Check():
         """ yield each frame in alignments that does
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
-        frames = set([item["frame_fullname"] for item in self.items])
+        frames = set(item["frame_fullname"] for item in self.items)
         for frame in tqdm(self.alignments.data.keys(), desc=self.output_message):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)
@@ -573,7 +573,7 @@ class Merge():
         """ Merge the source alignment into the destination """
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
-        self.hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
+        self._hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
         self.final_alignments.data.setdefault(frame, list()).append(alignment)
 
     def set_destination_filename(self):
@@ -758,8 +758,8 @@ class Rename():
         logger.info("[RENAME FACES]")  # Tidy up cli output
         rename_count = 0
         for frame, details, _, frame_fullname in tqdm(self.alignments.yield_faces(),
-                                                desc="Renaming Faces",
-                                                total=self.alignments.frames_count):
+                                                      desc="Renaming Faces",
+                                                      total=self.alignments.frames_count):
             rename_count += self.rename_faces(frame, frame_fullname, details)
         logger.info("%s faces renamed", rename_count)
 
