@@ -221,6 +221,8 @@ class Alignments():
     def add_face(self, frame, alignment):
         """ Add a new face for a frame and return it's index """
         logger.debug("Adding face to frame: '%s'", frame)
+        if frame not in self.data:
+            self.data[frame] = []
         self.data[frame].append(alignment)
         retval = self.count_faces_in_frame(frame) - 1
         logger.debug("Returning new face index: %s", retval)
