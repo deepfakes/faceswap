@@ -64,12 +64,12 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         build_tabs = getattr(self, "{}_tabs".format(command))
         build_tabs()
 
-    def extract_tabs(self):
+    def extract_tabs(self, command="extract"):
         """ Build the extract tabs """
         logger.debug("Build extract tabs")
         helptext = ("Updates preview from output every 5 "
                     "seconds to limit disk contention")
-        PreviewExtract(self, "preview", helptext, 5000)
+        PreviewExtract(self, "preview", helptext, 5000, command)
         logger.debug("Built extract tabs")
 
     def train_tabs(self):
@@ -88,7 +88,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         """ Build the convert tabs
             Currently identical to Extract, so just call that """
         logger.debug("Build convert tabs")
-        self.extract_tabs()
+        self.extract_tabs(command="convert")
         logger.debug("Built convert tabs")
 
     def remove_tabs(self):
@@ -98,19 +98,9 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                 continue
             logger.debug("removing child: %s", child)
             child_name = child.split(".")[-1]
-            child_object = self.children[child_name]
-            self.destroy_tabs_children(child_object)
+            child_object = self.children[child_name]  # returns the OptionalDisplayPage object
+            child_object.close()  # Call the OptionalDisplayPage close() method
             self.forget(child)
-
-    @staticmethod
-    def destroy_tabs_children(tab):
-        """ Destroy all tabs children
-            Children must be destroyed as forget only hides display
-        """
-        logger.debug("Destroying children for tab: %s", tab)
-        for child in tab.winfo_children():
-            logger.debug("Destroying child: %s", child)
-            child.destroy()
 
     def update_displaybook(self, *args):  # pylint: disable=unused-argument
         """ Set the display tabs based on executing task """

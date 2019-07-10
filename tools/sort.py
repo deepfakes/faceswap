@@ -13,13 +13,13 @@ import cv2
 from tqdm import tqdm
 
 # faceswap imports
-import face_recognition
-
 from lib.cli import FullHelpArgumentParser
 from lib import Serializer
 from lib.faces_detect import DetectedFace
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
+from lib.utils import cv2_read_img
+from lib.vgg_face import VGGFace
 from plugins.plugin_loader import PluginLoader
 
 from . import cli
@@ -34,6 +34,7 @@ class Sort():
         self.args = arguments
         self.changes = None
         self.serializer = None
+        self.vgg_face = None
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -49,12 +50,14 @@ class Sort():
         if (self.args.final_process == "folders"
                 and self.args.min_threshold < 0.0):
             method = self.args.group_method.lower()
-            if method == 'face':
-                self.args.min_threshold = 0.6
-            elif method == 'face-cnn':
+            if method == 'face-cnn':
                 self.args.min_threshold = 7.2
             elif method == 'hist':
                 self.args.min_threshold = 0.3
+
+        # Load VGG Face if sorting by face
+        if self.args.sort_method.lower() == "face":
+            self.vgg_face = VGGFace(backend=self.args.backend)
 
         # If logging is enabled, prepare container
         if self.args.log_changes:
@@ -87,7 +90,7 @@ class Sort():
         kwargs = {"in_queue": queue_manager.get_queue("in"),
                   "out_queue": out_queue}
 
-        for plugin in ("fan", "dlib"):
+        for plugin in ("fan", "cv2_dnn"):
             aligner = PluginLoader.get_aligner(plugin)(loglevel=self.args.loglevel)
             process = SpawnProcess(aligner.run, **kwargs)
             event = process.event
@@ -100,11 +103,11 @@ class Sort():
             if not event.is_set():
                 if plugin == "fan":
                     process.join()
-                    logger.error("Error initializing FAN. Trying Dlib")
+                    logger.error("Error initializing FAN. Trying CV2-DNN")
                     continue
                 else:
                     raise ValueError("Error inititalizing Aligner")
-            if plugin == "dlib":
+            if plugin == "cv2_dnn":
                 return
 
             try:
@@ -115,21 +118,21 @@ class Sort():
             if not err:
                 break
             process.join()
-            logger.error("Error initializing FAN. Trying Dlib")
+            logger.error("Error initializing FAN. Trying CV2-DNN")
 
     @staticmethod
     def alignment_dict(image):
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        face = face.to_dlib_rect()
+        face = face.to_bounding_box_dict()
         return {"image": image,
                 "detected_faces": [face]}
 
     @staticmethod
     def get_landmarks(filename):
         """ Extract the face from a frame (If not alignments file found) """
-        image = cv2.imread(filename)
+        image = cv2_read_img(filename, raise_error=True)
         queue_manager.get_queue("in").put(Sort.alignment_dict(image))
         face = queue_manager.get_queue("out").get()
         landmarks = face["landmarks"][0]
@@ -181,65 +184,13 @@ class Sort():
 
         logger.info("Sorting by face similarity...")
 
-        img_list = [[img, face_recognition.face_encodings(cv2.imread(img))]
-                    for img in
-                    tqdm(self.find_images(input_dir),
-                         desc="Loading",
-                         file=sys.stdout)]
-
-        img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1),
-                      desc="Sorting",
-                      file=sys.stdout):
-            min_score = float("inf")
-            j_min_score = i + 1
-            for j in range(i + 1, len(img_list)):
-                f1encs = img_list[i][1]
-                f2encs = img_list[j][1]
-                if f1encs and f2encs:
-                    score = face_recognition.face_distance(f1encs[0],
-                                                           f2encs)[0]
-                else:
-                    score = float("inf")
-
-                if score < min_score:
-                    min_score = score
-                    j_min_score = j
-            (img_list[i + 1],
-             img_list[j_min_score]) = (img_list[j_min_score],
-                                       img_list[i + 1])
-        return img_list
-
-    def sort_face_dissim(self):
-        """ Sort by face dissimilarity """
-        input_dir = self.args.input_dir
-
-        logger.info("Sorting by face dissimilarity...")
-
-        img_list = [[img, face_recognition.face_encodings(cv2.imread(img)), 0]
-                    for img in
-                    tqdm(self.find_images(input_dir),
-                         desc="Loading",
-                         file=sys.stdout)]
-
-        img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len), desc="Sorting", file=sys.stdout):
-            score_total = 0
-            for j in range(0, img_list_len):
-                if i == j:
-                    continue
-                try:
-                    score_total += face_recognition.face_distance(
-                        [img_list[i][1]],
-                        [img_list[j][1]])
-                except:
-                    logger.info("except")
-                    pass
-
-            img_list[i][2] = score_total
-
-        logger.info("Sorting...")
-        img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
+        images = np.array(self.find_images(input_dir))
+        preds = np.array([self.vgg_face.predict(cv2_read_img(img, raise_error=True))
+                          for img in tqdm(images, desc="loading", file=sys.stdout)])
+        logger.info("Sorting. Depending on ths size of your dataset, this may take a few "
+                    "minutes...")
+        indices = self.vgg_face.sorted_similarity(preds, method="ward")
+        img_list = images[indices]
         return img_list
 
     def sort_face_cnn(self):
@@ -337,7 +288,7 @@ class Sort():
         logger.info("Sorting by histogram similarity...")
 
         img_list = [
-            [img, cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256])]
+            [img, cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256])]
             for img in
             tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
         ]
@@ -367,7 +318,7 @@ class Sort():
 
         img_list = [
             [img,
-             cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256]), 0]
+             cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256]), 0]
             for img in
             tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
         ]
@@ -411,60 +362,6 @@ class Sort():
         # If remainder is 0, nothing gets added to the last bin.
         for i in range(1, remainder + 1):
             bins[-1].append(img_list[-i][0])
-
-        return bins
-
-    def group_face(self, img_list):
-        """ Group into bins by face similarity """
-        logger.info("Grouping by face similarity...")
-
-        # Groups are of the form: group_num -> reference face
-        reference_groups = dict()
-
-        # Bins array, where index is the group number and value is
-        # an array containing the file paths to the images in that group.
-        # The first group (0), is always the non-face group.
-        bins = [[]]
-
-        # Comparison threshold used to decide how similar
-        # faces have to be to be grouped together.
-        min_threshold = self.args.min_threshold
-
-        img_list_len = len(img_list)
-
-        for i in tqdm(range(1, img_list_len),
-                      desc="Grouping",
-                      file=sys.stdout):
-            f1encs = img_list[i][1]
-
-            # Check if current image is a face, if not then
-            # add it immediately to the non-face list.
-            if f1encs is None or len(f1encs) <= 0:
-                bins[0].append(img_list[i][0])
-
-            else:
-                current_best = [-1, float("inf")]
-
-                for key, references in reference_groups.items():
-                    # Non-faces are not added to reference_groups dict, thus
-                    # removing the need to check that f2encs is a face.
-                    # The try-catch block is to handle the first face that gets
-                    # processed, as the first value is None.
-                    try:
-                        score = self.get_avg_score_faces(f1encs, references)
-                    except TypeError:
-                        score = float("inf")
-                    except ZeroDivisionError:
-                        score = float("inf")
-                    if score < current_best[1]:
-                        current_best[0], current_best[1] = key, score
-
-                if current_best[1] < min_threshold:
-                    reference_groups[current_best[0]].append(f1encs[0])
-                    bins[current_best[0]].append(img_list[i][0])
-                else:
-                    reference_groups[len(reference_groups)] = img_list[i][1]
-                    bins.append([img_list[i][0]])
 
         return bins
 
@@ -593,7 +490,7 @@ class Sort():
                       desc=description,
                       leave=False,
                       file=sys.stdout):
-            src = img_list[i][0]
+            src = img_list[i] if isinstance(img_list[i], str) else img_list[i][0]
             src_basename = os.path.basename(src)
 
             dst = os.path.join(output_dir, '{:05d}_{}'.format(i, src_basename))
@@ -607,7 +504,8 @@ class Sort():
                       desc=description,
                       file=sys.stdout):
             renaming = self.set_renaming_method(self.args.log_changes)
-            src, dst = renaming(img_list[i][0], output_dir, i, self.changes)
+            fname = img_list[i] if isinstance(img_list[i], str) else img_list[i][0]
+            src, dst = renaming(fname, output_dir, i, self.changes)
 
             try:
                 os.rename(src, dst)
@@ -674,17 +572,11 @@ class Sort():
         input_dir = self.args.input_dir
         logger.info("Preparing to group...")
         if group_method == 'group_blur':
-            temp_list = [[img, self.estimate_blur(cv2.imread(img))]
+            temp_list = [[img, self.estimate_blur(cv2_read_img(img, raise_error=True))]
                          for img in
                          tqdm(self.find_images(input_dir),
                               desc="Reloading",
                               file=sys.stdout)]
-        elif group_method == 'group_face':
-            temp_list = [
-                [img, face_recognition.face_encodings(cv2.imread(img))]
-                for img in tqdm(self.find_images(input_dir),
-                                desc="Reloading",
-                                file=sys.stdout)]
         elif group_method == 'group_face_cnn':
             self.launch_aligner()
             temp_list = []
@@ -708,7 +600,7 @@ class Sort():
         elif group_method == 'group_hist':
             temp_list = [
                 [img,
-                 cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256])]
+                 cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256])]
                 for img in
                 tqdm(self.find_images(input_dir),
                      desc="Reloading",
@@ -741,9 +633,9 @@ class Sort():
         for i in tqdm(range(len(sorted_list)),
                       desc="Splicing",
                       file=sys.stdout):
-            current_image = sorted_list[i][0]
-            new_val_index = val_index_list.index(current_image)
-            new_list.append([current_image, new_vals_list[new_val_index][1]])
+            current_img = sorted_list[i] if isinstance(sorted_list[i], str) else sorted_list[i][0]
+            new_val_index = val_index_list.index(current_img)
+            new_list.append([current_img, new_vals_list[new_val_index][1]])
 
         return new_list
 
@@ -761,12 +653,10 @@ class Sort():
     @staticmethod
     def estimate_blur(image_file):
         """
-        Estimate the amount of blur an image has
-        with the variance of the Laplacian.
-        Normalize by pixel number to offset the effect
-        of image size on pixel gradients & variance
+        Estimate the amount of blur an image has with the variance of the Laplacian.
+        Normalize by pixel number to offset the effect of image size on pixel gradients & variance
         """
-        image = cv2.imread(image_file)
+        image = cv2_read_img(image_file, raise_error=True)
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
@@ -864,16 +754,6 @@ class Sort():
         scores = []
         for img2 in references:
             score = cv2.compareHist(img1, img2, cv2.HISTCMP_BHATTACHARYYA)
-            scores.append(score)
-        return sum(scores) / len(scores)
-
-    @staticmethod
-    def get_avg_score_faces(f1encs, references):
-        """ Return the average similarity score between a face and
-            reference image """
-        scores = []
-        for f2encs in references:
-            score = face_recognition.face_distance(f1encs, f2encs)[0]
             scores.append(score)
         return sum(scores) / len(scores)
 

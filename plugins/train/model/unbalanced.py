@@ -16,6 +16,7 @@ class Model(OriginalModel):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
+        self.configfile = kwargs.get("configfile", None)
         self.lowmem = self.config.get("lowmem", False)
         kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
         kwargs["encoder_dim"] = 512 if self.lowmem else self.config["nodes"]

@@ -1,18 +1,21 @@
 tqdm
 psutil
 pathlib
-numpy==1.15.4
+numpy==1.16.2
 opencv-python
 scikit-image
+Pillow
 scikit-learn
+toposort
+fastcluster
 matplotlib==2.2.2
+imageio==2.5.0
+imageio-ffmpeg
 ffmpy==0.2.2
 nvidia-ml-py3
 h5py==2.9.0
 Keras==2.2.4
-cmake
-dlib
-face-recognition
+pywin32 ; sys_platform == "win32"
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,

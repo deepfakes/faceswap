@@ -13,8 +13,11 @@ import os
 import sys
 import subprocess
 import datetime
+from collections import OrderedDict
 
-from ffmpy import FFprobe, FFmpeg, FFRuntimeError
+import imageio
+import imageio_ffmpeg as im_ffm
+from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
 from lib.cli import FullHelpArgumentParser
@@ -144,7 +147,7 @@ class Effmpeg():
                                "rotate", "slice"]
 
     # Class variable that stores the target executable (ffmpeg or ffplay)
-    _executable = 'ffmpeg'
+    _executable = im_ffm.get_ffmpeg_exe()
 
     # Class variable that stores the common ffmpeg arguments based on verbosity
     __common_ffmpeg_args_dict = {"normal": "-hide_banner ",
@@ -159,7 +162,7 @@ class Effmpeg():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.args = arguments
-        self.exe = "ffmpeg"
+        self.exe = im_ffm.get_ffmpeg_exe()
         self.input = DataItem()
         self.output = DataItem()
         self.ref_vid = DataItem()
@@ -246,7 +249,7 @@ class Effmpeg():
                 _error_str += "hence it's not possible to "
                 _error_str += "'{}'.".format(self.args.action)
                 raise ValueError(_error_str)
-            elif self.output.fps is not None and self.__check_have_fps(['r', 'i']):
+            if self.output.fps is not None and self.__check_have_fps(['r', 'i']):
                 self.args.fps = self.output.fps
             elif self.ref_vid.fps is not None and self.__check_have_fps(['i']):
                 self.args.fps = self.ref_vid.fps
@@ -308,8 +311,8 @@ class Effmpeg():
         action(**kwargs)
 
     @staticmethod
-    def extract(input_=None, output=None, fps=None, extract_ext=None, start=None, duration=None,
-                **kwargs):
+    def extract(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
+                extract_ext=None, start=None, duration=None, **kwargs):
         """ Extract video to image frames """
         logger.debug("input_: %s, output: %s, fps: %s, extract_ext: '%s', start: %s, duration: %s",
                      input_, output, fps, extract_ext, start, duration)
@@ -325,15 +328,17 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(inputs=_input, outputs=_output)
 
     @staticmethod
-    def gen_vid(input_=None, output=None, fps=None, mux_audio=False,
-                ref_vid=None, preview=False, exe=None, **kwargs):
+    def gen_vid(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
+                mux_audio=False, ref_vid=None, preview=False, exe=None, **kwargs):
         """ Generate Video """
         logger.debug("input: %s, output: %s, fps: %s, mux_audio: %s, ref_vid: '%s', preview: %s, "
                      "exe: '%s'", input, output, fps, mux_audio, ref_vid, preview, exe)
         filename = Effmpeg.__get_extracted_filename(input_.path)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_path = os.path.join(input_.path, filename)
-        _output_opts = '-vf fps="' + str(fps) + '" '
+        _fps_arg = '-r ' + str(fps) + ' '
+        _input_opts += _fps_arg + "-f image2 "
+        _output_opts = _fps_arg
         if not preview:
             _output_opts = '-y ' + _output_opts + ' -c:v libx264'
         if mux_audio:
@@ -342,7 +347,7 @@ class Effmpeg():
                 raise ValueError("Preview for gen-vid with audio muxing is "
                                  "not supported.")
             _output_opts = _ref_vid_opts + ' ' + _output_opts
-            _inputs = {_input_path: _input_opts, ref_vid.path: None}
+            _inputs = OrderedDict([(_input_path, _input_opts), (ref_vid.path, None)])
         else:
             _inputs = {_input_path: _input_opts}
         _outputs = {output.path: _output_opts}
@@ -352,37 +357,37 @@ class Effmpeg():
     @staticmethod
     def get_fps(input_=None, print_=False, **kwargs):
         """ Get Frames per Second """
-        _input_opts = '-v error -select_streams v -of '
-        _input_opts += 'default=noprint_wrappers=1:nokey=1 '
-        _input_opts += '-show_entries stream=r_frame_rate'
-        if isinstance(input_, str):
-            _inputs = {input_: _input_opts}
-        else:
-            _inputs = {input_.path: _input_opts}
-        ffp = FFprobe(inputs=_inputs)
-        _fps = ffp.run(stdout=subprocess.PIPE)[0].decode("utf-8")
-        _fps = _fps.strip()
+        logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
+        input_ = input_ if isinstance(input_, str) else input_.path
+        logger.debug("input: %s", input_)
+        reader = imageio.get_reader(input_)
+        _fps = reader.get_meta_data()["fps"]
+        logger.debug(_fps)
+        reader.close()
         if print_:
             logger.info("Video fps: %s", _fps)
-        logger.debug(_fps)
         return _fps
 
     @staticmethod
     def get_info(input_=None, print_=False, **kwargs):
         """ Get video Info """
-        _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _inputs = {input_.path: _input_opts}
-        ffp = FFprobe(inputs=_inputs)
-        out = ffp.run(stdout=subprocess.PIPE,
-                      stderr=subprocess.STDOUT)[0].decode('utf-8')
-        if print_:
-            logger.info(out)
+        logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
+        input_ = input_ if isinstance(input_, str) else input_.path
+        logger.debug("input: %s", input_)
+        reader = imageio.get_reader(input_)
+        out = reader.get_meta_data()
         logger.debug(out)
+        reader.close()
+        if print_:
+            logger.info("======== Video Info ========",)
+            logger.info("path: %s", input_)
+            for key, val in out.items():
+                logger.info("%s: %s", key, val)
         return out
 
     @staticmethod
-    def rescale(input_=None, output=None, scale=None, preview=False, exe=None,
-                **kwargs):
+    def rescale(input_=None, output=None, scale=None,  # pylint:disable=unused-argument
+                preview=False, exe=None, **kwargs):
         """ Rescale Video """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _output_opts = '-vf scale="' + str(scale) + '"'
@@ -393,8 +398,8 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def rotate(input_=None, output=None, degrees=None, transpose=None,
-               preview=None, exe=None, **kwargs):
+    def rotate(input_=None, output=None, degrees=None,  # pylint:disable=unused-argument
+               transpose=None, preview=None, exe=None, **kwargs):
         """ Rotate Video """
         if transpose is None and degrees is None:
             raise ValueError("You have not supplied a valid transpose or "
@@ -419,8 +424,8 @@ class Effmpeg():
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def mux_audio(input_=None, output=None, ref_vid=None, preview=None,
-                  exe=None, **kwargs):
+    def mux_audio(input_=None, output=None, ref_vid=None,  # pylint:disable=unused-argument
+                  preview=None, exe=None, **kwargs):
         """ Mux Audio """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _ref_vid_opts = None
@@ -429,13 +434,13 @@ class Effmpeg():
             raise ValueError("Preview with audio muxing is not supported.")
         # if not preview:
         #    _output_opts = '-y ' + _output_opts
-        _inputs = {input_.path: _input_opts, ref_vid.path: _ref_vid_opts}
+        _inputs = OrderedDict([(input_.path, _input_opts), (ref_vid.path, _ref_vid_opts)])
         _outputs = {output.path: _output_opts}
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
-    def slice(input_=None, output=None, start=None, duration=None,
-              preview=None, exe=None, **kwargs):
+    def slice(input_=None, output=None, start=None,  # pylint:disable=unused-argument
+              duration=None, preview=None, exe=None, **kwargs):
         """ Slice Video """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
@@ -487,7 +492,7 @@ class Effmpeg():
         return all(getattr(self, i).fps is None for i in items_to_check)
 
     @staticmethod
-    def __run_ffmpeg(exe="ffmpeg", inputs=None, outputs=None):
+    def __run_ffmpeg(exe=im_ffm.get_ffmpeg_exe(), inputs=None, outputs=None):
         """ Run ffmpeg """
         logger.debug("Running ffmpeg: (exe: '%s', inputs: %s, outputs: %s", exe, inputs, outputs)
         ffm = FFmpeg(executable=exe, inputs=inputs, outputs=outputs)
@@ -540,11 +545,10 @@ class Effmpeg():
                 filename = file
                 break
         logger.debug("sample filename: '%s'", filename)
-        filename = filename.split('.')
-        img_ext = filename[-1]
-        zero_pad = Effmpeg.__get_zero_pad(filename[-2])
-        name = filename[-2][:-zero_pad]
-        retval = "{}%{}d.{}".format(name, zero_pad, img_ext)
+        filename, img_ext = os.path.splitext(filename)
+        zero_pad = Effmpeg.__get_zero_pad(filename)
+        name = filename[:-zero_pad]
+        retval = "{}%{}d{}".format(name, zero_pad, img_ext)
         logger.debug("filename: %s, img_ext: '%s', zero_pad: %s, name: '%s'",
                      filename, img_ext, zero_pad, name)
         logger.debug(retval)
@@ -554,6 +558,7 @@ class Effmpeg():
     def __get_zero_pad(filename):
         """ Return the starting position of zero padding from a filename """
         chkstring = filename[::-1]
+        logger.trace("filename: %s, chkstring: %s", filename, chkstring)
         pos = 0
         for pos in range(len(chkstring)):
             if not chkstring[pos].isdigit():

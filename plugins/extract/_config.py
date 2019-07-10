@@ -2,8 +2,12 @@
 """ Default configurations for extract """
 
 import logging
+import os
+import sys
 
+from importlib import import_module
 from lib.config import FaceswapConfig
+from lib.utils import full_path_split
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -14,35 +18,26 @@ class Config(FaceswapConfig):
     def set_defaults(self):
         """ Set the default values for config """
         logger.debug("Setting defaults")
+        current_dir = os.path.dirname(__file__)
+        for dirpath, _, filenames in os.walk(current_dir):
+            default_files = [fname for fname in filenames if fname.endswith("_defaults.py")]
+            if not default_files:
+                continue
+            base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
+            import_path = ".".join(full_path_split(dirpath.replace(base_path, ""))[1:])
+            plugin_type = import_path.split(".")[-1]
+            for filename in default_files:
+                self.load_module(filename, import_path, plugin_type)
 
-        # << GLOBAL OPTIONS >> #
-#        section = "global"
-#        self.add_section(title=section,
-#                         info="Options that apply to all models")
-
-        # << MTCNN DETECTOR OPTIONS >> #
-        section = "detect.mtcnn"
-        self.add_section(title=section,
-                         info="MTCNN Detector options")
-        self.add_item(
-            section=section, title="minsize", datatype=int, default=20, rounding=10,
-            min_max=(20, 1000),
-            info="The minimum size of a face (in pixels) to be accepted as a positive match.\n"
-                 "Lower values use significantly more VRAM and will detect more false positives")
-        self.add_item(
-            section=section, title="threshold_1", datatype=float, default=0.6, rounding=2,
-            min_max=(0.1, 0.9),
-            info="First stage threshold for face detection. This stage obtains face candidates")
-        self.add_item(
-            section=section, title="threshold_2", datatype=float, default=0.7, rounding=2,
-            min_max=(0.1, 0.9),
-            info="Second stage threshold for face detection. This stage refines face candidates")
-        self.add_item(
-            section=section, title="threshold_3", datatype=float, default=0.7, rounding=2,
-            min_max=(0.1, 0.9),
-            info="Third stage threshold for face detection. This stage further refines face "
-                 "candidates")
-        self.add_item(
-            section=section, title="scalefactor", datatype=float, default=0.709, rounding=3,
-            min_max=(0.1, 0.9),
-            info="The scale factor for the image pyramid")
+    def load_module(self, filename, module_path, plugin_type):
+        """ Load the defaults module and add defaults """
+        logger.debug("Adding defaults: (filename: %s, module_path: %s, plugin_type: %s",
+                     filename, module_path, plugin_type)
+        module = os.path.splitext(filename)[0]
+        section = ".".join((plugin_type, module.replace("_defaults", "")))
+        logger.debug("Importing defaults module: %s.%s", module_path, module)
+        mod = import_module("{}.{}".format(module_path, module))
+        self.add_section(title=section, info=mod._HELPTEXT)  # pylint:disable=protected-access
+        for key, val in mod._DEFAULTS.items():  # pylint:disable=protected-access
+            self.add_item(section=section, title=key, **val)
+        logger.debug("Added defaults: %s", section)

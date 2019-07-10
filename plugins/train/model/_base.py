@@ -13,14 +13,17 @@ from json import JSONDecodeError
 
 import keras
 from keras import losses
-from keras.models import load_model
+from keras import backend as K
+from keras.models import load_model, Model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
+from lib.model.backup_restore import Backup
 from lib.model.losses import DSSIMObjective, PenalizedLoss
 from lib.model.nn_blocks import NNBlocks
 from lib.multithreading import MultiThread
+from lib.utils import deprecation_warning, FaceswapError
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -32,8 +35,11 @@ class ModelBase():
     def __init__(self,
                  model_dir,
                  gpus,
+                 configfile=None,
+                 snapshot_interval=0,
                  no_logs=False,
                  warp_to_landmarks=False,
+                 augment_color=True,
                  no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
@@ -41,15 +47,25 @@ class ModelBase():
                  input_shape=None,
                  encoder_dim=None,
                  trainer="original",
+                 pingpong=False,
+                 memory_saving_gradients=False,
                  predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, "
-                     "training_image_size, %s, alignments_paths: %s, preview_scale: %s, "
-                     "input_shape: %s, encoder_dim: %s)", self.__class__.__name__, model_dir, gpus,
-                     training_image_size, alignments_paths, preview_scale, input_shape,
-                     encoder_dim)
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
+                     "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
+                     "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
+                     "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
+                     "pingpong: %s, memory_saving_gradients: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
+                     no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
+                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
+                     memory_saving_gradients, predict)
+
         self.predict = predict
         self.model_dir = model_dir
+
+        self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
+        self.configfile = configfile
         self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
                                use_icnr_init=self.config["icnr_init"],
                                use_reflect_padding=self.config["reflect_padding"])
@@ -58,7 +74,13 @@ class ModelBase():
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
-        self.state = State(self.model_dir, self.name, no_logs, training_image_size)
+        self.state = State(self.model_dir,
+                           self.name,
+                           self.config_changeable_items,
+                           no_logs,
+                           pingpong,
+                           training_image_size)
+        self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
 
@@ -71,21 +93,43 @@ class ModelBase():
         self.training_opts = {"alignments": alignments_paths,
                               "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
-                              "no_flip": no_flip}
+                              "augment_color": augment_color,
+                              "no_flip": no_flip,
+                              "pingpong": pingpong,
+                              "snapshot_interval": snapshot_interval}
+
+        self.set_gradient_type(memory_saving_gradients)
+        if self.multiple_models_in_folder:
+            deprecation_warning("Support for multiple model types within the same folder",
+                                additional_info="Please split each model into separate folders to "
+                                                "avoid issues in future.")
 
         self.build()
         self.set_training_data()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
+    def config_section(self):
+        """ The section name for loading config """
+        retval = ".".join(self.__module__.split(".")[-2:])
+        logger.debug(retval)
+        return retval
+
+    @property
     def config(self):
         """ Return config dict for current plugin """
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
-            model_name = ".".join(self.__module__.split(".")[-2:])
+            model_name = self.config_section
             logger.debug("Loading config for: %s", model_name)
-            _CONFIG = Config(model_name).config_dict
+            _CONFIG = Config(model_name, configfile=self.configfile).config_dict
         return _CONFIG
+
+    @property
+    def config_changeable_items(self):
+        """ Return the dict of config items that can be updated after the model
+            has been created """
+        return Config(self.config_section, configfile=self.configfile).changeable_items
 
     @property
     def name(self):
@@ -95,16 +139,40 @@ class ModelBase():
         logger.debug("model name: '%s'", retval)
         return retval
 
+    @property
+    def models_exist(self):
+        """ Return if all files exist and clear session """
+        retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
+        logger.debug("Pre-existing models exist: %s", retval)
+        return retval
+
+    @property
+    def multiple_models_in_folder(self):
+        """ Return true if there are multiple model types in the same folder, else false """
+        model_files = [fname for fname in os.listdir(str(self.model_dir)) if fname.endswith(".h5")]
+        retval = False if not model_files else os.path.commonprefix(model_files) == ""
+        logger.debug("model_files: %s, retval: %s", model_files, retval)
+        return retval
+
+    @staticmethod
+    def set_gradient_type(memory_saving_gradients):
+        """ Monkeypatch Memory Saving Gradients if requested """
+        if not memory_saving_gradients:
+            return
+        logger.info("Using Memory Saving Gradients")
+        from lib.model import memory_saving_gradients
+        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+
     def set_training_data(self):
         """ Override to set model specific training data.
 
             super() this method for defaults otherwise be sure to add """
         logger.debug("Setting training data")
+        # Force number of preview images to between 2 and 16
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
         self.training_opts["mask_type"] = self.config.get("mask_type", None)
         self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
-        self.training_opts["preview_images"] = 14
         logger.debug("Set training data: %s", self.training_opts)
 
     def calculate_coverage_ratio(self):
@@ -120,9 +188,20 @@ class ModelBase():
         """ Build the model. Override for custom build methods """
         self.add_networks()
         self.load_models(swapped=False)
-        self.build_autoencoders()
+        try:
+            self.build_autoencoders()
+        except ValueError as err:
+            if "must be from the same graph" in str(err).lower():
+                msg = ("There was an error loading saved weights. This is most likely due to "
+                       "model corruption during a previous save."
+                       "\nYou should restore weights from a snapshot or from backup files. "
+                       "You can use the 'Restore' Tool to restore from backup.")
+                raise FaceswapError(msg) from err
+            if "multi_gpu_model" in str(err).lower():
+                raise FaceswapError(str(err)) from err
+            raise err
         self.log_summary()
-        self.compile_predictors()
+        self.compile_predictors(initialize=True)
 
     def build_autoencoders(self):
         """ Override for Model Specific autoencoder builds
@@ -181,11 +260,7 @@ class ModelBase():
     def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
         logger.debug("Adding input shapes to state for model")
-        # PlaidML doesn't support tensor.get_shape()
-        if keras.backend.backend() == "plaidml.keras.backend":
-            inputs = {tensor.name: list(tensor.shape.dims)[-3:] for tensor in model.inputs}
-        else:
-            inputs = {tensor.name: tensor.get_shape().as_list()[-3:] for tensor in model.inputs}
+        inputs = {tensor.name: K.int_shape(tensor)[-3:] for tensor in model.inputs}
         if not any(inp for inp in inputs.keys() if inp.startswith("face")):
             raise ValueError("No input named 'face' was found. Check your input naming. "
                              "Current input names: {}".format(inputs))
@@ -195,88 +270,104 @@ class ModelBase():
     def set_output_shape(self, model):
         """ Set the output shape for use in training and convert """
         logger.debug("Setting output shape")
-        # PlaidML doesn't support tensor.get_shape()
-        if keras.backend.backend() == "plaidml.keras.backend":
-            out = [list(tensor.shape.dims)[-3:] for tensor in model.outputs]
-        else:
-            out = [tensor.get_shape().as_list()[-3:] for tensor in model.outputs]
+        out = [K.int_shape(tensor)[-3:] for tensor in model.outputs]
         if not out:
             raise ValueError("No outputs found! Check your model.")
         self.output_shape = tuple(out[0])
         logger.debug("Added output shape: %s", self.output_shape)
 
-    def compile_predictors(self):
+    def reset_pingpong(self):
+        """ Reset the models for pingpong training """
+        logger.debug("Resetting models")
+
+        # Clear models and graph
+        self.predictors = dict()
+        K.clear_session()
+
+        # Load Models for current training run
+        for model in self.networks.values():
+            model.network = Model.from_config(model.config)
+            model.network.set_weights(model.weights)
+
+        self.build_autoencoders()
+        self.compile_predictors(initialize=False)
+        logger.debug("Reset models")
+
+    def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        # TODO Look to re-instate clipnorm
-        # Clipnorm is ballooning VRAM useage, which is not expected behaviour
-        # and may be a bug in Keras/TF?
-        # For now this is commented out, but revisit in future to reinstate
-
-        ## PlaidML has a bug regarding the clipnorm parameter
-        ## See: https://github.com/plaidml/plaidml/issues/228
-        ## Workaround by simply removing it.
-        ## TODO: Remove this as soon it is fixed in PlaidML.
-        #if keras.backend.backend() == "plaidml.keras.backend":
-        #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
-        #else:
-        #    optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999, clipnorm=1.0)
-        optimizer = Adam(lr=5e-5, beta_1=0.5, beta_2=0.999)
+        learning_rate = self.config.get("learning_rate", 5e-5)
+        optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
-            loss_names = ["loss"]
-            loss_funcs = [self.loss_function(side)]
             mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
+            loss_names = ["loss"]
+            loss_funcs = [self.loss_function(mask, side, initialize)]
             if mask:
-                loss_names.insert(0, "mask_loss")
-                loss_funcs.insert(0, self.mask_loss_function(mask[0], side))
+                loss_names.append("mask_loss")
+                loss_funcs.append(self.mask_loss_function(side, initialize))
             model.compile(optimizer=optimizer, loss=loss_funcs)
 
             if len(loss_names) > 1:
                 loss_names.insert(0, "total_loss")
-            self.state.add_session_loss_names(side, loss_names)
-            self.history[side] = list()
+            if initialize:
+                self.state.add_session_loss_names(side, loss_names)
+                self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", loss_names)
 
-    def loss_function(self, side):
-        """ Set the loss function """
+    def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
+        """ Build and return Optimizer """
+        opt_kwargs = dict(lr=lr, beta_1=beta_1, beta_2=beta_2)
+        if (self.config.get("clipnorm", False) and
+                keras.backend.backend() != "plaidml.keras.backend"):
+            # NB: Clipnorm is ballooning VRAM useage, which is not expected behaviour
+            # and may be a bug in Keras/TF.
+            # PlaidML has a bug regarding the clipnorm parameter
+            # See: https://github.com/plaidml/plaidml/issues/228
+            # Workaround by simply removing it.
+            # TODO: Remove this as soon it is fixed in PlaidML.
+            opt_kwargs["clipnorm"] = 1.0
+        logger.debug("Optimizer kwargs: %s", opt_kwargs)
+        return Adam(**opt_kwargs)
+
+    def loss_function(self, mask, side, initialize):
+        """ Set the loss function
+            Side is input so we only log once """
         if self.config.get("dssim_loss", False):
-            if side == "a" and not self.predict:
+            if side == "a" and not self.predict and initialize:
                 logger.verbose("Using DSSIM Loss")
             loss_func = DSSIMObjective()
         else:
-            if side == "a" and not self.predict:
+            if side == "a" and not self.predict and initialize:
                 logger.verbose("Using Mean Absolute Error Loss")
             loss_func = losses.mean_absolute_error
-        logger.debug(loss_func)
+
+        if mask and self.config.get("penalized_mask_loss", False):
+            loss_mask = mask[0]
+            if side == "a" and not self.predict and initialize:
+                logger.verbose("Penalizing mask for Loss")
+            loss_func = PenalizedLoss(loss_mask, loss_func)
         return loss_func
 
-    def mask_loss_function(self, mask, side):
-        """ Set the loss function for masks
+    def mask_loss_function(self, side, initialize):
+        """ Set the mask loss function
             Side is input so we only log once """
-        if self.config.get("dssim_mask_loss", False):
-            if side == "a" and not self.predict:
-                logger.verbose("Using DSSIM Loss for mask")
-            mask_loss_func = DSSIMObjective()
-        else:
-            if side == "a" and not self.predict:
-                logger.verbose("Using Mean Absolute Error Loss for mask")
-            mask_loss_func = losses.mean_absolute_error
-
-        if self.config.get("penalized_mask_loss", False):
-            if side == "a" and not self.predict:
-                logger.verbose("Using Penalized Loss for mask")
-            mask_loss_func = PenalizedLoss(mask, mask_loss_func)
-        logger.debug(mask_loss_func)
+        if side == "a" and not self.predict and initialize:
+            logger.verbose("Using Mean Squared Error Loss for mask")
+        mask_loss_func = losses.mean_squared_error
         return mask_loss_func
 
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
         if swap:
-            retval = self.predictors["a"].predict
+            model = self.predictors["a"]
         else:
-            retval = self.predictors["b"].predict
+            model = self.predictors["b"]
+        if self.predict:
+            # Must compile the model to be thread safe
+            model._make_predict_function()  # pylint: disable=protected-access
+        retval = model.predict
         logger.debug("Got Converter: %s", retval)
         return retval
 
@@ -311,16 +402,31 @@ class ModelBase():
                 logger.verbose("%s:", name.title())
                 nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
 
+    def do_snapshot(self):
+        """ Perform a model snapshot """
+        logger.debug("Performing snapshot")
+        self.backup.snapshot_models(self.iterations)
+        logger.debug("Performed snapshot")
+
     def load_models(self, swapped):
         """ Load models from file """
         logger.debug("Load model: (swapped: %s)", swapped)
+
+        if not self.models_exist and not self.predict:
+            logger.info("Creating new '%s' model in folder: '%s'", self.name, self.model_dir)
+            return None
+        if not self.models_exist and self.predict:
+            logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
+            exit(0)
+
+        if not self.is_legacy:
+            K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
             if not network.side:
-                is_loaded = network.load(predict=self.predict)
+                is_loaded = network.load()
             else:
-                is_loaded = network.load(fullpath=model_mapping[network.side][network.type],
-                                         predict=self.predict)
+                is_loaded = network.load(fullpath=model_mapping[network.side][network.type])
             if not is_loaded:
                 break
         if is_loaded:
@@ -330,59 +436,76 @@ class ModelBase():
     def save_models(self):
         """ Backup and save the models """
         logger.debug("Backing up and saving models")
-        should_backup = self.get_save_averages()
+        save_averages = self.get_save_averages()
+        backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
+        if backup_func:
+            logger.info("Backing up models...")
         save_threads = list()
         for network in self.networks.values():
             name = "save_{}".format(network.name)
-            save_threads.append(MultiThread(network.save, name=name, should_backup=should_backup))
+            save_threads.append(MultiThread(network.save,
+                                            name=name,
+                                            backup_func=backup_func))
         save_threads.append(MultiThread(self.state.save,
-                                        name="save_state", should_backup=should_backup))
+                                        name="save_state",
+                                        backup_func=backup_func))
         for thread in save_threads:
             thread.start()
         for thread in save_threads:
             if thread.has_error:
                 logger.error(thread.errors[0])
             thread.join()
-        # Put in a line break to avoid jumbled console
-        print("\n")
-        logger.info("saved models")
+        msg = "[Saved models]"
+        if save_averages:
+            lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],
+                                              side.capitalize(),
+                                              save_averages[side])
+                       for side in sorted(list(save_averages.keys()))]
+            msg += " - Average since last save: {}".format(", ".join(lossmsg))
+        logger.info(msg)
 
     def get_save_averages(self):
-        """ Return the loss averages since last save and reset historical losses
+        """ Return the average loss since the last save iteration and reset historical loss """
+        logger.debug("Getting save averages")
+        avgs = dict()
+        for side, loss in self.history.items():
+            if not loss:
+                logger.debug("No loss in self.history: %s", side)
+                break
+            avgs[side] = sum(loss) / len(loss)
+            self.history[side] = list()  # Reset historical loss
+        logger.debug("Average losses since last save: %s", avgs)
+        return avgs
+
+    def should_backup(self, save_averages):
+        """ Check whether the loss averages for all losses is the lowest that has been seen.
 
             This protects against model corruption by only backing up the model
             if any of the loss values have fallen.
             TODO This is not a perfect system. If the model corrupts on save_iteration - 1
             then model may still backup
         """
-        logger.debug("Getting Average loss since last save")
-        avgs = dict()
         backup = True
 
-        for side, loss in self.history.items():
-            if not loss:
-                backup = False
-                break
+        if not save_averages:
+            logger.debug("No save averages. Not backing up")
+            return False
 
-            avgs[side] = sum(loss) / len(loss)
-            self.history[side] = list()  # Reset historical loss
-
+        for side, loss in save_averages.items():
             if not self.state.lowest_avg_loss.get(side, None):
                 logger.debug("Setting initial save iteration loss average for '%s': %s",
-                             side, avgs[side])
-                self.state.lowest_avg_loss[side] = avgs[side]
+                             side, loss)
+                self.state.lowest_avg_loss[side] = loss
                 continue
-
             if backup:
                 # Only run this if backup is true. All losses must have dropped for a valid backup
-                backup = self.check_loss_drop(side, avgs[side])
+                backup = self.check_loss_drop(side, loss)
 
         logger.debug("Lowest historical save iteration loss average: %s",
                      self.state.lowest_avg_loss)
-        logger.debug("Average loss since last save: %s", avgs)
 
         if backup:  # Update lowest loss values to the state
-            for side, avg_loss in avgs.items():
+            for side, avg_loss in save_averages.items():
                 logger.debug("Updating lowest save iteration average for '%s': %s", side, avg_loss)
                 self.state.lowest_avg_loss[side] = avg_loss
 
@@ -431,6 +554,7 @@ class ModelBase():
             logger.debug("No legacy files to rename")
             return
 
+        self.is_legacy = True
         logger.debug("Creating state file for legacy model")
         self.state.inputs = {"face:0": [64, 64, 3]}
         self.state.training_size = 256
@@ -446,7 +570,7 @@ class ModelBase():
             self.encoder_dim = 512
             self.state.config["lowmem"] = True
 
-        self.state.replace_config()
+        self.state.replace_config(self.config_changeable_items)
         self.state.save()
 
 
@@ -473,6 +597,8 @@ class NNMeta():
         self.name = self.set_name()
         self.network = network
         self.network.name = self.name
+        self.config = network.get_config()  # For pingpong restore
+        self.weights = network.get_weights()  # For pingpong restore
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_name(self):
@@ -482,7 +608,7 @@ class NNMeta():
             name += "_{}".format(self.side)
         return name
 
-    def load(self, fullpath=None, predict=False):
+    def load(self, fullpath=None):
         """ Load model """
         fullpath = fullpath if fullpath else self.filename
         logger.debug("Loading model: '%s'", fullpath)
@@ -492,53 +618,43 @@ class NNMeta():
             if str(err).lower().startswith("cannot create group in read only mode"):
                 self.convert_legacy_weights()
                 return True
-            if predict:
-                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
         except OSError as err:  # pylint: disable=broad-except
-            if predict:
-                raise ValueError("Unable to load training data. Error: {}".format(str(err)))
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
+        self.config = network.get_config()
         self.network = network  # Update network with saved model
         self.network.name = self.type
         return True
 
-    def save(self, fullpath=None, should_backup=False):
+    def save(self, fullpath=None, backup_func=None):
         """ Save model """
         fullpath = fullpath if fullpath else self.filename
-        if should_backup:
-            self.backup(fullpath=fullpath)
+        if backup_func:
+            backup_func(fullpath)
         logger.debug("Saving model: '%s'", fullpath)
+        self.weights = self.network.get_weights()
         self.network.save(fullpath)
-
-    def backup(self, fullpath=None):
-        """ Backup Model """
-        origfile = fullpath if fullpath else self.filename
-        backupfile = origfile + ".bk"
-        logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
-        if os.path.exists(backupfile):
-            os.remove(backupfile)
-        if os.path.exists(origfile):
-            os.rename(origfile, backupfile)
 
     def convert_legacy_weights(self):
         """ Convert legacy weights files to hold the model topology """
         logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
         self.network.load_weights(self.filename)
-        self.save(should_backup=False)
+        self.save(backup_func=None)
         self.network.name = self.type
 
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name, no_logs, training_image_size):
-        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', no_logs: %s, "
-                     "training_image_size: '%s'", self.__class__.__name__, model_dir,
-                     model_name, no_logs, training_image_size)
+    def __init__(self, model_dir, model_name, config_changeable_items,
+                 no_logs, pingpong, training_image_size):
+        logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
+                     "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
+                     "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
+                     config_changeable_items, no_logs, pingpong, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
@@ -550,9 +666,9 @@ class State():
         self.lowest_avg_loss = dict()
         self.inputs = dict()
         self.config = dict()
-        self.load()
+        self.load(config_changeable_items)
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs)
+        self.create_new_session(no_logs, pingpong)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -584,11 +700,12 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs):
+    def create_new_session(self, no_logs, pingpong):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
+                                          "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
                                           "iterations": 0}
@@ -608,7 +725,7 @@ class State():
         self.iterations += 1
         self.sessions[self.session_id]["iterations"] += 1
 
-    def load(self):
+    def load(self, config_changeable_items):
         """ Load state file """
         logger.debug("Loading State")
         try:
@@ -622,18 +739,18 @@ class State():
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", state)
-                self.replace_config()
+                self.replace_config(config_changeable_items)
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
             logger.debug("IOError: %s", str(err))
         except JSONDecodeError as err:
             logger.debug("JSONDecodeError: %s:", str(err))
 
-    def save(self, should_backup=False):
+    def save(self, backup_func=None):
         """ Save iteration number to state file """
         logger.debug("Saving State")
-        if should_backup:
-            self.backup()
+        if backup_func:
+            backup_func(self.filename)
         try:
             with open(self.filename, "wb") as out:
                 state = {"name": self.name,
@@ -649,25 +766,30 @@ class State():
             logger.error("Unable to save model state: %s", str(err.strerror))
         logger.debug("Saved State")
 
-    def backup(self):
-        """ Backup state file """
-        origfile = self.filename
-        backupfile = origfile + ".bk"
-        logger.debug("Backing up: '%s' to '%s'", origfile, backupfile)
-        if os.path.exists(backupfile):
-            os.remove(backupfile)
-        if os.path.exists(origfile):
-            os.rename(origfile, backupfile)
-
-    def replace_config(self):
-        """ Replace the loaded config with the one contained within the state file """
+    def replace_config(self, config_changeable_items):
+        """ Replace the loaded config with the one contained within the state file
+            Check for any fixed=False parameters changes and log info changes
+        """
         global _CONFIG  # pylint: disable=global-statement
         # Add any new items to state config for legacy purposes
         for key, val in _CONFIG.items():
             if key not in self.config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
                 self.config[key] = val
+        self.update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
         logger.debug("Replaced config. New config: %s", _CONFIG)
         logger.info("Using configuration saved in state file")
+
+    def update_changed_config_items(self, config_changeable_items):
+        """ Update any parameters which are not fixed and have been changed """
+        if not config_changeable_items:
+            logger.debug("No changeable parameters have been updated")
+            return
+        for key, val in config_changeable_items.items():
+            old_val = self.config[key]
+            if old_val == val:
+                continue
+            self.config[key] = val
+            logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)

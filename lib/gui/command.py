@@ -8,10 +8,10 @@ from tkinter import ttk
 from .tooltip import Tooltip
 from .utils import ContextMenu, FileHandler, get_images, get_config, set_slider_rounding
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
+class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent):
@@ -19,10 +19,11 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         scaling_factor = get_config().scaling_factor
         width = int(420 * scaling_factor)
         height = int(500 * scaling_factor)
-        ttk.Notebook.__init__(self, parent, width=width, height=height)
+        self.actionbtns = dict()
+        super().__init__(parent, width=width, height=height)
         parent.add(self)
 
-        self.actionbtns = dict()
+        self.tools_notebook = ToolsNotebook(self)
         self.set_running_task_trace()
         self.build_tabs()
         get_config().command_notebook = self
@@ -40,11 +41,13 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         logger.debug("Build Tabs")
         cli_opts = get_config().cli_opts
         for category in cli_opts.categories:
+            book = self.tools_notebook if category == "tools" else self
             cmdlist = cli_opts.commands[category]
             for command in cmdlist:
                 title = command.title()
-                commandtab = CommandTab(self, category, command)
-                self.add(commandtab, text=title)
+                commandtab = CommandTab(book, category, command)
+                book.add(commandtab, text=title)
+        self.add(self.tools_notebook, text="Tools")
         logger.debug("Built Tabs")
 
     def change_action_button(self, *args):
@@ -65,13 +68,20 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             Tooltip(btnact, text=hlp, wraplength=200)
 
 
-class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ToolsNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
+    """ Tools sit in their own tab, but need to inherit objects from the main command notebook """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.actionbtns = parent.actionbtns
+
+
+class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent, category, command):
         logger.debug("Initializing %s: (category: '%s', command: '%s')",
                      self.__class__.__name__, category, command)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
 
         self.category = category
         self.actionbtns = parent.actionbtns
@@ -98,12 +108,12 @@ class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Added frame seperator")
 
 
-class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+class OptionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Options Frame - Holds the Options for each command """
 
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.command = parent.command
@@ -131,13 +141,12 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
 
         chkframe = ttk.Frame(container)
-        chkframe.pack(side=tk.BOTTOM, expand=True)
-
         chkleft = ttk.Frame(chkframe, name="leftFrame")
-        chkleft.pack(side=tk.LEFT, anchor=tk.N, expand=True)
-
         chkright = ttk.Frame(chkframe, name="rightFrame")
-        chkright.pack(side=tk.RIGHT, anchor=tk.N, expand=True)
+
+        chkframe.pack(fill=tk.X, expand=True)
+        chkleft.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
+        chkright.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.RIGHT, anchor=tk.N)
         logger.debug("Added Options CheckButtons Frame")
 
         return container, chkframe
@@ -169,7 +178,7 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Options Scrollbar")
 
-    def update_scrollbar(self, event):  # pylint: disable=unused-argument
+    def update_scrollbar(self, event):  # pylint:disable=unused-argument
         """ Update the options frame scrollbar """
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
@@ -205,7 +214,7 @@ class OptionControl():
             dflt = ' '.join(str(val) for val in dflt)
         if ctl == ttk.Checkbutton:
             dflt = self.option.get("default", False)
-        choices = self.option["choices"] if ctl == ttk.Combobox else None
+        choices = self.option["choices"] if ctl in(ttk.Combobox, ttk.Radiobutton) else None
         min_max = self.option["min_max"] if ctl == ttk.Scale else None
 
         ctlframe = self.build_one_control_frame()
@@ -226,7 +235,7 @@ class OptionControl():
         logger.debug("Format control help: '%s'", ctltitle)
         ctlhelp = self.option.get("help", "")
         if ctlhelp.startswith("R|"):
-            ctlhelp = ctlhelp[2:].replace("\n\t", " ").replace("\n'", "\n\n'")
+            ctlhelp = ctlhelp[2:].replace("\nL|", "\n - ").replace("\n", "\n\n")
         else:
             ctlhelp = " ".join(ctlhelp.split())
         ctlhelp = ctlhelp.replace("%%", "%")
@@ -265,24 +274,41 @@ class OptionControl():
             self.add_browser_buttons(frame, sysbrowser, var)
 
         if control == ttk.Checkbutton:
-            self.checkbutton_to_checkframe(control,
-                                           control_title,
-                                           var,
-                                           helptext)
+            self.checkbutton_to_checkframe(control, control_title, var, helptext)
+        elif control == ttk.Radiobutton:
+            self.radio_control(frame, control_title, var, choices, helptext)
         elif control == ttk.Scale:
-            self.slider_control(control,
-                                frame,
-                                var,
-                                min_max,
-                                helptext)
+            self.slider_control(control, frame, var, min_max, helptext)
         else:
-            self.control_to_optionsframe(control,
-                                         frame,
-                                         var,
-                                         choices,
-                                         helptext)
+            self.control_to_optionsframe(control, frame, var, choices, helptext)
         logger.debug("Built control: '%s'", control_title)
         return var
+
+    @staticmethod
+    def radio_control(frame, control_title, var, choices, helptext):
+        """ Create a group of radio buttons """
+        logger.debug("Adding radio group: %s", control_title)
+        radio_frame_left = ttk.Frame(frame)
+        radio_frame_middle = ttk.Frame(frame)
+        radio_frame_right = ttk.Frame(frame)
+
+        radio_frame_left.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
+        radio_frame_middle.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
+        radio_frame_right.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.RIGHT, anchor=tk.N)
+
+        for idx, choice in enumerate(choices):
+            pos = idx + 1
+            if pos % 3 == 0:
+                radio_frame = radio_frame_right
+            elif (pos + 1) % 3 == 0:
+                radio_frame = radio_frame_middle
+            else:
+                radio_frame = radio_frame_left
+
+            ctl = ttk.Radiobutton(radio_frame, text=choice.title(), value=choice, variable=var)
+            ctl.pack(anchor=tk.W)
+            Tooltip(ctl, text=helptext, wraplength=920)
+        logger.debug("Added radio group: '%s'", control_title)
 
     def checkbutton_to_checkframe(self, control, control_title, var, helptext):
         """ Add checkbuttons to the checkbutton frame """
@@ -294,7 +320,7 @@ class OptionControl():
         frame = leftframe if chkbtn_count % 2 == 0 else rightframe
 
         ctl = control(frame, variable=var, text=control_title)
-        ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
+        ctl.pack(side=tk.TOP, anchor=tk.W)
 
         Tooltip(ctl, text=helptext, wraplength=200)
         logger.debug("Added control checkframe: '%s'", control_title)
@@ -318,8 +344,8 @@ class OptionControl():
         ctl["from_"] = min_max[0]
         ctl["to"] = min_max[1]
 
-        Tooltip(ctl, text=helptext, wraplength=720)
-        Tooltip(tbox, text=helptext, wraplength=720)
+        Tooltip(ctl, text=helptext, wraplength=920)
+        Tooltip(tbox, text=helptext, wraplength=920)
         logger.debug("Added slider control to Options Frame: %s", control)
 
     @staticmethod
@@ -372,6 +398,15 @@ class OptionControl():
             filepath.set(filename)
 
     @staticmethod
+    def ask_load_multi(filepath, filetypes):
+        """ Pop-up to get path to a file """
+        filenames = FileHandler("filename_multi", filetypes).retfile
+        if filenames:
+            final_names = " ".join("\"{}\"".format(fname) for fname in filenames)
+            logger.debug(final_names)
+            filepath.set(final_names)
+
+    @staticmethod
     def ask_save(filepath, filetypes=None):
         """ Pop-up to get path to save a new file """
         filename = FileHandler("savefilename", filetypes).retfile
@@ -380,7 +415,7 @@ class OptionControl():
             filepath.set(filename)
 
     @staticmethod
-    def ask_nothing(filepath, filetypes=None):  # pylint: disable=unused-argument
+    def ask_nothing(filepath, filetypes=None):  # pylint:disable=unused-argument
         """ Method that does nothing, used for disabling open/save pop up """
         return
 
@@ -399,12 +434,12 @@ class OptionControl():
             filepath.set(filename)
 
 
-class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """Action Frame - Displays action controls for the command tab """
 
     def __init__(self, parent):
         logger.debug("Initializing %s: (command: '%s')", self.__class__.__name__, parent.command)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
         self.pack(fill=tk.BOTH, padx=5, pady=5, side=tk.BOTTOM, anchor=tk.N)
 
         self.command = parent.command
@@ -438,11 +473,42 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                             text="Generate",
                             width=10,
                             command=lambda: tk_vars["generate"].set(var_value))
-        btngen.pack(side=tk.RIGHT, padx=5)
+        btngen.pack(side=tk.LEFT, padx=5)
+        if self.command == "train":
+            self.add_timeout(actframe)
         Tooltip(btngen,
                 text="Output command line options to the console",
                 wraplength=200)
         logger.debug("Added action buttons: '%s'", self.title)
+
+    def add_timeout(self, actframe):
+        """ Add a timeout option for training """
+        logger.debug("Adding timeout box for %s", self.command)
+        tk_var = get_config().tk_vars["traintimeout"]
+        min_max = (10, 600)
+
+        frameto = ttk.Frame(actframe)
+        frameto.pack(padx=5, pady=5, side=tk.RIGHT, fill=tk.X, expand=True)
+        lblto = ttk.Label(frameto, text="Timeout:", anchor=tk.W)
+        lblto.pack(side=tk.LEFT)
+        sldto = ttk.Scale(frameto,
+                          variable=tk_var,
+                          from_=min_max[0],
+                          to=min_max[1],
+                          command=lambda val, var=tk_var, dt=int, rn=10, mm=min_max:
+                          set_slider_rounding(val, var, dt, rn, mm))
+        sldto.pack(padx=5, side=tk.LEFT, fill=tk.X, expand=True)
+        tboxto = ttk.Entry(frameto, width=3, textvariable=tk_var, justify=tk.RIGHT)
+        tboxto.pack(side=tk.RIGHT)
+        helptxt = ("Training can take some time to save and shutdown. "
+                   "Set the timeout in seconds before giving up and force quitting.")
+        Tooltip(sldto,
+                text=helptxt,
+                wraplength=200)
+        Tooltip(tboxto,
+                text=helptxt,
+                wraplength=200)
+        logger.debug("Added timeout box for %s", self.command)
 
     def add_util_buttons(self):
         """ Add the section utility buttons """
