@@ -37,7 +37,7 @@ class GPUStats():
         self.initialized = False
         self.device_count = 0
         self.active_devices = list()
-        self.handles = None
+        self.handles = []
         self.driver = None
         self.devices = None
         self.vram = None
