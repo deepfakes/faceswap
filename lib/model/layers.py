@@ -336,6 +336,21 @@ class ReflectionPadding2D(Layer):
         return dict(list(base_config.items()) + list(config.items())) 
 
 
+class L2_normalize(Layer):
+    def __init__(self, axis, **kwargs):
+        self.axis = axis
+        super(L2_normalize, self).__init__(**kwargs)
+
+    def call(self, x):
+        return K.l2_normalize(x, self.axis)
+
+    def get_config(self):
+        config = super(L2_normalize, self).get_config()
+        config["axis"] = self.axis
+        return config
+
+
+
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
