@@ -800,7 +800,7 @@ class MouseHandler():
             # up to 3-4 minutes, hence high timeout.
             a_event.wait(300)
             if not a_event.is_set():
-                if plugin.starstwith("fan"):
+                if plugin.startswith("fan"):
                     align_process.join()
                     logger.error("Error initializing FAN. Trying CV2-DNN")
                     continue
