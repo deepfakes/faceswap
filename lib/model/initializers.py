@@ -124,9 +124,6 @@ class ConvolutionAware(initializers.Initializer):
 
         fan_in, _ = initializers._compute_fans(shape)  # pylint:disable=protected-access
         variance = 2 / fan_in
-        print("\n=======================")
-        print("inp shape", shape)
-        print("rank", rank)
 
         if rank == 3:
             row, stack_size, filters_size = shape
@@ -155,11 +152,7 @@ class ConvolutionAware(initializers.Initializer):
         else:
             return K.variable(self.orthogonal(shape), dtype=dtype)
 
-        print("kernel shape", kernel_shape)
-
         kernel_fourier_shape = correct_fft(np.zeros(kernel_shape)).shape
-        print("kernel fourier shape", kernel_fourier_shape)
-
         init = []
         for _ in range(filters_size):
             basis = self._create_basis(
@@ -174,12 +167,7 @@ class ConvolutionAware(initializers.Initializer):
 
         # Format of array is now: filters, stack, row, column
         init = np.array(init)
-        print("init shape", init.shape)
         init = self._scale_filters(init, variance)
-        print("init scaled shape", init.shape)
-        print("init transposed shape", init.transpose(transpose_dimensions).shape)
-        print("=======================\n")
-
         return K.variable(init.transpose(transpose_dimensions), dtype=dtype, name="conv_aware")
 
     def _create_basis(self, filters, size, dtype):
