@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-class StatusBar(ttk.Frame):
+class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Status Bar for displaying the Status Message and
         Progress Bar """
 
@@ -31,7 +31,7 @@ class StatusBar(ttk.Frame):
         lbltitle.pack(side=tk.LEFT, expand=False)
 
         lblstatus = ttk.Label(statusframe,
-                              width=20,
+                              width=40,
                               textvariable=self.status_message,
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
@@ -47,7 +47,7 @@ class StatusBar(ttk.Frame):
         pbar = ttk.Progressbar(progressframe,
                                length=200,
                                variable=self.pbar_position,
-                               maximum=1000,
+                               maximum=100,
                                mode="determinate")
         pbar.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         pbar.pack_forget()
@@ -73,7 +73,7 @@ class StatusBar(ttk.Frame):
             self.pbar.start()
         else:
             self.pbar.stop()
-            self.pbar.config(maximum=1000)
+            self.pbar.config(maximum=100)
 
     def progress_update(self, message, position, update_position=True):
         """ Update the GUIs progress bar and position """

@@ -42,7 +42,7 @@ class Tooltip:
                  waittime=400,
                  wraplength=250):
 
-        self.waittime = waittime  # in miliseconds, originally 500
+        self.waittime = waittime  # in milliseconds, originally 500
         self.wraplength = wraplength  # in pixels, originally 180
         self.widget = widget
         self.text = text
@@ -115,7 +115,7 @@ class Tooltip:
                 # No further checks will be done.
 
                 # TIP:
-                # A further mod might automagically augment the
+                # A further mod might auto-magically augment the
                 # wraplength when the tooltip is too high to be
                 # kept inside the screen.
                 y_1 = 0
