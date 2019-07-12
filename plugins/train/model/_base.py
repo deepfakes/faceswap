@@ -68,9 +68,6 @@ class ModelBase():
         self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
         self.configfile = configfile
-        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
-                               use_icnr_init=self.config["icnr_init"],
-                               use_reflect_padding=self.config["reflect_padding"])
         self.input_shape = input_shape
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
@@ -82,6 +79,13 @@ class ModelBase():
                            no_logs,
                            pingpong,
                            training_image_size)
+
+        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
+                               use_icnr_init=self.config["icnr_init"],
+                               use_convaware_init=self.config["conv_aware_init"],
+                               use_reflect_padding=self.config["reflect_padding"],
+                               first_run=self.state.first_run)
+
         self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
@@ -698,6 +702,11 @@ class State():
     def current_session(self):
         """ Return the current session dict """
         return self.sessions[self.session_id]
+
+    @property
+    def first_run(self):
+        """ Return True if this is the first run else False """
+        return self.session_id == 1
 
     def new_session_id(self):
         """ Return new session_id """

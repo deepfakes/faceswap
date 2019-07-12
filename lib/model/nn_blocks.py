@@ -14,8 +14,8 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-from keras.initializers import he_uniform, Constant, VarianceScaling
-from .initializers import ICNR
+from keras.initializers import he_uniform, VarianceScaling
+from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D, Scale
 from .normalization import GroupNormalization, InstanceNormalization
 
@@ -24,22 +24,48 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class NNBlocks():
     """ Blocks to use for creating models """
-    def __init__(self, use_subpixel=False, use_icnr_init=False, use_reflect_padding=False):
-        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s, use_reflect_padding: %s)",
-                     self.__class__.__name__, use_subpixel, use_icnr_init, use_reflect_padding)
+    def __init__(self, use_subpixel=False, use_icnr_init=False, use_convaware_init=False,
+                 use_reflect_padding=False, first_run=True):
+        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s, use_convaware_init: "
+                     "%s, use_reflect_padding: %s, first_run: %s)",
+                     self.__class__.__name__, use_subpixel, use_icnr_init, use_convaware_init,
+                     use_reflect_padding, first_run)
+        self.first_run = first_run
         self.use_subpixel = use_subpixel
         self.use_icnr_init = use_icnr_init
+        self.use_convaware_init = use_convaware_init
         self.use_reflect_padding = use_reflect_padding
+        if self.use_convaware_init and self.first_run:
+            logger.info("Using Convolutional Aware Initialization. Model generation will take a "
+                        "few minutes...")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def update_kwargs(kwargs):
-        """ Set the default kernel initializer to he_uniform() """
-        kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
+    def update_kwargs(self, kwargs):
+        """ Set the default kernel initializer to conv_aware or he_uniform()
+            if a specific initializer has not been passed in """
+        if self.use_convaware_init:
+            default = ConvolutionAware()
+            if self.first_run:
+                # Indicate the Convolutional Aware should be calculated on first run
+                default._init = True  # pylint:disable=protected-access
+        else:
+            default = he_uniform()
+        kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", default)
+        logger.debug("Set default kernel_initializer to: %s", kwargs["kernel_initializer"])
         return kwargs
 
+    @staticmethod
+    def switch_kernel_initializer(kwargs, initializer):
+        """ Switch the initializer in the given kwargs to the given initializer
+            and return the previous initializer to caller """
+        original = kwargs["kernel_initializer"]
+        kwargs["kernel_initializer"] = initializer
+        logger.debug("Switched kernel_initializer from %s to %s", original, initializer)
+        return original
+
     # <<< Original Model Blocks >>> #
-    def conv(self, inp, filters, kernel_size=5, strides=2, padding='same', use_instance_norm=False, res_block_follows=False, **kwargs):
+    def conv(self, inp, filters, kernel_size=5, strides=2, padding='same',
+             use_instance_norm=False, res_block_follows=False, **kwargs):
         """ Convolution Layer"""
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
                      "kwargs: %s)", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
@@ -58,7 +84,8 @@ class NNBlocks():
             var_x = LeakyReLU(0.1)(var_x)
         return var_x
 
-    def upscale(self, inp, filters, kernel_size=3, padding= 'same', use_instance_norm=False, res_block_follows=False, **kwargs):
+    def upscale(self, inp, filters, kernel_size=3, padding='same',
+                use_instance_norm=False, res_block_follows=False, **kwargs):
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s)",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
@@ -66,14 +93,16 @@ class NNBlocks():
         if self.use_reflect_padding:
             inp = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(inp)
             padding = 'valid'
-        temp = kwargs["kernel_initializer"]
         if self.use_icnr_init:
-            kwargs["kernel_initializer"] = ICNR(initializer=kwargs["kernel_initializer"])
+            original_init = self.switch_kernel_initializer(
+                kwargs,
+                ICNR(initializer=kwargs["kernel_initializer"]))
         var_x = Conv2D(filters * 4,
                        kernel_size=kernel_size,
                        padding=padding,
                        **kwargs)(inp)
-        kwargs["kernel_initializer"] = temp
+        if self.use_icnr_init:
+            self.switch_kernel_initializer(kwargs, original_init)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
         if not res_block_follows:
@@ -85,7 +114,7 @@ class NNBlocks():
         return var_x
 
     # <<< DFaker Model Blocks >>> #
-    def res_block(self, inp, filters, kernel_size=3, padding= 'same', **kwargs):
+    def res_block(self, inp, filters, kernel_size=3, padding='same', **kwargs):
         """ Residual block """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s)",
                      inp, filters, kernel_size, kwargs)
@@ -102,15 +131,15 @@ class NNBlocks():
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
             padding = 'valid'
-        temp = kwargs["kernel_initializer"]
-        kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
-                                                       mode='fan_in',
-                                                       distribution='uniform')
+        original_init = self.switch_kernel_initializer(kwargs, VarianceScaling(
+            scale=0.2,
+            mode='fan_in',
+            distribution='uniform'))
         var_x = Conv2D(filters,
                        kernel_size=kernel_size,
                        padding=padding,
                        **kwargs)(var_x)
-        kwargs["kernel_initializer"] = temp
+        self.switch_kernel_initializer(kwargs, original_init)
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
