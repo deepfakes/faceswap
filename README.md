@@ -1,7 +1,9 @@
-**Notice:** This repository is not operated or maintained by /u/deepfakes. Please read the explanation below for details.
 # deepfakes_faceswap
+<p align="center">
+  <a href="https://faceswap.dev"><img src="https://i.imgur.com/zHvjHnb.png"></img></a>
+<br />FaceSwap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
+</p>
 
-FaceSwap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
 ![Screenshots](https://i.imgur.com/nWHFLDf.jpg)
 
 <p align="center">
