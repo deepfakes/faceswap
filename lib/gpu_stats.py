@@ -90,12 +90,15 @@ class GPUStats():
                         self.plaid = plaidlib(log=log)
                     else:
                         msg = ("There was an error reading from the Nvidia Machine Learning "
-                               "Library. The most likely cause is incorrectly installed drivers. "
-                               "Please remove and reinstall your Nvidia drivers before reporting."
+                               "Library. Either you do not have an Nvidia GPU (in which case "
+                               "this warning can be ignored) or the most likely cause is "
+                               "incorrectly installed drivers. If this is the case, Please remove "
+                               "and reinstall your Nvidia drivers before reporting."
                                "Original Error: {}".format(str(err)))
                         if self.logger:
-                            self.logger.error(msg)
-                        raise ValueError(msg)
+                            self.logger.warning(msg)
+                        self.initialized = True
+                        return
             self.initialized = True
             self.get_device_count()
             self.get_active_devices()
