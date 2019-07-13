@@ -1,25 +1,25 @@
 # Workflow
 
-**Before attempting any of this, please make sure you have read, understood and completed the [installation instructions](../master/INSTALL.md). If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository or the [FaceSwap Discord server](https://discord.gg/FdEwxXd) instead of the main repo.**
+**Before attempting any of this, please make sure you have read, understood and completed the [installation instructions](../master/INSTALL.md). If you are experiencing issues, please raise them in the [faceswap Forum](https://faceswap.dev/forum) or the [FaceSwap Discord server](https://discord.gg/FdEwxXd) instead of the main repo.**
 
-- [Workflow](#workflow)
-- [Introduction](#introduction)
-  - [Disclaimer](#disclaimer)
-  - [Getting Started](#getting-started)
-- [Extract](#extract)
-  - [Gathering raw data](#gathering-raw-data)
-  - [Extracting Faces](#extracting-faces)
-  - [General Tips](#general-tips)
-- [Training a model](#training-a-model)
-  - [General Tips](#general-tips-1)
-- [Converting a video](#converting-a-video)
-  - [General Tips](#general-tips-2)
-- [GUI](#gui)
-- [Video's](#videos)
-- [EFFMPEG](#effmpeg)
-- [Extracting video frames with FFMPEG](#extracting-video-frames-with-ffmpeg)
-- [Generating a video](#generating-a-video)
-- [Notes](#notes)
+- [Workflow](#Workflow)
+- [Introduction](#Introduction)
+  - [Disclaimer](#Disclaimer)
+  - [Getting Started](#Getting-Started)
+- [Extract](#Extract)
+  - [Gathering raw data](#Gathering-raw-data)
+  - [Extracting Faces](#Extracting-Faces)
+  - [General Tips](#General-Tips)
+- [Training a model](#Training-a-model)
+  - [General Tips](#General-Tips-1)
+- [Converting a video](#Converting-a-video)
+  - [General Tips](#General-Tips-2)
+- [GUI](#GUI)
+- [Video's](#Videos)
+- [EFFMPEG](#EFFMPEG)
+- [Extracting video frames with FFMPEG](#Extracting-video-frames-with-FFMPEG)
+- [Generating a video](#Generating-a-video)
+- [Notes](#Notes)
   
 # Introduction
 
@@ -39,7 +39,7 @@ In order to accomplish this, the bot needs to learn to recognize both face A (Tr
 
 A possible source is Google, DuckDuckGo or Bing image search. There are scripts to download large amounts of images. A better source of images are videos (from interviews, public speeches, or movies) as these will capture many more natural poses and expressions. Fortunately FaceSwap has you covered and can extract faces from both still images and video files. See [Extracting video frames](#Extracting_video_frames) for more information.
 
-Feel free to list your image sets in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground), or add more methods to this file.
+Feel free to list your image sets in the [faceswap Forum](https://faceswap.dev/forum), or add more methods to this file.
 
 So now we have a folder full of pictures/videos of Trump and a separate folder of Nic Cage. Let's save them in our directory where we put the FaceSwap project. Example: `~/faceswap/src/trump` and `~/faceswap/src/cage`
 
@@ -191,4 +191,4 @@ ffmpeg -i video-frame-%0d.png -c:v libx264 -vf "fps=25,format=yuv420p" out.mp4
 # Notes
 This guide is far from complete. Functionality may change over time, and new dependencies are added and removed as time goes on. 
 
-If you are experiencing issues, please raise them in the [faceswap-playground](https://github.com/deepfakes/faceswap-playground) repository or the [FaceSwap Discord server](https://discord.gg/FdEwxXd) instead of the main repo.
+If you are experiencing issues, please raise them in the [faceswap Forum](https://faceswap.dev/forum) or the [FaceSwap Discord server](https://discord.gg/FdEwxXd). Usage questions raised in this repo are likely to be closed without response.

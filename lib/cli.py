@@ -427,8 +427,7 @@ class FaceSwapArgs():
             command,
             help=description,
             description=description,
-            epilog="Questions and feedback: \
-            https://github.com/deepfakes/faceswap-playground",
+            epilog="Questions and feedback: https://faceswap.dev/forum",
             formatter_class=SmartFormatter)
         return parser
 
