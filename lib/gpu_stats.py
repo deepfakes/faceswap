@@ -37,9 +37,9 @@ class GPUStats():
         self.initialized = False
         self.device_count = 0
         self.active_devices = list()
-        self.handles = None
+        self.handles = list()
         self.driver = None
-        self.devices = None
+        self.devices = list()
         self.vram = None
 
         self.initialize(log)
@@ -107,7 +107,7 @@ class GPUStats():
     def shutdown(self):
         """ Shutdown pynvml """
         if self.initialized:
-            self.handles = None
+            self.handles = list()
             if not IS_MACOS and not self.plaid:
                 pynvml.nvmlShutdown()
             self.initialized = False
