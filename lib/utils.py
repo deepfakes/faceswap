@@ -281,6 +281,7 @@ def rotate_landmarks(face, rotation_matrix):
         face["top"] = int(pt_y)
         face["right"] = int(pt_x1)
         face["bottom"] = int(pt_y1)
+        rotated_landmarks = face
 
     logger.trace("Rotated landmarks: %s", rotated_landmarks)
     return face
