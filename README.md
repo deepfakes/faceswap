@@ -23,7 +23,7 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 - [General notes:](#General-notes)
 - [Help I need support!](#Help-I-need-support)
   - [Discord Server](#Discord-Server)
-  - [FaceSwap-Playground](#FaceSwap-Playground)
+  - [FaceSwap Forum](#FaceSwap-Forum)
 - [Donate](#Donate)
   - [@torzdf](#torzdf)
   - [@andenixa](#andenixa)
@@ -68,9 +68,9 @@ See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a
 
 # Overview
 The project has multiple entry points. You will have to:
- - Gather photos (or use the one provided in the training data provided below)
+ - Gather photos and/or videos
  - **Extract** faces from your raw photos
- - **Train** a model on your photos (or use the one provided in the training data provided below)
+ - **Train** a model on the faces extracted from the photos/videos
  - **Convert** your sources with the model
 
 Check out [USAGE.md](USAGE.md) for more detailed instructions.
@@ -102,8 +102,8 @@ If there is not enough training data, start with someone who looks similar, then
 ## Discord Server
 Your best bet is to join the [FaceSwap Discord server](https://discord.gg/FdEwxXd) where there are plenty of users willing to help. Please note that, like this repo, this is a SFW Server!
 
-## FaceSwap-Playground
-Alternatively, you can post questions in the [FaceSwap Playground](https://github.com/deepfakes/faceswap-playground). Please do not post general support questions in this repo.
+## FaceSwap Forum
+Alternatively, you can post questions in the [FaceSwap Forum](https://faceswap.dev/forum). Please do not post general support questions in this repo as they are liable to be deleted without response.
 
 # Donate
 The developers work tirelessly to improve and develop FaceSwap. Many hours have been put in to provide the software as it is today, but this is an extremely time-consuming process with no financial reward. If you enjoy using the software, please consider donating to the devs, so they can spend more time implementing improvements.
@@ -144,13 +144,13 @@ Responsible for consolidating the converters, adding a lot of code to fix model 
  - Clone the repo
  - Play with it
  - Check issues with the 'advuser' tag
- - Also go to the 'faceswap-playground' repo and help others.
+ - Also go to the '[faceswap Forum](https://faceswap.dev/forum)' and help others.
 
 ## For end-users
  - Get the code here and play with it if you can
- - You can also go to the 'faceswap-playground' repo and help or get help from others.
+ - You can also go to the [faceswap Forum](https://faceswap.dev/forum) and help or get help from others.
  - Be patient. This is a relatively new technology for developers as well. Much effort is already being put into making this program easy to use for the average user. It just takes time!
- - **Notice** Any issue related to running the code has to be open in the 'faceswap-playground' project!
+ - **Notice** Any issue related to running the code has to be opened in the [faceswap Forum](https://faceswap.dev/forum)!
 
 ## For haters
 Sorry, no time for that.
