@@ -304,7 +304,7 @@ class Images():
         gui_preview = os.path.join(self.pathoutput, ".gui_preview.jpg")
         if not imagefiles or (len(imagefiles) == 1 and gui_preview not in imagefiles):
             logger.debug("No preview to display")
-#            self.previewoutput = None
+            self.previewoutput = None
             return
         # Filter to just the gui_preview if it exists in folder output
         imagefiles = [gui_preview] if gui_preview in imagefiles else imagefiles
@@ -320,7 +320,10 @@ class Images():
             logger.debug("Deleting preview image")
             os.remove(imagefiles[0])
         show_image = self.place_previews(frame_dims)
-        logger.debug("Displaying preview: '%s'", self.previewcache["filenames"])
+        if not show_image:
+            self.previewoutput = None
+            return
+        logger.debug("Displaying preview: %s", self.previewcache["filenames"])
         self.previewoutput = (show_image, ImageTk.PhotoImage(show_image))
 
     def get_newest_filenames(self, imagefiles):
@@ -344,6 +347,8 @@ class Images():
                      len(imagefiles), frame_dims, thumbnail_size)
         num_images = (frame_dims[0] // thumbnail_size) * (frame_dims[1] // thumbnail_size)
         logger.debug("num_images: %s", num_images)
+        if num_images == 0:
+            return
         samples = list()
         start_idx = len(imagefiles) - num_images if len(imagefiles) > num_images else 0
         show_files = sorted(imagefiles, key=os.path.getctime)[start_idx:]
@@ -406,6 +411,9 @@ class Images():
 
     def place_previews(self, frame_dims):
         """ Stack the preview images to fit display """
+        if self.previewcache.get("images", None) is None:
+            logger.debug("No images in cache. Returning None")
+            return None
         samples = self.previewcache["images"].copy()
         num_images, thumbnail_size = samples.shape[:2]
         if self.previewcache["placeholder"] is None:
@@ -414,6 +422,9 @@ class Images():
         logger.debug("num_images: %s, thumbnail_size: %s", num_images, thumbnail_size)
         cols, rows = frame_dims[0] // thumbnail_size, frame_dims[1] // thumbnail_size
         logger.debug("cols: %s, rows: %s", cols, rows)
+        if cols == 0 or rows == 0:
+            logger.debug("Cols or Rows is zero. No items to display")
+            return None
         remainder = (cols * rows) % num_images
         if remainder != 0:
             logger.debug("Padding final row. Remainder: %s", remainder)
