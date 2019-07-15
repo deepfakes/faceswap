@@ -4,7 +4,7 @@
         code sample + contribs """
 
 from keras.initializers import RandomNormal
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, SpatialDropout2D
+from keras.layers import Dense, Flatten, Input, Reshape, SpatialDropout2D
 from keras.models import Model as KerasModel
 
 from .original import logger, Model as OriginalModel
@@ -28,8 +28,8 @@ class Model(OriginalModel):
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")
-        self.add_network("decoder", "a", self.decoder_a())
-        self.add_network("decoder", "b", self.decoder_b())
+        self.add_network("decoder", "a", self.decoder_a(), is_output=True)
+        self.add_network("decoder", "b", self.decoder_b(), is_output=True)
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
@@ -73,7 +73,7 @@ class Model(OriginalModel):
             var_x = SpatialDropout2D(0.25)(var_x)
         var_x = self.blocks.upscale(var_x, decoder_complexity // 2, **kwargs)
         var_x = self.blocks.upscale(var_x, decoder_complexity // 4, **kwargs)
-        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -82,7 +82,10 @@ class Model(OriginalModel):
             var_y = self.blocks.upscale(var_y, decoder_complexity)
             var_y = self.blocks.upscale(var_y, decoder_complexity // 2)
             var_y = self.blocks.upscale(var_y, decoder_complexity // 4)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = self.blocks.conv2d(var_y, 1,
+                                       kernel_size=5,
+                                       padding="same",
+                                       activation="sigmoid")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)
 
@@ -114,7 +117,7 @@ class Model(OriginalModel):
             var_x = self.blocks.res_block(var_x, decoder_complexity // 2,
                                           kernel_initializer=self.kernel_initializer)
             var_x = self.blocks.upscale(var_x, decoder_complexity // 4, **kwargs)
-        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -126,6 +129,9 @@ class Model(OriginalModel):
             var_y = self.blocks.upscale(var_y, decoder_complexity // 4)
             if self.lowmem:
                 var_y = self.blocks.upscale(var_y, decoder_complexity // 8)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = self.blocks.conv2d(var_y, 1,
+                                       kernel_size=5,
+                                       padding="same",
+                                       activation="sigmoid")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)
