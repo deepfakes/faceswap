@@ -93,7 +93,7 @@ class Extract():
                 logger.trace("Skipping image '%s' due to extract_every_n = %s",
                              filename, self.skip_num)
                 continue
-            if image is None or (not image.any() and frame.ndim not in ((2, 3))):
+            if image is None or (not image.any() and image.ndim not in ((2, 3))):
                 # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
