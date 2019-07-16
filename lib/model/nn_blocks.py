@@ -14,7 +14,7 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-from keras.initializers import he_uniform, VarianceScaling
+from keras.initializers import he_uniform
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D, Scale
 from .normalization import GroupNormalization, InstanceNormalization
@@ -59,7 +59,7 @@ class NNBlocks():
     def switch_kernel_initializer(kwargs, initializer):
         """ Switch the initializer in the given kwargs to the given initializer
             and return the previous initializer to caller """
-        original = kwargs["kernel_initializer"]
+        original = kwargs.get("kernel_initializer", None)
         kwargs["kernel_initializer"] = initializer
         logger.debug("Switched kernel_initializer from %s to %s", original, initializer)
         return original
@@ -147,16 +147,10 @@ class NNBlocks():
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
             padding = "valid"
-        original_init = self.switch_kernel_initializer(kwargs, VarianceScaling(
-            scale=0.2,
-            mode="fan_in",
-            distribution="uniform"))
         var_x = self.conv2d(var_x, filters,
                             kernel_size=kernel_size,
                             padding=padding,
-                            force_initializer=True,
                             **kwargs)
-        self.switch_kernel_initializer(kwargs, original_init)
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
