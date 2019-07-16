@@ -4,7 +4,7 @@
 
 
 from keras.initializers import RandomNormal
-from keras.layers import Conv2D, Input
+from keras.layers import Input
 from keras.models import Model as KerasModel
 
 from .original import logger, Model as OriginalModel
@@ -48,7 +48,7 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, 128, res_block_follows=True)
         var_x = self.blocks.res_block(var_x, 128, kernel_initializer=self.kernel_initializer)
         var_x = self.blocks.upscale(var_x, 64)
-        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -57,6 +57,9 @@ class Model(OriginalModel):
             var_y = self.blocks.upscale(var_y, 256)
             var_y = self.blocks.upscale(var_y, 128)
             var_y = self.blocks.upscale(var_y, 64)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = self.blocks.conv2d(var_y, 1,
+                                       kernel_size=5,
+                                       padding="same",
+                                       activation="sigmoid")
             outputs.append(var_y)
         return KerasModel([input_], outputs=outputs)

@@ -14,8 +14,8 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-from keras.initializers import he_uniform, Constant, VarianceScaling
-from .initializers import ICNR
+from keras.initializers import he_uniform, VarianceScaling
+from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D, Scale
 from .normalization import GroupNormalization, InstanceNormalization
 
@@ -24,56 +24,102 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class NNBlocks():
     """ Blocks to use for creating models """
-    def __init__(self, use_subpixel=False, use_icnr_init=False, use_reflect_padding=False):
-        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s, use_reflect_padding: %s)",
-                     self.__class__.__name__, use_subpixel, use_icnr_init, use_reflect_padding)
+    def __init__(self, use_subpixel=False, use_icnr_init=False, use_convaware_init=False,
+                 use_reflect_padding=False, first_run=True):
+        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s, use_convaware_init: "
+                     "%s, use_reflect_padding: %s, first_run: %s)",
+                     self.__class__.__name__, use_subpixel, use_icnr_init, use_convaware_init,
+                     use_reflect_padding, first_run)
+        self.first_run = first_run
         self.use_subpixel = use_subpixel
         self.use_icnr_init = use_icnr_init
+        self.use_convaware_init = use_convaware_init
         self.use_reflect_padding = use_reflect_padding
+        if self.use_convaware_init and self.first_run:
+            logger.info("Using Convolutional Aware Initialization. Model generation will take a "
+                        "few minutes...")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def update_kwargs(kwargs):
-        """ Set the default kernel initializer to he_uniform() """
-        kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", he_uniform())
+    def update_kwargs(self, kwargs):
+        """ Update Kwargs for conv2D and Seperable conv2D layers.
+            Set the default kernel initializer to conv_aware or he_uniform()
+            if a specific initializer has not been passed in """
+        if self.use_convaware_init:
+            default = ConvolutionAware()
+            if self.first_run:
+                # Indicate the Convolutional Aware should be calculated on first run
+                default._init = True  # pylint:disable=protected-access
+        else:
+            default = he_uniform()
+        kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", default)
+        logger.debug("Set default kernel_initializer to: %s", kwargs["kernel_initializer"])
         return kwargs
 
-    # <<< Original Model Blocks >>> #
-    def conv(self, inp, filters, kernel_size=5, strides=2, padding='same', use_instance_norm=False, res_block_follows=False, **kwargs):
-        """ Convolution Layer"""
-        logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
-                     "kwargs: %s)", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
-        kwargs = self.update_kwargs(kwargs)
-        if self.use_reflect_padding:
-            inp = ReflectionPadding2D(stride=strides, kernel_size=kernel_size)(inp)
-            padding = 'valid'
-        var_x = Conv2D(filters,
-                       kernel_size=kernel_size,
+    @staticmethod
+    def switch_kernel_initializer(kwargs, initializer):
+        """ Switch the initializer in the given kwargs to the given initializer
+            and return the previous initializer to caller """
+        original = kwargs["kernel_initializer"]
+        kwargs["kernel_initializer"] = initializer
+        logger.debug("Switched kernel_initializer from %s to %s", original, initializer)
+        return original
+
+    def conv2d(self, inp, filters, kernel_size, strides=(1, 1), padding="same",
+               force_initializer=False, **kwargs):
+        """ A standard conv2D layer with correct initialization """
+        logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, padding: %s, "
+                     "force_initializer: %s, kwargs: %s)", inp, filters, kernel_size, strides,
+                     padding, force_initializer, kwargs)
+        if not force_initializer:
+            # Do not update the initializer if force_initializer is true (i.e. initializer is
+            # already correctly set in kwargs)
+            kwargs = self.update_kwargs(kwargs)
+        var_x = Conv2D(filters, kernel_size,
                        strides=strides,
                        padding=padding,
                        **kwargs)(inp)
+        return var_x
+
+    # <<< Original Model Blocks >>> #
+    def conv(self, inp, filters, kernel_size=5, strides=2, padding="same",
+             use_instance_norm=False, res_block_follows=False, **kwargs):
+        """ Convolution Layer"""
+        logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
+                     "kwargs: %s)", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
+        if self.use_reflect_padding:
+            inp = ReflectionPadding2D(stride=strides, kernel_size=kernel_size)(inp)
+            padding = "valid"
+        var_x = self.conv2d(inp, filters,
+                            kernel_size=kernel_size,
+                            strides=strides,
+                            padding=padding,
+                            **kwargs)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
         if not res_block_follows:
             var_x = LeakyReLU(0.1)(var_x)
         return var_x
 
-    def upscale(self, inp, filters, kernel_size=3, padding= 'same', use_instance_norm=False, res_block_follows=False, **kwargs):
+    def upscale(self, inp, filters, kernel_size=3, padding="same",
+                use_instance_norm=False, res_block_follows=False, **kwargs):
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s)",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
-        kwargs = self.update_kwargs(kwargs)
         if self.use_reflect_padding:
             inp = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(inp)
-            padding = 'valid'
-        temp = kwargs["kernel_initializer"]
+            padding = "valid"
+        kwargs = self.update_kwargs(kwargs)
         if self.use_icnr_init:
-            kwargs["kernel_initializer"] = ICNR(initializer=kwargs["kernel_initializer"])
-        var_x = Conv2D(filters * 4,
-                       kernel_size=kernel_size,
-                       padding=padding,
-                       **kwargs)(inp)
-        kwargs["kernel_initializer"] = temp
+            original_init = self.switch_kernel_initializer(
+                kwargs,
+                ICNR(initializer=kwargs["kernel_initializer"]))
+        var_x = self.conv2d(inp, filters * 4,
+                            kernel_size=kernel_size,
+                            padding=padding,
+                            force_initializer=True,
+                            **kwargs)
+        if self.use_icnr_init:
+            self.switch_kernel_initializer(kwargs, original_init)
         if use_instance_norm:
             var_x = InstanceNormalization()(var_x)
         if not res_block_follows:
@@ -85,32 +131,32 @@ class NNBlocks():
         return var_x
 
     # <<< DFaker Model Blocks >>> #
-    def res_block(self, inp, filters, kernel_size=3, padding= 'same', **kwargs):
+    def res_block(self, inp, filters, kernel_size=3, padding="same", **kwargs):
         """ Residual block """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s)",
                      inp, filters, kernel_size, kwargs)
-        kwargs = self.update_kwargs(kwargs)
         var_x = LeakyReLU(alpha=0.2)(inp)
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
-            padding = 'valid'
-        var_x = Conv2D(filters,
-                       kernel_size=kernel_size,
-                       padding=padding,
-                       **kwargs)(var_x)
+            padding = "valid"
+        var_x = self.conv2d(inp, filters,
+                            kernel_size=kernel_size,
+                            padding=padding,
+                            **kwargs)
         var_x = LeakyReLU(alpha=0.2)(var_x)
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
-            padding = 'valid'
-        temp = kwargs["kernel_initializer"]
-        kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
-                                                       mode='fan_in',
-                                                       distribution='uniform')
-        var_x = Conv2D(filters,
-                       kernel_size=kernel_size,
-                       padding=padding,
-                       **kwargs)(var_x)
-        kwargs["kernel_initializer"] = temp
+            padding = "valid"
+        original_init = self.switch_kernel_initializer(kwargs, VarianceScaling(
+            scale=0.2,
+            mode="fan_in",
+            distribution="uniform"))
+        var_x = self.conv2d(var_x, filters,
+                            kernel_size=kernel_size,
+                            padding=padding,
+                            force_initializer=True,
+                            **kwargs)
+        self.switch_kernel_initializer(kwargs, original_init)
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2)(var_x)
         return var_x
@@ -124,7 +170,7 @@ class NNBlocks():
         var_x = SeparableConv2D(filters,
                                 kernel_size=kernel_size,
                                 strides=strides,
-                                padding='same',
+                                padding="same",
                                 **kwargs)(inp)
         var_x = Activation("relu")(var_x)
         return var_x
@@ -139,17 +185,17 @@ GAN22_REGULARIZER = 1e-4
 
 
 # Gan Blocks:
-def normalization(inp, norm='none', group='16'):
+def normalization(inp, norm="none", group="16"):
     """ GAN Normalization """
-    if norm == 'layernorm':
+    if norm == "layernorm":
         var_x = GroupNormalization(group=group)(inp)
-    elif norm == 'batchnorm':
+    elif norm == "batchnorm":
         var_x = BatchNormalization()(inp)
-    elif norm == 'groupnorm':
+    elif norm == "groupnorm":
         var_x = GroupNormalization(group=16)(inp)
-    elif norm == 'instancenorm':
+    elif norm == "instancenorm":
         var_x = InstanceNormalization()(inp)
-    elif norm == 'hybrid':
+    elif norm == "hybrid":
         if group % 2 == 1:
             raise ValueError("Output channels must be an even number for hybrid norm, "
                              "received {}.".format(group))
@@ -200,7 +246,7 @@ def reflect_padding_2d(inp, pad=1):
     return var_x
 
 
-def conv_gan(inp, filters, use_norm=False, strides=2, norm='none'):
+def conv_gan(inp, filters, use_norm=False, strides=2, norm="none"):
     """ GAN Conv Block """
     var_x = Conv2D(filters,
                    kernel_size=3,
@@ -214,7 +260,7 @@ def conv_gan(inp, filters, use_norm=False, strides=2, norm='none'):
     return var_x
 
 
-def conv_d_gan(inp, filters, use_norm=False, norm='none'):
+def conv_d_gan(inp, filters, use_norm=False, norm="none"):
     """ GAN Discriminator Conv Block """
     var_x = inp
     var_x = Conv2D(filters,
@@ -229,7 +275,7 @@ def conv_d_gan(inp, filters, use_norm=False, norm='none'):
     return var_x
 
 
-def res_block_gan(inp, filters, use_norm=False, norm='none'):
+def res_block_gan(inp, filters, use_norm=False, norm="none"):
     """ GAN Res Block """
     var_x = Conv2D(filters,
                    kernel_size=3,

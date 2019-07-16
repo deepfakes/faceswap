@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Improved autoencoder for faceswap """
 
-from keras.layers import Concatenate, Conv2D, Dense, Flatten, Input, Reshape
+from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
 from ._base import ModelBase, logger
@@ -21,7 +21,7 @@ class Model(ModelBase):
         """ Add the IAE model weights """
         logger.debug("Adding networks")
         self.add_network("encoder", None, self.encoder())
-        self.add_network("decoder", None, self.decoder())
+        self.add_network("decoder", None, self.decoder(), is_output=True)
         self.add_network("intermediate", "a", self.intermediate())
         self.add_network("intermediate", "b", self.intermediate())
         self.add_network("inter", None, self.intermediate())
@@ -75,7 +75,7 @@ class Model(ModelBase):
         var_x = self.blocks.upscale(var_x, 256)
         var_x = self.blocks.upscale(var_x, 128)
         var_x = self.blocks.upscale(var_x, 64)
-        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -84,6 +84,9 @@ class Model(ModelBase):
             var_y = self.blocks.upscale(var_y, 256)
             var_y = self.blocks.upscale(var_y, 128)
             var_y = self.blocks.upscale(var_y, 64)
-            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var_y)
+            var_y = self.blocks.conv2d(var_y, 1,
+                                       kernel_size=5,
+                                       padding="same",
+                                       activation="sigmoid")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)

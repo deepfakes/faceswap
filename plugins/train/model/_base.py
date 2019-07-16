@@ -68,20 +68,25 @@ class ModelBase():
         self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
         self.configfile = configfile
-        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
-                               use_icnr_init=self.config["icnr_init"],
-                               use_reflect_padding=self.config["reflect_padding"])
         self.input_shape = input_shape
         self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
+        self.load_config()  # Load config if plugin has not already referenced it
         self.state = State(self.model_dir,
                            self.name,
                            self.config_changeable_items,
                            no_logs,
                            pingpong,
                            training_image_size)
+
+        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
+                               use_icnr_init=self.config["icnr_init"],
+                               use_convaware_init=self.config["conv_aware_init"],
+                               use_reflect_padding=self.config["reflect_padding"],
+                               first_run=self.state.first_run)
+
         self.is_legacy = False
         self.rename_legacy()
         self.load_state_info()
@@ -166,6 +171,14 @@ class ModelBase():
         from lib.model import memory_saving_gradients
         K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
+    def load_config(self):
+        """ Load the global config for reference in self.config """
+        global _CONFIG  # pylint: disable=global-statement
+        if not _CONFIG:
+            model_name = self.config_section
+            logger.debug("Loading config for: %s", model_name)
+            _CONFIG = Config(model_name, configfile=self.configfile).config_dict
+
     def set_training_data(self):
         """ Override to set model specific training data.
 
@@ -235,9 +248,10 @@ class ModelBase():
         logger.debug("Setting input shape from state file: %s", input_shape)
         self.input_shape = input_shape
 
-    def add_network(self, network_type, side, network):
+    def add_network(self, network_type, side, network, is_output=False):
         """ Add a NNMeta object """
-        logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
+        logger.debug("network_type: '%s', side: '%s', network: '%s', is_output: %s",
+                     network_type, side, network, is_output)
         filename = "{}_{}".format(self.name, network_type.lower())
         name = network_type.lower()
         if side:
@@ -246,7 +260,11 @@ class ModelBase():
             name += "_{}".format(side)
         filename += ".h5"
         logger.debug("name: '%s', filename: '%s'", name, filename)
-        self.networks[name] = NNMeta(str(self.model_dir / filename), network_type, side, network)
+        self.networks[name] = NNMeta(str(self.model_dir / filename),
+                                     network_type,
+                                     side,
+                                     network,
+                                     is_output)
 
     def add_predictor(self, side, model):
         """ Add a predictor to the predictors dictionary """
@@ -587,18 +605,20 @@ class NNMeta():
                 Otherwise the type should be completely unique.
     side:       A, B or None. Used to identify which networks can
                 be swapped.
-    network:      Define network to this.
+    network:    Define network to this.
+    is_output:  Set to True to indicate that this network is an output to the Autoencoder
     """
 
-    def __init__(self, filename, network_type, side, network):
+    def __init__(self, filename, network_type, side, network, is_output):
         logger.debug("Initializing %s: (filename: '%s', network_type: '%s', side: '%s', "
-                     "network: %s", self.__class__.__name__, filename, network_type,
-                     side, network)
+                     "network: %s, is_output: %s", self.__class__.__name__, filename,
+                     network_type, side, network, is_output)
         self.filename = filename
         self.type = network_type.lower()
         self.side = side
         self.name = self.set_name()
         self.network = network
+        self.is_output = is_output
         self.network.name = self.name
         self.config = network.get_config()  # For pingpong restore
         self.weights = network.get_weights()  # For pingpong restore
@@ -698,6 +718,11 @@ class State():
     def current_session(self):
         """ Return the current session dict """
         return self.sessions[self.session_id]
+
+    @property
+    def first_run(self):
+        """ Return True if this is the first run else False """
+        return self.session_id == 1
 
     def new_session_id(self):
         """ Return new session_id """
