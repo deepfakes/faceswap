@@ -59,7 +59,7 @@ Var envName
 !define MUI_ABORTWARNING
 
 # Install Location Page
-!define MUI_ICON "fs_logo_32.ico"
+!define MUI_ICON "fs_logo.ico"
 !define MUI_PAGE_HEADER_TEXT "Faceswap.py Installer"
 !define MUI_PAGE_HEADER_SUBTEXT "Install Location"
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Select Destination Folder:"
@@ -444,5 +444,5 @@ Function DesktopShortcut
     FileOpen $9 "$INSTDIR\$0" w
     FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
-    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
+    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo.ico"
 FunctionEnd
