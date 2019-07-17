@@ -139,7 +139,7 @@ class NNBlocks():
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
             padding = "valid"
-        var_x = self.conv2d(inp, filters,
+        var_x = self.conv2d(var_x, filters,
                             kernel_size=kernel_size,
                             padding=padding,
                             **kwargs)
