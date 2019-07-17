@@ -108,14 +108,14 @@ class FileHandler():
         filetypes = {"default": (all_files,),
                      "alignments": [("JSON", "*.json"),
                                     ("Pickle", "*.p"),
-                                    ("YAML", "*.yaml" "*.yml"),  # pylint: disable=W1403
+                                    ("YAML", "*.yaml *.yml"),
                                     all_files],
                      "config": [("Faceswap GUI config files", "*.fsw"), all_files],
                      "csv": [("Comma separated values", "*.csv"), all_files],
                      "image": [("Bitmap", "*.bmp"),
-                               ("JPG", "*.jpeg" "*.jpg"),  # pylint: disable=W1403
+                               ("JPG", "*.jpeg *.jpg"),
                                ("PNG", "*.png"),
-                               ("TIFF", "*.tif" "*.tiff"),  # pylint: disable=W1403
+                               ("TIFF", "*.tif *.tiff"),
                                all_files],
                      "ini": [("Faceswap config files", "*.ini"), all_files],
                      "state": [("State files", "*.json"), all_files],
@@ -125,7 +125,7 @@ class FileHandler():
                                ("Matroska", "*.mkv"),
                                ("MOV", "*.mov"),
                                ("MP4", "*.mp4"),
-                               ("MPEG", "*.mpeg"),
+                               ("MPEG", "*.mpeg *.mpg"),
                                ("WebM", "*.webm"),
                                all_files]}
         # Add in multi-select options
