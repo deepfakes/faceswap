@@ -21,21 +21,6 @@ class Model(OriginalModel):
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build_autoencoders(self):
-        """ Initialize Dfaker model """
-        logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[0] * 2, self.input_shape[1] * 2, 1)
-            inputs.append(Input(shape=mask_shape, name="mask"))
-
-        for side in ("a", "b"):
-            decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inputs[0]))
-            autoencoder = KerasModel(inputs, output)
-            self.add_predictor(side, autoencoder)
-        logger.debug("Initialized model")
-
     def decoder(self):
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
@@ -48,7 +33,11 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale(var_x, 128, res_block_follows=True)
         var_x = self.blocks.res_block(var_x, 128, kernel_initializer=self.kernel_initializer)
         var_x = self.blocks.upscale(var_x, 64)
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -60,6 +49,7 @@ class Model(OriginalModel):
             var_y = self.blocks.conv2d(var_y, 1,
                                        kernel_size=5,
                                        padding="same",
-                                       activation="sigmoid")
+                                       activation="sigmoid",
+                                       name="mask_out")
             outputs.append(var_y)
         return KerasModel([input_], outputs=outputs)

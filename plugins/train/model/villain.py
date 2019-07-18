@@ -71,7 +71,11 @@ class Model(OriginalModel):
         var_x = self.blocks.res_block(var_x, 256, **kwargs)
         var_x = self.blocks.upscale(var_x, self.input_shape[0], res_block_follows=True, **kwargs)
         var_x = self.blocks.res_block(var_x, self.input_shape[0], **kwargs)
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -82,6 +86,7 @@ class Model(OriginalModel):
             var_y = self.blocks.conv2d(var_y, 1,
                                        kernel_size=5,
                                        padding="same",
-                                       activation="sigmoid")
+                                       activation="sigmoid",
+                                       name="mask_out")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)

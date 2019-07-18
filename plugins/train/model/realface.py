@@ -69,21 +69,16 @@ class Model(ModelBase):
         return dense_width, upscalers_no
 
     def add_networks(self):
-        """ Add the original model weights """
+        """ Add the realface model weights """
         logger.debug("Adding networks")
         self.add_network("decoder", "a", self.decoder_a(), is_output=True)
         self.add_network("decoder", "b", self.decoder_b(), is_output=True)
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
-    def build_autoencoders(self):
-        """ Initialize original model """
+    def build_autoencoders(self, inputs):
+        """ Initialize realface model """
         logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = self.config["output_size"], self.config["output_size"], 1
-            inputs.append(Input(shape=mask_shape, name="mask"))
-
         for side in "a", "b":
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
@@ -131,7 +126,11 @@ class Model(ModelBase):
             var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2**idx, use_bias=True)
         var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**(idx + 1))
 
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
 
         outputs = [var_x]
 
@@ -145,7 +144,8 @@ class Model(ModelBase):
             var_y = self.blocks.conv2d(var_y, 1,
                                        kernel_size=5,
                                        padding="same",
-                                       activation="sigmoid")
+                                       activation="sigmoid",
+                                       name="mask_out")
 
             outputs += [var_y]
 
@@ -176,7 +176,11 @@ class Model(ModelBase):
             var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**idx)
         var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**(idx + 1))
 
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
 
         outputs = [var_x]
 
@@ -190,7 +194,8 @@ class Model(ModelBase):
             var_y = self.blocks.conv2d(var_y, 1,
                                        kernel_size=5,
                                        padding="same",
-                                       activation="sigmoid")
+                                       activation="sigmoid",
+                                       name="mask_out")
 
             outputs += [var_y]
 

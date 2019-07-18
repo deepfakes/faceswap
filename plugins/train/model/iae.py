@@ -27,14 +27,9 @@ class Model(ModelBase):
         self.add_network("inter", None, self.intermediate())
         logger.debug("Added networks")
 
-    def build_autoencoders(self):
+    def build_autoencoders(self, inputs):
         """ Initialize IAE model """
         logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[:2] + (1, ))
-            inputs.append(Input(shape=mask_shape, name="mask"))
-
         decoder = self.networks["decoder"].network
         encoder = self.networks["encoder"].network
         inter_both = self.networks["inter"].network
@@ -75,7 +70,11 @@ class Model(ModelBase):
         var_x = self.blocks.upscale(var_x, 256)
         var_x = self.blocks.upscale(var_x, 128)
         var_x = self.blocks.upscale(var_x, 64)
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid")
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -87,6 +86,7 @@ class Model(ModelBase):
             var_y = self.blocks.conv2d(var_y, 1,
                                        kernel_size=5,
                                        padding="same",
-                                       activation="sigmoid")
+                                       activation="sigmoid",
+                                       name="mask_out")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)

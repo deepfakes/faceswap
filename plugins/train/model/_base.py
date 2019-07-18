@@ -14,6 +14,7 @@ from json import JSONDecodeError
 import keras
 from keras import losses
 from keras import backend as K
+from keras.layers import Input
 from keras.models import load_model, Model
 from keras.utils import get_custom_objects, multi_gpu_model
 
@@ -69,7 +70,6 @@ class ModelBase():
         self.gpus = gpus
         self.configfile = configfile
         self.input_shape = input_shape
-        self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
 
@@ -162,6 +162,16 @@ class ModelBase():
         logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
 
+    @property
+    def output_shape(self):
+        """ Return the output shapes from the main AutoEncoder """
+        out = list()
+        for predictor in self.predictors.values():
+            out.extend([K.int_shape(output)[-3:] for output in predictor.outputs])
+            break  # Only get output from one autoencoder. Shapes are the same
+        # Only return the output shape of the face
+        return tuple(out[0])
+
     @staticmethod
     def set_gradient_type(memory_saving_gradients):
         """ Monkeypatch Memory Saving Gradients if requested """
@@ -204,8 +214,9 @@ class ModelBase():
         """ Build the model. Override for custom build methods """
         self.add_networks()
         self.load_models(swapped=False)
+        inputs = self.get_inputs()
         try:
-            self.build_autoencoders()
+            self.build_autoencoders(inputs)
         except ValueError as err:
             if "must be from the same graph" in str(err).lower():
                 msg = ("There was an error loading saved weights. This is most likely due to "
@@ -219,14 +230,25 @@ class ModelBase():
         self.log_summary()
         self.compile_predictors(initialize=True)
 
-    def build_autoencoders(self):
+    def get_inputs(self):
+        """ Return the inputs for the model """
+        logger.debug("Getting inputs")
+        inputs = [Input(shape=self.input_shape, name="face_in")]
+        output_network = [network for network in self.networks.values() if network.is_output][0]
+        if "mask_out" in output_network.output_names:
+            mask_idx = output_network.output_names.index("mask_out")
+            mask_shape = output_network.output_shapes[mask_idx]
+            inputs.append(Input(shape=mask_shape[1:], name="mask_in"))
+        logger.debug("Got inputs: %s", inputs)
+        return inputs
+
+    def build_autoencoders(self, inputs):
         """ Override for Model Specific autoencoder builds
 
-            NB! ENSURE YOU NAME YOUR INPUTS. At least the following input names
-            are expected:
-                face (the input for image)
-                mask (the input for mask if it is used)
-
+            Inputs is defined in self.get_inputs() and is standardized for all models
+                if will generally be in the order:
+                [face (the input for image),
+                 mask (the input for mask if it is used)]
         """
         raise NotImplementedError
 
@@ -275,8 +297,6 @@ class ModelBase():
         self.predictors[side] = model
         if not self.state.inputs:
             self.store_input_shapes(model)
-        if not self.output_shape:
-            self.set_output_shape(model)
 
     def store_input_shapes(self, model):
         """ Store the input and output shapes to state """
@@ -287,15 +307,6 @@ class ModelBase():
                              "Current input names: {}".format(inputs))
         self.state.inputs = inputs
         logger.debug("Added input shapes: %s", self.state.inputs)
-
-    def set_output_shape(self, model):
-        """ Set the output shape for use in training and convert """
-        logger.debug("Setting output shape")
-        out = [K.int_shape(tensor)[-3:] for tensor in model.outputs]
-        if not out:
-            raise ValueError("No outputs found! Check your model.")
-        self.output_shape = tuple(out[0])
-        logger.debug("Added output shape: %s", self.output_shape)
 
     def reset_pingpong(self):
         """ Reset the models for pingpong training """
@@ -310,7 +321,8 @@ class ModelBase():
             model.network = Model.from_config(model.config)
             model.network.set_weights(model.weights)
 
-        self.build_autoencoders()
+        inputs = self.get_inputs()
+        self.build_autoencoders(inputs)
         self.compile_predictors(initialize=False)
         logger.debug("Reset models")
 
@@ -635,6 +647,26 @@ class NNMeta():
         if self.side:
             name += "_{}".format(self.side)
         return name
+
+    @property
+    def output_names(self):
+        """ Return output node names """
+        output_names = [output.name for output in self.network.outputs]
+        if self.is_output and not any(name == "face_out" for name in output_names):
+            # Saved models break if their layer names are changed, so dummy
+            # in correct output names for legacy models
+            output_names = self.get_output_names()
+        return output_names
+
+    def get_output_names(self):
+        """ Return the output names based on number of channels and instances """
+        output_types = ["mask_out" if K.int_shape(output)[-1] == 1 else "face_out"
+                        for output in self.network.outputs]
+        output_names = ["{}{}".format(name,
+                                      "" if output_types.count(name) == 1 else "_{}".format(idx))
+                        for idx, name in enumerate(output_types)]
+        logger.debug(output_names)
+        return output_names
 
     def load(self, fullpath=None):
         """ Load model """

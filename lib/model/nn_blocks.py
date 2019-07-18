@@ -30,6 +30,7 @@ class NNBlocks():
                      "%s, use_reflect_padding: %s, first_run: %s)",
                      self.__class__.__name__, use_subpixel, use_icnr_init, use_convaware_init,
                      use_reflect_padding, first_run)
+        self.names = dict()
         self.first_run = first_run
         self.use_subpixel = use_subpixel
         self.use_icnr_init = use_icnr_init
@@ -39,6 +40,13 @@ class NNBlocks():
             logger.info("Using Convolutional Aware Initialization. Model generation will take a "
                         "few minutes...")
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def get_name(self, name):
+        """ Return unique layer name for requested block """
+        self.names[name] = self.names.setdefault(name, -1) + 1
+        name = "{}_{}".format(name, self.names[name])
+        logger.debug("Generating block name: %s", name)
+        return name
 
     def update_kwargs(self, kwargs):
         """ Update Kwargs for conv2D and Seperable conv2D layers.
@@ -86,18 +94,22 @@ class NNBlocks():
         """ Convolution Layer"""
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
                      "kwargs: %s)", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
+        name = self.get_name("conv")
         if self.use_reflect_padding:
-            inp = ReflectionPadding2D(stride=strides, kernel_size=kernel_size)(inp)
+            inp = ReflectionPadding2D(stride=strides,
+                                      kernel_size=kernel_size,
+                                      name="{}_reflectionpadding2d".format(name))(inp)
             padding = "valid"
         var_x = self.conv2d(inp, filters,
                             kernel_size=kernel_size,
                             strides=strides,
                             padding=padding,
+                            name="{}_conv2d".format(name),
                             **kwargs)
         if use_instance_norm:
-            var_x = InstanceNormalization()(var_x)
+            var_x = InstanceNormalization(name="{}_instancenorm".format(name))(var_x)
         if not res_block_follows:
-            var_x = LeakyReLU(0.1)(var_x)
+            var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
         return var_x
 
     def upscale(self, inp, filters, kernel_size=3, padding="same",
@@ -105,8 +117,11 @@ class NNBlocks():
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s)",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
+        name = self.get_name("upscale")
         if self.use_reflect_padding:
-            inp = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(inp)
+            inp = ReflectionPadding2D(stride=1,
+                                      kernel_size=kernel_size,
+                                      name="{}_reflectionpadding2d".format(name))(inp)
             padding = "valid"
         kwargs = self.update_kwargs(kwargs)
         if self.use_icnr_init:
@@ -117,17 +132,18 @@ class NNBlocks():
                             kernel_size=kernel_size,
                             padding=padding,
                             force_initializer=True,
+                            name="{}_conv2d".format(name),
                             **kwargs)
         if self.use_icnr_init:
             self.switch_kernel_initializer(kwargs, original_init)
         if use_instance_norm:
-            var_x = InstanceNormalization()(var_x)
+            var_x = InstanceNormalization(name="{}_instancenorm".format(name))(var_x)
         if not res_block_follows:
-            var_x = LeakyReLU(0.1)(var_x)
+            var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
         if self.use_subpixel:
-            var_x = SubPixelUpscaling()(var_x)
+            var_x = SubPixelUpscaling(name="{}_subpixel".format(name))(var_x)
         else:
-            var_x = PixelShuffler()(var_x)
+            var_x = PixelShuffler(name="{}_pixelshuffler".format(name))(var_x)
         return var_x
 
     # <<< DFaker Model Blocks >>> #
@@ -135,24 +151,31 @@ class NNBlocks():
         """ Residual block """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s)",
                      inp, filters, kernel_size, kwargs)
-        var_x = LeakyReLU(alpha=0.2)(inp)
+        name = self.get_name("residual")
+        var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_0".format(name))(inp)
         if self.use_reflect_padding:
-            var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
+            var_x = ReflectionPadding2D(stride=1,
+                                        kernel_size=kernel_size,
+                                        name="{}_reflectionpadding2d_0".format(name))(var_x)
             padding = "valid"
         var_x = self.conv2d(var_x, filters,
                             kernel_size=kernel_size,
                             padding=padding,
+                            name="{}_conv2d_0".format(name),
                             **kwargs)
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_1".format(name))(var_x)
         if self.use_reflect_padding:
-            var_x = ReflectionPadding2D(stride=1, kernel_size=kernel_size)(var_x)
+            var_x = ReflectionPadding2D(stride=1,
+                                        kernel_size=kernel_size,
+                                        name="{}_reflectionpadding2d_1".format(name))(var_x)
             padding = "valid"
         var_x = self.conv2d(var_x, filters,
                             kernel_size=kernel_size,
                             padding=padding,
+                            name="{}_conv2d_1".format(name),
                             **kwargs)
         var_x = Add()([var_x, inp])
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_3".format(name))(var_x)
         return var_x
 
     # <<< Unbalanced Model Blocks >>> #
@@ -160,13 +183,15 @@ class NNBlocks():
         """ Seperable Convolution Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      inp, filters, kernel_size, strides, kwargs)
+        name = self.get_name("separableconv2d")
         kwargs = self.update_kwargs(kwargs)
         var_x = SeparableConv2D(filters,
                                 kernel_size=kernel_size,
                                 strides=strides,
                                 padding="same",
+                                name="{}_seperableconv2d".format(name),
                                 **kwargs)(inp)
-        var_x = Activation("relu")(var_x)
+        var_x = Activation("relu", name="{}_relu".format(name))(var_x)
         return var_x
 
 # <<< GAN V2.2 Blocks >>> #
