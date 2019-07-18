@@ -102,7 +102,7 @@ If there is not enough training data, start with someone who looks similar, then
 
 # Help I need support!
 ## Discord Server
-Your best bet is to join the [FaceSwap Discord server](https://discord.gg/FdEwxXd) where there are plenty of users willing to help. Please note that, like this repo, this is a SFW Server!
+Your best bet is to join the [FaceSwap Discord server](https://discord.gg/FC54sYg) where there are plenty of users willing to help. Please note that, like this repo, this is a SFW Server!
 
 ## FaceSwap Forum
 Alternatively, you can post questions in the [FaceSwap Forum](https://faceswap.dev/forum). Please do not post general support questions in this repo as they are liable to be deleted without response.
