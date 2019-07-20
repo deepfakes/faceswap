@@ -326,26 +326,25 @@ class Interface():
         """Get the index of the previous or next frame which has a face"""         
         navigation = self.state["navigation"]
         frame_list = self.frames.file_list_sorted        
-        frame_idx = navigation["frame_idx"]
+        frame_idx = navigation["frame_idx"] + increment
 
-        if increment == 1:      
-            frame_idx += 1            
-            while True:
-                  if frame_idx == navigation["max_frame"]:
-                    break
-                  frame = frame_list[frame_idx]["frame_fullname"]
-                  if not self.alignments.frame_has_faces(frame) and not frame_idx == navigation["max_frame"]:
-                    frame_idx += 1                                             
-                  else: break
-        elif increment == -1:
-            frame_idx += -1
-            while True:
-                  if frame_idx == 0:
-                    break
-                  frame = frame_list[frame_idx]["frame_fullname"]
-                  if not self.alignments.frame_has_faces(frame) and not frame_idx == 0:
-                    frame_idx += -1
-                  else: break      
+        while True:
+            if increment == 1:
+              if frame_idx > navigation["max_frame"]: break
+            else:
+              if frame_idx < 0: break          
+
+            frame = frame_list[frame_idx]["frame_fullname"]            
+
+            if not self.alignments.frame_has_faces(frame):
+              if increment == 1:
+                  if frame_idx < navigation["max_frame"]:
+                    frame_idx += 1
+              else:
+                  if frame_idx > 0:
+                    frame_idx += -1                
+            else: break
+  
         return frame_idx
 
 class Help():
