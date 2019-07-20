@@ -338,10 +338,10 @@ class Interface():
             frame = frame_list[frame_idx]["frame_fullname"]
             if not self.alignments.frame_has_faces(frame):
                 if increment == 1:
-                    if frame_idx < navigation["max_frame"]:
+                    if frame_idx <= navigation["max_frame"]:
                         frame_idx += 1
                 else:
-                    if frame_idx > 0:
+                    if frame_idx >= 0:
                         frame_idx += -1
             else:
                 break
