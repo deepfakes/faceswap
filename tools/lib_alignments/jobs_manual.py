@@ -323,28 +323,28 @@ class Interface():
         self.state["edit"]["redraw"] = request
 
     def get_next_face_idx(self, increment):
-        """Get the index of the previous or next frame which has a face"""         
+        """Get the index of the previous or next frame which has a face"""
         navigation = self.state["navigation"]
-        frame_list = self.frames.file_list_sorted        
+        frame_list = self.frames.file_list_sorted
         frame_idx = navigation["frame_idx"] + increment
 
         while True:
             if increment == 1:
-              if frame_idx > navigation["max_frame"]: break
+                if frame_idx > navigation["max_frame"]:
+                    break
             else:
-              if frame_idx < 0: break          
-
-            frame = frame_list[frame_idx]["frame_fullname"]            
-
+                if frame_idx < 0:
+                    break
+            frame = frame_list[frame_idx]["frame_fullname"]
             if not self.alignments.frame_has_faces(frame):
-              if increment == 1:
-                  if frame_idx < navigation["max_frame"]:
-                    frame_idx += 1
-              else:
-                  if frame_idx > 0:
-                    frame_idx += -1                
-            else: break
-  
+                if increment == 1:
+                    if frame_idx < navigation["max_frame"]:
+                        frame_idx += 1
+                else:
+                    if frame_idx > 0:
+                        frame_idx += -1
+            else:
+                break
         return frame_idx
 
 class Help():
