@@ -37,6 +37,13 @@ class Color(Adjustment):
     This implementation is (loosely) based on to the "Color Transfer
     between Images" paper by Reinhard et al., 2001.
     """
+    
+    def setContrast(self, image, contrast, brightness=50):
+        
+        image = np.rint(image * 255.0).astype("uint8")            
+        image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)              
+        image = np.clip(np.divide(image, 255, dtype=np.float32), .0, 1.0)
+        return image
 
     def process(self, old_face, new_face, raw_mask):
         """
@@ -66,6 +73,12 @@ class Color(Adjustment):
         """
         clip = self.config.get("clip", True)
         preserve_paper = self.config.get("preserve_paper", True)
+        
+        constrast = self.config["constrast_adjustment"]
+        brightness = self.config["brightness_adjustment"]
+        
+        if constrast or brightness:
+            new_face = self.setContrast(new_face, constrast, brightness)
 
         # convert the images from the RGB to L*ab* color space, being
         # sure to utilizing the floating point data type (note: OpenCV
