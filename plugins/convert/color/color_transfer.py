@@ -75,10 +75,10 @@ class Color(Adjustment):
         """
         clip = self.config.get("clip", True)
         preserve_paper = self.config.get("preserve_paper", True)
-        
+
         constrast = self.config["constrast_adjustment"]
         brightness = self.config["brightness_adjustment"]
-        
+
         if constrast or brightness:
             new_face = self.setContrast(new_face, constrast, brightness)
 

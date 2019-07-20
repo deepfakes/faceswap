@@ -52,7 +52,7 @@ _DEFAULTS = {
                 "spectrum.",
         "datatype": float,
         "rounding": 1,
-        "min_max": (90.0, 100.0),
+        "min_max": (1.0, 100.0),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
