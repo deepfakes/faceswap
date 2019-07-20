@@ -430,7 +430,7 @@ class Help():
             status += "  Warning: There are unsaved changes\n"
 
         logger.trace("Compiled Status text")
-        return status   
+        return status
 
     @staticmethod
     def text_to_image(image, display_text):
@@ -630,7 +630,6 @@ class Manual():
         landmarks = [{"landmarksXY": face.aligned_landmarks}
                      for face in self.extracted_faces.faces]
         return FacesDisplay(faces, landmarks, self.extracted_faces.size, self.interface)
-
 
 
 class FrameDisplay():
