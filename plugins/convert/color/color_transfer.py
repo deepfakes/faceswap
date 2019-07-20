@@ -37,11 +37,13 @@ class Color(Adjustment):
     This implementation is (loosely) based on to the "Color Transfer
     between Images" paper by Reinhard et al., 2001.
     """
-    
-    def setContrast(self, image, contrast, brightness=50):
-        
-        image = np.rint(image * 255.0).astype("uint8")            
-        image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)              
+
+    def setContrast(self, image, contrast, brightness):
+        """
+        Set image contrast and brightness.
+        """
+        image = np.rint(image * 255.0).astype("uint8")
+        image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)
         image = np.clip(np.divide(image, 255, dtype=np.float32), .0, 1.0)
         return image
 

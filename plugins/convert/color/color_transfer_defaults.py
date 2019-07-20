@@ -87,7 +87,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    }, 
+    },
     "brightness_adjustment": {
         "default": 0,
         "info": "Brighness amount applied to the face prior to color transfer.",
@@ -97,5 +97,5 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    },     
+    },
 }
