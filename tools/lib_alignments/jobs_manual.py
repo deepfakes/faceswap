@@ -192,7 +192,7 @@ class Interface():
         if self.get_edit_mode() != "Edit":
             logger.debug("Copy received, but edit mode is not 'Edit'. Not copying")
             return
-        frame_id = self.state["navigation"]["frame_idx"] + args[1]
+        frame_id = self.get_next_face_idx(args[1])
         if not 0 <= frame_id <= self.state["navigation"]["max_frame"]:
             return
         current_frame = self.get_frame_name()
@@ -322,6 +322,31 @@ class Interface():
         """ Turn redraw requirement on or off """
         self.state["edit"]["redraw"] = request
 
+    def get_next_face_idx(self, increment):
+        """Get the index of the previous or next frame which has a face"""         
+        navigation = self.state["navigation"]
+        frame_list = self.frames.file_list_sorted        
+        frame_idx = navigation["frame_idx"]
+
+        if increment == 1:      
+            frame_idx += 1            
+            while True:
+                  if frame_idx == navigation["max_frame"]:
+                    break
+                  frame = frame_list[frame_idx]["frame_fullname"]
+                  if not self.alignments.frame_has_faces(frame) and not frame_idx == navigation["max_frame"]:
+                    frame_idx += 1                                             
+                  else: break
+        elif increment == -1:
+            frame_idx += -1
+            while True:
+                  if frame_idx == 0:
+                    break
+                  frame = frame_list[frame_idx]["frame_fullname"]
+                  if not self.alignments.frame_has_faces(frame) and not frame_idx == 0:
+                    frame_idx += -1
+                  else: break      
+        return frame_idx
 
 class Help():
     """ Generate and display help in cli and in window """
@@ -405,7 +430,7 @@ class Help():
             status += "  Warning: There are unsaved changes\n"
 
         logger.trace("Compiled Status text")
-        return status
+        return status   
 
     @staticmethod
     def text_to_image(image, display_text):
@@ -605,6 +630,7 @@ class Manual():
         landmarks = [{"landmarksXY": face.aligned_landmarks}
                      for face in self.extracted_faces.faces]
         return FacesDisplay(faces, landmarks, self.extracted_faces.size, self.interface)
+
 
 
 class FrameDisplay():
