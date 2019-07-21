@@ -19,7 +19,7 @@ from lib.faces_detect import DetectedFace
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import cv2_read_img
-from lib.vgg_face import VGGFace
+from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.plugin_loader import PluginLoader
 
 from . import cli

@@ -542,11 +542,10 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-be", "--backend"),
                               "action": Radio,
                               "type": str.upper,
-                              "choices": ("CPU", "OPENCL"),
-                              "default": "CPU",
-                              "help": "Backend to use for VGG Face inference. OpenCL is slightly "
-                                      "faster but may not be available on all systems. Only used "
-                                      "for sort by 'face'."})
+                              "choices": ("CPU", "GPU"),
+                              "default": "GPU",
+                              "help": "Backend to use for VGG Face inference."
+                                      "Only used for sort by 'face'."})
 
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',
