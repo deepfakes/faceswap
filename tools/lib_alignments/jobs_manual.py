@@ -81,10 +81,10 @@ class Interface():
                                 "key_type": range},
                     "c": {"action": self.copy_alignments,
                           "args": ("edit", -1),
-                          "help": "Copy Previous Frame's Alignments"},
+                          "help": "Copy Alignments from Previous Frame with Alignments"},
                     "v": {"action": self.copy_alignments,
                           "args": ("edit", 1),
-                          "help": "Copy Next Frame's Alignments"},
+                          "help": "Copy Alignments from Next Frame with Alignments"},
                     "y": {"action": self.toggle_state,
                           "args": ("image", "display"),
                           "help": "Toggle Image"},
@@ -192,7 +192,7 @@ class Interface():
         if self.get_edit_mode() != "Edit":
             logger.debug("Copy received, but edit mode is not 'Edit'. Not copying")
             return
-        frame_id = self.state["navigation"]["frame_idx"] + args[1]
+        frame_id = self.get_next_face_idx(args[1])
         if not 0 <= frame_id <= self.state["navigation"]["max_frame"]:
             return
         current_frame = self.get_frame_name()
@@ -322,6 +322,20 @@ class Interface():
         """ Turn redraw requirement on or off """
         self.state["edit"]["redraw"] = request
 
+    def get_next_face_idx(self, increment):
+        """Get the index of the previous or next frame which has a face"""
+        navigation = self.state["navigation"]
+        frame_list = self.frames.file_list_sorted
+        frame_idx = navigation["frame_idx"] + increment
+        while True:
+            if not 0 <= frame_idx <= navigation["max_frame"]:
+                break
+            frame = frame_list[frame_idx]["frame_fullname"]
+            if not self.alignments.frame_has_faces(frame):
+                frame_idx += increment
+            else:
+                break
+        return frame_idx
 
 class Help():
     """ Generate and display help in cli and in window """
