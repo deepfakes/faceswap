@@ -6,7 +6,6 @@ import logging
 import cv2
 import numpy as np
 
-from lib.model.masks import get_default_mask
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -19,29 +18,15 @@ def get_config(plugin_name):
 
 class Adjustment():
     """ Parent class for adjustments """
-    def __init__(self, mask_type, output_size, predicted_available):
-        logger.debug("Initializing %s: (arguments: '%s', output_size: %s, "
-                     "predicted_available: %s)",
-                     self.__class__.__name__, mask_type, output_size, predicted_available)
+    def __init__(self, output_size):
+        logger.debug("Initializing %s: (arguments: '%s', output_size: %s",
+                     self.__class__.__name__, output_size)
         self.config = get_config(".".join(self.__module__.split(".")[-2:]))
         logger.debug("config: %s", self.config)
-        self.mask_type = self.get_mask_type(mask_type, predicted_available)
         self.output_size = output_size
 
         self.skip = self.config.get("type", None) is None
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @staticmethod
-    def get_mask_type(mask_type, predicted_available):
-        """ Return the requested mask type. Return default mask if
-            predicted requested but not available """
-        logger.debug("Requested mask_type: %s", mask_type)
-        if mask_type == "predicted" and not predicted_available:
-            mask_type = get_default_mask()
-            logger.warning("Predicted selected, but the model was not trained with a mask. "
-                           "Switching to '%s'", mask_type)
-        logger.debug("Returning mask_type: %s", mask_type)
-        return mask_type
 
     def process(self, *args, **kwargs):
         """ Override for specific color adjustment process """

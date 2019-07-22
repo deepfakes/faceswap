@@ -43,7 +43,6 @@ class Convert():
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
-                                   self.predictor.has_predicted_mask,
                                    self.disk_io.draw_transparent,
                                    self.disk_io.pre_encode,
                                    arguments)

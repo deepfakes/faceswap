@@ -16,6 +16,16 @@ class Mask(Adjustment):
     def __init__(self, mask_type, output_size, predicted_available=False):
         super().__init__(mask_type, output_size, predicted_available)
 
+    def process(self, new_face):
+        """ The blend box function. Adds the created mask to the alpha channel """
+        if self.skip:
+            logger.trace("Skipping blend box")
+        else:
+            mask = self.get_mask()
+            new_face[:, :, -1] = np.minimum(new_face[:, :, -1:], mask)
+            logger.trace("Blended box")
+        return new_face
+
     def get_mask(self):
         """ The box for every face will be identical, so set the mask just once
             As gaussian blur technically blurs both sides of the mask, reduce the mask ratio by
@@ -26,21 +36,7 @@ class Mask(Adjustment):
         erode = slice(erode_size, -erode_size)
         mask = np.zeros((self.output_size, self.output_size, 1), dtype='float32')
         mask[erode, erode] = 1.
-
-        mask = BlurMask(self.config["type"],
-                        mask,
-                        self.config["radius"],
-                        self.config["passes"]).blurred
+        raw_mask = BlurMask(self.config["type"], mask, self.config["radius"], self.config["passes"])
+        mask = raw_mask.blurred
         logger.debug("Built box mask. Shape: %s", mask.shape)
         return mask
-
-    def process(self, new_face):
-        """ The blend box function. Adds the created mask to the alpha channel """
-        if self.skip:
-            logger.trace("Skipping blend box")
-        else:
-            logger.trace("Blending box")
-            mask = self.get_mask()
-            new_face = np.clip(np.concatenate((new_face, mask), axis=-1), 0., 1.)
-            logger.trace("Blended box")
-        return new_face
