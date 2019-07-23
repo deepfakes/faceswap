@@ -25,6 +25,7 @@ class Check():
         self.alignments = alignments
         self.job = arguments.job
         self.type = None
+        self.is_video = False  # Set when getting items
         self.output = arguments.output
         self.source_dir = self.get_source_dir(arguments)
         self.validate()
@@ -54,6 +55,7 @@ class Check():
     def get_items(self):
         """ Set the correct items to process """
         items = globals()[self.type.title()]
+        self.is_video = items.is_video
         return items(self.source_dir).file_list_sorted
 
     def process(self):
@@ -112,11 +114,12 @@ class Check():
         """ Return Faces when there are multiple faces in a frame """
         self.output_message = "Multiple faces in frame"
         seen_hash_dupes = set()
+        hashes_to_frame = self.alignments.hashes_to_frame
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
             frame_idx = [(frame, idx)
-                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
+                         for frame, idx in hashes_to_frame[f_hash].items()]
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -136,7 +139,7 @@ class Check():
     def get_missing_alignments(self):
         """ yield each frame that does not exist in alignments file """
         self.output_message = "Frames missing from alignments file"
-        exclude_filetypes = ["yaml", "yml", "p", "json", "txt"]
+        exclude_filetypes = set(["yaml", "yml", "p", "json", "txt"])
         for frame in tqdm(self.items, desc=self.output_message):
             frame_name = frame["frame_fullname"]
             if (frame["frame_extension"] not in exclude_filetypes
@@ -148,7 +151,7 @@ class Check():
         """ yield each frame in alignments that does
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
-        frames = [item["frame_fullname"] for item in self.items]
+        frames = set(item["frame_fullname"] for item in self.items)
         for frame in tqdm(self.alignments.data.keys(), desc=self.output_message):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)
@@ -157,21 +160,27 @@ class Check():
     def get_leftover_faces(self):
         """yield each face that isn't in the alignments file."""
         self.output_message = "Faces missing from the alignments file"
+        hashes_to_frame = self.alignments.hashes_to_frame
         for face in tqdm(self.items, desc=self.output_message):
             f_hash = face["face_hash"]
-            if not self.alignments.hashes_to_frame.get(f_hash, None):
+            if f_hash not in hashes_to_frame:
                 logger.debug("Returning: '%s'", face["face_fullname"])
                 yield face["face_fullname"], -1
 
     def output_results(self, items_output):
         """ Output the results in the requested format """
+        logger.trace("items_output: %s", items_output)
+        if self.output == "move" and self.is_video and self.type == "frames":
+            logger.warning("Move was selected with an input video. This is not possible so "
+                           "falling back to console output")
+            self.output = "console"
         if not items_output:
             logger.info("No %s were found meeting the criteria", self.type)
             return
         if self.output == "move":
             self.move_file(items_output)
             return
-        if self.job in ("multi-faces", "leftover-faces"):
+        if self.job in ("multi-faces", "leftover-faces") and self.type == "faces":
             # Strip the index for printed/file output
             items_output = [item[0] for item in items_output]
         output_message = "-----------------------------------------------\r\n"
@@ -185,11 +194,28 @@ class Check():
         if self.output == "file":
             self.output_file(output_message, len(items_output))
 
+    def get_output_folder(self):
+        """ Return output folder. Needs to be in the root if input is a
+            video and processing frames """
+        if self.is_video and self.type == "frames":
+            return os.path.dirname(self.source_dir)
+        return self.source_dir
+
+    def get_filename_prefix(self):
+        """ Video name needs to be prefixed to filename if input is a
+            video and processing frames """
+        if self.is_video and self.type == "frames":
+            return "{}_".format(os.path.basename(self.source_dir))
+        return ""
+
     def output_file(self, output_message, items_discovered):
         """ Save the output to a text file in the frames directory """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = "{}_{}.txt".format(self.output_message.replace(" ", "_").lower(), now)
-        output_file = os.path.join(self.source_dir, filename)
+        dst_dir = self.get_output_folder()
+        filename = "{}{}_{}.txt".format(self.get_filename_prefix(),
+                                        self.output_message.replace(" ", "_").lower(),
+                                        now)
+        output_file = os.path.join(dst_dir, filename)
         logger.info("Saving %s result(s) to '%s'", items_discovered, output_file)
         with open(output_file, "w") as f_output:
             f_output.write(output_message)
@@ -197,8 +223,10 @@ class Check():
     def move_file(self, items_output):
         """ Move the identified frames to a new subfolder """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = "{}_{}".format(self.output_message.replace(" ", "_").lower(), now)
-        output_folder = os.path.join(self.source_dir, folder_name)
+        folder_name = "{}{}_{}".format(self.get_filename_prefix(),
+                                       self.output_message.replace(" ", "_").lower(), now)
+        dst_dir = self.get_output_folder()
+        output_folder = os.path.join(dst_dir, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
         move = getattr(self, "move_{}".format(self.type))
@@ -244,8 +272,8 @@ class Draw():
         """ Set the output folder path """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "drawn_landmarks_{}".format(now)
-        if self.frames.vid_cap:
-            dest_folder = os.path.split(self.frames.folder)[0]
+        if self.frames.is_video:
+            dest_folder = os.path.dirname(self.frames.folder)
         else:
             dest_folder = self.frames.folder
         output_folder = os.path.join(dest_folder, folder_name)
@@ -457,15 +485,30 @@ class Legacy():
 class Merge():
     """ Merge two alignments files into one """
     def __init__(self, alignments, arguments):
+        self.alignments = alignments
+        self.faces = self.get_faces(arguments)
         self.final_alignments = alignments[0]
         self.process_alignments = alignments[1:]
+        self._hashes_to_frame = None
+
+    @staticmethod
+    def get_faces(arguments):
+        """ If faces argument is specified, load faces_dir
+            otherwise return None """
+        if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
+            return None
+        return Faces(arguments.faces_dir)
 
     def process(self):
         """Process the alignments file merge """
         logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
+        if self.faces is not None:
+            self.remove_faces()
+        self._hashes_to_frame = self.final_alignments.hashes_to_frame
         skip_count = 0
         merge_count = 0
         total_count = sum([alignments.frames_count for alignments in self.process_alignments])
+
         with tqdm(desc="Merging Alignments", total=total_count) as pbar:
             for alignments in self.process_alignments:
                 for _, src_alignments, _, frame in alignments.yield_faces():
@@ -486,9 +529,36 @@ class Merge():
             self.set_destination_filename()
             self.final_alignments.save()
 
+    def remove_faces(self):
+        """ Process to remove faces from an alignments file """
+        face_hashes = list(self.faces.items.keys())
+        del_faces_count = 0
+        del_frames_count = 0
+        if not face_hashes:
+            logger.error("No face hashes. This would remove all faces from your alignments file.")
+            return
+        for alignments in tqdm(self.alignments, desc="Filtering out faces"):
+            pre_face_count = alignments.faces_count
+            pre_frames_count = alignments.frames_count
+            alignments.filter_hashes(face_hashes, filter_out=False)
+            # Remove frames with no faces
+            frames = list(alignments.data.keys())
+            for frame in frames:
+                if not alignments.frame_has_faces(frame):
+                    del alignments.data[frame]
+            post_face_count = alignments.faces_count
+            post_frames_count = alignments.frames_count
+            removed_faces = pre_face_count - post_face_count
+            removed_frames = pre_frames_count - post_frames_count
+            del_faces_count += removed_faces
+            del_frames_count += removed_frames
+            logger.verbose("Removed %s faces and %s frames from %s",
+                           removed_faces, removed_frames, os.path.basename(alignments.file))
+        logger.info("Total removed - faces: %s, frames: %s", del_faces_count, del_frames_count)
+
     def check_exists(self, frame, alignment, idx):
         """ Check whether this face already exists """
-        existing_frame = self.final_alignments.hashes_to_frame.get(alignment["hash"], None)
+        existing_frame = self._hashes_to_frame.get(alignment["hash"], None)
         if not existing_frame:
             return False
         if frame in existing_frame.keys():
@@ -503,6 +573,7 @@ class Merge():
         """ Merge the source alignment into the destination """
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
+        self._hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
         self.final_alignments.data.setdefault(frame, list()).append(alignment)
 
     def set_destination_filename(self):
@@ -615,7 +686,7 @@ class RemoveAlignments():
         """ Set the correct items to process """
         retval = None
         if self.type == "frames":
-            retval = list(Frames(arguments.frames_dir).items.keys())
+            retval = Frames(arguments.frames_dir).items
         elif self.type == "faces":
             retval = Faces(arguments.faces_dir)
         return retval
@@ -662,7 +733,7 @@ class RemoveAlignments():
 
     def remove_faces(self):
         """ Process to remove faces from an alignments file """
-        face_hashes = list(self.items.items.keys())
+        face_hashes = self.items.items
         if not face_hashes:
             logger.error("No face hashes. This would remove all faces from your alignments file.")
             return 0
@@ -670,23 +741,6 @@ class RemoveAlignments():
         self.alignments.filter_hashes(face_hashes, filter_out=False)
         post_face_count = self.alignments.faces_count
         return pre_face_count - post_face_count
-
-    def remove_alignment(self, item):
-        """ Remove the alignment from the alignments file """
-        del_count = 0
-        frame_name, alignments, number_alignments = item[:3]
-        for idx in self.alignments.yield_original_index_reverse(alignments, number_alignments):
-            face_indexes = self.items.items.get(frame_name, [-1])
-            if idx not in face_indexes:
-                del alignments[idx]
-                self.removed.add(frame_name)
-                logger.verbose("Removed alignment data for image: '%s' index: %s",
-                               frame_name, str(idx))
-                del_count += 1
-            else:
-                logger.trace("Not removing alignment data for image: '%s' index: %s",
-                             frame_name, str(idx))
-        return del_count
 
 
 class Rename():
@@ -703,22 +757,18 @@ class Rename():
         """ Process the face renaming """
         logger.info("[RENAME FACES]")  # Tidy up cli output
         rename_count = 0
-        for frame, _, _, frame_fullname in tqdm(self.alignments.yield_faces(),
-                                                desc="Renaming Faces",
-                                                total=self.alignments.frames_count):
-            rename_count += self.rename_faces(frame, frame_fullname)
+        for frame, details, _, frame_fullname in tqdm(self.alignments.yield_faces(),
+                                                      desc="Renaming Faces",
+                                                      total=self.alignments.frames_count):
+            rename_count += self.rename_faces(frame, frame_fullname, details)
         logger.info("%s faces renamed", rename_count)
 
-    def rename_faces(self, frame, frame_fullname):
+    def rename_faces(self, frame, frame_fullname, details):
         """ Rename faces
             Done in 2 iterations as two files cannot share the same name """
         logger.trace("Renaming faces for frame: '%s'", frame_fullname)
         temp_ext = ".temp_move"
-        frame_faces = list()
-        frame_faces = [(f_hash, idx)
-                       for f_hash, details in self.alignments.hashes_to_frame.items()
-                       for frame_name, idx in details.items()
-                       if frame_name == frame_fullname]
+        frame_faces = [(x["hash"], idx) for idx, x in enumerate(details)]
         rename_count = 0
         rename_files = list()
         for f_hash, idx in frame_faces:

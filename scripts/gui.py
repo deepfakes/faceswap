@@ -36,7 +36,7 @@ class FaceswapGui(tk.Tk):
         pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
         statusbar = StatusBar(self)
         session = Session()
-        initialize_config(cliopts, scaling_factor, pathcache, statusbar, session)
+        initialize_config(self, cliopts, scaling_factor, pathcache, statusbar, session)
         initialize_images()
 
     def get_scaling(self):

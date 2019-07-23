@@ -3,11 +3,10 @@
 
 import logging
 
-import cv2
-
 from lib.faces_detect import DetectedFace
 from lib.logger import get_loglevel
 from lib.vgg_face import VGGFace
+from lib.utils import cv2_read_img
 from plugins.extract.pipeline import Extractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -41,10 +40,10 @@ class FaceFilter():
         """ Load the images """
         retval = dict()
         for fpath in reference_file_paths:
-            retval[fpath] = {"image": cv2.imread(fpath),  # pylint: disable=no-member
+            retval[fpath] = {"image": cv2_read_img(fpath, raise_error=True),
                              "type": "filter"}
         for fpath in nreference_file_paths:
-            retval[fpath] = {"image": cv2.imread(fpath),  # pylint: disable=no-member
+            retval[fpath] = {"image": cv2_read_img(fpath, raise_error=True),
                              "type": "nfilter"}
         logger.debug("Loaded filter images: %s", {k: v["type"] for k, v in retval.items()})
         return retval
@@ -106,7 +105,7 @@ class FaceFilter():
             landmarks = face["landmarks"][0]
 
             detected_face = DetectedFace()
-            detected_face.from_bounding_box(bounding_box, image)
+            detected_face.from_bounding_box_dict(bounding_box, image)
             detected_face.landmarksXY = landmarks
             detected_face.load_aligned(image, size=224)
             face["face"] = detected_face.aligned_face
@@ -164,6 +163,9 @@ class FaceFilter():
                 msg = ("Rejecting face as k-nearest neighbors classification is less than "
                        "0.5: {}".format(round(ratio, 2)))
                 retval = False
+            else:
+                msg = None
+                retval = True
         else:
             msg = None
             retval = True

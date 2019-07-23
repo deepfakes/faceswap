@@ -9,12 +9,15 @@ scikit-learn
 toposort
 fastcluster
 matplotlib==2.2.2
-imageio
+imageio==2.5.0
 imageio-ffmpeg
 ffmpy==0.2.2
-nvidia-ml-py3
+# Revert back to nvidia-ml-py3 when windows/system32 patch is implemented
+git+https://github.com/deepfakes/nvidia-ml-py3.git
+#nvidia-ml-py3
 h5py==2.9.0
 Keras==2.2.4
+pywin32 ; sys_platform == "win32"
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,

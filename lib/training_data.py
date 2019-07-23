@@ -4,7 +4,7 @@
 import logging
 
 from hashlib import sha1
-from random import shuffle, choice
+from random import random, shuffle, choice
 
 import cv2
 import numpy as np
@@ -13,35 +13,61 @@ from scipy.interpolate import griddata
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
+from lib.utils import cv2_read_img, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, training_opts):
+    def __init__(self, model_input_size, model_output_size, training_opts, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
-                     "training_opts: %s, landmarks: %s)",
+                     "training_opts: %s, landmarks: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_size,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
-                     bool(training_opts.get("landmarks", None)))
+                     bool(training_opts.get("landmarks", None)), config)
         self.batch_size = 0
         self.model_input_size = model_input_size
         self.model_output_size = model_output_size
         self.training_opts = training_opts
         self.landmarks = self.training_opts.get("landmarks", None)
+        self.fixed_producer_dispatcher = None  # Set by FPD when loading
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
                                             model_output_size,
-                                            training_opts.get("coverage_ratio", 0.625))
+                                            training_opts.get("coverage_ratio", 0.625),
+                                            config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
+<<<<<<< HEAD
     def setup_batcher(self, images, batch_size, side, purpose, do_shuffle=True, augmenting=True):
         """ Keep a queue filled to 8x Batch Size """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "augmenting: %s)", len(images), batch_size, side, do_shuffle, augmenting)
         self.batch_size = batch_size
         queue_in, queue_out = self.make_queues(side, purpose)
+=======
+    def set_mask_class(self):
+        """ Set the mask function to use if using mask """
+        mask_type = self.training_opts.get("mask_type", None)
+        if mask_type:
+            logger.debug("Mask type: '%s'", mask_type)
+            mask_class = getattr(masks, mask_type)
+        else:
+            mask_class = None
+        logger.debug("Mask class: %s", mask_class)
+        return mask_class
+
+    def minibatch_ab(self, images, batchsize, side,
+                     do_shuffle=True, is_preview=False, is_timelapse=False):
+        """ Keep a queue filled to 8x Batch Size """
+        logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
+                     "is_preview, %s, is_timelapse: %s)", len(images), batchsize, side, do_shuffle,
+                     is_preview, is_timelapse)
+        self.batchsize = batchsize
+        is_display = is_preview or is_timelapse
+        queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
+>>>>>>> staging
         training_size = self.training_opts.get("training_size", 256)
         in_height = in_width = self.model_input_size
         out_height = out_width = self.model_output_size
@@ -51,11 +77,12 @@ class TrainingDataGenerator():
                         (batch_size, out_height, out_width, 3),         # target images
                         (batch_size, out_height, out_width, 1)]         # target masks
 
-        load_process = FixedProducerDispatcher(
+        self.fixed_producer_dispatcher = FixedProducerDispatcher(
             method=self.load_batches,
             shapes=batch_shapes,
             in_queue=queue_in,
             out_queue=queue_out,
+<<<<<<< HEAD
             args=(images, side, batch_size, augmenting, do_shuffle))
         load_process.start()
         logger.debug("Batching to queue: (side: '%s', augmenting: %s)", side, augmenting)
@@ -65,16 +92,56 @@ class TrainingDataGenerator():
     def make_queues(side, purpose):
         """ Create the buffer token queues for Fixed Producer Dispatcher """
         q_names = ["{}_side_{}_{}".format(purpose, side, direction) for direction in ("in", "out")]
+=======
+            args=(images, side, is_display, do_shuffle, batchsize))
+        self.fixed_producer_dispatcher.start()
+        logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
+        return self.minibatch(side, is_display, self.fixed_producer_dispatcher)
+
+    def join_subprocess(self):
+        """ Join the FixedProduceerDispatcher subprocess from outside this module """
+        logger.debug("Joining FixedProducerDispatcher")
+        if self.fixed_producer_dispatcher is None:
+            logger.debug("FixedProducerDispatcher not yet initialized. Exiting")
+            return
+        self.fixed_producer_dispatcher.join()
+        logger.debug("Joined FixedProducerDispatcher")
+
+    @staticmethod
+    def make_queues(side, is_preview, is_timelapse):
+        """ Create the buffer token queues for Fixed Producer Dispatcher """
+        q_name = "_{}".format(side)
+        if is_preview:
+            q_name = "{}{}".format("preview", q_name)
+        elif is_timelapse:
+            q_name = "{}{}".format("timelapse", q_name)
+        else:
+            q_name = "{}{}".format("train", q_name)
+        q_names = ["{}_{}".format(q_name, direction) for direction in ("in", "out")]
+>>>>>>> staging
         logger.debug(q_names)
         queues = [queue_manager.get_queue(queue) for queue in q_names]
         return queues
 
+<<<<<<< HEAD
     def load_batches(self, mem_gen, images, side, batch_size, augmenting, do_shuffle):
         """ Load the warped images and target images to queue """
         logger.debug("Loading batch: (image_count: %s, side: '%s', augmenting: %s, "
                      "do_shuffle: %s)", len(images), side, augmenting, do_shuffle)
         def batch_gen(images, landmarks, batch_size):
             """ doc string """
+=======
+    def load_batches(self, mem_gen, images, side, is_display,
+                     do_shuffle=True, batchsize=0):
+        """ Load the warped images and target images to queue """
+        logger.debug("Loading batch: (image_count: %s, side: '%s', is_display: %s, "
+                     "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
+        self.validate_samples(images)
+        # Intialize this for each subprocess
+        self._nearest_landmarks = dict()
+
+        def _img_iter(imgs):
+>>>>>>> staging
             while True:
                 if do_shuffle:
                     rng_state = np.random.get_state()
@@ -95,6 +162,7 @@ class TrainingDataGenerator():
 
         for memory_wrapper in mem_gen:
             memory = memory_wrapper.get()
+<<<<<<< HEAD
             logger.trace("Putting to batch queue: (side: '%s', augmenting: %s)", side, augmenting)
             for image_num, image, landmark in batcher:
                 imgs = self.process_faces(image, landmark, side, augmenting, epoch)
@@ -107,6 +175,20 @@ class TrainingDataGenerator():
 
         logger.debug("Finished batching: (epoch: %s, side: '%s', augmenting: %s)",
                      epoch, side, augmenting)
+=======
+            logger.trace("Putting to batch queue: (side: '%s', is_display: %s)",
+                         side, is_display)
+            for i, img_path in enumerate(img_iter):
+                imgs = self.process_face(img_path, side, is_display)
+                for j, img in enumerate(imgs):
+                    memory[j][i][:] = img
+                epoch += 1
+                if i == batchsize - 1:
+                    break
+            memory_wrapper.ready()
+        logger.debug("Finished batching: (epoch: %s, side: '%s', is_display: %s)",
+                     epoch, side, is_display)
+>>>>>>> staging
 
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
@@ -114,6 +196,7 @@ class TrainingDataGenerator():
         length = data.shape[0]
         msg = ("Number of images is lower than batch-size (Note that too few "
                "images may lead to bad training). # images: {}, "
+<<<<<<< HEAD
                "batch-size: {}".format(length, self.batch_size))
         assert length >= self.batch_size, msg
 
@@ -139,6 +222,48 @@ class TrainingDataGenerator():
         logger.trace("Processing face: (image #: '%s', side: '%s', augmenting: %s)",
                      img_number, side, augmenting)
         if augmenting:
+=======
+               "batch-size: {}".format(length, self.batchsize))
+        try:
+            assert length >= self.batchsize, msg
+        except AssertionError as err:
+            msg += ("\nYou should increase the number of images in your training set or lower "
+                    "your batch-size.")
+            raise FaceswapError(msg) from err
+
+    @staticmethod
+    def minibatch(side, is_display, load_process):
+        """ A generator function that yields epoch, batchsize of warped_img
+            and batchsize of target_img from the load queue """
+        logger.debug("Launching minibatch generator for queue (side: '%s', is_display: %s)",
+                     side, is_display)
+        for batch_wrapper in load_process:
+            with batch_wrapper as batch:
+                logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
+                             "is_display: %s)",
+                             len(batch), [item.shape for item in batch], side, is_display)
+                yield batch
+        load_process.stop()
+        logger.debug("Finished minibatch generator for queue: (side: '%s', is_display: %s)",
+                     side, is_display)
+        load_process.join()
+
+    def process_face(self, filename, side, is_display):
+        """ Load an image and perform transformation and warping """
+        logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
+                     filename, side, is_display)
+        image = cv2_read_img(filename, raise_error=True)
+        if self.mask_class or self.training_opts["warp_to_landmarks"]:
+            src_pts = self.get_landmarks(filename, image, side)
+        if self.mask_class:
+            image = self.mask_class(src_pts, image, channels=4).mask
+
+        image = self.processing.color_adjust(image,
+                                             self.training_opts["augment_color"],
+                                             is_display)
+
+        if not is_display:
+>>>>>>> staging
             image = self.processing.random_transform(image)
             if not self.training_opts["no_flip"]:
                 image = self.processing.do_random_flip(image)
@@ -151,6 +276,28 @@ class TrainingDataGenerator():
                      image, side, [img.shape for img in processed])
         return processed
 
+<<<<<<< HEAD
+=======
+    def get_landmarks(self, filename, image, side):
+        """ Return the landmarks for this face """
+        logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
+        lm_key = sha1(image).hexdigest()
+        try:
+            src_points = self.landmarks[side][lm_key]
+        except KeyError as err:
+            msg = ("At least one of your images does not have a matching entry in your alignments "
+                   "file."
+                   "\nIf you are training with a mask or using 'warp to landmarks' then every "
+                   "face you intend to train on must exist within the alignments file."
+                   "\nThe specific file that caused the failure was '{}' which has a hash of {}."
+                   "\nMost likely there will be more than just this file missing from the "
+                   "alignments file. You can use the Alignments Tool to help identify missing "
+                   "alignments".format(lm_key, filename))
+            raise FaceswapError(msg) from err
+        logger.trace("Returning: (src_points: %s)", src_points)
+        return src_points
+
+>>>>>>> staging
     def get_closest_match(self, filename, side, src_points):
         """ Return closest matched landmarks from opposite set """
         logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
@@ -170,13 +317,15 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, input_size, output_size, coverage_ratio):
+    def __init__(self, input_size, output_size, coverage_ratio, config):
         """ input_size: Size of the face input into the model
             output_size: Size of the face that comes out of the modell
             coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
-        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s)",
-                     self.__class__.__name__, input_size, output_size, coverage_ratio)
+        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s, "
+                     "config: %s)", self.__class__.__name__, input_size, output_size,
+                     coverage_ratio, config)
+        self.config = config
         # Transform args
         self.t_args = {"rotation":  10.,   # Range to randomly rotate the image by
                        "zoom":      0.05,  # Range to randomly zoom the image by
@@ -190,6 +339,59 @@ class ImageManipulation():
         self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
+<<<<<<< HEAD
+=======
+    def color_adjust(self, img, augment_color, is_display):
+        """ Color adjust RGB image """
+        logger.trace("Color adjusting image")
+        if not is_display and augment_color:
+            logger.trace("Augmenting color")
+            face, _ = self.separate_mask(img)
+            face = face.astype("uint8")
+            face = self.random_contrast(face)
+            face = self.random_lab(face)
+            img[:, :, :3] = face
+        return img.astype('float32') / 255.0
+
+    def random_contrast(self, image):
+        """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
+        contrast_random = random()
+        if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
+            return image
+
+        base_contrast = image.shape[0] // 128
+        grid_base = random() * self.config.get("color_clahe_max_size", 4)
+        contrast_adjustment = int(grid_base * (base_contrast / 2))
+        grid_size = base_contrast + contrast_adjustment
+        logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(grid_size, grid_size))
+        for chan in range(3):
+            image[:, :, chan] = clahe.apply(image[:, :, chan])
+        return image
+
+    def random_lab(self, image):
+        # pylint:disable=no-member
+        """ Perform random color/lightness adjustment in L*a*b* colorspace """
+        amount_l = self.config.get("color_lightness", 30.) / 100
+        amount_ab = self.config.get("color_ab", 8.) / 100
+
+        randoms = [(random() * amount_l * 2) - amount_l,  # L adjust
+                   (random() * amount_ab * 2) - amount_ab,  # A adjust
+                   (random() * amount_ab * 2) - amount_ab]  # B adjust
+
+        logger.trace("Random LAB adjustments: %s", randoms)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype("float32") / 255.
+
+        for idx, adjustment in enumerate(randoms):
+            if adjustment >= 0:
+                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+            else:
+                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+        image = cv2.cvtColor((image * 255.0).astype("uint8"), cv2.COLOR_LAB2BGR)
+        return image
+
+>>>>>>> staging
     @staticmethod
     def separate_mask(image):
         """ Return the image and the mask from a 4 channel image """
@@ -237,7 +439,15 @@ class ImageManipulation():
         sample = image.copy()[:, :, :3]
         height, width = image.shape[0:2]
         coverage = self.get_coverage(image) // 2
-        assert height == width and height % 2 == 0
+        try:
+            assert height == width and height % 2 == 0
+        except AssertionError as err:
+            msg = ("Training images should be square with an even number of pixels across each "
+                   "side. An image was found with width: {}, height: {}."
+                   "\nMost likely this is a frame rather than a face within your training set. "
+                   "\nMake sure that the only images within your training set are faces generated "
+                   "from the Extract process.".format(width, height))
+            raise FaceswapError(msg) from err
 
         range_ = np.linspace(height // 2 - coverage, height // 2 + coverage, 5, dtype='float32')
         mapx = np.broadcast_to(range_, (5, 5)).copy()

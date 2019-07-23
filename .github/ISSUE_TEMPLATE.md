@@ -1,6 +1,6 @@
-**Note: Please only report bugs in this repository. Just because you are getting an error message does not automatically mean you have discovered a bug. If you don't have a lot of experience with this type of project, or if you need for setup help and other issues in using the faceswap tool, please refer to the [faceswap-playground](https://github.com/deepfakes/faceswap-playground/issues) instead. The faceswap-playground is also an excellent place to ask questions and submit feedback.**
+**Note: Please only report bugs in this repository. Just because you are getting an error message does not automatically mean you have discovered a bug. If you don't have a lot of experience with this type of project, or if you need for setup help and other issues in using the faceswap tool, please refer to the [faceswap Forum](https://faceswap.dev/forum) instead. The [faceswap Forum](https://faceswap.dev/forum) is also an excellent place to ask questions and submit feedback. Non-bugs are likely to be closed without response.**
 
-**Please always attach your generated crash_report.log to any bug report**
+**Please always attach your generated crash_report.log to any bug report. Failure to attach this report may lead to your issue being closed without response.**
 
 ## Expected behavior
 

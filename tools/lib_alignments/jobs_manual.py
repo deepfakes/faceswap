@@ -81,10 +81,10 @@ class Interface():
                                 "key_type": range},
                     "c": {"action": self.copy_alignments,
                           "args": ("edit", -1),
-                          "help": "Copy Previous Frame's Alignments"},
+                          "help": "Copy Alignments from Previous Frame with Alignments"},
                     "v": {"action": self.copy_alignments,
                           "args": ("edit", 1),
-                          "help": "Copy Next Frame's Alignments"},
+                          "help": "Copy Alignments from Next Frame with Alignments"},
                     "y": {"action": self.toggle_state,
                           "args": ("image", "display"),
                           "help": "Toggle Image"},
@@ -192,7 +192,7 @@ class Interface():
         if self.get_edit_mode() != "Edit":
             logger.debug("Copy received, but edit mode is not 'Edit'. Not copying")
             return
-        frame_id = self.state["navigation"]["frame_idx"] + args[1]
+        frame_id = self.get_next_face_idx(args[1])
         if not 0 <= frame_id <= self.state["navigation"]["max_frame"]:
             return
         current_frame = self.get_frame_name()
@@ -322,6 +322,20 @@ class Interface():
         """ Turn redraw requirement on or off """
         self.state["edit"]["redraw"] = request
 
+    def get_next_face_idx(self, increment):
+        """Get the index of the previous or next frame which has a face"""
+        navigation = self.state["navigation"]
+        frame_list = self.frames.file_list_sorted
+        frame_idx = navigation["frame_idx"] + increment
+        while True:
+            if not 0 <= frame_idx <= navigation["max_frame"]:
+                break
+            frame = frame_list[frame_idx]["frame_fullname"]
+            if not self.alignments.frame_has_faces(frame):
+                frame_idx += increment
+            else:
+                break
+        return frame_idx
 
 class Help():
     """ Generate and display help in cli and in window """
@@ -450,7 +464,8 @@ class Manual():
                                               align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
-        self.mouse_handler = MouseHandler(self.interface, self.arguments.loglevel)
+        self.mouse_handler = MouseHandler(self.interface, self.arguments.loglevel,
+                                          amd=self.arguments.amd)
 
         print(self.help.helptext)
         max_idx = self.frames.count - 1
@@ -749,14 +764,15 @@ class FacesDisplay():
 
 class MouseHandler():
     """ Manual Extraction """
-    def __init__(self, interface, loglevel):
-        logger.debug("Initializing %s: (interface: %s)", self.__class__.__name__, interface)
+    def __init__(self, interface, loglevel, amd=False):
+        logger.debug("Initializing %s: (interface: %s, loglevel: %s, amd: %s)",
+                     self.__class__.__name__, interface, loglevel, amd)
         self.interface = interface
         self.alignments = interface.alignments
         self.frames = interface.frames
 
         self.extractor = dict()
-        self.init_extractor(loglevel)
+        self.init_extractor(loglevel, amd)
 
         self.mouse_state = None
         self.last_move = None
@@ -769,8 +785,8 @@ class MouseHandler():
                       "bounding_box_orig": list()}
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def init_extractor(self, loglevel):
-        """ Initialize FAN """
+    def init_extractor(self, loglevel, amd):
+        """ Initialize Aligner """
         logger.debug("Initialize Extractor")
         out_queue = queue_manager.get_queue("out")
 
@@ -784,8 +800,11 @@ class MouseHandler():
         d_event = detect_process.event
         detect_process.start()
 
-        for plugin in ("fan", "cv2_dnn"):
-            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel)
+        plugins = ["fan_amd"] if amd else ["fan"]
+        plugins.append("cv2_dnn")
+        for plugin in plugins:
+            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel,
+                                                       normalize_method="hist")
             align_process = SpawnProcess(aligner.run, **a_kwargs)
             a_event = align_process.event
             align_process.start()
@@ -795,7 +814,7 @@ class MouseHandler():
             # up to 3-4 minutes, hence high timeout.
             a_event.wait(300)
             if not a_event.is_set():
-                if plugin == "fan":
+                if plugin.startswith("fan"):
                     align_process.join()
                     logger.error("Error initializing FAN. Trying CV2-DNN")
                     continue
@@ -985,9 +1004,9 @@ class MouseHandler():
         """ Convert Extracted Tuple to Alignments data """
         alignment = dict()
         bbox, landmarks = extract_data
-        alignment["x"] = bbox.left
-        alignment["w"] = bbox.width
-        alignment["y"] = bbox.top
-        alignment["h"] = bbox.height
+        alignment["x"] = bbox["left"]
+        alignment["w"] = bbox["right"] - bbox["left"]
+        alignment["y"] = bbox["top"]
+        alignment["h"] = bbox["bottom"] - bbox["top"]
         alignment["landmarksXY"] = landmarks
         return alignment

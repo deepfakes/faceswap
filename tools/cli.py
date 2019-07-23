@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 from lib.cli import FaceSwapArgs
-from lib.cli import (ContextFullPaths, DirFullPaths, FileFullPaths, FilesFullPaths,
-                     SaveFileFullPaths, Radio, Slider)
+from lib.cli import (ContextFullPaths, DirOrFileFullPaths, DirFullPaths, FileFullPaths,
+                     FilesFullPaths, SaveFileFullPaths, Radio, Slider)
 from lib.utils import _image_extensions
 
 
@@ -43,7 +43,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     frames_and_faces_dir + align_eyes +
                     "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
-                    "separated list of alignments files with the -a flag."
+                    "separated list of alignments files with the -a flag. Optionally specify a "
+                    "faces (-fc) folder to filter the final alignments file to only those faces "
+                    "that appear within the provided folder."
                     "\nL|'missing-alignments': Identify frames that do not exist in the "
                     "alignments file." + output_opts + frames_dir +
                     "\nL|'missing-frames': Identify frames in the alignments file that do not "
@@ -95,8 +97,9 @@ class AlignmentsArgs(FaceSwapArgs):
                               "dest": "faces_dir",
                               "help": "Directory containing extracted faces."})
         argument_list.append({"opts": ("-fr", "-frames_folder"),
-                              "action": DirFullPaths,
+                              "action": DirOrFileFullPaths,
                               "dest": "frames_dir",
+                              "filetypes": "video",
                               "help": "Directory containing source frames "
                                       "that faces were extracted from."})
         argument_list.append({"opts": ("-fmt", "--alignment_format"),
@@ -149,6 +152,42 @@ class AlignmentsArgs(FaceSwapArgs):
                               "help": "Enable this option if manual "
                                       "alignments window is closing "
                                       "instantly. (Manual only)"})
+        return argument_list
+
+
+class PreviewArgs(FaceSwapArgs):
+    """ Class to parse the command line arguments for Preview (Convert Settings) tool """
+    def get_argument_list(self):
+
+        argument_list = list()
+        argument_list.append({"opts": ("-i", "--input-dir"),
+                              "action": DirOrFileFullPaths,
+                              "filetypes": "video",
+                              "dest": "input_dir",
+                              "required": True,
+                              "help": "Input directory or video. Either a directory containing "
+                                      "the image files you wish to process or path to a video "
+                                      "file."})
+        argument_list.append({"opts": ("-al", "--alignments"),
+                              "action": FileFullPaths,
+                              "filetypes": "alignments",
+                              "type": str,
+                              "dest": "alignments_path",
+                              "help": "Path to the alignments file for the input, if not at the "
+                                      "default location"})
+        argument_list.append({"opts": ("-m", "--model-dir"),
+                              "action": DirFullPaths,
+                              "dest": "model_dir",
+                              "required": True,
+                              "help": "Model directory. A directory containing the trained model "
+                                      "you wish to process."})
+        argument_list.append({"opts": ("-s", "--swap-model"),
+                              "action": "store_true",
+                              "dest": "swap_model",
+                              "default": False,
+                              "help": "Swap the model. Instead of A -> B, "
+                                      "swap B -> A"})
+
         return argument_list
 
 
@@ -351,13 +390,28 @@ class EffmpegArgs(FaceSwapArgs):
         return argument_list
 
 
+class RestoreArgs(FaceSwapArgs):
+    """ Class to restore model files from backup """
+
+    @staticmethod
+    def get_argument_list():
+        """ Put the arguments in a list so that they are accessible from both argparse and gui """
+        argument_list = list()
+        argument_list.append({"opts": ("-m", "--model-dir"),
+                              "action": DirFullPaths,
+                              "dest": "model_dir",
+                              "required": True,
+                              "help": "Model directory. A directory containing the model "
+                                      "you wish to restore from backup."})
+        return argument_list
+
+
 class SortArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for sort tool """
 
     @staticmethod
     def get_argument_list():
-        """ Put the arguments in a list so that they are accessible from both
-        argparse and gui """
+        """ Put the arguments in a list so that they are accessible from both argparse and gui """
         argument_list = list()
         argument_list.append({"opts": ('-i', '--input'),
                               "action": DirFullPaths,
@@ -488,11 +542,10 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-be", "--backend"),
                               "action": Radio,
                               "type": str.upper,
-                              "choices": ("CPU", "OPENCL"),
-                              "default": "CPU",
-                              "help": "Backend to use for VGG Face inference. OpenCL is slightly "
-                                      "faster but may not be available on all systems. Only used "
-                                      "for sort by 'face'."})
+                              "choices": ("CPU", "GPU"),
+                              "default": "GPU",
+                              "help": "Backend to use for VGG Face inference."
+                                      "Only used for sort by 'face'."})
 
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',

@@ -7,10 +7,14 @@ import os
 from tqdm import tqdm
 
 import cv2
+# TODO imageio single frame seek seems slow. Look into this
+# import imageio
+import imageio_ffmpeg as im_ffm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import _image_extensions, _video_extensions, hash_image_file, hash_encode_image
+from lib.utils import (_image_extensions, _video_extensions, cv2_read_img, hash_image_file,
+                       hash_encode_image)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -91,24 +95,29 @@ class MediaLoader():
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self.folder = folder
-        self.vid_cap = self.check_input_folder()
+        self.vid_reader = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
         logger.verbose("%s items loaded", self.count)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
+    def is_video(self):
+        """ Return whether source is a video or not """
+        return self.vid_reader is not None
+
+    @property
     def count(self):
         """ Number of faces or frames """
-        if self.vid_cap:
-            retval = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
+        if self.is_video:
+            retval = int(im_ffm.count_frames_and_secs(self.folder)[0])
         else:
             retval = len(self.file_list_sorted)
         return retval
 
     def check_input_folder(self):
         """ makes sure that the frames or faces folder exists
-            If frames folder contains a video file return video capture object """
+            If frames folder contains a video file return imageio reader object """
         err = None
         loadtype = self.__class__.__name__
         if not self.folder:
@@ -123,8 +132,10 @@ class MediaLoader():
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
                 os.path.splitext(self.folder)[1] in _video_extensions):
-            logger.verbose("Video exists at : '%s'", self.folder)
+            logger.verbose("Video exists at: '%s'", self.folder)
             retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
+            # TODO ImageIO single frame seek seems slow. Look into this
+            # retval = imageio.get_reader(self.folder)
         else:
             logger.verbose("Folder exists at '%s'", self.folder)
             retval = None
@@ -134,7 +145,7 @@ class MediaLoader():
     def valid_extension(filename):
         """ Check whether passed in file has a valid extension """
         extension = os.path.splitext(filename)[1]
-        retval = extension in _image_extensions
+        retval = extension.lower() in _image_extensions
         logger.trace("Filename has valid extension: '%s': %s", filename, retval)
         return retval
 
@@ -155,12 +166,12 @@ class MediaLoader():
 
     def load_image(self, filename):
         """ Load an image """
-        if self.vid_cap:
+        if self.is_video:
             image = self.load_video_frame(filename)
         else:
             src = os.path.join(self.folder, filename)
             logger.trace("Loading image: '%s'", src)
-            image = cv2.imread(src)  # pylint: disable=no-member
+            image = cv2_read_img(src, raise_error=True)
         return image
 
     def load_video_frame(self, filename):
@@ -168,8 +179,11 @@ class MediaLoader():
         frame = os.path.splitext(filename)[0]
         logger.trace("Loading video frame: '%s'", frame)
         frame_no = int(frame[frame.rfind("_") + 1:]) - 1
-        self.vid_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
-        _, image = self.vid_cap.read()
+        self.vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
+        _, image = self.vid_reader.read()
+        # TODO imageio single frame seek seems slow. Look into this
+        # self.vid_reader.set_image_index(frame_no)
+        # image = self.vid_reader.get_next_data()[:, :, ::-1]
         return image
 
     @staticmethod
@@ -221,7 +235,7 @@ class Frames(MediaLoader):
 
     def process_folder(self):
         """ Iterate through the frames dir pulling the base filename """
-        iterator = self.process_video if self.vid_cap else self.process_frames
+        iterator = self.process_video if self.is_video else self.process_frames
         for item in iterator():
             yield item
 

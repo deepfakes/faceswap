@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from lib.multithreading import MultiThread
-from ._base import BoundingBox, Detector, logger
+from ._base import Detector, logger
 
 
 # Must import tensorflow inside the spawned process
@@ -156,12 +156,12 @@ class Detect(Detector):
         logger.trace("Processing Output: (faces: %s, points: %s, rotation_matrix: %s)",
                      faces, points, rotation_matrix)
         faces = self.recalculate_bounding_box(faces, points)
-        faces = [BoundingBox(face[0], face[1], face[2], face[3]) for face in faces]
+        faces = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3]) for face in faces]
         if isinstance(rotation_matrix, np.ndarray):
             faces = [self.rotate_rect(face, rotation_matrix)
                      for face in faces]
-        detected = [BoundingBox(face.left / scale, face.top / scale,
-                                face.right / scale, face.bottom / scale)
+        detected = [self.to_bounding_box_dict(face["left"] / scale, face["top"] / scale,
+                                              face["right"] / scale, face["bottom"] / scale)
                     for face in faces]
         logger.trace("Processed Output: %s", detected)
         return detected

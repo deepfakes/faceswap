@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .tooltip import Tooltip
-from .utils import adjust_wraplength, get_config, get_images, ContextMenu, set_slider_rounding
+from .utils import adjust_wraplength, get_config, get_images, ControlBuilder
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 POPUP = dict()
@@ -207,7 +207,18 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         for key, val in self.options.items():
             if key == "helptext":
                 continue
-            OptionControl(key, val, self.optsframe)
+            ctl = ControlBuilder(self.optsframe,
+                                 key,
+                                 val["type"],
+                                 val["default"],
+                                 selected_value=val["value"],
+                                 choices=val["choices"],
+                                 is_radio=val["gui_radio"],
+                                 rounding=val["rounding"],
+                                 min_max=val["min_max"],
+                                 helptext=val["helptext"],
+                                 radio_columns=4)
+            val["selected"] = ctl.tk_var
         logger.debug("Added Config Frame")
 
     def add_scrollbar(self):
@@ -239,130 +250,3 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         info = ttk.Label(info_frame, text=self.plugin_info)
         info.pack(padx=5, pady=5, fill=tk.X, expand=True)
         info.bind("<Configure>", adjust_wraplength)
-
-
-class OptionControl():
-    """ Build the correct control for the option parsed and place it on the
-    frame """
-
-    def __init__(self, title, values, option_frame):
-        logger.debug("Initializing %s", self.__class__.__name__)
-        self.title = title
-        self.values = values
-        self.option_frame = option_frame
-
-        self.control = self.set_control()
-        self.control_frame = self.set_control_frame()
-        self.tk_var = self.set_tk_var()
-
-        self.build_full_control()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def helptext(self):
-        """ Format the help text for tooltips """
-        logger.debug("Format control help: '%s'", self.title)
-        helptext = self.values.get("helptext", "")
-        helptext = helptext.replace("\n\t", "\n  - ").replace("%%", "%")
-        helptext = self.title + " - " + helptext
-        logger.debug("Formatted control help: (title: '%s', help: '%s'", self.title, helptext)
-        return helptext
-
-    def set_control(self):
-        """ Set the correct control type for this option """
-        dtype = self.values["type"]
-        choices = self.values["choices"]
-        if choices:
-            control = ttk.Combobox
-        elif dtype == bool:
-            control = ttk.Checkbutton
-        elif dtype in (int, float):
-            control = ttk.Scale
-        else:
-            control = ttk.Entry
-        logger.debug("Setting control '%s' to %s", self.title, control)
-        return control
-
-    def set_control_frame(self):
-        """ Frame to hold control and it's label """
-        logger.debug("Build config control frame")
-        frame = ttk.Frame(self.option_frame)
-        frame.pack(fill=tk.X, expand=True)
-        logger.debug("Built confog control frame")
-        return frame
-
-    def set_tk_var(self):
-        """ Correct variable type for control """
-        logger.debug("Setting config variable type: '%s'", self.title)
-        var = tk.BooleanVar if self.control == ttk.Checkbutton else tk.StringVar
-        var = var(self.control_frame)
-        logger.debug("Set config variable type: ('%s': %s", self.title, type(var))
-        return var
-
-    def build_full_control(self):
-        """ Build the correct control type for the option passed through """
-        logger.debug("Build confog option control")
-        self.build_control_label()
-        self.build_one_control()
-        self.values["selected"] = self.tk_var
-        logger.debug("Built option control")
-
-    def build_control_label(self):
-        """ Label for control """
-        logger.debug("Build config control label: '%s'", self.title)
-        title = self.title.replace("_", " ").title()
-        lbl = ttk.Label(self.control_frame, text=title, width=20, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        logger.debug("Built config control label: '%s'", self.title)
-
-    def build_one_control(self):
-        """ Build and place the option controls """
-        logger.debug("Build control: (title: '%s', values: %s)", self.title, self.values)
-        self.tk_var.set(self.values["value"])
-
-        if self.control == ttk.Scale:
-            self.slider_control()
-        else:
-            self.control_to_optionsframe()
-        logger.debug("Built control: '%s'", self.title)
-
-    def slider_control(self):
-        """ A slider control with corresponding Entry box """
-        logger.debug("Add slider control to Config Options Frame: %s", self.control)
-        d_type = self.values["type"]
-        rnd = self.values["rounding"]
-        min_max = self.values["min_max"]
-
-        tbox = ttk.Entry(self.control_frame, width=8, textvariable=self.tk_var, justify=tk.RIGHT)
-        tbox.pack(padx=(0, 5), side=tk.RIGHT)
-        ctl = self.control(
-            self.control_frame,
-            variable=self.tk_var,
-            command=lambda val, var=self.tk_var, dt=d_type, rn=rnd, mm=min_max:
-            set_slider_rounding(val, var, dt, rn, mm))
-        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
-        rc_menu = ContextMenu(ctl)
-        rc_menu.cm_bind()
-        ctl["from_"] = min_max[0]
-        ctl["to"] = min_max[1]
-
-        Tooltip(ctl, text=self.helptext, wraplength=720)
-        Tooltip(tbox, text=self.helptext, wraplength=720)
-        logger.debug("Added slider control to Options Frame: %s", self.control)
-
-    def control_to_optionsframe(self):
-        """ Standard non-check buttons sit in the main options frame """
-        logger.debug("Add control to Options Frame: %s", self.control)
-        choices = self.values["choices"]
-        if self.control == ttk.Checkbutton:
-            ctl = self.control(self.control_frame, variable=self.tk_var, text=None)
-        else:
-            ctl = self.control(self.control_frame, textvariable=self.tk_var)
-        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
-        rc_menu = ContextMenu(ctl)
-        rc_menu.cm_bind()
-        if choices:
-            logger.debug("Adding combo choices: %s", choices)
-            ctl["values"] = [choice for choice in choices]
-        Tooltip(ctl, text=self.helptext, wraplength=720)
-        logger.debug("Added control to Options Frame: %s", self.control)

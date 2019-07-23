@@ -88,7 +88,8 @@ class TensorBoardLogs():
                 continue
             for logfile in sides.values():
                 timestamps = [event.wall_time
-                              for event in tf.train.summary_iterator(logfile)]
+                              for event in tf.train.summary_iterator(logfile)
+                              if event.summary.value]
                 logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
                 all_timestamps[sess] = timestamps
                 break  # break after first file read
@@ -163,7 +164,7 @@ class Session():
     @property
     def session(self):
         """ Return current session dictionary """
-        return self.state["sessions"][str(self.session_id)]
+        return self.state["sessions"].get(str(self.session_id), dict())
 
     @property
     def session_ids(self):
@@ -239,7 +240,11 @@ class Session():
 
     def get_iterations_for_session(self, session_id):
         """ Return the number of iterations for the given session id """
-        return self.state["sessions"][str(session_id)]["iterations"]
+        session = self.state["sessions"].get(str(session_id), None)
+        if session is None:
+            logger.warning("No session data found for session id: %s", session_id)
+            return 0
+        return session["iterations"]
 
 
 class SessionsSummary():
@@ -254,9 +259,9 @@ class SessionsSummary():
     def time_stats(self):
         """ Return session time stats """
         ts_data = self.session.tb_logs.get_timestamps()
-        time_stats = {sess_id: {"start_time": min(timestamps),
-                                "end_time": max(timestamps),
-                                "datapoints": len(timestamps)}
+        time_stats = {sess_id: {"start_time": min(timestamps) if timestamps else 0,
+                                "end_time": max(timestamps) if timestamps else 0,
+                                "datapoints": len(timestamps) if timestamps else 0}
                       for sess_id, timestamps in ts_data.items()}
         return time_stats
 
@@ -267,12 +272,12 @@ class SessionsSummary():
         for sess_idx, ts_data in self.time_stats.items():
             iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = ts_data["end_time"] - ts_data["start_time"]
-            batchsize = self.session.total_batchsize[sess_idx]
+            batchsize = self.session.total_batchsize.get(sess_idx, 0)
             compiled.append({"session": sess_idx,
                              "start": ts_data["start_time"],
                              "end": ts_data["end_time"],
                              "elapsed": elapsed,
-                             "rate": (batchsize * iterations) / elapsed,
+                             "rate": (batchsize * iterations) / elapsed if elapsed != 0 else 0,
                              "batch": batchsize,
                              "iterations": iterations})
         compiled = sorted(compiled, key=lambda k: k["session"])
@@ -334,11 +339,11 @@ class SessionsSummary():
 class Calculations():
     """ Class to pull raw data for given session(s) and perform calculations """
     def __init__(self, session, display="loss", loss_keys=["loss"], selections=["raw"],
-                 avg_samples=10, flatten_outliers=False, is_totals=False):
+                 avg_samples=500, smooth_amount=0.90, flatten_outliers=False, is_totals=False):
         logger.debug("Initializing %s: (session: %s, display: %s, loss_keys: %s, selections: %s, "
-                     "avg_samples: %s, flatten_outliers: %s, is_totals: %s",
+                     "avg_samples: %s, smooth_amount: %s, flatten_outliers: %s, is_totals: %s",
                      self.__class__.__name__, session, display, loss_keys, selections, avg_samples,
-                     flatten_outliers, is_totals)
+                     smooth_amount, flatten_outliers, is_totals)
 
         warnings.simplefilter("ignore", np.RankWarning)
 
@@ -347,7 +352,8 @@ class Calculations():
         self.loss_keys = loss_keys
         self.selections = selections
         self.is_totals = is_totals
-        self.args = {"avg_samples": int(avg_samples),
+        self.args = {"avg_samples": avg_samples,
+                     "smooth_amount": smooth_amount,
                      "flatten_outliers": flatten_outliers}
         self.iterations = 0
         self.stats = None
@@ -359,12 +365,13 @@ class Calculations():
         logger.debug("Refreshing")
         if not self.session.initialized:
             logger.warning("Session data is not initialized. Not refreshing")
-            return
+            return None
         self.iterations = 0
         self.stats = self.get_raw()
         self.get_calculations()
         self.remove_raw()
         logger.debug("Refreshed")
+        return self
 
     def get_raw(self):
         """ Add raw data to stats dict """
@@ -434,6 +441,9 @@ class Calculations():
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
             iterations = range(len(timestamps) - 1)
+            print("===========\n")
+            print(timestamps[:100])
+            print([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations][:100])
             rate.extend([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations])
         logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
@@ -452,7 +462,7 @@ class Calculations():
             if (mean - limit) <= item <= (mean + limit):
                 retdata.append(item)
             else:
-                logger.debug("Item idx: %s, value: %s flattened to %s", idx, item, mean)
+                logger.trace("Item idx: %s, value: %s flattened to %s", idx, item, mean)
                 retdata.append(mean)
         logger.debug("Flattened outliers")
         return retdata
@@ -491,6 +501,18 @@ class Calculations():
                 avgs.append(avg)
         logger.debug("Calculated Average")
         return avgs
+
+    def calc_smoothed(self, data):
+        """ Smooth the data """
+        last = data[0]  # First value in the plot (first timestep)
+        weight = self.args["smooth_amount"]
+        smoothed = list()
+        for point in data:
+            smoothed_val = last * weight + (1 - weight) * point  # Calculate smoothed value
+            smoothed.append(smoothed_val)                        # Save it
+            last = smoothed_val                                  # Anchor the last smoothed value
+
+        return smoothed
 
     @staticmethod
     def calc_trend(data):

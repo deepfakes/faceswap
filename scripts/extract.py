@@ -30,13 +30,16 @@ class Extract():
         self.images = Images(self.args)
         self.alignments = Alignments(self.args, True, self.images.is_video)
         self.post_process = PostProcess(arguments)
+        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
+        normalization = None if self.args.normalization == "none" else self.args.normalization
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
                                    self.args.loglevel,
-                                   self.args.multiprocess,
-                                   self.args.rotate_images,
-                                   self.args.min_size)
-
+                                   configfile=configfile,
+                                   multiprocess=not self.args.singleprocess,
+                                   rotate_images=self.args.rotate_images,
+                                   min_size=self.args.min_size,
+                                   normalize_method=normalization)
         self.save_queue = queue_manager.get_queue("extract_save")
         self.verify_output = False
         self.save_interval = None
@@ -90,7 +93,8 @@ class Extract():
                 logger.trace("Skipping image '%s' due to extract_every_n = %s",
                              filename, self.skip_num)
                 continue
-            if image is None or not image.any():
+            if image is None or (not image.any() and image.ndim not in ((2, 3))):
+                # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
             imagename = os.path.basename(filename)
@@ -191,7 +195,7 @@ class Extract():
                 if self.extractor.final_pass:
                     self.output_processing(faces, align_eyes, size, filename)
                     self.output_faces(filename, faces)
-                    if self.save_interval and idx + 1 % self.save_interval == 0:
+                    if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
                 else:
                     del faces["image"]
@@ -225,7 +229,7 @@ class Extract():
         detected_faces = faces["detected_faces"]
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box(face, image)
+            detected_face.from_bounding_box_dict(face, image)
             detected_face.landmarksXY = landmarks[idx]
             detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,

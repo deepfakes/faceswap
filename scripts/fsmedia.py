@@ -10,12 +10,14 @@ import os
 from pathlib import Path
 
 import cv2
+import imageio
+import imageio_ffmpeg as im_ffm
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
-from lib.utils import (camel_case_split, get_folder, get_image_paths,
+from lib.utils import (camel_case_split, cv2_read_img, get_folder, get_image_paths,
                        set_system_verbosity, _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -144,9 +146,7 @@ class Images():
     def images_found(self):
         """ Number of images or frames """
         if self.is_video:
-            cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-            retval = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
-            cap.release()
+            retval = int(im_ffm.count_frames_and_secs(self.args.input_dir)[0])
         else:
             retval = len(self.input_images)
         return retval
@@ -157,7 +157,7 @@ class Images():
             logger.error("Input location %s not found.", self.args.input_dir)
             exit(1)
         if (os.path.isfile(self.args.input_dir) and
-                os.path.splitext(self.args.input_dir)[1] in _video_extensions):
+                os.path.splitext(self.args.input_dir)[1].lower() in _video_extensions):
             logger.info("Input Video: %s", self.args.input_dir)
             retval = True
         else:
@@ -184,11 +184,8 @@ class Images():
         """ Load frames from disk """
         logger.debug("Input is separate Frames. Loading images")
         for filename in self.input_images:
-            logger.trace("Loading image: '%s'", filename)
-            try:
-                image = cv2.imread(filename)  # pylint: disable=no-member
-            except Exception as err:  # pylint: disable=broad-except
-                logger.error("Failed to load image '%s'. Original Error: %s", filename, err)
+            image = cv2_read_img(filename, raise_error=False)
+            if image is None:
                 continue
             yield filename, image
 
@@ -196,25 +193,37 @@ class Images():
         """ Return frames from a video file """
         logger.debug("Input is video. Capturing frames")
         vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
-        cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-        i = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                logger.debug("Video terminated")
-                break
-            i += 1
-            # Keep filename format for outputted face
-            filename = "{}_{:06d}.png".format(vidname, i)
+        reader = imageio.get_reader(self.args.input_dir)
+        for i, frame in enumerate(reader):
+            # Convert to BGR for cv2 compatibility
+            frame = frame[:, :, ::-1]
+            filename = "{}_{:06d}.png".format(vidname, i + 1)
             logger.trace("Loading video frame: '%s'", filename)
             yield filename, frame
-        cap.release()
+        reader.close()
 
-    @staticmethod
-    def load_one_image(filename):
+    def load_one_image(self, filename):
         """ load requested image """
         logger.trace("Loading image: '%s'", filename)
-        return cv2.imread(filename)  # pylint: disable=no-member
+        if self.is_video:
+            if filename.isdigit():
+                frame_no = filename
+            else:
+                frame_no = os.path.splitext(filename)[0][filename.rfind("_") + 1:]
+                logger.trace("Extracted frame_no %s from filename '%s'", frame_no, filename)
+            retval = self.load_one_video_frame(int(frame_no))
+        else:
+            retval = cv2_read_img(filename, raise_error=True)
+        return retval
+
+    def load_one_video_frame(self, frame_no):
+        """ Load a single frame from a video file """
+        logger.trace("Loading video frame: %s", frame_no)
+        reader = imageio.get_reader(self.args.input_dir)
+        reader.set_image_index(frame_no - 1)
+        frame = reader.get_next_data()[:, :, ::-1]
+        reader.close()
+        return frame
 
 
 class PostProcess():
@@ -263,10 +272,20 @@ class PostProcess():
         if ((hasattr(self.args, "filter") and self.args.filter is not None) or
                 (hasattr(self.args, "nfilter") and
                  self.args.nfilter is not None)):
-            face_filter = dict(detector=self.args.detector.replace("-", "_").lower(),
-                               aligner=self.args.aligner.replace("-", "_").lower(),
+
+            if hasattr(self.args, "detector"):
+                detector = self.args.detector.replace("-", "_").lower()
+            else:
+                detector = "cv2_dnn"
+            if hasattr(self.args, "aligner"):
+                aligner = self.args.aligner.replace("-", "_").lower()
+            else:
+                aligner = "cv2_dnn"
+
+            face_filter = dict(detector=detector,
+                               aligner=aligner,
                                loglevel=self.args.loglevel,
-                               multiprocess=self.args.multiprocess)
+                               multiprocess=not self.args.singleprocess)
             filter_lists = dict()
             if hasattr(self.args, "ref_threshold"):
                 face_filter["ref_threshold"] = self.args.ref_threshold
