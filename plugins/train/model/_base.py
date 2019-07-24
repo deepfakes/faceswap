@@ -341,6 +341,8 @@ class ModelBase():
         if not any(inp for inp in inputs.keys() if inp.startswith("face")):
             raise ValueError("No input named 'face' was found. Check your input naming. "
                              "Current input names: {}".format(inputs))
+        # Make sure they are all ints so that it can be json serialized
+        inputs = {key: tuple(int(i) for i in val) for key, val in inputs.items()}
         self.state.inputs = inputs
         logger.debug("Added input shapes: %s", self.state.inputs)
 
