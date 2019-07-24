@@ -148,7 +148,7 @@ class FaceswapControl():
         self.thread = None  # Thread for LongRunningTask termination
         self.train_stats = {"iterations": 0, "timestamp": None}
         self.consoleregex = {
-            "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
+            "loss": re.compile(r"[\W]+(\d+)?[\W]+([a-zA-Z\s]*)[\W]+?(\d+\.\d+)"),
             "tqdm": re.compile(r"(?P<dsc>.*?)(?P<pct>\d+%).*?(?P<itm>\S+/\S+)\W\["
                                r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
             "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
@@ -241,13 +241,12 @@ class FaceswapControl():
             return False
 
         loss = self.consoleregex["loss"].findall(string)
-        if len(loss) < 2:
+        if len(loss) != 2 or not all(len(itm) == 3 for itm in loss):
             logger.trace("Not loss message. Returning False")
             return False
 
-        message = ""
-        for item in loss:
-            message += "{}: {}  ".format(item[0], item[1])
+        message = "Total Iterations: {} | ".format(int(loss[0][0]))
+        message += "  ".join(["{}: {}".format(itm[1], itm[2]) for itm in loss])
         if not message:
             logger.trace("Error creating loss message. Returning False")
             return False
@@ -270,8 +269,9 @@ class FaceswapControl():
         self.train_stats["iterations"] = iterations
 
         elapsed = self.calc_elapsed()
-        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed,
-                                                          self.train_stats["iterations"], message)
+        message = "Elapsed: {} | Session Iterations: {}  {}".format(
+            elapsed,
+            self.train_stats["iterations"], message)
         self.statusbar.progress_update(message, 0, False)
         logger.trace("Succesfully captured loss: %s", message)
         return True

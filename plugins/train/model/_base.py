@@ -163,14 +163,49 @@ class ModelBase():
         return retval
 
     @property
-    def output_shape(self):
+    def output_shapes(self):
         """ Return the output shapes from the main AutoEncoder """
         out = list()
         for predictor in self.predictors.values():
             out.extend([K.int_shape(output)[-3:] for output in predictor.outputs])
             break  # Only get output from one autoencoder. Shapes are the same
         # Only return the output shape of the face
-        return tuple(out[0])
+        return [tuple(shape) for shape in out]
+
+    @property
+    def output_shape(self):
+        """ The output shape of the model (shape of largest face output) """
+        return self.output_shapes[self.largest_face_index]
+
+    @property
+    def largest_face_index(self):
+        """ Return the index from model.outputs of the largest face
+            Required for multi-output model prediction. The largest face
+            is assumed to be the final output
+        """
+        sizes = [shape[1] for shape in self.output_shapes if shape[2] == 3]
+        if not sizes:
+            return None
+        max_face = max(sizes)
+        retval = [idx for idx, shape in enumerate(self.output_shapes)
+                  if shape[1] == max_face and shape[2] == 3][0]
+        logger.debug(retval)
+        return retval
+
+    @property
+    def largest_mask_index(self):
+        """ Return the index from model.outputs of the largest mask
+            Required for multi-output model prediction. The largest face
+            is assumed to be the final output
+        """
+        sizes = [shape[1] for shape in self.output_shapes if shape[2] == 1]
+        if not sizes:
+            return None
+        max_mask = max(sizes)
+        retval = [idx for idx, shape in enumerate(self.output_shapes)
+                  if shape[1] == max_mask and shape[2] == 1][0]
+        logger.debug(retval)
+        return retval
 
     @staticmethod
     def set_gradient_type(memory_saving_gradients):
@@ -235,9 +270,10 @@ class ModelBase():
         logger.debug("Getting inputs")
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
-        if "mask_out" in output_network.output_names:
-            mask_idx = output_network.output_names.index("mask_out")
-            mask_shape = output_network.output_shapes[mask_idx]
+        mask_idx = [idx for idx, name in enumerate(output_network.output_names)
+                    if name.startswith("mask")]
+        if mask_idx:
+            mask_shape = output_network.output_shapes[mask_idx[0]]
             inputs.append(Input(shape=mask_shape[1:], name="mask_in"))
         logger.debug("Got inputs: %s", inputs)
         return inputs
@@ -333,20 +369,13 @@ class ModelBase():
         optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
 
         for side, model in self.predictors.items():
-            mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
-            loss_names = ["loss"]
-            loss_funcs = [self.loss_function(mask, side, initialize)]
-            if mask:
-                loss_names.append("mask_loss")
-                loss_funcs.append(self.mask_loss_function(side, initialize))
-            model.compile(optimizer=optimizer, loss=loss_funcs)
-
-            if len(loss_names) > 1:
-                loss_names.insert(0, "total_loss")
+            mask_input = [inp for inp in model.inputs if inp.name.startswith("mask")]
+            loss = Loss(side, model.outputs, mask_input, self.predict)
+            model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
-                self.state.add_session_loss_names(side, loss_names)
+                self.state.add_session_loss_names(side, loss.names)
                 self.history[side] = list()
-        logger.debug("Compiled Predictors. Losses: %s", loss_names)
+        logger.debug("Compiled Predictors. Losses: %s", loss.names)
 
     def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
         """ Build and return Optimizer """
@@ -362,33 +391,6 @@ class ModelBase():
             opt_kwargs["clipnorm"] = 1.0
         logger.debug("Optimizer kwargs: %s", opt_kwargs)
         return Adam(**opt_kwargs, cpu_mode=self.optimizer_savings)
-
-    def loss_function(self, mask, side, initialize):
-        """ Set the loss function
-            Side is input so we only log once """
-        if self.config.get("dssim_loss", False):
-            if side == "a" and not self.predict and initialize:
-                logger.verbose("Using DSSIM Loss")
-            loss_func = DSSIMObjective()
-        else:
-            if side == "a" and not self.predict and initialize:
-                logger.verbose("Using Mean Absolute Error Loss")
-            loss_func = losses.mean_absolute_error
-
-        if mask and self.config.get("penalized_mask_loss", False):
-            loss_mask = mask[0]
-            if side == "a" and not self.predict and initialize:
-                logger.verbose("Penalizing mask for Loss")
-            loss_func = PenalizedLoss(loss_mask, loss_func)
-        return loss_func
-
-    def mask_loss_function(self, side, initialize):
-        """ Set the mask loss function
-            Side is input so we only log once """
-        if side == "a" and not self.predict and initialize:
-            logger.verbose("Using Mean Squared Error Loss for mask")
-        mask_loss_func = losses.mean_squared_error
-        return mask_loss_func
 
     def converter(self, swap):
         """ Converter for autoencoder models """
@@ -607,6 +609,91 @@ class ModelBase():
         self.state.save()
 
 
+class Loss():
+    """ Holds loss names and functions for an Autoencoder """
+    def __init__(self, side, outputs, mask_input, predict):
+        logger.debug("Initializing %s: (side: '%s', outputs: '%s', mask_input: '%s', predict: %s",
+                     self.__class__.__name__, side, outputs, mask_input, predict)
+        self.outputs = outputs
+        self.names = self.get_loss_names()
+        self.funcs = self.get_loss_functions(side, predict, mask_input)
+        if len(self.names) > 1:
+            self.names.insert(0, "total_loss")
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    @property
+    def config(self):
+        """ Return the global _CONFIG variable """
+        return _CONFIG
+
+    @property
+    def loss_shapes(self):
+        """ The shapes of the output nodes """
+        return [K.int_shape(output)[1:] for output in self.outputs]
+
+    @property
+    def largest_output(self):
+        """ Return the index of the largest face output """
+        max_size = max(shape[0] for shape in self.loss_shapes if shape[2] == 3)
+        largest_idx = [idx for idx, shape in enumerate(self.loss_shapes)
+                       if shape[0] == max_size and shape[2] == 3][0]
+        return largest_idx
+
+    def get_loss_names(self):
+        """ Return the loss names based on model output """
+        output_names = [output.name for output in self.outputs]
+        logger.debug("Model output names: %s", output_names)
+        loss_names = [name[name.find("/") + 1:name.rfind("/")].replace("_out", "")
+                      for name in output_names]
+        if not all(name.startswith("face") or name.startswith("mask") for name in loss_names):
+            # Handle incorrectly named/legacy outputs
+            logger.debug("Renaming loss names from: %s", loss_names)
+            loss_names = self.update_loss_names()
+        loss_names = ["{}_loss".format(name) for name in loss_names]
+        logger.debug(loss_names)
+        return loss_names
+
+    def update_loss_names(self):
+        """ Update loss names if named incorrectly or legacy model """
+        output_types = ["mask" if shape[-1] == 1 else "face" for shape in self.loss_shapes]
+        loss_names = ["{}{}".format(name,
+                                    "" if output_types.count(name) == 1 else "_{}".format(idx))
+                      for idx, name in enumerate(output_types)]
+        logger.debug("Renamed loss names to: %s", loss_names)
+        return loss_names
+
+    def get_loss_functions(self, side, predict, mask):
+        """ Set the loss function """
+        loss_funcs = list()
+        largest_face = self.largest_output
+
+        if self.config.get("dssim_loss", False):
+            if not predict and side.lower() == "a":
+                logger.verbose("Using DSSIM Loss")
+            loss_func = DSSIMObjective()
+        else:
+            loss_func = losses.mean_absolute_error
+            if not predict and side.lower() == "a":
+                logger.verbose("Using Mean Absolute Error Loss")
+
+        for idx, loss_name in enumerate(self.names):
+            if loss_name.startswith("mask"):
+                mask_func = losses.mean_squared_error
+                loss_funcs.append(mask_func)
+                logger.debug("mask loss: %s", mask_func)
+            elif mask and idx == largest_face and self.config.get("penalized_mask_loss", False):
+                face_func = PenalizedLoss(mask[0], loss_func)
+                logger.debug("final face loss: %s", face_func)
+                loss_funcs.append(face_func)
+                if not predict and side.lower() == "a":
+                    logger.verbose("Penalizing mask for Loss")
+            else:
+                logger.debug("face loss func: %s", loss_func)
+                loss_funcs.append(loss_func)
+        logger.debug(loss_funcs)
+        return loss_funcs
+
+
 class NNMeta():
     """ Class to hold a neural network and it's meta data
 
@@ -652,7 +739,7 @@ class NNMeta():
     def output_names(self):
         """ Return output node names """
         output_names = [output.name for output in self.network.outputs]
-        if self.is_output and not any(name == "face_out" for name in output_names):
+        if self.is_output and not any(name.startswith("face_out") for name in output_names):
             # Saved models break if their layer names are changed, so dummy
             # in correct output names for legacy models
             output_names = self.get_output_names()
@@ -665,7 +752,7 @@ class NNMeta():
         output_names = ["{}{}".format(name,
                                       "" if output_types.count(name) == 1 else "_{}".format(idx))
                         for idx, name in enumerate(output_types)]
-        logger.debug(output_names)
+        logger.debug("Overridden output_names: %s", output_names)
         return output_names
 
     def load(self, fullpath=None):

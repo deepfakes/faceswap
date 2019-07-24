@@ -436,6 +436,8 @@ class Predict():
         self.faces_count = 0
         self.verify_output = False
         self.model = self.load_model()
+        self.output_indices = {"face": self.model.largest_face_index,
+                               "mask": self.model.largest_mask_index}
         self.predictor = self.model.converter(self.args.swap_model)
         self.queues = dict()
 
@@ -612,11 +614,24 @@ class Predict():
         predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
+        predicted = self.filter_multi_out(predicted)
+
         # Compile masks into alpha channel or keep raw faces
         predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
         predicted = predicted.astype("float32")
 
         logger.trace("Final shape: %s", predicted.shape)
+        return predicted
+
+    def filter_multi_out(self, predicted):
+        """ Filter the predicted output to the final output """
+        if not predicted:
+            return predicted
+        face = predicted[self.output_indices["face"]]
+        mask_idx = self.output_indices["mask"]
+        mask = predicted[mask_idx] if mask_idx is not None else None
+        predicted = [face, mask] if mask is not None else [face]
+        logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 
     def queue_out_frames(self, batch, swapped_faces):

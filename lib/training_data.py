@@ -21,22 +21,22 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, training_opts, config):
-        logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
+    def __init__(self, model_input_size, model_output_shapes, training_opts, config):
+        logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
                      "training_opts: %s, landmarks: %s, config: %s)",
-                     self.__class__.__name__, model_input_size, model_output_size,
+                     self.__class__.__name__, model_input_size, model_output_shapes,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
                      bool(training_opts.get("landmarks", None)), config)
         self.batchsize = 0
         self.model_input_size = model_input_size
-        self.model_output_size = model_output_size
+        self.model_output_shapes = model_output_shapes
         self.training_opts = training_opts
         self.mask_class = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
         self.fixed_producer_dispatcher = None  # Set by FPD when loading
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
-                                            model_output_size,
+                                            model_output_shapes,
                                             training_opts.get("coverage_ratio", 0.625),
                                             config)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -64,10 +64,10 @@ class TrainingDataGenerator():
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list((
             (batchsize, training_size, training_size, 3),  # sample images
-            (batchsize, self.model_input_size, self.model_input_size, 3),
-            (batchsize, self.model_output_size, self.model_output_size, 3)))
-        if self.mask_class:
-            batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
+            (batchsize, self.model_input_size, self.model_input_size, 3)))
+        # Add the output shapes
+        batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
+        logger.debug("Batch shapes: %s", batch_shape)
 
         self.fixed_producer_dispatcher = FixedProducerDispatcher(
             method=self.load_batches,
@@ -237,18 +237,19 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, input_size, output_size, coverage_ratio, config):
+    def __init__(self, input_size, output_shapes, coverage_ratio, config):
         """ input_size: Size of the face input into the model
-            output_size: Size of the face that comes out of the modell
+            output_shapes: Shapes that come out of the model
             coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
-        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s, "
-                     "config: %s)", self.__class__.__name__, input_size, output_size,
+        logger.debug("Initializing %s: (input_size: %s, output_shapes: %s, coverage_ratio: %s, "
+                     "config: %s)", self.__class__.__name__, input_size, output_shapes,
                      coverage_ratio, config)
         self.config = config
         # Transform and Warp args
         self.input_size = input_size
-        self.output_size = output_size
+        self.output_sizes = [shape[1] for shape in output_shapes if shape[2] == 3]
+        logger.debug("Output sizes: %s", self.output_sizes)
         # Warp args
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
         self.scale = 5  # Normal random variable scale
@@ -386,9 +387,8 @@ class ImageManipulation():
 
         pad = int(1.25 * self.input_size)
         slices = slice(pad // 10, -pad // 10)
-        dst_slice = slice(0, (self.output_size + 1), (self.output_size // 4))
+        dst_slices = [slice(0, (size + 1), (size // 4)) for size in self.output_sizes]
         interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
-        ####
 
         for i, map_ in enumerate([mapx, mapy]):
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
@@ -399,22 +399,17 @@ class ImageManipulation():
         logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
-        dst_points = np.mgrid[dst_slice, dst_slice]
-        mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
-        target_image = cv2.warpAffine(  # pylint:disable=no-member
-            image, mat, (self.output_size, self.output_size))
-        logger.trace("Target image shape: %s", target_image.shape)
+        dst_points = [np.mgrid[dst_slice, dst_slice] for dst_slice in dst_slices]
+        mats = [umeyama(src_points, True, dst_pts.T.reshape(-1, 2))[0:2]
+                for dst_pts in dst_points]
 
-        warped_image, warped_mask = self.separate_mask(warped_image)
-        target_image, target_mask = self.separate_mask(target_image)
+        target_images = [cv2.warpAffine(image,  # pylint:disable=no-member
+                                        mat,
+                                        (self.output_sizes[idx], self.output_sizes[idx]))
+                         for idx, mat in enumerate(mats)]
 
-        if target_mask is None:
-            logger.trace("Randomly warped image")
-            return [warped_image, target_image]
-
-        logger.trace("Target mask shape: %s", target_mask.shape)
-        logger.trace("Randomly warped image and mask")
-        return [warped_image, target_image, target_mask]
+        logger.trace("Target image shapes: %s", [tgt.shape for tgt in target_images])
+        return self.compile_images(warped_image, target_images)
 
     def random_warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
@@ -475,21 +470,33 @@ class ImageManipulation():
             warped_image[slices, slices, :], (self.input_size, self.input_size),
             cv2.INTER_AREA)  # pylint:disable=no-member
         logger.trace("Warped image shape: %s", warped_image.shape)
-        target_image = cv2.resize(  # pylint:disable=no-member
-            target_image[slices, slices, :], (self.output_size, self.output_size),
-            cv2.INTER_AREA)  # pylint:disable=no-member
-        logger.trace("Target image shape: %s", target_image.shape)
+        target_images = [cv2.resize(target_image[slices, slices, :],  # pylint:disable=no-member
+                                    (size, size),
+                                    cv2.INTER_AREA)  # pylint:disable=no-member
+                         for size in self.output_sizes]
 
-        warped_image, warped_mask = self.separate_mask(warped_image)
-        target_image, target_mask = self.separate_mask(target_image)
+        logger.trace("Target image shapea: %s", [img.shape for img in target_images])
+        return self.compile_images(warped_image, target_images)
 
-        if target_mask is None:
-            logger.trace("Randomly warped image")
-            return [warped_image, target_image]
+    def compile_images(self, warped_image, target_images):
+        """ Compile the warped images, target images and mask for feed """
+        warped_image, _ = self.separate_mask(warped_image)
+        final_target_images = list()
+        target_mask = None
+        for target_image in target_images:
+            image, mask = self.separate_mask(target_image)
+            final_target_images.append(image)
+            # Add the mask if it exists and is the same size as our largest output
+            if mask is not None and mask.shape[1] == max(self.output_sizes):
+                target_mask = mask
 
-        logger.trace("Target mask shape: %s", target_mask.shape)
-        logger.trace("Randomly warped image and mask")
-        return [warped_image, target_image, target_mask]
+        retval = [warped_image] + final_target_images
+        if target_mask is not None:
+            logger.trace("Target mask shape: %s", target_mask.shape)
+            retval.append(target_mask)
+
+        logger.trace("Final shapes: %s", [img.shape for img in retval])
+        return retval
 
 
 def stack_images(images):

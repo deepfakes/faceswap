@@ -358,8 +358,8 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
             'iconphoto',
             toplevel._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         position = self.data_popup_get_position()
-        height = int(720 * scaling_factor)
-        width = int(400 * scaling_factor)
+        height = int(900 * scaling_factor)
+        width = int(480 * scaling_factor)
         toplevel.geometry("{}x{}+{}+{}".format(str(height),
                                                str(width),
                                                str(position[0]),
@@ -559,12 +559,13 @@ class SessionPopUp(tk.Toplevel):
             text = loss_key.replace("_", " ").title()
             helptext = "Display {}".format(text)
             var = tk.BooleanVar()
-            if loss_key.startswith("loss"):
+            if loss_key.startswith("total"):
                 var.set(True)
             lk_vars[loss_key] = var
 
             if len(loss_keys) == 1:
                 # Don't display if there's only one item
+                var.set(True)
                 break
 
             if not section_added:

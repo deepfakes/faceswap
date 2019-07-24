@@ -251,7 +251,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add a single graph to the graph window """
         logger.trace("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-        for loss_key in self.display_item.loss_keys:
+        display_tabs = sorted(self.display_item.loss_keys)
+        if any(key.startswith("total") for key in display_tabs):
+            total_idx = [idx for idx, key in enumerate(display_tabs) if key.startswith("total")][0]
+            display_tabs.insert(0, display_tabs.pop(total_idx))
+        for loss_key in display_tabs:
             tabname = loss_key.replace("_", " ").title()
             if tabname in existing:
                 continue
