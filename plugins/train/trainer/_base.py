@@ -295,10 +295,8 @@ class Batcher():
         batch = next(self.feed)
         feed = batch[1]
         batch = batch[2:]   # Remove full size samples and feed from batch
-        if self.use_mask:
-            # Add mask to inputs
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
+        mask = batch[-1]
+        batch = [[feed, mask], batch] if self.use_mask else [feed, batch]
         self.generate_preview(do_preview)
         return batch
 
