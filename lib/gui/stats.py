@@ -192,8 +192,9 @@ class Session():
     def total_loss(self):
         """ Return collated loss for all session """
         loss_dict = dict()
-        for sess in self.tb_logs.get_loss().values():
-            for loss_key, side_loss in sess.items():
+        all_loss = self.tb_logs.get_loss()
+        for key in sorted(int(idx) for idx in all_loss.keys()):
+            for loss_key, side_loss in all_loss[key].items():
                 for side, loss in side_loss.items():
                     loss_dict.setdefault(loss_key, dict()).setdefault(side, list()).extend(loss)
         return loss_dict
