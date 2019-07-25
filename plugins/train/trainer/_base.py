@@ -155,7 +155,7 @@ class TrainerBase():
         """ Override for specific model loss formatting """
         logger.trace(loss)
         output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
-                  for side in sorted(list(loss.keys()))]
+                  for side in sorted(loss.keys())]
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
@@ -652,7 +652,7 @@ class PingPong():
         self.model = model
         self.sides = sides
         self.side = sorted(sides)[0]
-        self.loss = {side: dict() for side in sides}
+        self.loss = {side: [0] for side in sides}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def switch(self):
