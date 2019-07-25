@@ -54,9 +54,9 @@ class Check():
 
     def get_items(self):
         """ Set the correct items to process """
-        items = globals()[self.type.title()]
+        items = globals()[self.type.title()](self.source_dir)
         self.is_video = items.is_video
-        return items(self.source_dir).file_list_sorted
+        return items.file_list_sorted
 
     def process(self):
         """ Process the frames check against the alignments file """
