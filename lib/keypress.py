@@ -56,16 +56,16 @@ class KBHit:
         else:
             termios.tcsetattr(self.file_desc, termios.TCSAFLUSH, self.old_term)
 
-    def getch(self):
+    @staticmethod
+    def getch():
         """ Returns a keyboard character after kbhit() has been called.
             Should not be called in the same program as getarrow(). """
-        if self.is_gui and os.name != "nt":
-            return None
         if os.name == "nt":
             return msvcrt.getch().decode("utf-8")
         return sys.stdin.read(1)
 
-    def getarrow(self):
+    @staticmethod
+    def getarrow():
         """ Returns an arrow-key code after kbhit() has been called. Codes are
         0 : up
         1 : right
@@ -73,8 +73,6 @@ class KBHit:
         3 : left
         Should not be called in the same program as getch(). """
 
-        if self.is_gui:
-            return None
         if os.name == "nt":
             msvcrt.getch()  # skip 0xE0
             char = msvcrt.getch()
@@ -85,10 +83,9 @@ class KBHit:
 
         return vals.index(ord(char.decode("utf-8")))
 
-    def kbhit(self):
+    @staticmethod
+    def kbhit():
         """ Returns True if keyboard character was hit, False otherwise. """
-        if self.is_gui and os.name != "nt":
-            return None
         if os.name == "nt":
             return msvcrt.kbhit()
         d_r, _, _ = select([sys.stdin], [], [], 0)

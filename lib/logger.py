@@ -13,6 +13,7 @@ from time import sleep
 from tqdm import tqdm
 
 from lib.queue_manager import queue_manager
+from lib.sysinfo import sysinfo
 
 LOG_QUEUE = queue_manager._log_queue  # pylint: disable=protected-access
 
@@ -81,7 +82,7 @@ def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
     rootlogger.setLevel(loglevel)
 
 
-def log_setup(loglevel, logfile, command, is_gui=False):
+def log_setup(loglevel, logfile, command):
     """ initial log set up. """
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
@@ -90,7 +91,7 @@ def log_setup(loglevel, logfile, command, is_gui=False):
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
     f_handler = file_handler(numeric_loglevel, logfile, log_format, command)
-    s_handler = stream_handler(numeric_loglevel, is_gui)
+    s_handler = stream_handler(numeric_loglevel)
     c_handler = crash_handler(log_format)
 
     q_listener = QueueListener(LOG_QUEUE, f_handler, s_handler, c_handler,
@@ -117,26 +118,21 @@ def file_handler(loglevel, logfile, log_format, command):
     return log_file
 
 
-def stream_handler(loglevel, is_gui):
+def stream_handler(loglevel):
     """ Add a logging cli handler """
     # Don't set stdout to lower than verbose
     loglevel = max(loglevel, 15)
     log_format = FaceswapFormatter("%(asctime)s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
 
-    if is_gui:
-        # tqdm.write inserts extra lines in the GUI, so use standard output as
-        # it is not needed there.
-        log_console = logging.StreamHandler(sys.stdout)
-    else:
-        log_console = TqdmHandler(sys.stdout)
+    log_console = TqdmHandler(sys.stdout)
     log_console.setFormatter(log_format)
     log_console.setLevel(loglevel)
     return log_console
 
 
 def crash_handler(log_format):
-    """ Add a handler that sores the last 50 debug lines to 'debug_buffer'
+    """ Add a handler that sores the last 50 debug lines to `debug_buffer`
         for use in crash reports """
     log_crash = logging.StreamHandler(debug_buffer)
     log_crash.setFormatter(log_format)
@@ -155,7 +151,6 @@ def get_loglevel(loglevel):
 
 def crash_log():
     """ Write debug_buffer to a crash log on crash """
-    from lib.sysinfo import sysinfo
     path = os.getcwd()
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
 
@@ -167,13 +162,11 @@ def crash_log():
     with open(filename, "w") as outfile:
         outfile.writelines(freeze_log)
         traceback.print_exc(file=outfile)
-        outfile.write(sysinfo)
+        outfile.write(sysinfo.full_info())
     return filename
 
 
 old_factory = logging.getLogRecordFactory()  # pylint: disable=invalid-name
-
-
 def faceswap_logrecord(*args, **kwargs):
     """ Add a flag to logging.LogRecord to not strip formatting from particular records """
     record = old_factory(*args, **kwargs)

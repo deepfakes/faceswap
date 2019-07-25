@@ -18,8 +18,7 @@ from lib import Serializer
 from lib.faces_detect import DetectedFace
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import cv2_read_img
-from lib.vgg_face2_keras import VGGFace2 as VGGFace
+from lib.vgg_face import VGGFace
 from plugins.plugin_loader import PluginLoader
 
 from . import cli
@@ -125,14 +124,14 @@ class Sort():
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        face = face.to_bounding_box_dict()
+        face = face.to_bounding_box()
         return {"image": image,
                 "detected_faces": [face]}
 
     @staticmethod
     def get_landmarks(filename):
         """ Extract the face from a frame (If not alignments file found) """
-        image = cv2_read_img(filename, raise_error=True)
+        image = cv2.imread(filename)
         queue_manager.get_queue("in").put(Sort.alignment_dict(image))
         face = queue_manager.get_queue("out").get()
         landmarks = face["landmarks"][0]
@@ -185,7 +184,7 @@ class Sort():
         logger.info("Sorting by face similarity...")
 
         images = np.array(self.find_images(input_dir))
-        preds = np.array([self.vgg_face.predict(cv2_read_img(img, raise_error=True))
+        preds = np.array([self.vgg_face.predict(cv2.imread(img))
                           for img in tqdm(images, desc="loading", file=sys.stdout)])
         logger.info("Sorting. Depending on ths size of your dataset, this may take a few "
                     "minutes...")
@@ -288,7 +287,7 @@ class Sort():
         logger.info("Sorting by histogram similarity...")
 
         img_list = [
-            [img, cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256])]
+            [img, cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256])]
             for img in
             tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
         ]
@@ -318,7 +317,7 @@ class Sort():
 
         img_list = [
             [img,
-             cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256]), 0]
+             cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256]), 0]
             for img in
             tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
         ]
@@ -572,7 +571,7 @@ class Sort():
         input_dir = self.args.input_dir
         logger.info("Preparing to group...")
         if group_method == 'group_blur':
-            temp_list = [[img, self.estimate_blur(cv2_read_img(img, raise_error=True))]
+            temp_list = [[img, self.estimate_blur(cv2.imread(img))]
                          for img in
                          tqdm(self.find_images(input_dir),
                               desc="Reloading",
@@ -600,7 +599,7 @@ class Sort():
         elif group_method == 'group_hist':
             temp_list = [
                 [img,
-                 cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256])]
+                 cv2.calcHist([cv2.imread(img)], [0], None, [256], [0, 256])]
                 for img in
                 tqdm(self.find_images(input_dir),
                      desc="Reloading",
@@ -653,10 +652,12 @@ class Sort():
     @staticmethod
     def estimate_blur(image_file):
         """
-        Estimate the amount of blur an image has with the variance of the Laplacian.
-        Normalize by pixel number to offset the effect of image size on pixel gradients & variance
+        Estimate the amount of blur an image has
+        with the variance of the Laplacian.
+        Normalize by pixel number to offset the effect
+        of image size on pixel gradients & variance
         """
-        image = cv2_read_img(image_file, raise_error=True)
+        image = cv2.imread(image_file)
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)

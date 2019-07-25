@@ -1,6 +1,5 @@
 !include MUI2.nsh
 !include nsDialogs.nsh
-!include winmessages.nsh
 !include LogicLib.nsh
 !include CPUFeatures.nsh
 !include MultiDetailPrint.nsi
@@ -13,9 +12,9 @@ InstallDir $PROFILE\faceswap
 # Download sites
 !define wwwGit "https://github.com/git-for-windows/git/releases/download/v2.20.1.windows.1/Git-2.20.1-64-bit.exe"
 
-# Sometimes miniconda breaks. Uncomment/comment the following 2 lines to pin
-!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
-#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
+# Latest miniconda appears to be broken when activating environment. Currently pinned to older version
+#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
 
 
@@ -47,8 +46,7 @@ Var InstallFailed
 Var lblPos
 Var hasAVX
 Var hasSSE4
-Var setupType
-Var ctlRadio
+Var noNvidia
 Var ctlCondaText
 Var ctlCondaButton
 Var Log
@@ -59,7 +57,7 @@ Var envName
 !define MUI_ABORTWARNING
 
 # Install Location Page
-!define MUI_ICON "fs_logo.ico"
+!define MUI_ICON "fs_logo_32.ico"
 !define MUI_PAGE_HEADER_TEXT "Faceswap.py Installer"
 !define MUI_PAGE_HEADER_SUBTEXT "Install Location"
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Select Destination Folder:"
@@ -141,26 +139,13 @@ Function pgPrereqCreate
             intOp $lblPos $lblPos + 7
         ${EndIf}
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
-        Pop $0
 
         StrCpy $lblPos 46
     # Info Custom Options
     ${NSD_CreateGroupBox} 5% 40% 90% 60% "Custom Items"
     Pop $0
-        ${NSD_CreateRadioButton} 10% $lblPos% 27% 11u "Setup for NVIDIA GPU"
-            Pop $ctlRadio
-		    ${NSD_AddStyle} $ctlRadio ${WS_GROUP}
-            nsDialogs::SetUserData $ctlRadio "nvidia"
-            ${NSD_OnClick} $ctlRadio RadioClick
-        ${NSD_CreateRadioButton} 40% $lblPos% 25% 11u "Setup for AMD GPU"
-            Pop $ctlRadio
-            nsDialogs::SetUserData $ctlRadio "amd"
-            ${NSD_OnClick} $ctlRadio RadioClick
-        ${NSD_CreateRadioButton} 70% $lblPos% 20% 11u "Setup for CPU"
-            Pop $ctlRadio
-            nsDialogs::SetUserData $ctlRadio "cpu"
-            ${NSD_OnClick} $ctlRadio RadioClick
-
+        ${NSD_CreateCheckBox} 10% $lblPos% 80% 11u " IMPORTANT! Check here if you do NOT have an NVIDIA graphics card"
+        Pop $noNvidia
         intOp $lblPos $lblPos + 10
 
         ${NSD_CreateLabel} 10% $lblPos% 80% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
@@ -187,12 +172,6 @@ Function pgPrereqCreate
     nsDialogs::Show
 FunctionEnd
 
-Function RadioClick
-    Pop $R0
-	nsDialogs::GetUserData $R0
-    Pop $setupType
-FunctionEnd
-
 Function fnc_hCtl_test_DirRequest1_Click
 	Pop $R0
 	${If} $R0 == $ctlCondaButton
@@ -206,20 +185,11 @@ Function fnc_hCtl_test_DirRequest1_Click
 FunctionEnd
 
 Function pgPrereqLeave
-	call CheckSetupType
     Call CheckCustomCondaPath
+    ${NSD_GetState} $noNvidia $noNvidia
     ${NSD_GetText} $envName $envName
 
 FunctionEnd
-
-Function CheckSetupType
-    ${If} $setupType == ""
-	    MessageBox MB_OK "Please specify whether to setup for Nvidia, AMD or CPU."
-	    Abort
-	${EndIf}
-    StrCpy $Log "$log(check) Setting up for: $setupType$\n"
-FunctionEnd
-
 
 Function CheckCustomCondaPath
     ${NSD_GetText} $ctlCondaText $2
@@ -383,13 +353,14 @@ Function CloneRepo
 FunctionEnd
 
 Function SetEnvironment
-    DetailPrint "Initializing Conda..."
-    SetDetailsPrint listonly
-    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda update -y -n base -c defaults conda && conda deactivate"
-    pop $0
-    ExecDos::wait $0
-    pop $0
-    SetDetailsPrint both
+    # Updating Conda breaks setup.py. Commented out in case this issue gets resolved in future
+#    DetailPrint "Initializing Conda..."
+#    SetDetailsPrint listonly
+#    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$dirConda\scripts\activate.bat && conda update -y -n base -c defaults conda && conda deactivate"
+#    pop $0
+#    ExecDos::wait $0
+#    pop $0
+#    SetDetailsPrint both
     DetailPrint "Creating Conda Virtual Environment..."
 
     IfFileExists  "$dirConda\envs\$envName" DeleteEnv CreateEnv
@@ -421,8 +392,8 @@ FunctionEnd
 Function SetupFaceSwap
     DetailPrint "Setting up FaceSwap Environment... This may take a while"
     StrCpy $0 "${flagsSetup}"
-    ${If} $setupType != "cpu"
-        StrCpy $0 "$0 --$setupType"
+    ${If} $noNvidia != 1
+        StrCpy $0 "$0 --gpu"
     ${EndIf}
 
     SetDetailsPrint listonly
@@ -444,5 +415,5 @@ Function DesktopShortcut
     FileOpen $9 "$INSTDIR\$0" w
     FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
-    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo.ico"
+    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
 FunctionEnd

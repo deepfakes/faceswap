@@ -15,7 +15,7 @@ from keras.backend.tensorflow_backend import set_session
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import cv2_read_img, get_folder, get_image_paths, set_system_verbosity
+from lib.utils import (get_folder, get_image_paths, set_system_verbosity)
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -114,10 +114,9 @@ class Train():
             log = logger.critical
         else:
             msg = ("Exit requested! The trainer will complete its current cycle, "
-                   "save the models and quit (This can take a couple of minutes "
-                   "depending on your training speed).")
-            if not self.args.redirect_gui:
-                msg += " If you want to kill it now, press Ctrl + c"
+                   "save the models and quit (it can take up a couple of seconds "
+                   "depending on your training speed). If you want to kill it now, "
+                   "press Ctrl + c")
             log = logger.info
         log(msg)
         self.stop = True
@@ -152,22 +151,16 @@ class Train():
         """ Load the model requested for training """
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir)
-        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
-        augment_color = not self.args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
             gpus=self.args.gpus,
-            configfile=configfile,
-            snapshot_interval=self.args.snapshot_interval,
             no_logs=self.args.no_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
-            augment_color=augment_color,
             no_flip=self.args.no_flip,
             training_image_size=self.image_size,
             alignments_paths=self.alignments_paths,
             pingpong=self.args.pingpong,
             memory_saving_gradients=self.args.memory_saving_gradients,
-            optimizer_savings=self.args.optimizer_savings,
             predict=False)
         logger.debug("Loaded Model")
         return model
@@ -175,7 +168,7 @@ class Train():
     @property
     def image_size(self):
         """ Get the training set image size for storing in model data """
-        image = cv2_read_img(self.images["a"][0], raise_error=True)
+        image = cv2.imread(self.images["a"][0])  # pylint: disable=no-member
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
@@ -203,8 +196,7 @@ class Train():
                           self.alignments_paths,
                           self.images,
                           self.timelapse,
-                          self.args.preview_scale,
-                          self.args.configfile)
+                          self.args.preview_scale)
         logger.debug("Loaded Trainer")
         return trainer
 
@@ -241,15 +233,13 @@ class Train():
         """ Monitor the console, and generate + monitor preview if requested """
         is_preview = self.args.preview
         logger.debug("Launching Monitor")
-        logger.info("R|===================================================")
-        logger.info("R|  Starting")
+        logger.info("R|===============================================")
+        logger.info("R|- Starting                                    -")
         if is_preview:
-            logger.info("R|  Using live preview")
-        logger.info("R|  Press '%s' to save and quit",
-                    "Terminate" if self.args.redirect_gui else "ENTER")
-        if not self.args.redirect_gui:
-            logger.info("R|  Press 'S' to save model weights immediately")
-        logger.info("R|===================================================")
+            logger.info("R|- Using live preview                          -")
+        logger.info("R|- Press 'ENTER' to save and quit              -")
+        logger.info("R|- Press 'S' to save model weights immediately -")
+        logger.info("R|===============================================")
 
         keypress = KBHit(is_gui=self.args.redirect_gui)
         err = False

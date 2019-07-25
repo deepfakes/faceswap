@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """ Command Line Arguments """
-
-# pylint: disable=too-many-lines
-
 import argparse
 import logging
 import os
@@ -14,7 +11,7 @@ import textwrap
 from importlib import import_module
 
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, safe_shutdown
+from lib.utils import safe_shutdown
 from lib.model.masks import get_available_masks, get_default_mask
 from plugins.plugin_loader import PluginLoader
 
@@ -46,20 +43,16 @@ class ScriptExecutor():
     def test_for_tf_version():
         """ Check that the minimum required Tensorflow version is installed """
         min_ver = 1.12
-        max_ver = 1.13
         try:
             import tensorflow as tf
         except ImportError:
-            raise FaceswapError("Tensorflow is a requirement but is not installed on your system.")
+            logger.error("Tensorflow is a requirement but is not installed on your system.")
+            exit(1)
         tf_ver = float(".".join(tf.__version__.split(".")[:2]))
         if tf_ver < min_ver:
-            raise FaceswapError("The minimum supported Tensorflow is version {} but you have "
-                                "version {} installed. Please upgrade Tensorflow.".format(
-                                    min_ver, tf_ver))
-        if tf_ver > max_ver:
-            raise FaceswapError("The maximumum supported Tensorflow is version {} but you have "
-                                "version {} installed. Please downgrade Tensorflow.".format(
-                                    max_ver, tf_ver))
+            logger.error("The minimum supported Tensorflow is version %s but you have version "
+                         "%s installed. Please upgrade Tensorflow.", min_ver, tf_ver)
+            exit(1)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
     def test_for_gui(self):
@@ -83,7 +76,7 @@ class ScriptExecutor():
             # pylint: disable=unused-variable
             import tkinter  # noqa pylint: disable=unused-import
         except ImportError:
-            logger.error(
+            logger.warning(
                 "It looks like TkInter isn't installed for your OS, so "
                 "the GUI has been disabled. To enable the GUI please "
                 "install the TkInter application. You can try:")
@@ -94,38 +87,27 @@ class ScriptExecutor():
             logger.info("Arch: sudo pacman -S tk")
             logger.info("CentOS/Redhat: sudo yum install tkinter")
             logger.info("Fedora: sudo dnf install python3-tkinter")
-            raise FaceswapError("TkInter not found")
+            exit(1)
 
     @staticmethod
     def check_display():
         """ Check whether there is a display to output the GUI. If running on
             Windows then assume not running in headless mode """
         if not os.environ.get("DISPLAY", None) and os.name != "nt":
+            logger.warning("No display detected. GUI mode has been disabled.")
             if platform.system() == "Darwin":
                 logger.info("macOS users need to install XQuartz. "
                             "See https://support.apple.com/en-gb/HT201341")
-            raise FaceswapError("No display detected. GUI mode has been disabled.")
+            exit(1)
 
     def execute_script(self, arguments):
         """ Run the script for called command """
-        is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
-        log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
+        log_setup(arguments.loglevel, arguments.logfile, self.command)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
-        if hasattr(arguments, "amd") and arguments.amd:
-            plaidml_found = self.setup_amd(arguments.loglevel)
-            if not plaidml_found:
-                safe_shutdown()
-                exit(1)
         try:
             script = self.import_script()
             process = script(arguments)
             process.process()
-        except FaceswapError as err:
-            for line in str(err).splitlines():
-                logger.error(line)
-            crash_file = crash_log()
-            logger.info("To get more information on this error see the crash report written to "
-                        "'%s'", crash_file)
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise
         except SystemExit:
@@ -133,26 +115,12 @@ class ScriptExecutor():
         except Exception:  # pylint: disable=broad-except
             crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
-            logger.critical("An unexpected crash has occurred. Crash report written to '%s'. "
+            logger.critical("An unexpected crash has occurred. Crash report written to %s. "
                             "Please verify you are running the latest version of faceswap "
                             "before reporting", crash_file)
 
         finally:
             safe_shutdown()
-
-    @staticmethod
-    def setup_amd(loglevel):
-        """ Test for plaidml and setup for AMD """
-        logger.debug("Setting up for AMD")
-        try:
-            import plaidml  # noqa pylint:disable=unused-import
-        except ImportError:
-            logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
-            return False
-        from lib.plaidml_tools import setup_plaidml
-        setup_plaidml(loglevel)
-        logger.debug("setup up for PlaidML")
-        return True
 
 
 class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
@@ -384,17 +352,6 @@ class FaceSwapArgs():
         """ Arguments that are used in ALL parts of Faceswap
             DO NOT override this """
         global_args = list()
-        global_args.append({"opts": ("-amd", "--amd"),
-                            "action": "store_true",
-                            "dest": "amd",
-                            "default": False,
-                            "help": "AMD GPU users must enable this option for PlaidML support"})
-        global_args.append({"opts": ("-C", "--configfile"),
-                            "action": FileFullPaths,
-                            "filetypes": "ini",
-                            "type": str,
-                            "help": "Optionally overide the saved config with the path to a "
-                                    "custom config file."})
         global_args.append({"opts": ("-L", "--loglevel"),
                             "type": str.upper,
                             "dest": "loglevel",
@@ -427,7 +384,8 @@ class FaceSwapArgs():
             command,
             help=description,
             description=description,
-            epilog="Questions and feedback: https://faceswap.dev/forum",
+            epilog="Questions and feedback: \
+            https://github.com/deepfakes/faceswap-playground",
             formatter_class=SmartFormatter)
         return parser
 
@@ -535,8 +493,7 @@ class ExtractArgs(ExtractConvertArgs):
             "type": str.lower,
             "choices":  PluginLoader.get_available_extractors("detect"),
             "default": "mtcnn",
-            "help": "R|Detector to use. NB: Unless stated, all aligners will run on CPU for AMD "
-                    "GPUs. Some of these have configurable settings in "
+            "help": "R|Detector to use. Some of these have configurable settings in "
                     "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
                     "\nL|'cv2-dnn': A CPU only extractor, is the least reliable, but uses least "
                     "resources and runs fast on CPU. Use this if not using a GPU and time is "
@@ -551,30 +508,12 @@ class ExtractArgs(ExtractConvertArgs):
             "type": str.lower,
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
-            "help": "R|Aligner to use. NB: Unless stated, all aligners will run on CPU for AMD "
-                    "GPUs."
+            "help": "R|Aligner to use."
                     "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
                     "resource intensive, but less accurate. Only use this if not using a gpu "
                     " and time is important."
-                    "\nL|'fan': Face Alignment Network. Best aligner. GPU heavy, slow when not "
-                    "running on GPU"
-                    "\nL|'fan-amd': Face Alignment Network. Uses Keras backend to support AMD "
-                    "Cards. Best aligner. GPU heavy, slow when not running on GPU"})
-        argument_list.append({"opts": ("-nm", "--normalization"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "dest": "normalization",
-                              "choices": ["none", "clahe", "hist", "mean"],
-                              "default": "none",
-                              "help": "R|Performing normalization can help the aligner better "
-                                      "align faces with difficult lighting conditions at an "
-                                      "extraction speed cost. Different methods will yield "
-                                      "different results on different sets."
-                                      "\nL|'none': Don't perform normalization on the face."
-                                      "\nL|'clahe': Perform Contrast Limited Adaptive Histogram "
-                                      "Equalization on the face."
-                                      "\nL|'hist': Equalize the histograms on the RGB channels."
-                                      "\nL|'mean': Normalize the face colors to the mean."})
+                    "\nL|'fan': Face Alignment Network. Best aligner. "
+                    "GPU heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",
@@ -597,16 +536,15 @@ class ExtractArgs(ExtractConvertArgs):
                                       "threshold. Discarded images are moved into a \"blurry\" "
                                       "sub-folder. Lower values allow more blur. Set to 0.0 to "
                                       "turn off."})
-        argument_list.append({"opts": ("-sp", "--singleprocess"),
+        argument_list.append({"opts": ("-mp", "--multiprocess"),
                               "action": "store_true",
                               "default": False,
-                              "help": "Don't run extraction in parallel. Will run detection first "
-                                      "then alignment (2 passes). Useful if VRAM is at a premium. "
-                                      "Only has an effect if both the aligner and detector use "
-                                      "the GPU, otherwise this is automatically off. NB: AMD "
-                                      "cards do not support parallel processing, so if both "
-                                      "aligner and detector use an AMD GPU this will "
-                                      "automatically be enabled."})
+                              "help": "Run extraction in parallel. Offers "
+                                      "speed up for some extractor/detector "
+                                      "combinations, less so for others. "
+                                      "Only has an effect if both the "
+                                      "aligner and detector use the GPU, "
+                                      "otherwise this is automatic."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
@@ -730,8 +668,6 @@ class ConvertArgs(ExtractConvertArgs):
                     "\nL|color-transfer: Transfers the color distribution from the source to the "
                     "target image using the mean and standard deviations of the L*a*b* "
                     "color space."
-                    "\nL|manual-balance: Manually adjust the balance of the image in a variety of "
-                    "color spaces. Best used with the Preview tool to set correct values."
                     "\nL|match-hist: Adjust the histogram of each color channel in the swapped "
                     "reconstruction to equal the histogram of the masked area in the orginal "
                     "image."
@@ -762,8 +698,6 @@ class ConvertArgs(ExtractConvertArgs):
                     "\nL|components: An improved face hull mask using a facehull of 8 facial "
                     "parts."
                     "\nL|dfl_full: An improved face hull mask using a facehull of 3 facial parts."
-                    "\nL|extended: Based on components mask. Extends the eyebrow points to "
-                    "further up the forehead. May perform badly on difficult angles."
                     "\nL|facehull: Face cutout based on landmarks."
                     "\nL|predicted: The predicted mask generated from the model. If the model was "
                     "not trained with a mask then this will fallback to "
@@ -776,7 +710,7 @@ class ConvertArgs(ExtractConvertArgs):
                                                                                     False),
                               "default": "opencv",
                               "help": "R|The plugin to use to output the converted images. The "
-                                      "writers are configurable in '/config/convert.ini' or 'Edit "
+                                      "writers are configurable in '/config/convert.ini' or `Edit "
                                       "> Configure Convert Plugins:'"
                                       "\nL|ffmpeg: [video] Writes out the convert straight to "
                                       "video. When the input is a series of images then the "
@@ -796,21 +730,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "Scale the final output frames by this amount. 100%% will "
                                       "output the frames at source dimensions. 50%% at half size "
                                       "200%% at double size"})
-        argument_list.append({"opts": ("-j", "--jobs"),
-                              "dest": "jobs",
-                              "action": Slider,
-                              "type": int,
-                              "default": 0,
-                              "min_max": (0, 40),
-                              "rounding": 1,
-                              "help": "The maximum number of parallel processes for performing "
-                                      "conversion. Converting images is system RAM heavy so it is "
-                                      "possible to run out of memory if you have a lot of "
-                                      "processes and not enough RAM to accomodate them all. "
-                                      "Setting this to 0 will use the maximum available. No "
-                                      "matter what you set this to, it will never attempt to use "
-                                      "more processes than are available on your system. If "
-                                      "singleprocess is enabled this setting will be ignored."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
                               "action": Slider,
@@ -931,10 +850,9 @@ class TrainArgs(FaceSwapArgs):
                                       "\nL|lightweight: A lightweight model for low-end cards. "
                                       "Don't expect great results. Can train as low as 1.6GB "
                                       "with batch size 8."
-                                      "\nL|realface: A high detail, dual density model based on "
-                                      "DFaker, with customizable in/out resolution. The "
-                                      "autoencoders are unbalanced so B>A swaps won't work "
-                                      "so well. By andenixa et al. Very configurable."
+                                      "\nL|realface: Customizable in/out resolution model "
+                                      "from andenixa. The autoencoders are unbalanced so B>A "
+                                      "swaps won't work so well. Very configurable."
                                       "\nL|unbalanced: 128px in/out model from andenixa. The "
                                       "autoencoders are unbalanced so B>A swaps won't work so "
                                       "well. Very configurable."
@@ -963,16 +881,6 @@ class TrainArgs(FaceSwapArgs):
                               "dest": "save_interval",
                               "default": 100,
                               "help": "Sets the number of iterations before saving the model"})
-        argument_list.append({"opts": ("-ss", "--snapshot-interval"),
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (0, 100000),
-                              "rounding": 5000,
-                              "dest": "snapshot_interval",
-                              "default": 25000,
-                              "help": "Sets the number of iterations before saving a backup "
-                                      "snapshot of the model in it's current state. Set to 0 for "
-                                      "off."})
         argument_list.append({"opts": ("-bs", "--batch-size"),
                               "type": int,
                               "action": Slider,
@@ -1027,24 +935,6 @@ class TrainArgs(FaceSwapArgs):
                               "help": "Disables TensorBoard logging. NB: Disabling logs means "
                                       "that you will not be able to use the graph or analysis "
                                       "for this session in the GUI."})
-        argument_list.append({"opts": ("-msg", "--memory-saving-gradients"),
-                              "action": "store_true",
-                              "dest": "memory_saving_gradients",
-                              "default": False,
-                              "help": "Trades off VRAM usage against computation time. Can fit "
-                                      "larger models into memory at a cost of slower training "
-                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
-                                      "training time. NB: Launch time will be significantly "
-                                      "delayed. Switching sides using ping-pong training will "
-                                      "take longer."})
-        argument_list.append({"opts": ("-o", "--optimizer-savings"),
-                              "dest": "optimizer_savings",
-                              "action": "store_true",
-                              "default": False,
-                              "help": "To save VRAM some optimizer gradient calculations can be "
-                                      "performed on the CPU rather than the GPU. This allows you "
-                                      "to increase batchsize at a training speed cost. Nvidia "
-                                      "only. This option will have no effect for plaidML users."})
         argument_list.append({"opts": ("-pp", "--ping-pong"),
                               "action": "store_true",
                               "dest": "pingpong",
@@ -1054,6 +944,16 @@ class TrainArgs(FaceSwapArgs):
                                       "2 to 4 times longer, with about a 30%%-50%% reduction in "
                                       "VRAM useage. NB: Preview won't show until both sides have "
                                       "been trained once."})
+        argument_list.append({"opts": ("-msg", "--memory-saving-gradients"),
+                              "action": "store_true",
+                              "dest": "memory_saving_gradients",
+                              "default": False,
+                              "help": "Trades off VRAM useage against computation time. Can fit "
+                                      "larger models into memory at a cost of slower training "
+                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
+                                      "training time. NB: Launch time will be significantly "
+                                      "delayed. Switching sides using ping-pong training will "
+                                      "take longer."})
         argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
                               "action": "store_true",
                               "dest": "warp_to_landmarks",
@@ -1071,44 +971,6 @@ class TrainArgs(FaceSwapArgs):
                                       "horizontally. Sometimes it is desirable for this not to "
                                       "occur. Generally this should be left off except for "
                                       "during 'fit training'."})
-        argument_list.append({"opts": ("-nac", "--no-augment-color"),
-                              "action": "store_true",
-                              "dest": "no_augment_color",
-                              "default": False,
-                              "help": "Color augmentation helps make the model less susceptible "
-                                      "to color differences between the A and B sets, at an "
-                                      "increased training time cost. Enable this option to "
-                                      "disable color augmentation."})
-        argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
-                              "action": DirFullPaths,
-                              "dest": "timelapse_input_a",
-                              "default": None,
-                              "help": "For if you want a timelapse: "
-                                      "The input folder for the timelapse. "
-                                      "This folder should contain faces of A "
-                                      "which will be converted for the "
-                                      "timelapse. You must supply a "
-                                      "--timelapse-output and a "
-                                      "--timelapse-input-B parameter."})
-        argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
-                              "action": DirFullPaths,
-                              "dest": "timelapse_input_b",
-                              "default": None,
-                              "help": "For if you want a timelapse: "
-                                      "The input folder for the timelapse. "
-                                      "This folder should contain faces of B "
-                                      "which will be converted for the "
-                                      "timelapse. You must supply a "
-                                      "--timelapse-output and a "
-                                      "--timelapse-input-A parameter."})
-        argument_list.append({"opts": ("-to", "--timelapse-output"),
-                              "action": DirFullPaths,
-                              "dest": "timelapse_output",
-                              "default": None,
-                              "help": "The output folder for the timelapse. "
-                                      "If the input folders are supplied but "
-                                      "no output folder, it will default to "
-                                      "your model folder /timelapse/"})
         return argument_list
 
 

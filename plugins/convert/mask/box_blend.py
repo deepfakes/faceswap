@@ -13,8 +13,8 @@ class Mask(Adjustment):
         For actions that occur identically for each frame (e.g. blend_box), constants can
         be placed into self.func_constants to be compiled at launch, then referenced for
         each face. """
-    def __init__(self, mask_type, output_size, predicted_available=False, **kwargs):
-        super().__init__(mask_type, output_size, predicted_available, **kwargs)
+    def __init__(self, mask_type, output_size, predicted_available=False):
+        super().__init__(mask_type, output_size, predicted_available)
 
     def process(self, new_face):
         """ The blend box function. Adds the created mask to the alpha channel """

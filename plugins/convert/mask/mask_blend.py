@@ -9,8 +9,8 @@ from ._base import Adjustment, BlurMask, logger
 
 class Mask(Adjustment):
     """ Return the requested mask """
-    def __init__(self, mask_type, output_size, predicted_available=False, **kwargs):
-        super().__init__(mask_type, output_size, predicted_available, **kwargs)
+    def __init__(self, output_size):
+        super().__init__(output_size)
         self.do_erode = self.config.get("erosion", 0) != 0
         self.do_blend = self.config.get("type", None) is not None
 

@@ -154,11 +154,6 @@ class SysInfo():
         return ". ".join(commits)
 
     @property
-    def cuda_keys_windows(self):
-        """ Return the OS Environ CUDA Keys for Windows """
-        return [key for key in os.environ.keys() if key.lower().startswith("cuda_path_v")]
-
-    @property
     def cuda_version(self):
         """ Get the installed CUDA version """
         chk = Popen("nvcc -V", shell=True, stdout=PIPE, stderr=PIPE)
@@ -199,7 +194,7 @@ class SysInfo():
                 break
 
         if not cudnn_checkfile:
-            retval = "No global version found"
+            retval = "Not Found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
             return retval
@@ -219,7 +214,7 @@ class SysInfo():
                 if found == 3:
                     break
         if found != 3:
-            retval = "No global version found"
+            retval = "Not Found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
             return retval
@@ -242,11 +237,8 @@ class SysInfo():
     def cudnn_checkfiles_windows(self):
         """ Return the checkfile locations for windows """
         # TODO A more reliable way of getting the windows location
-        if not self._cuda_path and not self.cuda_keys_windows:
-            return list()
         if not self._cuda_path:
-            self._cuda_path = os.environ[self.cuda_keys_windows[0]]
-
+            return list()
         cudnn_checkfile = os.path.join(self._cuda_path, "include", "cudnn.h")
         return [cudnn_checkfile]
 
@@ -294,7 +286,7 @@ class SysInfo():
                 if chk:
                     break
         if not chk:
-            retval = "No global version found"
+            retval = "Not Found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda Cuda"
             return retval
@@ -303,13 +295,15 @@ class SysInfo():
 
     def cuda_version_windows(self):
         """ Get CUDA version for Windows systems """
-        cuda_keys = self.cuda_keys_windows
+        cuda_keys = [key
+                     for key in os.environ.keys()
+                     if key.lower().startswith("cuda_path_v")]
         if not cuda_keys:
-            retval = "No global version found"
+            retval = "Not Found"
             if self.is_conda:
                 retval += ". Check Conda packages for Conda Cuda"
             return retval
-        cudavers = [key.lower().replace("cuda_path_v", "").replace("_", ".") for key in cuda_keys]
+        cudavers = [key.replace("CUDA_PATH_V", "").replace("_", ".") for key in cuda_keys]
         return " ".join(cudavers)
 
     def full_info(self):
@@ -358,13 +352,4 @@ class SysInfo():
         return ", ".join(retval)
 
 
-def get_sysinfo():
-    """ Return sys info or error message if there is an error """
-    try:
-        retval = SysInfo().full_info()
-    except Exception as err:  # pylint: disable=broad-except
-        retval = "Exception occured trying to retrieve sysinfo: {}".format(err)
-    return retval
-
-
-sysinfo = get_sysinfo()  # pylint: disable=invalid-name
+sysinfo = SysInfo()  # pylint: disable=invalid-name
