@@ -718,10 +718,6 @@ class RemoveAlignments():
         logger.info("%s alignment(s) were removed from alignments file", del_count)
         self.alignments.save()
 
-        if self.type == "faces":
-            rename = Rename(self.alignments, None, self.items)
-            rename.process()
-
     def remove_frames(self, frame):
         """ Process to remove frames from an alignments file """
         if frame in self.items:
