@@ -4,6 +4,7 @@
 import logging
 
 import os
+import sys
 import cv2
 import keras
 import numpy as np
@@ -131,7 +132,8 @@ class Facehull(Mask):
                 try:
                     cv2.fillConvexPoly(masks[i], hull, 1.)
                 except Exception as error:
-                    print("CV2 Error '{0}' occured. Arguments {1}.".format(error.message, error.args))
+                    print("CV2 Error '{0}' occured.".format(error.message))
+                    print("Error Arguments {1}.".format(error.args))
                 # else:
                     # trace block
 
@@ -145,76 +147,112 @@ class Smart(Mask):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
-        Check if model is available, if not, download and unzip it
         """
 
-        build_dict = {"vgg_300":     (8, "Nirkin_300_softmax_v1.h5"),
-                      "vgg_500":     (5, "Nirkin_500_softmax_v1.h5"),
-                      "unet_256":    (6, "DFL_256_sigmoid_v1.h5"),
-                      None:          (5, "Nirkin_500_softmax_v1.h5")}
-        git_model_id, model_filename = build_dict[mask_type]
-        cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-        model = GetModel(model_filename, cache_path, git_model_id)
-        mask_model = keras.models.load_model(model.model_path)
-
         postprocess_test = False
+        target_size, model = self.get_models(mask_type)
+        mask_model = keras.models.load_model(model.model_path)
+        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndmin=4)
+        original_size, faces = self.resize_inputs(faces, target_size)
 
-        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndim=4)
-        if  model_filename.startswith('DFL'):
-            model_input = faces
-            masks = mask_model.predict(model_input)
-            low = masks < 0.1
-            high = masks > 0.9
-        if model_filename.startswith('Nirkin'):
-            # pylint: disable=no-member
-            model_input = (faces - means)
-            masks = mask_model.predict_on_batch(model_input)[..., 1:2]
-            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in masks)
-            if postprocess_test:
-                generator = (self.postprocessing(mask[:, :, None]) for mask in masks)
-            masks = np.array(tuple(generator))[..., None]
-            low = masks < 0.025
-            high = masks > 0.975
-        masks[low] = 0.
-        masks[high] = 1.
-
-        return masks
-
-        @staticmethod
-        def postprocessing(mask):
-            # pylint: disable=no-member
-            """ Post-processing of Nirkin style segmentation masks """
-            #Select_largest_segment
-            pop_small_segments = False # Don't do this right now
-            if pop_small_segments:
-                results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
-                _, labels, stats, _ = results
-                segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
-                mask[labels != segments_ranked_by_area[0, 0]] = 0.
-
-            #Smooth contours
-            smooth_contours = False # Don't do this right now
-            if smooth_contours:
-                iters = 2
-                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
-                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
-                cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
-                cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
-
-            #Fill holes
-            fill_holes = True
-            if fill_holes:
-                not_holes = mask.copy()
-                not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
-                cv2.floodFill(not_holes, None, (0, 0), 255)
-                holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]
-                mask = cv2.bitwise_or(mask, holes)
-                mask = np.expand_dims(mask, axis=-1)
-
-            return mask
+        batch_size = 16
+        batches = faces.shape[0] // batch_size
+        even_split_section = batches * batch_size
+        faces_batched = np.split(faces[:even_split_section], batches)
+        means_batched = np.split(means[:even_split_section], batches)
+        masks_batched = np.split(masks[:even_split_section], batches)
+        if faces.shape[0] % batch_size != 0:
+            faces_batched.append(faces[even_split_section:])
+            means_batched.append(means[even_split_section:])
+            masks_batched.append(masks[even_split_section:])
+        batched = zip(faces_batched, means_batched)
+        for i, (faces, means) in enumerate(batched):
+            if  model.model_filename[0].startswith('DFL'):
+                model_input = faces
+                results = mask_model.predict(model_input[..., :3])
+                low = results < 0.1
+                high = results > 0.9
+            if model.model_filename[0].startswith('Nirkin'):
+                # pylint: disable=no-member
+                print(faces.shape, means.shape)
+                model_input = (faces - means[:, None, None, :])
+                results = mask_model.predict_on_batch(model_input[..., :3])[..., 1:2]
+                generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
+                if postprocess_test:
+                    generator = (self.postprocessing(mask[:, :, None]) for mask in results)
+                results = np.array(tuple(generator))[..., None]
+                low = results < 0.025
+                high = results > 0.975
+            results[low] = 0.
+            results[high] = 1.
+            _, results = self.resize_inputs(results, original_size)
+            batch_slice = slice(i * batch_size, (i + 1) * batch_size)
+            print(masks.shape, results.shape)
+            masks[batch_slice] = results[..., None]
+            
 
         return masks
+
+    @staticmethod
+    def get_models(mask_type):
+        """ Check if model is available, if not, download and unzip it """
+
+        build_dict = {"vgg_300":     (300, 8, "Nirkin_300_softmax_v1.h5"),
+                      "vgg_500":     (500, 5, "Nirkin_500_softmax_v1.h5"),
+                      "unet_256":    (256, 6, "DFL_256_sigmoid_v1.h5"),
+                      None:          (500, 5, "Nirkin_500_softmax_v1.h5")}
+        input_size, git_model_id, model_filename = build_dict[mask_type]
+        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
+        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
+        model = GetModel(model_filename, cache_path, git_model_id)
+
+        return input_size, model
+
+    @staticmethod
+    def resize_inputs(faces, target_size):
+        """ resize input and output of mask models appropriately """
+        _, height, width, _ = faces.shape
+        image_size = min(height, width)
+        if image_size != target_size:
+            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
+            generator = (cv2.resize(face, (target_size, target_size), method) for face in faces)
+            faces = np.array(tuple(generator))
+
+        return image_size, faces
+
+    @staticmethod
+    def postprocessing(mask):
+        # pylint: disable=no-member
+        """ Post-processing of Nirkin style segmentation masks """
+        #Select_largest_segment
+        pop_small_segments = False # Don't do this right now
+        if pop_small_segments:
+            results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+            _, labels, stats, _ = results
+            segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
+            mask[labels != segments_ranked_by_area[0, 0]] = 0.
+
+        #Smooth contours
+        smooth_contours = False # Don't do this right now
+        if smooth_contours:
+            iters = 2
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+
+        #Fill holes
+        fill_holes = True
+        if fill_holes:
+            not_holes = mask.copy()
+            not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
+            cv2.floodFill(not_holes, None, (0, 0), 255)
+            holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]
+            mask = cv2.bitwise_or(mask, holes)
+            mask = np.expand_dims(mask, axis=-1)
+
+        return mask
 
 
 class Dummy(Mask):

@@ -122,37 +122,34 @@ class TrainerBase():
                     landmarks[i] = np.clip(raw_pts, 0, max_size)
                 except KeyError:
                     raise Exception("Landmarks not found for hash: '{}'".format(a_hash))
-            means = np.mean(images, axis=(0, 1, 2))
+            means = np.mean(images, axis=(1, 2))
             return images, img_file, means, landmarks
 
         images = dict()
-        mask_args = {None:          (self.image_size, Facehull),
-                     "none":        (self.image_size, Dummy),
-                     "components":  (self.image_size, Facehull),
-                     "dfl_full":    (self.image_size, Facehull),
-                     "facehull":    (self.image_size, Facehull),
-                     "vgg_300":     (300, Smart),
-                     "vgg_500":     (500, Smart),
-                     "unet_256":    (256, Smart)}
+        mask_args = {None:          Facehull,
+                     "none":        Dummy,
+                     "components":  Facehull,
+                     "dfl_full":    Facehull,
+                     "facehull":    Facehull,
+                     "vgg_300":     Smart,
+                     "vgg_500":     Smart,
+                     "unet_256":    Smart}
         mask_type = self.model.training_opts["mask_type"]
-        model_in_size, Mask = mask_args[mask_type]
+        Mask = mask_args[mask_type]
+        mask_model_batch_size = range(32)
         for side in self.sides:
             logger.info("Creating image dataset for side: %s", side)
-            imgs_npy, file, means, landmarks = dataset_setup(img_paths[side],
-                                                           model_in_size,
-                                                           self.batch_size)
-            imgs_npy /= 255.
-            imgs_marks = zip(imgs_npy[:, None, ...], landmarks[:, None, ...], means[:, None, ...])
-            for i, (img, landmark, mean) in enumerate(imgs_marks):
-                imgs_npy[i] = np.squeeze(Mask(mask_type,
-                                              img,
-                                              landmark,
-                                              mean,
-                                              channels=4).masks, axis=0)
-            del imgs_npy  # flush memmap to disk and save changes
+            imgs, file, means, landmarks = dataset_setup(img_paths[side],
+                                                         self.image_size,
+                                                         self.batch_size)
+            imgs /= 255.
+            #imgs_marks = zip(imgs_npy[:, None, ...], landmarks[:, None, ...], means[:, None, ...])
+            #for i, (img, landmark, mean) in enumerate(imgs_marks):
+            imgs = Mask(mask_type, imgs, landmarks, means, channels=4).masks
+            del imgs  # flush memmap to disk and save changes
             images[side] = {"images":       file,
                             "landmarks":    landmarks,
-                            "data_shape":   (len(img_paths[side]), model_in_size, model_in_size, 4)}
+                            "data_shape":   (len(img_paths[side]), self.image_size, self.image_size, 4)}
         return images
 
     def set_tensorboard(self):
