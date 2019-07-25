@@ -425,37 +425,15 @@ class Images():
         if cols == 0 or rows == 0:
             logger.debug("Cols or Rows is zero. No items to display")
             return None
-        remainder = (cols * rows) % num_images
+        remainder = (cols * rows) - num_images
         if remainder != 0:
-            logger.debug("Padding final row. Remainder: %s", remainder)
+            logger.debug("Padding sample display. Remainder: %s", remainder)
             placeholder = np.concatenate([np.expand_dims(self.previewcache["placeholder"],
                                                          0)] * remainder)
             samples = np.concatenate((samples, placeholder))
 
-        try:
-            display = np.vstack([np.hstack(samples[row * cols: (row + 1) * cols])
-                                 for row in range(rows)])
-        except ValueError as err:
-            # TODO Actually handle this properly. The following error is inconsistently output:
-            #   Exception in Tkinter callback
-            #   Traceback (most recent call last):
-            #     File "/home/matt/fake/faceswap/lib/gui/utils.py", line 435, in place_previews
-            #       for row in range(rows)])
-            #     File "/home/matt/fake/faceswap/lib/gui/utils.py", line 435, in <listcomp>
-            #       for row in range(rows)])
-            #     File "/home/matt/fake/envs/faceswap/lib/python3.6/site-packages/numpy/core/
-            #           shape_base.py", line 340, in hstack
-            #       return _nx.concatenate(arrs, 1)
-            #   ValueError: need at least one array to concatenate
-            # This theoretically shouldn't be possible as if cols == 0 or rows == 0 then this code
-            # shouldnever be reached
-            logger.warning("A known, but unexplained bug has occured! It has been skipped, but "
-                           "please report the following output to the faceswap Devs:")
-            logger.warning("Extract/Convert preview bug. Debug output: (cols: %s, rows: %s, "
-                           "remainder: %s, num_images: %s, thumbnail_size: %s, samples shape: %s, "
-                           "err: %s)", cols, rows, remainder, num_images, thumbnail_size,
-                           samples.shape, err)
-            return None
+        display = np.vstack([np.hstack(samples[row * cols: (row + 1) * cols])
+                             for row in range(rows)])
         logger.debug("display shape: %s", display.shape)
         return Image.fromarray(display)
 
