@@ -41,6 +41,7 @@ class Extract():
                                    min_size=self.args.min_size,
                                    normalize_method=normalization)
         self.save_queue = queue_manager.get_queue("extract_save")
+        self.threads = list()
         self.verify_output = False
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
@@ -57,9 +58,10 @@ class Extract():
         logger.info('Starting, this may take a while...')
         # queue_manager.debug_monitor(3)
         self.threaded_io("load")
-        save_thread = self.threaded_io("save")
+        self.threaded_io("save")
         self.run_extraction()
-        save_thread.join()
+        for thread in self.threads:
+            thread.join()
         self.alignments.save()
         Utils.finalize(self.images.images_found // self.skip_num,
                        self.alignments.faces_count,
@@ -77,7 +79,7 @@ class Extract():
             func = self.reload_images
         io_thread = MultiThread(func, *io_args, thread_count=1)
         io_thread.start()
-        return io_thread
+        self.threads.append(io_thread)
 
     def load_images(self):
         """ Load the images """
@@ -179,6 +181,7 @@ class Extract():
             is_final = self.extractor.final_pass
             detected_faces = dict()
             self.extractor.launch()
+            self.check_thread_error()
             for idx, faces in enumerate(tqdm(self.extractor.detected_faces(),
                                              total=to_process,
                                              file=sys.stdout,
@@ -186,7 +189,7 @@ class Extract():
                                                  phase + 1,
                                                  self.extractor.passes,
                                                  self.extractor.phase.title()))):
-
+                self.check_thread_error()
                 exception = faces.get("exception", False)
                 if exception:
                     break
@@ -207,6 +210,11 @@ class Extract():
             else:
                 logger.debug("Reloading images")
                 self.threaded_io("reload", detected_faces)
+
+    def check_thread_error(self):
+        """ Check and raise thread errors """
+        for thread in self.threads:
+            thread.check_and_raise_error()
 
     def output_processing(self, faces, align_eyes, size, filename):
         """ Prepare faces for output """
