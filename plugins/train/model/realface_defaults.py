@@ -81,9 +81,9 @@ _DEFAULTS = {
         "default": 128,
         "info": "Output image resolution (in pixels).\nBe aware that larger resolution will "
                 "increase VRAM requirements.\nNB: Must be between 64 and 256 and be divisible "
-                "by 16.",
+                "by 32.",
         "datatype": int,
-        "rounding": 16,
+        "rounding": 32,
         "min_max": (64, 256),
         "choices": [],
         "gui_radio": False,
