@@ -117,7 +117,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         session = get_config().session
         if not session.initialized:
             logger.debug("Training not running")
-            print("Training not running")
             return
         if session.logging_disabled:
             logger.trace("Logging disabled. Not triggering analysis update")

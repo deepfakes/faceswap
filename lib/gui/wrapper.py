@@ -188,8 +188,9 @@ class FaceswapControl():
                         (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
                 if self.command == "train" and "[saved models]" in output.strip().lower():
-                    logger.debug("Trigger update preview")
+                    logger.debug("Trigger GUI Training update")
                     self.wrapper.tk_vars["updatepreview"].set(True)
+                    self.wrapper.tk_vars["refreshgraph"].set(True)
                 print(output.strip())
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
@@ -261,11 +262,8 @@ class FaceswapControl():
             # Don't initialize session until after the first iteration as state
             # file must exist first
             get_config().session.initialize_session(is_training=True)
-            self.wrapper.tk_vars["refreshgraph"].set(True)
 
         iterations += 1
-        if iterations % 100 == 0:
-            self.wrapper.tk_vars["refreshgraph"].set(True)
         self.train_stats["iterations"] = iterations
 
         elapsed = self.calc_elapsed()
