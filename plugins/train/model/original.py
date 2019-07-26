@@ -16,6 +16,7 @@ class Model(ModelBase):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
+        self.configfile = kwargs.get("configfile", None)
         if "input_shape" not in kwargs:
             kwargs["input_shape"] = (64, 64, 3)
         if "encoder_dim" not in kwargs:
@@ -27,12 +28,12 @@ class Model(ModelBase):
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")
-        self.add_network("decoder", "a", self.decoder())
-        self.add_network("decoder", "b", self.decoder())
+        self.add_network("decoder", "a", self.decoder(), is_output=True)
+        self.add_network("decoder", "b", self.decoder(), is_output=True)
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
-    def build_autoencoders(self):
+    def build_autoencoders(self, inputs):
         """ Initialize original model """
         logger.debug("Initializing model")
         face = Input(shape=self.input_shape, name="face")
@@ -71,7 +72,11 @@ class Model(ModelBase):
         var_x = self.blocks.upscale(var_x, 256)
         var_x = self.blocks.upscale(var_x, 128)
         var_x = self.blocks.upscale(var_x, 64)
-        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -79,6 +84,10 @@ class Model(ModelBase):
             var_y = self.blocks.upscale(var_y, 256)
             var_y = self.blocks.upscale(var_y, 128)
             var_y = self.blocks.upscale(var_y, 64)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = self.blocks.conv2d(var_y, 1,
+                                       kernel_size=5,
+                                       padding="same",
+                                       activation="sigmoid",
+                                       name="mask_out")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)

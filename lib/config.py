@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Default configurations for faceswap
-    Extends out configparser funcionality
-    by checking for default config updates
+    Extends out configparser funcionality by checking for default config updates
     and returning data in it's correct format """
 
 import logging
@@ -15,10 +14,10 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class FaceswapConfig():
     """ Config Items """
-    def __init__(self, section):
+    def __init__(self, section, configfile=None):
         """ Init Configuration  """
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self.configfile = self.get_config_file()
+        self.configfile = self.get_config_file(configfile)
         self.config = ConfigParser(allow_no_value=True)
         self.defaults = OrderedDict()
         self.config.optionxform = str
@@ -93,8 +92,14 @@ class FaceswapConfig():
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
         return retval
 
-    def get_config_file(self):
-        """ Return the config file from the calling folder """
+    def get_config_file(self, configfile):
+        """ Return the config file from the calling folder or the provided file """
+        if configfile is not None:
+            if not os.path.isfile(configfile):
+                err = "Config file does not exist at: {}".format(configfile)
+                logger.error(err)
+                raise ValueError(err)
+            return configfile
         dirname = os.path.dirname(sys.modules[self.__module__].__file__)
         folder, fname = os.path.split(dirname)
         retval = os.path.join(os.path.dirname(folder), "config", "{}.ini".format(fname))
@@ -111,7 +116,7 @@ class FaceswapConfig():
         self.defaults[title]["helptext"] = info
 
     def add_item(self, section=None, title=None, datatype=str, default=None, info=None,
-                 rounding=None, min_max=None, choices=None, fixed=True):
+                 rounding=None, min_max=None, choices=None, gui_radio=False, fixed=True):
         """ Add a default item to a config section
 
             For int or float values, rounding and min_max must be set
@@ -122,6 +127,9 @@ class FaceswapConfig():
             For str values choices can be set to validate input and create a combo box
             in the GUI
 
+            is_radio is to indicate to the GUI that it should display Radio Buttons rather than
+            combo boxes for multiple choice options.
+
             The 'fixed' parameter is only for training configs. Training configurations
             are set when the model is created, and then reloaded from the state file.
             Marking an item as fixed=False indicates that this value can be changed for
@@ -130,8 +138,9 @@ class FaceswapConfig():
 
         """
         logger.debug("Add item: (section: '%s', title: '%s', datatype: '%s', default: '%s', "
-                     "info: '%s', rounding: '%s', min_max: %s, choices: %s, fixed: %s)",
-                     section, title, datatype, default, info, rounding, min_max, choices, fixed)
+                     "info: '%s', rounding: '%s', min_max: %s, choices: %s, gui_radio: %s, "
+                     "fixed: %s)", section, title, datatype, default, info, rounding, min_max,
+                     choices, gui_radio, fixed)
 
         choices = list() if not choices else choices
 
@@ -156,6 +165,7 @@ class FaceswapConfig():
                                          "rounding": rounding,
                                          "min_max": min_max,
                                          "choices": choices,
+                                         "gui_radio": gui_radio,
                                          "fixed": fixed}
 
     @staticmethod

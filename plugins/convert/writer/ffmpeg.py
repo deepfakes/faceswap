@@ -6,15 +6,15 @@ from math import ceil
 
 import imageio
 import imageio_ffmpeg as im_ffm
-from ffmpy import FFmpeg
+from ffmpy import FFmpeg, FFRuntimeError
 
 from ._base import Output, logger
 
 
 class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, output_folder, total_count, source_video):
-        super().__init__(output_folder)
+    def __init__(self, output_folder, total_count, source_video, **kwargs):
+        super().__init__(output_folder, **kwargs)
         self.source_video = source_video
         self.frame_order = list(range(1, total_count + 1))
         self.output_dimensions = None  # Fix dims of 1st frame in case of different sized images
@@ -84,6 +84,7 @@ class Writer(Output):
                                   fps=self.video_fps,
                                   ffmpeg_log_level="error",
                                   quality=None,
+                                  macro_block_size=8,
                                   output_params=self.output_params)
 
     def write(self, filename, image):
@@ -138,6 +139,22 @@ class Writer(Output):
                      inputs=inputs,
                      outputs=outputs)
         logger.debug("Executing: %s", ffm.cmd)
-        ffm.run()
+        # Sometimes ffmpy exits for no discernible reason, but then works on a later attempt,
+        # so take 5 shots at this
+        attempts = 5
+        for attempt in range(attempts):
+            logger.debug("Muxing attempt: %s", attempt + 1)
+            try:
+                ffm.run()
+            except FFRuntimeError as err:
+                logger.debug("ffmpy runtime error: %s", str(err))
+                if attempt != attempts - 1:
+                    continue
+                logger.error("There was a problem muxing audio. The output video has been "
+                             "created but you will need to mux audio yourself either with the "
+                             "EFFMpeg tool or an external application.")
+                os.rename(self.video_tmp_file, self.video_file)
+            break
         logger.debug("Removing temp file")
-        os.remove(self.video_tmp_file)
+        if os.path.isfile(self.video_tmp_file):
+            os.remove(self.video_tmp_file)

@@ -113,9 +113,10 @@ class FixedProducerDispatcher():
 
     def __init__(self, method, shapes, in_queue, out_queue,
                  args=tuple(), kwargs={}, ctype=c_float, workers=1, buffers=None):
-        logger.debug("Initializing %s: (method: '%s', shapes: %s, args: %s, kwargs: %s, "
-                     "ctype: %s, workers: %s, buffers: %s)", self.__class__.__name__, method,
-                     shapes, args, kwargs, ctype, workers, buffers)
+        logger.debug("Initializing %s: (method: '%s', shapes: %s, ctype: %s, workers: %s, "
+                     "buffers: %s)", self.__class__.__name__, method, shapes, ctype, workers,
+                     buffers)
+        logger.trace("args: %s, kwargs: %s", args, kwargs)
         if buffers is None:
             buffers = workers * 2
         else:
@@ -389,10 +390,9 @@ class FSThread(threading.Thread):
         try:
             if self._target:
                 self._target(*self._args, **self._kwargs)
-        except Exception:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except
             self.err = sys.exc_info()
-            logger.debug("Error in thread (%s): %s", self._name,
-                         self.err[1].with_traceback(self.err[2]))
+            logger.debug("Error in thread (%s): %s", self._name, str(err))
         finally:
             # Avoid a refcycle if the thread is running a function with
             # an argument that has a member that points to the thread.

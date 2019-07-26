@@ -419,6 +419,21 @@ class GlobalStdDevPooling2D(_GlobalPooling2D):
             pooled = K.std(inputs, axis=[2, 3])
         return pooled
 
+class L2_normalize(Layer):
+    def __init__(self, axis, **kwargs):
+        self.axis = axis
+        super(L2_normalize, self).__init__(**kwargs)
+
+    def call(self, x):
+        return K.l2_normalize(x, self.axis)
+
+    def get_config(self):
+        config = super(L2_normalize, self).get_config()
+        config["axis"] = self.axis
+        return config
+
+
+
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:

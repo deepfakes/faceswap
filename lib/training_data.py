@@ -4,7 +4,7 @@
 import logging
 
 from hashlib import sha1
-from random import shuffle, choice
+from random import random, shuffle, choice
 
 import cv2
 import numpy as np
@@ -13,27 +13,30 @@ from scipy.interpolate import griddata
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
+from lib.utils import cv2_read_img, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class TrainingDataGenerator():
     """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, training_opts):
-        logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
-                     "training_opts: %s, landmarks: %s)",
-                     self.__class__.__name__, model_input_size, model_output_size,
+    def __init__(self, model_input_size, model_output_shapes, training_opts, config):
+        logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
+                     "training_opts: %s, landmarks: %s, config: %s)",
+                     self.__class__.__name__, model_input_size, model_output_shapes,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
-                     bool(training_opts.get("landmarks", None)))
-        self.batch_size = 0
+                     bool(training_opts.get("landmarks", None)), config)
+        self.batchsize = 0
         self.model_input_size = model_input_size
-        self.model_output_size = model_output_size
+        self.model_output_shapes = model_output_shapes
         self.training_opts = training_opts
         self.landmarks = self.training_opts.get("landmarks", None)
+        self.fixed_producer_dispatcher = None  # Set by FPD when loading
         self._nearest_landmarks = None
         self.processing = ImageManipulation(model_input_size,
-                                            model_output_size,
-                                            training_opts.get("coverage_ratio", 0.625))
+                                            model_output_shapes,
+                                            training_opts.get("coverage_ratio", 0.625),
+                                            config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def setup_batcher(self, images, batch_size, side, purpose, do_shuffle=True, augmenting=True):
@@ -51,7 +54,7 @@ class TrainingDataGenerator():
                         (batch_size, out_height, out_width, 3),         # target images
                         (batch_size, out_height, out_width, 1)]         # target masks
 
-        load_process = FixedProducerDispatcher(
+        self.fixed_producer_dispatcher = FixedProducerDispatcher(
             method=self.load_batches,
             shapes=batch_shapes,
             in_queue=queue_in,
@@ -151,6 +154,25 @@ class TrainingDataGenerator():
                      image, side, [img.shape for img in processed])
         return processed
 
+    def get_landmarks(self, filename, image, side):
+        """ Return the landmarks for this face """
+        logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
+        lm_key = sha1(image).hexdigest()
+        try:
+            src_points = self.landmarks[side][lm_key]
+        except KeyError as err:
+            msg = ("At least one of your images does not have a matching entry in your alignments "
+                   "file."
+                   "\nIf you are training with a mask or using 'warp to landmarks' then every "
+                   "face you intend to train on must exist within the alignments file."
+                   "\nThe specific file that caused the failure was '{}' which has a hash of {}."
+                   "\nMost likely there will be more than just this file missing from the "
+                   "alignments file. You can use the Alignments Tool to help identify missing "
+                   "alignments".format(lm_key, filename))
+            raise FaceswapError(msg) from err
+        logger.trace("Returning: (src_points: %s)", src_points)
+        return src_points
+
     def get_closest_match(self, filename, side, src_points):
         """ Return closest matched landmarks from opposite set """
         logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
@@ -170,9 +192,9 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, input_size, output_size, coverage_ratio):
+    def __init__(self, input_size, output_shapes, coverage_ratio, config):
         """ input_size: Size of the face input into the model
-            output_size: Size of the face that comes out of the modell
+            output_shapes: Shapes that come out of the model
             coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
         logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s)",
@@ -184,11 +206,64 @@ class ImageManipulation():
                        "flip":      0.5}   # Chance to flip the image horizontally
         # Transform and Warp args
         self.input_size = input_size
-        self.output_size = output_size
+        self.output_sizes = [shape[1] for shape in output_shapes if shape[2] == 3]
+        logger.debug("Output sizes: %s", self.output_sizes)
         # Warp args
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
         self.scale = 5  # Normal random variable scale
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def color_adjust(self, img, augment_color, is_display):
+        """ Color adjust RGB image """
+        logger.trace("Color adjusting image")
+        if not is_display and augment_color:
+            logger.trace("Augmenting color")
+            face, _ = self.separate_mask(img)
+            face = face.astype("uint8")
+            face = self.random_clahe(face)
+            face = self.random_lab(face)
+            img[:, :, :3] = face
+        return img.astype('float32') / 255.0
+
+    def random_clahe(self, image):
+        """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
+        contrast_random = random()
+        if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
+            return image
+
+        base_contrast = image.shape[0] // 128
+        grid_base = random() * self.config.get("color_clahe_max_size", 4)
+        contrast_adjustment = int(grid_base * (base_contrast / 2))
+        grid_size = base_contrast + contrast_adjustment
+        logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+
+        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+                                tileGridSize=(grid_size, grid_size))
+        for chan in range(3):
+            image[:, :, chan] = clahe.apply(image[:, :, chan])
+        return image
+
+    def random_lab(self, image):
+        """ Perform random color/lightness adjustment in L*a*b* colorspace """
+        amount_l = self.config.get("color_lightness", 30) / 100
+        amount_ab = self.config.get("color_ab", 8) / 100
+
+        randoms = [(random() * amount_l * 2) - amount_l,  # L adjust
+                   (random() * amount_ab * 2) - amount_ab,  # A adjust
+                   (random() * amount_ab * 2) - amount_ab]  # B adjust
+
+        logger.trace("Random LAB adjustments: %s", randoms)
+        image = cv2.cvtColor(  # pylint:disable=no-member
+            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
+
+        for idx, adjustment in enumerate(randoms):
+            if adjustment >= 0:
+                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+            else:
+                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+        image = cv2.cvtColor((image * 255.0).astype("uint8"),  # pylint:disable=no-member
+                             cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
+        return image
 
     @staticmethod
     def separate_mask(image):
@@ -236,8 +311,16 @@ class ImageManipulation():
         logger.trace("Randomly warping image")
         sample = image.copy()[:, :, :3]
         height, width = image.shape[0:2]
-        coverage = self.get_coverage(image) // 2
-        assert height == width and height % 2 == 0
+
+        try:
+            assert height == width and height % 2 == 0
+        except AssertionError as err:
+            msg = ("Training images should be square with an even number of pixels across each "
+                   "side. An image was found with width: {}, height: {}."
+                   "\nMost likely this is a frame rather than a face within your training set. "
+                   "\nMake sure that the only images within your training set are faces generated "
+                   "from the Extract process.".format(width, height))
+            raise FaceswapError(msg) from err
 
         range_ = np.linspace(height // 2 - coverage, height // 2 + coverage, 5, dtype='float32')
         mapx = np.broadcast_to(range_, (5, 5)).copy()
@@ -246,7 +329,7 @@ class ImageManipulation():
 
         pad = int(1.25 * self.input_size)
         slices = slice(pad // 10, -pad // 10)
-        dst_slice = slice(0, (self.output_size + 1), (self.output_size // 4))
+        dst_slices = [slice(0, (size + 1), (size // 4)) for size in self.output_sizes]
         interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
 
         for i, map_ in enumerate([mapx, mapy]):
@@ -259,8 +342,10 @@ class ImageManipulation():
         mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
         target_image = cv2.warpAffine(image, mat, (self.output_size, self.output_size))
 
-        warped_image, warped_mask = self.separate_mask(warped_image)
-        target_image, target_mask = self.separate_mask(target_image)
+        target_images = [cv2.warpAffine(image,
+                                        mat,
+                                        (self.output_sizes[idx], self.output_sizes[idx]))
+                         for idx, mat in enumerate(mats)]
 
         logger.trace("Warped image shape: %s", warped_image.shape)
         logger.trace("Warped mask shape: %s", warped_mask.shape)

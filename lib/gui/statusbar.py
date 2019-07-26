@@ -47,7 +47,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         pbar = ttk.Progressbar(progressframe,
                                length=200,
                                variable=self.pbar_position,
-                               maximum=1000,
+                               maximum=100,
                                mode="determinate")
         pbar.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         pbar.pack_forget()
@@ -73,7 +73,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
             self.pbar.start()
         else:
             self.pbar.stop()
-            self.pbar.config(maximum=1000)
+            self.pbar.config(maximum=100)
 
     def progress_update(self, message, position, update_position=True):
         """ Update the GUIs progress bar and position """

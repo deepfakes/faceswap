@@ -8,10 +8,10 @@ from tkinter import ttk
 from .tooltip import Tooltip
 from .utils import ContextMenu, FileHandler, get_images, get_config, set_slider_rounding
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
+class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent):
@@ -19,10 +19,11 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         scaling_factor = get_config().scaling_factor
         width = int(420 * scaling_factor)
         height = int(500 * scaling_factor)
-        ttk.Notebook.__init__(self, parent, width=width, height=height)
+        self.actionbtns = dict()
+        super().__init__(parent, width=width, height=height)
         parent.add(self)
 
-        self.actionbtns = dict()
+        self.tools_notebook = ToolsNotebook(self)
         self.set_running_task_trace()
         self.build_tabs()
         get_config().command_notebook = self
@@ -40,11 +41,13 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         logger.debug("Build Tabs")
         cli_opts = get_config().cli_opts
         for category in cli_opts.categories:
+            book = self.tools_notebook if category == "tools" else self
             cmdlist = cli_opts.commands[category]
             for command in cmdlist:
                 title = command.title()
-                commandtab = CommandTab(self, category, command)
-                self.add(commandtab, text=title)
+                commandtab = CommandTab(book, category, command)
+                book.add(commandtab, text=title)
+        self.add(self.tools_notebook, text="Tools")
         logger.debug("Built Tabs")
 
     def change_action_button(self, *args):
@@ -65,13 +68,20 @@ class CommandNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             Tooltip(btnact, text=hlp, wraplength=200)
 
 
-class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ToolsNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
+    """ Tools sit in their own tab, but need to inherit objects from the main command notebook """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.actionbtns = parent.actionbtns
+
+
+class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Frame to hold each individual tab of the command notebook """
 
     def __init__(self, parent, category, command):
         logger.debug("Initializing %s: (category: '%s', command: '%s')",
                      self.__class__.__name__, category, command)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
 
         self.category = category
         self.actionbtns = parent.actionbtns
@@ -98,12 +108,12 @@ class CommandTab(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Added frame seperator")
 
 
-class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+class OptionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Options Frame - Holds the Options for each command """
 
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.command = parent.command
@@ -168,7 +178,7 @@ class OptionsFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.optsframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Options Scrollbar")
 
-    def update_scrollbar(self, event):  # pylint: disable=unused-argument
+    def update_scrollbar(self, event):  # pylint:disable=unused-argument
         """ Update the options frame scrollbar """
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
@@ -405,7 +415,7 @@ class OptionControl():
             filepath.set(filename)
 
     @staticmethod
-    def ask_nothing(filepath, filetypes=None):  # pylint: disable=unused-argument
+    def ask_nothing(filepath, filetypes=None):  # pylint:disable=unused-argument
         """ Method that does nothing, used for disabling open/save pop up """
         return
 
@@ -424,12 +434,12 @@ class OptionControl():
             filepath.set(filename)
 
 
-class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """Action Frame - Displays action controls for the command tab """
 
     def __init__(self, parent):
         logger.debug("Initializing %s: (command: '%s')", self.__class__.__name__, parent.command)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
         self.pack(fill=tk.BOTH, padx=5, pady=5, side=tk.BOTTOM, anchor=tk.N)
 
         self.command = parent.command

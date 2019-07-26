@@ -9,18 +9,33 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def get_config(plugin_name):
+def get_config(plugin_name, configfile=None):
     """ Return the config for the requested model """
-    return Config(plugin_name).config_dict
+    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class Adjustment():
     """ Parent class for scaling adjustments """
-    def __init__(self):
-        logger.debug("Initializing %s", self.__class__.__name__)
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]))
+    def __init__(self, configfile=None, config=None):
+        logger.debug("Initializing %s: (configfile: %s, config: %s)",
+                     self.__class__.__name__, configfile, config)
+        self.config = self.set_config(configfile, config)
         logger.debug("config: %s", self.config)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_config(self, configfile, config):
+        """ Set the config to either global config or passed in config """
+        section = ".".join(self.__module__.split(".")[-2:])
+        if config is None:
+            logger.debug("Loading base config")
+            retval = get_config(section, configfile=configfile)
+        else:
+            logger.debug("Loading passed in config")
+            config.section = section
+            retval = config.config_dict
+            config.section = None
+        logger.debug("Config: %s", retval)
+        return retval
 
     def process(self, new_face):
         """ Override for specific scaling adjustment process """

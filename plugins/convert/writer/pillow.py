@@ -9,8 +9,8 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Images output writer using cv2 """
-    def __init__(self, output_folder):
-        super().__init__(output_folder)
+    def __init__(self, output_folder, **kwargs):
+        super().__init__(output_folder, **kwargs)
         self.check_transparency_format()
         # Correct format namings for writing to byte stream
         self.format_dict = dict(jpg="JPEG", jp2="JPEG 2000", tif="TIFF")

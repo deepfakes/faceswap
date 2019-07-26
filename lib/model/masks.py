@@ -111,6 +111,32 @@ class Facehull(Mask):
         parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
         return parts
 
+    @staticmethod
+    def extended(landmarks):
+        """ Component facehull mask with forehead extended"""
+        # mid points between the side of face and eye point
+        ml_pnt = (landmarks[36] + landmarks[0]) // 2
+        mr_pnt = (landmarks[16] + landmarks[45]) // 2
+
+        # mid points between the mid points and eye
+        ql_pnt = (landmarks[36] + ml_pnt) // 2
+        qr_pnt = (landmarks[45] + mr_pnt) // 2
+
+        # Top of the eye arrays
+        bot_l = np.array((ql_pnt, landmarks[36], landmarks[37], landmarks[38], landmarks[39]))
+        bot_r = np.array((landmarks[42], landmarks[43], landmarks[44], landmarks[45], qr_pnt))
+
+        # Eyebrow arrays
+        top_l = landmarks[17:22]
+        top_r = landmarks[22:27]
+
+        # Adjust eyebrow arrays
+        landmarks[17:22] = top_l + ((top_l - bot_l) // 2)
+        landmarks[22:27] = top_r + ((top_r - bot_r) // 2)
+
+        parts = self.eight(landmarks)
+        return parts
+
     def build_masks(self, mask_type, faces, means, landmarks):
         """
         Function for creating facehull masks
@@ -120,6 +146,7 @@ class Facehull(Mask):
         build_dict = {"facehull":    self.one,
                       "dfl_full":    self.three,
                       "components":  self.eight,
+                      "extended":    self.extended,
                       None:          self.three}
         masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
         if landmarks.ndim == 2:
@@ -189,7 +216,7 @@ class Smart(Mask):
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
             print(masks.shape, results.shape)
             masks[batch_slice] = results[..., None]
-            
+
 
         return masks
 

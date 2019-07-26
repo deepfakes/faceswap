@@ -16,34 +16,68 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Converter():
     """ Swap a source face with a target """
-    def __init__(self, output_dir, output_size, draw_transparent, pre_encode, arguments):
-        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s, "
-                     "draw_transparent: %s, pre_encode: %s, arguments: %s)",
-                     self.__class__.__name__, output_dir, output_size,
-                     draw_transparent, pre_encode, arguments)
+    def __init__(self, output_dir, output_size, output_has_mask,
+                 draw_transparent, pre_encode, arguments, configfile=None):
+        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  output_has_mask: %s, "
+                     "draw_transparent: %s, pre_encode: %s, arguments: %s, configfile: %s)",
+                     self.__class__.__name__, output_dir, output_size, output_has_mask,
+                     draw_transparent, pre_encode, arguments, configfile)
         self.output_dir = output_dir
         self.draw_transparent = draw_transparent
         self.writer_pre_encode = pre_encode
-        self.scale = arguments.output_scale / 100.
+        self.scale = arguments.output_scale / 100
+        self.output_size = output_size
+        self.output_has_mask = output_has_mask
         self.args = arguments
+        self.configfile = configfile
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
-        self.load_plugins(output_size)
+        self.load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_plugins(self, output_size):
+    def reinitialize(self, config):
+        """ reinitialize converter """
+        logger.debug("Reinitializing converter")
+        self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
+        self.load_plugins(config=config, disable_logging=True)
+        logger.debug("Reinitialized converter")
+
+    def load_plugins(self, config=None, disable_logging=False):
         """ Load the requested adjustment plugins """
-        logger.debug("Loading plugins")
-        self.adjustments["box"] = PluginLoader.get_converter("mask", "box_blend")("none", output_size)
-        self.adjustments["mask"] = PluginLoader.get_converter("mask", "mask_blend")(output_size)
+        logger.debug("Loading plugins. config: %s", config)
+        self.adjustments["box"] = PluginLoader.get_converter(
+            "mask",
+            "box_blend",
+            disable_logging=disable_logging)("none",
+                                             self.output_size,
+                                             configfile=self.configfile,
+                                             config=config)
+
+        self.adjustments["mask"] = PluginLoader.get_converter(
+            "mask",
+            "mask_blend",
+            disable_logging=disable_logging)(self.args.mask_type,
+                                             self.output_size,
+                                             self.output_has_mask,
+                                             configfile=self.configfile,
+                                             config=config)
+
         if self.args.color_adjustment != "none" and self.args.color_adjustment is not None:
-            self.adjustments["color"] = PluginLoader.get_converter("color", self.args.color_adjustment)()
+            self.adjustments["color"] = PluginLoader.get_converter(
+                "color",
+                self.args.color_adjustment,
+                disable_logging=disable_logging)(configfile=self.configfile, config=config)
+
         if self.args.scaling != "none" and self.args.scaling is not None:
-            self.adjustments["scaling"] = PluginLoader.get_converter("scaling", self.args.scaling)()
+            self.adjustments["scaling"] = PluginLoader.get_converter(
+                "scaling",
+                self.args.scaling,
+                disable_logging=disable_logging)(configfile=self.configfile, config=config)
         logger.debug("Loaded plugins: %s", self.adjustments)
 
-    def process(self, in_queue, out_queue):
+    def process(self, in_queue, out_queue, completion_queue=None):
         """ Process items from the queue """
-        logger.debug("Starting convert process. (in_queue: %s, out_queue: %s)", in_queue, out_queue)
+        logger.debug("Starting convert process. (in_queue: %s, out_queue: %s, completion_queue: "
+                     "%s)", in_queue, out_queue, completion_queue)
         while True:
             item = in_queue.get()
             if item == "EOF":
@@ -70,6 +104,9 @@ class Converter():
             logger.trace("Out queue put: %s", item["filename"])
             out_queue.put((item["filename"], image))
         logger.debug("Completed convert process")
+        # Signal that this process has finished
+        if completion_queue is not None:
+            completion_queue.put(1)
 
     def patch_image(self, predicted):
         """ Patch the image """

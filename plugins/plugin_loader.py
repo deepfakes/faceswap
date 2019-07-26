@@ -11,36 +11,37 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class PluginLoader():
     """ Plugin loader for extract, training and model tasks """
     @staticmethod
-    def get_detector(name):
+    def get_detector(name, disable_logging=False):
         """ Return requested detector plugin """
-        return PluginLoader._import("extract.detect", name)
+        return PluginLoader._import("extract.detect", name, disable_logging)
 
     @staticmethod
-    def get_aligner(name):
+    def get_aligner(name, disable_logging=False):
         """ Return requested detector plugin """
-        return PluginLoader._import("extract.align", name)
+        return PluginLoader._import("extract.align", name, disable_logging)
 
     @staticmethod
-    def get_model(name):
+    def get_model(name, disable_logging=False):
         """ Return requested model plugin """
-        return PluginLoader._import("train.model", name)
+        return PluginLoader._import("train.model", name, disable_logging)
 
     @staticmethod
-    def get_trainer(name):
+    def get_trainer(name, disable_logging=False):
         """ Return requested trainer plugin """
-        return PluginLoader._import("train.trainer", name)
+        return PluginLoader._import("train.trainer", name, disable_logging)
 
     @staticmethod
-    def get_converter(category, name):
+    def get_converter(category, name, disable_logging=False):
         """ Return the converter sub plugin """
-        return PluginLoader._import("convert.{}".format(category), name)
+        return PluginLoader._import("convert.{}".format(category), name, disable_logging)
 
     @staticmethod
-    def _import(attr, name):
+    def _import(attr, name, disable_logging):
         """ Import the plugin's module """
         name = name.replace("-", "_")
         ttl = attr.split(".")[-1].title()
-        logger.info("Loading %s from %s plugin...", ttl, name.title())
+        if not disable_logging:
+            logger.info("Loading %s from %s plugin...", ttl, name.title())
         attr = "model" if attr == "Trainer" else attr.lower()
         mod = ".".join(("plugins", attr, name))
         module = import_module(mod)
@@ -55,6 +56,7 @@ class PluginLoader():
         extractors = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(extractpath)
                             if not item.name.startswith("_")
+                            and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py")
                             and item.name != "manual.py")
         return extractors
@@ -66,6 +68,7 @@ class PluginLoader():
         models = sorted(item.name.replace(".py", "").replace("_", "-")
                         for item in os.scandir(modelpath)
                         if not item.name.startswith("_")
+                        and not item.name.endswith("defaults.py")
                         and item.name.endswith(".py"))
         return models
 
@@ -84,6 +87,7 @@ class PluginLoader():
         converters = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(convertpath)
                             if not item.name.startswith("_")
+                            and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py"))
         if add_none:
             converters.insert(0, "none")

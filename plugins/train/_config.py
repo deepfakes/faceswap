@@ -2,24 +2,17 @@
 """ Default configurations for models """
 
 import logging
+import os
+import sys
+
+from importlib import import_module
 
 from lib.config import FaceswapConfig
 from lib.model.masks import get_available_masks
+from lib.utils import full_path_split
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-MASK_TYPES = get_available_masks()
-MASK_INFO = ("The mask to be used for training:"
-             "\n\t none: Doesn't use any mask."
-             "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
-             "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
-             "\n\t facehull: Face cutout based on landmarks")
-COVERAGE_INFO = ("How much of the extracted image to train on. Generally the model is optimized\n"
-                 "to the default value. Sensible values to use are:"
-                 "\n\t62.5%% spans from eyebrow to eyebrow."
-                 "\n\t75.0%% spans from temple to temple."
-                 "\n\t87.5%% spans from ear to ear."
-                 "\n\t100.0%% is a mugshot.")
 ADDITIONAL_INFO = ("\nNB: Unless specifically stated, values changed here will only take effect "
                    "when creating a new model.")
 
@@ -30,10 +23,35 @@ class Config(FaceswapConfig):
     def set_defaults(self):
         """ Set the default values for config """
         logger.debug("Setting defaults")
-        # << GLOBAL OPTIONS >> #
+        self.set_globals()
+        current_dir = os.path.dirname(__file__)
+        for dirpath, _, filenames in os.walk(current_dir):
+            default_files = [fname for fname in filenames if fname.endswith("_defaults.py")]
+            if not default_files:
+                continue
+            base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
+            import_path = ".".join(full_path_split(dirpath.replace(base_path, ""))[1:])
+            plugin_type = import_path.split(".")[-1]
+            for filename in default_files:
+                self.load_module(filename, import_path, plugin_type)
+
+    def set_globals(self):
+        """ Set the global options for training """
+        logger.debug("Setting global config")
         section = "global"
         self.add_section(title=section,
                          info="Options that apply to all models" + ADDITIONAL_INFO)
+        self.add_item(section=section, title="mask_type", datatype=str, default="none",
+                      choices=get_available_masks(), gui_radio=True,
+                      info="The mask to be used for training:"
+                           "\n\t none: Doesn't use any mask."
+                           "\n\t components: An improved face hull mask using a facehull of 8 "
+                           "facial parts"
+                           "\n\t dfl_full: An improved face hull mask using a facehull of 3 "
+                           "facial parts"
+                           "\n\t extended: Based on components mask. Extends the eyebrow points "
+                           "to further up the forehead. May perform badly on difficult angles."
+                           "\n\t facehull: Face cutout based on landmarks")
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
             info="\nUse ICNR to tile the default initializer in a repeating pattern. \n"
@@ -41,6 +59,16 @@ class Config(FaceswapConfig):
                  "and should only be used on upscaling layers. This can help reduce the \n"
                  "'checkerboard effect' when upscaling the image in the decoder.\n"
                  "https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf \n")
+        self.add_item(
+            section=section, title="conv_aware_init", datatype=bool, default=False,
+            info="Use Convolution Aware Initialization for convolutional layers\nThis can help "
+                 "eradicate the vanishing and exploding gradient problem as well as lead to "
+                 "higher accuracy, lower loss and faster convergence."
+                 "\nNB This can use more VRAM when creating a new model so you may want to lower "
+                 "the batch size for the first run. The batch size can be raised again when "
+                 "reloading the model."
+                 "\nNB: Building the model will likely take several minutes as the caluclations "
+                 "for this initialization technique are expensive.")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="\nUse subpixel upscaling rather than pixel shuffler. These techniques \n"
@@ -281,3 +309,18 @@ class Config(FaceswapConfig):
             section=section, title="lowmem", datatype=bool, default=False,
             info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\nNB: Models "
                  "with a changed lowmem mode are not compatible with each other.")
+
+    def load_module(self, filename, module_path, plugin_type):
+        """ Load the defaults module and add defaults """
+        logger.debug("Adding defaults: (filename: %s, module_path: %s, plugin_type: %s",
+                     filename, module_path, plugin_type)
+        module = os.path.splitext(filename)[0]
+        section = ".".join((plugin_type, module.replace("_defaults", "")))
+        logger.debug("Importing defaults module: %s.%s", module_path, module)
+        mod = import_module("{}.{}".format(module_path, module))
+        helptext = mod._HELPTEXT  # pylint:disable=protected-access
+        helptext += ADDITIONAL_INFO if module_path.endswith("model") else ""
+        self.add_section(title=section, info=helptext)
+        for key, val in mod._DEFAULTS.items():  # pylint:disable=protected-access
+            self.add_item(section=section, title=key, **val)
+        logger.debug("Added defaults: %s", section)

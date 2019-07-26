@@ -30,14 +30,18 @@ class Extract():
         self.images = Images(self.args)
         self.alignments = Alignments(self.args, True, self.images.is_video)
         self.post_process = PostProcess(arguments)
+        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
+        normalization = None if self.args.normalization == "none" else self.args.normalization
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
                                    self.args.loglevel,
-                                   self.args.multiprocess,
-                                   self.args.rotate_images,
-                                   self.args.min_size)
-
+                                   configfile=configfile,
+                                   multiprocess=not self.args.singleprocess,
+                                   rotate_images=self.args.rotate_images,
+                                   min_size=self.args.min_size,
+                                   normalize_method=normalization)
         self.save_queue = queue_manager.get_queue("extract_save")
+        self.threads = list()
         self.verify_output = False
         self.save_interval = None
         if hasattr(self.args, "save_interval"):
@@ -54,9 +58,10 @@ class Extract():
         logger.info('Starting, this may take a while...')
         # queue_manager.debug_monitor(3)
         self.threaded_io("load")
-        save_thread = self.threaded_io("save")
+        self.threaded_io("save")
         self.run_extraction()
-        save_thread.join()
+        for thread in self.threads:
+            thread.join()
         self.alignments.save()
         Utils.finalize(self.images.images_found // self.skip_num,
                        self.alignments.faces_count,
@@ -74,7 +79,7 @@ class Extract():
             func = self.reload_images
         io_thread = MultiThread(func, *io_args, thread_count=1)
         io_thread.start()
-        return io_thread
+        self.threads.append(io_thread)
 
     def load_images(self):
         """ Load the images """
@@ -90,7 +95,8 @@ class Extract():
                 logger.trace("Skipping image '%s' due to extract_every_n = %s",
                              filename, self.skip_num)
                 continue
-            if image is None or not image.any():
+            if image is None or (not image.any() and image.ndim not in ((2, 3))):
+                # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
             imagename = os.path.basename(filename)
@@ -175,6 +181,7 @@ class Extract():
             is_final = self.extractor.final_pass
             detected_faces = dict()
             self.extractor.launch()
+            self.check_thread_error()
             for idx, faces in enumerate(tqdm(self.extractor.detected_faces(),
                                              total=to_process,
                                              file=sys.stdout,
@@ -182,7 +189,7 @@ class Extract():
                                                  phase + 1,
                                                  self.extractor.passes,
                                                  self.extractor.phase.title()))):
-
+                self.check_thread_error()
                 exception = faces.get("exception", False)
                 if exception:
                     break
@@ -191,7 +198,7 @@ class Extract():
                 if self.extractor.final_pass:
                     self.output_processing(faces, align_eyes, size, filename)
                     self.output_faces(filename, faces)
-                    if self.save_interval and idx + 1 % self.save_interval == 0:
+                    if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
                 else:
                     del faces["image"]
@@ -203,6 +210,11 @@ class Extract():
             else:
                 logger.debug("Reloading images")
                 self.threaded_io("reload", detected_faces)
+
+    def check_thread_error(self):
+        """ Check and raise thread errors """
+        for thread in self.threads:
+            thread.check_and_raise_error()
 
     def output_processing(self, faces, align_eyes, size, filename):
         """ Prepare faces for output """
@@ -225,7 +237,7 @@ class Extract():
         detected_faces = faces["detected_faces"]
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box(face, image)
+            detected_face.from_bounding_box_dict(face, image)
             detected_face.landmarksXY = landmarks[idx]
             detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,

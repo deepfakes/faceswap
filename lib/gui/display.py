@@ -64,12 +64,12 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         build_tabs = getattr(self, "{}_tabs".format(command))
         build_tabs()
 
-    def extract_tabs(self):
+    def extract_tabs(self, command="extract"):
         """ Build the extract tabs """
         logger.debug("Build extract tabs")
         helptext = ("Updates preview from output every 5 "
                     "seconds to limit disk contention")
-        PreviewExtract(self, "preview", helptext, 5000)
+        PreviewExtract(self, "preview", helptext, 5000, command)
         logger.debug("Built extract tabs")
 
     def train_tabs(self):
@@ -88,7 +88,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         """ Build the convert tabs
             Currently identical to Extract, so just call that """
         logger.debug("Build convert tabs")
-        self.extract_tabs()
+        self.extract_tabs(command="convert")
         logger.debug("Built convert tabs")
 
     def remove_tabs(self):
