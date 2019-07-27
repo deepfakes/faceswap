@@ -164,12 +164,6 @@ class Config(FaceswapConfig):
                  "maintains the structure of the image."
                  )
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="dfl_full",
-            choices=MASK_TYPES, info=MASK_INFO)
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=75., rounding=1,
-            min_max=(62.5, 100.0), info=COVERAGE_INFO)
-        self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(1e-6, 1e-4), rounding=6, fixed=False,
             info="Learning rate - how fast your network will learn (how large are \n"
