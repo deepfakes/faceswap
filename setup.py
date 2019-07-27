@@ -16,10 +16,11 @@ INSTALL_FAILED = False
 TENSORFLOW_REQUIREMENTS = {"==1.12.0": ["9.0", "7.2"],
                            ">=1.13.1,<1.14": ["10.0", "7.4"]}  # TF 1.14+ Not currently supported
 # Mapping of Python packages to their conda names if different from pypi or in non-default channel
-CONDA_MAPPING = {"opencv-python": ("opencv", "conda-forge"),
-                 "fastcluster": ("fastcluster", "conda-forge"),
-                 "toposort": ("toposort", "conda-forge"),
-                 "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge")}
+CONDA_MAPPING = {
+    # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
+    "fastcluster": ("fastcluster", "conda-forge"),
+    "toposort": ("toposort", "conda-forge"),
+    "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge")}
 
 
 class Environment():
