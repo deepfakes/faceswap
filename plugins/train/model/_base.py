@@ -20,7 +20,7 @@ from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss
+from lib.model.losses import DSSIMObjective, PenalizedLoss, gradient_loss
 from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
