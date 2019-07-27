@@ -964,7 +964,8 @@ class TrainArgs(FaceSwapArgs):
                               "min_max": (0, 10),
                               "rounding": 1,
                               "default": 1,
-                              "help": "Number of GPUs to use for training. Zero GPUs will fallback to CPU training."})
+                              "help": "Number of GPUs to use for training."
+                                      "Zero GPUs will fallback to CPU training."})
         argument_list.append({"opts": ("-ps", "--preview-scale"),
                               "type": int,
                               "action": Slider,

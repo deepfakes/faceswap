@@ -311,11 +311,11 @@ class Train():
         num_cores = psutil.cpu_count(logical=False)
 
         print("Warning, GPU setup must happen before importing TensorFlow")
-        os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         gpu_str = "" if gpus < 1 else str(range(gpus))
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_str
 
-        gpu_options = tf.GPUOptions(allow_growth = growth,
+        gpu_options = tf.GPUOptions(allow_growth=growth,
                                     visible_device_list="0")
         config = tf.ConfigProto(gpu_options=gpu_options,
                                 intra_op_parallelism_threads=num_cores,
