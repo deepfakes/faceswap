@@ -100,8 +100,9 @@ class FixedProducerDispatcher():
 
         # Consumer side
         batch_size = 64
-        dispatcher = FixedProducerDispatcher(do_work, shapes=[
-            (batch_size, 256,256,3), (batch_size, 256,256,3)])
+        height = width = 256
+        batch_shapes = (batch_size, height, width, 3)
+        dispatcher = FixedProducerDispatcher(do_work, shapes=[batch_shapes, batch_shapes])
         for batch_wrapper in dispatcher:
             # alternative batch_wrapper.get and batch_wrapper.free can be used
             with batch_wrapper as batch:

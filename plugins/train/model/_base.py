@@ -35,7 +35,7 @@ class ModelBase():
     """ Base class that all models should inherit from """
     def __init__(self,
                  model_dir,
-                 gpus,
+                 gpus=1,
                  configfile=None,
                  snapshot_interval=0,
                  no_logs=False,

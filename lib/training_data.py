@@ -226,8 +226,7 @@ class TrainingDataGenerator():
         if not closest_hashes:
             dst_points_items = list(landmarks.items())
             dst_points = list(x[1] for x in dst_points_items)
-            closest = (np.mean(np.square(src_points - dst_points),
-                               axis=(1, 2))).argsort()[:10]
+            closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
             closest_hashes = tuple(dst_points_items[i][0] for i in closest)
             self._nearest_landmarks[filename] = closest_hashes
         dst_points = landmarks[choice(closest_hashes)]
@@ -378,9 +377,7 @@ class ImageManipulation():
                    "from the Extract process.".format(width, height))
             raise FaceswapError(msg) from err
 
-        range_ = np.linspace(height // 2 - coverage // 2,
-                             height // 2 + coverage // 2,
-                             5, dtype='float32')
+        range_ = np.linspace(height // 2 - coverage, height // 2 + coverage, 5, dtype='float32')
         mapx = np.broadcast_to(range_, (5, 5)).copy()
         mapy = mapx.T
         # mapx, mapy = np.float32(np.meshgrid(range_,range_)) # instead of broadcast
