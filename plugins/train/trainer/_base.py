@@ -14,7 +14,9 @@
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
         no_logs:            Disable tensorboard logging
+        snapshot_interval:  Interval for saving model snapshots
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
+        augment_color:      Perform random shifting of L*a*b* colors
         no_flip:            Don't perform a random flip on the image
         pingpong:           Train each side seperately per save iteration rather than together
 """
@@ -26,22 +28,30 @@ import time
 import cv2
 import numpy as np
 
-from tensorflow import keras as tf_keras
+import tensorflow as tf
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
-from lib.utils import get_folder, get_image_paths
+from lib.utils import FaceswapError, get_folder, get_image_paths
+from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+def get_config(plugin_name, configfile=None):
+    """ Return the config for the requested model """
+    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class TrainerBase():
     """ Base Trainer """
 
-    def __init__(self, model, images, batch_size):
+    def __init__(self, model, images, batch_size, configfile):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
+        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         self.batch_size = batch_size
         self.model = model
         self.model.state.add_session_batchsize(batch_size)
@@ -55,7 +65,8 @@ class TrainerBase():
                                        images[side],
                                        self.model,
                                        self.use_mask,
-                                       batch_size)
+                                       batch_size,
+                                       self.config)
                          for side in self.sides}
 
         self.tensorboard = self.set_tensorboard()
@@ -66,6 +77,7 @@ class TrainerBase():
         self.timelapse = Timelapse(self.model,
                                    self.use_mask,
                                    self.model.training_opts["coverage_ratio"],
+                                   self.config.get("preview_images", 14),
                                    self.batchers)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -112,72 +124,91 @@ class TrainerBase():
 
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
+
         for side in self.sides:
             logger.debug("Setting up TensorBoard Logging. Side: %s", side)
             log_dir = os.path.join(str(self.model.model_dir),
                                    "{}_logs".format(self.model.name),
                                    side,
                                    "session_{}".format(self.model.state.session_id))
-            tbs = tf_keras.callbacks.TensorBoard(log_dir=log_dir,
-                                                 histogram_freq=0,  # Must be 0 or hangs
-                                                 batch_size=self.batch_size,
-                                                 write_graph=True,
-                                                 write_grads=True)
+            tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir, **self.tensorboard_kwargs)
             tbs.set_model(self.model.predictors[side])
             tensorboard[side] = tbs
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
 
+    @property
+    def tensorboard_kwargs(self):
+        """ TF 1.13 + needs an additional kwarg which is not valid for earlier versions """
+        kwargs = dict(histogram_freq=0,  # Must be 0 or hangs
+                      batch_size=64,
+                      write_graph=True,
+                      write_grads=True)
+        tf_version = [int(ver) for ver in tf.__version__.split(".") if ver.isdigit()]
+        logger.debug("Tensorflow version: %s", tf_version)
+        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
+            kwargs["update_freq"] = "batch"
+        logger.debug(kwargs)
+        return kwargs
+
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
         logger.trace(loss)
-        output = list()
-        for side in sorted(list(loss.keys())):
-            display = ", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
-                                                        side.capitalize(),
-                                                        this_loss)
-                                 for idx, this_loss in enumerate(loss[side])])
-            output.append(display)
+        output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
+                  for side in sorted(loss.keys())]
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
-        do_preview = False if viewer is None else True
-        do_timelapse = False if timelapse_kwargs is None else True
+        do_preview = viewer is not None
+        do_timelapse = timelapse_kwargs is not None
+        snapshot_interval = self.model.training_opts.get("snapshot_interval", 0)
+        do_snapshot = (snapshot_interval != 0 and
+                       self.model.iterations >= snapshot_interval and
+                       self.model.iterations % snapshot_interval == 0)
         loss = dict()
-        for side, batcher in self.batchers.items():
-            if self.pingpong.active and side != self.pingpong.side:
-                continue
-            loss[side] = batcher.train_one_batch(do_preview)
-            if not do_preview and not do_timelapse:
-                continue
+        try:
+            for side, batcher in self.batchers.items():
+                if self.pingpong.active and side != self.pingpong.side:
+                    continue
+                loss[side] = batcher.train_one_batch(do_preview)
+                if not do_preview and not do_timelapse:
+                    continue
+                if do_preview:
+                    self.samples.images[side] = batcher.compile_sample(None)
+                if do_timelapse:
+                    self.timelapse.get_sample(side, timelapse_kwargs)
+
+            self.model.state.increment_iterations()
+
+            for side, side_loss in loss.items():
+                self.store_history(side, side_loss)
+                self.log_tensorboard(side, side_loss)
+
+            if not self.pingpong.active:
+                self.print_loss(loss)
+            else:
+                for key, val in loss.items():
+                    self.pingpong.loss[key] = val
+                self.print_loss(self.pingpong.loss)
+
             if do_preview:
-                self.samples.images[side] = batcher.compile_sample(self.batch_size)
+                samples = self.samples.show_sample()
+                if samples is not None:
+                    viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
+
             if do_timelapse:
-                self.timelapse.get_sample(side, timelapse_kwargs)
+                self.timelapse.output_timelapse()
 
-        self.model.state.increment_iterations()
-
-        for side, side_loss in loss.items():
-            self.store_history(side, side_loss)
-            self.log_tensorboard(side, side_loss)
-
-        if not self.pingpong.active:
-            self.print_loss(loss)
-        else:
-            for key, val in loss.items():
-                self.pingpong.loss[key] = val
-            self.print_loss(self.pingpong.loss)
-
-        if do_preview:
-            samples = self.samples.show_sample()
-            if samples is not None:
-                viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
-
-        if do_timelapse:
-            self.timelapse.output_timelapse()
+            if do_snapshot:
+                self.model.do_snapshot()
+        except Exception as err:
+            #  Shutdown the FixedProducerDispatchers then continue to raise error
+            for batcher in self.batchers.values():
+                batcher.shutdown_feed()
+            raise err
 
     def store_history(self, side, loss):
         """ Store the history of this step """
@@ -206,33 +237,55 @@ class TrainerBase():
 
 class Batcher():
     """ Batch images from a single side """
-    def __init__(self, side, images, model, use_mask, batch_size):
-        logger.debug("Initializing %s: side: '%s', num_images: %s, batch_size: %s)",
-                     self.__class__.__name__, side, len(images), batch_size)
+    def __init__(self, side, images, model, use_mask, batch_size, config):
+        logger.debug("Initializing %s: side: '%s', num_images: %s, batch_size: %s, config: %s)",
+                     self.__class__.__name__, side, len(images), batch_size, config)
         self.model = model
         self.use_mask = use_mask
         self.side = side
+        self.images = images
+        self.config = config
         self.target = None
         self.samples = None
         self.mask = None
 
-        self.feed = self.load_generator().minibatch_ab(images, batch_size, self.side)
+        generator = self.load_generator()
+        self.feed = generator.minibatch_ab(images, batch_size, self.side)
+        self.shutdown_feed = generator.join_subprocess
+
+        self.preview_feed = None
         self.timelapse_feed = None
 
     def load_generator(self):
         """ Pass arguments to TrainingDataGenerator and return object """
         logger.debug("Loading generator: %s", self.side)
         input_size = self.model.input_shape[0]
-        output_size = self.model.output_shape[0]
-        logger.debug("input_size: %s, output_size: %s", input_size, output_size)
-        generator = TrainingDataGenerator(input_size, output_size, self.model.training_opts)
+        output_shapes = self.model.output_shapes
+        logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
+        generator = TrainingDataGenerator(input_size,
+                                          output_shapes,
+                                          self.model.training_opts,
+                                          self.config)
         return generator
 
     def train_one_batch(self, do_preview):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
         batch = self.get_next(do_preview)
-        loss = self.model.predictors[self.side].train_on_batch(*batch)
+        try:
+            loss = self.model.predictors[self.side].train_on_batch(*batch)
+        except tf_errors.ResourceExhaustedError as err:
+            msg = ("You do not have enough GPU memory available to train the selected model at "
+                   "the selected settings. You can try a number of things:"
+                   "\n1) Close any other application that is using your GPU (web browsers are "
+                   "particularly bad for this)."
+                   "\n2) Lower the batchsize (the amount of images fed into the model each "
+                   "iteration)."
+                   "\n3) Try 'Memory Saving Gradients' and/or 'Optimizer Savings' and/or 'Ping "
+                   "Pong Training'."
+                   "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
+                   "(in config) if it has one.")
+            raise FaceswapError(msg) from err
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
@@ -240,27 +293,48 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        self.samples = batch[0] if do_preview else None
-        batch = batch[1:]   # Remove full size samples from batch
-        if self.use_mask:
-            batch = self.compile_mask(batch)
-        self.target = batch[1] if do_preview else None
+        feed = batch[1]
+        batch = batch[2:]   # Remove full size samples and feed from batch
+        mask = batch[-1]
+        batch = [[feed, mask], batch] if self.use_mask else [feed, batch]
+        self.generate_preview(do_preview)
         return batch
 
-    def compile_mask(self, batch):
-        """ Compile the mask into training data """
-        logger.trace("Compiling Mask: (side: '%s')", self.side)
-        mask = batch[-1]
-        retval = list()
-        for idx in range(len(batch) - 1):
-            image = batch[idx]
-            retval.append([image, mask])
-        return retval
+    def generate_preview(self, do_preview):
+        """ Generate the preview if a preview iteration """
+        if not do_preview:
+            self.samples = None
+            self.target = None
+            return
+        logger.debug("Generating preview")
+        if self.preview_feed is None:
+            self.set_preview_feed()
+        batch = next(self.preview_feed)
+        self.samples, feed = batch[:2]
+        batch = batch[2:]   # Remove full size samples and feed from batch
+        self.target = batch[self.model.largest_face_index]
+        if self.use_mask:
+            mask = batch[-1]
+            batch = [[feed, mask], batch]
+            self.target = [self.target, mask]
+
+    def set_preview_feed(self):
+        """ Set the preview dictionary """
+        logger.debug("Setting preview feed: (side: '%s')", self.side)
+        preview_images = self.config.get("preview_images", 14)
+        preview_images = min(max(preview_images, 2), 16)
+        batchsize = min(len(self.images), preview_images)
+        self.preview_feed = self.load_generator().minibatch_ab(self.images,
+                                                               batchsize,
+                                                               self.side,
+                                                               do_shuffle=True,
+                                                               is_preview=True)
+        logger.debug("Set preview feed. Batchsize: %s", batchsize)
 
     def compile_sample(self, batch_size, samples=None, images=None):
         """ Training samples to display in the viewer """
-        num_images = self.model.training_opts.get("preview_images", 14)
-        num_images = min(batch_size, num_images)
+        num_images = self.config.get("preview_images", 14)
+        num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
         samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
@@ -274,12 +348,14 @@ class Batcher():
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples = batch[0]
-        batch = batch[1:]   # Remove full size samples from batch
+        samples, feed = batch[:2]
         batchsize = len(samples)
+        batch = batch[2:]   # Remove full size samples and feed from batch
+        images = batch[self.model.largest_face_index]
         if self.use_mask:
-            batch = self.compile_mask(batch)
-        images = batch[1]
+            mask = batch[-1]
+            batch = [[feed, mask], batch]
+            images = [images, mask]
         sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 
@@ -378,11 +454,10 @@ class Samples():
         preds["b_a"] = self.model.predictors["b"].predict(feed_a)
         preds["a_b"] = self.model.predictors["a"].predict(feed_b)
         preds["b_b"] = self.model.predictors["b"].predict(feed_b)
-
-        # Get the returned image from predictors that emit multiple items
+        # Get the returned largest image from predictors that emit multiple items
         if not isinstance(preds["a_a"], np.ndarray):
             for key, val in preds.items():
-                preds[key] = val[0]
+                preds[key] = val[self.model.largest_face_index]
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
@@ -521,10 +596,11 @@ class Samples():
 
 class Timelapse():
     """ Create the timelapse """
-    def __init__(self, model, use_mask, coverage_ratio, batchers):
+    def __init__(self, model, use_mask, coverage_ratio, preview_images, batchers):
         logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
-                     "batchers: '%s')", self.__class__.__name__, model, use_mask,
-                     coverage_ratio, batchers)
+                     "preview_images: %s, batchers: '%s')", self.__class__.__name__, model,
+                     use_mask, coverage_ratio, preview_images, batchers)
+        self.preview_images = preview_images
         self.samples = Samples(model, use_mask, coverage_ratio)
         self.model = model
         self.batchers = batchers
@@ -551,7 +627,7 @@ class Timelapse():
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
         batchsize = min(len(images["a"]),
                         len(images["b"]),
-                        self.model.training_opts.get("preview_images", 14))
+                        self.preview_images)
         for side, image_files in images.items():
             self.batchers[side].set_timelapse_feed(image_files, batchsize)
         logger.debug("Set up timelapse")
@@ -576,7 +652,7 @@ class PingPong():
         self.model = model
         self.sides = sides
         self.side = sorted(sides)[0]
-        self.loss = {side: dict() for side in sides}
+        self.loss = {side: [0] for side in sides}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def switch(self):

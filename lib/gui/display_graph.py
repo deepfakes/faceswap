@@ -12,12 +12,13 @@ import matplotlib
 # pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
 
-from matplotlib import pyplot as plt, style  # noqa
+from matplotlib import style  # noqa
+from matplotlib.figure import Figure  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)  # noqa
 
 from .tooltip import Tooltip  # noqa
-from .utils import get_config, get_images  # noqa
+from .utils import get_config, get_images, LongRunningTask  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -82,11 +83,12 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.calcs = data
         self.ylabel = ylabel
-        self.colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges",
-                           "Greys", "copper", "summer", "bone"]
+        self.colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges", "Greys", "copper",
+                           "summer", "bone", "hot", "cool", "pink", "Wistia", "spring", "winter"]
         self.lines = list()
         self.toolbar = None
-        self.fig = plt.figure(figsize=(4, 4), dpi=75)
+        self.fig = Figure(figsize=(4, 4), dpi=75)
+
         self.ax1 = self.fig.add_subplot(1, 1, 1)
         self.plotcanvas = FigureCanvasTkAgg(self.fig, self)
 
@@ -98,12 +100,12 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Place the graph canvas """
         logger.debug("Setting plotcanvas")
         self.plotcanvas.get_tk_widget().pack(side=tk.TOP, padx=5, fill=tk.BOTH, expand=True)
-        plt.subplots_adjust(left=0.100,
-                            bottom=0.100,
-                            right=0.95,
-                            top=0.95,
-                            wspace=0.2,
-                            hspace=0.2)
+        self.fig.subplots_adjust(left=0.100,
+                                 bottom=0.100,
+                                 right=0.95,
+                                 top=0.95,
+                                 wspace=0.2,
+                                 hspace=0.2)
         logger.debug("Set plotcanvas")
 
     def update_plot(self, initiate=True):
@@ -151,9 +153,9 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
             self.ax1.set_xlim(0, xmax)
+            logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
         else:
             self.axes_limits_set_default()
-        logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
 
     @staticmethod
     def axes_data_get_min_max(data):
@@ -183,10 +185,10 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         sorted_lines = list()
         for key in sorted(keys):
             title = key.replace("_", " ").title()
-            if key.startswith(("avg", "trend")):
-                sorted_lines.append([key, title])
-            else:
+            if key.startswith("raw"):
                 raw_lines.append([key, title])
+            else:
+                sorted_lines.append([key, title])
 
         groupsize = self.lines_groupsize(raw_lines, sorted_lines)
         sorted_lines = raw_lines + sorted_lines
@@ -201,11 +203,10 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         groupsize = 1
         if raw_lines:
             groupsize = len(raw_lines)
-        else:
-            for check in ("avg", "trend"):
-                if any(item[0].startswith(check) for item in sorted_lines):
-                    groupsize = len([item for item in sorted_lines if item[0].startswith(check)])
-                    break
+        elif sorted_lines:
+            keys = [key[0][:key[0].find("_")] for key in sorted_lines]
+            distinct_keys = set(keys)
+            groupsize = len(keys) // len(distinct_keys)
         logger.trace(groupsize)
         return groupsize
 
@@ -242,12 +243,19 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.toolbar.pack(side=tk.BOTTOM)
         self.toolbar.update()
 
+    def clear(self):
+        """ Clear the plots from RAM """
+        logger.debug("Clearing graph from RAM: %s", self)
+        self.fig.clf()
+        del self.fig
+
 
 class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """ Live graph to be displayed during training. """
 
     def __init__(self, parent, data, ylabel):
         GraphBase.__init__(self, parent, data, ylabel)
+        self.thread = None  # Thread for LongRunningTask
         self.add_callback()
 
     def add_callback(self):
@@ -262,11 +270,25 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def refresh(self, *args):  # pylint: disable=unused-argument
         """ Read loss data and apply to graph """
-        logger.debug("Updating plot")
-        self.calcs.refresh()
-        self.update_plot(initiate=False)
-        self.plotcanvas.draw()
-        get_config().tk_vars["refreshgraph"].set(False)
+        refresh_var = get_config().tk_vars["refreshgraph"]
+        if not refresh_var.get() and self.thread is None:
+            return
+
+        if self.thread is None:
+            logger.debug("Updating plot data")
+            self.thread = LongRunningTask(target=self.calcs.refresh)
+            self.thread.start()
+            self.after(1000, self.refresh)
+        elif not self.thread.complete.is_set():
+            logger.debug("Graph Data not yet available")
+            self.after(1000, self.refresh)
+        else:
+            logger.debug("Updating plot with data from background thread")
+            self.calcs = self.thread.get_result()  # Terminate the LongRunningTask object
+            self.thread = None
+            self.update_plot(initiate=False)
+            self.plotcanvas.draw()
+            refresh_var.set(False)
 
     def save_fig(self, location):
         """ Save the figure to file """

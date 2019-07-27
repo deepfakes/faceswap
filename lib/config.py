@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Default configurations for faceswap
-    Extends out configparser funcionality
-    by checking for default config updates
+    Extends out configparser funcionality by checking for default config updates
     and returning data in it's correct format """
 
 import logging
@@ -15,10 +14,10 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class FaceswapConfig():
     """ Config Items """
-    def __init__(self, section):
+    def __init__(self, section, configfile=None):
         """ Init Configuration  """
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self.configfile = self.get_config_file()
+        self.configfile = self.get_config_file(configfile)
         self.config = ConfigParser(allow_no_value=True)
         self.defaults = OrderedDict()
         self.config.optionxform = str
@@ -27,6 +26,20 @@ class FaceswapConfig():
         self.set_defaults()
         self.handle_config()
         logger.debug("Initialized: %s", self.__class__.__name__)
+
+    @property
+    def changeable_items(self):
+        """ Training only.
+            Return a dict of config items with their set values for items
+            that can be altered after the model has been created """
+        retval = dict()
+        for sect in ("global", self.section):
+            for key, val in self.defaults[sect].items():
+                if key == "helptext" or val["fixed"]:
+                    continue
+                retval[key] = self.get(sect, key)
+        logger.debug("Alterable for existing models: %s", retval)
+        return retval
 
     def set_defaults(self):
         """ Override for plugin specific config defaults
@@ -79,8 +92,14 @@ class FaceswapConfig():
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
         return retval
 
-    def get_config_file(self):
-        """ Return the config file from the calling folder """
+    def get_config_file(self, configfile):
+        """ Return the config file from the calling folder or the provided file """
+        if configfile is not None:
+            if not os.path.isfile(configfile):
+                err = "Config file does not exist at: {}".format(configfile)
+                logger.error(err)
+                raise ValueError(err)
+            return configfile
         dirname = os.path.dirname(sys.modules[self.__module__].__file__)
         folder, fname = os.path.split(dirname)
         retval = os.path.join(os.path.dirname(folder), "config", "{}.ini".format(fname))
@@ -96,8 +115,8 @@ class FaceswapConfig():
         self.defaults[title] = OrderedDict()
         self.defaults[title]["helptext"] = info
 
-    def add_item(self, section=None, title=None, datatype=str,
-                 default=None, info=None, rounding=None, min_max=None, choices=None):
+    def add_item(self, section=None, title=None, datatype=str, default=None, info=None,
+                 rounding=None, min_max=None, choices=None, gui_radio=False, fixed=True):
         """ Add a default item to a config section
 
             For int or float values, rounding and min_max must be set
@@ -108,10 +127,20 @@ class FaceswapConfig():
             For str values choices can be set to validate input and create a combo box
             in the GUI
 
+            is_radio is to indicate to the GUI that it should display Radio Buttons rather than
+            combo boxes for multiple choice options.
+
+            The 'fixed' parameter is only for training configs. Training configurations
+            are set when the model is created, and then reloaded from the state file.
+            Marking an item as fixed=False indicates that this value can be changed for
+            existing models, and will overide the value saved in the state file with the
+            updated value in config.
+
         """
         logger.debug("Add item: (section: '%s', title: '%s', datatype: '%s', default: '%s', "
-                     "info: '%s', rounding: '%s', min_max: %s, choices: %s)",
-                     section, title, datatype, default, info, rounding, min_max, choices)
+                     "info: '%s', rounding: '%s', min_max: %s, choices: %s, gui_radio: %s, "
+                     "fixed: %s)", section, title, datatype, default, info, rounding, min_max,
+                     choices, gui_radio, fixed)
 
         choices = list() if not choices else choices
 
@@ -128,12 +157,34 @@ class FaceswapConfig():
             raise ValueError("'rounding' and 'min_max' must be set for numerical options")
         if not isinstance(choices, (list, tuple)):
             raise ValueError("'choices' must be a list or tuple")
+
+        info = self.expand_helptext(info, choices, default, datatype, min_max, fixed)
         self.defaults[section][title] = {"default": default,
                                          "helptext": info,
                                          "type": datatype,
                                          "rounding": rounding,
                                          "min_max": min_max,
-                                         "choices": choices}
+                                         "choices": choices,
+                                         "gui_radio": gui_radio,
+                                         "fixed": fixed}
+
+    @staticmethod
+    def expand_helptext(helptext, choices, default, datatype, min_max, fixed):
+        """ Add extra helptext info from parameters """
+        if not fixed:
+            helptext += "\nThis option can be updated for existing models."
+        if choices:
+            helptext += "\nChoose from: {}".format(choices)
+        elif datatype == bool:
+            helptext += "\nChoose from: True, False"
+        elif datatype == int:
+            cmin, cmax = min_max
+            helptext += "\nSelect an integer between {} and {}".format(cmin, cmax)
+        elif datatype == float:
+            cmin, cmax = min_max
+            helptext += "\nSelect a decimal number between {} and {}".format(cmin, cmax)
+        helptext += "\n[Default: {}]".format(default)
+        return helptext
 
     def check_exists(self):
         """ Check that a config file exists """
@@ -176,28 +227,10 @@ class FaceswapConfig():
                      "config: '%s')", section, item, default, option["helptext"], config)
         config = self.config if config is None else config
         helptext = option["helptext"]
-        helptext += self.set_helptext_choices(option)
-        helptext += "\n[Default: {}]".format(default)
         helptext = self.format_help(helptext, is_section=False)
         config.set(section, helptext)
         config.set(section, item, str(default))
         logger.debug("Inserted item: '%s'", item)
-
-    @staticmethod
-    def set_helptext_choices(option):
-        """ Set the helptext choices """
-        choices = ""
-        if option["choices"]:
-            choices = "\nChoose from: {}".format(option["choices"])
-        elif option["type"] == bool:
-            choices = "\nChoose from: True, False"
-        elif option["type"] == int:
-            cmin, cmax = option["min_max"]
-            choices = "\nSelect an integer between {} and {}".format(cmin, cmax)
-        elif option["type"] == float:
-            cmin, cmax = option["min_max"]
-            choices = "\nSelect a decimal number between {} and {}".format(cmin, cmax)
-        return choices
 
     @staticmethod
     def format_help(helptext, is_section=False):
@@ -213,7 +246,7 @@ class FaceswapConfig():
 
     def load_config(self):
         """ Load values from config """
-        logger.info("Loading config: '%s'", self.configfile)
+        logger.verbose("Loading config: '%s'", self.configfile)
         self.config.read(self.configfile)
 
     def save_config(self):

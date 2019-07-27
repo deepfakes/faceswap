@@ -11,11 +11,11 @@ from .utils import get_images
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class DisplayPage(ttk.Frame):
+class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Parent frame holder for each tab.
         Defines uniform structure for each tab to inherit from """
     def __init__(self, parent, tabname, helptext):
-        logger.debug("Initializing %s: (tabname: '%s', helptext: %s",
+        logger.debug("Initializing %s: (tabname: '%s', helptext: %s)",
                      self.__class__.__name__, tabname, helptext)
         ttk.Frame.__init__(self, parent)
         self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
@@ -147,12 +147,15 @@ class DisplayPage(ttk.Frame):
         return self.subnotebook.children[tab_name]
 
 
-class DisplayOptionalPage(DisplayPage):
+class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
-    def __init__(self, parent, tabname, helptext, waittime):
+    def __init__(self, parent, tabname, helptext, waittime, command=None):
+        logger.debug("%s: OptionalPage args: (waittime: %s, command: %s)",
+                     self.__class__.__name__, waittime, command)
         DisplayPage.__init__(self, parent, tabname, helptext)
 
+        self.command = command
         self.display_item = None
 
         self.set_info_text()
@@ -260,3 +263,11 @@ class DisplayOptionalPage(DisplayPage):
     def display_item_process(self):
         """ Override for display specific loading """
         raise NotImplementedError()
+
+    def close(self):
+        """ Called when the parent notebook is shutting down
+            Children must be destroyed as forget only hides display
+            Override for page specific shutdown """
+        for child in self.winfo_children():
+            logger.debug("Destroying child: %s", child)
+            child.destroy()

@@ -18,6 +18,10 @@ from keras.utils.generic_utils import get_custom_objects
 from keras import initializers
 from keras.layers import ZeroPadding2D
 
+if K.backend() == "plaidml.keras.backend":
+    from lib.plaidml_utils import pad
+else:
+    from tensorflow import pad 
 
 class PixelShuffler(Layer):
     """ PixelShuffler layer for Keras
@@ -319,7 +323,7 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return tf.pad(x, [[0,0],
+        return pad(x, [[0,0],
                           [padding_top, padding_bot],
                           [padding_left, padding_right],
                           [0,0] ],
@@ -330,6 +334,21 @@ class ReflectionPadding2D(Layer):
                   'kernel_size': self.kernel_size}
         base_config = super(ReflectionPadding2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items())) 
+
+
+class L2_normalize(Layer):
+    def __init__(self, axis, **kwargs):
+        self.axis = axis
+        super(L2_normalize, self).__init__(**kwargs)
+
+    def call(self, x):
+        return K.l2_normalize(x, self.axis)
+
+    def get_config(self):
+        config = super(L2_normalize, self).get_config()
+        config["axis"] = self.axis
+        return config
+
 
 
 # Update layers into Keras custom objects

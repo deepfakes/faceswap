@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _launched_processes = set()  # pylint: disable=invalid-name
 
 
+def total_cpus():
+    """ Return total number of cpus """
+    return mp.cpu_count()
+
+
 class ConsumerBuffer():
     """ Memory buffer for consuming """
     def __init__(self, dispatcher, index, data):
@@ -107,9 +112,10 @@ class FixedProducerDispatcher():
 
     def __init__(self, method, shapes, in_queue, out_queue,
                  args=tuple(), kwargs={}, ctype=c_float, workers=1, buffers=None):
-        logger.debug("Initializing %s: (method: '%s', shapes: %s, args: %s, kwargs: %s, "
-                     "ctype: %s, workers: %s, buffers: %s)", self.__class__.__name__, method,
-                     shapes, args, kwargs, ctype, workers, buffers)
+        logger.debug("Initializing %s: (method: '%s', shapes: %s, ctype: %s, workers: %s, "
+                     "buffers: %s)", self.__class__.__name__, method, shapes, ctype, workers,
+                     buffers)
+        logger.trace("args: %s, kwargs: %s", args, kwargs)
         if buffers is None:
             buffers = workers * 2
         else:
@@ -293,9 +299,10 @@ class PoolProcess():
 
     def set_procs(self, processes):
         """ Set the number of processes to use """
-        if processes is None:
-            running_processes = len(mp.active_children())
-            processes = max(mp.cpu_count() - running_processes, 1)
+        processes = mp.cpu_count() if processes is None else processes
+        running_processes = len(mp.active_children())
+        avail_processes = max(mp.cpu_count() - running_processes, 1)
+        processes = min(avail_processes, processes)
         logger.verbose("Processing '%s' in %s processes", self._name, processes)
         return processes
 
@@ -307,6 +314,7 @@ class PoolProcess():
             logger.debug("Adding process %s of %s to mp.Pool '%s'",
                          idx + 1, self.procs, self._name)
             self.pool.apply_async(self._method, args=self._args, kwds=self._kwargs)
+            _launched_processes.add(self.pool)
         logging.debug("Pooled Processes: '%s'", self._name)
 
     def join(self):
@@ -314,6 +322,7 @@ class PoolProcess():
         logger.debug("Joining Pooled Process: '%s'", self._name)
         self.pool.close()
         self.pool.join()
+        _launched_processes.remove(self.pool)
         logger.debug("Joined Pooled Process: '%s'", self._name)
 
 
@@ -363,7 +372,8 @@ class SpawnProcess(mp.context.SpawnProcess):
         """ Add logging to join function """
         logger.debug("Joining Process: (name: '%s', PID: %s)", self._name, self.pid)
         super().join(timeout=timeout)
-        _launched_processes.remove(self)
+        if self in _launched_processes:
+            _launched_processes.remove(self)
         logger.debug("Joined Process: (name: '%s', PID: %s)", self._name, self.pid)
 
 
@@ -379,10 +389,9 @@ class FSThread(threading.Thread):
         try:
             if self._target:
                 self._target(*self._args, **self._kwargs)
-        except Exception:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except
             self.err = sys.exc_info()
-            logger.debug("Error in thread (%s): %s", self._name,
-                         self.err[1].with_traceback(self.err[2]))
+            logger.debug("Error in thread (%s): %s", self._name, str(err))
         finally:
             # Avoid a refcycle if the thread is running a function with
             # an argument that has a member that points to the thread.
@@ -414,6 +423,14 @@ class MultiThread():
     def errors(self):
         """ Return a list of thread errors """
         return [thread.err for thread in self._threads]
+
+    def check_and_raise_error(self):
+        """ Checks for errors in thread and raises them in caller """
+        if not self.has_error:
+            return
+        logger.debug("Thread error caught: %s", self.errors)
+        error = self.errors[0]
+        raise error[1].with_traceback(error[2])
 
     def start(self):
         """ Start a thread with the given method and args """
@@ -480,9 +497,13 @@ def terminate_processes():
         have a mechanism in place to terminate this work to avoid
         long blocks
     """
-    logger.debug("Processes to join: %s", [process.name
+
+    logger.debug("Processes to join: %s", [process
                                            for process in _launched_processes
-                                           if process.is_alive()])
+                                           if isinstance(process, mp.pool.Pool)
+                                           or process.is_alive()])
     for process in list(_launched_processes):
-        if process.is_alive():
+        if isinstance(process, mp.pool.Pool):
+            process.terminate()
+        if isinstance(process, mp.pool.Pool) or process.is_alive():
             process.join()
