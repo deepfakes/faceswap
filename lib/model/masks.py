@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_available_masks():
     """ Return a list of the available masks for cli """
-    masks = ["components", "dfl_full", "facehull", "none", "vgg_300", "vgg_500", "unet_256"]
+    masks = ["extended", "components", "dfl_full", "facehull", "none", "vgg_300", "vgg_500", "unet_256"]
     logger.debug(masks)
     return masks
 
@@ -194,7 +194,7 @@ class Smart(Mask):
             masks_batched.append(masks[even_split_section:])
         batched = zip(faces_batched, means_batched)
         for i, (faces, means) in enumerate(batched):
-            if  model.model_filename[0].startswith('DFL'):
+            if model.model_filename[0].startswith('DFL'):
                 model_input = faces
                 results = mask_model.predict(model_input[..., :3])
                 low = results < 0.1
@@ -216,7 +216,6 @@ class Smart(Mask):
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
             print(masks.shape, results.shape)
             masks[batch_slice] = results[..., None]
-
 
         return masks
 
@@ -251,16 +250,16 @@ class Smart(Mask):
     def postprocessing(mask):
         # pylint: disable=no-member
         """ Post-processing of Nirkin style segmentation masks """
-        #Select_largest_segment
-        pop_small_segments = False # Don't do this right now
+        # Select_largest_segment
+        pop_small_segments = False  # Don't do this right now
         if pop_small_segments:
             results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
             _, labels, stats, _ = results
             segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
             mask[labels != segments_ranked_by_area[0, 0]] = 0.
 
-        #Smooth contours
-        smooth_contours = False # Don't do this right now
+        # Smooth contours
+        smooth_contours = False  # Don't do this right now
         if smooth_contours:
             iters = 2
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
@@ -269,7 +268,7 @@ class Smart(Mask):
             cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
             cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
 
-        #Fill holes
+        # Fill holes
         fill_holes = True
         if fill_holes:
             not_holes = mask.copy()

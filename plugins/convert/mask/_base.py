@@ -71,7 +71,7 @@ class BlurMask():
         Works for square images only.
         Currently supports Gaussian and Normalized Box Filters
     """
-    def __init__(self, blur_type, mask, kernel_ratio, passes=1):
+    def __init__(self, mask, blur_type, kernel_ratio, passes=1):
         """ image_size = height or width of original image
             mask = the mask to apply the blurring to
             kernel_ratio = kernel ratio as percentage of mask size
