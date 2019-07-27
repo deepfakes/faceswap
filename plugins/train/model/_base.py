@@ -11,16 +11,17 @@ import time
 
 from json import JSONDecodeError
 
-import keras
 from keras import losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model
+from keras.layers import Input, Concatenate
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import DSSIMObjective, PenalizedLoss
+from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss
+from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
 from lib.multithreading import MultiThread
@@ -70,9 +71,10 @@ class ModelBase():
         self.gpus = gpus
         self.configfile = configfile
         self.input_shape = input_shape
+        self.mask_shape = (input_shape[:-1] + (1, ))
+        self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
-
         self.load_config()  # Load config if plugin has not already referenced it
         self.state = State(self.model_dir,
                            self.name,
@@ -210,11 +212,10 @@ class ModelBase():
     @staticmethod
     def set_gradient_type(memory_saving_gradients):
         """ Monkeypatch Memory Saving Gradients if requested """
-        if not memory_saving_gradients:
-            return
-        logger.info("Using Memory Saving Gradients")
-        from lib.model import memory_saving_gradients
-        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+        if memory_saving_gradients:
+            logger.info("Using Memory Saving Gradients")
+            from lib.model import memory_saving_gradients
+            K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
     def load_config(self):
         """ Load the global config for reference in self.config """
@@ -308,15 +309,15 @@ class ModelBase():
 
     def add_network(self, network_type, side, network, is_output=False):
         """ Add a NNMeta object """
-        logger.debug("network_type: '%s', side: '%s', network: '%s', is_output: %s",
-                     network_type, side, network, is_output)
-        filename = "{}_{}".format(self.name, network_type.lower())
-        name = network_type.lower()
+        logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
+        f_string = ""
+        n_string = ""
         if side:
             side = side.lower()
-            filename += "_{}".format(side.upper())
-            name += "_{}".format(side)
-        filename += ".h5"
+            f_string = "_" + side.upper()
+            n_string = "_" + side
+        filename = "{0}_{1}{2}.h5".format(self.name, network_type.lower(), f_string)
+        name = "{0}{1}".format(network_type.lower(), n_string)
         logger.debug("name: '%s', filename: '%s'", name, filename)
         self.networks[name] = NNMeta(str(self.model_dir / filename),
                                      network_type,
@@ -397,10 +398,8 @@ class ModelBase():
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
-        if swap:
-            model = self.predictors["a"]
-        else:
-            model = self.predictors["b"]
+        side = "a" if swap else "b"
+        model = self.predictors[side]
         if self.predict:
             # Must compile the model to be thread safe
             model._make_predict_function()  # pylint: disable=protected-access
@@ -774,8 +773,11 @@ class NNMeta():
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
+        if self.type == "encoder" and len(network.inputs)==1:
+            self.network = self.convert_legacy_models(network)
+        else:
+            self.network = network
         self.config = network.get_config()
-        self.network = network  # Update network with saved model
         self.network.name = self.type
         return True
 
@@ -794,6 +796,33 @@ class NNMeta():
         self.network.load_weights(self.filename)
         self.save(backup_func=None)
         self.network.name = self.type
+
+    def convert_legacy_models(self, network):
+        """ Convert single input(image) models to two inputs models(image,mask)
+        """
+        print("stripping model \n\n")
+        print(network.layers[0].input_shape,
+              network.layers[0].output_shape,
+              network.layers[1].input_shape,
+              network.layers[1].output_shape)
+        prev_input_shape = network.layers[0].output_shape[1:]
+        _face = Input(shape=prev_input_shape)
+        _mask = Input(shape=prev_input_shape[:-1] + (1,))
+        merge = Concatenate(axis=-1)([_face, _mask])
+        model_stub = Model(inputs=network.layers[1].input, outputs=network.outputs)
+        new_model = Model(inputs=[_face, _mask], outputs=model_stub(merge).outputs)
+
+        """
+        prev_input_shape = network.layers[0].output_shape[1:]
+        _face = Input(shape=prev_input_shape)
+        _mask = Input(shape=prev_input_shape[:-1] + (1,))
+        merge = Concatenate(axis=-1)([_face, _mask])
+        network.layers.pop(0)
+        network.layers[0].input = merge
+        new_model = Model(inputs=[_face, _mask], outputs=network.outputs)
+        """
+        return new_model
+
 
 
 class State():

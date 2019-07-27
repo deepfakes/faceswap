@@ -9,7 +9,7 @@
     """
 
 from keras.initializers import RandomNormal
-from keras.layers import Dense, Flatten, Input, Reshape
+from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, Concatenate
 from keras.models import Model as KerasModel
 
 from ._base import ModelBase, logger
@@ -21,6 +21,7 @@ class Model(ModelBase):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
 
+        self.mask_shape = (self.config["output_size"], self.config["output_size"], 1)
         self.configfile = kwargs.get("configfile", None)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
@@ -79,18 +80,23 @@ class Model(ModelBase):
     def build_autoencoders(self, inputs):
         """ Initialize realface model """
         logger.debug("Initializing model")
+        face = Input(shape=self.input_shape, name="face")
+        mask = Input(shape=self.mask_shape, name="mask")
+        inputs = [face, mask]
+
         for side in "a", "b":
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inputs[0]))
+            output = decoder(self.networks["encoder"].network(inputs))
             autoencoder = KerasModel(inputs, output)
             self.add_predictor(side, autoencoder)
         logger.debug("Initialized model")
 
     def encoder(self):
         """ RealFace Encoder Network """
-        input_ = Input(shape=self.input_shape)
-        var_x = input_
+        face_ = Input(shape=self.input_shape)
+        mask_ = Input(shape=self.mask_shape)
+        var_x = Concatenate(axis=-1)([face_, mask_])
 
         encoder_complexity = self.config["complexity_encoder"]
 
@@ -98,10 +104,9 @@ class Model(ModelBase):
             var_x = self.blocks.conv(var_x, encoder_complexity * 2**idx)
             var_x = self.blocks.res_block(var_x, encoder_complexity * 2**idx, use_bias=True)
             var_x = self.blocks.res_block(var_x, encoder_complexity * 2**idx, use_bias=True)
+        var_x = self.blocks.conv(var_x, encoder_complexity * 2**self.downscalers_no)
 
-        var_x = self.blocks.conv(var_x, encoder_complexity * 2**(idx + 1))
-
-        return KerasModel(input_, var_x)
+        return KerasModel([face_, mask_], var_x)
 
     def decoder_b(self):
         """ RealFace Decoder Network """
@@ -124,7 +129,7 @@ class Model(ModelBase):
             var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**idx)
             var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2**idx, use_bias=False)
             var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2**idx, use_bias=True)
-        var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**(idx + 1))
+        var_x = self.blocks.upscale(var_x, decoder_b_complexity // 2**self.downscalers_no)
 
         var_x = self.blocks.conv2d(var_x, 3,
                                    kernel_size=5,
@@ -139,7 +144,7 @@ class Model(ModelBase):
             mask_b_complexity = 384
             for idx in range(self.upscalers_no-2):
                 var_y = self.blocks.upscale(var_y, mask_b_complexity // 2**idx)
-            var_y = self.blocks.upscale(var_y, mask_b_complexity // 2**(idx + 1))
+            var_y = self.blocks.upscale(var_y, mask_b_complexity // 2**self.downscalers_no)
 
             var_y = self.blocks.conv2d(var_y, 1,
                                        kernel_size=5,
@@ -174,7 +179,7 @@ class Model(ModelBase):
         decoder_a_complexity = int(self.config["complexity_decoder"] / 1.5)
         for idx in range(self.upscalers_no-2):
             var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**idx)
-        var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**(idx + 1))
+        var_x = self.blocks.upscale(var_x, decoder_a_complexity // 2**self.downscalers_no)
 
         var_x = self.blocks.conv2d(var_x, 3,
                                    kernel_size=5,
