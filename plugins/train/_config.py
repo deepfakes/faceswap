@@ -41,17 +41,6 @@ class Config(FaceswapConfig):
         section = "global"
         self.add_section(title=section,
                          info="Options that apply to all models" + ADDITIONAL_INFO)
-        self.add_item(section=section, title="mask_type", datatype=str, default="none",
-                      choices=get_available_masks(), gui_radio=True,
-                      info="The mask to be used for training:"
-                           "\n\t none: Doesn't use any mask."
-                           "\n\t components: An improved face hull mask using a facehull of 8 "
-                           "facial parts"
-                           "\n\t dfl_full: An improved face hull mask using a facehull of 3 "
-                           "facial parts"
-                           "\n\t extended: Based on components mask. Extends the eyebrow points "
-                           "to further up the forehead. May perform badly on difficult angles."
-                           "\n\t facehull: Face cutout based on landmarks")
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
             info="\nUse ICNR to tile the default initializer in a repeating pattern. \n"
@@ -163,6 +152,17 @@ class Config(FaceswapConfig):
                  "between these two gradient maps. Allows for large color shifts,but \n"
                  "maintains the structure of the image."
                  )
+        self.add_item(section=section, title="mask_type", datatype=str, default="none",
+                      choices=get_available_masks(),
+                      info="The mask to be used for training:"
+                           "\n\t none: Doesn't use any mask."
+                           "\n\t components: An improved face hull mask using a facehull of 8 "
+                           "facial parts"
+                           "\n\t dfl_full: An improved face hull mask using a facehull of 3 "
+                           "facial parts"
+                           "\n\t extended: Based on components mask. Extends the eyebrow points "
+                           "to further up the forehead. May perform badly on difficult angles."
+                           "\n\t facehull: Face cutout based on landmarks")
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(1e-6, 1e-4), rounding=6, fixed=False,
