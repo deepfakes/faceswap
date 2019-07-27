@@ -366,7 +366,7 @@ class ImageManipulation():
         """ get pair of random warped images from aligned face image """
         logger.trace("Randomly warping image")
         height, width = image.shape[0:2]
-        coverage = self.get_coverage(image)
+        coverage = self.get_coverage(image) // 2
         try:
             assert height == width and height % 2 == 0
         except AssertionError as err:
@@ -377,7 +377,7 @@ class ImageManipulation():
                    "from the Extract process.".format(width, height))
             raise FaceswapError(msg) from err
 
-        range_ = np.linspace(height // 2 - coverage, height // 2 + coverage, 5, dtype='float32')
+        range_ = np.linspace(height // 2 - coverage , height // 2 + coverage, 5, dtype='float32')
         mapx = np.broadcast_to(range_, (5, 5)).copy()
         mapy = mapx.T
         # mapx, mapy = np.float32(np.meshgrid(range_,range_)) # instead of broadcast
@@ -413,7 +413,7 @@ class ImageManipulation():
             From DFAKER plugin """
         logger.trace("Randomly warping landmarks")
         size = image.shape[0]
-        coverage = self.get_coverage(image)
+        coverage = self.get_coverage(image) // 2
 
         p_mx = size - 1
         p_hf = (size // 2) - 1
@@ -461,7 +461,7 @@ class ImageManipulation():
         target_image = image
 
         # TODO Make sure this replacement is correct
-        slices = slice(size // 2 - coverage // 2, size // 2 + coverage // 2)
+        slices = slice(size // 2 - coverage, size // 2 + coverage)
 #        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
         warped_image = cv2.resize(  # pylint:disable=no-member
             warped_image[slices, slices, :], (self.input_size, self.input_size),
