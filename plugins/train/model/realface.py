@@ -8,7 +8,6 @@
                        Kvrooman - additional couseling on autoencoders and practical advices
     """
 
-import sys
 from keras.initializers import RandomNormal
 from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
