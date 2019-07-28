@@ -7,7 +7,7 @@
     Additional thanks: Birb - source of inspiration, great Encoder ideas
                        Kvrooman - additional couseling on autoencoders and practical advices
     """
-    
+
 import sys
 from keras.initializers import RandomNormal
 from keras.layers import Dense, Flatten, Input, Reshape
@@ -21,10 +21,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-                                                  
-        if sys.platform == 'win32':
-            from ctypes import windll                
-            windll.user32.SetProcessDPIAware(True)                         
 
         self.configfile = kwargs.get("configfile", None)
         self.check_input_output()
