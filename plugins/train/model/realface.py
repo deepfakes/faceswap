@@ -53,7 +53,7 @@ class Model(ModelBase):
             exit(1)
         if not 64 <= self.config["output_size"] <= 256 or self.config["output_size"] % 32 != 0:
             logger.error("Config error: output_size must be between 64 and 256 and be divisible "
-                         "by 16.")
+                         "by 32.")
             exit(1)
         logger.debug("Input and output sizes are valid")
 
