@@ -7,7 +7,8 @@
     Additional thanks: Birb - source of inspiration, great Encoder ideas
                        Kvrooman - additional couseling on autoencoders and practical advices
     """
-
+    
+import sys
 from keras.initializers import RandomNormal
 from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
@@ -20,6 +21,10 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
+                                                  
+        if sys.platform == 'win32':
+            from ctypes import windll                
+            windll.user32.SetProcessDPIAware(True)                         
 
         self.configfile = kwargs.get("configfile", None)
         self.check_input_output()
@@ -51,7 +56,7 @@ class Model(ModelBase):
             logger.error("Config error: input_size must be between 64 and 128 and be divisible by "
                          "16.")
             exit(1)
-        if not 64 <= self.config["output_size"] <= 256 or self.config["output_size"] % 16 != 0:
+        if not 64 <= self.config["output_size"] <= 256 or self.config["output_size"] % 32 != 0:
             logger.error("Config error: output_size must be between 64 and 256 and be divisible "
                          "by 16.")
             exit(1)
