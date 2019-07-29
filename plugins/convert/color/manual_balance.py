@@ -21,6 +21,21 @@ class Color(Adjustment):
                 image[:, :, idx] = image[:, :, idx] * (1 + adjustment[idx])
 
         image = self.convert_colorspace(image * 255.0, to_bgr=True)
+        
+        constrast = self.config["constrast_adj"]
+        brightness = self.config["brightness_adj"]
+
+        if constrast or brightness:            
+            image = self.adjustContrast(image, constrast, brightness)
+        return image
+    
+    def adjustContrast(self, image, contrast, brightness):
+        """
+        Adjust image contrast and brightness.
+        """
+        image = np.rint(image * 255.0).astype("uint8")
+        image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)
+        image = np.clip(np.divide(image, 255, dtype=np.float32), .0, 1.0)
         return image
 
     def convert_colorspace(self, new_face, to_bgr=False):
@@ -29,5 +44,5 @@ class Color(Adjustment):
         colorspace = "YCrCb" if mode == "ycrcb" else mode.upper()
         conversion = "{}2BGR".format(colorspace) if to_bgr else "BGR2{}".format(colorspace)
         image = cv2.cvtColor(new_face.astype("uint8"),  # pylint: disable=no-member
-                             getattr(cv2, "COLOR_{}".format(conversion))).astype("float32") / 255.0
+                             getattr(cv2, "COLOR_{}".format(conversion))).astype("float32") / 255.0        
         return image
