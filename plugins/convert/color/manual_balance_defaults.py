@@ -114,7 +114,7 @@ _DEFAULTS = {
         "gui_radio": False,
         "fixed": True,
     },
-       "constrast_adj": {
+    "constrast_adj": {
         "default": 0,
         "info": "Amount of contrast applied.",
         "datatype": int,

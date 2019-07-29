@@ -21,14 +21,14 @@ class Color(Adjustment):
                 image[:, :, idx] = image[:, :, idx] * (1 + adjustment[idx])
 
         image = self.convert_colorspace(image * 255.0, to_bgr=True)
-        
+
         constrast = self.config["constrast_adj"]
         brightness = self.config["brightness_adj"]
 
-        if constrast or brightness:            
+        if constrast or brightness:
             image = self.adjustContrast(image, constrast, brightness)
         return image
-    
+
     def adjustContrast(self, image, contrast, brightness):
         """
         Adjust image contrast and brightness.
