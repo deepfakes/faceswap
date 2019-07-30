@@ -22,8 +22,8 @@ class Color(Adjustment):
 
         image = self.convert_colorspace(image * 255.0, to_bgr=True)
 
-        constrast = self.config["constrast_adj"]
-        brightness = self.config["brightness_adj"]
+        constrast = max(-126, int(round(self.config["constrast"] * 1.27)))
+        brightness = max(-126, int(round(self.config["brightness"] * 1.27)))
 
         if constrast or brightness:
             image = self.adjustContrast(image, constrast, brightness)
