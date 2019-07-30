@@ -255,6 +255,7 @@ class FaceswapConfig():
         f_cfgfile = open(self.configfile, "w")
         self.config.write(f_cfgfile)
         f_cfgfile.close()
+        logger.debug("Updated config at: '%s'", self.configfile)
 
     def validate_config(self):
         """ Check for options in default config against saved config

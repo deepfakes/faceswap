@@ -543,12 +543,18 @@ class ConfigTools():
         """ Update config with selected values """
         for section, items in self.tk_vars.items():
             for item, value in items.items():
-                new_value = str(value.get())
+                try:
+                    new_value = str(value.get())
+                except tk.TclError as err:
+                    # When manually filling in text fields, blank values will
+                    # raise an error on numeric datatypes so return 0
+                    logger.debug("Error getting value. Defaulting to 0. Error: %s", str(err))
+                    new_value = str(0)
                 old_value = self.config.config[section][item]
                 if new_value != old_value:
                     logger.trace("Updating config: %s, %s from %s to %s",
                                  section, item, old_value, new_value)
-                    self.config.config[section][item] = str(value.get())
+                    self.config.config[section][item] = new_value
 
     def get_config_dicts(self):
         """ Hold a custom config dict for the config """
