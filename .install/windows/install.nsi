@@ -17,7 +17,7 @@ InstallDir $PROFILE\faceswap
 !define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 #!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
-
+!define wwwFaceswap "https://www.faceswap.dev"
 
 # Faceswap Specific
 !define flagsSetup "--installer"
@@ -306,6 +306,8 @@ Section Install
     Call SetEnvironment
     Call SetupFaceSwap
     Call DesktopShortcut
+    ExecShell "open" "${wwwFaceswap}"
+    DetailPrint "Visit ${wwwFaceswap} for help and support."
 SectionEnd
 
 Function InstallPrerequisites
