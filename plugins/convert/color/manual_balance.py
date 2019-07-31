@@ -31,7 +31,7 @@ class Color(Adjustment):
         contrast = max(-126, int(round(self.config["contrast"] * 1.27)))
         brightness = max(-126, int(round(self.config["brightness"] * 1.27)))
 
-        if not contrast or not brightness:
+        if not contrast and not brightness:
             return image
 
         image = np.rint(image * 255.0).astype("uint8")
