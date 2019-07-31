@@ -28,12 +28,12 @@ class Color(Adjustment):
         """
         Adjust image contrast and brightness.
         """
-        contrast  = max(-126, int(round(self.config["contrast"] * 1.27)))
+        contrast = max(-126, int(round(self.config["contrast"] * 1.27)))
         brightness = max(-126, int(round(self.config["brightness"] * 1.27)))
-        
+
         if not contrast or not brightness:
             return image
-        
+
         image = np.rint(image * 255.0).astype("uint8")
         image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)
         image = np.clip(np.divide(image, 255, dtype=np.float32), .0, 1.0)
