@@ -114,7 +114,7 @@ _DEFAULTS = {
         "gui_radio": False,
         "fixed": True,
     },
-    "constrast": {
+    "contrast": {
         "default": 0.0,
         "info": "Amount of contrast applied.",
         "datatype": float,
