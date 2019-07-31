@@ -31,10 +31,12 @@ class Color(Adjustment):
         contrast  = max(-126, int(round(self.config["contrast"] * 1.27)))
         brightness = max(-126, int(round(self.config["brightness"] * 1.27)))
         
-        if contrast or brightness:        
-            image = np.rint(image * 255.0).astype("uint8")
-            image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)
-            image = np.clip(np.divide(image, 255, dtype=np.float32), .0, 1.0)
+        if not contrast or not brightness:
+            return image
+        
+        image = np.rint(image * 255.0).astype("uint8")
+        image = np.clip(image * (contrast/127+1) - contrast + brightness, 0, 255)
+        image = np.clip(np.divide(image, 255, dtype=np.float32), .0, 1.0)
         return image
 
     def convert_colorspace(self, new_face, to_bgr=False):
