@@ -58,86 +58,69 @@ class Config(FaceswapConfig):
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="icnr_init", datatype=bool, default=False,
-            info="\nUse ICNR to tile the default initializer in a repeating pattern. \n"
-                 "This strategy is designed for pairing with sub-pixel / pixel shuffler \n"
-                 "to reduce the 'checkerboard effect' in image reconstruction. \n"
-                 "https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf \n")
+            info="Use ICNR to tile the default initializer in a repeating pattern. "
+                 "This strategy is designed for pairing with sub-pixel / pixel shuffler "
+                 "to reduce the 'checkerboard effect' in image reconstruction. "
+                 "\n\t https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
         self.add_item(
             section=section, title="conv_aware_init", datatype=bool, default=False,
-            info="Use Convolution Aware Initialization for convolutional layers. \n"
-                 "This can help eradicate the vanishing and exploding gradient problem \n"
-                 "as well as lead to higher accuracy, lower loss and faster convergence. \n"
-                 "NB This can use more VRAM when creating a new model so you may want to \n"
-                 "lower the batch size for the first run. The batch size can be raised \n"
-                 "again when reloading the model. \n"
-                 "NB: Building the model will likely take several minutes as the calculations \n"
-                 "for this initialization technique are expensive. \n")
+            info="Use Convolution Aware Initialization for convolutional layers. "
+                 "This can help eradicate the vanishing and exploding gradient problem "
+                 "as well as lead to higher accuracy, lower loss and faster convergence. "
+                 "NB This can use more VRAM when creating a new model so you may want to "
+                 "lower the batch size for the first run. The batch size can be raised "
+                 "again when reloading the model. "
+                 "\n\t NB: Building the model will likely take several minutes as the calculations "
+                 "for this initialization technique are expensive.")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
-            info="\nUse subpixel upscaling rather than pixel shuffler. These techniques \n"
-                 "are both designed to produce better resolving upscaling than other \n"
-                 "methods. Each perform the same operations, but using different TF opts.\n"
-                 "https://arxiv.org/pdf/1609.05158.pdf \n")
+            info="Use subpixel upscaling rather than pixel shuffler. These techniques "
+                 "are both designed to produce better resolving upscaling than other "
+                 "methods. Each perform the same operations, but using different TF opts."
+                 "\n\t https://arxiv.org/pdf/1609.05158.pdf")
         self.add_item(
             section=section, title="reflect_padding", datatype=bool, default=False,
-            info="\nUse reflection padding rather than zero padding with convolutions. \n"
-                 "Each convolution must pad the image boundaries to maintain the proper \n"
-                 "sizing. More complex padding schemes can reduce artifacts at the \n"
-                 "border of the image.\n"
-                 "http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt \n")
+            info="Use reflection padding rather than zero padding with convolutions. "
+                 "Each convolution must pad the image boundaries to maintain the proper "
+                 "sizing. More complex padding schemes can reduce artifacts at the "
+                 "border of the image."
+                 "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool, default=True,
-            info="\nImage loss function is weighted by mask presence. For areas of \n"
-                 "the image without the facial mask, reconstuction errors will be \n"
-                 "ignored while the masked face area is prioritized. May increase \n"
-                 "overall quality by focusing attention on the core face area.\n")
+            info="Image loss function is weighted by mask presence. For areas of "
+                 "the image without the facial mask, reconstuction errors will be "
+                 "ignored while the masked face area is prioritized. May increase "
+                 "overall quality by focusing attention on the core face area.")
         self.add_item(
             section=section, title="image_loss_function", datatype=str,
             default="Mean_Absolute_Error",
             choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
                      "Smooth_L1", "L_inf_norm", "SSIM", "GMSD", "Pixel_Gradient_Difference"],
-            info="\nMean_Absolute_Error ---\n"
-                 "MAE will guide reconstructions of each pixel towards its median \n"
-                 "value in the training dataset. Robust to outliers but as a median, \n"
-                 "it can potentially ignore some infrequent image types in the dataset. \n"
-
-                 "\nMean_Squared_Error ---\n"
-                 "MSE will guide reconstructions of each pixel towards its average \n"
-                 "value in the training dataset. As an avg, it will be suspectible to \n"
-                 "outliers and typically produces slightly blurrier results. \n"
-
-                 "\nLogCosh ---\n"
-                 "log(cosh(x)) acts similiar to MSE for small errors and to MAE for large \n"
-                 "errors. Like MSE, it is very stable and prevents overshoots when errors \n"
-                 "are near zero. Like MAE, it is robust to outliers. \n"
-
-                 "\nSmooth_L1 ---\n"
-                 "Modification of the MAE loss to correct two of its disadvantages. \n"
-                 "This loss has improved stability and better guidance for small errors. \n"
-
-                 "\nL_inf_norm ---\n"
-                 "The L_inf norm will reduce the largest individual pixel error in an image. \n"
-                 "As each largest error is minimized sequentially, the overall error is \n"
-                 "improved. This loss will be extremely focused on outliers. \n"
-
-                 "\nSSIM - Structural Similarity Index Metric ---\n"
-                 "SSIM is a perception-based loss that considers changes in texture, \n"
-                 "luminance, contrast, and local spatial statistics of an image. \n"
-                 "Potentially better textural, and realistic looking images. \n"
-
-                 "\nGMSD - Gradient Magnitude Similarity Deviation ---\n"
-                 "GMSD seeks to match the differences between pixel color changes \n"
-                 "when moving from pixel to pixel in an image. Corresponding pixels in \n"
-                 "two images will have a difference with their neighboring pixels. \n"
-                 "The global standard deviation of the pixel to pixel differences for \n"
-                 "each image is calculated and the differnece in this metric is minimized. \n"
-
-                 "\nPixel_Gradient_Difference ---\n"
-                 "Instead of minimizing the difference between the absolute value of \n"
-                 "each pixel in two reference images, compute the pixel to pixel \n"
-                 "spatial difference in each image and then minimize that difference \n"
-                 "between two images. Allows for large color shifts,but maintains the \n"
-                 "structure of the image.\n"
+            info="\n\t Mean_Absolute_Error --- MAE will guide reconstructions of each pixel "
+                 "towards its median value in the training dataset. Robust to outliers but as "
+                 "a median, it can potentially ignore some infrequent image types in the dataset."
+                 "\n\t Mean_Squared_Error --- MSE will guide reconstructions of each pixel "
+                 "towards its average value in the training dataset. As an avg, it will be "
+                 "suspectible to outliers and typically produces slightly blurrier results."
+                 "\n\t LogCosh --- log(cosh(x)) acts similiar to MSE for small errors and to "
+                 "MAE for large errors. Like MSE, it is very stable and prevents overshoots "
+                 "when errors are near zero. Like MAE, it is robust to outliers."
+                 "\n\t Smooth_L1 --- Modification of the MAE loss to correct two of its "
+                 "disadvantages. This loss has improved stability and guidance for small errors."
+                 "\n\t L_inf_norm --- The L_inf norm will reduce the largest individual pixel "
+                 "error in an image. As each largest error is minimized sequentially, the "
+                 "overall error is improved. This loss will be extremely focused on outliers."
+                 "\n\t SSIM - Structural Similarity Index Metric --- SSIM is a perception-based "
+                 "loss that considers changes in texture, luminance, contrast, and local spatial "
+                 "statistics of an image. Potentially delivers more realistic looking images."
+                 "\n\t GMSD - Gradient Magnitude Similarity Deviation --- GMSD seeks to match "
+                 "the global standard deviation of the pixel to pixel differences between two "
+                 "images. Similiar in approach to SSIM."
+                 "\n\t Pixel_Gradient_Difference --- Instead of minimizing the difference between "
+                 "the absolute value of each pixel in two reference images, compute the pixel to "
+                 "pixel spatial difference in each image and then minimize that difference "
+                 "between two images. Allows for large color shifts,but maintains the structure "
+                 "of the image.\n"
                  )
         self.add_item(section=section, title="mask_type", datatype=str, default="none",
                       choices=get_available_masks(),
@@ -153,15 +136,15 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(1e-6, 1e-4), rounding=6, fixed=False,
-            info="Learning rate - how fast your network will learn (how large are \n"
-                 "the modifications to the model weights after one batch of training).\n"
-                 "Values that are too large might result in model crashes and the \n"
-                 "inability of the model to find the best solution.\n"
-                 "Values that are too small might be unable to escape from dead-ends \n"
+            info="Learning rate - how fast your network will learn (how large are "
+                 "the modifications to the model weights after one batch of training). "
+                 "Values that are too large might result in model crashes and the "
+                 "inability of the model to find the best solution. "
+                 "Values that are too small might be unable to escape from dead-ends "
                  "and find the best global minimum.")
         self.add_item(
             section=section, title="coverage", datatype=float, default=68.75,
-            min_max=(62.5, 100.0), fixed=True,
+            min_max=(62.5, 100.0), rounding=3, fixed=True,
             info="How much of the extracted image to train on. Generally the model is optimized"
                 "\nto the default value. Sensible values to use are:"
                 "\n\t62.5%% spans from eyebrow to eyebrow."
