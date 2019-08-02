@@ -667,16 +667,16 @@ class Loss():
         """ Set the loss function """
         loss_funcs = []
         largest_face = self.largest_output
-        loss_dict = {'Mean_Absolute_Error':         losses.mean_absolute_error,
-                     'Mean_Squared_Error':          losses.mean_squared_error,
-                     'LogCosh':                     losses.logcosh,
-                     'SSIM':                        DSSIMObjective(),
-                     'GMSD':                        gmsd_loss,
-                     'Smooth_L1':                   generalized_loss,
-                     'L_inf_norm':                  l_inf_norm,
-                     'Pixel_Gradient_Difference':   gradient_loss}
-        img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
-        mask_loss_config = "Mean_Squared_Error"
+        loss_dict = {'mae':                     losses.mean_absolute_error,
+                     'mse':                     losses.mean_squared_error,
+                     'logcosh':                 losses.logcosh,
+                     'smooth_l1':               generalized_loss,
+                     'l_inf_norm':              l_inf_norm,
+                     'ssim':                    DSSIMObjective(),
+                     'gmsd':                    gmsd_loss,
+                     'pixel_gradient_diff':     gradient_loss}
+        img_loss_config = self.config.get("loss_function", "mae")
+        mask_loss_config = "mse"
 
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):

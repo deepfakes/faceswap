@@ -92,17 +92,17 @@ class Config(FaceswapConfig):
                  "ignored while the masked face area is prioritized. May increase "
                  "overall quality by focusing attention on the core face area.")
         self.add_item(
-            section=section, title="image_loss_function", datatype=str,
-            default="Mean_Absolute_Error",
-            choices=["Mean_Absolute_Error", "Mean_Squared_Error", "LogCosh",
-                     "Smooth_L1", "L_inf_norm", "SSIM", "GMSD", "Pixel_Gradient_Difference"],
-            info="\n\t Mean_Absolute_Error --- MAE will guide reconstructions of each pixel "
+            section=section, title="loss_function", datatype=str,
+            default="mae",
+            choices=["mae", "mse", "logcosh", "smooth_l1", "l_inf_norm", "ssim", "gmsd",
+                     "pixel_gradient_diff"],
+            info="\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
                  "towards its median value in the training dataset. Robust to outliers but as "
                  "a median, it can potentially ignore some infrequent image types in the dataset."
-                 "\n\t Mean_Squared_Error --- MSE will guide reconstructions of each pixel "
+                 "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
                  "towards its average value in the training dataset. As an avg, it will be "
                  "suspectible to outliers and typically produces slightly blurrier results."
-                 "\n\t LogCosh --- log(cosh(x)) acts similiar to MSE for small errors and to "
+                 "\n\t LogCosh - log(cosh(x)) acts similiar to MSE for small errors and to "
                  "MAE for large errors. Like MSE, it is very stable and prevents overshoots "
                  "when errors are near zero. Like MAE, it is robust to outliers."
                  "\n\t Smooth_L1 --- Modification of the MAE loss to correct two of its "
@@ -110,13 +110,13 @@ class Config(FaceswapConfig):
                  "\n\t L_inf_norm --- The L_inf norm will reduce the largest individual pixel "
                  "error in an image. As each largest error is minimized sequentially, the "
                  "overall error is improved. This loss will be extremely focused on outliers."
-                 "\n\t SSIM - Structural Similarity Index Metric --- SSIM is a perception-based "
+                 "\n\t SSIM - Structural Similarity Index Metric is a perception-based "
                  "loss that considers changes in texture, luminance, contrast, and local spatial "
                  "statistics of an image. Potentially delivers more realistic looking images."
-                 "\n\t GMSD - Gradient Magnitude Similarity Deviation --- GMSD seeks to match "
+                 "\n\t GMSD - Gradient Magnitude Similarity Deviation seeks to match "
                  "the global standard deviation of the pixel to pixel differences between two "
                  "images. Similiar in approach to SSIM."
-                 "\n\t Pixel_Gradient_Difference --- Instead of minimizing the difference between "
+                 "\n\t Pixel_Gradient_Difference - Instead of minimizing the difference between "
                  "the absolute value of each pixel in two reference images, compute the pixel to "
                  "pixel spatial difference in each image and then minimize that difference "
                  "between two images. Allows for large color shifts,but maintains the structure "
@@ -144,9 +144,11 @@ class Config(FaceswapConfig):
                  "and find the best global minimum.")
         self.add_item(
             section=section, title="coverage", datatype=float, default=68.75,
-            min_max=(62.5, 100.0), rounding=3, fixed=True,
-            info="How much of the extracted image to train on. Generally the model is optimized"
-                 "\nto the default value. Sensible values to use are:"
+            min_max=(62.5, 100.0), rounding=2, fixed=True,
+            info="How much of the extracted image to train on. A lower coverage will limit the model's "
+                 "scope to a zoomed-in central area while higher amounts can include the entire face. "
+                 "A trade-off exists between lower amounts given a bit more detail versus higher amounts "
+                 "avoiding noticeable swap transitions. Sensible values to use are:"
                  "\n\t62.5%% spans from eyebrow to eyebrow."
                  "\n\t75.0%% spans from temple to temple."
                  "\n\t87.5%% spans from ear to ear."
