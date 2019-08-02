@@ -776,7 +776,7 @@ class NNMeta():
             return False
         self.config = network.get_config()
         self.network = network  # Update network with saved model
-        self.network.name = self.type
+        self.network.name = self.name
         return True
 
     def save(self, fullpath=None, backup_func=None):
