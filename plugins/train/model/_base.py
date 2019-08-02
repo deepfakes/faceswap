@@ -668,14 +668,14 @@ class Loss():
         """ Set the loss function """
         loss_funcs = []
         largest_face = self.largest_output
-        loss_dict = {'Mean_Absolute_Error':    losses.mean_absolute_error,
-                     'Mean_Squared_Error':     losses.mean_squared_error,
-                     'LogCosh':                losses.logcosh,
-                     'SSIM':                   DSSIMObjective(),
-                     'GMSD':                   gmsd_loss,
-                     'Total_Variation':        gradient_loss,
-                     'Smooth_L1':              generalized_loss,
-                     'L_inf_norm':             l_inf_norm}
+        loss_dict = {'Mean_Absolute_Error':         losses.mean_absolute_error,
+                     'Mean_Squared_Error':          losses.mean_squared_error,
+                     'LogCosh':                     losses.logcosh,
+                     'SSIM':                        DSSIMObjective(),
+                     'GMSD':                        gmsd_loss,
+                     'Smooth_L1':                   generalized_loss,
+                     'L_inf_norm':                  l_inf_norm,
+                     'Pixel_Gradient_Difference':   gradient_loss}
         img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
         mask_loss_config = "Mean_Squared_Error"
 
