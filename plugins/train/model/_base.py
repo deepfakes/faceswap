@@ -374,7 +374,6 @@ class ModelBase():
         for side, model in self.predictors.items():
             mask_input = [inp for inp in model.inputs if inp.name.startswith("mask")]
             loss = Loss(side, model.outputs, mask_input, self.predict)
-            # loss = self.loss_function(mask, side, initialize)
             model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
                 self.state.add_session_loss_names(side, loss.names)
@@ -681,18 +680,15 @@ class Loss():
 
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
-                logger.verbose("Using %s loss function for mask", mask_loss_config)
                 loss_funcs.append(loss_dict[mask_loss_config])
                 logger.debug("mask loss: %s", mask_loss_config)
             elif mask and idx == largest_face and self.config.get("penalized_mask_loss", False):
-                logger.verbose("Image loss function is weighted by mask presence")
                 loss_funcs.append(PenalizedLoss(mask[0], loss_dict[img_loss_config]))
                 logger.debug("final face loss: %s", img_loss_config)
             else:
-                logger.verbose("Using %s loss function for image", img_loss_config)
                 loss_funcs.append(loss_dict[img_loss_config])
                 logger.debug("face loss func: %s", img_loss_config)
-            logger.debug(loss_funcs)
+        logger.debug(loss_funcs)
         return loss_funcs
 
 class NNMeta():
