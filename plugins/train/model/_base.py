@@ -374,6 +374,7 @@ class ModelBase():
         for side, model in self.predictors.items():
             mask_input = [inp for inp in model.inputs if inp.name.startswith("mask")]
             loss = Loss(side, model.outputs, mask_input, self.predict)
+            # loss = self.loss_function(mask, side, initialize)
             model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
                 self.state.add_session_loss_names(side, loss.names)
@@ -665,35 +666,34 @@ class Loss():
 
     def get_loss_functions(self, side, predict, mask):
         """ Set the loss function """
-        loss_funcs = list()
+        loss_funcs = []
         largest_face = self.largest_output
-
-        if self.config.get("dssim_loss", False):
-            if not predict and side.lower() == "a":
-                logger.verbose("Using DSSIM Loss")
-            loss_func = DSSIMObjective()
-        else:
-            loss_func = losses.mean_absolute_error
-            if not predict and side.lower() == "a":
-                logger.verbose("Using Mean Absolute Error Loss")
+        loss_dict = {'Mean_Absolute_Error':         losses.mean_absolute_error,
+                     'Mean_Squared_Error':          losses.mean_squared_error,
+                     'LogCosh':                     losses.logcosh,
+                     'SSIM':                        DSSIMObjective(),
+                     'GMSD':                        gmsd_loss,
+                     'Smooth_L1':                   generalized_loss,
+                     'L_inf_norm':                  l_inf_norm,
+                     'Pixel_Gradient_Difference':   gradient_loss}
+        img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
+        mask_loss_config = "Mean_Squared_Error"
 
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
-                mask_func = losses.mean_squared_error
-                loss_funcs.append(mask_func)
-                logger.debug("mask loss: %s", mask_func)
+                logger.verbose("Using %s loss function for mask", mask_loss_config)
+                loss_funcs.append(loss_dict[mask_loss_config])
+                logger.debug("mask loss: %s", mask_loss_config)
             elif mask and idx == largest_face and self.config.get("penalized_mask_loss", False):
-                face_func = PenalizedLoss(mask[0], loss_func)
-                logger.debug("final face loss: %s", face_func)
-                loss_funcs.append(face_func)
-                if not predict and side.lower() == "a":
-                    logger.verbose("Penalizing mask for Loss")
+                logger.verbose("Image loss function is weighted by mask presence")
+                loss_funcs.append(PenalizedLoss(mask[0], loss_dict[img_loss_config]))
+                logger.debug("final face loss: %s", img_loss_config)
             else:
-                logger.debug("face loss func: %s", loss_func)
-                loss_funcs.append(loss_func)
-        logger.debug(loss_funcs)
+                logger.verbose("Using %s loss function for image", img_loss_config)
+                loss_funcs.append(loss_dict[img_loss_config])
+                logger.debug("face loss func: %s", img_loss_config)
+            logger.debug(loss_funcs)
         return loss_funcs
-
 
 class NNMeta():
     """ Class to hold a neural network and it's meta data
