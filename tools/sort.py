@@ -57,7 +57,7 @@ class Sort():
 
         # Load VGG Face if sorting by face
         if self.args.sort_method.lower() == "face":
-            self.vgg_face = VGGFace(backend=self.args.backend)
+            self.vgg_face = VGGFace(backend=self.args.backend, loglevel=self.args.loglevel)
 
         # If logging is enabled, prepare container
         if self.args.log_changes:
