@@ -36,7 +36,7 @@ class Config(FaceswapConfig):
                 self.load_module(filename, import_path, plugin_type)
 
     def set_globals(self):
-        """ 
+        """
         Set the global options for training
 
         Loss Documentation
@@ -70,8 +70,8 @@ class Config(FaceswapConfig):
                  "NB This can use more VRAM when creating a new model so you may want to "
                  "lower the batch size for the first run. The batch size can be raised "
                  "again when reloading the model. "
-                 "\n\t NB: Building the model will likely take several minutes as the calculations "
-                 "for this initialization technique are expensive.")
+                 "\n\t NB: Building the model will likely take several minutes as the "
+                 "calculations for this initialization technique are expensive.")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Use subpixel upscaling rather than pixel shuffler. These techniques "
@@ -146,11 +146,11 @@ class Config(FaceswapConfig):
             section=section, title="coverage", datatype=float, default=68.75,
             min_max=(62.5, 100.0), rounding=3, fixed=True,
             info="How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.")
+                 "\nto the default value. Sensible values to use are:"
+                 "\n\t62.5%% spans from eyebrow to eyebrow."
+                 "\n\t75.0%% spans from temple to temple."
+                 "\n\t87.5%% spans from ear to ear."
+                 "\n\t100.0%% is a mugshot.")
 
     def load_module(self, filename, module_path, plugin_type):
         """ Load the defaults module and add defaults """
