@@ -373,7 +373,7 @@ class ModelBase():
 
         for side, model in self.predictors.items():
             mask_input = [inp for inp in model.inputs if inp.name.startswith("mask")]
-            loss = Loss(side, model.outputs, mask_input, self.predict)
+            loss = Loss(model.outputs, mask_input)
             model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
                 self.state.add_session_loss_names(side, loss.names)
@@ -612,12 +612,12 @@ class ModelBase():
 
 class Loss():
     """ Holds loss names and functions for an Autoencoder """
-    def __init__(self, side, outputs, mask_input, predict):
-        logger.debug("Initializing %s: (side: '%s', outputs: '%s', mask_input: '%s', predict: %s",
-                     self.__class__.__name__, side, outputs, mask_input, predict)
+    def __init__(self, outputs, mask_input):
+        logger.debug("Initializing %s: (outputs: '%s', mask_input: '%s')",
+                     self.__class__.__name__, outputs, mask_input)
         self.outputs = outputs
         self.names = self.get_loss_names()
-        self.funcs = self.get_loss_functions(side, predict, mask_input)
+        self.funcs = self.get_loss_functions(mask_input)
         if len(self.names) > 1:
             self.names.insert(0, "total_loss")
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -663,7 +663,7 @@ class Loss():
         logger.debug("Renamed loss names to: %s", loss_names)
         return loss_names
 
-    def get_loss_functions(self, side, predict, mask):
+    def get_loss_functions(self, mask):
         """ Set the loss function """
         loss_funcs = []
         largest_face = self.largest_output
@@ -690,6 +690,7 @@ class Loss():
                 logger.debug("face loss func: %s", img_loss_config)
         logger.debug(loss_funcs)
         return loss_funcs
+
 
 class NNMeta():
     """ Class to hold a neural network and it's meta data
@@ -888,7 +889,6 @@ class State():
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", state)
-                self.update_legacy_config()
                 self.replace_config(config_changeable_items)
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
@@ -926,11 +926,27 @@ class State():
             if key not in self.config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
                 self.config[key] = val
+        legacy_update = self.update_legacy_config()
         self.update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
+        if legacy_update:
+            self.save()
         logger.debug("Replaced config. New config: %s", _CONFIG)
         logger.info("Using configuration saved in state file")
+
+    def update_legacy_config(self):
+        """ Update legacy state config files with the new loss formating
+        """
+        prior = "dssim_loss"
+        new = "loss_function"
+        if prior not in self.config:
+            return False
+        self.config[new] = "ssim" if self.config[prior] else "mae"
+        del self.config[prior]
+        logger.info("Updated config from older dssim format. New config loss function: %s",
+                    self.config[new])
+        return True
 
     def update_changed_config_items(self, config_changeable_items):
         """ Update any parameters which are not fixed and have been changed """
@@ -943,13 +959,3 @@ class State():
                 continue
             self.config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
-
-    def update_legacy_config(self):
-        """ Update legacy state config files with the new loss formating
-        """
-        prior = "dssim_loss"
-        new = "loss_function"
-        if prior in self.config.keys() and new not in self.config.keys():
-            self.config[new] = "ssim" if self.config[prior] is True else "mae"
-            logger.debug("Updated config from older dssim format. New config loss function: %s",
-                         self.config[new])
