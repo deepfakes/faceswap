@@ -6,7 +6,6 @@ import logging
 import cv2
 import numpy as np
 
-from lib.model import masks as model_masks
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -26,8 +25,7 @@ class Adjustment():
                      configfile, config)
         self.config = self.set_config(configfile, config)
         logger.debug("config: %s", self.config)
-        self.mask_type = self.get_mask_type(mask_type, predicted_available)
-        self.dummy = np.zeros((output_size, output_size, 3), dtype='float32')
+        self.output_size = output_size
 
         self.skip = self.config.get("type", None) is None
         logger.debug("Initialized %s", self.__class__.__name__)

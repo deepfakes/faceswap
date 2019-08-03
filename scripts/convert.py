@@ -46,7 +46,6 @@ class Convert():
         configfile = self.args.configfile if hasattr(self.args, "configfile") else None
         self.converter = Converter(get_folder(self.args.output_dir),
                                    self.predictor.output_size,
-                                   self.predictor.has_predicted_mask,
                                    self.disk_io.draw_transparent,
                                    self.disk_io.pre_encode,
                                    arguments,

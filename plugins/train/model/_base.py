@@ -11,11 +11,11 @@ import time
 
 from json import JSONDecodeError
 
-import keras
 from keras import losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model
+from keras.layers import Input, Concatenate
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
@@ -45,7 +45,6 @@ class ModelBase():
                  no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
-                 preview_scale=100,
                  input_shape=None,
                  encoder_dim=None,
                  trainer="original",
@@ -71,9 +70,10 @@ class ModelBase():
         self.gpus = gpus
         self.configfile = configfile
         self.input_shape = input_shape
+        self.mask_shape = (input_shape[:-1] + (1, ))
+        self.output_shape = None  # set after model is compiled
         self.encoder_dim = encoder_dim
         self.trainer = trainer
-
         self.load_config()  # Load config if plugin has not already referenced it
         self.state = State(self.model_dir,
                            self.name,
@@ -99,7 +99,6 @@ class ModelBase():
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
         self.training_opts = {"alignments": alignments_paths,
-                              "preview_scaling": preview_scale / 100,
                               "warp_to_landmarks": warp_to_landmarks,
                               "augment_color": augment_color,
                               "no_flip": no_flip,
@@ -211,11 +210,10 @@ class ModelBase():
     @staticmethod
     def set_gradient_type(memory_saving_gradients):
         """ Monkeypatch Memory Saving Gradients if requested """
-        if not memory_saving_gradients:
-            return
-        logger.info("Using Memory Saving Gradients")
-        from lib.model import memory_saving_gradients
-        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+        if memory_saving_gradients:
+            logger.info("Using Memory Saving Gradients")
+            from lib.model import memory_saving_gradients
+            K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
     def load_config(self):
         """ Load the global config for reference in self.config """
@@ -309,15 +307,15 @@ class ModelBase():
 
     def add_network(self, network_type, side, network, is_output=False):
         """ Add a NNMeta object """
-        logger.debug("network_type: '%s', side: '%s', network: '%s', is_output: %s",
-                     network_type, side, network, is_output)
-        filename = "{}_{}".format(self.name, network_type.lower())
-        name = network_type.lower()
+        logger.debug("network_type: '%s', side: '%s', network: '%s'", network_type, side, network)
+        f_string = ""
+        n_string = ""
         if side:
             side = side.lower()
-            filename += "_{}".format(side.upper())
-            name += "_{}".format(side)
-        filename += ".h5"
+            f_string = "_" + side.upper()
+            n_string = "_" + side
+        filename = "{0}_{1}{2}.h5".format(self.name, network_type.lower(), f_string)
+        name = "{0}{1}".format(network_type.lower(), n_string)
         logger.debug("name: '%s', filename: '%s'", name, filename)
         self.networks[name] = NNMeta(str(self.model_dir / filename),
                                      network_type,
@@ -368,8 +366,20 @@ class ModelBase():
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        learning_rate = self.config.get("learning_rate", 5e-5)
-        optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
+        opt_kwargs = {"lr":       self.config.get("learning_rate", 5e-5),
+                      "beta_1":   0.5,
+                      "beta_2":   0.999}
+        plaid = "plaidml.keras.backend"
+        if (self.config.get("clipnorm", False) and K.backend() != plaid):
+            opt_kwargs["clipnorm"] = 1.
+        # NB: Clipnorm is ballooning VRAM useage, which is not expected behaviour
+        # and may be a bug in Keras/TF.
+        # PlaidML has a bug regarding the clipnorm parameter
+        # See: https://github.com/plaidml/plaidml/issues/228
+        # Workaround by simply removing it.
+        # TODO: Remove this as soon it is fixed in PlaidML.
+        optimizer = Adam(**opt_kwargs)
+        logger.debug("Build optimizer with kwargs: %s", opt_kwargs)
 
         for side, model in self.predictors.items():
             mask_input = [inp for inp in model.inputs if inp.name.startswith("mask")]
@@ -379,6 +389,36 @@ class ModelBase():
                 self.state.add_session_loss_names(side, loss.names)
                 self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", loss.names)
+
+    def loss_function(self, mask, side, initialize):
+        """ Set the loss function for the image and mask
+            Side is input so we only log once """
+        loss_dict = {'Mean_Absolute_Error':    losses.mean_absolute_error,
+                     'Mean_Squared_Error':     losses.mean_squared_error,
+                     'LogCosh':                losses.logcosh,
+                     'SSIM':                   DSSIMObjective(),
+                     'GMSD':                   gmsd_loss,
+                     'Total_Variation':        gradient_loss,
+                     'Smooth_L1':              generalized_loss,
+                     'L_inf_norm':             l_inf_norm}
+        img_loss_config = self.config.get("image_loss_function", "Mean_Absolute_Error")
+        mask_loss_config = "Mean_Squared_Error"
+
+        if side == "a" and not self.predict and initialize:
+            logger.verbose("Using %s loss function for image", img_loss_config)
+            if mask:
+                logger.verbose("Using %s loss function for mask", mask_loss_config)
+                if self.config.get("mask-penalized_loss", False):
+                    logger.verbose("Image loss function is weighted by mask presence")
+
+        loss_names = ["loss"]
+        loss_funcs = [loss_dict[img_loss_config]]
+        if mask:
+            if self.config.get("mask-penalized_loss", False):
+                loss_funcs = [Mask_Penalized_Loss(mask[0], loss_dict[img_loss_config])]
+            loss_names.append("mask_loss")
+            loss_funcs.append(loss_dict[mask_loss_config])
+        return loss_names, loss_funcs
 
     def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
         """ Build and return Optimizer """
@@ -427,8 +467,6 @@ class ModelBase():
 
     def log_summary(self):
         """ Verbose log the model summaries """
-        if self.predict:
-            return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
             self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
@@ -769,6 +807,10 @@ class NNMeta():
             logger.warning("Failed loading existing training data. Generating new models")
             logger.debug("Exception: %s", str(err))
             return False
+        if self.type == "encoder" and len(network.inputs)==1:
+            self.network = self.convert_legacy_models(network)
+        else:
+            self.network = network
         self.config = network.get_config()
         self.network = network  # Update network with saved model
         self.network.name = self.name
@@ -789,6 +831,33 @@ class NNMeta():
         self.network.load_weights(self.filename)
         self.save(backup_func=None)
         self.network.name = self.type
+
+    def convert_legacy_models(self, network):
+        """ Convert single input(image) models to two inputs models(image,mask)
+        """
+        print("stripping model \n\n")
+        print(network.layers[0].input_shape,
+              network.layers[0].output_shape,
+              network.layers[1].input_shape,
+              network.layers[1].output_shape)
+        prev_input_shape = network.layers[0].output_shape[1:]
+        _face = Input(shape=prev_input_shape)
+        _mask = Input(shape=prev_input_shape[:-1] + (1,))
+        merge = Concatenate(axis=-1)([_face, _mask])
+        model_stub = Model(inputs=network.layers[1].input, outputs=network.outputs)
+        new_model = Model(inputs=[_face, _mask], outputs=model_stub(merge).outputs)
+
+        """
+        prev_input_shape = network.layers[0].output_shape[1:]
+        _face = Input(shape=prev_input_shape)
+        _mask = Input(shape=prev_input_shape[:-1] + (1,))
+        merge = Concatenate(axis=-1)([_face, _mask])
+        network.layers.pop(0)
+        network.layers[0].input = merge
+        new_model = Model(inputs=[_face, _mask], outputs=network.outputs)
+        """
+        return new_model
+
 
 
 class State():

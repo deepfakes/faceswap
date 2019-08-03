@@ -162,7 +162,7 @@ class DSSIMObjective():
 
 
 # <<< START: from Dfaker >>> #
-def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-name
+def Mask_Penalized_Loss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-name
     """ Plaidml + tf Penalized loss function """
     mask_as_k_inv_prop = 1 - mask_prop
     mask = (mask * mask_prop) + mask_as_k_inv_prop
