@@ -3,7 +3,7 @@
     Based on https://github.com/iperov/DeepFaceLab
 """
 
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, Concatenate
+from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
 from .original import logger, Model as OriginalModel
@@ -24,19 +24,17 @@ class Model(OriginalModel):
 
     def encoder(self):
         """ DFL H128 Encoder """
-        face_ = Input(shape=self.input_shape)
-        mask_ = Input(shape=self.mask_shape)
-        var_x = Concatenate(axis=-1)([face_, mask_])
+        input_ = Input(shape=self.input_shape)
+        var_x = input_
         var_x = self.blocks.conv(var_x, 128)
         var_x = self.blocks.conv(var_x, 256)
         var_x = self.blocks.conv(var_x, 512)
         var_x = self.blocks.conv(var_x, 1024)
-        var_x = Flatten()(var_x)
-        var_x = Dense(self.encoder_dim)(var_x)
+        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
         var_x = Reshape((8, 8, self.encoder_dim))(var_x)
         var_x = self.blocks.upscale(var_x, self.encoder_dim)
-        return KerasModel([face_, mask_], var_x)
+        return KerasModel(input_, var_x)
 
     def decoder(self):
         """ DFL H128 Decoder """
