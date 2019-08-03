@@ -99,7 +99,7 @@ class BlurMask():
             ksize = int(kwargs["ksize"][0])
             logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
             blurred = func(blurred, **kwargs)
-            ksize = int(ksize * self.multipass_factor)
+            ksize = round(ksize * self.multipass_factor)
             kwargs["ksize"] = self.get_kernel_tuple(ksize)
         logger.trace("Returning blurred mask. Shape: %s", blurred.shape)
         return blurred
@@ -109,8 +109,7 @@ class BlurMask():
         """ Multipass Factor
             For multiple passes the kernel must be scaled down. This value is
             different for box filter and gaussian """
-        factor = dict(gaussian=0.8,
-                      normalized=0.5)
+        factor = dict(gaussian=0.8, normalized=0.5)
         return factor[self.blur_type]
 
     @property
@@ -140,8 +139,8 @@ class BlurMask():
     def get_kernel_size(self, radius_ratio):
         """ Set the kernel size to absolute """
         mask_diameter = np.sqrt(np.sum(self.mask))
-        radius = max(1, round(mask_diameter * radius_ratio / 100))
-        kernel_size = int((radius * 2) + 1)
+        radius = round(max(1., mask_diameter * radius_ratio / 100.))
+        kernel_size = radius * 2 + 1
         logger.trace("kernel_size: %s", kernel_size)
         return kernel_size
 

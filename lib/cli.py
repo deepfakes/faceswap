@@ -867,12 +867,6 @@ class TrainArgs(FaceSwapArgs):
                               "required": True,
                               "help": "Input directory. A directory containing training images "
                                       "for face A."})
-        argument_list.append({"opts": ("-B", "--input-B"),
-                              "action": DirFullPaths,
-                              "dest": "input_b",
-                              "required": True,
-                              "help": "Input directory. A directory containing training images "
-                                      "for face B."})
         argument_list.append({"opts": ("-ala", "--alignments-A"),
                               "action": FileFullPaths,
                               "filetypes": 'alignments',
@@ -883,6 +877,23 @@ class TrainArgs(FaceSwapArgs):
                                       "if you are using a masked model or warp-to-landmarks is "
                                       "enabled. Defaults to <input-A>/alignments.json if not "
                                       "provided."})
+        argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_input_a",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain faces of A "
+                                      "which will be converted for the "
+                                      "timelapse. You must supply a "
+                                      "--timelapse-output and a "
+                                      "--timelapse-input-B parameter."})
+        argument_list.append({"opts": ("-B", "--input-B"),
+                              "action": DirFullPaths,
+                              "dest": "input_b",
+                              "required": True,
+                              "help": "Input directory. A directory containing training images "
+                                      "for face B."})
         argument_list.append({"opts": ("-alb", "--alignments-B"),
                               "action": FileFullPaths,
                               "filetypes": 'alignments',
@@ -893,12 +904,17 @@ class TrainArgs(FaceSwapArgs):
                                       "if you are using a masked model or warp-to-landmarks is "
                                       "enabled. Defaults to <input-B>/alignments.json if not "
                                       "provided."})
-        argument_list.append({"opts": ("-m", "--model-dir"),
+        argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
                               "action": DirFullPaths,
-                              "dest": "model_dir",
-                              "required": True,
-                              "help": "Model directory. This is where the training data will be "
-                                      "stored."})
+                              "dest": "timelapse_input_b",
+                              "default": None,
+                              "help": "For if you want a timelapse: "
+                                      "The input folder for the timelapse. "
+                                      "This folder should contain faces of B "
+                                      "which will be converted for the "
+                                      "timelapse. You must supply a "
+                                      "--timelapse-output and a "
+                                      "--timelapse-input-A parameter."})
         argument_list.append({"opts": ("-t", "--trainer"),
                               "action": Radio,
                               "type": str.lower,
@@ -925,6 +941,20 @@ class TrainArgs(FaceSwapArgs):
                                       "\nL|villain: 128px in/out model from villainguy. Very "
                                       "resource hungry (11GB for batchsize 16). Good for "
                                       "details, but more susceptible to color differences."})
+        argument_list.append({"opts": ("-to", "--timelapse-output"),
+                              "action": DirFullPaths,
+                              "dest": "timelapse_output",
+                              "default": None,
+                              "help": "The output folder for the timelapse. "
+                                      "If the input folders are supplied but "
+                                      "no output folder, it will default to "
+                                      "your model folder /timelapse/"})
+        argument_list.append({"opts": ("-m", "--model-dir"),
+                              "action": DirFullPaths,
+                              "dest": "model_dir",
+                              "required": True,
+                              "help": "Model directory. This is where the training data will be "
+                                      "stored."})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
@@ -1049,36 +1079,6 @@ class TrainArgs(FaceSwapArgs):
                                       "to color differences between the A and B sets, at an "
                                       "increased training time cost. Enable this option to "
                                       "disable color augmentation."})
-        argument_list.append({"opts": ("-tia", "--timelapse-input-A"),
-                              "action": DirFullPaths,
-                              "dest": "timelapse_input_a",
-                              "default": None,
-                              "help": "For if you want a timelapse: "
-                                      "The input folder for the timelapse. "
-                                      "This folder should contain faces of A "
-                                      "which will be converted for the "
-                                      "timelapse. You must supply a "
-                                      "--timelapse-output and a "
-                                      "--timelapse-input-B parameter."})
-        argument_list.append({"opts": ("-tib", "--timelapse-input-B"),
-                              "action": DirFullPaths,
-                              "dest": "timelapse_input_b",
-                              "default": None,
-                              "help": "For if you want a timelapse: "
-                                      "The input folder for the timelapse. "
-                                      "This folder should contain faces of B "
-                                      "which will be converted for the "
-                                      "timelapse. You must supply a "
-                                      "--timelapse-output and a "
-                                      "--timelapse-input-A parameter."})
-        argument_list.append({"opts": ("-to", "--timelapse-output"),
-                              "action": DirFullPaths,
-                              "dest": "timelapse_output",
-                              "default": None,
-                              "help": "The output folder for the timelapse. "
-                                      "If the input folders are supplied but "
-                                      "no output folder, it will default to "
-                                      "your model folder /timelapse/"})
         return argument_list
 
 

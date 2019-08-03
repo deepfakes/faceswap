@@ -20,7 +20,8 @@ from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import DSSIMObjective, PenalizedLoss
+from lib.model.losses import DSSIMObjective, PenalizedLoss, gradient_loss
+from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
 from lib.multithreading import MultiThread
@@ -35,7 +36,7 @@ class ModelBase():
     """ Base class that all models should inherit from """
     def __init__(self,
                  model_dir,
-                 gpus,
+                 gpus=1,
                  configfile=None,
                  snapshot_interval=0,
                  no_logs=False,
@@ -397,10 +398,8 @@ class ModelBase():
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
-        if swap:
-            model = self.predictors["a"]
-        else:
-            model = self.predictors["b"]
+        side = "a" if swap else "b"
+        model = self.predictors[side]
         if self.predict:
             # Must compile the model to be thread safe
             model._make_predict_function()  # pylint: disable=protected-access
@@ -666,35 +665,31 @@ class Loss():
 
     def get_loss_functions(self, side, predict, mask):
         """ Set the loss function """
-        loss_funcs = list()
+        loss_funcs = []
         largest_face = self.largest_output
-
-        if self.config.get("dssim_loss", False):
-            if not predict and side.lower() == "a":
-                logger.verbose("Using DSSIM Loss")
-            loss_func = DSSIMObjective()
-        else:
-            loss_func = losses.mean_absolute_error
-            if not predict and side.lower() == "a":
-                logger.verbose("Using Mean Absolute Error Loss")
+        loss_dict = {'mae':                     losses.mean_absolute_error,
+                     'mse':                     losses.mean_squared_error,
+                     'logcosh':                 losses.logcosh,
+                     'smooth_l1':               generalized_loss,
+                     'l_inf_norm':              l_inf_norm,
+                     'ssim':                    DSSIMObjective(),
+                     'gmsd':                    gmsd_loss,
+                     'pixel_gradient_diff':     gradient_loss}
+        img_loss_config = self.config.get("loss_function", "mae")
+        mask_loss_config = "mse"
 
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
-                mask_func = losses.mean_squared_error
-                loss_funcs.append(mask_func)
-                logger.debug("mask loss: %s", mask_func)
+                loss_funcs.append(loss_dict[mask_loss_config])
+                logger.debug("mask loss: %s", mask_loss_config)
             elif mask and idx == largest_face and self.config.get("penalized_mask_loss", False):
-                face_func = PenalizedLoss(mask[0], loss_func)
-                logger.debug("final face loss: %s", face_func)
-                loss_funcs.append(face_func)
-                if not predict and side.lower() == "a":
-                    logger.verbose("Penalizing mask for Loss")
+                loss_funcs.append(PenalizedLoss(mask[0], loss_dict[img_loss_config]))
+                logger.debug("final face loss: %s", img_loss_config)
             else:
-                logger.debug("face loss func: %s", loss_func)
-                loss_funcs.append(loss_func)
+                loss_funcs.append(loss_dict[img_loss_config])
+                logger.debug("face loss func: %s", img_loss_config)
         logger.debug(loss_funcs)
         return loss_funcs
-
 
 class NNMeta():
     """ Class to hold a neural network and it's meta data
@@ -893,6 +888,7 @@ class State():
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", state)
+                self.update_legacy_config()
                 self.replace_config(config_changeable_items)
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
@@ -947,3 +943,13 @@ class State():
                 continue
             self.config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
+
+    def update_legacy_config(self):
+        """ Update legacy state config files with the new loss formating
+        """
+        prior = "dssim_loss"
+        new = "loss_function"
+        if prior in self.config.keys() and new not in self.config.keys():
+            self.config[new] = "ssim" if self.config[prior] is True else "mae"
+            logger.debug("Updated config from older dssim format. New config loss function: %s",
+                         self.config[new])

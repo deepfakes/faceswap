@@ -47,20 +47,4 @@ _HELPTEXT = (
 )
 
 
-_DEFAULTS = {
-    "coverage": {
-        "default": 62.5,
-        "info": "How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
-        "rounding": 1,
-        "min_max": (62.5, 100.0),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-}
+_DEFAULTS = {}

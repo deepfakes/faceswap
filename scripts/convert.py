@@ -190,7 +190,7 @@ class DiskIO():
     @property
     def pre_encode(self):
         """ Return the writer's pre-encoder """
-        dummy = np.zeros((20, 20, 3)).astype("uint8")
+        dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self.writer.pre_encode(dummy)
         retval = None if test is None else self.writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
@@ -464,9 +464,8 @@ class Predict():
     @property
     def input_mask(self):
         """ Return the input mask """
-        mask = np.zeros(self.model.state.mask_shapes[0], dtype="float32")
-        retval = np.expand_dims(mask, 0)
-        return retval
+        mask = np.zeros((1, ) + self.model.state.mask_shapes[0], dtype="float32")
+        return mask
 
     @property
     def has_predicted_mask(self):
