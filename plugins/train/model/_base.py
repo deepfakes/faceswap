@@ -942,3 +942,11 @@ class State():
                 continue
             self.config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
+
+    def update_legacy_config(self):
+        """ Update legacy state config files with the new loss formating
+        """
+        prior = "dssim_loss"
+        new = "loss_function"
+        if prior in self.config.keys():
+            self.config[new] = "ssim" if self.config[prior] == "true" else "mae"
