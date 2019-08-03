@@ -888,6 +888,7 @@ class State():
                 self.inputs = state.get("inputs", dict())
                 self.config = state.get("config", dict())
                 logger.debug("Loaded state: %s", state)
+                self.update_legacy_config()
                 self.replace_config(config_changeable_items)
         except IOError as err:
             logger.warning("No existing state file found. Generating.")
@@ -948,5 +949,7 @@ class State():
         """
         prior = "dssim_loss"
         new = "loss_function"
-        if prior in self.config.keys():
-            self.config[new] = "ssim" if self.config[prior] == "true" else "mae"
+        if prior in self.config.keys() and new not in self.config.keys():
+            self.config[new] = "ssim" if self.config[prior] is True else "mae"
+            logger.debug("Updated config from older dssim format. New config loss function: %s",
+                         self.config[new])
