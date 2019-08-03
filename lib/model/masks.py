@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_available_masks():
     """ Return a list of the available masks for cli """
-    masks = ["components", "dfl_full", "facehull", "none", "vgg_300", "vgg_500", "unet_256"]
+    masks = ["none", "components", "extended", "vgg_300", "vgg_500", "unet_256"]
     logger.debug(masks)
     return masks
 
@@ -249,8 +249,8 @@ class Smart(Mask):
 
     @staticmethod
     def postprocessing(mask):
-        # pylint: disable=no-member
         """ Post-processing of Nirkin style segmentation masks """
+        # pylint: disable=no-member
         #Select_largest_segment
         pop_small_segments = False # Don't do this right now
         if pop_small_segments:
