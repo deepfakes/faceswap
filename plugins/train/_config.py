@@ -120,8 +120,7 @@ class Config(FaceswapConfig):
                  "the absolute value of each pixel in two reference images, compute the pixel to "
                  "pixel spatial difference in each image and then minimize that difference "
                  "between two images. Allows for large color shifts,but maintains the structure "
-                 "of the image.\n"
-                 )
+                 "of the image.\n")
         self.add_item(section=section, title="mask_type", datatype=str, default="none",
                       choices=get_available_masks(),
                       info="The mask to be used for training:"
@@ -145,10 +144,11 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="coverage", datatype=float, default=68.75,
             min_max=(62.5, 100.0), rounding=2, fixed=True,
-            info="How much of the extracted image to train on. A lower coverage will limit the model's "
-                 "scope to a zoomed-in central area while higher amounts can include the entire face. "
-                 "A trade-off exists between lower amounts given a bit more detail versus higher amounts "
-                 "avoiding noticeable swap transitions. Sensible values to use are:"
+            info="How much of the extracted image to train on. A lower coverage will limit the "
+                 "model's scope to a zoomed-in central area while higher amounts can include the "
+                 "entire face. A trade-off exists between lower amounts given more detail "
+                 "versus higher amounts avoiding noticeable swap transitions. Sensible values to "
+                 "use are:"
                  "\n\t62.5%% spans from eyebrow to eyebrow."
                  "\n\t75.0%% spans from temple to temple."
                  "\n\t87.5%% spans from ear to ear."

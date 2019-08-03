@@ -451,6 +451,7 @@ class FaceFilter(PostProcessAction):
         ret_faces = list()
         for idx, detect_face in enumerate(output_item["detected_faces"]):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
+            check_item.load_aligned(output_item["image"])
             if not self.filter.check(check_item):
                 logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
                                output_item["filename"], idx)

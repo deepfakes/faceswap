@@ -211,7 +211,7 @@ class DiskIO():
         """ Return the writer plugin """
         args = [self.args.output_dir]
         if self.args.writer in ("ffmpeg", "gif"):
-            args.append(self.total_count)
+            args.extend([self.total_count, self.frame_ranges])
         if self.args.writer == "ffmpeg":
             if self.images.is_video:
                 args.append(self.args.input_dir)
@@ -345,6 +345,7 @@ class DiskIO():
             return False
         idx = int(indices[0]) if indices else None
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
+        logger.trace("idx: %s, skipframe: %s", idx, skipframe)
         return skipframe
 
     def get_detected_faces(self, filename, image):

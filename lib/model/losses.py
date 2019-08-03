@@ -7,6 +7,8 @@
 
 from __future__ import absolute_import
 
+import logging
+
 import keras.backend as K
 from keras.layers import Lambda, concatenate
 import numpy as np
@@ -18,6 +20,9 @@ if K.backend() == "plaidml.keras.backend":
     from plaidml.op import extract_image_patches
 else:
     from tensorflow import extract_image_patches  # pylint: disable=ungrouped-imports
+
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class DSSIMObjective():
@@ -174,6 +179,85 @@ def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-na
         return loss_func(n_true, n_pred)
     return inner_loss
 # <<< END: from Dfaker >>> #
+
+
+# <<< START: from DFL >>> #
+def style_loss(gaussian_blur_radius=0.0, loss_weight=1.0, wnd_size=0, step_size=1):
+    """ Style Loss from DeepFaceLab
+        https://github.com/iperov/DeepFaceLab """
+    def gaussian_blur(radius=2.0):
+        def gaussian(var_x, radius, sigma):
+            return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
+
+        def make_kernel(sigma):
+            kernel_size = max(3, int(2 * 2 * sigma + 1))
+            mean = np.floor(0.5 * kernel_size)
+            kernel_1d = np.array([gaussian(x, mean, sigma) for x in range(kernel_size)])
+            np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
+            kernel = np_kernel / np.sum(np_kernel)
+            return kernel
+
+        gauss_kernel = make_kernel(radius)
+        gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
+
+        def func(input_):
+            inputs = [input_[:, :, :, i:i + 1] for i in range(K.int_shape(input_)[-1])]
+            outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
+                       for inp in inputs]
+            return K.concatenate(outputs, axis=-1)
+        return func
+
+    if gaussian_blur_radius > 0.0:
+        gblur = gaussian_blur(gaussian_blur_radius)
+
+    def std(content, style, loss_weight):
+        content_nc = K.int_shape(content)[-1]
+        style_nc = K.int_shape(style)[-1]
+        if content_nc != style_nc:
+            raise Exception("style_loss() content_nc != style_nc")
+
+        axes = [1, 2]
+        c_mean, c_var = K.mean(content, axis=axes, keepdims=True), K.var(content,
+                                                                         axis=axes,
+                                                                         keepdims=True)
+        s_mean, s_var = K.mean(style, axis=axes, keepdims=True), K.var(style,
+                                                                       axis=axes,
+                                                                       keepdims=True)
+        c_std, s_std = K.sqrt(c_var + 1e-5), K.sqrt(s_var + 1e-5)
+
+        mean_loss = K.sum(K.square(c_mean-s_mean))
+        std_loss = K.sum(K.square(c_std-s_std))
+
+        return (mean_loss + std_loss) * (loss_weight / float(content_nc))
+
+    def func(target, style):
+        if wnd_size == 0:
+            if gaussian_blur_radius > 0.0:
+                return std(gblur(target), gblur(style), loss_weight=loss_weight)
+            return std(target, style, loss_weight=loss_weight)
+
+        # currently unused
+        if K.backend() == "plaidml.keras.backend":
+            logger.warning("plaidML backend does not support style_loss. Disabling")
+            return 0
+        shp = K.int_shape(target)[1]
+        k = (shp - wnd_size) // step_size + 1
+        if gaussian_blur_radius > 0.0:
+            target, style = gblur(target), gblur(style)
+        target = tf.image.extract_image_patches(target,
+                                                [1, k, k, 1],
+                                                [1, 1, 1, 1],
+                                                [1, step_size, step_size, 1],
+                                                "VALID")
+        style = tf.image.extract_image_patches(style,
+                                               [1, k, k, 1],
+                                               [1, 1, 1, 1],
+                                               [1, step_size, step_size, 1],
+                                               "VALID")
+        return std(target, style, loss_weight)
+
+    return func
+# <<< END: from DFL >>> #
 
 
 # <<< START: from Shoanlu GAN >>> #
@@ -512,7 +596,6 @@ def scharr_edges(image, magnitude):
     num_kernels = [2]
     kernels = K.constant(matrix, dtype='float32')
     kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
-
 
     # Use depth-wise convolution to calculate edge maps per channel.
     # Output tensor has shape [batch_size, h, w, d * num_kernels].

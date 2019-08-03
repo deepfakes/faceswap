@@ -17,7 +17,7 @@ InstallDir $PROFILE\faceswap
 !define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 #!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
-
+!define wwwFaceswap "https://www.faceswap.dev"
 
 # Faceswap Specific
 !define flagsSetup "--installer"
@@ -306,6 +306,8 @@ Section Install
     Call SetEnvironment
     Call SetupFaceSwap
     Call DesktopShortcut
+    ExecShell "open" "${wwwFaceswap}"
+    DetailPrint "Visit ${wwwFaceswap} for help and support."
 SectionEnd
 
 Function InstallPrerequisites
@@ -426,7 +428,16 @@ Function SetupFaceSwap
     ${EndIf}
 
     SetDetailsPrint listonly
-    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate"
+    ; Create a temporary .bat file for setting up faceswap so the path can be set for Git
+    ; Required for installing pynvml from github
+    FileOpen $9 "$dirTemp\_install_faceswap.bat" w
+    ${If} $InstallGit == 1
+        FileWrite $9 "SET PATH=%PATH%;$PROGRAMFILES64\git\cmd$\r$\n"
+    ${EndIf}
+    FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate$\r$\n"
+    FileClose $9
+
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\_install_faceswap.bat$\""
     pop $0
     ExecDos::wait $0
     pop $0
