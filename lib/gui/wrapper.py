@@ -47,8 +47,6 @@ class ProcessWrapper():
         category, command = self.tk_vars["action"].get().split(",")
 
         if self.tk_vars["runningtask"].get():
-            if self.task.command == "train":
-                self.tk_vars["istraining"].set(False)
             self.task.terminate()
         else:
             self.command = command
@@ -126,6 +124,8 @@ class ProcessWrapper():
         """ Finalize wrapper when process has exited """
         logger.debug("Terminating Faceswap processes")
         self.tk_vars["runningtask"].set(False)
+        if self.task.command == "train":
+            self.tk_vars["istraining"].set(False)
         self.statusbar.progress_stop()
         self.statusbar.status_message.set(message)
         self.tk_vars["display"].set(None)
@@ -141,7 +141,8 @@ class FaceswapControl():
     def __init__(self, wrapper):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.wrapper = wrapper
-        self.statusbar = get_config().statusbar
+        self.config = get_config()
+        self.statusbar = self.config.statusbar
         self.command = None
         self.args = None
         self.process = None
@@ -189,6 +190,10 @@ class FaceswapControl():
                     continue
                 if self.command == "train" and "[saved models]" in output.strip().lower():
                     logger.debug("Trigger GUI Training update")
+                    if not self.config.session.initialized:
+                        # Don't initialize session until after the first save as state
+                        # file must exist first
+                        self.config.session.initialize_session(is_training=True)
                     self.wrapper.tk_vars["updatepreview"].set(True)
                     self.wrapper.tk_vars["refreshgraph"].set(True)
                 print(output.strip())
@@ -255,13 +260,8 @@ class FaceswapControl():
         iterations = self.train_stats["iterations"]
 
         if iterations == 0:
-            # Initialize session stats and set initial timestamp
+            # Set initial timestamp
             self.train_stats["timestamp"] = time()
-
-        if not get_config().session.initialized and iterations > 0:
-            # Don't initialize session until after the first iteration as state
-            # file must exist first
-            get_config().session.initialize_session(is_training=True)
 
         iterations += 1
         self.train_stats["iterations"] = iterations
@@ -339,16 +339,15 @@ class FaceswapControl():
     def terminate(self):
         """ Terminate the running process in a LongRunningTask so we can still
             output to console """
-        root = get_config().root
         if self.thread is None:
             logger.debug("Terminating wrapper in LongRunningTask")
             self.thread = LongRunningTask(target=self.terminate_in_thread,
                                           args=(self.command, self.process))
             self.thread.start()
-            root.after(1000, self.terminate)
+            self.config.root.after(1000, self.terminate)
         elif not self.thread.complete.is_set():
             logger.debug("Not finished terminating")
-            root.after(1000, self.terminate)
+            self.config.root.after(1000, self.terminate)
         else:
             logger.debug("Termination Complete. Cleaning up")
             _ = self.thread.get_result()  # Terminate the LongRunningTask object
@@ -358,7 +357,7 @@ class FaceswapControl():
         """ Terminate the subprocess """
         logger.debug("Terminating wrapper")
         if command == "train":
-            timeout = get_config().tk_vars["traintimeout"].get()
+            timeout = self.config.tk_vars["traintimeout"].get()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()

@@ -99,6 +99,15 @@ class GPUStats():
                             self.logger.warning(msg)
                         self.initialized = True
                         return
+                except Exception as err:  # pylint: disable=broad-except
+                    msg = ("An unhandled exception occured loading pynvml. "
+                           "Original error: {}".format(str(err)))
+                    if self.logger:
+                        self.logger.error(msg)
+                    else:
+                        print(msg)
+                    self.initialized = True
+                    return
             self.initialized = True
             self.get_device_count()
             self.get_active_devices()

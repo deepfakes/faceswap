@@ -53,6 +53,7 @@ class Output():
         frame_no = int(re.search(self.re_search, filename).group())
         self.cache[frame_no] = image
         logger.trace("Added to cache. Frame no: %s", frame_no)
+        logger.trace("Current cache: %s", sorted(self.cache.keys()))
 
     def write(self, filename, image):
         """ Override for specific frame writing method """

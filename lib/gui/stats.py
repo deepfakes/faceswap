@@ -225,7 +225,7 @@ class Session():
         else:
             self.session_id = session_id
         self.initialized = True
-        logger.debug("Initialized session")
+        logger.debug("Initialized session. Session_ID: %s", self.session_id)
 
     def load_state_file(self):
         """ Load the current state file """

@@ -342,9 +342,9 @@ class ReflectionPadding2D(Layer):
 
         return pad(x,
                    [[0, 0],
-                   [padding_top, padding_bot],
-                   [padding_left, padding_right],
-                   [0, 0]],
+                    [padding_top, padding_bot],
+                    [padding_left, padding_right],
+                    [0, 0]],
                    'REFLECT')
 
     def get_config(self):

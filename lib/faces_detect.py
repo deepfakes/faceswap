@@ -99,16 +99,20 @@ class DetectedFace():
         """ No need to load aligned information for all uses of this
             class, so only call this to load the information for easy
             reference to aligned properties for this face """
-        logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
-                     size, align_eyes, dtype)
-        padding = int(size * self.extract_ratio) // 2
-        self.aligned["size"] = size
-        self.aligned["padding"] = padding
-        self.aligned["align_eyes"] = align_eyes
-        self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
-        if image is None:
-            self.aligned["face"] = None
+        # Don't reload an already aligned face:
+        if self.aligned:
+            logger.trace("Skipping alignment calculation for already aligned face")
         else:
+            logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
+                         size, align_eyes, dtype)
+            padding = int(size * self.extract_ratio) // 2
+            self.aligned["size"] = size
+            self.aligned["padding"] = padding
+            self.aligned["align_eyes"] = align_eyes
+            self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
+            self.aligned["face"] = None
+        if image is not None and self.aligned["face"] is None:
+            logger.trace("Getting aligned face")
             face = AlignerExtract().transform(
                 image,
                 self.aligned["matrix"],

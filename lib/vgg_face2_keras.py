@@ -14,7 +14,7 @@ import os
 import cv2
 import numpy as np
 from fastcluster import linkage
-from lib.utils import GetModel
+from lib.utils import GetModel, set_system_verbosity
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -23,8 +23,10 @@ class VGGFace2():
     """ VGG Face feature extraction.
         Input images should be in BGR Order """
 
-    def __init__(self, backend="GPU"):
-        logger.debug("Initializing %s:", self.__class__.__name__,)
+    def __init__(self, backend="GPU", loglevel="INFO"):
+        logger.debug("Initializing %s: (backend: %s, loglevel: %s)",
+                     self.__class__.__name__, backend, loglevel)
+        set_system_verbosity(loglevel)
         backend = backend.upper()
         git_model_id = 10
         model_filename = ["vggface2_resnet50_v2.h5"]

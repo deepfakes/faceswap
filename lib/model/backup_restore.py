@@ -5,7 +5,7 @@
 import logging
 import os
 from datetime import datetime
-from shutil import copyfile, copytree
+from shutil import copyfile, copytree, rmtree
 
 from lib import Serializer
 from lib.utils import get_folder
@@ -58,7 +58,13 @@ class Backup():
     def snapshot_models(self, iterations):
         """ Take a snapshot of the model at current state and back up """
         logger.info("Saving snapshot")
-        dst = str(get_folder("{}_snapshot_{}_iters".format(self.model_dir, iterations)))
+        snapshot_dir = "{}_snapshot_{}_iters".format(self.model_dir, iterations)
+
+        if os.path.isdir(snapshot_dir):
+            logger.debug("Removing previously existing snapshot folder: '%s'", snapshot_dir)
+            rmtree(snapshot_dir)
+
+        dst = str(get_folder(snapshot_dir))
         for filename in os.listdir(self.model_dir):
             if not self.check_valid(filename, for_restore=False):
                 logger.debug("Not snapshotting file: '%s'", filename)

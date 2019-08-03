@@ -20,7 +20,7 @@ from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import DSSIMObjective, Mask_Penalized_Loss, gradient_loss
+from lib.model.losses import DSSIMObjective, PenalizedLoss, gradient_loss
 from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
@@ -382,12 +382,9 @@ class ModelBase():
         logger.debug("Build optimizer with kwargs: %s", opt_kwargs)
 
         for side, model in self.predictors.items():
-            mask = [inp for inp in model.inputs if inp.name.startswith("mask")]
-            loss_names, loss_funcs = self.loss_function(mask, side, initialize)
-            model.compile(optimizer=optimizer, loss=loss_funcs)
-
-            if len(loss_names) > 1:
-                loss_names.insert(0, "total_loss")
+            mask_input = [inp for inp in model.inputs if inp.name.startswith("mask")]
+            loss = Loss(model.outputs, mask_input)
+            model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
                 self.state.add_session_loss_names(side, loss.names)
                 self.history[side] = list()
@@ -653,12 +650,12 @@ class ModelBase():
 
 class Loss():
     """ Holds loss names and functions for an Autoencoder """
-    def __init__(self, side, outputs, mask_input, predict):
-        logger.debug("Initializing %s: (side: '%s', outputs: '%s', mask_input: '%s', predict: %s",
-                     self.__class__.__name__, side, outputs, mask_input, predict)
+    def __init__(self, outputs, mask_input):
+        logger.debug("Initializing %s: (outputs: '%s', mask_input: '%s')",
+                     self.__class__.__name__, outputs, mask_input)
         self.outputs = outputs
         self.names = self.get_loss_names()
-        self.funcs = self.get_loss_functions(side, predict, mask_input)
+        self.funcs = self.get_loss_functions(mask_input)
         if len(self.names) > 1:
             self.names.insert(0, "total_loss")
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -704,34 +701,31 @@ class Loss():
         logger.debug("Renamed loss names to: %s", loss_names)
         return loss_names
 
-    def get_loss_functions(self, side, predict, mask):
+    def get_loss_functions(self, mask):
         """ Set the loss function """
-        loss_funcs = list()
+        loss_funcs = []
         largest_face = self.largest_output
-
-        if self.config.get("dssim_loss", False):
-            if not predict and side.lower() == "a":
-                logger.verbose("Using DSSIM Loss")
-            loss_func = DSSIMObjective()
-        else:
-            loss_func = losses.mean_absolute_error
-            if not predict and side.lower() == "a":
-                logger.verbose("Using Mean Absolute Error Loss")
+        loss_dict = {'mae':                     losses.mean_absolute_error,
+                     'mse':                     losses.mean_squared_error,
+                     'logcosh':                 losses.logcosh,
+                     'smooth_l1':               generalized_loss,
+                     'l_inf_norm':              l_inf_norm,
+                     'ssim':                    DSSIMObjective(),
+                     'gmsd':                    gmsd_loss,
+                     'pixel_gradient_diff':     gradient_loss}
+        img_loss_config = self.config.get("loss_function", "mae")
+        mask_loss_config = "mse"
 
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
-                mask_func = losses.mean_squared_error
-                loss_funcs.append(mask_func)
-                logger.debug("mask loss: %s", mask_func)
+                loss_funcs.append(loss_dict[mask_loss_config])
+                logger.debug("mask loss: %s", mask_loss_config)
             elif mask and idx == largest_face and self.config.get("penalized_mask_loss", False):
-                face_func = PenalizedLoss(mask[0], loss_func)
-                logger.debug("final face loss: %s", face_func)
-                loss_funcs.append(face_func)
-                if not predict and side.lower() == "a":
-                    logger.verbose("Penalizing mask for Loss")
+                loss_funcs.append(PenalizedLoss(mask[0], loss_dict[img_loss_config]))
+                logger.debug("final face loss: %s", img_loss_config)
             else:
-                logger.debug("face loss func: %s", loss_func)
-                loss_funcs.append(loss_func)
+                loss_funcs.append(loss_dict[img_loss_config])
+                logger.debug("face loss func: %s", img_loss_config)
         logger.debug(loss_funcs)
         return loss_funcs
 
@@ -819,7 +813,8 @@ class NNMeta():
         else:
             self.network = network
         self.config = network.get_config()
-        self.network.name = self.type
+        self.network = network  # Update network with saved model
+        self.network.name = self.name
         return True
 
     def save(self, fullpath=None, backup_func=None):
@@ -1000,11 +995,27 @@ class State():
             if key not in self.config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
                 self.config[key] = val
+        legacy_update = self.update_legacy_config()
         self.update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
+        if legacy_update:
+            self.save()
         logger.debug("Replaced config. New config: %s", _CONFIG)
         logger.info("Using configuration saved in state file")
+
+    def update_legacy_config(self):
+        """ Update legacy state config files with the new loss formating
+        """
+        prior = "dssim_loss"
+        new = "loss_function"
+        if prior not in self.config:
+            return False
+        self.config[new] = "ssim" if self.config[prior] else "mae"
+        del self.config[prior]
+        logger.info("Updated config from older dssim format. New config loss function: %s",
+                    self.config[new])
+        return True
 
     def update_changed_config_items(self, config_changeable_items):
         """ Update any parameters which are not fixed and have been changed """

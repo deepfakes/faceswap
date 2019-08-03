@@ -4,7 +4,7 @@ pathlib
 numpy==1.16.2
 opencv-python
 scikit-image
-Pillow
+Pillow>=6.0.0
 scikit-learn
 toposort
 fastcluster
