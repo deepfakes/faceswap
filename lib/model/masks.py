@@ -44,10 +44,13 @@ class Mask():
         assert channels in (1, 3, 4), "Channels should be 1, 3 or 4"
         self.mask_type = mask_type
         self.channels = channels
-        if faces.ndim < 4:
+        dimensions = faces.ndim
+        if dimensions < 4:
             faces = np.expand_dims(faces, axis=0)
         masks = self.build_masks(mask_type, faces, means, landmarks)
         self.masks = self.merge_masks(faces, masks)
+        if dimensions < 4:
+            self.masks = np.squeeze(self.masks, axis=0)
         logger.trace("Initialized %s", self.__class__.__name__)
 
     def build_masks(self, mask_type, faces, means, landmarks):

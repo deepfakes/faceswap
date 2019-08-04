@@ -180,13 +180,8 @@ class TrainingDataGenerator():
             landmarks = self.get_landmarks(filename, image, side)
         if self.mask_class:
             mean = (127.5, 127.5, 127.5)  #TODO fix means
-            image = self.mask_class(self.mask_type, image, landmarks, mean, channels=4).masks
-            # handles multiple
-            image = np.squeeze(image, axis=0)
-
-        image = self.processing.color_adjust(image,
-                                             self.training_opts["augment_color"],
-                                             is_display)
+            image = self.mask_class(self.mask_type, image / 255., landmarks, mean, channels=4).masks
+        image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
 
         if not is_display:
             image = self.processing.random_transform(image)
@@ -286,8 +281,7 @@ class ImageManipulation():
         grid_size = base_contrast + contrast_adjustment
         logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
 
-        clahe = cv2.createCLAHE(clipLimit=2.0,
-                                tileGridSize=(grid_size, grid_size))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(grid_size, grid_size))
         for chan in range(3):
             image[:, :, chan] = clahe.apply(image[:, :, chan])
         return image
