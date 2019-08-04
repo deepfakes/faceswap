@@ -99,7 +99,7 @@ class BlurMask():
             ksize = int(kwargs["ksize"][0])
             logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
             blurred = func(blurred, **kwargs)
-            ksize = round(ksize * self.multipass_factor)
+            ksize = int(round(ksize * self.multipass_factor))
             kwargs["ksize"] = self.get_kernel_tuple(ksize)
         logger.trace("Returning blurred mask. Shape: %s", blurred.shape)
         return blurred
@@ -140,7 +140,7 @@ class BlurMask():
         """ Set the kernel size to absolute """
         mask_diameter = np.sqrt(np.sum(self.mask))
         radius = round(max(1., mask_diameter * radius_ratio / 100.))
-        kernel_size = radius * 2 + 1
+        kernel_size = int(radius * 2 + 1)
         logger.trace("kernel_size: %s", kernel_size)
         return kernel_size
 
