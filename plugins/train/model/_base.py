@@ -50,7 +50,7 @@ class ModelBase():
                  trainer="original",
                  pingpong=False,
                  memory_saving_gradients=False,
-                 optimizer_savings="none",
+                 optimizer_savings=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
                      "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
@@ -65,6 +65,7 @@ class ModelBase():
 
         self.predict = predict
         self.model_dir = model_dir
+        self.vram_savings = VRAMSavings(pingpong, optimizer_savings, memory_saving_gradients)
 
         self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
@@ -74,11 +75,12 @@ class ModelBase():
         self.trainer = trainer
 
         self.load_config()  # Load config if plugin has not already referenced it
+
         self.state = State(self.model_dir,
                            self.name,
                            self.config_changeable_items,
                            no_logs,
-                           pingpong,
+                           self.vram_savings.pingpong,
                            training_image_size)
 
         self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
@@ -102,11 +104,9 @@ class ModelBase():
                               "warp_to_landmarks": warp_to_landmarks,
                               "augment_color": augment_color,
                               "no_flip": no_flip,
-                              "pingpong": pingpong,
+                              "pingpong": self.vram_savings.pingpong,
                               "snapshot_interval": snapshot_interval}
 
-        self.optimizer_savings = optimizer_savings
-        self.set_gradient_type(memory_saving_gradients)
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
                                 additional_info="Please split each model into separate folders to "
@@ -206,15 +206,6 @@ class ModelBase():
                   if shape[1] == max_mask and shape[2] == 1][0]
         logger.debug(retval)
         return retval
-
-    @staticmethod
-    def set_gradient_type(memory_saving_gradients):
-        """ Monkeypatch Memory Saving Gradients if requested """
-        if not memory_saving_gradients:
-            return
-        logger.info("Using Memory Saving Gradients")
-        from lib.model import memory_saving_gradients
-        K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
 
     def load_config(self):
         """ Load the global config for reference in self.config """
@@ -392,7 +383,7 @@ class ModelBase():
             # TODO: Remove this as soon it is fixed in PlaidML.
             opt_kwargs["clipnorm"] = 1.0
         logger.debug("Optimizer kwargs: %s", opt_kwargs)
-        return Adam(**opt_kwargs, cpu_mode=self.optimizer_savings)
+        return Adam(**opt_kwargs, cpu_mode=self.vram_savings.optimizer_savings)
 
     def converter(self, swap):
         """ Converter for autoencoder models """
@@ -609,6 +600,51 @@ class ModelBase():
 
         self.state.replace_config(self.config_changeable_items)
         self.state.save()
+
+
+class VRAMSavings():
+    """ VRAM Saving training methods """
+    def __init__(self, pingpong, optimizer_savings, memory_saving_gradients):
+        logger.debug("Initializing %s: (pingpong: %s, optimizer_savings: %s, "
+                     "memory_saving_gradients: %s)", self.__class__.__name__,
+                     pingpong, optimizer_savings, memory_saving_gradients)
+        self.is_plaidml = keras.backend.backend() == "plaidml.keras.backend"
+        self.pingpong = self.set_pingpong(pingpong)
+        self.optimizer_savings = self.set_optimizer_savings(optimizer_savings)
+        self.memory_saving_gradients = self.set_gradient_type(memory_saving_gradients)
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    def set_pingpong(self, pingpong):
+        """ Disable pingpong for plaidML users """
+        if pingpong and self.is_plaidml:
+            logger.warning("Pingpong training not supported on plaidML. Disabling")
+            pingpong = False
+        logger.debug("pingpong: %s", pingpong)
+        if pingpong:
+            logger.info("Using Pingpong Training")
+        return pingpong
+
+    def set_optimizer_savings(self, optimizer_savings):
+        """ Disable optimizer savings for plaidML users """
+        if optimizer_savings and self.is_plaidml == "plaidml.keras.backend":
+            logger.warning("Optimizer Savings not supported on plaidML. Disabling")
+            optimizer_savings = False
+        logger.debug("optimizer_savings: %s", optimizer_savings)
+        if optimizer_savings:
+            logger.info("Using Optimizer Savings")
+        return optimizer_savings
+
+    def set_gradient_type(self, memory_saving_gradients):
+        """ Monkeypatch Memory Saving Gradients if requested """
+        if memory_saving_gradients and self.is_plaidml:
+            logger.warning("Memory Saving Gradients not supported on plaidML. Disabling")
+            memory_saving_gradients = False
+        logger.debug("memory_saving_gradients: %s", memory_saving_gradients)
+        if memory_saving_gradients:
+            logger.info("Using Memory Saving Gradients")
+            from lib.model import memory_saving_gradients
+            K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+        return memory_saving_gradients
 
 
 class Loss():
