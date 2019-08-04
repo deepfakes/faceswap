@@ -28,9 +28,13 @@ import cv2
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
 from lib.utils import GetModel
+from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
+def get_config(plugin_name, configfile=None):
+    """ Return the config for the requested model """
+    return Config(plugin_name, configfile=configfile).config_dict
 
 class Aligner():
     """ Landmarks Aligner Object """
@@ -40,6 +44,7 @@ class Aligner():
                      "git_model_id: %s, model_filename: '%s', colorspace: '%s'. input_size: %s)",
                      self.__class__.__name__, loglevel, configfile, normalize_method, git_model_id,
                      model_filename, colorspace, input_size)
+        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         self.loglevel = loglevel
         self.normalize_method = normalize_method
         self.colorspace = colorspace.upper()

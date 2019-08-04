@@ -7,7 +7,8 @@ import cv2
 import numpy as np
 import keras
 from keras import backend as K
-
+from lib.multithreading import FSThread
+from lib.queue_manager import queue_manager
 from ._base import Aligner, logger
 
 
@@ -30,14 +31,101 @@ class Align(Aligner):
         """ Initialization tasks to run prior to alignments """
         try:
             super().initialize(*args, **kwargs)
-            logger.info("Initializing Face Alignment Network...")
+            logger.info("Initializing Face Alignment Network (AMD)...")
             logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
             self.model = FAN(self.model_path)
+            self.batch_size = self.config["batch-size"]
+            logger.verbose("Starting FAN-AMD with batchsize of %i.", self.batch_size)
             self.init.set()
-            logger.info("Initialized Face Alignment Network.")
+            logger.info("Initialized Face Alignment Network (AMD).")
         except Exception as err:
             self.error.set()
             raise err
+
+    def prediction_thread(self, in_queue, out_queue):
+        while True:
+            items = in_queue.get()
+            if items == "EOF":
+                logger.debug("FAN prediction_thread got EOF")
+                out_queue.put(items)
+                break
+            infos, images, items = items
+            predictions = self.model.predict(images)
+            out_queue.put((predictions, infos, items))
+
+    def post_processing_thread(self, in_queue):
+        while True:
+            job = in_queue.get()
+            if job == "EOF":
+                logger.debug("FAN post_processing_thread worker got EOF")
+                self.finalize(job)
+                break
+            for pred, infos, item in zip(*job):
+                pts_img = self.get_pts_from_predict(pred, infos["center"], infos["scale"])
+                pts_img = [(int(pt[0]), int(pt[1])) for pt in pts_img]
+                item["landmarks"].append(pts_img)
+                if len(item["landmarks"]) == len(item["detected_faces"]):
+                    self.finalize(item)
+
+    def align(self, *args, **kwargs):
+        """ Process landmarks """
+        if not self.init:
+            self.initialize(*args, **kwargs)
+        logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
+        queue_size = 2
+        queue_manager.add_queue("fan_work", queue_size, False)
+        queue_manager.add_queue("fan_done", queue_size, False)
+        work_queue = queue_manager.get_queue("fan_work", queue_size)
+        done_queue = queue_manager.get_queue("fan_done", queue_size)
+        worker = FSThread(target=self.prediction_thread, args=(work_queue, done_queue))
+        worker.start()
+        post_worker = FSThread(target=self.post_processing_thread, args=(done_queue,))
+        post_worker.start()
+        got_eof = False
+        batches = list()
+        for item in self.get_item():
+            if item == "EOF":
+                got_eof = True
+            else:
+                image = self.convert_color(item["image"])
+                data = None
+                try:
+                    data = self.process_landmarks(image, item["detected_faces"])
+                except ValueError as err:
+                    logger.warning("Image '%s' could not be processed. This may be due"
+                                   " to corrupted data: %s", item["filename"], str(err))
+                item["landmarks"] = list()
+                if not data and not got_eof:
+                    item["detected_faces"] = list()
+                    self.finalize(item)
+                    continue
+                batches.extend([(img, item) for img in data])
+
+            while len(batches) >= self.batch_size or (batches and got_eof):
+                batch = batches[:self.batch_size]
+                batches = batches[len(batch):]
+                infos = [x[0] for x in batch]
+                images = np.array([x["image"] for x in infos]).astype("float32")
+                items = [x[1] for x in batch]
+                images = images.transpose((0, 3, 1, 2)) / 255.0
+                work_queue.put((infos, images, items))
+
+            if got_eof:
+                work_queue.put("EOF")
+                break
+
+        worker.join()
+        post_worker.join()
+        logger.debug("Completed Align")
+
+    def process_landmarks(self, image, detected_faces):
+        """ Align image and process landmarks """
+        retval = list()
+        for detected_face in detected_faces:
+            feed_dict = self.align_image(detected_face, image)
+            self.normalize_face(feed_dict)
+            retval.append(feed_dict)
+        return retval
 
     # DETECTED FACE BOUNDING BOX PROCESSING
     def align_image(self, detected_face, image):
@@ -129,17 +217,6 @@ class Align(Aligner):
         eye = np.linalg.inv(eye)
         retval = np.matmul(eye, pnt)[0:2]
         logger.trace("Transformed Points: %s", retval)
-        return retval
-
-    def predict_landmarks(self, feed_dict):
-        """ Predict the 68 point landmarks """
-        logger.trace("Predicting Landmarks")
-        image = np.expand_dims(
-            feed_dict["image"].transpose((2, 0, 1)).astype(np.float32) / 255.0, 0)
-        prediction = self.model.predict(image)[-1]
-        pts_img = self.get_pts_from_predict(prediction, feed_dict["center"], feed_dict["scale"])
-        retval = [(int(pt[0]), int(pt[1])) for pt in pts_img]
-        logger.trace("Predicted Landmarks: %s", retval)
         return retval
 
     def get_pts_from_predict(self, prediction, center, scale):
@@ -268,4 +345,4 @@ class FAN():
     def predict(self, feed_item):
         """ Predict landmarks in session """
         pred = self.model.predict(feed_item)
-        return [pred[-1].reshape((68, 64, 64))]
+        return pred[-1].reshape((feed_item.shape[0], 68, 64, 64))

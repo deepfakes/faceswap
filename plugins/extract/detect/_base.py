@@ -176,7 +176,8 @@ class Detector():
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def compile_detection_image(self, input_image,
-                                is_square=False, scale_up=False, to_rgb=False, to_grayscale=False):
+                                is_square=False, scale_up=False, to_rgb=False,
+                                to_grayscale=False, pad_to=None):
         """ Compile the detection image """
         image = input_image.copy()
         if to_rgb:
@@ -184,7 +185,7 @@ class Detector():
         elif to_grayscale:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
         scale = self.set_scale(image, is_square=is_square, scale_up=scale_up)
-        image = self.scale_image(image, scale)
+        image = self.scale_image(image, scale, pad_to)
         return [image, scale]
 
     def set_scale(self, image, is_square=False, scale_up=False):
@@ -211,21 +212,29 @@ class Detector():
         return scale
 
     @staticmethod
-    def scale_image(image, scale):
+    def scale_image(image, scale, pad_to=None):
         """ Scale the image """
         # pylint: disable=no-member
-        if scale == 1.0:
-            return image
-
         height, width = image.shape[:2]
         interpln = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA
-        dims = (int(width * scale), int(height * scale))
+        if scale != 1.0:
+            dims = (int(width * scale), int(height * scale))
+            if scale < 1.0:
+                logger.verbose("Resizing image from %sx%s to %s. Scale=%s",
+                             width, height, "x".join(str(i) for i in dims), scale)
+            image = cv2.resize(image, dims, interpolation=interpln)
+        if pad_to:
+            image = Detector.pad_image(image, pad_to)
+        return image
 
-        if scale < 1.0:
-            logger.trace("Resizing image from %sx%s to %s.",
-                         width, height, "x".join(str(i) for i in dims))
-
-        image = cv2.resize(image, dims, interpolation=interpln)
+    @staticmethod
+    def pad_image(image, target):
+        height, width = image.shape[:2]
+        if width < target[0] or height < target[1]:
+            return cv2.copyMakeBorder(
+                image, 0, target[1] - height, 0, target[0] - width,
+                cv2.BORDER_CONSTANT, (0, 0, 0)
+            )
         return image
 
     # <<< IMAGE ROTATION METHODS >>> #
