@@ -1031,29 +1031,29 @@ class TrainArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "memory_saving_gradients",
                               "default": False,
-                              "help": "Trades off VRAM usage against computation time. Can fit "
-                                      "larger models into memory at a cost of slower training "
-                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
-                                      "training time. NB: Launch time will be significantly "
-                                      "delayed. Switching sides using ping-pong training will "
-                                      "take longer."})
+                              "help": "[Nvidia only] Trades off VRAM usage against computation "
+                                      "time. Can fit larger models into memory at a cost of "
+                                      "slower training speed. 50%%-150%% batch size increase for "
+                                      "20%%-50%% longer training time. NB: Launch time will be "
+                                      "significantly delayed. Switching sides using ping-pong "
+                                      "training will take longer."})
         argument_list.append({"opts": ("-o", "--optimizer-savings"),
                               "dest": "optimizer_savings",
                               "action": "store_true",
                               "default": False,
-                              "help": "To save VRAM some optimizer gradient calculations can be "
-                                      "performed on the CPU rather than the GPU. This allows you "
-                                      "to increase batchsize at a training speed cost. Nvidia "
-                                      "only. This option will have no effect for plaidML users."})
+                              "help": "[Nvidia only] To save VRAM some optimizer gradient "
+                                      "calculations can be performed on the CPU rather than the "
+                                      "GPU. This allows you to increase batchsize at a training "
+                                      "speed cost."})
         argument_list.append({"opts": ("-pp", "--ping-pong"),
                               "action": "store_true",
                               "dest": "pingpong",
                               "default": False,
-                              "help": "Enable ping pong training. Trains one side at a time, "
-                                      "switching sides at each save iteration. Training will take "
-                                      "2 to 4 times longer, with about a 30%%-50%% reduction in "
-                                      "VRAM useage. NB: Preview won't show until both sides have "
-                                      "been trained once."})
+                              "help": "[Nvidia only] Enable ping pong training. Trains one side "
+                                      "at a time, switching sides at each save iteration. "
+                                      "Training will take 2 to 4 times longer, with about a "
+                                      "30%%-50%% reduction in VRAM useage. NB: Preview won't show "
+                                      "until both sides have been trained once."})
         argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
                               "action": "store_true",
                               "dest": "warp_to_landmarks",
