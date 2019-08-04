@@ -49,8 +49,11 @@ class ScriptExecutor():
         max_ver = 1.13
         try:
             import tensorflow as tf
-        except ImportError:
-            raise FaceswapError("Tensorflow is a requirement but is not installed on your system.")
+        except ImportError as err:
+            raise FaceswapError("There was an error importing Tensorflow. This is most likely "
+                                "because you do not have TensorFlow installed, or you are trying "
+                                "to run tensorflow-gpu on a system without an Nvidia graphics "
+                                "card. Original import error: {}".format(str(err)))
         tf_ver = float(".".join(tf.__version__.split(".")[:2]))
         if tf_ver < min_ver:
             raise FaceswapError("The minimum supported Tensorflow is version {} but you have "
