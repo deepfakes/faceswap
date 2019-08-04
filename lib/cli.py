@@ -547,6 +547,9 @@ class ExtractArgs(ExtractConvertArgs):
                     "\nL|'mtcnn': Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
                     "detectors but can often return more false positives."
                     "\nL|'s3fd': Fast on GPU, slow on CPU. Can detect more faces and fewer false "
+                    "positives than other GPU detectors, but is a lot more resource intensive."
+                    "\nL|'s3fd-amd': Fast on GPU, slow on CPU. Uses Keras backend to support AMD "
+                    "cards. Can detect more faces and fewer false "
                     "positives than other GPU detectors, but is a lot more resource intensive."})
         argument_list.append({
             "opts": ("-A", "--aligner"),
@@ -555,7 +558,8 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("align"),
             "default": "fan",
             "help": "R|Aligner to use. NB: Unless stated, all aligners will run on CPU for AMD "
-                    "GPUs."
+                    "GPUs. Some of these have configurable settings in "
+                    "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
                     "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
                     "resource intensive, but less accurate. Only use this if not using a gpu "
                     " and time is important."
