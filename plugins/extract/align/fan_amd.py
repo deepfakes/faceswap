@@ -73,10 +73,8 @@ class Align(Aligner):
             self.initialize(*args, **kwargs)
         logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
         queue_size = 2
-        queue_manager.add_queue("fan_work", queue_size, False)
-        queue_manager.add_queue("fan_done", queue_size, False)
-        work_queue = queue_manager.get_queue("fan_work", queue_size)
-        done_queue = queue_manager.get_queue("fan_done", queue_size)
+        work_queue = queue_manager.get_queue("fan_work", queue_size, False)
+        done_queue = queue_manager.get_queue("fan_done", queue_size, False)
         worker = FSThread(target=self.prediction_thread, args=(work_queue, done_queue))
         worker.start()
         post_worker = FSThread(target=self.post_processing_thread, args=(done_queue,))

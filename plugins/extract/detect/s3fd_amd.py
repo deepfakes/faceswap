@@ -78,10 +78,8 @@ class Detect(Detector):
         super().detect_faces(*args, **kwargs)
         logger.debug("Launching Detect")
         queue_size = 2
-        queue_manager.add_queue("s3fd_work", queue_size, False)
-        queue_manager.add_queue("s3fd_done", queue_size, False)
-        work_queue = queue_manager.get_queue("s3fd_work", queue_size)
-        done_queue = queue_manager.get_queue("s3fd_done", queue_size)
+        work_queue = queue_manager.get_queue("s3fd_work", queue_size, False)
+        done_queue = queue_manager.get_queue("s3fd_done", queue_size, False)
         worker = FSThread(target=self.prediction_thread, args=(work_queue, done_queue))
         worker.start()
         post_worker = FSThread(target=self.post_processing_thread, args=(done_queue,))
