@@ -116,8 +116,7 @@ class Facehull(Mask):
         parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
         return parts
 
-    @staticmethod
-    def extended(landmarks):
+    def extended(self, landmarks):
         """ Component facehull mask with forehead extended"""
         # mid points between the side of face and eye point
         ml_pnt = (landmarks[36] + landmarks[0]) // 2
@@ -153,7 +152,7 @@ class Facehull(Mask):
                       "components":  self.eight,
                       "extended":    self.extended,
                       None:          self.three}
-        masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
+        masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='uint8', ndmin=4)
         if landmarks.ndim == 2:
             landmarks = landmarks[None, ...]
         for i, landmark in enumerate(landmarks):
@@ -162,13 +161,10 @@ class Facehull(Mask):
                 # pylint: disable=no-member
                 hull = cv2.convexHull(np.concatenate(item))
                 try:
-                    cv2.fillConvexPoly(masks[i], hull, 1.)
+                    cv2.fillConvexPoly(masks[i], hull, 255)
                 except Exception as error:
                     print("CV2 Error '{0}' occured.".format(error.message))
                     print("Error Arguments {1}.".format(error.args))
-                # else:
-                    # trace block
-
         return masks
 
 
@@ -184,7 +180,7 @@ class Smart(Mask):
         postprocess_test = False
         target_size, model = self.get_models(mask_type)
         mask_model = keras.models.load_model(model.model_path)
-        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndmin=4)
+        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
         original_size, faces = self.resize_inputs(faces, target_size)
 
         batch_size = 16
@@ -220,8 +216,8 @@ class Smart(Mask):
             _, results = self.resize_inputs(results, original_size)
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
             print(masks.shape, results.shape)
-            masks[batch_slice] = results[..., None]
-
+            results = results * 255.
+            masks[batch_slice] = results[..., None].astype("uint8")
 
         return masks
 

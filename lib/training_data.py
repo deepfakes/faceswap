@@ -180,7 +180,7 @@ class TrainingDataGenerator():
             landmarks = self.get_landmarks(filename, image, side)
         if self.mask_class:
             mean = (127.5, 127.5, 127.5)  #TODO fix means
-            image = self.mask_class(self.mask_type, image / 255., landmarks, mean, channels=4).masks
+            image = self.mask_class(self.mask_type, image, landmarks, mean, channels=4).masks
         image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
 
         if not is_display:
@@ -261,11 +261,10 @@ class ImageManipulation():
         logger.trace("Color adjusting image")
         if not is_display and augment_color:
             logger.trace("Augmenting color")
-            face, _ = self.separate_mask(img)
-            face = face.astype("uint8")
+            face, mask = self.separate_mask(face)
             face = self.random_clahe(face)
             face = self.random_lab(face)
-            img[:, :, :3] = face
+            img = np.concatenate((face, mask),axis=-1)
         return img.astype('float32') / 255.0
 
     def random_clahe(self, image):
@@ -282,8 +281,8 @@ class ImageManipulation():
         logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
 
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(grid_size, grid_size))
-        for chan in range(3):
-            image[:, :, chan] = clahe.apply(image[:, :, chan])
+        for channel in range(3):
+            image[:, :, channel] = clahe.apply(image[:, :, channel])
         return image
 
     def random_lab(self, image):
@@ -311,10 +310,10 @@ class ImageManipulation():
     def separate_mask(image):
         """ Return the image and the mask from a 4 channel image """
         mask = None
-        if image.shape[2] == 4:
+        if image.shape[-1] == 4:
             logger.trace("Image contains mask")
-            mask = np.expand_dims(image[:, :, -1], axis=2)
-            image = image[:, :, :3]
+            mask = image[..., 3:]
+            image = image[..., :3]
         else:
             logger.trace("Image has no mask")
         return image, mask
