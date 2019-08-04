@@ -261,7 +261,7 @@ class ImageManipulation():
         logger.trace("Color adjusting image")
         if not is_display and augment_color:
             logger.trace("Augmenting color")
-            face, mask = self.separate_mask(face)
+            face, mask = self.separate_mask(img)
             face = self.random_clahe(face)
             face = self.random_lab(face)
             img = np.concatenate((face, mask),axis=-1)
