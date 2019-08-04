@@ -221,7 +221,7 @@ class Detector():
             dims = (int(width * scale), int(height * scale))
             if scale < 1.0:
                 logger.verbose("Resizing image from %sx%s to %s. Scale=%s",
-                             width, height, "x".join(str(i) for i in dims), scale)
+                               width, height, "x".join(str(i) for i in dims), scale)
             image = cv2.resize(image, dims, interpolation=interpln)
         if pad_to:
             image = Detector.pad_image(image, pad_to)

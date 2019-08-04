@@ -32,9 +32,11 @@ from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
+
 def get_config(plugin_name, configfile=None):
     """ Return the config for the requested model """
     return Config(plugin_name, configfile=configfile).config_dict
+
 
 class Aligner():
     """ Landmarks Aligner Object """
