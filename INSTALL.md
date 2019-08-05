@@ -95,7 +95,7 @@ Reboot your PC, so that everything you have just installed gets registered.
     - Give it the name: faceswap
     - **IMPORTANT**: Select python version 3.6
     - Hit "Create" (NB: This may take a while as it will need to download Python 3.6)
-![Anaconda virtual env setup](https://i.imgur.com/Tl5tyVq.png)
+![Anaconda virtual env setup](https://i.imgur.com/59RHnLs.png)
 
 #### Entering your virtual environment
 To enter the virtual environment:
