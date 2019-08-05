@@ -630,7 +630,7 @@ class Install():
         """ Install required pip packages """
         self.output.info("Installing Required Python Packages. This may take some time...")
         for pkg in self.env.missing_packages:
-            if self.env.is_conda:
+            if self.env.is_conda and not pkg.startswith("git"):
                 verbose = pkg.startswith("tensorflow") or self.env.updater
                 pkg = CONDA_MAPPING.get(pkg, (pkg, None))
                 channel = None if len(pkg) != 2 else pkg[1]
