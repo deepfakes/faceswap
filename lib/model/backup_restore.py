@@ -58,7 +58,7 @@ class Backup():
     def snapshot_models(self, iterations):
         """ Take a snapshot of the model at current state and back up """
         logger.info("Saving snapshot")
-        snapshot_dir = "{}_snapshot_{}_iters".format(self.model_dir, iterations)
+        snapshot_dir = "'drive/My Drive/'{}_snapshot_{}_iters".format(self.model_dir, iterations)
 
         if os.path.isdir(snapshot_dir):
             logger.debug("Removing previously existing snapshot folder: '%s'", snapshot_dir)
