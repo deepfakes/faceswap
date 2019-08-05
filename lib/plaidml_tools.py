@@ -70,7 +70,10 @@ class PlaidMLStats():
     @property
     def names(self):
         """ Return all PlaidML Device Names """
-        return ["{} - {}".format(device.get("vendor", "unknown"), device.get("name", "unknown"))
+        return ["{} - {} ({})".format(
+            device.get("vendor", "unknown"),
+            device.get("name", "unknown"),
+            "supported" if device in self.supported_devices else "experimental")
                 for device in self.device_details]
 
     @property
