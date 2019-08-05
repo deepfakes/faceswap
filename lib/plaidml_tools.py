@@ -73,8 +73,8 @@ class PlaidMLStats():
         return ["{} - {} ({})".format(
             device.get("vendor", "unknown"),
             device.get("name", "unknown"),
-            "supported" if device in self.supported_devices else "experimental")
-                for device in self.device_details]
+            "supported" if idx in self.supported_indices else "experimental")
+                for idx, device in enumerate(self.device_details)]
 
     @property
     def supported_indices(self):
