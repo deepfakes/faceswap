@@ -66,12 +66,16 @@ class Config(FaceswapConfig):
             section=section, title="conv_aware_init", datatype=bool, default=False,
             info="Use Convolution Aware Initialization for convolutional layers. "
                  "This can help eradicate the vanishing and exploding gradient problem "
-                 "as well as lead to higher accuracy, lower loss and faster convergence. "
-                 "NB This can use more VRAM when creating a new model so you may want to "
+                 "as well as lead to higher accuracy, lower loss and faster convergence.\nNB:"
+                 "\n\t This can use more VRAM when creating a new model so you may want to "
                  "lower the batch size for the first run. The batch size can be raised "
                  "again when reloading the model. "
-                 "\n\t NB: Building the model will likely take several minutes as the "
-                 "calculations for this initialization technique are expensive.")
+                 "\n\t Multi-GPU is not supported for this option, so you should start the model "
+                 "on a single GPU. Once training has started, you can stop training, enable "
+                 "multi-GPU and resume."
+                 "\n\t Building the model will likely take several minutes as the calculations "
+                 "for this initialization technique are expensive. This will only impact starting "
+                 "a new model.")
         self.add_item(
             section=section, title="subpixel_upscaling", datatype=bool, default=False,
             info="Use subpixel upscaling rather than pixel shuffler. These techniques "
