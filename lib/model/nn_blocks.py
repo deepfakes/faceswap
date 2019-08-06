@@ -60,7 +60,7 @@ class NNBlocks():
                 default._init = True  # pylint:disable=protected-access
         else:
             default = he_uniform()
-        if kwargs["kernel_initializer"] != default:
+        if kwargs.get("kernel_initializer", None) != default:
             kwargs["kernel_initializer"] = default
             logger.debug("Set default kernel_initializer to: %s", kwargs["kernel_initializer"])
         return kwargs
