@@ -14,7 +14,7 @@ from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, reg
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
-from keras.initializers import he_uniform
+from keras.initializers import he_uniform, VarianceScaling
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D, Scale
 from .normalization import GroupNormalization, InstanceNormalization
@@ -48,10 +48,11 @@ class NNBlocks():
         logger.debug("Generating block name: %s", name)
         return name
 
-    def update_kwargs(self, kwargs):
-        """ Update Kwargs for conv2D and Seperable conv2D layers.
-            Set the default kernel initializer to conv_aware or he_uniform()
-            if a specific initializer has not been passed in """
+    def set_default_initializer(self, kwargs):
+        """ Sets the default initializer for conv2D and Seperable conv2D layers
+            to conv_aware or he_uniform().
+            if a specific initializer has been passed in then the specified initializer
+            will be used rather than the default """
         if self.use_convaware_init:
             default = ConvolutionAware()
             if self.first_run:
@@ -59,8 +60,9 @@ class NNBlocks():
                 default._init = True  # pylint:disable=protected-access
         else:
             default = he_uniform()
-        kwargs["kernel_initializer"] = kwargs.get("kernel_initializer", default)
-        logger.debug("Set default kernel_initializer to: %s", kwargs["kernel_initializer"])
+        if kwargs["kernel_initializer"] != default:
+            kwargs["kernel_initializer"] = default
+            logger.debug("Set default kernel_initializer to: %s", kwargs["kernel_initializer"])
         return kwargs
 
     @staticmethod
@@ -72,16 +74,11 @@ class NNBlocks():
         logger.debug("Switched kernel_initializer from %s to %s", original, initializer)
         return original
 
-    def conv2d(self, inp, filters, kernel_size, strides=(1, 1), padding="same",
-               force_initializer=False, **kwargs):
+    def conv2d(self, inp, filters, kernel_size, strides=(1, 1), padding="same", **kwargs):
         """ A standard conv2D layer with correct initialization """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, padding: %s, "
-                     "force_initializer: %s, kwargs: %s)", inp, filters, kernel_size, strides,
-                     padding, force_initializer, kwargs)
-        if not force_initializer:
-            # Do not update the initializer if force_initializer is true (i.e. initializer is
-            # already correctly set in kwargs)
-            kwargs = self.update_kwargs(kwargs)
+                     "kwargs: %s)", inp, filters, kernel_size, strides, padding, kwargs)
+        kwargs = self.set_default_initializer(kwargs)
         var_x = Conv2D(filters, kernel_size,
                        strides=strides,
                        padding=padding,
@@ -123,7 +120,7 @@ class NNBlocks():
                                       kernel_size=kernel_size,
                                       name="{}_reflectionpadding2d".format(name))(inp)
             padding = "valid"
-        kwargs = self.update_kwargs(kwargs)
+        kwargs = self.set_default_initializer(kwargs)
         if self.use_icnr_init:
             original_init = self.switch_kernel_initializer(
                 kwargs,
@@ -131,7 +128,6 @@ class NNBlocks():
         var_x = self.conv2d(inp, filters * 4,
                             kernel_size=kernel_size,
                             padding=padding,
-                            force_initializer=True,
                             name="{}_conv2d".format(name),
                             **kwargs)
         if self.use_icnr_init:
@@ -169,11 +165,17 @@ class NNBlocks():
                                         kernel_size=kernel_size,
                                         name="{}_reflectionpadding2d_1".format(name))(var_x)
             padding = "valid"
+        if not self.use_convaware_init:
+            original_init = self.switch_kernel_initializer(kwargs, VarianceScaling(
+                scale=0.2,
+                mode="fan_in",
+                distribution="uniform"))
         var_x = self.conv2d(var_x, filters,
                             kernel_size=kernel_size,
                             padding=padding,
-                            name="{}_conv2d_1".format(name),
                             **kwargs)
+        if not self.use_convaware_init:
+            self.switch_kernel_initializer(kwargs, original_init)
         var_x = Add()([var_x, inp])
         var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_3".format(name))(var_x)
         return var_x
@@ -184,7 +186,7 @@ class NNBlocks():
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      inp, filters, kernel_size, strides, kwargs)
         name = self.get_name("separableconv2d")
-        kwargs = self.update_kwargs(kwargs)
+        kwargs = self.set_default_initializer(kwargs)
         var_x = SeparableConv2D(filters,
                                 kernel_size=kernel_size,
                                 strides=strides,
