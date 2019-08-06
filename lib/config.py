@@ -34,6 +34,8 @@ class FaceswapConfig():
             that can be altered after the model has been created """
         retval = dict()
         for sect in ("global", self.section):
+            if sect not in self.defaults:
+                continue
             for key, val in self.defaults[sect].items():
                 if key == "helptext" or val["fixed"]:
                     continue
