@@ -4,7 +4,7 @@
 import logging
 
 from hashlib import sha1
-from random import random, shuffle, choice
+from random import random, shuffle, choice, uniform
 
 import cv2
 import numpy as np
@@ -178,9 +178,13 @@ class TrainingDataGenerator():
         image = cv2_read_img(filename, raise_error=True)
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             landmarks = self.get_landmarks(filename, image, side)
+        image = image.astype('float32') / 255.
         if self.mask_class:
-            mean = (127.5, 127.5, 127.5)  #TODO fix means
+            if image.ndim < 4:
+                image = np.expand_dims(image, axis=0)
+            mean = np.mean(image, axis=(1,2))
             image = self.mask_class(self.mask_type, image, landmarks, mean, channels=4).masks
+            print(np.mean(image, axis=(0,1))
         image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
 
         if not is_display:
@@ -265,7 +269,7 @@ class ImageManipulation():
             face = self.random_clahe(face)
             face = self.random_lab(face)
             img = np.concatenate((face, mask),axis=-1)
-        return img.astype('float32') / 255.0
+        return img
 
     def random_clahe(self, image):
         """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
@@ -273,17 +277,19 @@ class ImageManipulation():
         contrast_random = random()
         if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
             return image
-
+        if image.dtype == "float32":
+            image = np.rint(image * 255.).astype('uint8')
         base_contrast = image.shape[0] // 128
         grid_base = random() * self.config.get("color_clahe_max_size", 4)
         contrast_adjustment = int(grid_base * (base_contrast / 2))
         grid_size = base_contrast + contrast_adjustment
         logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
 
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(grid_size, grid_size))
+        clahe = cv2.createCLAHE(clipLimit=2., tileGridSize=(grid_size, grid_size))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         for channel in range(3):
             image[:, :, channel] = clahe.apply(image[:, :, channel])
-        return image
+        return image.astype('float32') / 255.
 
     def random_lab(self, image):
         """ Perform random color/lightness adjustment in L*a*b* colorspace """
@@ -291,19 +297,17 @@ class ImageManipulation():
         amount_l = self.config.get("color_lightness", 30) / 100
         amount_ab = self.config.get("color_ab", 8) / 100
 
-        randoms = [(random() * amount_l * 2) - amount_l,  # L adjust
-                   (random() * amount_ab * 2) - amount_ab,  # A adjust
-                   (random() * amount_ab * 2) - amount_ab]  # B adjust
-
+        randoms = [amount_l * uniform(-1.,1.),   # L adjust
+                   amount_ab * uniform(-1.,1.),  # A adjust
+                   amount_ab * uniform(-1.,1.)]  # B adjust
         logger.trace("Random LAB adjustments: %s", randoms)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype("float32") / 255.
 
         for idx, adjustment in enumerate(randoms):
             if adjustment >= 0:
-                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+                image[:, :, idx] = image[:, :, idx] * (1 - adjustment) + adjustment
             else:
                 image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
-        image = cv2.cvtColor((image * 255.0).astype("uint8"), cv2.COLOR_LAB2BGR)
+        image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
         return image
 
     @staticmethod

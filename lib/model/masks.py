@@ -49,8 +49,7 @@ class Mask():
             faces = np.expand_dims(faces, axis=0)
         masks = self.build_masks(mask_type, faces, means, landmarks)
         self.masks = self.merge_masks(faces, masks)
-        if dimensions < 4:
-            self.masks = np.squeeze(self.masks, axis=0)
+        self.masks = np.squeeze(self.masks, axis=0)
         logger.trace("Initialized %s", self.__class__.__name__)
 
     def build_masks(self, mask_type, faces, means, landmarks):
@@ -152,7 +151,7 @@ class Facehull(Mask):
                       "components":  self.eight,
                       "extended":    self.extended,
                       None:          self.three}
-        masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='uint8', ndmin=4)
+        masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
         if landmarks.ndim == 2:
             landmarks = landmarks[None, ...]
         for i, landmark in enumerate(landmarks):
@@ -161,7 +160,7 @@ class Facehull(Mask):
                 # pylint: disable=no-member
                 hull = cv2.convexHull(np.concatenate(item))
                 try:
-                    cv2.fillConvexPoly(masks[i], hull, 255)
+                    cv2.fillConvexPoly(masks[i], hull, 1.)
                 except Exception as error:
                     print("CV2 Error '{0}' occured.".format(error.message))
                     print("Error Arguments {1}.".format(error.args))
@@ -180,11 +179,11 @@ class Smart(Mask):
         postprocess_test = False
         target_size, model = self.get_models(mask_type)
         mask_model = keras.models.load_model(model.model_path)
-        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
+        masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndmin=4)
         original_size, faces = self.resize_inputs(faces, target_size)
 
-        batch_size = 16
-        batches = faces.shape[0] // batch_size
+        batch_size = min(faces.shape[0], 16)
+        batches = ((faces.shape[0] - 1) // batch_size) + 1
         even_split_section = batches * batch_size
         faces_batched = np.split(faces[:even_split_section], batches)
         means_batched = np.split(means[:even_split_section], batches)
@@ -194,30 +193,32 @@ class Smart(Mask):
             means_batched.append(means[even_split_section:])
             masks_batched.append(masks[even_split_section:])
         batched = zip(faces_batched, means_batched)
+        print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", len(faces_batched),"means_batched: ", len(means_batched))
+        print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", faces_batched[0].shape,"means_batched: ", means_batched[0].shape)
         for i, (faces, means) in enumerate(batched):
+            print(faces.shape, means.shape)
+            print(faces.dtype, means.dtype)
+            print(mask_model.summary())
             if  model.model_filename[0].startswith('DFL'):
                 model_input = faces
-                results = mask_model.predict(model_input[..., :3])
-                low = results < 0.1
-                high = results > 0.9
+                #results = mask_model.predict(model_input[..., :3])
+                results = mask_model.predict(model_input)
+                results = np.swapaxes(results, 2, 0)
             if model.model_filename[0].startswith('Nirkin'):
                 # pylint: disable=no-member
-                print(faces.shape, means.shape)
                 model_input = (faces - means[:, None, None, :])
                 results = mask_model.predict_on_batch(model_input[..., :3])[..., 1:2]
                 generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
                 if postprocess_test:
                     generator = (self.postprocessing(mask[:, :, None]) for mask in results)
                 results = np.array(tuple(generator))[..., None]
-                low = results < 0.025
-                high = results > 0.975
-            results[low] = 0.
-            results[high] = 1.
+            results[results < 0.05] = 0.
+            results[results > 0.95] = 1.
+            print("results......................: ",results.shape)
             _, results = self.resize_inputs(results, original_size)
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
-            print(masks.shape, results.shape)
-            results = results * 255.
-            masks[batch_slice] = results[..., None].astype("uint8")
+            #results = results * 255.
+            masks[batch_slice] = results[..., None]
 
         return masks
 
@@ -225,10 +226,10 @@ class Smart(Mask):
     def get_models(mask_type):
         """ Check if model is available, if not, download and unzip it """
 
-        build_dict = {"vgg_300":     (300, 8, "Nirkin_300_softmax_v1.h5"),
-                      "vgg_500":     (500, 5, "Nirkin_500_softmax_v1.h5"),
-                      "unet_256":    (256, 6, "DFL_256_sigmoid_v1.h5"),
-                      None:          (500, 5, "Nirkin_500_softmax_v1.h5")}
+        build_dict = {"vgg_300":     (300, 8, ["Nirkin_300_softmax_v1.h5"]),
+                      "vgg_500":     (500, 5, ["Nirkin_500_softmax_v1.h5"]),
+                      "unet_256":    (256, 6, ["DFL_256_sigmoid_v1.h5"]),
+                      None:          (500, 5, ["Nirkin_500_softmax_v1.h5"])}
         input_size, git_model_id, model_filename = build_dict[mask_type]
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
