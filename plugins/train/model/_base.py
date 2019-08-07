@@ -21,8 +21,7 @@ from keras.utils import get_custom_objects, multi_gpu_model
 from lib import Serializer
 from lib.model.backup_restore import Backup
 from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
-                              generalized_loss, l_inf_norm, gmsd_loss)
-from lib.model.masks import gaussian_blur
+                              generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
 from lib.multithreading import MultiThread

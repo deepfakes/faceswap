@@ -5,7 +5,6 @@ import inspect
 import logging
 import sys
 
-import keras.backend as K
 import cv2
 import numpy as np
 
@@ -28,31 +27,6 @@ def get_default_mask():
     default = default if default in masks else masks[0]
     logger.debug(default)
     return default
-
-
-def gaussian_blur(radius=2.0):
-    """ From https://github.com/iperov/DeepFaceLab
-        Used for blurring mask in training """
-    def gaussian(var_x, radius, sigma):
-        return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
-
-    def make_kernel(sigma):
-        kernel_size = max(3, int(2 * 2 * sigma + 1))
-        mean = np.floor(0.5 * kernel_size)
-        kernel_1d = np.array([gaussian(x, mean, sigma) for x in range(kernel_size)])
-        np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
-        kernel = np_kernel / np.sum(np_kernel)
-        return kernel
-
-    gauss_kernel = make_kernel(radius)
-    gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
-
-    def func(input_):
-        inputs = [input_[:, :, :, i:i + 1] for i in range(K.int_shape(input_)[-1])]
-        outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
-                   for inp in inputs]
-        return K.concatenate(outputs, axis=-1)
-    return func
 
 
 class Mask():

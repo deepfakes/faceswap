@@ -15,7 +15,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.distributions import Beta
 
-from .masks import gaussian_blur
 from .normalization import InstanceNormalization
 if K.backend() == "plaidml.keras.backend":
     from plaidml.op import extract_image_patches
@@ -913,3 +912,31 @@ def ms_ssim_loss(y_true, y_pred):
     loss = K.expand_dims(expanded, axis=-1)
     # need to expand to [1,height,width] dimensions for Keras. modify to not be hard-coded
     return K.tile(loss, [1, 64, 64])
+
+
+# Gaussian Blur is here as it is only used for losses.
+# It was previously kept in lib/model/masks but the import of keras backend
+# breaks plaidml
+def gaussian_blur(radius=2.0):
+    """ From https://github.com/iperov/DeepFaceLab
+        Used for blurring mask in training """
+    def gaussian(var_x, radius, sigma):
+        return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
+
+    def make_kernel(sigma):
+        kernel_size = max(3, int(2 * 2 * sigma + 1))
+        mean = np.floor(0.5 * kernel_size)
+        kernel_1d = np.array([gaussian(x, mean, sigma) for x in range(kernel_size)])
+        np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
+        kernel = np_kernel / np.sum(np_kernel)
+        return kernel
+
+    gauss_kernel = make_kernel(radius)
+    gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
+
+    def func(input_):
+        inputs = [input_[:, :, :, i:i + 1] for i in range(K.int_shape(input_)[-1])]
+        outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
+                   for inp in inputs]
+        return K.concatenate(outputs, axis=-1)
+    return func
