@@ -20,8 +20,9 @@ from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib import Serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import DSSIMObjective, PenalizedLoss, gradient_loss
-from lib.model.losses import generalized_loss, l_inf_norm, gmsd_loss
+from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
+                              generalized_loss, l_inf_norm, gmsd_loss)
+from lib.model.masks import gaussian_blur
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
 from lib.multithreading import MultiThread
@@ -677,6 +678,15 @@ class Loss():
         return _CONFIG
 
     @property
+    def mask_preprocessing_func(self):
+        """ The selected pre-processing function for the mask """
+        retval = None
+        if self.config.get("mask_blur", False):
+            retval = gaussian_blur(max(1, self.mask_shape[1] // 32))
+        logger.debug(retval)
+        return retval
+
+    @property
     def selected_loss(self):
         """ Return the selected loss function """
         retval = self.loss_dict[self.config.get("loss_function", "mae")]
@@ -685,9 +695,13 @@ class Loss():
 
     @property
     def selected_mask_loss(self):
-        """ Return the selected mask loss function. Currently returns mse """
-        retval = self.loss_dict["mse"]
-        logger.debug(retval)
+        """ Return the selected mask loss function. Currently returns mse
+            If a processing function has been requested wrap the loss function
+            in loss wrapper """
+        loss_func = self.loss_dict["mse"]
+        func = self.mask_preprocessing_func
+        logger.debug("loss_func: %s, func: %s", loss_func, func)
+        retval = mask_loss_wrapper(loss_func, preprocessing_func=func)
         return retval
 
     @property
@@ -746,7 +760,8 @@ class Loss():
                 logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
                              face_size, mask_size, scaling)
                 loss_funcs.append(PenalizedLoss(self.mask_input, self.selected_loss,
-                                                mask_scaling=scaling))
+                                                mask_scaling=scaling,
+                                                preprocessing_func=self.mask_preprocessing_func))
             else:
                 loss_funcs.append(self.selected_loss)
             logger.debug("%s: %s", loss_name, loss_funcs[-1])

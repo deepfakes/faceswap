@@ -125,17 +125,21 @@ class Config(FaceswapConfig):
                  "pixel spatial difference in each image and then minimize that difference "
                  "between two images. Allows for large color shifts,but maintains the structure "
                  "of the image.\n")
-        self.add_item(section=section, title="mask_type", datatype=str, default="none",
-                      choices=get_available_masks(),
-                      info="The mask to be used for training:"
-                           "\n\t none: Doesn't use any mask."
-                           "\n\t components: An improved face hull mask using a facehull of 8 "
-                           "facial parts"
-                           "\n\t dfl_full: An improved face hull mask using a facehull of 3 "
-                           "facial parts"
-                           "\n\t extended: Based on components mask. Extends the eyebrow points "
-                           "to further up the forehead. May perform badly on difficult angles."
-                           "\n\t facehull: Face cutout based on landmarks")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=get_available_masks(),
+            info="The mask to be used for training:"
+                 "\n\t none: Doesn't use any mask."
+                 "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
+                 "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
+                 "\n\t extended: Based on components mask. Extends the eyebrow points to further "
+                 "up the forehead. May perform badly on difficult angles."
+                 "\n\t facehull: Face cutout based on landmarks")
+        self.add_item(
+            section=section, title="mask_blur", datatype=bool, default=False,
+            info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
+                 "edges of the mask, which can help with poorly calculated masks, and give less "
+                 "of a hard edge to the predicted mask.")
         self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
             min_max=(1e-6, 1e-4), rounding=6, fixed=False,
