@@ -147,6 +147,13 @@ class Detector():
             logger.trace("Item out: %s", {key: val
                                           for key, val in output.items()
                                           if key != "image"})
+            # Prevent zero size faces
+            iheight, iwidth = output["image"].shape[:2]
+            output["detected_faces"] = [
+                f for f in output.get("detected_faces", list())
+                if f["right"] > 0 and f["left"] < iwidth
+                and f["bottom"] > 0 and f["top"] < iheight
+            ]
             if self.min_size > 0 and output.get("detected_faces", None):
                 output["detected_faces"] = self.filter_small_faces(output["detected_faces"])
         else:

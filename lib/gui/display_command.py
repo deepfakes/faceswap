@@ -191,7 +191,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
-                text="Graph updates every 100 iterations. Click to refresh now.",
+                text="Graph updates at every model save. Click to refresh now.",
                 wraplength=200)
         logger.debug("Added refresh option")
 

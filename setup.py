@@ -278,7 +278,7 @@ class Environment():
     def update_amd_dep(self):
         """ Update amd dependency for AMD cards """
         if self.enable_amd:
-            self.required_packages.append("plaidml-keras==0.6.3")
+            self.required_packages.append("plaidml-keras==0.6.4")
 
 
 class Output():
