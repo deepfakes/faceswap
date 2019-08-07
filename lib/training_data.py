@@ -64,8 +64,8 @@ class TrainingDataGenerator():
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list((
             (batchsize, training_size, training_size, 3),  # sample images
-            (batchsize, self.model_input_size, self.model_input_size, 3)))
-        # Add the output shapes
+            (batchsize, self.model_input_size, self.model_input_size, 3)))  # Training Image
+        # Target images
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
 

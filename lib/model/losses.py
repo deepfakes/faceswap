@@ -15,6 +15,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.distributions import Beta
 
+from .masks import gaussian_blur
 from .normalization import InstanceNormalization
 if K.backend() == "plaidml.keras.backend":
     from plaidml.op import extract_image_patches
@@ -162,8 +163,23 @@ class DSSIMObjective():
 
 
 # <<< START: from Dfaker >>> #
-def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-name
+def PenalizedLoss(mask, loss_func, mask_prop=1.0, mask_scaling=1.0):  # pylint: disable=invalid-name
     """ Plaidml + tf Penalized loss function """
+
+    def scale_mask(mask, scaling):
+        """ Scale the input mask to be the same size as the input face """
+        if scaling != 1.0:
+            size = round(1 / scaling)
+            mask = K.pool2d(mask,
+                            pool_size=(size, size),
+                            strides=(size, size),
+                            padding="valid",
+                            data_format=K.image_data_format(),
+                            pool_mode="avg")
+        logger.debug("resized tensor: %s", mask)
+        return mask
+
+    mask = scale_mask(mask, mask_scaling)
     mask_as_k_inv_prop = 1 - mask_prop
     mask = (mask * mask_prop) + mask_as_k_inv_prop
 
@@ -185,27 +201,6 @@ def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-na
 def style_loss(gaussian_blur_radius=0.0, loss_weight=1.0, wnd_size=0, step_size=1):
     """ Style Loss from DeepFaceLab
         https://github.com/iperov/DeepFaceLab """
-    def gaussian_blur(radius=2.0):
-        def gaussian(var_x, radius, sigma):
-            return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
-
-        def make_kernel(sigma):
-            kernel_size = max(3, int(2 * 2 * sigma + 1))
-            mean = np.floor(0.5 * kernel_size)
-            kernel_1d = np.array([gaussian(x, mean, sigma) for x in range(kernel_size)])
-            np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
-            kernel = np_kernel / np.sum(np_kernel)
-            return kernel
-
-        gauss_kernel = make_kernel(radius)
-        gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
-
-        def func(input_):
-            inputs = [input_[:, :, :, i:i + 1] for i in range(K.int_shape(input_)[-1])]
-            outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
-                       for inp in inputs]
-            return K.concatenate(outputs, axis=-1)
-        return func
 
     if gaussian_blur_radius > 0.0:
         gblur = gaussian_blur(gaussian_blur_radius)
