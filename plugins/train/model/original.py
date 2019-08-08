@@ -3,7 +3,7 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contribs """
 
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape
+from keras.layers import Dense, Flatten, Input, Reshape
 
 from keras.models import Model as KerasModel
 
@@ -28,19 +28,14 @@ class Model(ModelBase):
     def add_networks(self):
         """ Add the original model weights """
         logger.debug("Adding networks")
-        self.add_network("decoder", "a", self.decoder())
-        self.add_network("decoder", "b", self.decoder())
+        self.add_network("decoder", "a", self.decoder(), is_output=True)
+        self.add_network("decoder", "b", self.decoder(), is_output=True)
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
 
-    def build_autoencoders(self):
+    def build_autoencoders(self, inputs):
         """ Initialize original model """
         logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[:2] + (1, ))
-            inputs.append(Input(shape=mask_shape, name="mask"))
-
         for side in ("a", "b"):
             logger.debug("Adding Autoencoder. Side: %s", side)
             decoder = self.networks["decoder_{}".format(side)].network
@@ -71,7 +66,11 @@ class Model(ModelBase):
         var_x = self.blocks.upscale(var_x, 256)
         var_x = self.blocks.upscale(var_x, 128)
         var_x = self.blocks.upscale(var_x, 64)
-        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        var_x = self.blocks.conv2d(var_x, 3,
+                                   kernel_size=5,
+                                   padding="same",
+                                   activation="sigmoid",
+                                   name="face_out")
         outputs = [var_x]
 
         if self.config.get("mask_type", None):
@@ -79,6 +78,10 @@ class Model(ModelBase):
             var_y = self.blocks.upscale(var_y, 256)
             var_y = self.blocks.upscale(var_y, 128)
             var_y = self.blocks.upscale(var_y, 64)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = self.blocks.conv2d(var_y, 1,
+                                       kernel_size=5,
+                                       padding="same",
+                                       activation="sigmoid",
+                                       name="mask_out")
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs)

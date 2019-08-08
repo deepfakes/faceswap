@@ -210,4 +210,4 @@ class Converter():
                 round((frame.shape[0] / 2 * self.scale) * 2))
         frame = cv2.resize(frame, dims, interpolation=interp)  # pylint: disable=no-member
         logger.trace("resized frame: %s", frame.shape)
-        return frame
+        return np.clip(frame, 0.0, 1.0)

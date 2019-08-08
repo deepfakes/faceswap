@@ -25,7 +25,7 @@ from lib.faces_detect import DetectedFace
 _image_extensions = [  # pylint:disable=invalid-name
     ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 _video_extensions = [  # pylint:disable=invalid-name
-    ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".webm"]
+    ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm"]
 
 
 def get_folder(path, make_folder=True):
@@ -281,6 +281,7 @@ def rotate_landmarks(face, rotation_matrix):
         face["top"] = int(pt_y)
         face["right"] = int(pt_x1)
         face["bottom"] = int(pt_y1)
+        rotated_landmarks = face
 
     logger.trace("Rotated landmarks: %s", rotated_landmarks)
     return face

@@ -13,10 +13,13 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, output_folder, total_count, source_video, **kwargs):
+    def __init__(self, output_folder, total_count, frame_ranges, source_video, **kwargs):
         super().__init__(output_folder, **kwargs)
+        logger.debug("total_count: %s, frame_ranges: %s, source_video: '%s'",
+                     total_count, frame_ranges, source_video)
         self.source_video = source_video
-        self.frame_order = list(range(1, total_count + 1))
+        self.frame_ranges = frame_ranges
+        self.frame_order = self.set_frame_order(total_count)
         self.output_dimensions = None  # Fix dims of 1st frame in case of different sized images
         self.writer = None  # Need to know dimensions of first frame, so set writer then
 
@@ -50,6 +53,7 @@ class Writer(Output):
         """ Return the fps of source video """
         reader = imageio.get_reader(self.source_video)
         retval = reader.get_meta_data()["fps"]
+        reader.close()
         logger.debug(retval)
         return retval
 
@@ -76,6 +80,17 @@ class Writer(Output):
 
         logger.debug(output_args)
         return output_args
+
+    def set_frame_order(self, total_count):
+        """ Return the full list of frames to be converted in order """
+        if self.frame_ranges is None:
+            retval = list(range(1, total_count + 1))
+        else:
+            retval = list()
+            for rng in self.frame_ranges:
+                retval.extend(list(range(rng[0], rng[1] + 1)))
+        logger.debug("frame_order: %s", retval)
+        return retval
 
     def get_writer(self):
         """ Add the requested encoding options and return the writer """
@@ -131,6 +146,16 @@ class Writer(Output):
             however muxing audio is non-trivial, so this is done afterwards with ffmpy.
             A future fix could be implemented to mux audio with the frames """
         logger.info("Muxing Audio...")
+        if self.frame_ranges is not None:
+            logger.warning("Muxing audio is not currently supported for limited frame ranges."
+                           "The output video has been created but you will need to mux audio "
+                           "yourself")
+            os.rename(self.video_tmp_file, self.video_file)
+            logger.debug("Removing temp file")
+            if os.path.isfile(self.video_tmp_file):
+                os.remove(self.video_tmp_file)
+            return
+
         exe = im_ffm.get_ffmpeg_exe()
         inputs = OrderedDict([(self.video_tmp_file, None), (self.source_video, None)])
         outputs = {self.video_file: "-map 0:0 -map 1:1 -c: copy"}

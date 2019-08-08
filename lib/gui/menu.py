@@ -180,8 +180,11 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="watch")
         self.clear_console()
         print("Obtaining system information...")
-        from lib.sysinfo import sysinfo
-        info = sysinfo
+        try:
+            from lib.sysinfo import sysinfo
+            info = sysinfo
+        except Exception as err:
+            info = "Error obtaining system info: {}".format(str(err))
         self.clear_console()
         logger.debug("Obtained system information: %s", info)
         print(info)

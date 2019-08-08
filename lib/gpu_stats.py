@@ -37,9 +37,9 @@ class GPUStats():
         self.initialized = False
         self.device_count = 0
         self.active_devices = list()
-        self.handles = None
+        self.handles = list()
         self.driver = None
-        self.devices = None
+        self.devices = list()
         self.vram = None
 
         self.initialize(log)
@@ -90,12 +90,24 @@ class GPUStats():
                         self.plaid = plaidlib(log=log)
                     else:
                         msg = ("There was an error reading from the Nvidia Machine Learning "
-                               "Library. The most likely cause is incorrectly installed drivers. "
-                               "Please remove and reinstall your Nvidia drivers before reporting."
+                               "Library. Either you do not have an Nvidia GPU (in which case "
+                               "this warning can be ignored) or the most likely cause is "
+                               "incorrectly installed drivers. If this is the case, Please remove "
+                               "and reinstall your Nvidia drivers before reporting."
                                "Original Error: {}".format(str(err)))
                         if self.logger:
-                            self.logger.error(msg)
-                        raise ValueError(msg)
+                            self.logger.warning(msg)
+                        self.initialized = True
+                        return
+                except Exception as err:  # pylint: disable=broad-except
+                    msg = ("An unhandled exception occured loading pynvml. "
+                           "Original error: {}".format(str(err)))
+                    if self.logger:
+                        self.logger.error(msg)
+                    else:
+                        print(msg)
+                    self.initialized = True
+                    return
             self.initialized = True
             self.get_device_count()
             self.get_active_devices()
@@ -104,7 +116,7 @@ class GPUStats():
     def shutdown(self):
         """ Shutdown pynvml """
         if self.initialized:
-            self.handles = None
+            self.handles = list()
             if not IS_MACOS and not self.plaid:
                 pynvml.nvmlShutdown()
             self.initialized = False
