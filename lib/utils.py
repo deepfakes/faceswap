@@ -3,15 +3,17 @@
 
 import logging
 import os
+import subprocess
 import sys
 import urllib
 import warnings
 import zipfile
-from socket import timeout as socket_timeout, error as socket_error
-
 from hashlib import sha1
 from pathlib import Path
 from re import finditer
+from socket import timeout as socket_timeout, error as socket_error
+
+import imageio_ffmpeg as im_ffm
 from tqdm import tqdm
 
 import numpy as np
@@ -138,6 +140,93 @@ def hash_encode_image(image, extension):
             img,
             cv2.IMREAD_UNCHANGED)).hexdigest()  # pylint:disable=no-member,c-extension-no-member
     return f_hash, img
+
+
+def convert_to_secs(*args):
+    """ converts a time to second. Either convert_to_secs(min, secs) or
+        convert_to_secs(hours, mins, secs). """
+    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger.debug("from time: %s", args)
+    retval = 0.0
+    if len(args) == 1:
+        retval = float(args[0])
+    elif len(args) == 2:
+        retval = 60 * float(args[0]) + float(args[1])
+    elif len(args) == 3:
+        retval = 3600 * float(args[0]) + 60 * float(args[1]) + float(args[2])
+    logger.debug("to secs: %s", retval)
+    return retval
+
+
+def count_frames_and_secs(path, timeout=15):
+    """
+    Adapted From ffmpeg_imageio, to handle occasional hanging issue:
+    https://github.com/imageio/imageio-ffmpeg
+
+    Get the number of frames and number of seconds for the given video
+    file. Note that this operation can be quite slow for large files.
+
+    Disclaimer: I've seen this produce different results from actually reading
+    the frames with older versions of ffmpeg (2.x). Therefore I cannot say
+    with 100% certainty that the returned values are always exact.
+    """
+    # https://stackoverflow.com/questions/2017843/fetch-frame-count-with-ffmpeg
+
+    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    assert isinstance(path, str), "Video path must be a string"
+    exe = im_ffm.get_ffmpeg_exe()
+    iswin = sys.platform.startswith("win")
+    logger.debug("iswin: '%s'", iswin)
+    cmd = [exe, "-i", path, "-map", "0:v:0", "-c", "copy", "-f", "null", "-"]
+    logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
+    attempts = 3
+    for attempt in range(attempts):
+        try:
+            logger.debug("attempt: %s of %s", attempt + 1, attempts)
+            proc = subprocess.Popen(cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT,
+                                    shell=iswin)
+            out, _ = proc.communicate(timeout=timeout)
+            logger.debug("Succesfully communicated with FFMPEG")
+            break
+        except subprocess.CalledProcessError as err:
+            out = err.output.decode(errors="ignore")
+            raise RuntimeError("FFMEG call failed with {}:\n{}".format(err.returncode, out))
+        except subprocess.TimeoutExpired as err:
+            proc.kill()
+            this_attempt = attempt + 1
+            if this_attempt == attempts:
+                msg = ("FFMPEG hung while attempting to obtain the frame count. "
+                       "Sometimes this issue resolves itself, so you can try running again. "
+                       "Otherwise use the Effmpeg Tool to extract the frames from your video into "
+                       "a folder, and then run the requested Faceswap process on that folder.")
+                raise FaceswapError(msg) from err
+            logger.warning("FFMPEG hung while attempting to obtain the frame count. "
+                           "Retrying %s of %s", this_attempt + 1, attempts)
+            continue
+
+    # Note that other than with the subprocess calls below, ffmpeg wont hang here.
+    # Worst case Python will stop/crash and ffmpeg will continue running until done.
+
+    nframes = nsecs = None
+    for line in out.splitlines():
+        if not line.startswith(b"frame="):
+            continue
+        line = line.decode(errors="ignore")
+        logger.debug("frame line: '%s'", line)
+        idx = line.find("frame=")
+        if idx >= 0:
+            splitframes = line[idx:].split("=", 1)[-1].lstrip().split(" ", 1)[0].strip()
+            nframes = int(splitframes)
+        idx = line.find("time=")
+        if idx >= 0:
+            splittime = line[idx:].split("=", 1)[-1].lstrip().split(" ", 1)[0].strip()
+            nsecs = convert_to_secs(*splittime.split(":"))
+        logger.debug("nframes: %s, nsecs: %s", nframes, nsecs)
+        return nframes, nsecs
+
+    raise RuntimeError("Could not get number of frames")  # pragma: no cover
 
 
 def backup_file(directory, filename):
