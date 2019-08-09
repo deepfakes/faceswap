@@ -173,10 +173,11 @@ class TrainerBase():
             for side, batcher in self.batchers.items():
                 if self.pingpong.active and side != self.pingpong.side:
                     continue
-                loss[side] = batcher.train_one_batch(do_preview)
+                loss[side] = batcher.train_one_batch()
                 if not do_preview and not do_timelapse:
                     continue
                 if do_preview:
+                    batcher.generate_preview(do_preview)
                     self.samples.images[side] = batcher.compile_sample(None)
                 if do_timelapse:
                     self.timelapse.get_sample(side, timelapse_kwargs)
@@ -252,9 +253,9 @@ class Batcher():
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
         self.shutdown_feed = generator.join_subprocess
-
         self.preview_feed = None
         self.timelapse_feed = None
+        self.set_preview_feed()
 
     def load_generator(self):
         """ Pass arguments to TrainingDataGenerator and return object """
@@ -268,12 +269,12 @@ class Batcher():
                                           self.config)
         return generator
 
-    def train_one_batch(self, do_preview):
+    def train_one_batch(self):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        batch = self.get_next(do_preview)
+        x, y = self.get_next()
         try:
-            loss = self.model.predictors[self.side].train_on_batch(*batch)
+            loss = self.model.predictors[self.side].train_on_batch(x=x, y=y)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -289,16 +290,13 @@ class Batcher():
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self, do_preview):
+    def get_next(self):
         """ Return the next batch from the generator
-            Items should come out as: (warped, target [, mask]) """
+            Items should come out as: (sample, warped, mask, targets) """
         batch = next(self.feed)
-        feed = batch[1]
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        mask = batch[-1]
-        batch = [[feed, mask], batch] if self.use_mask else [feed, batch]
-        self.generate_preview(do_preview)
-        return batch
+        x = batch[1:3] if self.use_mask else batch[1:2]
+        y = batch[3:]
+        return x, y
 
     def generate_preview(self, do_preview):
         """ Generate the preview if a preview iteration """
@@ -307,16 +305,10 @@ class Batcher():
             self.target = None
             return
         logger.debug("Generating preview")
-        if self.preview_feed is None:
-            self.set_preview_feed()
         batch = next(self.preview_feed)
-        self.samples, feed = batch[:2]
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        self.target = batch[self.model.largest_face_index]
-        if self.use_mask:
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
-            self.target = [self.target, mask]
+        self.samples, _, mask  = batch[:3]
+        targets = batch[3:]
+        self.target = [targets[self.model.largest_face_index], mask]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -338,24 +330,16 @@ class Batcher():
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
         samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
-        if self.use_mask:
-            retval = [tgt[0:num_images] for tgt in images]
-        else:
-            retval = [images[0:num_images]]
-        retval = samples + retval
+        retval = samples + [tgt[0:num_images] for tgt in images]
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples, feed = batch[:2]
+        samples, _, mask = batch[:3]
+        targets = batch[3:]
         batchsize = len(samples)
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        images = batch[self.model.largest_face_index]
-        if self.use_mask:
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
-            images = [images, mask]
+        images = [targets[self.model.largest_face_index], mask]
         sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 

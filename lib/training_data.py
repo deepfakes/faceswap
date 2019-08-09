@@ -69,6 +69,7 @@ class TrainingDataGenerator():
         batch_shape = list(((batchsize, training_size, training_size, 3),  # sample images
                             (batchsize, self.model_input_size, self.model_input_size, 3)))
         # Add the output shapes
+        batch_shape.extend([(batchsize, ) + self.model_output_shapes[-1][:-1] + (1,)])
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
 
@@ -131,7 +132,6 @@ class TrainingDataGenerator():
             for i, img_path in enumerate(img_iter):
                 imgs = self.process_face(img_path, side, is_display)
                 for j, img in enumerate(imgs):
-                    print("i & j: ", i, " ", j)
                     memory[j][i][:] = img
                 epoch += 1
                 if i == batchsize - 1:
@@ -255,6 +255,7 @@ class ImageManipulation():
         # Transform and Warp args
         self.input_size = input_size
         self.output_sizes = [shape[1] for shape in output_shapes if shape[2] == 3]
+        self.output_shapes = output_shapes
         logger.debug("Output sizes: %s", self.output_sizes)
         # Warp args
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
@@ -268,8 +269,8 @@ class ImageManipulation():
             logger.trace("Augmenting color")
             face, mask = self.separate_mask(img)
             face = self.random_clahe(face)
-            face = self.random_lab(face)
-            img = np.concatenate((face, mask),axis=-1)
+            #face = self.random_lab(face)
+            img = np.concatenate((face, mask), axis=-1)
         return img
 
     def random_clahe(self, image):
@@ -295,19 +296,19 @@ class ImageManipulation():
     def random_lab(self, image):
         """ Perform random color/lightness adjustment in L*a*b* colorspace """
         # pylint:disable=no-member
-        amount_l = self.config.get("color_lightness", 30) / 100
-        amount_ab = self.config.get("color_ab", 8) / 100
+        amount_l = self.config.get("color_lightness", 30.) / 100.
+        amount_ab = self.config.get("color_ab", 8.) / 100.
 
-        randoms = [amount_l * uniform(-1.,1.),   # L adjust
-                   amount_ab * uniform(-1.,1.),  # A adjust
-                   amount_ab * uniform(-1.,1.)]  # B adjust
+        randoms = [amount_l * uniform(-1., 1.),   # L adjust
+                   amount_ab * uniform(-1., 1.),  # A adjust
+                   amount_ab * uniform(-1., 1.)]  # B adjust
         logger.trace("Random LAB adjustments: %s", randoms)
 
         for idx, adjustment in enumerate(randoms):
-            if adjustment >= 0:
-                image[:, :, idx] = image[:, :, idx] * (1 - adjustment) + adjustment
+            if adjustment >= 0.:
+                image[:, :, idx] = image[:, :, idx] * (1. - adjustment) + adjustment
             else:
-                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+                image[:, :, idx] = image[:, :, idx] * (1. + adjustment)
         image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
         return image
 
@@ -388,7 +389,7 @@ class ImageManipulation():
 
         for i, map_ in enumerate([mapx, mapy]):
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  
+            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]
 
         warped_image = cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
         logger.trace("Warped image shape: %s", warped_image.shape)
@@ -471,15 +472,15 @@ class ImageManipulation():
         compiled_images = list()
         warped_image, _ = self.separate_mask(warped_image)
         compiled_images.append(warped_image)
-        for target_image in target_images:
+        for i, target_image in enumerate(target_images):
             image, mask = self.separate_mask(target_image)
             compiled_images.append(image)
             # Add the mask if it exists and is the same size as our largest output
             if mask.shape[1] == max(self.output_sizes):
-                target_mask = mask
-
-        logger.trace("Target mask shape: %s", target_mask.shape)
-        compiled_images.append(target_mask)
+                compiled_images.insert(1, mask)
+                if self.output_shapes[i] == 1:
+                    compiled_images.append(mask)
+                    logger.trace("Target mask shape: %s", mask.shape)
 
         logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
         return compiled_images
