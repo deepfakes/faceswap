@@ -393,14 +393,12 @@ class ImageManipulation():
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
             interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  
 
-        warped_image = cv2.remap(
-            image, interp[0], interp[1], cv2.INTER_LINEAR)
+        warped_image = cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
         logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
         dst_points = [np.mgrid[dst_slice, dst_slice] for dst_slice in dst_slices]
-        mats = [umeyama(src_points, True, dst_pts.T.reshape(-1, 2))[0:2]
-                for dst_pts in dst_points]
+        mats = [umeyama(src_points, True, dst_pts.T.reshape(-1, 2))[0:2] for dst_pts in dst_points]
 
         target_images = [cv2.warpAffine(image,
                                         mat,
@@ -430,8 +428,8 @@ class ImageManipulation():
                        np.random.normal(size=dst_points.shape, scale=2.0))
         destination = destination.astype('uint8')
 
-        face_core = cv2.convexHull(np.concatenate(  
-            [source[17:], destination[17:]], axis=0).astype(int))
+        face_core = np.concatenate([source[17:], destination[17:]], axis=0).astype('unit8')
+        hulled_face_core = cv2.convexHull(face_core)
 
         source = [(pty, ptx) for ptx, pty in source] + edge_anchors
         destination = [(pty, ptx) for ptx, pty in destination] + edge_anchors
@@ -441,7 +439,7 @@ class ImageManipulation():
             for idx, (pty, ptx) in enumerate(fpl):
                 if idx > 17:
                     break
-                elif cv2.pointPolygonTest(face_core,
+                elif cv2.pointPolygonTest(hulled_face_core,
                                           (pty, ptx),
                                           False) >= 0:
                     indicies_to_remove.add(idx)
@@ -450,17 +448,11 @@ class ImageManipulation():
             source.pop(idx)
             destination.pop(idx)
 
-        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear")
+        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear").astype('float32')
         map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size)
         map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size)
-        map_x_32 = map_x.astype('float32')
-        map_y_32 = map_y.astype('float32')
 
-        warped_image = cv2.remap(image,
-                                 map_x_32,
-                                 map_y_32,
-                                 cv2.INTER_LINEAR,
-                                 cv2.BORDER_TRANSPARENT)
+        warped_image = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR, cv2.BORDER_TRANSPARENT)
         target_image = image
 
         # TODO Make sure this replacement is correct
