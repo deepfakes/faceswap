@@ -289,6 +289,5 @@ class Dummy(Mask):
 
     def build_masks(self, mask_type, faces, means, landmarks):
         """ Dummy mask of all ones """
-        masks = np.ones_like(faces)
-
+        masks = np.array(np.ones(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
         return masks

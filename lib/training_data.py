@@ -45,7 +45,7 @@ class TrainingDataGenerator():
     def set_mask_class(self):
         """ Set the mask function to use if using mask """
         mask_type = self.training_opts.get("mask_type", "none")
-        mask_args = {None:          Facehull,
+        mask_args = {None:          Dummy,
                      "components":  Facehull,
                      "extended":    Facehull,
                      "vgg_300":     Smart,
@@ -66,9 +66,8 @@ class TrainingDataGenerator():
         is_display = is_preview or is_timelapse
         queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list((
-            (batchsize, training_size, training_size, 3),  # sample images
-            (batchsize, self.model_input_size, self.model_input_size, 3)))
+        batch_shape = list(((batchsize, training_size, training_size, 3),  # sample images
+                            (batchsize, self.model_input_size, self.model_input_size, 3)))
         # Add the output shapes
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
@@ -132,6 +131,7 @@ class TrainingDataGenerator():
             for i, img_path in enumerate(img_iter):
                 imgs = self.process_face(img_path, side, is_display)
                 for j, img in enumerate(imgs):
+                    print("i & j: ", i, " ", j)
                     memory[j][i][:] = img
                 epoch += 1
                 if i == batchsize - 1:
@@ -176,8 +176,10 @@ class TrainingDataGenerator():
         logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
                      filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
-        if self.mask_class or self.training_opts["warp_to_landmarks"]:
+        if self.mask_type is not None or self.training_opts["warp_to_landmarks"]:
             landmarks = self.get_landmarks(filename, image, side)
+        else:
+            landmarks = None
         image = image.astype('float32') / 255.
         if self.mask_class:
             if image.ndim < 4:
@@ -312,13 +314,8 @@ class ImageManipulation():
     @staticmethod
     def separate_mask(image):
         """ Return the image and the mask from a 4 channel image """
-        mask = None
-        if image.shape[-1] == 4:
-            logger.trace("Image contains mask")
-            mask = image[..., 3:]
-            image = image[..., :3]
-        else:
-            logger.trace("Image has no mask")
+        mask = image[..., 3:]
+        image = image[..., :3]
         return image, mask
 
     def get_coverage(self, image):
@@ -428,7 +425,7 @@ class ImageManipulation():
                        np.random.normal(size=dst_points.shape, scale=2.0))
         destination = destination.astype('uint8')
 
-        face_core = np.concatenate([source[17:], destination[17:]], axis=0).astype('unit8')
+        face_core = np.concatenate([source[17:], destination[17:]], axis=0).astype('uint64')
         hulled_face_core = cv2.convexHull(face_core)
 
         source = [(pty, ptx) for ptx, pty in source] + edge_anchors
@@ -448,10 +445,9 @@ class ImageManipulation():
             source.pop(idx)
             destination.pop(idx)
 
-        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear").astype('float32')
-        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size)
-        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size)
-
+        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear")
+        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size).astype('float32')
+        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size).astype('float32')
         warped_image = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR, cv2.BORDER_TRANSPARENT)
         target_image = image
 
@@ -472,23 +468,21 @@ class ImageManipulation():
 
     def compile_images(self, warped_image, target_images):
         """ Compile the warped images, target images and mask for feed """
+        compiled_images = list()
         warped_image, _ = self.separate_mask(warped_image)
-        final_target_images = list()
-        target_mask = None
+        compiled_images.append(warped_image)
         for target_image in target_images:
             image, mask = self.separate_mask(target_image)
-            final_target_images.append(image)
+            compiled_images.append(image)
             # Add the mask if it exists and is the same size as our largest output
-            if mask is not None and mask.shape[1] == max(self.output_sizes):
+            if mask.shape[1] == max(self.output_sizes):
                 target_mask = mask
 
-        retval = [warped_image] + final_target_images
-        if target_mask is not None:
-            logger.trace("Target mask shape: %s", target_mask.shape)
-            retval.append(target_mask)
+        logger.trace("Target mask shape: %s", target_mask.shape)
+        compiled_images.append(target_mask)
 
-        logger.trace("Final shapes: %s", [img.shape for img in retval])
-        return retval
+        logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
+        return compiled_images
 
 
 def stack_images(images):
@@ -510,7 +504,4 @@ def stack_images(images):
     new_axes = get_transpose_axes(len(images_shape))
     new_shape = [np.prod(images_shape[x]) for x in new_axes]
     logger.debug("Stacked images")
-    return np.transpose(
-        images,
-        axes=np.concatenate(new_axes)
-        ).reshape(new_shape)
+    return np.transpose(images, axes=np.concatenate(new_axes)).reshape(new_shape)
