@@ -184,7 +184,6 @@ class TrainingDataGenerator():
                 image = np.expand_dims(image, axis=0)
             mean = np.mean(image, axis=(1,2))
             image = self.mask_class(self.mask_type, image, landmarks, mean, channels=4).masks
-            print(np.mean(image, axis=(0,1))
         image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
 
         if not is_display:
