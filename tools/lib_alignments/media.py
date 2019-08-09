@@ -9,12 +9,11 @@ from tqdm import tqdm
 import cv2
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
-import imageio_ffmpeg as im_ffm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import (_image_extensions, _video_extensions, cv2_read_img, hash_image_file,
-                       hash_encode_image)
+from lib.utils import (_image_extensions, _video_extensions, count_frames_and_secs, cv2_read_img,
+                       hash_image_file, hash_encode_image)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -110,7 +109,7 @@ class MediaLoader():
     def count(self):
         """ Number of faces or frames """
         if self.is_video:
-            retval = int(im_ffm.count_frames_and_secs(self.folder)[0])
+            retval = int(count_frames_and_secs(self.folder)[0])
         else:
             retval = len(self.file_list_sorted)
         return retval
