@@ -72,12 +72,6 @@ class Detector():
         # will support. It is also used for holding the number of threads/
         # processes for parallel processing plugins
         self.batch_size = 1
-
-        if rotation is not None:
-            deprecation_warning("Rotation ('-r', '--rotation')",
-                                additional_info="It is not necessary for most detectors and will "
-                                                "be moved to plugin config for those detectors "
-                                                "that require it.")
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERRIDE METHODS >>> #
@@ -186,7 +180,11 @@ class Detector():
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
         scale = self.set_scale(image, is_square=is_square, scale_up=scale_up)
         image = self.scale_image(image, scale, pad_to)
-        return [image, scale]
+        if pad_to is None:
+            return [image, scale]
+        pad_left = int(pad_to[0] - int(input_image.shape[1] * scale)) // 2
+        pad_top = int(pad_to[1] - int(input_image.shape[0] * scale)) // 2
+        return [image, scale, (pad_left, pad_top)]
 
     def set_scale(self, image, is_square=False, scale_up=False):
         """ Set the scale factor for incoming image """
@@ -213,7 +211,7 @@ class Detector():
 
     @staticmethod
     def scale_image(image, scale, pad_to=None):
-        """ Scale the image """
+        """ Scale the image and optional pad to given size """
         # pylint: disable=no-member
         height, width = image.shape[:2]
         interpln = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA
@@ -231,10 +229,15 @@ class Detector():
     def pad_image(image, target):
         height, width = image.shape[:2]
         if width < target[0] or height < target[1]:
-            return cv2.copyMakeBorder(
-                image, 0, target[1] - height, 0, target[0] - width,
+            pad_l = (target[0] - width) // 2
+            pad_r = (target[0] - width) - pad_l
+            pad_t = (target[1] - height) // 2
+            pad_b = (target[1] - height) - pad_t
+            img = cv2.copyMakeBorder(
+                image, pad_t, pad_b, pad_l, pad_r,
                 cv2.BORDER_CONSTANT, (0, 0, 0)
             )
+            return img
         return image
 
     # <<< IMAGE ROTATION METHODS >>> #
@@ -255,8 +258,11 @@ class Detector():
         if rotation.lower() == "on":
             rotation_angles.extend(range(90, 360, 90))
         else:
-            passed_angles = [int(angle)
-                             for angle in rotation.split(",")]
+            passed_angles = [
+                int(angle)
+                for angle in rotation.split(",")
+                if int(angle) != 0
+            ]
             if len(passed_angles) == 1:
                 rotation_step_size = passed_angles[0]
                 rotation_angles.extend(range(rotation_step_size,

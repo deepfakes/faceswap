@@ -13,6 +13,7 @@ import keras
 import keras.backend as K
 from lib.multithreading import FSThread
 from lib.queue_manager import queue_manager
+import queue
 
 
 class Detect(Detector):
@@ -29,6 +30,8 @@ class Detect(Detector):
         self.vram = 4096
         self.min_vram = 1024  # Will run at this with warnings
         self.model = None
+        self.got_input_eof = False
+        self.rotate_queue = None  # set in the detect_faces method
         self.supports_plaidml = True
 
     def initialize(self, *args, **kwargs):
@@ -47,81 +50,161 @@ class Detect(Detector):
             self.error.set()
             raise err
 
-    def prediction_thread(self, in_queue, out_queue):
-        while True:
-            job = in_queue.get()
-            if job == "EOF":
-                logger.debug("Prediction processing got EOF")
-                out_queue.put(job)
-                break
-            batch, items = job
-            predictions = self.model.predict(batch)
-            out_queue.put((predictions, items))
-
-    def post_processing_thread(self, in_queue):
+    def post_processing_thread(self, in_queue, again_queue):
+        # If -r is set we move images without found faces and remaining
+        # rotations to a queue which is "merged" with the intial input queue.
+        # This also means it is possible that we get data after an EOF.
+        # This is handled by counting open rotation jobs and propagating
+        # a second EOF as soon as we are really done through
+        # the preprocsessing thread (detect_faces) and the prediction thread.
+        open_rot_jobs = 0
+        got_first_eof = False
         while True:
             job = in_queue.get()
             if job == "EOF":
                 logger.debug("Post processing got EOF")
-                self.finalize(job)
+                got_first_eof = True
+            else:
+                predictions, items = job
+                bboxes = self.model.finalize_predictions(predictions)
+                for bbox, item in zip(bboxes, items):
+                    s3fd_opts = item["_s3fd"]
+                    detected_faces = self.process_output(bbox, s3fd_opts)
+                    did_rotation = s3fd_opts["rotations"].pop(0) != 0
+                    if detected_faces:
+                        item["detected_faces"] = detected_faces
+                        del item["_s3fd"]
+                        self.finalize(item)
+                        if did_rotation:
+                            open_rot_jobs -= 1
+                            logger.debug("Found face after rotation.")
+                    elif s3fd_opts["rotations"]:  # we have remaining rotations
+                        if not did_rotation:
+                            open_rot_jobs += 1
+                        logger.trace("Rotate face %s and try again.", item["filename"])
+                        again_queue.put(item)
+                    else:
+                        logger.trace("No face detected for %s.", item["filename"])
+                        open_rot_jobs -= 1
+                        item["detected_faces"] = []
+                        del item["_s3fd"]
+                        self.finalize(item)
+            if got_first_eof and open_rot_jobs <= 0:
+                logger.debug("Sending second EOF")
+                again_queue.put("EOF")
+                self.finalize("EOF")
                 break
-            predictions, items = job
-            bboxes = self.model.finalize_predictions(predictions)
-            for bbox, item in zip(bboxes, items):
-                detected_faces = self.process_output(bbox, item["_scale"])
-                item["detected_faces"] = detected_faces
-                del item["_scale"]
-                self.finalize(item)
+
+    def prediction_thread(self, in_queue, out_queue):
+        got_first_eof = False
+        while True:
+            job = in_queue.get()
+            if job == "EOF":
+                logger.debug("Prediction processing got EOF")
+                if got_first_eof:
+                    break
+                out_queue.put(job)
+                got_first_eof = True
+                continue
+            batch, items = job
+            predictions = self.model.predict(batch)
+            out_queue.put((predictions, items))
 
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image """
         super().detect_faces(*args, **kwargs)
         logger.debug("Launching Detect")
-        queue_size = 2
-        work_queue = queue_manager.get_queue("s3fd_work", queue_size, False)
-        done_queue = queue_manager.get_queue("s3fd_done", queue_size, False)
-        worker = FSThread(target=self.prediction_thread, args=(work_queue, done_queue))
+        self.rotate_queue = queue_manager.get_queue("s3fd_rotate", 8, False)
+        prediction_queue = queue_manager.get_queue("s3fd_pred", 8, False)
+        post_queue = queue_manager.get_queue("s3fd_post", 8, False)
+        worker = FSThread(
+            target=self.prediction_thread, args=(prediction_queue, post_queue)
+        )
+        post_worker = FSThread(
+            target=self.post_processing_thread, args=(post_queue, self.rotate_queue)
+        )
         worker.start()
-        post_worker = FSThread(target=self.post_processing_thread, args=(done_queue,))
         post_worker.start()
 
-        batch = list()
-        got_eof = False
-        while not got_eof:
+        got_first_eof = False
+        while True:
             got_eof, in_batch = self.get_batch()
+            batch = list()
             for item in in_batch:
-                detect_image, scale = self.compile_detection_image(
-                    item["image"], is_square=True, pad_to=self.target
-                )
-                item["_scale"] = scale
-                batch.append((detect_image, item))
+                s3fd_opts = item.setdefault("_s3fd", {})
+                if "scaled_img" not in s3fd_opts:
+                    detect_image, scale, pads = self.compile_detection_image(
+                        item["image"], is_square=True, pad_to=self.target
+                    )
+                    s3fd_opts["scale"] = scale
+                    s3fd_opts["pads"] = pads
+                    s3fd_opts["rotations"] = list(self.rotation)
+                    s3fd_opts["rotmatrix"] = None  # the first "rotation" is always 0
+                    img = s3fd_opts["scaled_img"] = detect_image
+                else:
+                    angle = s3fd_opts["rotations"][0]
+                    img, rotmat = self.rotate_image(s3fd_opts["scaled_img"], angle)
+                    s3fd_opts["rotmatrix"] = rotmat
+                batch.append((img, item))
 
-            if not batch:
-                work_queue.put("EOF")
-                break
+            if batch:
+                batch_data = np.array([x[0] for x in batch], dtype="float32")
+                batch_data = self.model.prepare_batch(batch_data)
+                batch_items = [x[1] for x in batch]
+                prediction_queue.put((batch_data, batch_items))
 
-            batch_data = np.array([x[0] for x in batch], dtype="float32")
-            batch_data = self.model.prepare_batch(batch_data)
-            items = [x[1] for x in batch]
-            work_queue.put((batch_data, items))
-            batch.clear()
             if got_eof:
-                work_queue.put("EOF")
-                break
+                logger.info("Main worker got EOF")
+                prediction_queue.put("EOF")
+                if got_first_eof:
+                    break
+                got_first_eof = True
 
         worker.join()
         post_worker.join()
+        for qname in ():
+            queue_manager.del_queue(qname)
         logger.debug("Detecting Faces complete")
 
-    def process_output(self, faces, scale):
+    def process_output(self, faces, opts):
         """ Compile found faces for output """
-        logger.trace("Processing Output: (faces: %s)", faces)
-        faces = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3]) for face in faces]
-        detected = [self.to_bounding_box_dict(face["left"] / scale, face["top"] / scale,
-                                              face["right"] / scale, face["bottom"] / scale)
-                    for face in faces]
+        logger.trace(
+            "Processing Output: (faces: %s, rotation_matrix: %s)",
+            faces, opts["rotmatrix"]
+        )
+        detected = []
+        scale = opts["scale"]
+        pad_l, pad_t = opts["pads"]
+        rot = opts["rotmatrix"]
+        for face in faces:
+            face = self.to_bounding_box_dict(face[0], face[1], face[2], face[3])
+            if isinstance(rot, np.ndarray):
+                face = self.rotate_rect(face, rot)
+            face = self.to_bounding_box_dict(
+                (face["left"] - pad_l) / scale,
+                (face["top"] - pad_t) / scale,
+                (face["right"] - pad_l) / scale,
+                (face["bottom"] - pad_t) / scale
+            )
+            detected.append(face)
         logger.trace("Processed Output: %s", detected)
         return detected
+
+    def get_item(self):
+        """
+        Yield one item from the input or rotation
+        queue while prioritizing rotation queue to
+        prevent deadlocks.
+        """
+        try:
+            item = self.rotate_queue.get(block=self.got_input_eof)
+            return item
+        except queue.Empty:
+            pass
+        item = super(Detect, self).get_item()
+        if not isinstance(item, dict) and item == "EOF":
+            self.got_input_eof = True
+        return item
 
 
 ################################################################################
