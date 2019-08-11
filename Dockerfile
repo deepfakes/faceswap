@@ -1,7 +1,6 @@
 FROM tensorflow/tensorflow:1.13.1
 
-RUN add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
- && apt-get update -qq -y \
+RUN apt-get update -qq -y \
  && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk ffmpeg \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
