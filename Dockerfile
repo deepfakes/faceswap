@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow-gpu:1.13.1
+FROM tensorflow/tensorflow:1.13.1
 
 RUN apt-get update -qq -y \
  && apt-get install -y libsm6 libxext6 libxrender-dev libglib2.0-0 git wget nano unzip curl gcc \
