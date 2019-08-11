@@ -1,7 +1,7 @@
 FROM tensorflow/tensorflow:1.13.1
 
 RUN apt-get update -qq -y \
- && apt-get install -y libsm6 libxrender1 libxext-dev python3.6-tk ffmpeg \
+ && apt-get install -y libsm6 libxrender1 libxext-dev python3.6 ffmpeg \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
