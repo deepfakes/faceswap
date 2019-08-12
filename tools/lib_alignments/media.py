@@ -97,6 +97,7 @@ class MediaLoader():
         self.vid_reader = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
+        self.count = self.count_frames()
         logger.verbose("%s items loaded", self.count)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -105,8 +106,7 @@ class MediaLoader():
         """ Return whether source is a video or not """
         return self.vid_reader is not None
 
-    @property
-    def count(self):
+    def count_frames(self):
         """ Number of faces or frames """
         if self.is_video:
             retval = int(count_frames_and_secs(self.folder)[0])

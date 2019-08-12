@@ -139,10 +139,10 @@ class Images():
         self.args = arguments
         self.is_video = self.check_input_folder()
         self.input_images = self.get_input_images()
+        self.images_found = self.count_images()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @property
-    def images_found(self):
+    def count_images(self):
         """ Number of images or frames """
         if self.is_video:
             retval = int(count_frames_and_secs(self.args.input_dir)[0])
