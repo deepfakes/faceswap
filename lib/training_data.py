@@ -269,7 +269,7 @@ class ImageManipulation():
             logger.trace("Augmenting color")
             face, mask = self.separate_mask(img)
             face = self.random_clahe(face)
-            #face = self.random_lab(face)
+            face = self.random_lab(face)
             img = np.concatenate((face, mask), axis=-1)
         return img
 
@@ -299,17 +299,17 @@ class ImageManipulation():
         amount_l = self.config.get("color_lightness", 30.) / 100.
         amount_ab = self.config.get("color_ab", 8.) / 100.
 
-        randoms = [amount_l * uniform(-1., 1.),   # L adjust
-                   amount_ab * uniform(-1., 1.),  # A adjust
-                   amount_ab * uniform(-1., 1.)]  # B adjust
+        randoms = [(random() * amount_l * 2.) - amount_l,  # L adjust
+                   (random() * amount_ab * 2.) - amount_ab,  # A adjust
+                   (random() * amount_ab * 2.) - amount_ab]  # B adjust
         logger.trace("Random LAB adjustments: %s", randoms)
 
         for idx, adjustment in enumerate(randoms):
             if adjustment >= 0.:
-                image[:, :, idx] = image[:, :, idx] * (1. - adjustment) + adjustment
+                image[:, :, idx] = ((1. - image[:, :, idx]) * adjustment) + image[:, :, idx]
             else:
                 image[:, :, idx] = image[:, :, idx] * (1. + adjustment)
-        image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
+        image = cv2.cvtColor((image * 255.0).astype("uint8"), cv2.COLOR_LAB2BGR)
         return image
 
     @staticmethod
