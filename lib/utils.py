@@ -183,18 +183,16 @@ def count_frames_and_secs(path, timeout=15):
     for attempt in range(attempts):
         try:
             logger.debug("attempt: %s of %s", attempt + 1, attempts)
-            proc = subprocess.Popen(cmd,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT,
-                                    shell=iswin)
-            out, _ = proc.communicate(timeout=timeout)
+            out = subprocess.check_output(cmd,
+                                          stderr=subprocess.STDOUT,
+                                          shell=iswin,
+                                          timeout=timeout)
             logger.debug("Succesfully communicated with FFMPEG")
             break
         except subprocess.CalledProcessError as err:
             out = err.output.decode(errors="ignore")
             raise RuntimeError("FFMEG call failed with {}:\n{}".format(err.returncode, out))
         except subprocess.TimeoutExpired as err:
-            proc.kill()
             this_attempt = attempt + 1
             if this_attempt == attempts:
                 msg = ("FFMPEG hung while attempting to obtain the frame count. "
@@ -210,7 +208,7 @@ def count_frames_and_secs(path, timeout=15):
     # Worst case Python will stop/crash and ffmpeg will continue running until done.
 
     nframes = nsecs = None
-    for line in out.splitlines():
+    for line in reversed(out.splitlines()):
         if not line.startswith(b"frame="):
             continue
         line = line.decode(errors="ignore")
