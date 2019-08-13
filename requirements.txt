@@ -26,4 +26,4 @@ pywin32 ; sys_platform == "win32"
 #    If your graphics card support is below Cuda 9.0 you will need to either
 #    compile tensorflow yourself or download a custom version.
 #    Install 1.12.0<=tensorflow-gpu<=1.13.0 for CUDA 9.0
-#    or tensorflow-gpu>=1.13.1 or tf-nightly-gpu for CUDA 10.0
+#    or tensorflow-gpu==1.13.1 for CUDA 10.0
