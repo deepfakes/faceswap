@@ -3,9 +3,13 @@
   <a href="https://faceswap.dev"><img src="https://i.imgur.com/zHvjHnb.png"></img></a>
 <br />FaceSwap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
 </p>
+<p align="center">
+<img src = "https://i.imgur.com/nWHFLDf.jpg"></img>
+</p>
 
-![Screenshots](https://i.imgur.com/nWHFLDf.jpg)
-
+<p align="center">
+<a href="https://www.patreon.com/bePatron?u=23238350"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png"></img></a>
+</p>
 <p align="center">
   <a href="https://www.youtube.com/watch?v=r1jng79a5xc"><img src="https://img.youtube.com/vi/r1jng79a5xc/0.jpg"></img></a>
 <br />Jennifer Lawrence/Steve Buscemi FaceSwap using the Villain model
@@ -14,35 +18,37 @@
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
 - [deepfakes_faceswap](#deepfakesfaceswap)
-- [Manifesto](#Manifesto)
-  - [FaceSwap has ethical uses.](#FaceSwap-has-ethical-uses)
-- [How To setup and run the project](#How-To-setup-and-run-the-project)
-- [Overview](#Overview)
-  - [Extract](#Extract)
-  - [Train](#Train)
-  - [Convert](#Convert)
-  - [GUI](#GUI)
-- [General notes:](#General-notes)
-- [Help I need support!](#Help-I-need-support)
-  - [Discord Server](#Discord-Server)
-  - [FaceSwap Forum](#FaceSwap-Forum)
-- [Donate](#Donate)
-  - [@torzdf](#torzdf)
-  - [@andenixa](#andenixa)
-  - [@kvrooman](#kvrooman)
-- [How to contribute](#How-to-contribute)
-  - [For people interested in the generative models](#For-people-interested-in-the-generative-models)
-  - [For devs](#For-devs)
-  - [For non-dev advanced users](#For-non-dev-advanced-users)
-  - [For end-users](#For-end-users)
-  - [For haters](#For-haters)
-- [About github.com/deepfakes](#About-githubcomdeepfakes)
-  - [What is this repo?](#What-is-this-repo)
-  - [Why this repo?](#Why-this-repo)
-  - [Why is it named 'deepfakes' if it is not /u/deepfakes?](#Why-is-it-named-deepfakes-if-it-is-not-udeepfakes)
-  - [What if /u/deepfakes feels bad about that?](#What-if-udeepfakes-feels-bad-about-that)
-- [About machine learning](#About-machine-learning)
-  - [How does a computer know how to recognize/shape faces? How does machine learning work? What is a neural network?](#How-does-a-computer-know-how-to-recognizeshape-faces-How-does-machine-learning-work-What-is-a-neural-network)
+- [Manifesto](#manifesto)
+  - [FaceSwap has ethical uses.](#faceswap-has-ethical-uses)
+- [How To setup and run the project](#how-to-setup-and-run-the-project)
+- [Overview](#overview)
+  - [Extract](#extract)
+  - [Train](#train)
+  - [Convert](#convert)
+  - [GUI](#gui)
+- [General notes:](#general-notes)
+- [Help I need support!](#help-i-need-support)
+  - [Discord Server](#discord-server)
+  - [FaceSwap Forum](#faceswap-forum)
+- [Donate](#donate)
+  - [Patreon](#patreon)
+  - [One time Donations](#one-time-donations)
+    - [@torzdf](#torzdf)
+    - [@andenixa](#andenixa)
+    - [@kvrooman](#kvrooman)
+- [How to contribute](#how-to-contribute)
+  - [For people interested in the generative models](#for-people-interested-in-the-generative-models)
+  - [For devs](#for-devs)
+  - [For non-dev advanced users](#for-non-dev-advanced-users)
+  - [For end-users](#for-end-users)
+  - [For haters](#for-haters)
+- [About github.com/deepfakes](#about-githubcomdeepfakes)
+  - [What is this repo?](#what-is-this-repo)
+  - [Why this repo?](#why-this-repo)
+  - [Why is it named 'deepfakes' if it is not /u/deepfakes?](#why-is-it-named-deepfakes-if-it-is-not-udeepfakes)
+  - [What if /u/deepfakes feels bad about that?](#what-if-udeepfakes-feels-bad-about-that)
+- [About machine learning](#about-machine-learning)
+  - [How does a computer know how to recognize/shape faces? How does machine learning work? What is a neural network?](#how-does-a-computer-know-how-to-recognizeshape-faces-how-does-machine-learning-work-what-is-a-neural-network)
 
 # Manifesto
 
@@ -110,7 +116,14 @@ Alternatively, you can post questions in the [FaceSwap Forum](https://faceswap.d
 # Donate
 The developers work tirelessly to improve and develop FaceSwap. Many hours have been put in to provide the software as it is today, but this is an extremely time-consuming process with no financial reward. If you enjoy using the software, please consider donating to the devs, so they can spend more time implementing improvements.
 
-## @torzdf
+## Patreon
+The best way to support us is through our Patreon page:
+
+[![become-a-patron](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/bePatron?u=23238350)
+
+## One time Donations
+Alternatively you can give a one off donation to any of our Devs:
+### @torzdf
  There is very little FaceSwap code that hasn't been touched by torzdf. He is responsible for implementing the GUI, FAN aligner, MTCNN detector and porting the Villain, DFL-H128 and DFaker models to FaceSwap, as well as significantly improving many areas of the code.
 
 **Bitcoin:** 385a1r9tyZpt5LyZcNk1FALTxC8ZHta7yq
@@ -119,12 +132,12 @@ The developers work tirelessly to improve and develop FaceSwap. Many hours have 
 
 **Paypal:** [![torzdf](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=JZ8PP3YE9J62L)
 
-## @andenixa
+### @andenixa
 Creator of the Unbalanced and OHR models, as well as expanding various capabilities within the training process. Andenixa is currently working on new models and will take requests for donations.
 
 **Paypal:** [![andenixa](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=NRVLQYGS6NWTU)
 
-## @kvrooman
+### @kvrooman
 Responsible for consolidating the converters, adding a lot of code to fix model stability issues, and helping significantly towards making the training process more modular, kvrooman continues to be a very active contributor.
 
 **Ethereum:** 0x18CBbff5fA7C78de7B949A2b0160A0d1bd649f80
