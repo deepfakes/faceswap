@@ -79,7 +79,6 @@ class TrainingDataGenerator():
             in_queue=queue_in,
             out_queue=queue_out,
             args=(images, side, is_display, do_shuffle, batchsize))
-        print("here")
         self.fixed_producer_dispatcher.start()
         logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
         return self.minibatch(side, is_display, self.fixed_producer_dispatcher)

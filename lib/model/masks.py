@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import cv2
-import keras
 import numpy as np
 from lib.utils import GetModel
 
@@ -175,6 +174,7 @@ class Smart(Mask):
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
         """
+        import keras
 
         postprocess_test = False
         target_size, model = self.get_models(mask_type)
@@ -225,7 +225,6 @@ class Smart(Mask):
     @staticmethod
     def get_models(mask_type):
         """ Check if model is available, if not, download and unzip it """
-
         build_dict = {"vgg_300":     (300, 8, ["Nirkin_300_softmax_v1.h5"]),
                       "vgg_500":     (500, 5, ["Nirkin_500_softmax_v1.h5"]),
                       "unet_256":    (256, 6, ["DFL_256_sigmoid_v1.h5"]),
