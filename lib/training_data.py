@@ -79,6 +79,7 @@ class TrainingDataGenerator():
             in_queue=queue_in,
             out_queue=queue_out,
             args=(images, side, is_display, do_shuffle, batchsize))
+        print("here")
         self.fixed_producer_dispatcher.start()
         logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
         return self.minibatch(side, is_display, self.fixed_producer_dispatcher)
@@ -281,6 +282,7 @@ class ImageManipulation():
             return image
         if image.dtype == "float32":
             image = np.rint(image * 255.).astype('uint8')
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         base_contrast = image.shape[0] // 128
         grid_base = random() * self.config.get("color_clahe_max_size", 4)
         contrast_adjustment = int(grid_base * (base_contrast / 2))
@@ -288,28 +290,29 @@ class ImageManipulation():
         logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
 
         clahe = cv2.createCLAHE(clipLimit=2., tileGridSize=(grid_size, grid_size))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         for channel in range(3):
             image[:, :, channel] = clahe.apply(image[:, :, channel])
-        return image.astype('float32') / 255.
+        return image
 
     def random_lab(self, image):
         """ Perform random color/lightness adjustment in L*a*b* colorspace """
         # pylint:disable=no-member
         amount_l = self.config.get("color_lightness", 30.) / 100.
         amount_ab = self.config.get("color_ab", 8.) / 100.
-
         randoms = [(random() * amount_l * 2.) - amount_l,  # L adjust
                    (random() * amount_ab * 2.) - amount_ab,  # A adjust
                    (random() * amount_ab * 2.) - amount_ab]  # B adjust
         logger.trace("Random LAB adjustments: %s", randoms)
 
+        image = image.astype("float32") / 255.
         for idx, adjustment in enumerate(randoms):
             if adjustment >= 0.:
                 image[:, :, idx] = ((1. - image[:, :, idx]) * adjustment) + image[:, :, idx]
             else:
                 image[:, :, idx] = image[:, :, idx] * (1. + adjustment)
-        image = cv2.cvtColor((image * 255.0).astype("uint8"), cv2.COLOR_LAB2BGR)
+        image[..., 0] = image[..., 0] * 100.
+        image[..., 1:3] = (image[..., 1:3] * 255.) - 128.
+        image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
         return image
 
     @staticmethod
