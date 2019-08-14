@@ -94,10 +94,10 @@ class BlurMask():
         kwargs = self.get_kwargs()
         blurred = self.mask
         for i in range(self.passes):
-            ksize = int(kwargs["ksize"][0])
+            ksize = kwargs["ksize"][0]
             logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
             blurred = func(blurred, **kwargs)
-            ksize = round(ksize * self.multipass_factor)
+            ksize = int(ksize * self.multipass_factor)
             kwargs["ksize"] = self.get_kernel_tuple(ksize)
         logger.trace("Returning blurred mask. Shape: %s", blurred.shape)
         return blurred
@@ -119,25 +119,23 @@ class BlurMask():
     @property
     def func_mapping(self):
         """ Return a dict of function name to cv2 function """
-        return dict(gaussian=cv2.GaussianBlur,  # pylint: disable = no-member
-                    normalized=cv2.blur)  # pylint: disable = no-member
+        # pylint: disable = no-member
+        return dict(gaussian=cv2.GaussianBlur, normalized=cv2.blur)
 
     @property
     def kwarg_requirements(self):
         """ Return a dict of function name to a list of required kwargs """
-        return dict(gaussian=["ksize", "sigmaX"],
-                    normalized=["ksize"])
+        return dict(gaussian=["ksize", "sigmaX"], normalized=["ksize"])
 
     @property
     def kwarg_mapping(self):
         """ Return a dict of kwarg names to config item names """
-        return dict(ksize=self.kernel_size,
-                    sigmaX=self.sigma)
+        return dict(ksize=self.kernel_size, sigmaX=self.sigma)
 
     def get_kernel_size(self, radius_ratio):
         """ Set the kernel size to absolute """
         mask_diameter = np.sqrt(np.sum(self.mask))
-        radius = round(max(1., mask_diameter * radius_ratio / 100.))
+        radius = int(max(1., mask_diameter * radius_ratio / 100.))
         kernel_size = radius * 2 + 1
         logger.trace("kernel_size: %s", kernel_size)
         return kernel_size

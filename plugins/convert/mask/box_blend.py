@@ -22,7 +22,7 @@ class Mask(Adjustment):
             logger.trace("Skipping blend box")
         else:
             mask = self.get_mask()
-            new_face[:, :, -1] = np.minimum(new_face[:, :, -1:], mask)
+            new_face[..., -1] = np.minimum(new_face[..., -1], mask)
             logger.trace("Blended box")
         return new_face
 

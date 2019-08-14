@@ -16,12 +16,13 @@ class Mask(Adjustment):
 
     def process(self, new_face):
         """ Return mask and perform processing """
-        mask = new_face[:, :, -1:]
+        mask = new_face[..., -1:]
         if not self.skip:
             if self.do_erode:
                 mask = self.erode(mask)
             if self.do_blend:
                 mask = self.blend(mask)
+        mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
         mask = np.clip(mask, 0., 1.)
         logger.trace("mask shape: %s", mask.shape)
         return mask

@@ -46,12 +46,12 @@ class Adjustment():
         reinsert_mask = False
         if new_face.shape[2] == 4:
             reinsert_mask = True
-            final_mask = new_face[:, :, -1]
+            final_mask = new_face[:, :, -1:]
             new_face = new_face[:, :, :3]
         new_face = self.process(old_face, new_face, raw_mask)
         new_face = np.clip(new_face, 0.0, 1.0)
         if reinsert_mask and new_face.shape[2] != 4:
             # Reinsert Mask
-            new_face = np.concatenate((new_face, np.expand_dims(final_mask, axis=-1)), -1)
+            new_face = np.concatenate((new_face, final_mask), -1)
         logger.trace("Performed color adjustment")
         return new_face
