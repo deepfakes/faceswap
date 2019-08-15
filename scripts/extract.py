@@ -113,10 +113,16 @@ class Extract():
         """ Reload the images and pair to detected face """
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
         load_queue = self.extractor.input_queue
+        idx = 0
         for filename, image in self.images.load():
+            idx += 1
             if load_queue.shutdown.is_set():
                 logger.debug("Reload Queue: Stop signal received. Terminating")
                 break
+            if idx % self.skip_num != 0:
+                logger.trace("Skipping image '%s' due to extract_every_n = %s",
+                             filename, self.skip_num)
+                continue
             logger.trace("Reloading image: '%s'", filename)
             detect_item = detected_faces.pop(filename, None)
             if not detect_item:
