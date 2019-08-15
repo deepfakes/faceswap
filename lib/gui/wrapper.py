@@ -188,11 +188,16 @@ class FaceswapControl():
                         (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
                         (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
-                if self.command == "train" and "[saved models]" in output.strip().lower():
+                if (self.command == "train" and
+                        self.wrapper.tk_vars["istraining"].get() and
+                        "[saved models]" in output.strip().lower()):
                     logger.debug("Trigger GUI Training update")
+                    logger.trace("tk_vars: %s", {itm: var.get()
+                                                 for itm, var in self.wrapper.tk_vars.items()})
                     if not self.config.session.initialized:
                         # Don't initialize session until after the first save as state
                         # file must exist first
+                        logger.debug("Initializing curret training session")
                         self.config.session.initialize_session(is_training=True)
                     self.wrapper.tk_vars["updatepreview"].set(True)
                     self.wrapper.tk_vars["refreshgraph"].set(True)
@@ -361,6 +366,7 @@ class FaceswapControl():
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()
+            self.config.tk_vars["istraining"].set(False)
             if os.name == "nt":
                 logger.debug("Sending carriage return to process")
                 con_in = win32console.GetStdHandle(  # pylint:disable=c-extension-no-member

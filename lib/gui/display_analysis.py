@@ -141,7 +141,12 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             self.after(1000, lambda msg=message: self.set_session_summary(msg))
         else:
             logger.debug("Retrieving data from thread")
-            self.summary = self.thread.get_result()
+            result = self.thread.get_result()
+            if result is None:
+                logger.debug("No result from session summary. Clearing analysis view")
+                self.clear_session()
+                return
+            self.summary = result
             self.thread = None
             self.set_info("Session: {}".format(message))
             self.stats.session = self.session
