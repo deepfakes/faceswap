@@ -37,24 +37,20 @@ class Mask():
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
 
-    def __init__(self, mask_type, faces, landmarks=None, means=None, channels=4):
-        logger.trace("Initializing %s: (mask_type: %s, channels: %s)",
-                     self.__class__.__name__, mask_type, channels)
-        assert channels in (1, 3, 4), "Channels should be 1, 3 or 4"
+    def __init__(self, mask_type):
+        logger.trace("Initializing %s: (mask_type: %s)", self.__class__.__name__, mask_type)
         self.mask_type = mask_type
-        self.channels = channels
-        dimensions = faces.ndim
-        if dimensions < 4:
-            faces = np.expand_dims(faces, axis=0)
-        masks = self.build_masks(mask_type, faces, means, landmarks)
-        self.masks = self.merge_masks(faces, masks)
-        self.masks = np.squeeze(self.masks, axis=0)
+        self.target_size, self.mask_model = self.build_masks(mask_type)
         logger.trace("Initialized %s", self.__class__.__name__)
 
-    def build_masks(self, mask_type, faces, means, landmarks):
+    def build_model(self, mask_type):
         """ Override to build the mask """
         raise NotImplementedError
 
+    def build_masks(self, faces, means, landmarks):
+        """ Override to build the mask """
+        raise NotImplementedError
+        
     def merge_masks(self, faces, masks):
         """ Return the masks in the requested shape """
         logger.trace("faces_shape: %s, masks_shape: %s", faces.shape, masks.shape)
@@ -139,7 +135,7 @@ class Facehull(Mask):
         parts = self.eight(landmarks)
         return parts
 
-    def build_masks(self, mask_type, faces, means, landmarks):
+    def build_model(self, mask_type):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
@@ -150,11 +146,17 @@ class Facehull(Mask):
                       "components":  self.eight,
                       "extended":    self.extended,
                       None:          self.three}
+        return None, build_dict[mask_type]
+
+    def build_masks(self, faces, means, landmarks):
+                      
+        if faces.ndim < 4:
+            faces = np.expand_dims(faces, axis=0)
         masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
         if landmarks.ndim == 2:
             landmarks = landmarks[None, ...]
         for i, landmark in enumerate(landmarks):
-            parts = build_dict[mask_type](landmark)
+            parts = self.mask_model(landmark)
             for item in parts:
                 # pylint: disable=no-member
                 hull = cv2.convexHull(np.concatenate(item))
@@ -163,13 +165,28 @@ class Facehull(Mask):
                 except Exception as error:
                     print("CV2 Error '{0}' occured.".format(error.message))
                     print("Error Arguments {1}.".format(error.args))
-        return masks
+        return self.merge_masks(faces, masks)
 
 
 class Smart(Mask):
     """ Neural net trained segmentation masks for face areas """
 
-    def build_masks(self, mask_type, faces, means, landmarks):
+    def build_model(self, mask_type):
+        """ Check if model is available, if not, download and unzip it """
+        import keras
+        build_dict = {"vgg_300":     (300, 8, ["Nirkin_300_softmax_v1.h5"]),
+                      "vgg_500":     (500, 5, ["Nirkin_500_softmax_v1.h5"]),
+                      "unet_256":    (256, 6, ["DFL_256_sigmoid_v1.h5"]),
+                      None:          (500, 5, ["Nirkin_500_softmax_v1.h5"])}
+        input_size, git_model_id, model_filename = build_dict[mask_type]
+        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
+        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
+        model = GetModel(model_filename, cache_path, git_model_id)
+        with keras.backend.tf.device("/cpu:0"):
+            mask_model = keras.models.load_model(model.model_path)
+        return input_size, mask_model
+    
+    def build_masks(self, faces, means, landmarks):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
@@ -177,12 +194,9 @@ class Smart(Mask):
         import keras
 
         postprocess_test = False
-        target_size, model = self.get_models(mask_type)
-        mask_model = keras.models.load_model(model.model_path)
         masks = np.array(np.zeros(faces.shape[:-1] + (1, )), dtype='float32', ndmin=4)
-        original_size, faces = self.resize_inputs(faces, target_size)
-
-        batch_size = min(faces.shape[0], 16)
+        original_size, faces = self.resize_inputs(faces, self.target_size)
+        batch_size = min(faces.shape[0], 8)
         batches = ((faces.shape[0] - 1) // batch_size) + 1
         even_split_section = batches * batch_size
         faces_batched = np.split(faces[:even_split_section], batches)
@@ -196,18 +210,18 @@ class Smart(Mask):
         print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", len(faces_batched),"means_batched: ", len(means_batched))
         print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", faces_batched[0].shape,"means_batched: ", means_batched[0].shape)
         for i, (faces, means) in enumerate(batched):
-            print(faces.shape, means.shape)
-            print(faces.dtype, means.dtype)
-            print(mask_model.summary())
             if  model.model_filename[0].startswith('DFL'):
                 model_input = faces
-                #results = mask_model.predict(model_input[..., :3])
-                results = mask_model.predict(model_input)
+                with keras.backend.tf.device("/cpu:0"):
+                    results = mask_model.predict(model_input)
                 results = np.swapaxes(results, 2, 0)
             if model.model_filename[0].startswith('Nirkin'):
                 # pylint: disable=no-member
-                model_input = (faces - means[:, None, None, :])
-                results = mask_model.predict_on_batch(model_input[..., :3])[..., 1:2]
+                model_input = faces - means[:, None, None, :]
+                with keras.backend.tf.device("/cpu:0"):
+                    results = mask_model.predict_on_batch(model_input)
+                print("done prediction")
+                results = results[..., 1:2]
                 generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
                 if postprocess_test:
                     generator = (self.postprocessing(mask[:, :, None]) for mask in results)
@@ -219,22 +233,8 @@ class Smart(Mask):
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
             #results = results * 255.
             masks[batch_slice] = results[..., None]
-
-        return masks
-
-    @staticmethod
-    def get_models(mask_type):
-        """ Check if model is available, if not, download and unzip it """
-        build_dict = {"vgg_300":     (300, 8, ["Nirkin_300_softmax_v1.h5"]),
-                      "vgg_500":     (500, 5, ["Nirkin_500_softmax_v1.h5"]),
-                      "unet_256":    (256, 6, ["DFL_256_sigmoid_v1.h5"]),
-                      None:          (500, 5, ["Nirkin_500_softmax_v1.h5"])}
-        input_size, git_model_id, model_filename = build_dict[mask_type]
-        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
-        model = GetModel(model_filename, cache_path, git_model_id)
-
-        return input_size, model
+        print("done batch")
+        return self.merge_masks(faces, masks)
 
     @staticmethod
     def resize_inputs(faces, target_size):
@@ -289,4 +289,4 @@ class Dummy(Mask):
     def build_masks(self, mask_type, faces, means, landmarks):
         """ Dummy mask of all ones """
         masks = np.array(np.ones(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
-        return masks
+        return self.merge_masks(faces, masks)

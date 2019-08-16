@@ -31,6 +31,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
+from lib.model.masks import Facehull, Smart, Dummy
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
@@ -294,8 +295,26 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (sample, warped, mask, targets) """
         batch = next(self.feed)
-        x = batch[1:3] if self.use_mask else batch[1:2]
-        y = batch[3:]
+        x = batch[1:2]
+        y = batch[2:]
+        if self.use_mask:
+            image = y[-2]
+            mean = np.mean(image, axis=(1,2))
+            mask_type = self.model.training_opts.get("mask_type", "none")
+            mask_args = {None:          Dummy,
+                         "components":  Facehull,
+                         "extended":    Facehull,
+                         "vgg_300":     Smart,
+                         "vgg_500":     Smart,
+                         "unet_256":    Smart,
+                         "none":        Dummy}
+            mask_class = mask_args[mask_type]
+            logger.debug("Mask class: %s", mask_class)
+            landmarks = None
+            print("start mask")
+            mask = mask_class(mask_type, image, landmarks, mean, channels=1).masks
+            x.append(mask)
+            y[-1] = mask
         return x, y
 
     def generate_preview(self, do_preview):

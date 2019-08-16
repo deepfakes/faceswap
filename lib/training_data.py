@@ -10,8 +10,6 @@ import cv2
 import numpy as np
 from scipy.interpolate import griddata
 
-from lib.model import masks
-from lib.model.masks import Facehull, Smart, Dummy
 from lib.multithreading import FixedProducerDispatcher
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
@@ -32,7 +30,6 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_shapes = model_output_shapes
         self.training_opts = training_opts
-        self.mask_class, self.mask_type = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
         self.fixed_producer_dispatcher = None  # Set by FPD when loading
         self._nearest_landmarks = None
@@ -42,19 +39,6 @@ class TrainingDataGenerator():
                                             config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_mask_class(self):
-        """ Set the mask function to use if using mask """
-        mask_type = self.training_opts.get("mask_type", "none")
-        mask_args = {None:          Dummy,
-                     "components":  Facehull,
-                     "extended":    Facehull,
-                     "vgg_300":     Smart,
-                     "vgg_500":     Smart,
-                     "unet_256":    Smart,
-                     "none":        Dummy}
-        mask_class = mask_args[mask_type]
-        logger.debug("Mask class: %s", mask_class)
-        return mask_class, mask_type
 
     def minibatch_ab(self, images, batchsize, side,
                      do_shuffle=True, is_preview=False, is_timelapse=False):
@@ -68,8 +52,6 @@ class TrainingDataGenerator():
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(((batchsize, training_size, training_size, 3),  # sample images
                             (batchsize, self.model_input_size, self.model_input_size, 3)))
-        # Add the output shapes
-        batch_shape.extend([(batchsize, ) + self.model_output_shapes[-1][:-1] + (1,)])
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
 
@@ -176,16 +158,6 @@ class TrainingDataGenerator():
         logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
                      filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
-        if self.mask_type is not None or self.training_opts["warp_to_landmarks"]:
-            landmarks = self.get_landmarks(filename, image, side)
-        else:
-            landmarks = None
-        image = image.astype('float32') / 255.
-        if self.mask_class:
-            if image.ndim < 4:
-                image = np.expand_dims(image, axis=0)
-            mean = np.mean(image, axis=(1,2))
-            image = self.mask_class(self.mask_type, image, landmarks, mean, channels=4).masks
         image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
 
         if not is_display:
@@ -195,15 +167,26 @@ class TrainingDataGenerator():
         sample = image.copy()[:, :, :3]
 
         if self.training_opts["warp_to_landmarks"]:
+            landmarks = self.get_landmarks(filename, image, side)
             dst_pts = self.get_closest_match(filename, side, landmarks)
-            processed = self.processing.random_warp_landmarks(image, landmarks, dst_pts)
+            warped_image, target_images = self.processing.random_warp_landmarks(image, landmarks, dst_pts)
         else:
-            processed = self.processing.random_warp(image)
+            warped_image, target_images = self.processing.random_warp(image)
 
-        processed.insert(0, sample)
+        processed = self.compile_images(sample, warped_image, target_images)
         logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
                      filename, side, [img.shape for img in processed])
         return processed
+        
+    @staticmethod
+    def compile_images(sample, warped_image, target_images):
+        """ Compile the warped images, target images and mask for feed """
+        compiled_images = [sample, warped_image]
+        for i, target_image in enumerate(target_images):
+            compiled_images.append(target_image)
+
+        logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
+        return compiled_images
 
     def get_landmarks(self, filename, image, side):
         """ Return the landmarks for this face """
@@ -267,10 +250,8 @@ class ImageManipulation():
         logger.trace("Color adjusting image")
         if not is_display and augment_color:
             logger.trace("Augmenting color")
-            face, mask = self.separate_mask(img)
-            face = self.random_clahe(face)
-            face = self.random_lab(face)
-            img = np.concatenate((face, mask), axis=-1)
+            img = self.random_clahe(img)
+            img = self.random_lab(img)
         return img
 
     def random_clahe(self, image):
@@ -279,8 +260,6 @@ class ImageManipulation():
         contrast_random = random()
         if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
             return image
-        if image.dtype == "float32":
-            image = np.rint(image * 255.).astype('uint8')
         image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         base_contrast = image.shape[0] // 128
         grid_base = random() * self.config.get("color_clahe_max_size", 4)
@@ -303,23 +282,17 @@ class ImageManipulation():
                    (random() * amount_ab * 2.) - amount_ab]  # B adjust
         logger.trace("Random LAB adjustments: %s", randoms)
 
-        image = image.astype("float32") / 255.
+        image = image.astype("float32")
+        image /= 255.
         for idx, adjustment in enumerate(randoms):
             if adjustment >= 0.:
                 image[:, :, idx] = ((1. - image[:, :, idx]) * adjustment) + image[:, :, idx]
             else:
                 image[:, :, idx] = image[:, :, idx] * (1. + adjustment)
         image[..., 0] = image[..., 0] * 100.
-        image[..., 1:3] = (image[..., 1:3] * 255.) - 128.
+        image[..., 1:] = (image[..., 1:] * 255.) - 128.
         image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
         return image
-
-    @staticmethod
-    def separate_mask(image):
-        """ Return the image and the mask from a 4 channel image """
-        mask = image[..., 3:]
-        image = image[..., :3]
-        return image, mask
 
     def get_coverage(self, image):
         """ Return coverage value for given image """
@@ -406,7 +379,7 @@ class ImageManipulation():
                          for idx, mat in enumerate(mats)]
 
         logger.trace("Target image shapes: %s", [tgt.shape for tgt in target_images])
-        return self.compile_images(warped_image, target_images)
+        return warped_image, target_images
 
     def random_warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
@@ -467,25 +440,7 @@ class ImageManipulation():
                          for size in self.output_sizes]
 
         logger.trace("Target image shapea: %s", [img.shape for img in target_images])
-        return self.compile_images(warped_image, target_images)
-
-    def compile_images(self, warped_image, target_images):
-        """ Compile the warped images, target images and mask for feed """
-        compiled_images = list()
-        warped_image, _ = self.separate_mask(warped_image)
-        compiled_images.append(warped_image)
-        for i, target_image in enumerate(target_images):
-            image, mask = self.separate_mask(target_image)
-            compiled_images.append(image)
-            # Add the mask if it exists and is the same size as our largest output
-            if mask.shape[1] == max(self.output_sizes):
-                compiled_images.insert(1, mask)
-                if self.output_shapes[i] == 1:
-                    compiled_images.append(mask)
-                    logger.trace("Target mask shape: %s", mask.shape)
-
-        logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
-        return compiled_images
+        return warped_image, target_images
 
 
 def stack_images(images):
