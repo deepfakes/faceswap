@@ -95,9 +95,9 @@ class MediaLoader():
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self.folder = folder
         self.vid_reader = self.check_input_folder()
+        self.count = self.count_frames()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
-        self.count = self.count_frames()
         logger.verbose("%s items loaded", self.count)
         logger.debug("Initialized %s", self.__class__.__name__)
 
