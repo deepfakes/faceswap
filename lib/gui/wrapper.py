@@ -348,6 +348,8 @@ class FaceswapControl():
             logger.debug("Terminating wrapper in LongRunningTask")
             self.thread = LongRunningTask(target=self.terminate_in_thread,
                                           args=(self.command, self.process))
+            if self.command == "train":
+                self.wrapper.tk_vars["istraining"].set(False)
             self.thread.start()
             self.config.root.after(1000, self.terminate)
         elif not self.thread.complete.is_set():
@@ -366,7 +368,6 @@ class FaceswapControl():
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()
-            self.config.tk_vars["istraining"].set(False)
             if os.name == "nt":
                 logger.debug("Sending carriage return to process")
                 con_in = win32console.GetStdHandle(  # pylint:disable=c-extension-no-member
