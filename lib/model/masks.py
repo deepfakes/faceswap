@@ -40,7 +40,7 @@ class Mask():
     def __init__(self, mask_type):
         logger.trace("Initializing %s: (mask_type: %s)", self.__class__.__name__, mask_type)
         self.mask_type = mask_type
-        self.target_size, self.mask_model = self.build_masks(mask_type)
+        self.target_size, self.mask_model = self.build_model(mask_type)
         logger.trace("Initialized %s", self.__class__.__name__)
 
     def build_model(self, mask_type):
@@ -51,12 +51,12 @@ class Mask():
         """ Override to build the mask """
         raise NotImplementedError
         
-    def merge_masks(self, faces, masks):
+    def merge_masks(self, faces, masks, channels):
         """ Return the masks in the requested shape """
         logger.trace("faces_shape: %s, masks_shape: %s", faces.shape, masks.shape)
-        if self.channels == 3:
+        if channels == 3:
             retval = np.repeat(masks, 3, axis=-1)
-        elif self.channels == 4:
+        elif channels == 4:
             retval = np.concatenate((faces[..., :3], masks), axis=-1)
         else:
             retval = masks
@@ -148,7 +148,7 @@ class Facehull(Mask):
                       None:          self.three}
         return None, build_dict[mask_type]
 
-    def build_masks(self, faces, means, landmarks):
+    def build_masks(self, faces, means, landmarks, channels):
                       
         if faces.ndim < 4:
             faces = np.expand_dims(faces, axis=0)
@@ -165,7 +165,7 @@ class Facehull(Mask):
                 except Exception as error:
                     print("CV2 Error '{0}' occured.".format(error.message))
                     print("Error Arguments {1}.".format(error.args))
-        return self.merge_masks(faces, masks)
+        return self.merge_masks(faces, masks, channels)
 
 
 class Smart(Mask):
@@ -186,7 +186,7 @@ class Smart(Mask):
             mask_model = keras.models.load_model(model.model_path)
         return input_size, mask_model
     
-    def build_masks(self, faces, means, landmarks):
+    def build_masks(self, faces, means, landmarks, channels):
         """
         Function for creating facehull masks
         Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
@@ -210,16 +210,16 @@ class Smart(Mask):
         print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", len(faces_batched),"means_batched: ", len(means_batched))
         print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", faces_batched[0].shape,"means_batched: ", means_batched[0].shape)
         for i, (faces, means) in enumerate(batched):
-            if  model.model_filename[0].startswith('DFL'):
+            if  self.target_size == 256:
                 model_input = faces
                 with keras.backend.tf.device("/cpu:0"):
-                    results = mask_model.predict(model_input)
+                    results = self.mask_model.predict(model_input)
                 results = np.swapaxes(results, 2, 0)
-            if model.model_filename[0].startswith('Nirkin'):
+            else:
                 # pylint: disable=no-member
                 model_input = faces - means[:, None, None, :]
                 with keras.backend.tf.device("/cpu:0"):
-                    results = mask_model.predict_on_batch(model_input)
+                    results = self.mask_model.predict_on_batch(model_input)
                 print("done prediction")
                 results = results[..., 1:2]
                 generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
@@ -234,7 +234,7 @@ class Smart(Mask):
             #results = results * 255.
             masks[batch_slice] = results[..., None]
         print("done batch")
-        return self.merge_masks(faces, masks)
+        return self.merge_masks(faces, masks, channels)
 
     @staticmethod
     def resize_inputs(faces, target_size):
@@ -286,7 +286,7 @@ class Smart(Mask):
 class Dummy(Mask):
     """ Dummy mask to enable full crop training of face and background """
 
-    def build_masks(self, mask_type, faces, means, landmarks):
+    def build_masks(self, faces, means, landmarks, channels):
         """ Dummy mask of all ones """
         masks = np.array(np.ones(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
-        return self.merge_masks(faces, masks)
+        return self.merge_masks(faces, masks, channels)

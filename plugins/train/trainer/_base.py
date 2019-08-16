@@ -276,6 +276,7 @@ class Batcher():
         x, y = self.get_next()
         try:
             loss = self.model.predictors[self.side].train_on_batch(x=x, y=y)
+            print("trained")
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -312,9 +313,12 @@ class Batcher():
             logger.debug("Mask class: %s", mask_class)
             landmarks = None
             print("start mask")
-            mask = mask_class(mask_type, image, landmarks, mean, channels=1).masks
+            Mask_model = mask_class(mask_type)
+            mask = Mask_model.build_masks(image, mean, landmarks, channels=1)
             x.append(mask)
             y[-1] = mask
+            print("x: ", [item.shape for item in x])
+            print("y: ", [item.shape for item in y])
         return x, y
 
     def generate_preview(self, do_preview):
