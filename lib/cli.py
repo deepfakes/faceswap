@@ -46,7 +46,7 @@ class ScriptExecutor():
     def test_for_tf_version():
         """ Check that the minimum required Tensorflow version is installed """
         min_ver = 1.12
-        max_ver = 1.13
+        max_ver = 1.14
         try:
             import tensorflow as tf
         except ImportError as err:
