@@ -18,6 +18,7 @@ git+https://github.com/deepfakes/nvidia-ml-py3.git
 h5py==2.9.0
 Keras==2.2.4
 pywin32 ; sys_platform == "win32"
+pynvx==0.0.4 ; sys_platform == "darwin"
 
 # tensorflow is included within the docker image.
 # If you are looking for dependencies for a manual install,
@@ -26,4 +27,4 @@ pywin32 ; sys_platform == "win32"
 #    If your graphics card support is below Cuda 9.0 you will need to either
 #    compile tensorflow yourself or download a custom version.
 #    Install 1.12.0<=tensorflow-gpu<=1.13.0 for CUDA 9.0
-#    or tensorflow-gpu==1.13.1 for CUDA 10.0
+#    or 1.13.1<=tensorflow-gpu<1.15 for CUDA 10.0

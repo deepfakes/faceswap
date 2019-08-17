@@ -148,6 +148,8 @@ class TrainerBase():
         logger.debug("Tensorflow version: %s", tf_version)
         if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
             kwargs["update_freq"] = "batch"
+        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 13):
+            kwargs["profile_batch"] = 0
         logger.debug(kwargs)
         return kwargs
 
