@@ -87,7 +87,7 @@ _FS_BACKEND = Backend().backend
 
 def get_backend():
     """ Return the faceswap backend """
-    return _FS_BACKEND
+    return _FS_BACKEND.lower()
 
 
 def get_folder(path, make_folder=True):

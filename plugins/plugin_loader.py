@@ -64,7 +64,7 @@ class PluginLoader():
         # TODO Remove this hacky fix when we move them to the same models
         multi_versions = [extractor.replace("-amd", "")
                           for extractor in extractors if extractor.endswith("-amd")]
-        if get_backend().lower() == "amd":
+        if get_backend() == "amd":
             for extractor in multi_versions:
                 extractors.remove(extractor)
         else:

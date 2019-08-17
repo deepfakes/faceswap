@@ -114,7 +114,7 @@ class ScriptExecutor():
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
-        if get_backend().lower == "amd":
+        if get_backend() == "amd":
             plaidml_found = self.setup_amd(arguments.loglevel)
             if not plaidml_found:
                 safe_shutdown()
@@ -441,7 +441,7 @@ class FaceSwapArgs():
 
     def process_suppressions(self):
         """ Suppress option if it is not available for running backend """
-        fs_backend = get_backend().lower()
+        fs_backend = get_backend()
         for opt_list in [self.global_arguments, self.argument_list, self.optional_arguments]:
             for opts in opt_list:
                 if opts.get("backend", None) is None:
@@ -538,7 +538,7 @@ class ExtractArgs(ExtractConvertArgs):
     def get_optional_arguments():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        backend = get_backend().lower()
+        backend = get_backend()
         argument_list = []
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
