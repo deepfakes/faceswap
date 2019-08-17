@@ -3,6 +3,7 @@
 
 # >>> ENV
 import ctypes
+import json
 import locale
 import os
 import re
@@ -274,6 +275,21 @@ class Environment():
         if self.enable_amd:
             self.required_packages.append("plaidml-keras==0.6.4")
 
+    def set_config(self):
+        """ Set the backend in the faceswap config file """
+        if self.enable_amd:
+            backend = "amd"
+        elif self.enable_cuda:
+            backend = "nvidia"
+        else:
+            backend = "cpu"
+        config = {"backend": backend}
+        pypath = os.path.dirname(os.path.realpath(__file__))
+        config_file = os.path.join(pypath, "config", ".faceswap")
+        with open(config_file, "w") as cnf:
+            json.dump(config, cnf)
+        self.output.info("Faceswap config written to: {}".format(config_file))
+
 
 class Output():
     """ Format and display output """
@@ -342,6 +358,7 @@ class Checks():
             self.docker_confirm()
         if self.env.enable_docker:
             self.docker_tips()
+            self.env.set_config()
             exit(0)
 
     # Check for CUDA and cuDNN
@@ -785,6 +802,7 @@ class Tips():
 if __name__ == "__main__":
     ENV = Environment()
     Checks(ENV)
+    ENV.set_config()
     if INSTALL_FAILED:
         exit(1)
     Install(ENV)

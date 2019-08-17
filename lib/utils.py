@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
 
+import json
 import logging
 import os
 import subprocess
@@ -28,6 +29,65 @@ _image_extensions = [  # pylint:disable=invalid-name
     ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm"]
+
+
+class Backend():
+    """ Return the backend from config/.faceswap
+        if file doesn't exist, create it """
+    def __init__(self):
+        self.backends = {"1": "amd", "2": "cpu", "3": "nvidia"}
+        self.config_file = self.get_config_file()
+        self.backend = self.get_backend()
+
+    @staticmethod
+    def get_config_file():
+        """ Return location of config file """
+        pypath = os.path.dirname(os.path.realpath(sys.argv[0]))
+        config_file = os.path.join(pypath, "config", ".faceswap")
+        return config_file
+
+    def get_backend(self):
+        """ Return the backend from config/.faceswap """
+        if not os.path.isfile(self.config_file):
+            self.configure_backend()
+        while True:
+            try:
+                with open(self.config_file, "r") as cnf:
+                    config = json.load(cnf)
+                break
+            except json.decoder.JSONDecodeError:
+                self.configure_backend()
+                continue
+        fs_backend = config.get("backend", None)
+        if fs_backend is None or fs_backend.lower() not in self.backends.values():
+            fs_backend = self.configure_backend()
+        print("Setting Faceswap backend to {}".format(fs_backend.upper()))
+        return fs_backend.lower()
+
+    def configure_backend(self):
+        """ Configure the backend if config file doesn't exist or there is a
+            problem with the file """
+        print("First time configuration. Please select the required backend")
+        while True:
+            selection = input("1: AMD, 2: CPU, 3: NVIDIA: ")
+            if selection not in ("1", "2", "3"):
+                print("'{}' is not a valid selection. Please try again".format(selection))
+                continue
+            break
+        fs_backend = self.backends[selection].lower()
+        config = {"backend": fs_backend}
+        with open(self.config_file, "w") as cnf:
+            json.dump(config, cnf)
+        print("Faceswap config written to: {}".format(self.config_file))
+        return fs_backend
+
+
+_FS_BACKEND = Backend().backend
+
+
+def get_backend():
+    """ Return the faceswap backend """
+    return _FS_BACKEND
 
 
 def get_folder(path, make_folder=True):

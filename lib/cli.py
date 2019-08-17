@@ -14,7 +14,7 @@ import textwrap
 from importlib import import_module
 
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, safe_shutdown
+from lib.utils import FaceswapError, get_backend, safe_shutdown
 from lib.model.masks import get_available_masks, get_default_mask
 from plugins.plugin_loader import PluginLoader
 
@@ -114,7 +114,7 @@ class ScriptExecutor():
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
-        if hasattr(arguments, "amd") and arguments.amd:
+        if get_backend().lower == "amd":
             plaidml_found = self.setup_amd(arguments.loglevel)
             if not plaidml_found:
                 safe_shutdown()
@@ -357,6 +357,7 @@ class FaceSwapArgs():
         self.global_arguments = self.get_global_arguments()
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
+        self.process_suppressions()
         if not subparser:
             return
 
@@ -387,11 +388,6 @@ class FaceSwapArgs():
         """ Arguments that are used in ALL parts of Faceswap
             DO NOT override this """
         global_args = list()
-        global_args.append({"opts": ("-amd", "--amd"),
-                            "action": "store_true",
-                            "dest": "amd",
-                            "default": False,
-                            "help": "AMD GPU users must enable this option for PlaidML support"})
         global_args.append({"opts": ("-C", "--configfile"),
                             "action": FileFullPaths,
                             "filetypes": "ini",
@@ -442,6 +438,21 @@ class FaceSwapArgs():
             kwargs = {key: option[key]
                       for key in option.keys() if key != "opts"}
             self.parser.add_argument(*args, **kwargs)
+
+    def process_suppressions(self):
+        """ Suppress option if it is not available for running backend """
+        fs_backend = get_backend().lower()
+        for opt_list in [self.global_arguments, self.argument_list, self.optional_arguments]:
+            for opts in opt_list:
+                if opts.get("backend", None) is None:
+                    continue
+                opt_backend = opts.pop("backend")
+                if isinstance(opt_backend, (list, tuple)):
+                    opt_backend = [backend.lower() for backend in opt_backend]
+                else:
+                    opt_backend = [opt_backend.lower()]
+                if fs_backend not in opt_backend:
+                    opts["help"] = argparse.SUPPRESS
 
 
 class ExtractConvertArgs(FaceSwapArgs):
@@ -527,6 +538,7 @@ class ExtractArgs(ExtractConvertArgs):
     def get_optional_arguments():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
+        backend = get_backend().lower()
         argument_list = []
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
@@ -536,37 +548,48 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Serializer for alignments file. If yaml is chosen and not "
                                       "available, then json will be used as the default "
                                       "fallback."})
+        s3fd = "s3fd"
+        fan = "fan"
+        if backend == "cpu":
+            default_detector = default_aligner = "cv2-dnn"
+        else:
+            default_detector = s3fd
+            default_aligner = fan
+        if backend == "amd":
+            default_detector += "-amd"
+            default_aligner += "-amd"
+            s3fd += "-amd"
+            fan += "-amd"
+
         argument_list.append({
             "opts": ("-D", "--detector"),
             "action": Radio,
             "type": str.lower,
             "choices":  PluginLoader.get_available_extractors("detect"),
-            "default": "s3fd",
-            "help": "R|Detector to use. NB: Unless stated, all aligners will run on CPU for AMD "
-                    "GPUs. Some of these have configurable settings in "
+            "default": default_detector,
+            "help": "R|Detector to use. Some of these have configurable settings in "
                     "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
                     "\nL|'cv2-dnn': A CPU only extractor, is the least reliable, but uses least "
                     "resources and runs fast on CPU. Use this if not using a GPU and time is "
                     "important."
                     "\nL|'mtcnn': Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
-                    "detectors but can often return more false positives."
-                    "\nL|'s3fd': Fast on GPU, slow on CPU. Can detect more faces and fewer false "
-                    "positives than other GPU detectors, but is a lot more resource intensive."})
+                    "detectors but can often return more false positives. NB: Runs on CPU for AMD "
+                    "cards."
+                    "\nL|'" + s3fd + "': Fast on GPU, slow on CPU. Can detect more faces and "
+                    "fewer false positives than other GPU detectors, but is a lot more resource "
+                    "intensive."})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "action": Radio,
             "type": str.lower,
             "choices": PluginLoader.get_available_extractors("align"),
-            "default": "fan",
-            "help": "R|Aligner to use. NB: Unless stated, all aligners will run on CPU for AMD "
-                    "GPUs."
+            "default": default_aligner,
+            "help": "R|Aligner to use."
                     "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
                     "resource intensive, but less accurate. Only use this if not using a gpu "
                     " and time is important."
-                    "\nL|'fan': Face Alignment Network. Best aligner. GPU heavy, slow when not "
-                    "running on GPU"
-                    "\nL|'fan-amd': Face Alignment Network. Uses Keras backend to support AMD "
-                    "Cards. Best aligner. GPU heavy, slow when not running on GPU"})
+                    "\nL|'" + fan + "': Face Alignment Network. Best aligner. GPU "
+                    "heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
                               "type": str.lower,
@@ -606,13 +629,10 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,
+                              "backend": "nvidia",
                               "help": "Don't run extraction in parallel. Will run detection first "
-                                      "then alignment (2 passes). Useful if VRAM is at a premium. "
-                                      "Only has an effect if both the aligner and detector use "
-                                      "the GPU, otherwise this is automatically off. NB: AMD "
-                                      "cards do not support parallel processing, so if both "
-                                      "aligner and detector use an AMD GPU this will "
-                                      "automatically be enabled."})
+                                      "then alignment (2 passes). Useful if VRAM is at a "
+                                      "premium."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
@@ -797,6 +817,7 @@ class ConvertArgs(ExtractConvertArgs):
                                       "singleprocess is enabled this setting will be ignored."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
+                              "backend": "nvidia",
                               "action": Slider,
                               "min_max": (1, 10),
                               "rounding": 1,
@@ -1008,6 +1029,7 @@ class TrainArgs(FaceSwapArgs):
                                       "iterations, you can set that value here."})
         argument_list.append({"opts": ("-g", "--gpus"),
                               "type": int,
+                              "backend": "nvidia",
                               "action": Slider,
                               "min_max": (1, 10),
                               "rounding": 1,
@@ -1036,6 +1058,7 @@ class TrainArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "allow_growth",
                               "default": False,
+                              "backend": "nvidia",
                               "help": "Sets allow_growth option of Tensorflow to spare memory "
                                       "on some configurations."})
         argument_list.append({"opts": ("-nl", "--no-logs"),
@@ -1049,29 +1072,32 @@ class TrainArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "memory_saving_gradients",
                               "default": False,
-                              "help": "[Nvidia only] Trades off VRAM usage against computation "
-                                      "time. Can fit larger models into memory at a cost of "
-                                      "slower training speed. 50%%-150%% batch size increase for "
-                                      "20%%-50%% longer training time. NB: Launch time will be "
-                                      "significantly delayed. Switching sides using ping-pong "
-                                      "training will take longer."})
+                              "backend": "nvidia",
+                              "help": "Trades off VRAM usage against computation time. Can fit "
+                                      "larger models into memory at a cost of slower training "
+                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
+                                      "training time. NB: Launch time will be significantly "
+                                      "delayed. Switching sides using ping-pong training will "
+                                      "take longer."})
         argument_list.append({"opts": ("-o", "--optimizer-savings"),
                               "dest": "optimizer_savings",
                               "action": "store_true",
                               "default": False,
-                              "help": "[Nvidia only] To save VRAM some optimizer gradient "
-                                      "calculations can be performed on the CPU rather than the "
-                                      "GPU. This allows you to increase batchsize at a training "
-                                      "speed/system RAM cost."})
+                              "backend": "nvidia",
+                              "help": "To save VRAM some optimizer gradient calculations can be "
+                                      "performed on the CPU rather than the GPU. This allows you "
+                                      "to increase batchsize at a training speed/system RAM "
+                                      "cost."})
         argument_list.append({"opts": ("-pp", "--ping-pong"),
                               "action": "store_true",
                               "dest": "pingpong",
                               "default": False,
-                              "help": "[Nvidia only] Enable ping pong training. Trains one side "
-                                      "at a time, switching sides at each save iteration. "
-                                      "Training will take 2 to 4 times longer, with about a "
-                                      "30%%-50%% reduction in VRAM useage. NB: Preview won't show "
-                                      "until both sides have been trained once."})
+                              "backend": "nvidia",
+                              "help": "Enable ping pong training. Trains one side at a time, "
+                                      "switching sides at each save iteration. Training will "
+                                      "take 2 to 4 times longer, with about a 30%%-50%% reduction "
+                                      "in VRAM useage. NB: Preview won't show until both sides "
+                                      "have been trained once."})
         argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
                               "action": "store_true",
                               "dest": "warp_to_landmarks",

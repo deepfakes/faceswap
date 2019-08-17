@@ -5,6 +5,8 @@ import logging
 import os
 from importlib import import_module
 
+from lib.utils import get_backend
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -49,7 +51,7 @@ class PluginLoader():
 
     @staticmethod
     def get_available_extractors(extractor_type):
-        """ Return a list of available models """
+        """ Return a list of available aligners/detectors """
         extractpath = os.path.join(os.path.dirname(__file__),
                                    "extract",
                                    extractor_type)
@@ -59,6 +61,15 @@ class PluginLoader():
                             and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py")
                             and item.name != "manual.py")
+        # TODO Remove this hacky fix when we move them to the same models
+        multi_versions = [extractor.replace("-amd", "")
+                          for extractor in extractors if extractor.endswith("-amd")]
+        if get_backend().lower() == "amd":
+            for extractor in multi_versions:
+                extractors.remove(extractor)
+        else:
+            for extractor in multi_versions:
+                extractors.remove("{}-amd".format(extractor))
         return extractors
 
     @staticmethod
