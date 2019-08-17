@@ -12,6 +12,7 @@ import zipfile
 from hashlib import sha1
 from pathlib import Path
 from re import finditer
+from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
 
 import imageio_ffmpeg as im_ffm
@@ -61,7 +62,8 @@ class Backend():
         fs_backend = config.get("backend", None)
         if fs_backend is None or fs_backend.lower() not in self.backends.values():
             fs_backend = self.configure_backend()
-        print("Setting Faceswap backend to {}".format(fs_backend.upper()))
+        if current_process().name == "MainProcess":
+            print("Setting Faceswap backend to {}".format(fs_backend.upper()))
         return fs_backend.lower()
 
     def configure_backend(self):
@@ -87,7 +89,7 @@ _FS_BACKEND = Backend().backend
 
 def get_backend():
     """ Return the faceswap backend """
-    return _FS_BACKEND.lower()
+    return _FS_BACKEND
 
 
 def get_folder(path, make_folder=True):
