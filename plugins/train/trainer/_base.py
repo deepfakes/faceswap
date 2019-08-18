@@ -295,30 +295,13 @@ class Batcher():
     def get_next(self):
         """ Return the next batch from the generator
             Items should come out as: (sample, warped, mask, targets) """
+        logger.debug("Generating targets")
         batch = next(self.feed)
-        x = batch[1:2]
-        y = batch[2:]
         if self.use_mask:
-            image = y[-2]
-            mean = np.mean(image, axis=(1,2))
-            mask_type = self.model.training_opts.get("mask_type", "none")
-            mask_args = {None:          Dummy,
-                         "components":  Facehull,
-                         "extended":    Facehull,
-                         "vgg_300":     Smart,
-                         "vgg_500":     Smart,
-                         "unet_256":    Smart,
-                         "none":        Dummy}
-            mask_class = mask_args[mask_type]
-            logger.debug("Mask class: %s", mask_class)
-            landmarks = None
-            print("start mask")
-            Mask_model = mask_class(mask_type)
-            mask = Mask_model.build_masks(image, mean, landmarks, channels=1)
-            x.append(mask)
-            y[-1] = mask
-            print("x: ", [item.shape for item in x])
-            print("y: ", [item.shape for item in y])
+            x, y = self.get_mask(batch)
+        else:
+            x = batch[2:3]
+            y = batch[3:]
         return x, y
 
     def generate_preview(self, do_preview):
@@ -329,9 +312,36 @@ class Batcher():
             return
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
-        self.samples, _, mask  = batch[:3]
+        self.samples = batch[1]
         targets = batch[3:]
-        self.target = [targets[self.model.largest_face_index], mask]
+        self.target = targets[self.model.largest_face_index]
+        print(self.use_mask)
+        if self.use_mask:
+            x, y = self.get_mask(batch)
+            self.target = [self.target, y[-1]]
+
+    def get_mask(self, batch):
+        """ Return the next batch from the generator
+            Items should come out as: (sample, warped, mask, targets) """
+        landmarks = batch[0]
+        image = batch[-2]
+        mean = np.mean(image, axis=(1,2))
+        mask_type = self.model.training_opts.get("mask_type", "none")
+        mask_args = {None:          Dummy,
+                     "components":  Facehull,
+                     "extended":    Facehull,
+                     "vgg_300":     Smart,
+                     "vgg_500":     Smart,
+                     "unet_256":    Smart,
+                     "none":        Dummy}
+        mask_class = mask_args[mask_type]
+        logger.debug("Mask class: %s", mask_class)
+        Mask_model = mask_class(mask_type)
+        mask = Mask_model.build_masks(image, mean, landmarks, channels=1)
+        x = [batch[2], mask]
+        y = batch[3:]
+        y[-1] = mask
+        return x, y
 
     def set_preview_feed(self):
         """ Set the preview dictionary """

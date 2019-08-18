@@ -159,7 +159,7 @@ class Facehull(Mask):
             parts = self.mask_model(landmark)
             for item in parts:
                 # pylint: disable=no-member
-                hull = cv2.convexHull(np.concatenate(item))
+                hull = cv2.convexHull(np.concatenate(item)).astype("int32")
                 try:
                     cv2.fillConvexPoly(masks[i], hull, 1.)
                 except Exception as error:

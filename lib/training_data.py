@@ -50,7 +50,8 @@ class TrainingDataGenerator():
         is_display = is_preview or is_timelapse
         queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list(((batchsize, training_size, training_size, 3),  # sample images
+        batch_shape = list(((batchsize, 68, 2),
+                            (batchsize, training_size, training_size, 3),  # sample images
                             (batchsize, self.model_input_size, self.model_input_size, 3)))
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
@@ -89,8 +90,7 @@ class TrainingDataGenerator():
         queues = [queue_manager.get_queue(queue) for queue in q_names]
         return queues
 
-    def load_batches(self, mem_gen, images, side, is_display,
-                     do_shuffle=True, batchsize=0):
+    def load_batches(self, mem_gen, images, side, is_display, do_shuffle=True, batchsize=0):
         """ Load the warped images and target images to queue """
         logger.debug("Loading batch: (image_count: %s, side: '%s', is_display: %s, "
                      "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
@@ -112,9 +112,10 @@ class TrainingDataGenerator():
             logger.trace("Putting to batch queue: (side: '%s', is_display: %s)",
                          side, is_display)
             for i, img_path in enumerate(img_iter):
-                imgs = self.process_face(img_path, side, is_display)
+                imgs, landmarks = self.process_face(img_path, side, is_display)
                 for j, img in enumerate(imgs):
-                    memory[j][i][:] = img
+                    memory[0][i][:] = landmarks
+                    memory[j+1][i][:] = img
                 epoch += 1
                 if i == batchsize - 1:
                     break
@@ -158,6 +159,7 @@ class TrainingDataGenerator():
         logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
                      filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
+        landmarks = self.get_landmarks(filename, image, side)
         image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
 
         if not is_display:
@@ -167,7 +169,6 @@ class TrainingDataGenerator():
         sample = image.copy()[:, :, :3]
 
         if self.training_opts["warp_to_landmarks"]:
-            landmarks = self.get_landmarks(filename, image, side)
             dst_pts = self.get_closest_match(filename, side, landmarks)
             warped_image, target_images = self.processing.random_warp_landmarks(image, landmarks, dst_pts)
         else:
@@ -176,7 +177,7 @@ class TrainingDataGenerator():
         processed = self.compile_images(sample, warped_image, target_images)
         logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
                      filename, side, [img.shape for img in processed])
-        return processed
+        return processed, landmarks
         
     @staticmethod
     def compile_images(sample, warped_image, target_images):
