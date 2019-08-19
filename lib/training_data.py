@@ -253,6 +253,8 @@ class ImageManipulation():
             logger.trace("Augmenting color")
             img = self.random_clahe(img)
             img = self.random_lab(img)
+        else:
+            img = img.astype("float32") / 255.
         return img
 
     def random_clahe(self, image):
@@ -293,6 +295,7 @@ class ImageManipulation():
         image[..., 0] = image[..., 0] * 100.
         image[..., 1:] = (image[..., 1:] * 255.) - 128.
         image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
+        print("mask: ", image.dtype, image.shape, np.mean(image, axis=(0,1)))
         return image
 
     def get_coverage(self, image):

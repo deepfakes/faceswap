@@ -315,16 +315,19 @@ class Batcher():
         self.samples = batch[1]
         targets = batch[3:]
         self.target = targets[self.model.largest_face_index]
-        print(self.use_mask)
         if self.use_mask:
             x, y = self.get_mask(batch)
+            #print("target: ", self.target.dtype, self.target.shape, np.mean(self.target, axis=(1,2)))
+            #print("sample: ", self.samples.dtype, self.samples.shape, np.mean(self.samples, axis=(1,2)))
+            mask = y[-1]
+            #print("mask: ", mask.dtype, mask.shape, np.mean(mask, axis=(1,2)))
             self.target = [self.target, y[-1]]
 
     def get_mask(self, batch):
         """ Return the next batch from the generator
             Items should come out as: (sample, warped, mask, targets) """
         landmarks = batch[0]
-        image = batch[-2]
+        image = batch[2]
         mean = np.mean(image, axis=(1,2))
         mask_type = self.model.training_opts.get("mask_type", "none")
         mask_args = {None:          Dummy,
