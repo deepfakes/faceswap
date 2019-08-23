@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
+from argparse import SUPPRESS
+
 from lib.cli import FaceSwapArgs
 from lib.cli import (ContextFullPaths, DirOrFileFullPaths, DirFullPaths, FileFullPaths,
                      FilesFullPaths, SaveFileFullPaths, Radio, Slider)
@@ -87,6 +89,7 @@ class AlignmentsArgs(FaceSwapArgs):
                               "action": FilesFullPaths,
                               "dest": "alignments_file",
                               "nargs": "+",
+                              "group": "data",
                               "required": True,
                               "filetypes": "alignments",
                               "help": "Full path to the alignments file to be processed. If "
@@ -95,16 +98,19 @@ class AlignmentsArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-fc", "-faces_folder"),
                               "action": DirFullPaths,
                               "dest": "faces_dir",
+                              "group": "data",
                               "help": "Directory containing extracted faces."})
         argument_list.append({"opts": ("-fr", "-frames_folder"),
                               "action": DirOrFileFullPaths,
                               "dest": "frames_dir",
                               "filetypes": "video",
+                              "group": "data",
                               "help": "Directory containing source frames "
                                       "that faces were extracted from."})
         argument_list.append({"opts": ("-fmt", "--alignment_format"),
                               "type": str,
                               "choices": ("json", "pickle", "yaml"),
+                              "group": "data",
                               "help": "The file format to save the alignment "
                                       "data in. Defaults to same as source."})
         argument_list.append({
@@ -112,6 +118,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "action": Radio,
             "type": str,
             "choices": ("console", "file", "move"),
+            "group": "output",
             "default": "console",
             "help": "R|How to output discovered items ('faces' and 'frames' only):"
                     "\nL|'console': Print the list of frames to the screen. (DEFAULT)"
@@ -126,6 +133,7 @@ class AlignmentsArgs(FaceSwapArgs):
                               "min_max": (1, 100),
                               "default": 1,
                               "rounding": 1,
+                              "group": "output",
                               "help": "Extract every 'nth' frame. This option will skip frames "
                                       "when extracting faces. For example a value of 1 will "
                                       "extract faces from every frame, a value of 10 will extract "
@@ -135,6 +143,7 @@ class AlignmentsArgs(FaceSwapArgs):
                               "action": Slider,
                               "min_max": (128, 512),
                               "default": 256,
+                              "group": "output",
                               "rounding": 64,
                               "help": "The output size of extracted faces. (extract only)"})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
@@ -164,6 +173,7 @@ class PreviewArgs(FaceSwapArgs):
                               "action": DirOrFileFullPaths,
                               "filetypes": "video",
                               "dest": "input_dir",
+                              "group": "data",
                               "required": True,
                               "help": "Input directory or video. Either a directory containing "
                                       "the image files you wish to process or path to a video "
@@ -172,12 +182,14 @@ class PreviewArgs(FaceSwapArgs):
                               "action": FileFullPaths,
                               "filetypes": "alignments",
                               "type": str,
+                              "group": "data",
                               "dest": "alignments_path",
                               "help": "Path to the alignments file for the input, if not at the "
                                       "default location"})
         argument_list.append({"opts": ("-m", "--model-dir"),
                               "action": DirFullPaths,
                               "dest": "model_dir",
+                              "group": "data",
                               "required": True,
                               "help": "Model directory. A directory containing the trained model "
                                       "you wish to process."})
@@ -231,14 +243,16 @@ class EffmpegArgs(FaceSwapArgs):
                               "dest": "input",
                               "default": "input",
                               "help": "Input file.",
+                              "group": "data",
                               "required": True,
                               "action_option": "-a",
                               "filetypes": "video"})
 
         argument_list.append({"opts": ('-o', '--output'),
                               "action": ContextFullPaths,
-                              "dest": "output",
+                              "group": "data",
                               "default": "",
+                              "dest": "output",
                               "help": "Output file. If no output is "
                                       "specified then: if the output is "
                                       "meant to be a video then a video "
@@ -257,6 +271,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-r', '--reference-video'),
                               "action": FileFullPaths,
                               "dest": "ref_vid",
+                              "group": "data",
                               "default": None,
                               "help": "Path to reference video if 'input' "
                                       "was not a video.",
@@ -265,6 +280,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-fps', '--fps'),
                               "type": str,
                               "dest": "fps",
+                              "group": "output",
                               "default": "-1.0",
                               "help": "Provide video fps. Can be an integer, "
                                       "float or fraction. Negative values "
@@ -276,6 +292,7 @@ class EffmpegArgs(FaceSwapArgs):
                               "action": Radio,
                               "choices": _image_extensions,
                               "dest": "extract_ext",
+                              "group": "output",
                               "default": ".png",
                               "help": "Image format that extracted images "
                                       "should be saved as. '.bmp' will offer "
@@ -287,6 +304,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-s', '--start'),
                               "type": str,
                               "dest": "start",
+                              "group": "clip",
                               "default": "00:00:00",
                               "help": "Enter the start time from which an "
                                       "action is to be applied. "
@@ -298,6 +316,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-e', '--end'),
                               "type": str,
                               "dest": "end",
+                              "group": "clip",
                               "default": "00:00:00",
                               "help": "Enter the end time to which an action "
                                       "is to be applied. If both an end time "
@@ -309,6 +328,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-d', '--duration'),
                               "type": str,
                               "dest": "duration",
+                              "group": "clip",
                               "default": "00:00:00",
                               "help": "Enter the duration of the chosen "
                                       "action, for example if you enter "
@@ -324,6 +344,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-m', '--mux-audio'),
                               "action": "store_true",
                               "dest": "mux_audio",
+                              "group": "output",
                               "default": False,
                               "help": "Mux the audio from the reference "
                                       "video into the input video. This "
@@ -339,6 +360,7 @@ class EffmpegArgs(FaceSwapArgs):
                          "(3, 90Clockwise&VerticalFlip)"),
              "type": lambda v: self.__parse_transpose(v),
              "dest": "transpose",
+             "group": "rotate",
              "default": None,
              "help": "Transpose the video. If transpose is "
                      "set, then degrees will be ignored. For "
@@ -351,12 +373,14 @@ class EffmpegArgs(FaceSwapArgs):
                               "type": str,
                               "dest": "degrees",
                               "default": None,
+                              "group": "rotate",
                               "help": "Rotate the video clockwise by the "
                                       "given number of degrees."})
 
         argument_list.append({"opts": ('-sc', '--scale'),
                               "type": str,
                               "dest": "scale",
+                              "group": "output",
                               "default": "1920x1080",
                               "help": "Set the new resolution scale if the "
                                       "chosen action is 'rescale'."})
@@ -365,10 +389,13 @@ class EffmpegArgs(FaceSwapArgs):
                               "action": "store_true",
                               "dest": "preview",
                               "default": False,
-                              "help": "Uses ffplay to preview the effects of "
-                                      "actions that have a video output. "
-                                      "Currently preview does not work when "
-                                      "muxing audio."})
+                              # TODO Fix preview or remove
+                              "help": SUPPRESS,
+                              # "help": "Uses ffplay to preview the effects of "
+                              #         "actions that have a video output. "
+                              #         "Currently preview does not work when "
+                              #         "muxing audio."
+                              })
 
         argument_list.append({"opts": ('-q', '--quiet'),
                               "action": "store_true",
@@ -416,31 +443,16 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-i', '--input'),
                               "action": DirFullPaths,
                               "dest": "input_dir",
-                              "default": "input_dir",
+                              "group": "data",
                               "help": "Input directory of aligned faces.",
                               "required": True})
 
         argument_list.append({"opts": ('-o', '--output'),
                               "action": DirFullPaths,
                               "dest": "output_dir",
-                              "default": "_output_dir",
+                              "group": "data",
                               "help": "Output directory for sorted aligned "
                                       "faces."})
-
-        argument_list.append({"opts": ('-fp', '--final-process'),
-                              "action": Radio,
-                              "type": str,
-                              "choices": ("folders", "rename"),
-                              "dest": 'final_process',
-                              "default": "rename",
-                              "help": "R|Default: rename."
-                                      "\nL|'folders': files are sorted using "
-                                      "the -s/--sort-by method, then they "
-                                      "are organized into folders using "
-                                      "the -g/--group-by grouping method."
-                                      "\nL|'rename': files are sorted using "
-                                      "the -s/--sort-by then they are "
-                                      "renamed."})
 
         argument_list.append({"opts": ('-k', '--keep'),
                               "action": 'store_true',
@@ -459,6 +471,7 @@ class SortArgs(FaceSwapArgs):
                               "choices": ("blur", "face", "face-cnn", "face-cnn-dissim",
                                           "face-yaw", "hist", "hist-dissim"),
                               "dest": 'sort_method',
+                              "group": "sort settings",
                               "default": "hist",
                               "help": "R|Sort by method. Choose how images are sorted. "
                                       "\nL|'blur': Sort faces by blurriness."
@@ -481,24 +494,13 @@ class SortArgs(FaceSwapArgs):
                                       "dissimilarity."
                                       "\nDefault: hist"})
 
-        argument_list.append({"opts": ('-g', '--group-by'),
-                              "action": Radio,
-                              "type": str,
-                              "choices": ("blur", "face-cnn", "face-yaw", "hist"),
-                              "dest": 'group_method',
-                              "default": "hist",
-                              "help": "Group by method. "
-                                      "When -fp/--final-processing by "
-                                      "folders choose the how the images are "
-                                      "grouped after sorting. "
-                                      "Default: hist"})
-
         argument_list.append({"opts": ('-t', '--ref_threshold'),
                               "action": Slider,
                               "min_max": (-1.0, 10.0),
                               "rounding": 2,
                               "type": float,
                               "dest": 'min_threshold',
+                              "group": "sort settings",
                               "default": -1.0,
                               "help": "Float value. "
                                       "Minimum threshold to use for grouping comparison with "
@@ -512,12 +514,42 @@ class SortArgs(FaceSwapArgs):
                                       "could result in a lot of directories being created. "
                                       "Defaults: face-cnn 7.2, hist 0.3"})
 
+        argument_list.append({"opts": ('-fp', '--final-process'),
+                              "action": Radio,
+                              "type": str,
+                              "choices": ("folders", "rename"),
+                              "dest": 'final_process',
+                              "default": "rename",
+                              "group": "output",
+                              "help": "R|Default: rename."
+                                      "\nL|'folders': files are sorted using "
+                                      "the -s/--sort-by method, then they "
+                                      "are organized into folders using "
+                                      "the -g/--group-by grouping method."
+                                      "\nL|'rename': files are sorted using "
+                                      "the -s/--sort-by then they are "
+                                      "renamed."})
+
+        argument_list.append({"opts": ('-g', '--group-by'),
+                              "action": Radio,
+                              "type": str,
+                              "choices": ("blur", "face-cnn", "face-yaw", "hist"),
+                              "dest": 'group_method',
+                              "group": "output",
+                              "default": "hist",
+                              "help": "Group by method. "
+                                      "When -fp/--final-processing by "
+                                      "folders choose the how the images are "
+                                      "grouped after sorting. "
+                                      "Default: hist"})
+
         argument_list.append({"opts": ('-b', '--bins'),
                               "action": Slider,
                               "min_max": (1, 100),
                               "rounding": 1,
                               "type": int,
                               "dest": 'num_bins',
+                              "group": "output",
                               "default": 5,
                               "help": "Integer value. "
                                       "Number of folders that will be used "
@@ -544,12 +576,13 @@ class SortArgs(FaceSwapArgs):
                               "type": str.upper,
                               "choices": ("CPU", "GPU"),
                               "default": "GPU",
+                              "group": "sort settings",
                               "help": "Backend to use for VGG Face inference."
                                       "Only used for sort by 'face'."})
 
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',
-                              "dest": 'log_changes',
+                              "group": "output",
                               "default": False,
                               "help": "Logs file renaming changes if "
                                       "grouping by renaming, or it logs the "
@@ -562,6 +595,7 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-lf', '--log-file'),
                               "action": SaveFileFullPaths,
                               "filetypes": "alignments",
+                              "group": "output",
                               "dest": 'log_file_path',
                               "default": 'sort_log.json',
                               "help": "Specify a log file to use for saving "

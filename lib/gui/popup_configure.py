@@ -193,6 +193,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.optsframe = ttk.Frame(self.canvas)
         self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
+        self.group_frames = dict()
 
         self.build_frame()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -207,7 +208,17 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         for key, val in self.options.items():
             if key == "helptext":
                 continue
-            ctl = ControlBuilder(self.optsframe,
+            group = val["group"]
+            frame = self.optsframe
+            if group is not None:
+                group = group.lower()
+                if self.group_frames.get(group, None) is None:
+                    group_frame = ttk.LabelFrame(self.optsframe, text=group.title())
+                    group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                    self.group_frames[group] = group_frame
+                frame = self.group_frames[group]
+
+            ctl = ControlBuilder(frame,
                                  key,
                                  val["type"],
                                  val["default"],

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Dfl_H128 Model plugin.
+    The default options for the faceswap Dfl_SAE Model plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -45,16 +45,6 @@ _HELPTEXT = "DFL SAE Model (Adapted from https://github.com/iperov/DeepFaceLab)"
 
 
 _DEFAULTS = {
-    "architecture": {
-        "default": "df",
-        "info": "Model architecture:"
-                "\n\t'df': Keeps the faces more natural."
-                "\n\t'liae': Can help fix overly different face shapes.",
-        "datatype": str,
-        "choices": ["df", "liae"],
-        "gui_radio": True,
-        "fixed": True,
-    },
     "input_size": {
         "default": 128,
         "info": "Resolution (in pixels) of the input image to train on.\n"
@@ -64,6 +54,24 @@ _DEFAULTS = {
         "rounding": 16,
         "min_max": (64, 256),
         "fixed": True,
+    },
+    "clipnorm": {
+        "default": True,
+        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
+                "the expense of VRAM.",
+        "datatype": bool,
+        "fixed": False,
+    },
+    "architecture": {
+        "default": "df",
+        "info": "Model architecture:"
+                "\n\t'df': Keeps the faces more natural."
+                "\n\t'liae': Can help fix overly different face shapes.",
+        "datatype": str,
+        "choices": ["df", "liae"],
+        "gui_radio": True,
+        "fixed": True,
+        "group": "network",
     },
     "autoencoder_dims": {
         "default": 0,
@@ -75,6 +83,7 @@ _DEFAULTS = {
         "rounding": 32,
         "min_max": (0, 1024),
         "fixed": True,
+        "group": "network",
     },
     "encoder_dims": {
         "default": 42,
@@ -84,6 +93,7 @@ _DEFAULTS = {
         "rounding": 1,
         "min_max": (21, 85),
         "fixed": True,
+        "group": "network",
     },
     "decoder_dims": {
         "default": 21,
@@ -93,18 +103,13 @@ _DEFAULTS = {
         "rounding": 1,
         "min_max": (10, 85),
         "fixed": True,
+        "group": "network",
     },
     "multiscale_decoder": {
         "default": False,
         "info": "Multiscale decoder can help to obtain better details.",
         "datatype": bool,
         "fixed": True,
-    },
-    "clipnorm": {
-        "default": True,
-        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
-                "the expense of VRAM.",
-        "datatype": bool,
-        "fixed": False,
+        "group": "network",
     },
 }

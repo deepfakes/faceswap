@@ -48,6 +48,20 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
+    "input_size": {
+        "default": 128,
+        "info": "Resolution (in pixels) of the image to train on.\n"
+                "BE AWARE Larger resolution will dramatically increaseVRAM requirements.\n"
+                "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
+                "NB: Your faceset must be at least 1.6x larger than your required input "
+                "size.\n(e.g. 160 is the maximum input size for a 256x256 faceset).",
+        "datatype": int,
+        "rounding": 64,
+        "min_max": (64, 512),
+        "choices": [],
+        "gui_radio": False,
+        "fixed": True,
+    },
     "lowmem": {
         "default": False,
         "info": "Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
@@ -81,6 +95,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network",
     },
     "complexity_encoder": {
         "default": 128,
@@ -91,6 +106,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network",
     },
     "complexity_decoder_a": {
         "default": 384,
@@ -101,6 +117,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network",
     },
     "complexity_decoder_b": {
         "default": 512,
@@ -111,19 +128,6 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    },
-    "input_size": {
-        "default": 128,
-        "info": "Resolution (in pixels) of the image to train on.\n"
-                "BE AWARE Larger resolution will dramatically increaseVRAM requirements.\n"
-                "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
-                "NB: Your faceset must be at least 1.6x larger than your required input "
-                "size.\n(e.g. 160 is the maximum input size for a 256x256 faceset).",
-        "datatype": int,
-        "rounding": 64,
-        "min_max": (64, 512),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
+        "group": "network",
     },
 }

@@ -57,13 +57,42 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
-            section=section, title="icnr_init", datatype=bool, default=False,
+            section=section, title="coverage", datatype=float, default=68.75,
+            min_max=(62.5, 100.0), rounding=2, fixed=True,
+            info="How much of the extracted image to train on. A lower coverage will limit the "
+                 "model's scope to a zoomed-in central area while higher amounts can include the "
+                 "entire face. A trade-off exists between lower amounts given more detail "
+                 "versus higher amounts avoiding noticeable swap transitions. Sensible values to "
+                 "use are:"
+                 "\n\t62.5%% spans from eyebrow to eyebrow."
+                 "\n\t75.0%% spans from temple to temple."
+                 "\n\t87.5%% spans from ear to ear."
+                 "\n\t100.0%% is a mugshot.")
+        self.add_item(
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=get_available_masks(), group="mask",
+            info="The mask to be used for training:"
+                 "\n\t none: Doesn't use any mask."
+                 "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
+                 "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
+                 "\n\t extended: Based on components mask. Extends the eyebrow points to further "
+                 "up the forehead. May perform badly on difficult angles."
+                 "\n\t facehull: Face cutout based on landmarks")
+        self.add_item(
+            section=section, title="mask_blur", datatype=bool, default=False, group="mask",
+            info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
+                 "edges of the mask, which can help with poorly calculated masks, and give less "
+                 "of a hard edge to the predicted mask.")
+        self.add_item(
+            section=section, title="icnr_init", datatype=bool,
+            default=False, group="initialization",
             info="Use ICNR to tile the default initializer in a repeating pattern. "
                  "This strategy is designed for pairing with sub-pixel / pixel shuffler "
                  "to reduce the 'checkerboard effect' in image reconstruction. "
                  "\n\t https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
         self.add_item(
-            section=section, title="conv_aware_init", datatype=bool, default=False,
+            section=section, title="conv_aware_init", datatype=bool,
+            default=False, group="initialization",
             info="Use Convolution Aware Initialization for convolutional layers. "
                  "This can help eradicate the vanishing and exploding gradient problem "
                  "as well as lead to higher accuracy, lower loss and faster convergence.\nNB:"
@@ -77,26 +106,29 @@ class Config(FaceswapConfig):
                  "for this initialization technique are expensive. This will only impact starting "
                  "a new model.")
         self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool, default=False,
+            section=section, title="subpixel_upscaling", datatype=bool,
+            default=False, group="network",
             info="Use subpixel upscaling rather than pixel shuffler. These techniques "
                  "are both designed to produce better resolving upscaling than other "
                  "methods. Each perform the same operations, but using different TF opts."
                  "\n\t https://arxiv.org/pdf/1609.05158.pdf")
         self.add_item(
-            section=section, title="reflect_padding", datatype=bool, default=False,
+            section=section, title="reflect_padding", datatype=bool,
+            default=False, group="network",
             info="Use reflection padding rather than zero padding with convolutions. "
                  "Each convolution must pad the image boundaries to maintain the proper "
                  "sizing. More complex padding schemes can reduce artifacts at the "
                  "border of the image."
                  "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool, default=True,
+            section=section, title="penalized_mask_loss", datatype=bool,
+            default=True, group="loss",
             info="Image loss function is weighted by mask presence. For areas of "
                  "the image without the facial mask, reconstuction errors will be "
                  "ignored while the masked face area is prioritized. May increase "
                  "overall quality by focusing attention on the core face area.")
         self.add_item(
-            section=section, title="loss_function", datatype=str,
+            section=section, title="loss_function", datatype=str, group="loss",
             default="mae",
             choices=["mae", "mse", "logcosh", "smooth_l1", "l_inf_norm", "ssim", "gmsd",
                      "pixel_gradient_diff"],
@@ -126,41 +158,14 @@ class Config(FaceswapConfig):
                  "between two images. Allows for large color shifts,but maintains the structure "
                  "of the image.\n")
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
-            choices=get_available_masks(),
-            info="The mask to be used for training:"
-                 "\n\t none: Doesn't use any mask."
-                 "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
-                 "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
-                 "\n\t extended: Based on components mask. Extends the eyebrow points to further "
-                 "up the forehead. May perform badly on difficult angles."
-                 "\n\t facehull: Face cutout based on landmarks")
-        self.add_item(
-            section=section, title="mask_blur", datatype=bool, default=False,
-            info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
-                 "edges of the mask, which can help with poorly calculated masks, and give less "
-                 "of a hard edge to the predicted mask.")
-        self.add_item(
             section=section, title="learning_rate", datatype=float, default=5e-5,
-            min_max=(1e-6, 1e-4), rounding=6, fixed=False,
+            min_max=(1e-6, 1e-4), rounding=6, fixed=False, group="optimizer",
             info="Learning rate - how fast your network will learn (how large are "
                  "the modifications to the model weights after one batch of training). "
                  "Values that are too large might result in model crashes and the "
                  "inability of the model to find the best solution. "
                  "Values that are too small might be unable to escape from dead-ends "
                  "and find the best global minimum.")
-        self.add_item(
-            section=section, title="coverage", datatype=float, default=68.75,
-            min_max=(62.5, 100.0), rounding=2, fixed=True,
-            info="How much of the extracted image to train on. A lower coverage will limit the "
-                 "model's scope to a zoomed-in central area while higher amounts can include the "
-                 "entire face. A trade-off exists between lower amounts given more detail "
-                 "versus higher amounts avoiding noticeable swap transitions. Sensible values to "
-                 "use are:"
-                 "\n\t62.5%% spans from eyebrow to eyebrow."
-                 "\n\t75.0%% spans from temple to temple."
-                 "\n\t87.5%% spans from ear to ear."
-                 "\n\t100.0%% is a mugshot.")
 
     def load_module(self, filename, module_path, plugin_type):
         """ Load the defaults module and add defaults """
