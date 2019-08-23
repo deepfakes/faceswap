@@ -12,7 +12,8 @@ from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
 from .stats import Calculations
-from .utils import FileHandler, get_config, get_images, set_slider_rounding
+from .control_helper import set_slider_rounding
+from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
