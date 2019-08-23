@@ -7,11 +7,12 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
+from .control_helper import ControlBuilder
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
 from .tooltip import Tooltip
-from .utils import ControlBuilder, FileHandler, get_config, get_images, LongRunningTask
+from .utils import FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

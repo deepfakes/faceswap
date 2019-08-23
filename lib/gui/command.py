@@ -5,8 +5,9 @@ import logging
 import tkinter as tk
 from tkinter import ttk
 
+from .control_helper import set_slider_rounding
 from .tooltip import Tooltip
-from .utils import ContextMenu, FileHandler, get_images, get_config, set_slider_rounding
+from .utils import ContextMenu, FileHandler, get_images, get_config
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 

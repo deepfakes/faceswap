@@ -16,7 +16,8 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.utils import ControlBuilder, get_images, initialize_images
+from lib.gui.control_helper import ControlBuilder
+from lib.gui.utils import get_images, initialize_images
 from lib.gui.tooltip import Tooltip
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
@@ -573,7 +574,7 @@ class ConfigTools():
     def reset_config_saved(self, section=None):
         """ Reset config to saved values """
         logger.debug("Resetting to saved config: %s", section)
-        sections = [section] if section is not None else [key for key in self.tk_vars.keys()]
+        sections = [section] if section is not None else list(self.tk_vars.keys())
         for config_section in sections:
             for item, options in self.config_dicts[config_section].items():
                 if item == "helptext":
@@ -587,7 +588,7 @@ class ConfigTools():
     def reset_config_default(self, section=None):
         """ Reset config to default values """
         logger.debug("Resetting to default: %s", section)
-        sections = [section] if section is not None else [key for key in self.tk_vars.keys()]
+        sections = [section] if section is not None else list(self.tk_vars.keys())
         for config_section in sections:
             for item, options in self.config.defaults[config_section].items():
                 if item == "helptext":

@@ -7,8 +7,9 @@ import tkinter as tk
 
 from tkinter import ttk
 
+from .control_helper import ControlPanel
 from .tooltip import Tooltip
-from .utils import adjust_wraplength, get_config, get_images, ControlBuilder
+from .utils import get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 POPUP = dict()
@@ -78,7 +79,7 @@ class ConfigurePlugins(tk.Toplevel):
         logger.debug("Building plugin config popup")
         container = ttk.Notebook(self.page_frame)
         container.pack(fill=tk.BOTH, expand=True)
-        categories = sorted(list(key for key in self.config_dict_gui.keys()))
+        categories = sorted(list(self.config_dict_gui.keys()))
         if "global" in categories:  # Move global to first item
             categories.insert(0, categories.pop(categories.index("global")))
         for category in categories:
@@ -97,16 +98,16 @@ class ConfigurePlugins(tk.Toplevel):
             page = ttk.Notebook(container)
             page.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             for plugin in plugins:
-                frame = ConfigFrame(page,
-                                    self.config_dict_gui[category][plugin],
-                                    self.plugin_info[plugin])
+                frame = ControlPanel(page,
+                                     self.config_dict_gui[category][plugin],
+                                     self.plugin_info[plugin])
                 title = plugin[plugin.rfind(".") + 1:]
                 title = title.replace("_", " ").title()
                 page.add(frame, text=title)
         else:
-            page = ConfigFrame(container,
-                               self.config_dict_gui[category][plugins[0]],
-                               self.plugin_info[plugins[0]])
+            page = ControlPanel(container,
+                                self.config_dict_gui[category][plugins[0]],
+                                self.plugin_info[plugins[0]])
 
         logger.debug("Built plugin config page: '%s'", category)
 
@@ -175,89 +176,3 @@ class ConfigurePlugins(tk.Toplevel):
         print("Saved config: '{}'".format(self.config.configfile))
         self.destroy()
         logger.debug("Saved config")
-
-
-class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ Config Frame - Holds the Options for config """
-
-    def __init__(self, parent, options, plugin_info):
-        logger.debug("Initializing %s", self.__class__.__name__)
-        ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        self.options = options
-        self.plugin_info = plugin_info
-
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.optsframe = ttk.Frame(self.canvas)
-        self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
-        self.group_frames = dict()
-
-        self.build_frame()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def build_frame(self):
-        """ Build the options frame for this command """
-        logger.debug("Add Config Frame")
-        self.add_scrollbar()
-        self.canvas.bind("<Configure>", self.resize_frame)
-
-        self.add_info()
-        for key, val in self.options.items():
-            if key == "helptext":
-                continue
-            group = val["group"]
-            frame = self.optsframe
-            if group is not None:
-                group = group.lower()
-                if self.group_frames.get(group, None) is None:
-                    group_frame = ttk.LabelFrame(self.optsframe, text=group.title())
-                    group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-                    self.group_frames[group] = group_frame
-                frame = self.group_frames[group]
-
-            ctl = ControlBuilder(frame,
-                                 key,
-                                 val["type"],
-                                 val["default"],
-                                 selected_value=val["value"],
-                                 choices=val["choices"],
-                                 is_radio=val["gui_radio"],
-                                 rounding=val["rounding"],
-                                 min_max=val["min_max"],
-                                 helptext=val["helptext"],
-                                 radio_columns=4)
-            val["selected"] = ctl.tk_var
-        logger.debug("Added Config Frame")
-
-    def add_scrollbar(self):
-        """ Add a scrollbar to the options frame """
-        logger.debug("Add Config Scrollbar")
-        scrollbar = ttk.Scrollbar(self, command=self.canvas.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas.config(yscrollcommand=scrollbar.set)
-        self.optsframe.bind("<Configure>", self.update_scrollbar)
-        logger.debug("Added Config Scrollbar")
-
-    def update_scrollbar(self, event):  # pylint: disable=unused-argument
-        """ Update the options frame scrollbar """
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def resize_frame(self, event):
-        """ Resize the options frame to fit the canvas """
-        logger.debug("Resize Config Frame")
-        canvas_width = event.width
-        self.canvas.itemconfig(self.optscanvas, width=canvas_width)
-        logger.debug("Resized Config Frame")
-
-    def add_info(self):
-        """ Plugin information """
-        info_frame = ttk.Frame(self.optsframe)
-        info_frame.pack(fill=tk.X, expand=True)
-        lbl = ttk.Label(info_frame, text="About:", width=20, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        info = ttk.Label(info_frame, text=self.plugin_info)
-        info.pack(padx=5, pady=5, fill=tk.X, expand=True)
-        info.bind("<Configure>", adjust_wraplength)
