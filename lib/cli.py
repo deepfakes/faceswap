@@ -114,15 +114,17 @@ class ScriptExecutor():
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
+        success = False
         if get_backend() == "amd":
             plaidml_found = self.setup_amd(arguments.loglevel)
             if not plaidml_found:
-                safe_shutdown()
-                exit(1)
+                safe_shutdown(got_error=True)
+                return
         try:
             script = self.import_script()
             process = script(arguments)
             process.process()
+            success = True
         except FaceswapError as err:
             for line in str(err).splitlines():
                 logger.error(line)
@@ -141,7 +143,7 @@ class ScriptExecutor():
                             "before reporting", crash_file)
 
         finally:
-            safe_shutdown()
+            safe_shutdown(got_error=not success)
 
     @staticmethod
     def setup_amd(loglevel):
