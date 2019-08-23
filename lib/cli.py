@@ -590,6 +590,29 @@ class ExtractArgs(ExtractConvertArgs):
                                       "Pass in a single number to use increments of that size up "
                                       "to 360, or pass in a list of numbers to enumerate exactly "
                                       "what angles to check"})
+        argument_list.append({"opts": ("-min", "--min-size"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "min_size",
+                              "min_max": (0, 1080),
+                              "default": 0,
+                              "rounding": 20,
+                              "group": "Face Processing",
+                              "help": "Filters out faces detected below this size. Length, in "
+                                      "pixels across the diagonal of the bounding box. Set to 0 "
+                                      "for off"})
+        argument_list.append({"opts": ("-een", "--extract-every-n"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "extract_every_n",
+                              "min_max": (1, 100),
+                              "default": 1,
+                              "rounding": 1,
+                              "group": "Face Processing",
+                              "help": "Extract every 'nth' frame. This option will skip frames "
+                                      "when extracting faces. For example a value of 1 will "
+                                      "extract faces from every frame, a value of 10 will extract "
+                                      "faces from every 10th frame."})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "action": FilesFullPaths,
                               "filetypes": "image",
@@ -645,7 +668,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "action": "store_true",
                               "default": False,
                               "backend": "nvidia",
-
                               "help": "Don't run extraction in parallel. Will run detection first "
                                       "then alignment (2 passes). Useful if VRAM is at a "
                                       "premium."})
@@ -659,29 +681,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "The output size of extracted faces. Make sure that the "
                                       "model you intend to train supports your required size. "
                                       "This will only need to be changed for hi-res models."})
-        argument_list.append({"opts": ("-min", "--min-size"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "min_size",
-                              "min_max": (0, 1080),
-                              "default": 0,
-                              "rounding": 20,
-                              "group": "Face Processing",
-                              "help": "Filters out faces detected below this size. Length, in "
-                                      "pixels across the diagonal of the bounding box. Set to 0 "
-                                      "for off"})
-        argument_list.append({"opts": ("-een", "--extract-every-n"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "extract_every_n",
-                              "min_max": (1, 100),
-                              "default": 1,
-                              "rounding": 1,
-                              "group": "Face Processing",
-                              "help": "Extract every 'nth' frame. This option will skip frames "
-                                      "when extracting faces. For example a value of 1 will "
-                                      "extract faces from every frame, a value of 10 will extract "
-                                      "faces from every 10th frame."})
         argument_list.append({"opts": ("-s", "--skip-existing"),
                               "action": "store_true",
                               "dest": "skip_existing",
@@ -897,6 +896,39 @@ class ConvertArgs(ExtractConvertArgs):
                                       "NB: Using face filter will significantly decrease "
                                       "extraction speed and its accuracy cannot be "
                                       "guaranteed."})
+
+        argument_list.append({"opts": ("-j", "--jobs"),
+                              "dest": "jobs",
+                              "action": Slider,
+                              "group": "settings",
+                              "type": int,
+                              "default": 0,
+                              "min_max": (0, 40),
+                              "rounding": 1,
+                              "help": "The maximum number of parallel processes for performing "
+                                      "conversion. Converting images is system RAM heavy so it is "
+                                      "possible to run out of memory if you have a lot of "
+                                      "processes and not enough RAM to accomodate them all. "
+                                      "Setting this to 0 will use the maximum available. No "
+                                      "matter what you set this to, it will never attempt to use "
+                                      "more processes than are available on your system. If "
+                                      "singleprocess is enabled this setting will be ignored."})
+        argument_list.append({"opts": ("-g", "--gpus"),
+                              "type": int,
+                              "backend": "nvidia",
+                              "action": Slider,
+                              "min_max": (1, 10),
+                              "rounding": 1,
+                              "group": "settings",
+                              "default": 1,
+                              "help": "Number of GPUs to use for conversion"})
+        argument_list.append({"opts": ("-t", "--trainer"),
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_models(),
+                              "group": "settings",
+                              "help": "[LEGACY] This only needs to be selected if a legacy "
+                                      "model is being loaded or if there are multiple models in "
+                                      "the model folder"})
         argument_list.append({"opts": ("-k", "--keep-unchanged"),
                               "action": "store_true",
                               "dest": "keep_unchanged",
@@ -914,13 +946,6 @@ class ConvertArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Disable multiprocessing. Slower but less resource "
                                       "intensive."})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_models(),
-                              "help": "[LEGACY] This only needs to be selected if a legacy "
-                                      "model is being loaded or if there are multiple models in "
-                                      "the  model folder"})
-
         return argument_list
 
 
