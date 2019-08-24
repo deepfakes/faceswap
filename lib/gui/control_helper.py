@@ -488,6 +488,16 @@ class FileBrowser():
         self.add_browser_buttons()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
+    @property
+    def helptext(self):
+        """ Dict containing tooltip text for buttons """
+        retval = dict(folder="Select a folder",
+                      load="Select a file",
+                      load_multi="Select 1 or several files",
+                      context="Filebrowser changes depending on selected action",
+                      save="Select a save location")
+        return retval
+
     def add_browser_buttons(self):
         """ Add correct file browser button for control """
         logger.debug("Adding browser buttons: (sysbrowser: '%s'", self.browser)
@@ -498,6 +508,7 @@ class FileBrowser():
                                  image=img,
                                  command=lambda cmd=action: cmd(self.tk_var, self.filetypes))
             fileopn.pack(padx=(0, 5), side=tk.RIGHT)
+            Tooltip(fileopn, text=self.helptext[browser], wraplength=200)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, self.filetypes)
 
