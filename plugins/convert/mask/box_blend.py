@@ -36,7 +36,10 @@ class Mask(Adjustment):
         erode = slice(erode_size, -erode_size)
         mask = np.zeros((self.output_size, self.output_size, 1), dtype='float32')
         mask[erode, erode] = 1.
-        raw_mask = BlurMask(self.config["type"], mask, self.config["radius"], self.config["passes"])
+        raw_mask = BlurMask(self.config["type"],
+                            mask,
+                            self.config["radius"],
+                            self.config["passes"])
         mask = raw_mask.blurred
         logger.debug("Built box mask. Shape: %s", mask.shape)
         return mask

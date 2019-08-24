@@ -111,7 +111,6 @@ class DetectedFace():
             self.aligned["face"] = None
         if image is not None and self.aligned["face"] is None:
             logger.trace("Getting aligned face")
-            print("size: ", size)
             face = AlignerExtract().transform(
                 image,
                 self.aligned["matrix"],
@@ -164,7 +163,7 @@ class DetectedFace():
 
         face = AlignerExtract().transform(image,
                                           self.reference["matrix"],
-                                          size, 
+                                          size,
                                           self.reference["padding"])
         np.clip(face[:, :, :3] / 255., 0., 1., out=face)
         self.reference["face"] = face if dtype is None else face.astype(dtype)

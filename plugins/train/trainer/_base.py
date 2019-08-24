@@ -31,7 +31,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
-from lib.model.masks import Facehull, Smart, Dummy
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
@@ -276,7 +275,6 @@ class Batcher():
         x, y = self.get_next()
         try:
             loss = self.model.predictors[self.side].train_on_batch(x=x, y=y)
-            print("trained")
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"

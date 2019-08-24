@@ -60,7 +60,7 @@ class Extract():
         matrix = self.transform_matrix(mat, size, padding)
         points = np.array([[0, 0], [0, size - 1], [size - 1, size - 1], [size - 1, 0]], np.int32)
         points = points.reshape((-1, 1, 2))
-        matrix = cv2.invertAffineTransform(matrix)  
+        matrix = cv2.invertAffineTransform(matrix)
         logger.trace("Returning: (points: %s, matrix: %s", points, matrix)
         return cv2.transform(points, matrix)
 

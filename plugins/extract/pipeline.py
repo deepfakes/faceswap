@@ -25,8 +25,8 @@ class Extractor():
     def __init__(self, detector, aligner, masker, loglevel,
                  configfile=None, multiprocess=False, rotate_images=None, min_size=20,
                  normalize_method=None):
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, loglevel: %s, configfile: %s, "
-                     "multiprocess: %s, rotate_images: %s, min_size: %s, "
+        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, loglevel: %s, "
+                     "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
                      "normalize_method: %s)", self.__class__.__name__, detector, aligner, masker,
                      loglevel, configfile, multiprocess, rotate_images, min_size,
                      normalize_method)
@@ -99,7 +99,7 @@ class Extractor():
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
         masker = PluginLoader.get_masker(masker_name)(loglevel=loglevel,
-                                                         configfile=configfile)
+                                                      configfile=configfile)
         return masker
 
     def set_parallel_processing(self, multiprocess):
@@ -129,8 +129,8 @@ class Extractor():
                (self.detector.supports_plaidml and aligner_vram != 0) or
                (self.aligner.supports_plaidml and detector_vram != 0) or
                (self.masker.supports_plaidml and masker_vram != 0)):
-            logger.warning("Keras + non-Keras aligner/detector/masker combination does not support "
-                           "parallel processing. Switching to serial.")
+            logger.warning("Keras + non-Keras aligner/detector/masker combination does not "
+                           "support parallel processing. Switching to serial.")
             return False
 
         if self.detector.supports_plaidml and (self.aligner.supports_plaidml and
@@ -146,7 +146,7 @@ class Extractor():
         required_vram = detector_vram + aligner_vram + masker_vram + 320  # 320MB buffer
         stats = gpu_stats.get_card_most_free()
         free_vram = int(stats["free"])
-        logger.verbose("%s - %sMB free of %sMB",stats["device"], free_vram, int(stats["total"]))
+        logger.verbose("%s - %sMB free of %sMB", stats["device"], free_vram, int(stats["total"]))
         if free_vram <= required_vram:
             logger.warning("Not enough free VRAM for parallel processing. Switching to serial")
             return False
@@ -155,10 +155,12 @@ class Extractor():
     def add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
-        for task in ("extract_detect_in", "extract_align_in", "extract_mask_in", "extract_mask_out"):
+        tasks = ["extract_detect_in", "extract_align_in", "extract_mask_in", "extract_mask_out"]
+        for task in tasks:
             # Limit queue size to avoid stacking ram
             size = 32
-            if task == "extract_detect_in" or (not self.is_parallel and task == "extract_align_in"):
+            if task == "extract_detect_in" or (not self.is_parallel and 
+                                               task == "extract_align_in"):
                 size = 64
             queue_manager.add_queue(task, maxsize=size)
             queues[task] = queue_manager.get_queue(task)

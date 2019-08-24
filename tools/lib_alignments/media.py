@@ -193,7 +193,6 @@ class MediaLoader():
         output_file = os.path.join(output_folder, filename)
         output_file = os.path.splitext(output_file)[0]+'.png'
         logger.trace("Saving image: '%s'", output_file)
-        print("here")
         cv2.imwrite(output_file, image)
 
 

@@ -53,6 +53,9 @@ class Mask(Adjustment):
     def blend(self, mask):
         """ Blur mask if requested """
         logger.trace("Blending mask")
-        raw_mask = BlurMask(self.config["type"], mask, self.config["radius"], self.config["passes"])
+        raw_mask = BlurMask(self.config["type"],
+                            mask,
+                            self.config["radius"],
+                            self.config["passes"])
         mask = raw_mask.blurred
         return mask

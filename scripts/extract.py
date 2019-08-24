@@ -182,7 +182,7 @@ class Extract():
             detected_faces = dict()
             self.extractor.launch()
             self.check_thread_error()
-            desc="Running pass {} of {}: {}".format(phase + 1,
+            desc="Running pass {} of {}: {}".format(phase+1,
                                                     self.extractor.passes,
                                                     self.extractor.phase.title())
             status_bar = tqdm(self.extractor.detected_faces(),

@@ -26,10 +26,9 @@ SOFTWARE.
 
 import cv2
 import keras
-import sys
 import numpy as np
-
 from ._base import Masker, logger
+from keras.layers.core import Activation
 
 
 class Mask(Masker):
@@ -53,7 +52,7 @@ class Mask(Masker):
             logger.debug("VGG initialize: (args: %s kwargs: %s)", args, kwargs)
             with keras.backend.tf.device("/cpu:0"):
                 self.model = keras.models.load_model(self.model_path)
-            o = keras.layers.core.Activation('softmax', name='softmax')(self.model.layers[-1].output)
+            o = Activation('softmax', name='softmax')(self.model.layers[-1].output)
             self.model = keras.models.Model(input=self.model.input, output=[o])
             self.init.set()
             logger.info("Initialized VGG Mask Network(500)")
@@ -68,11 +67,10 @@ class Mask(Masker):
         """
         postprocess_test = False
         images = faces.astype("float32")
-        means = np.mean(images, axis=(0,1), dtype='float32')
-        images = images[None, ...] if images.ndim ==3 else images
-        means = means[None, ...] if means.ndim ==1 else means
+        means = np.mean(images, axis=(0, 1), dtype='float32')
+        images = images[None, ...] if images.ndim == 3 else images
+        means = means[None, ...] if means.ndim == 1 else means
         masks = np.array(np.zeros(images.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
-        
         original_size, resized_faces = self.resize_inputs(images, self.input_size)
         batch_size = min(resized_faces.shape[0], 8)
         batches = ((resized_faces.shape[0] - 1) // batch_size) + 1
@@ -89,24 +87,16 @@ class Mask(Masker):
             # pylint: disable=no-member
             model_input = face - mean[:, None, None, :]
             results = self.model.predict_on_batch(model_input)
-            print("shape: ", results.shape)
-            sys.stdout.flush()
-            print(np.mean(results, axis=(0,1,2)))
-            sys.stdout.flush()
             results = results[..., 0:1] * -1. + 1.
-            #results = np.clip(results.argmax(axis=-1), 0, 1).astype('float32')
+            # results = np.clip(results.argmax(axis=-1), 0, 1).astype('float32')
             generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
             if postprocess_test:
                 generator = (self.postprocessing(mask[:, :, None]) for mask in results)
             results = np.array(tuple(generator))[..., None]
-            print("shape: ", results.shape)
-            sys.stdout.flush()
             results[results < 0.05]= 0.
             results[results > 0.95] = 1.
             results *= 255.
             _, results = self.resize_inputs(results, original_size)
-            print("shape: ", masks.shape, results.shape)
-            sys.stdout.flush()
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
             masks[batch_slice] = results[..., None].astype('uint8')
         faces = np.concatenate((faces[..., :3], masks[0]), axis=-1)
@@ -127,16 +117,16 @@ class Mask(Masker):
     def postprocessing(mask):
         """ Post-processing of Nirkin style segmentation masks """
         # pylint: disable=no-member
-        #Select_largest_segment
-        pop_small_segments = False # Don't do this right now
+        # Select_largest_segment
+        pop_small_segments = False #  Don't do this right now
         if pop_small_segments:
             results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
             _, labels, stats, _ = results
             segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
             mask[labels != segments_ranked_by_area[0, 0]] = 0.
 
-        #Smooth contours
-        smooth_contours = False # Don't do this right now
+        # Smooth contours
+        smooth_contours = False #  Don't do this right now
         if smooth_contours:
             iters = 2
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
@@ -145,7 +135,7 @@ class Mask(Masker):
             cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
             cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
 
-        #Fill holes
+        # Fill holes
         fill_holes = True
         if fill_holes:
             not_holes = mask.copy()
@@ -156,4 +146,3 @@ class Mask(Masker):
             mask = np.expand_dims(mask, axis=-1)
 
         return mask
-

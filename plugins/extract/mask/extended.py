@@ -60,9 +60,8 @@ class Mask(Masker):
         """ Function for creating facehull masks
             Faces may be of shape (batch_size, height, width, 3)
         """
-        faces_np = faces[None, ...] if faces.ndim ==3 else faces
+        faces_np = faces[None, ...] if faces.ndim == 3 else faces
         masks = np.ones(faces_np.shape[:-1] + (1,), dtype='uint8')
-        print(landmarks.shape)
         for i, landmark in enumerate(landmarks[:1, ...]):
             parts = self.parse_parts(landmark)
             for item in parts:
@@ -111,4 +110,3 @@ class Mask(Masker):
         nose = (landmarks[27:31], landmarks[31:36])
         parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
         return parts
-

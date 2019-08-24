@@ -25,7 +25,6 @@ SOFTWARE.
 """
 
 import numpy as np
-
 from ._base import Masker, logger
 
 
@@ -62,7 +61,3 @@ class Mask(Masker):
         masks = np.full(faces.shape[:-1] + (1,), fill_value=255, dtype='uint8')
         faces = np.concatenate((faces[..., :3], masks), axis=-1)
         return faces, masks
-
-
-
-    

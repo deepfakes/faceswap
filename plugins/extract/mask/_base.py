@@ -30,11 +30,13 @@ from lib.utils import GetModel
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
+
 def get_available_masks():
     """ Return a list of the available masks for cli """
     masks = ["none", "components", "extended", "vgg_300", "vgg_500", "unet_256"]
     logger.debug(masks)
     return masks
+
 
 def get_default_mask():
     """ Set the default mask for cli """
@@ -42,6 +44,7 @@ def get_default_mask():
     default = "components" if "components" in masks else masks[0]
     logger.debug("Default mask is %s", default)
     return default
+
 
 class Masker():
     """ Face Mask Object
@@ -54,10 +57,11 @@ class Masker():
                     1 - Returns a single channel mask
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
-    def __init__(self, loglevel, configfile=None, git_model_id=None, model_filename=None, input_size=256):
-        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, "
-                     "git_model_id: %s, model_filename: '%s', input_size: %s)",
-                     self.__class__.__name__, loglevel, configfile, git_model_id, model_filename, input_size)
+    def __init__(self, loglevel, configfile=None, git_model_id=None,
+                 model_filename=None, input_size=256):
+        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, git_model_id: %s, "
+                     "model_filename: '%s', input_size: %s)", self.__class__.__name__, loglevel,
+                     configfile, git_model_id, model_filename, input_size)
         self.loglevel = loglevel
         self.input_size = input_size
         self.extract = Extract()

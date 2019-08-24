@@ -89,12 +89,13 @@ def cv2_read_img(filename, raise_error=False):
         Logs an error if the image returned is None. or an error has occured.
 
         Pass raise_error=True if error should be raised """
+    # pylint:disable=no-member,c-extension-no-member
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.trace("Requested image: '%s'", filename)
     success = True
     image = None
     try:
-        image = cv2.imread(filename)  # pylint:disable=no-member,c-extension-no-member
+        image = cv2.imread(filename, cv2.IMREAD_UNCHANGED) 
         if image is None:
             raise ValueError
     except TypeError:
@@ -132,8 +133,7 @@ def hash_image_file(filename):
 def hash_encode_image(image, extension):
     """ Encode the image, get the hash and return the hash with
         encoded image """
-    # pylint:disable=no-member,c-extension-no-member
-    print(extension, image.shape, image.dtype, np.mean(image, axis=(0,1)))
+    # pylint:disable=no-member, c-extension-no-member
     img = cv2.imencode(extension, image)[1]
     f_hash = sha1(cv2.imdecode(img, cv2.IMREAD_UNCHANGED)).hexdigest()
     return f_hash, img

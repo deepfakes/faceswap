@@ -208,8 +208,6 @@ class Smart(Mask):
             means_batched.append(means[even_split_section:])
             masks_batched.append(masks[even_split_section:])
         batched = zip(faces_batched, means_batched)
-        print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", len(faces_batched),"means_batched: ", len(means_batched))
-        print("faces: ", faces.shape,"means: ", means.shape,"masks: ", masks.shape,"faces_batched: ", faces_batched[0].shape,"means_batched: ", means_batched[0].shape)
         for i, (faces, means) in enumerate(batched):
             if  self.target_size == 256:
                 model_input = faces
@@ -221,7 +219,6 @@ class Smart(Mask):
                 model_input = faces - means[:, None, None, :]
                 with keras.backend.tf.device("/cpu:0"):
                     results = self.mask_model.predict_on_batch(model_input)
-                print("done prediction")
                 results = results[..., 1:2]
                 generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
                 if postprocess_test:
@@ -229,12 +226,9 @@ class Smart(Mask):
                 results = np.array(tuple(generator))[..., None]
             results[results < 0.05] = 0.
             results[results > 0.95] = 1.
-            print("results......................: ",results.shape)
             _, results = self.resize_inputs(results, original_size)
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
-            #results = results * 255.
             masks[batch_slice] = results[..., None]
-        print("done batch")
         return self.merge_masks(faces, masks, channels)
 
     @staticmethod

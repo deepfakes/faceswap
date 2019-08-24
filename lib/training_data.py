@@ -50,8 +50,7 @@ class TrainingDataGenerator():
         is_display = is_preview or is_timelapse
         queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list(((batchsize, 68, 2),
-                            (batchsize, training_size, training_size, 3),  # sample images
+        batch_shape = list(((batchsize, training_size, training_size, 3),
                             (batchsize, self.model_input_size, self.model_input_size, 3)))
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
@@ -112,10 +111,9 @@ class TrainingDataGenerator():
             logger.trace("Putting to batch queue: (side: '%s', is_display: %s)",
                          side, is_display)
             for i, img_path in enumerate(img_iter):
-                imgs, landmarks = self.process_face(img_path, side, is_display)
+                imgs = self.process_face(img_path, side, is_display)
                 for j, img in enumerate(imgs):
-                    memory[0][i][:] = landmarks
-                    memory[j+1][i][:] = img
+                    memory[j][i][:] = img
                 epoch += 1
                 if i == batchsize - 1:
                     break
@@ -177,7 +175,7 @@ class TrainingDataGenerator():
         processed = self.compile_images(sample, warped_image, target_images)
         logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
                      filename, side, [img.shape for img in processed])
-        return processed, landmarks
+        return processed
         
     @staticmethod
     def compile_images(sample, warped_image, target_images):
@@ -251,8 +249,10 @@ class ImageManipulation():
         logger.trace("Color adjusting image")
         if not is_display and augment_color:
             logger.trace("Augmenting color")
-            img = self.random_clahe(img)
-            img = self.random_lab(img)
+            face = img[..., :3]
+            face = self.random_clahe(face)
+            face = self.random_lab(face)
+            img[..., :3] = face
         else:
             img = img.astype("float32") / 255.
         return img
@@ -295,7 +295,6 @@ class ImageManipulation():
         image[..., 0] = image[..., 0] * 100.
         image[..., 1:] = (image[..., 1:] * 255.) - 128.
         image = cv2.cvtColor(image, cv2.COLOR_LAB2BGR)
-        print("mask: ", image.dtype, image.shape, np.mean(image, axis=(0,1)))
         return image
 
     def get_coverage(self, image):
