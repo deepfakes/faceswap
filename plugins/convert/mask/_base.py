@@ -135,8 +135,8 @@ class BlurMask():
     def get_kernel_size(self, radius_ratio):
         """ Set the kernel size to absolute """
         mask_diameter = np.sqrt(np.sum(self.mask))
-        radius = int(max(1., mask_diameter * radius_ratio / 100.))
-        kernel_size = radius * 2 + 1
+        radius = round(max(1., mask_diameter * radius_ratio / 100.))
+        kernel_size = int(radius * 2 + 1)
         logger.trace("kernel_size: %s", kernel_size)
         return kernel_size
 

@@ -92,12 +92,13 @@ class CliOptions():
             if opt.get("help", "") == SUPPRESS:
                 logger.trace("Skipping suppressed option: %s", opt)
                 continue
-            ctl, sysbrowser, filetypes, action_option = self.set_control(opt)
+            ctl, sysbrowser, filetypes, action_option, group = self.set_control(opt)
             opt["control_title"] = self.set_control_title(opt.get("opts", ""))
             opt["control"] = ctl
             opt["filesystem_browser"] = sysbrowser
             opt["filetypes"] = filetypes
             opt["action_option"] = action_option
+            opt["group"] = group
             final_options.append(opt)
             logger.trace("Processed: %s", opt)
         return final_options
@@ -112,6 +113,7 @@ class CliOptions():
     def set_control(self, option):
         """ Set the control and filesystem browser to use for each option """
         sysbrowser = None
+        group = option.get("group", None)
         action = option.get("action", None)
         action_option = option.get("action_option", None)
         filetypes = option.get("filetypes", None)
@@ -134,7 +136,7 @@ class CliOptions():
             ctl = ttk.Combobox
         elif option.get("action", "") == "store_true":
             ctl = ttk.Checkbutton
-        return ctl, sysbrowser, filetypes, action_option
+        return ctl, sysbrowser, filetypes, action_option, group
 
     @staticmethod
     def set_sysbrowser(action, filetypes, action_option):
