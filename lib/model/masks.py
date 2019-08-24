@@ -184,6 +184,7 @@ class Smart(Mask):
         model = GetModel(model_filename, cache_path, git_model_id)
         with keras.backend.tf.device("/cpu:0"):
             mask_model = keras.models.load_model(model.model_path)
+        print(mask_model.summary())
         return input_size, mask_model
     
     def build_masks(self, faces, means, landmarks, channels):

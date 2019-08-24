@@ -21,6 +21,11 @@ class PluginLoader():
         return PluginLoader._import("extract.align", name, disable_logging)
 
     @staticmethod
+    def get_masker(name, disable_logging=False):
+        """ Return requested detector plugin """
+        return PluginLoader._import("extract.mask", name, disable_logging)
+
+    @staticmethod
     def get_model(name, disable_logging=False):
         """ Return requested model plugin """
         return PluginLoader._import("train.model", name, disable_logging)
@@ -50,9 +55,7 @@ class PluginLoader():
     @staticmethod
     def get_available_extractors(extractor_type):
         """ Return a list of available models """
-        extractpath = os.path.join(os.path.dirname(__file__),
-                                   "extract",
-                                   extractor_type)
+        extractpath = os.path.join(os.path.dirname(__file__), "extract", extractor_type)
         extractors = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(extractpath)
                             if not item.name.startswith("_")
@@ -81,9 +84,7 @@ class PluginLoader():
     @staticmethod
     def get_available_convert_plugins(convert_category, add_none=True):
         """ Return a list of available models """
-        convertpath = os.path.join(os.path.dirname(__file__),
-                                   "convert",
-                                   convert_category)
+        convertpath = os.path.join(os.path.dirname(__file__), "convert", convert_category)
         converters = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(convertpath)
                             if not item.name.startswith("_")

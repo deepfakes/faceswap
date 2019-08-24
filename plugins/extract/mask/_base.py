@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-""" Base class for Face Aligner plugins
+""" Base class for Face Masker plugins
     Plugins should inherit from this class
 
-    See the override methods for which methods are
-    required.
+    See the override methods for which methods are required.
 
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
@@ -12,18 +11,18 @@
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
-     "image": <source image>,
+     "image": <four channel source image>,
      "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>,
-     "landmarks": <list of landmarks>}
+     "mask": <one channel mask image>}
     """
 
 import logging
 import os
 import traceback
+import cv2
+import numpy as np
 
 from io import StringIO
-
-import cv2
 
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
@@ -31,18 +30,35 @@ from lib.utils import GetModel
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
+def get_available_masks():
+    """ Return a list of the available masks for cli """
+    masks = ["none", "components", "extended", "vgg_300", "vgg_500", "unet_256"]
+    logger.debug(masks)
+    return masks
 
-class Aligner():
-    """ Landmarks Aligner Object """
-    def __init__(self, loglevel, configfile=None, normalize_method=None,
-                 git_model_id=None, model_filename=None, colorspace="BGR", input_size=256):
-        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, normalize_method: %s, "
-                     "git_model_id: %s, model_filename: '%s', colorspace: '%s', input_size: %s)",
-                     self.__class__.__name__, loglevel, configfile, normalize_method, git_model_id,
-                     model_filename, colorspace, input_size)
+def get_default_mask():
+    """ Set the default mask for cli """
+    masks = get_available_masks()
+    default = "components" if "components" in masks else masks[0]
+    logger.debug("Default mask is %s", default)
+    return default
+
+class Masker():
+    """ Face Mask Object
+    Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
+        of dtype float32 and with range[0., 1.]
+        Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
+        Produced mask will be in range [0, 1.]
+        the output mask will be <mask_type>.mask
+        channels: 1, 3 or 4:
+                    1 - Returns a single channel mask
+                    3 - Returns a 3 channel mask
+                    4 - Returns the original image with the mask in the alpha channel """
+    def __init__(self, loglevel, configfile=None, git_model_id=None, model_filename=None, input_size=256):
+        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, "
+                     "git_model_id: %s, model_filename: '%s', input_size: %s)",
+                     self.__class__.__name__, loglevel, configfile, git_model_id, model_filename, input_size)
         self.loglevel = loglevel
-        self.normalize_method = normalize_method
-        self.colorspace = colorspace.upper()
         self.input_size = input_size
         self.extract = Extract()
         self.init = None
@@ -55,7 +71,7 @@ class Aligner():
         #  Get model if required
         self.model_path = self.get_model(git_model_id, model_filename)
 
-        # Approximate VRAM required for aligner. Used to calculate
+        # Approximate VRAM required for masker. Used to calculate
         # how many parallel processes / batches can be run.
         # Be conservative to avoid OOM.
         self.vram = None
@@ -68,9 +84,9 @@ class Aligner():
     # <<< OVERRIDE METHODS >>> #
     # These methods must be overriden when creating a plugin
     def initialize(self, *args, **kwargs):
-        """ Inititalize the aligner
-            Tasks to be run before any alignments are performed.
-            Override for specific detector """
+        """ Inititalize the masker
+            Tasks to be run before any masking is performed.
+            Override for specific masker """
         logger.debug("_base initialize %s: (PID: %s, args: %s, kwargs: %s)",
                      self.__class__.__name__, os.getpid(), args, kwargs)
         self.init = kwargs["event"]
@@ -78,14 +94,8 @@ class Aligner():
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
 
-    def align_image(self, detected_face, image):
-        """ Align the incoming image for feeding into aligner
-            Override for aligner specific processing """
-        raise NotImplementedError
-
-    def predict_landmarks(self, feed_dict):
-        """ Predict the 68 point landmarks
-            Override for aligner specific landmark prediction """
+    def build_masks(self, faces, means, landmarks):
+        """ Override to build the mask """
         raise NotImplementedError
 
     # <<< GET MODEL >>> #
@@ -102,14 +112,14 @@ class Aligner():
         model = GetModel(model_filename, cache_path, git_model_id)
         return model.model_path
 
-    # <<< ALIGNMENT WRAPPER >>> #
+    # <<< MASKING WRAPPER >>> #
     def run(self, *args, **kwargs):
         """ Parent align process.
             This should always be called as the entry point so exceptions
             are passed back to parent.
             Do not override """
         try:
-            self.align(*args, **kwargs)
+            self.mask(*args, **kwargs)
         except Exception:  # pylint:disable=broad-except
             logger.error("Caught exception in child process: %s", os.getpid())
             # Display traceback if in initialization stage
@@ -121,92 +131,40 @@ class Aligner():
             self.queues["out"].put(exception)
             exit(1)
 
-    def align(self, *args, **kwargs):
-        """ Process landmarks """
+    def mask(self, *args, **kwargs):
+        """ Process masks """
         if not self.init:
             self.initialize(*args, **kwargs)
-        logger.debug("Launching Align: (args: %s kwargs: %s)", args, kwargs)
+        logger.debug("Launching Mask: (args: %s kwargs: %s)", args, kwargs)
 
         for item in self.get_item():
             if item == "EOF":
                 self.finalize(item)
                 break
-            image = self.convert_color(item["image"])
 
-            logger.trace("Aligning faces")
+            logger.trace("Masking faces")
             try:
-                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
-                logger.trace("Aligned faces: %s", item["landmarks"])
+                item["image"], item["mask"] = self.process_masks(item["image"], item["landmarks"])
+                logger.trace("Masked faces: %s", item["filename"])
             except ValueError as err:
                 logger.warning("Image '%s' could not be processed. This may be due to corrupted "
                                "data: %s", item["filename"], str(err))
                 item["detected_faces"] = list()
-                item["landmarks"] = list()
+                item["mask"] = list()
                 # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
-                # import sys
-                # exc_info = sys.exc_info()
-                # traceback.print_exception(*exc_info)
+                import sys
+                exc_info = sys.exc_info()
+                traceback.print_exception(*exc_info)
             self.finalize(item)
-        logger.debug("Completed Align")
+        logger.debug("Completed Mask")
 
-    def convert_color(self, image):
-        """ Convert the image to the correct colorspace """
-        logger.trace("Converting image to colorspace: %s", self.colorspace)
-        if self.colorspace == "RGB":
-            cvt_image = image[:, :, ::-1].copy()
-        elif self.colorspace == "GRAY":
-            cvt_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)  # pylint:disable=no-member
-        else:
-            cvt_image = image.copy()
-        return cvt_image
-
-    def process_landmarks(self, image, detected_faces):
+    def process_masks(self, image, landmarks):
         """ Align image and process landmarks """
-        logger.trace("Processing landmarks")
+        logger.trace("Processing masks")
         retval = list()
-        for detected_face in detected_faces:
-            feed_dict = self.align_image(detected_face, image)
-            self.normalize_face(feed_dict)
-            landmarks = self.predict_landmarks(feed_dict)
-            retval.append(landmarks)
-        logger.trace("Processed landmarks: %s", retval)
-        return retval
-
-    # <<< FACE NORMALIZATION METHODS >>> #
-    def normalize_face(self, feed_dict):
-        """ Normalize the face for feeding into model """
-        if self.normalize_method is None:
-            return
-        logger.trace("Normalizing face")
-        meth = getattr(self, "normalize_{}".format(self.normalize_method.lower()))
-        feed_dict["image"] = meth(feed_dict["image"])
-        logger.trace("Normalized face")
-
-    @staticmethod
-    def normalize_mean(face):
-        """ Normalize Face to the Mean """
-        face = face / 255.0
-        for chan in range(3):
-            layer = face[:, :, chan]
-            layer = (layer - layer.min()) / (layer.max() - layer.min())
-            face[:, :, chan] = layer
-        return face * 255.0
-
-    @staticmethod
-    def normalize_hist(face):
-        """ Equalize the RGB histogram channels """
-        for chan in range(3):
-            face[:, :, chan] = cv2.equalizeHist(face[:, :, chan])  # pylint: disable=no-member
-        return face
-
-    @staticmethod
-    def normalize_clahe(face):
-        """ Perform Contrast Limited Adaptive Histogram Equalization """
-        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
-                                tileGridSize=(4, 4))
-        for chan in range(3):
-            face[:, :, chan] = clahe.apply(face[:, :, chan])
-        return face
+        faces, masks = self.build_masks(image, np.array(landmarks))
+        logger.trace("Processed masks")
+        return faces, masks
 
     # <<< FINALIZE METHODS >>> #
     def finalize(self, output):

@@ -560,6 +560,13 @@ class ExtractArgs(ExtractConvertArgs):
                     "running on GPU"
                     "\nL|'fan-amd': Face Alignment Network. Uses Keras backend to support AMD "
                     "Cards. Best aligner. GPU heavy, slow when not running on GPU"})
+        argument_list.append({
+            "opts": ("-M", "--masker"),
+            "action": Radio,
+            "type": str.lower,
+            "choices": PluginLoader.get_available_extractors("mask"),
+            "default": "components",
+            "help": "Help string"})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
                               "type": str.lower,
@@ -657,13 +664,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Draw landmarks on the ouput faces for "
                                       "debug"})
-        argument_list.append({"opts": ("-ae", "--align-eyes"),
-                              "action": "store_true",
-                              "dest": "align_eyes",
-                              "default": False,
-                              "help": "Perform extra alignment to ensure "
-                                      "left/right eyes are  at the same "
-                                      "height"})
         argument_list.append({"opts": ("-si", "--save-interval"),
                               "dest": "save_interval",
                               "type": int,

@@ -51,7 +51,7 @@ class FaceFilter():
     # Extraction pipeline
     def align_faces(self, detector_name, aligner_name, loglevel, multiprocess):
         """ Use the requested detectors to retrieve landmarks for filter images """
-        extractor = Extractor(detector_name, aligner_name, loglevel, multiprocess=multiprocess)
+        extractor = Extractor(detector_name, aligner_name, masker_name, loglevel, multiprocess=multiprocess)
         self.run_extractor(extractor)
         del extractor
         self.load_aligned_face()

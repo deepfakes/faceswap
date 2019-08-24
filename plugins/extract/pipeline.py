@@ -22,17 +22,18 @@ class Extractor():
         and can be accessed from:
             Extractor.input_queue
     """
-    def __init__(self, detector, aligner, loglevel,
+    def __init__(self, detector, aligner, masker, loglevel,
                  configfile=None, multiprocess=False, rotate_images=None, min_size=20,
                  normalize_method=None):
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, loglevel: %s, configfile: %s, "
+        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, loglevel: %s, configfile: %s, "
                      "multiprocess: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s)", self.__class__.__name__, detector, aligner,
+                     "normalize_method: %s)", self.__class__.__name__, detector, aligner, masker,
                      loglevel, configfile, multiprocess, rotate_images, min_size,
                      normalize_method)
         self.phase = "detect"
         self.detector = self.load_detector(detector, loglevel, rotate_images, min_size, configfile)
         self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
+        self.masker = self.load_masker(masker, loglevel, configfile)
         self.is_parallel = self.set_parallel_processing(multiprocess)
         self.processes = list()
         self.queues = self.add_queues()
@@ -41,10 +42,10 @@ class Extractor():
     @property
     def input_queue(self):
         """ Return the correct input queue depending on the current phase """
-        if self.is_parallel or self.phase == "detect":
-            qname = "extract_detect_in"
-        else:
-            qname = "extract_align_in"
+        qname_dict = {"detect":  "extract_detect_in",
+                      "align":   "extract_align_in",
+                      "mask":    "extract_mask_in"}
+        qname = "extract_detect_in" if self.is_parallel else qname_dict[self.phase]
         retval = self.queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -52,7 +53,7 @@ class Extractor():
     @property
     def output_queue(self):
         """ Return the correct output queue depending on the current phase """
-        qname = "extract_align_out" if self.final_pass else "extract_align_in"
+        qname = "extract_mask_out" if self.final_pass else "extract_mask_in"
         retval = self.queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -60,14 +61,14 @@ class Extractor():
     @property
     def passes(self):
         """ Return the number of passes the extractor needs to make """
-        retval = 1 if self.is_parallel else 2
+        retval = 1 if self.is_parallel else 3
         logger.trace(retval)
         return retval
 
     @property
     def final_pass(self):
         """ Return true if this is the final extractor pass """
-        retval = self.is_parallel or self.phase == "align"
+        retval = self.is_parallel or self.phase == "mask"
         logger.trace(retval)
         return retval
 
@@ -92,13 +93,23 @@ class Extractor():
                                                          normalize_method=normalize_method)
         return aligner
 
+    @staticmethod
+    def load_masker(masker, loglevel, configfile):
+        """ Set global arguments and load masker plugin """
+        masker_name = masker.replace("-", "_").lower()
+        logger.debug("Loading Masker: '%s'", masker_name)
+        masker = PluginLoader.get_masker(masker_name)(loglevel=loglevel,
+                                                         configfile=configfile)
+        return masker
+
     def set_parallel_processing(self, multiprocess):
-        """ Set whether to run detect and align together or separately """
+        """ Set whether to run detect, align, and mask together or separately """
         detector_vram = self.detector.vram
         aligner_vram = self.aligner.vram
+        masker_vram = self.masker.vram
 
-        if detector_vram == 0 or aligner_vram == 0:
-            logger.debug("At least one of aligner or detector have no VRAM requirement. "
+        if detector_vram == 0 or aligner_vram == 0 or masker_vram == 0:
+            logger.debug("At least one of aligner, detector or masker have no VRAM requirements. "
                          "Enabling parallel processing.")
             return True
 
@@ -108,19 +119,22 @@ class Extractor():
 
         gpu_stats = GPUStats()
         if gpu_stats.is_plaidml and (not self.detector.supports_plaidml or
-                                     not self.aligner.supports_plaidml):
-            logger.debug("At least one of aligner or detector does not support plaidML. "
+                                     not self.aligner.supports_plaidml or
+                                     not self.masker.supports_plaidml):
+            logger.debug("At least one of aligner, detector or masker does not support plaidML. "
                          "Enabling parallel processing.")
             return True
 
         if not gpu_stats.is_plaidml and (
-                (self.detector.supports_plaidml and aligner_vram != 0) or
-                (self.aligner.supports_plaidml and detector_vram != 0)):
-            logger.warning("Keras + non-Keras aligner/detector combination does not support "
+               (self.detector.supports_plaidml and aligner_vram != 0) or
+               (self.aligner.supports_plaidml and detector_vram != 0) or
+               (self.masker.supports_plaidml and masker_vram != 0)):
+            logger.warning("Keras + non-Keras aligner/detector/masker combination does not support "
                            "parallel processing. Switching to serial.")
             return False
 
-        if self.detector.supports_plaidml and self.aligner.supports_plaidml:
+        if self.detector.supports_plaidml and (self.aligner.supports_plaidml and
+                                               self.masker.supports_plaidml):
             logger.debug("Both aligner and detector support plaidML. Disabling parallel "
                          "processing.")
             return False
@@ -129,27 +143,22 @@ class Extractor():
             logger.debug("No GPU detected. Enabling parallel processing.")
             return True
 
-        required_vram = detector_vram + aligner_vram + 320  # 320MB buffer
+        required_vram = detector_vram + aligner_vram + masker_vram + 320  # 320MB buffer
         stats = gpu_stats.get_card_most_free()
         free_vram = int(stats["free"])
-        logger.verbose("%s - %sMB free of %sMB",
-                       stats["device"],
-                       free_vram,
-                       int(stats["total"]))
+        logger.verbose("%s - %sMB free of %sMB",stats["device"], free_vram, int(stats["total"]))
         if free_vram <= required_vram:
-            logger.warning("Not enough free VRAM for parallel processing. "
-                           "Switching to serial")
+            logger.warning("Not enough free VRAM for parallel processing. Switching to serial")
             return False
         return True
 
     def add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
-        for task in ("extract_detect_in", "extract_align_in", "extract_align_out"):
+        for task in ("extract_detect_in", "extract_align_in", "extract_mask_in", "extract_mask_out"):
             # Limit queue size to avoid stacking ram
             size = 32
-            if task == "extract_detect_in" or (not self.is_parallel
-                                               and task == "extract_align_in"):
+            if task == "extract_detect_in" or (not self.is_parallel and task == "extract_align_in"):
                 size = 64
             queue_manager.add_queue(task, maxsize=size)
             queues[task] = queue_manager.get_queue(task)
@@ -170,18 +179,56 @@ class Extractor():
             logger.debug("Launching aligner and detector")
             self.launch_aligner()
             self.launch_detector()
+            self.launch_masker()
         elif self.phase == "detect":
             logger.debug("Launching detector")
             self.launch_detector()
-        else:
+        elif self.phase == "align":
             logger.debug("Launching aligner")
             self.launch_aligner()
+        else:
+            logger.debug("Launching masker")
+            self.launch_masker()
+
+    def launch_masker(self):
+        """ Launch the face masker """
+        logger.debug("Launching Masker")
+        kwargs = {"in_queue": self.queues["extract_mask_in"],
+                  "out_queue": self.queues["extract_mask_out"]}
+
+        process = SpawnProcess(self.masker.run, **kwargs)
+        # mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
+        # process = mp_func(self.detector.run, **kwargs)
+        event = process.event if hasattr(process, "event") else None
+        error = process.error if hasattr(process, "error") else None
+        process.start()
+        self.processes.append(process)
+
+        if event is None:
+            logger.debug("Launched Masker")
+            return
+
+        # Wait for Masker to take it's VRAM
+        for mins in reversed(range(5)):
+            for seconds in range(60):
+                event.wait(seconds)
+                if event.is_set():
+                    break
+                if error.is_set():
+                    break
+            if event.is_set():
+                break
+            if mins == 0 or error.is_set():
+                raise ValueError("Error initializing Masker")
+            logger.info("Waiting for Masker... Time out in %s minutes", mins)
+
+        logger.debug("Launched Masker")
 
     def launch_aligner(self):
         """ Launch the face aligner """
         logger.debug("Launching Aligner")
         kwargs = {"in_queue": self.queues["extract_align_in"],
-                  "out_queue": self.queues["extract_align_out"]}
+                  "out_queue": self.queues["extract_mask_in"]}
 
         process = SpawnProcess(self.aligner.run, **kwargs)
         event = process.event
@@ -190,9 +237,6 @@ class Extractor():
         self.processes.append(process)
 
         # Wait for Aligner to take it's VRAM
-        # The first ever load of the model for FAN has reportedly taken
-        # up to 3-4 minutes, hence high timeout.
-        # TODO investigate why this is and fix if possible
         for mins in reversed(range(5)):
             for seconds in range(60):
                 event.wait(seconds)
@@ -225,6 +269,7 @@ class Extractor():
             logger.debug("Launched Detector")
             return
 
+        # Wait for Detector to take it's VRAM
         for mins in reversed(range(5)):
             for seconds in range(60):
                 event.wait(seconds)
