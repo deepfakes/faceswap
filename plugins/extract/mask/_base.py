@@ -49,10 +49,9 @@ def get_default_mask():
 class Masker():
     """ Face Mask Object
     Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
-        of dtype float32 and with range[0., 1.]
+        of dtype unit8 and with range[0, 255]
         Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
-        Produced mask will be in range [0, 1.]
-        the output mask will be <mask_type>.mask
+        Produced mask will be in range [0, 255]
         channels: 1, 3 or 4:
                     1 - Returns a single channel mask
                     3 - Returns a 3 channel mask

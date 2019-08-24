@@ -233,7 +233,7 @@ class ModelBase():
         # Force number of preview images to between 2 and 16
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
-        self.training_opts["mask_type"] = self.config.get("mask_type", None)
+        self.training_opts["replicate_input_mask"] = self.config.get("replicate_input_mask", None)
         self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
         logger.debug("Set training data: %s", self.training_opts)
 
@@ -284,8 +284,7 @@ class ModelBase():
 
             Inputs is defined in self.get_inputs() and is standardized for all models
                 if will generally be in the order:
-                [face (the input for image),
-                 mask (the input for mask if it is used)]
+                [face (the input for image), mask (the input for mask if it is used)]
         """
         raise NotImplementedError
 
@@ -597,7 +596,7 @@ class ModelBase():
         self.state.config["coverage"] = 62.5
         self.state.config["subpixel_upscaling"] = False
         self.state.config["reflect_padding"] = False
-        self.state.config["mask_type"] = None
+        self.state.config["replicate_input_mask"] = False
         self.state.config["lowmem"] = False
         self.encoder_dim = 1024
 

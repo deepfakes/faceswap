@@ -29,6 +29,8 @@ class TrainingDataGenerator():
         self.batchsize = 0
         self.model_input_size = model_input_size
         self.model_output_shapes = model_output_shapes
+        self.output_sizes = [shape[1] for shape in model_output_shapes if shape[2] == 3]
+        print(model_output_shapes)
         self.training_opts = training_opts
         self.landmarks = self.training_opts.get("landmarks", None)
         self.fixed_producer_dispatcher = None  # Set by FPD when loading
@@ -50,8 +52,9 @@ class TrainingDataGenerator():
         is_display = is_preview or is_timelapse
         queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list(((batchsize, training_size, training_size, 3),
-                            (batchsize, self.model_input_size, self.model_input_size, 3)))
+        batch_shape = list(((batchsize, training_size, training_size, 4),
+                            (batchsize, self.model_input_size, self.model_input_size, 3),
+                            (batchsize, self.model_input_size, self.model_input_size, 1)))
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
 
@@ -157,7 +160,6 @@ class TrainingDataGenerator():
         logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
                      filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
-        landmarks = self.get_landmarks(filename, image, side)
         image = self.processing.color_adjust(image,
                                              self.training_opts["augment_color"],
                                              is_display)
@@ -166,9 +168,10 @@ class TrainingDataGenerator():
             image = self.processing.random_transform(image)
             if not self.training_opts["no_flip"]:
                 image = self.processing.do_random_flip(image)
-        sample = image.copy()[:, :, :3]
+        sample = image.copy()
 
         if self.training_opts["warp_to_landmarks"]:
+            landmarks = self.get_landmarks(filename, image, side)
             dst_pts = self.get_closest_match(filename, side, landmarks)
             warped_image, target_images = self.processing.warp_landmarks(image, landmarks, dst_pts)
         else:
@@ -179,12 +182,14 @@ class TrainingDataGenerator():
                      filename, side, [img.shape for img in processed])
         return processed
 
-    @staticmethod
-    def compile_images(sample, warped_image, target_images):
+    def compile_images(self, sample, warped_image, target_images):
         """ Compile the warped images, target images and mask for feed """
-        compiled_images = [sample, warped_image]
-        for i, target_image in enumerate(target_images):
-            compiled_images.append(target_image)
+        compiled_images = [sample, warped_image[..., :3], warped_image[..., 3:4]]
+        for target_image in target_images:
+            compiled_images.append(target_image[..., :3])
+            final_output = target_image.shape[1] == max(self.output_sizes)
+            if final_output:
+                compiled_images.append(target_image[..., 3:4])
 
         logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
         return compiled_images
@@ -239,7 +244,6 @@ class ImageManipulation():
         # Transform and Warp args
         self.input_size = input_size
         self.output_sizes = [shape[1] for shape in output_shapes if shape[2] == 3]
-        self.output_shapes = output_shapes
         logger.debug("Output sizes: %s", self.output_sizes)
         # Warp args
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160

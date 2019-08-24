@@ -7,18 +7,17 @@
 
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
-        alignments:         dict containing paths to alignments files for keys 'a' and 'b'
-        preview_scaling:    How much to scale the preview out by
-        training_size:      Size of the training images
-        coverage_ratio:     Ratio of face to be cropped out for training
-        mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
-                            Set to None for not used
-        no_logs:            Disable tensorboard logging
-        snapshot_interval:  Interval for saving model snapshots
-        warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
-        augment_color:      Perform random shifting of L*a*b* colors
-        no_flip:            Don't perform a random flip on the image
-        pingpong:           Train each side seperately per save iteration rather than together
+        alignments:             dict containing paths to alignments files for keys 'a' and 'b'
+        preview_scaling:        How much to scale the preview out by
+        training_size:          Size of the training images
+        coverage_ratio:         Ratio of face to be cropped out for training
+        replicate_input_mask:   Replicate input masks with additional model dedicated layers
+        no_logs:                Disable tensorboard logging
+        snapshot_interval:      Interval for saving model snapshots
+        warp_to_landmarks:      Use random_warp_landmarks instead of random_warp
+        augment_color:          Perform random shifting of L*a*b* colors
+        no_flip:                Don't perform a random flip on the image
+        pingpong:               Train each side seperately per save iteration rather than together
 """
 
 import logging
@@ -90,14 +89,14 @@ class TrainerBase():
     def landmarks_required(self):
         """ Return True if Landmarks are required """
         opts = self.model.training_opts
-        retval = bool(opts.get("mask_type", None) or opts["warp_to_landmarks"])
+        retval = opts["warp_to_landmarks"]
         logger.debug(retval)
         return retval
 
     @property
     def use_mask(self):
         """ Return True if a mask is requested """
-        retval = bool(self.model.training_opts.get("mask_type", None))
+        retval = self.model.training_opts.get("replicate_input_mask", False)
         logger.debug(retval)
         return retval
 
@@ -262,6 +261,7 @@ class Batcher():
         logger.debug("Loading generator: %s", self.side)
         input_size = self.model.input_shape[0]
         output_shapes = self.model.output_shapes
+        input_shapes = self.model.input_shapes
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,
@@ -292,14 +292,11 @@ class Batcher():
 
     def get_next(self):
         """ Return the next batch from the generator
-            Items should come out as: (sample, warped, mask, targets) """
+            Items should come out as: (sample, warped, targets, [mask]) """
         logger.debug("Generating targets")
         batch = next(self.feed)
-        if self.use_mask:
-            x, y = self.get_mask(batch)
-        else:
-            x = batch[2:3]
-            y = batch[3:]
+        x = batch[1:3]
+        y = batch[3:]
         return x, y
 
     def generate_preview(self, do_preview):
@@ -310,39 +307,9 @@ class Batcher():
             return
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
-        self.samples = batch[1]
-        targets = batch[3:]
-        self.target = targets[self.model.largest_face_index]
-        if self.use_mask:
-            x, y = self.get_mask(batch)
-            #print("target: ", self.target.dtype, self.target.shape, np.mean(self.target, axis=(1,2)))
-            #print("sample: ", self.samples.dtype, self.samples.shape, np.mean(self.samples, axis=(1,2)))
-            mask = y[-1]
-            #print("mask: ", mask.dtype, mask.shape, np.mean(mask, axis=(1,2)))
-            self.target = [self.target, y[-1]]
-
-    def get_mask(self, batch):
-        """ Return the next batch from the generator
-            Items should come out as: (sample, warped, mask, targets) """
-        landmarks = batch[0]
-        image = batch[2]
-        mean = np.mean(image, axis=(1,2))
-        mask_type = self.model.training_opts.get("mask_type", "none")
-        mask_args = {None:          Dummy,
-                     "components":  Facehull,
-                     "extended":    Facehull,
-                     "vgg_300":     Smart,
-                     "vgg_500":     Smart,
-                     "unet_256":    Smart,
-                     "none":        Dummy}
-        mask_class = mask_args[mask_type]
-        logger.debug("Mask class: %s", mask_class)
-        Mask_model = mask_class(mask_type)
-        mask = Mask_model.build_masks(image, mean, landmarks, channels=1)
-        x = [batch[2], mask]
+        self.samples = batch[0]
         y = batch[3:]
-        y[-1] = mask
-        return x, y
+        self.target = [y[self.model.largest_face_index], y[-1]]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -370,10 +337,10 @@ class Batcher():
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples, _, mask = batch[:3]
-        targets = batch[3:]
+        samples = batch[0]
+        y = batch[3:]
         batchsize = len(samples)
-        images = [targets[self.model.largest_face_index], mask]
+        images = [y[self.model.largest_face_index], y[-1]]
         sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 
