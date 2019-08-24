@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ Helper functions and classes for GUI controls """
 import logging
+import re
+
 import tkinter as tk
 from tkinter import ttk
 
@@ -132,9 +134,13 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Creating new group frame for: %s", group)
             is_master = group == "_master"
             opts_frame = self.optsframe.subframe
-            group_frame = ttk.LabelFrame(opts_frame,
-                                         text="" if is_master else group.title(),
-                                         name=group.lower())
+            if is_master:
+                group_frame = ttk.Frame(opts_frame, name=group.lower())
+            else:
+                group_frame = ttk.LabelFrame(opts_frame,
+                                             text="" if is_master else group.title(),
+                                             name=group.lower())
+
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
             self.group_frames[group] = dict(frame=group_frame,
@@ -279,6 +285,7 @@ class ControlBuilder():
         self.title = title
         self.default = default
         self.helptext = self.format_helptext(helptext)
+        self.helpset = False
         self.label_width = label_width
         self.filebrowser = None
 
@@ -311,7 +318,12 @@ class ControlBuilder():
         if helptext is None:
             return helptext
         logger.debug("Format control help: '%s'", self.title)
-        helptext = helptext.replace("\n\t", "\n  - ").replace("%%", "%")
+        if helptext.startswith("R|"):
+            helptext = helptext[2:].replace("\nL|", "\n - ").replace("\n", "\n\n")
+        else:
+            helptext = " ".join(helptext.split())
+        helptext = helptext.replace("%%", "%")
+        helptext = ". ".join(i.capitalize() for i in helptext.split(". "))
         helptext = self.title + " - " + helptext
         logger.debug("Formatted control help: (title: '%s', help: '%s'", self.title, helptext)
         return helptext
@@ -397,7 +409,7 @@ class ControlBuilder():
         self.set_control_width(ctl, control_width)
         if self.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
-            if self.helptext is not None:
+            if self.helptext is not None and not self.helpset:
                 Tooltip(ctl, text=self.helptext, wraplength=720)
 
         logger.debug("Built control: '%s'", self.title)
@@ -411,6 +423,11 @@ class ControlBuilder():
     def radio_control(self, choices, columns):
         """ Create a group of radio buttons """
         logger.debug("Adding radio group: %s", self.title)
+        helpitems = {re.sub(r'[^A-Za-z0-9\-]+', '',
+                            line.split()[1].lower()): " ".join(line.split()[1:])
+                     for line in self.helptext.splitlines()
+                     if line.startswith(" - ")}
+
         ctl = ttk.LabelFrame(self.frame, text=self.title.replace("_", " ").title())
         radio_holder = AutoFillContainer(ctl, columns)
         for idx, choice in enumerate(choices):
@@ -419,6 +436,11 @@ class ControlBuilder():
                                     text=choice.title(),
                                     value=choice,
                                     variable=self.tk_var)
+            if choice.lower() in helpitems:
+                self.helpset = True
+                helptext = helpitems[choice.lower()].capitalize()
+                helptext = '. '.join(item.capitalize() for item in helptext.split('. '))
+                Tooltip(radio, text=helptext)
             radio.pack(anchor=tk.W)
             logger.debug("Adding radio option %s to column %s", choice, frame_id)
         return radio_holder.parent

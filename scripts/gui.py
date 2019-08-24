@@ -116,10 +116,6 @@ class Gui():  # pylint: disable=too-few-public-methods
         pathscript = os.path.realpath(os.path.dirname(cmd))
         self.args = arguments
         self.root = FaceswapGui(pathscript)
-        try:
-            self.root.state("zoomed")
-        except tk.TclError:
-            self.root.attributes('-zoomed', True)
 
     def process(self):
         """ Builds the GUI """

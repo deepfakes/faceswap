@@ -18,7 +18,7 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     def __init__(self, parent):
         logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
         scaling_factor = get_config().scaling_factor
-        width = int(470 * scaling_factor)
+        width = int(420 * scaling_factor)
         root_height = get_config().root.winfo_height()
         height = int(round(root_height * 0.78125))
 
@@ -97,7 +97,7 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Build the tab """
         logger.debug("Build Tab: '%s'", self.command)
         options = get_config().cli_opts.opts[self.command]
-        ControlPanel(self, options, label_width=16, radio_columns=2, columns=2)
+        ControlPanel(self, options, label_width=16, radio_columns=3, columns=1)
         self.add_frame_separator()
 
         ActionFrame(self)

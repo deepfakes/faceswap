@@ -149,6 +149,7 @@ class AlignmentsArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
+                              "group": "output",
                               "default": False,
                               "help": "Perform extra alignment to ensure "
                                       "left/right eyes are  at the same "
@@ -156,6 +157,7 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "only)"})
         argument_list.append({"opts": ("-dm", "--disable-monitor"),
                               "action": "store_true",
+                              "group": "settings",
                               "dest": "disable_monitor",
                               "default": False,
                               "help": "Enable this option if manual "
@@ -400,6 +402,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-q', '--quiet'),
                               "action": "store_true",
                               "dest": "quiet",
+                              "group": "settings",
                               "default": False,
                               "help": "Reduces output verbosity so that only "
                                       "serious errors are printed. If both "
@@ -409,6 +412,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-v', '--verbose'),
                               "action": "store_true",
                               "dest": "verbose",
+                              "group": "settings",
                               "default": False,
                               "help": "Increases output verbosity. If both "
                                       "quiet and verbose are set, verbose "
