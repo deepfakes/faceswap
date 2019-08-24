@@ -106,7 +106,10 @@ class ModelBase():
                               "augment_color": augment_color,
                               "no_flip": no_flip,
                               "pingpong": self.vram_savings.pingpong,
-                              "snapshot_interval": snapshot_interval}
+                              "snapshot_interval": snapshot_interval,
+                              "replicate_input_mask": self.config["replicate_input_mask"],
+                              "penalized_mask_loss": self.config["penalized_mask_loss"]}
+
 
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -223,7 +226,6 @@ class ModelBase():
         # Force number of preview images to between 2 and 16
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
-        self.training_opts["replicate_input_mask"] = self.config.get("replicate_input_mask", None)
         self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
         logger.debug("Set training data: %s", self.training_opts)
 

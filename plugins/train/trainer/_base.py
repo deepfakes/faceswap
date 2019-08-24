@@ -96,7 +96,8 @@ class TrainerBase():
     @property
     def use_mask(self):
         """ Return True if a mask is requested """
-        retval = self.model.training_opts.get("replicate_input_mask", False)
+        retval = (self.model.training_opts.get("replicate_input_mask", False) or
+                  self.model.training_opts.get("penalized_mask_loss", True))
         logger.debug(retval)
         return retval
 
@@ -263,7 +264,6 @@ class Batcher():
         logger.debug("Loading generator: %s", self.side)
         input_size = self.model.input_shape[0]
         output_shapes = self.model.output_shapes
-        input_shapes = self.model.input_shapes
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,

@@ -30,7 +30,6 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_shapes = model_output_shapes
         self.output_sizes = [shape[1] for shape in model_output_shapes if shape[2] == 3]
-        print(model_output_shapes)
         self.training_opts = training_opts
         self.landmarks = self.training_opts.get("landmarks", None)
         self.fixed_producer_dispatcher = None  # Set by FPD when loading
@@ -184,11 +183,13 @@ class TrainingDataGenerator():
 
     def compile_images(self, sample, warped_image, target_images):
         """ Compile the warped images, target images and mask for feed """
-        compiled_images = [sample, warped_image[..., :3], warped_image[..., 3:4]]
+        compiled_images = [sample, warped_image[..., :3]]
+        if self.training_opts["penalized_mask_loss"]:
+            compiled_images.append(warped_image[..., 3:4])
         for target_image in target_images:
             compiled_images.append(target_image[..., :3])
             final_output = target_image.shape[1] == max(self.output_sizes)
-            if final_output:
+            if final_output and self.training_opts["replicate_input_mask"]:
                 compiled_images.append(target_image[..., 3:4])
 
         logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
