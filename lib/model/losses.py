@@ -25,6 +25,22 @@ else:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+def mask_loss_wrapper(loss_func, preprocessing_func=None):
+    """ A wrapper for mask loss that can perform pre-processing on the input
+        prior to calling the loss function
+        loss_func: The loss function to use
+        preprocessing_func: The preprocessing function to use. Should take a Keras Input
+        as it's only argument """
+
+    def func(y_true, y_pred):
+        """ Process input if a processing function has been passed, otherwise just return loss """
+        if preprocessing_func is not None:
+            y_true = K.reshape(y_true, [-1] + list(K.int_shape(y_pred)[1:]))
+            y_true = preprocessing_func(y_true)
+        return loss_func(y_true, y_pred)
+    return func
+
+
 class DSSIMObjective():
     """ DSSIM Loss Function
 
@@ -162,8 +178,32 @@ class DSSIMObjective():
 
 
 # <<< START: from Dfaker >>> #
-def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-name
-    """ Plaidml + tf Penalized loss function """
+def PenalizedLoss(mask, loss_func,  # pylint: disable=invalid-name
+                  mask_prop=1.0, mask_scaling=1.0, preprocessing_func=None):
+    """ Plaidml + tf Penalized loss function
+        mask_scaling: For multi-decoder output the target mask will likely be at
+                      full size scaling, so this is the scaling factor to reduce
+                      the mask by.
+        preprocessing_func: The preprocessing function to use. Should take a Keras Input
+                            as it's only input
+    """
+
+    def scale_mask(mask, scaling):
+        """ Scale the input mask to be the same size as the input face """
+        if scaling != 1.0:
+            size = round(1 / scaling)
+            mask = K.pool2d(mask,
+                            pool_size=(size, size),
+                            strides=(size, size),
+                            padding="valid",
+                            data_format=K.image_data_format(),
+                            pool_mode="avg")
+        logger.debug("resized tensor: %s", mask)
+        return mask
+
+    mask = scale_mask(mask, mask_scaling)
+    if preprocessing_func is not None:
+        mask = preprocessing_func(mask)
     mask_as_k_inv_prop = 1 - mask_prop
     mask = (mask * mask_prop) + mask_as_k_inv_prop
 
@@ -185,27 +225,6 @@ def PenalizedLoss(mask, loss_func, mask_prop=1.0):  # pylint: disable=invalid-na
 def style_loss(gaussian_blur_radius=0.0, loss_weight=1.0, wnd_size=0, step_size=1):
     """ Style Loss from DeepFaceLab
         https://github.com/iperov/DeepFaceLab """
-    def gaussian_blur(radius=2.0):
-        def gaussian(var_x, radius, sigma):
-            return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
-
-        def make_kernel(sigma):
-            kernel_size = max(3, int(2 * 2 * sigma + 1))
-            mean = np.floor(0.5 * kernel_size)
-            kernel_1d = np.array([gaussian(x, mean, sigma) for x in range(kernel_size)])
-            np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
-            kernel = np_kernel / np.sum(np_kernel)
-            return kernel
-
-        gauss_kernel = make_kernel(radius)
-        gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
-
-        def func(input_):
-            inputs = [input_[:, :, :, i:i + 1] for i in range(K.int_shape(input_)[-1])]
-            outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
-                       for inp in inputs]
-            return K.concatenate(outputs, axis=-1)
-        return func
 
     if gaussian_blur_radius > 0.0:
         gblur = gaussian_blur(gaussian_blur_radius)
@@ -893,3 +912,31 @@ def ms_ssim_loss(y_true, y_pred):
     loss = K.expand_dims(expanded, axis=-1)
     # need to expand to [1,height,width] dimensions for Keras. modify to not be hard-coded
     return K.tile(loss, [1, 64, 64])
+
+
+# Gaussian Blur is here as it is only used for losses.
+# It was previously kept in lib/model/masks but the import of keras backend
+# breaks plaidml
+def gaussian_blur(radius=2.0):
+    """ From https://github.com/iperov/DeepFaceLab
+        Used for blurring mask in training """
+    def gaussian(var_x, radius, sigma):
+        return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
+
+    def make_kernel(sigma):
+        kernel_size = max(3, int(2 * 2 * sigma + 1))
+        mean = np.floor(0.5 * kernel_size)
+        kernel_1d = np.array([gaussian(x, mean, sigma) for x in range(kernel_size)])
+        np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
+        kernel = np_kernel / np.sum(np_kernel)
+        return kernel
+
+    gauss_kernel = make_kernel(radius)
+    gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
+
+    def func(input_):
+        inputs = [input_[:, :, :, i:i + 1] for i in range(K.int_shape(input_)[-1])]
+        outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
+                   for inp in inputs]
+        return K.concatenate(outputs, axis=-1)
+    return func

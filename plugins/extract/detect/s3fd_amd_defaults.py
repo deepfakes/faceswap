@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Unbalanced Model plugin.
+    The default options for the faceswap S3Fd-AMD Detect plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -42,92 +42,34 @@
 
 
 _HELPTEXT = (
-    "An unbalanced model with adjustable input size options.\n"
-    "This is an unbalanced model so b>a swaps may not work well\n"
-)
+    "S3FD-AMD Detector options. Uses keras backend to support AMD cards.\n"
+    "Fast on GPU, slow on CPU. Can detect more faces and fewer false "
+    "positives than other GPU detectors, but is a lot more resource intensive."
+    )
 
 
 _DEFAULTS = {
-    "input_size": {
-        "default": 128,
-        "info": "Resolution (in pixels) of the image to train on.\n"
-                "BE AWARE Larger resolution will dramatically increaseVRAM requirements.\n"
-                "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
-                "NB: Your faceset must be at least 1.6x larger than your required input "
-                "size.\n(e.g. 160 is the maximum input size for a 256x256 faceset).",
+    "confidence": {
+        "default": 50,
+        "info": "The confidence level at which the detector has succesfully found a face.\n"
+                "Higher levels will be more discriminating, lower levels will have more false "
+                "positives.",
         "datatype": int,
-        "rounding": 64,
-        "min_max": (64, 512),
+        "rounding": 5,
+        "min_max": (25, 100),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
     },
-    "lowmem": {
-        "default": False,
-        "info": "Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
-                "NB: Models with a changed lowmem mode are not compatible with each other.\n"
-                "NB: lowmem will override cutom nodes and complexity settings.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "clipnorm": {
-        "default": True,
-        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
-                "the expense of VRAM.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "nodes": {
-        "default": 1024,
-        "info": "Number of nodes for decoder. Don't change this unless you know what you are "
-                "doing!",
+    "batch-size": {
+        "default": 8,
+        "info": "The batch size to use. Normally higher batch sizes equal better performance.\n"
+                "A batchsize of 8 requires about 2 GB vram.",
         "datatype": int,
-        "rounding": 64,
-        "min_max": (512, 4096),
+        "rounding": 1,
+        "min_max": (1, 32),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-        "group": "network",
-    },
-    "complexity_encoder": {
-        "default": 128,
-        "info": "Encoder Convolution Layer Complexity. sensible ranges: 128 to 160.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
-    "complexity_decoder_a": {
-        "default": 384,
-        "info": "Decoder A Complexity.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
-    "complexity_decoder_b": {
-        "default": 512,
-        "info": "Decoder B Complexity.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
+    }
 }

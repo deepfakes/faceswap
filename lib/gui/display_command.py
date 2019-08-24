@@ -12,7 +12,8 @@ from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
 from .stats import Calculations
-from .utils import FileHandler, get_config, get_images, set_slider_rounding
+from .control_helper import set_slider_rounding
+from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -191,7 +192,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
-                text="Graph updates every 100 iterations. Click to refresh now.",
+                text="Graph updates at every model save. Click to refresh now.",
                 wraplength=200)
         logger.debug("Added refresh option")
 
