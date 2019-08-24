@@ -51,7 +51,7 @@ class ConfigurePlugins(tk.Toplevel):
         scaling_factor = get_config().scaling_factor
         pos_x = root.winfo_x() + 80
         pos_y = root.winfo_y() + 80
-        width = int(720 * scaling_factor)
+        width = int(600 * scaling_factor)
         height = int(400 * scaling_factor)
         logger.debug("Pop up Geometry: %sx%s, %s+%s", width, height, pos_x, pos_y)
         self.geometry("{}x{}+{}+{}".format(width, height, pos_x, pos_y))
@@ -94,20 +94,23 @@ class ConfigurePlugins(tk.Toplevel):
         """ Build a plugin config page """
         logger.debug("Building plugin config page: '%s'", category)
         plugins = sorted(list(key for key in self.config_dict_gui[category].keys()))
+        panel_kwargs = dict(columns=2, radio_columns=2, blank_nones=False)
         if any(plugin != category for plugin in plugins):
             page = ttk.Notebook(container)
             page.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             for plugin in plugins:
                 frame = ControlPanel(page,
                                      self.config_dict_gui[category][plugin],
-                                     self.plugin_info[plugin])
+                                     header_text=self.plugin_info[plugin],
+                                     **panel_kwargs)
                 title = plugin[plugin.rfind(".") + 1:]
                 title = title.replace("_", " ").title()
                 page.add(frame, text=title)
         else:
             page = ControlPanel(container,
                                 self.config_dict_gui[category][plugins[0]],
-                                self.plugin_info[plugins[0]])
+                                header_text=self.plugin_info[plugins[0]],
+                                **panel_kwargs)
 
         logger.debug("Built plugin config page: '%s'", category)
 

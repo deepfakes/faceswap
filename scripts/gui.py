@@ -116,6 +116,7 @@ class Gui():  # pylint: disable=too-few-public-methods
         pathscript = os.path.realpath(os.path.dirname(cmd))
         self.args = arguments
         self.root = FaceswapGui(pathscript)
+        self.root.state("zoomed")
 
     def process(self):
         """ Builds the GUI """

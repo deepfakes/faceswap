@@ -4,7 +4,7 @@ import inspect
 from argparse import SUPPRESS
 import logging
 import re
-from tkinter import ttk
+from collections import OrderedDict
 
 from lib import cli
 import tools.cli as ToolsCli
@@ -72,7 +72,7 @@ class CliOptions():
             logger.debug("Processing: (classname: '%s')", classname)
             command = self.format_command_name(classname)
             options = self.get_cli_arguments(cli_source, classname, command)
-            options = self.process_options(options)
+            options = self.process_options(options, command)
             logger.debug("Processed: (classname: '%s', command: '%s', options: %s)",
                          classname, command, options)
             subopts[command] = options
@@ -84,24 +84,29 @@ class CliOptions():
         meth = getattr(cli_source, classname)(None, command)
         return meth.argument_list + meth.optional_arguments + meth.global_arguments
 
-    def process_options(self, command_options):
+    def process_options(self, command_options, command):
         """ Process the options for a single command """
-        final_options = list()
+        gui_options = OrderedDict()
         for opt in command_options:
             logger.trace("Processing: %s", opt)
             if opt.get("help", "") == SUPPRESS:
                 logger.trace("Skipping suppressed option: %s", opt)
                 continue
-            ctl, sysbrowser, filetypes, action_option, group = self.set_control(opt)
-            opt["control_title"] = self.set_control_title(opt.get("opts", ""))
-            opt["control"] = ctl
-            opt["filesystem_browser"] = sysbrowser
-            opt["filetypes"] = filetypes
-            opt["action_option"] = action_option
-            opt["group"] = group
-            final_options.append(opt)
+            title = self.set_control_title(opt["opts"])
+            gui_options[title] = {
+                "type": self.get_data_type(opt),
+                "default": opt.get("default", None),
+                "value": opt.get("default", ""),
+                "choices": opt.get("choices", None),
+                "gui_radio": opt.get("action", "") == cli.Radio,
+                "rounding": self.get_rounding(opt),
+                "min_max": opt.get("min_max", None),
+                "sysbrowser": self.get_sysbrowser(opt, command),
+                "group": opt.get("group", None),
+                "helptext": opt["help"],
+                "opts": opt["opts"]}
             logger.trace("Processed: %s", opt)
-        return final_options
+        return gui_options
 
     @staticmethod
     def set_control_title(opts):
@@ -110,75 +115,76 @@ class CliOptions():
         ctltitle = ctltitle.replace("-", " ").replace("_", " ").strip().title()
         return ctltitle
 
-    def set_control(self, option):
-        """ Set the control and filesystem browser to use for each option """
-        sysbrowser = None
-        group = option.get("group", None)
-        action = option.get("action", None)
-        action_option = option.get("action_option", None)
-        filetypes = option.get("filetypes", None)
-        ctl = ttk.Entry
-        if action in (cli.FullPaths,
-                      cli.DirFullPaths,
-                      cli.FileFullPaths,
-                      cli.FilesFullPaths,
-                      cli.DirOrFileFullPaths,
-                      cli.SaveFileFullPaths,
-                      cli.ContextFullPaths):
-            sysbrowser, filetypes = self.set_sysbrowser(action,
-                                                        filetypes,
-                                                        action_option)
-        elif option.get("min_max", None):
-            ctl = ttk.Scale
-        elif option.get("action", "") == cli.Radio:
-            ctl = ttk.Radiobutton
-        elif option.get("choices", "") != "":
-            ctl = ttk.Combobox
-        elif option.get("action", "") == "store_true":
-            ctl = ttk.Checkbutton
-        return ctl, sysbrowser, filetypes, action_option, group
+    @staticmethod
+    def get_data_type(opt):
+        """ Return a datatype for passing into control_helper.py to get the correct control """
+        if opt.get("type", None) is not None and isinstance(opt["type"], type):
+            retval = opt["type"]
+        elif opt.get("action", "") in ("store_true", "store_false"):
+            retval = bool
+        else:
+            retval = str
+        return retval
 
     @staticmethod
-    def set_sysbrowser(action, filetypes, action_option):
-        """ Set the correct file system browser and filetypes
-            for the passed in action """
-        sysbrowser = ["folder"]
-        filetypes = "default" if not filetypes else filetypes
-        if action == cli.FileFullPaths:
-            sysbrowser = ["load"]
-        elif action == cli.FilesFullPaths:
-            sysbrowser = ["load_multi"]
-        elif action == cli.SaveFileFullPaths:
-            sysbrowser = ["save"]
-        elif action == cli.DirOrFileFullPaths:
-            sysbrowser = ["folder", "load"]
-        elif action == cli.ContextFullPaths and action_option:
-            sysbrowser = ["context"]
-        logger.debug("sysbrowser: %s, filetypes: '%s'", sysbrowser, filetypes)
-        return sysbrowser, filetypes
+    def get_rounding(opt):
+        """ Return rounding if correct data type, else None """
+        dtype = opt.get("type", None)
+        if dtype == float:
+            retval = opt.get("rounding", 2)
+        elif dtype == int:
+            retval = opt.get("rounding", 1)
+        else:
+            retval = None
+        return retval
 
-    def set_context_option(self, command):
-        """ Set the tk_var for the source action option
-            that dictates the context sensitive file browser. """
-        actions = {item["opts"][0]: item["value"]
-                   for item in self.gen_command_options(command)}
-        for opt in self.gen_command_options(command):
-            if opt["filesystem_browser"] == ["context"]:
-                opt["action_option"] = actions[opt["action_option"]]
+    @staticmethod
+    def get_sysbrowser(option, command):
+        """ Return the system file browser and file types if required else None """
+        action = option.get("action", None)
+        if action not in (cli.FullPaths,
+                          cli.DirFullPaths,
+                          cli.FileFullPaths,
+                          cli.FilesFullPaths,
+                          cli.DirOrFileFullPaths,
+                          cli.SaveFileFullPaths,
+                          cli.ContextFullPaths):
+            return None
+
+        retval = dict()
+        action_option = option.get("action_option", None)
+        retval["filetypes"] = option.get("filetypes", "default")
+        if action == cli.FileFullPaths:
+            retval["browser"] = ["load"]
+        elif action == cli.FilesFullPaths:
+            retval["browser"] = ["load_multi"]
+        elif action == cli.SaveFileFullPaths:
+            retval["browser"] = ["save"]
+        elif action == cli.DirOrFileFullPaths:
+            retval["browser"] = ["folder", "load"]
+        elif action == cli.ContextFullPaths and action_option:
+            retval["browser"] = ["context"]
+            retval["command"] = command
+            retval["action_option"] = action_option
+            retval["destination"] = option.get("dest", option["opts"][1].replace("--", ""))
+        else:
+            retval["browser"] = ["folder"]
+        logger.debug(retval)
+        return retval
 
     def gen_command_options(self, command):
         """ Yield each option for specified command """
-        for option in self.opts[command]:
-            yield option
+        for key, val in self.opts[command].items():
+            yield key, val
 
     def options_to_process(self, command=None):
         """ Return a consistent object for processing
             regardless of whether processing all commands
             or just one command for reset and clear """
         if command is None:
-            options = [opt for opts in self.opts.values() for opt in opts]
+            options = [opt for opts in self.opts.values() for opt in opts.values()]
         else:
-            options = [opt for opt in self.gen_command_options(command)]
+            options = [opt for opt in self.opts[command].values()]
         return options
 
     def reset(self, command=None):
@@ -191,19 +197,19 @@ class CliOptions():
             if (option.get("nargs", None)
                     and isinstance(default, (list, tuple))):
                 default = ' '.join(str(val) for val in default)
-            option["value"].set(default)
+            option["selected"].set(default)
 
     def clear(self, command=None):
         """ Clear the options values for all or passed
             commands """
         logger.debug("Clearing options. (command: '%s'", command)
         for option in self.options_to_process(command):
-            if isinstance(option["value"].get(), bool):
-                option["value"].set(False)
-            elif isinstance(option["value"].get(), int):
-                option["value"].set(0)
+            if isinstance(option["selected"].get(), bool):
+                option["selected"].set(False)
+            elif isinstance(option["selected"].get(), int):
+                option["selected"].set(0)
             else:
-                option["value"].set("")
+                option["selected"].set("")
 
     def get_option_values(self, command=None):
         """ Return all or single command control titles
@@ -214,7 +220,7 @@ class CliOptions():
                 continue
             cmd_dict = dict()
             for opt in opts:
-                cmd_dict[opt["control_title"]] = opt["value"].get()
+                cmd_dict[opt["control_title"]] = opt["selected"].get()
             ctl_dict[cmd] = cmd_dict
         logger.debug("command: '%s', ctl_dict: '%s'", command, ctl_dict)
         return ctl_dict
@@ -222,16 +228,16 @@ class CliOptions():
     def get_one_option_variable(self, command, title):
         """ Return a single tk_var for the specified
             command and control_title """
-        for option in self.gen_command_options(command):
-            if option["control_title"] == title:
-                return option["value"]
+        for opt_title, option in self.gen_command_options(command):
+            if opt_title == title:
+                return option["selected"]
         return None
 
     def gen_cli_arguments(self, command):
         """ Return the generated cli arguments for
             the selected command """
-        for option in self.gen_command_options(command):
-            optval = str(option.get("value", "").get())
+        for _, option in self.gen_command_options(command):
+            optval = str(option.get("selected", "").get())
             opt = option["opts"][0]
             if command in ("extract", "convert") and opt == "-o":
                 get_images().pathoutput = optval
