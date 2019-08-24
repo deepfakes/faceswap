@@ -297,8 +297,11 @@ class Batcher():
             Items should come out as: (sample, warped, targets, [mask]) """
         logger.debug("Generating targets")
         batch = next(self.feed)
-        x = batch[1:3]
-        y = batch[3:]
+        use_mask =  (self.model.training_opts["penalized_mask_loss"] or
+                     self.model.training_opts["replicate_input_mask"])
+        cutoff = 3 if use_mask else 2
+        x = batch[1:cutoff]
+        y = batch[cutoff:]
         return x, y
 
     def generate_preview(self, do_preview):
@@ -310,7 +313,10 @@ class Batcher():
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
         self.samples = batch[0]
-        y = batch[3:]
+        use_mask =  (self.model.training_opts["penalized_mask_loss"] or
+                     self.model.training_opts["replicate_input_mask"])
+        cutoff = 3 if use_mask else 2
+        y = batch[cutoff:]
         self.target = [y[self.model.largest_face_index], y[-1]]
 
     def set_preview_feed(self):
@@ -340,7 +346,10 @@ class Batcher():
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         samples = batch[0]
-        y = batch[3:]
+        use_mask =  (self.model.training_opts["penalized_mask_loss"] or
+                     self.model.training_opts["replicate_input_mask"])
+        cutoff = 3 if use_mask else 2
+        y = batch[cutoff:]
         batchsize = len(samples)
         images = [y[self.model.largest_face_index], y[-1]]
         sample = self.compile_sample(batchsize, samples=samples, images=images)

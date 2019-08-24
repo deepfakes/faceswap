@@ -52,8 +52,9 @@ class TrainingDataGenerator():
         queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(((batchsize, training_size, training_size, 4),
-                            (batchsize, self.model_input_size, self.model_input_size, 3),
-                            (batchsize, self.model_input_size, self.model_input_size, 1)))
+                            (batchsize, self.model_input_size, self.model_input_size, 3)))
+        if (self.training_opts["penalized_mask_loss"] or self.training_opts["replicate_input_mask"]):
+            batch_shape.extend(tuple((batchsize, self.model_input_size, self.model_input_size, 1)))
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
         logger.debug("Batch shapes: %s", batch_shape)
 
