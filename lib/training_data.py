@@ -158,7 +158,9 @@ class TrainingDataGenerator():
                      filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
         landmarks = self.get_landmarks(filename, image, side)
-        image = self.processing.color_adjust(image, self.training_opts["augment_color"], is_display)
+        image = self.processing.color_adjust(image,
+                                             self.training_opts["augment_color"],
+                                             is_display)
 
         if not is_display:
             image = self.processing.random_transform(image)
@@ -168,15 +170,15 @@ class TrainingDataGenerator():
 
         if self.training_opts["warp_to_landmarks"]:
             dst_pts = self.get_closest_match(filename, side, landmarks)
-            warped_image, target_images = self.processing.random_warp_landmarks(image, landmarks, dst_pts)
+            warped_image, target_images = self.processing.warp_landmarks(image, landmarks, dst_pts)
         else:
-            warped_image, target_images = self.processing.random_warp(image)
+            warped_image, target_images = self.processing.warp_control_points(image)
 
         processed = self.compile_images(sample, warped_image, target_images)
         logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
                      filename, side, [img.shape for img in processed])
         return processed
-        
+
     @staticmethod
     def compile_images(sample, warped_image, target_images):
         """ Compile the warped images, target images and mask for feed """
@@ -339,7 +341,7 @@ class ImageManipulation():
         logger.trace("Randomly flipped image")
         return retval
 
-    def random_warp(self, image):
+    def warp_control_points(self, image):
         """ get pair of random warped images from aligned face image """
         # pylint:disable=no-member
         logger.trace("Randomly warping image")
@@ -384,7 +386,7 @@ class ImageManipulation():
         logger.trace("Target image shapes: %s", [tgt.shape for tgt in target_images])
         return warped_image, target_images
 
-    def random_warp_landmarks(self, image, src_points=None, dst_points=None):
+    def warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
             From DFAKER plugin """
         # pylint:disable=no-member

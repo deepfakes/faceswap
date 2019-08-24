@@ -50,7 +50,7 @@ class Mask():
     def build_masks(self, faces, means, landmarks):
         """ Override to build the mask """
         raise NotImplementedError
-        
+
     def merge_masks(self, faces, masks, channels):
         """ Return the masks in the requested shape """
         logger.trace("faces_shape: %s, masks_shape: %s", faces.shape, masks.shape)
@@ -149,7 +149,7 @@ class Facehull(Mask):
         return None, build_dict[mask_type]
 
     def build_masks(self, faces, means, landmarks, channels):
-                      
+        """  docstring """
         if faces.ndim < 4:
             faces = np.expand_dims(faces, axis=0)
         masks = np.array(np.zeros(faces.shape[:-1] + (1,)), dtype='float32', ndmin=4)
@@ -186,7 +186,7 @@ class Smart(Mask):
             mask_model = keras.models.load_model(model.model_path)
         print(mask_model.summary())
         return input_size, mask_model
-    
+
     def build_masks(self, faces, means, landmarks, channels):
         """
         Function for creating facehull masks
@@ -209,7 +209,7 @@ class Smart(Mask):
             masks_batched.append(masks[even_split_section:])
         batched = zip(faces_batched, means_batched)
         for i, (faces, means) in enumerate(batched):
-            if  self.target_size == 256:
+            if self.target_size == 256:
                 model_input = faces
                 with keras.backend.tf.device("/cpu:0"):
                     results = self.mask_model.predict(model_input)
@@ -247,16 +247,16 @@ class Smart(Mask):
     def postprocessing(mask):
         """ Post-processing of Nirkin style segmentation masks """
         # pylint: disable=no-member
-        #Select_largest_segment
-        pop_small_segments = False # Don't do this right now
+        # Select_largest_segment
+        pop_small_segments = False  # Don't do this right now
         if pop_small_segments:
             results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
             _, labels, stats, _ = results
             segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
             mask[labels != segments_ranked_by_area[0, 0]] = 0.
 
-        #Smooth contours
-        smooth_contours = False # Don't do this right now
+        # Smooth contours
+        smooth_contours = False  # Don't do this right now
         if smooth_contours:
             iters = 2
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
@@ -265,7 +265,7 @@ class Smart(Mask):
             cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
             cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
 
-        #Fill holes
+        # Fill holes
         fill_holes = True
         if fill_holes:
             not_holes = mask.copy()

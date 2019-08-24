@@ -92,7 +92,7 @@ class Mask(Masker):
             if postprocess_test:
                 generator = (self.postprocessing(mask[:, :, None]) for mask in results)
             results = np.array(tuple(generator))[..., None]
-            results[results < 0.05]= 0.
+            results[results < 0.05] = 0.
             results[results > 0.95] = 1.
             results *= 255.
             _, results = self.resize_inputs(results, original_size)
@@ -117,7 +117,7 @@ class Mask(Masker):
         """ Post-processing of Nirkin style segmentation masks """
         # pylint: disable=no-member
         # Select_largest_segment
-        pop_small_segments = False #  Don't do this right now
+        pop_small_segments = False  # Don't do this right now
         if pop_small_segments:
             results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
             _, labels, stats, _ = results
@@ -125,7 +125,7 @@ class Mask(Masker):
             mask[labels != segments_ranked_by_area[0, 0]] = 0.
 
         # Smooth contours
-        smooth_contours = False #  Don't do this right now
+        smooth_contours = False  # Don't do this right now
         if smooth_contours:
             iters = 2
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))

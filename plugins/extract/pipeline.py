@@ -159,7 +159,7 @@ class Extractor():
         for task in tasks:
             # Limit queue size to avoid stacking ram
             size = 32
-            if task == "extract_detect_in" or (not self.is_parallel and 
+            if task == "extract_detect_in" or (not self.is_parallel and
                                                task == "extract_align_in"):
                 size = 64
             queue_manager.add_queue(task, maxsize=size)
