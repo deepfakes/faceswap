@@ -39,7 +39,11 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                      "radio_columns: %s, header_text: %s, blank_nones: %s)",
                      self.__class__.__name__, parent, options, label_width, columns, radio_columns,
                      header_text, blank_nones)
+        gui_style = ttk.Style()
+        
+        gui_style.configure('WinGrayBG.TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
         super().__init__(parent)
+
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.options = options
@@ -139,7 +143,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             else:
                 group_frame = ttk.LabelFrame(opts_frame,
                                              text="" if is_master else group.title(),
-                                             name=group.lower())
+                                             name=group.lower(), style="WinGrayBG.TLabelframe")
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
@@ -428,7 +432,7 @@ class ControlBuilder():
                      for line in self.helptext.splitlines()
                      if line.startswith(" - ")}
 
-        ctl = ttk.LabelFrame(self.frame, text=self.title.replace("_", " ").title())
+        ctl = ttk.LabelFrame(self.frame, text=self.title.replace("_", " ").title(), style="WinGrayBG.TLabelframe")
         radio_holder = AutoFillContainer(ctl, columns)
         for idx, choice in enumerate(choices):
             frame_id = idx % columns

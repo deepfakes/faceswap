@@ -19,8 +19,7 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
         scaling_factor = get_config().scaling_factor
         width = int(420 * scaling_factor)
-        root_height = get_config().root.winfo_height()
-        height = int(round(root_height * 0.78125))
+        height = int(500 * scaling_factor)
 
         self.actionbtns = dict()
         super().__init__(parent, width=width, height=height)
