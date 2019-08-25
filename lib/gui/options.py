@@ -219,8 +219,8 @@ class CliOptions():
             if command and command != cmd:
                 continue
             cmd_dict = dict()
-            for opt in opts:
-                cmd_dict[opt["control_title"]] = opt["selected"].get()
+            for key, val in opts.items():
+                cmd_dict[key] = val["selected"].get()
             ctl_dict[cmd] = cmd_dict
         logger.debug("command: '%s', ctl_dict: '%s'", command, ctl_dict)
         return ctl_dict
