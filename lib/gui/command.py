@@ -96,7 +96,7 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Build the tab """
         logger.debug("Build Tab: '%s'", self.command)
         options = get_config().cli_opts.opts[self.command]
-        ControlPanel(self, options, label_width=16, radio_columns=2, columns=2)
+        ControlPanel(self, options, label_width=16, radio_columns=3, columns=1)
         self.add_frame_separator()
 
         ActionFrame(self)
