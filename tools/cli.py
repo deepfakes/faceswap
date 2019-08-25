@@ -118,7 +118,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "action": Radio,
             "type": str,
             "choices": ("console", "file", "move"),
-            "group": "output",
+            "group": "processing",
             "default": "console",
             "help": "R|How to output discovered items ('faces' and 'frames' only):"
                     "\nL|'console': Print the list of frames to the screen. (DEFAULT)"
@@ -133,7 +133,7 @@ class AlignmentsArgs(FaceSwapArgs):
                               "min_max": (1, 100),
                               "default": 1,
                               "rounding": 1,
-                              "group": "output",
+                              "group": "extract",
                               "help": "Extract every 'nth' frame. This option will skip frames "
                                       "when extracting faces. For example a value of 1 will "
                                       "extract faces from every frame, a value of 10 will extract "
@@ -143,13 +143,13 @@ class AlignmentsArgs(FaceSwapArgs):
                               "action": Slider,
                               "min_max": (128, 512),
                               "default": 256,
-                              "group": "output",
+                              "group": "extract",
                               "rounding": 64,
                               "help": "The output size of extracted faces. (extract only)"})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
-                              "group": "output",
+                              "group": "extract",
                               "default": False,
                               "help": "Perform extra alignment to ensure "
                                       "left/right eyes are  at the same "
@@ -157,7 +157,7 @@ class AlignmentsArgs(FaceSwapArgs):
                                       "only)"})
         argument_list.append({"opts": ("-dm", "--disable-monitor"),
                               "action": "store_true",
-                              "group": "settings",
+                              "group": "manual tool",
                               "dest": "disable_monitor",
                               "default": False,
                               "help": "Enable this option if manual "
@@ -462,6 +462,7 @@ class SortArgs(FaceSwapArgs):
                               "action": 'store_true',
                               "dest": 'keep_original',
                               "default": False,
+                              "group": "output",
                               "help": "Keeps the original files in the input "
                                       "directory. Be careful when using this "
                                       "with rename grouping and no specified "
@@ -580,13 +581,13 @@ class SortArgs(FaceSwapArgs):
                               "type": str.upper,
                               "choices": ("CPU", "GPU"),
                               "default": "GPU",
-                              "group": "sort settings",
+                              "group": "settings",
                               "help": "Backend to use for VGG Face inference."
                                       "Only used for sort by 'face'."})
 
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',
-                              "group": "output",
+                              "group": "settings",
                               "default": False,
                               "help": "Logs file renaming changes if "
                                       "grouping by renaming, or it logs the "
@@ -599,7 +600,7 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-lf', '--log-file'),
                               "action": SaveFileFullPaths,
                               "filetypes": "alignments",
-                              "group": "output",
+                              "group": "settings",
                               "dest": 'log_file_path',
                               "default": 'sort_log.json',
                               "help": "Specify a log file to use for saving "

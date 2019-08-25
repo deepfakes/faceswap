@@ -58,7 +58,7 @@ class Config(FaceswapConfig):
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section, title="coverage", datatype=float, default=68.75,
-            min_max=(62.5, 100.0), rounding=2, fixed=True,
+            min_max=(62.5, 100.0), rounding=2, fixed=True, group="face",
             info="How much of the extracted image to train on. A lower coverage will limit the "
                  "model's scope to a zoomed-in central area while higher amounts can include the "
                  "entire face. A trade-off exists between lower amounts given more detail "

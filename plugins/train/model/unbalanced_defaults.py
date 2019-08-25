@@ -60,6 +60,7 @@ _DEFAULTS = {
         "min_max": (64, 512),
         "choices": [],
         "gui_radio": False,
+        "group": "size",
         "fixed": True,
     },
     "lowmem": {
@@ -72,6 +73,7 @@ _DEFAULTS = {
         "min_max": None,
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "clipnorm": {
@@ -83,6 +85,7 @@ _DEFAULTS = {
         "min_max": None,
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "nodes": {

@@ -652,28 +652,6 @@ class ExtractArgs(ExtractConvertArgs):
                                       "threshold. Discarded images are moved into a \"blurry\" "
                                       "sub-folder. Lower values allow more blur. Set to 0.0 to "
                                       "turn off."})
-        argument_list.append({"opts": ("-sp", "--singleprocess"),
-                              "action": "store_true",
-                              "default": False,
-                              "backend": "nvidia",
-                              "group": "settings",
-                              "help": "Don't run extraction in parallel. Will run detection first "
-                                      "then alignment (2 passes). Useful if VRAM is at a "
-                                      "premium."})
-        argument_list.append({"opts": ("-s", "--skip-existing"),
-                              "action": "store_true",
-                              "dest": "skip_existing",
-                              "group": "skipping",
-                              "default": False,
-                              "help": "Skips frames that have already been extracted and exist in "
-                                      "the alignments file"})
-        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
-                              "action": "store_true",
-                              "dest": "skip_faces",
-                              "group": "skipping",
-                              "default": False,
-                              "help": "Skip frames that already have detected faces in the "
-                                      "alignments file"})
         argument_list.append({"opts": ("-een", "--extract-every-n"),
                               "type": int,
                               "action": Slider,
@@ -724,6 +702,28 @@ class ExtractArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Perform extra alignment to ensure left/right eyes are at "
                                       "the same height"})
+        argument_list.append({"opts": ("-sp", "--singleprocess"),
+                              "action": "store_true",
+                              "default": False,
+                              "backend": "nvidia",
+                              "group": "settings",
+                              "help": "Don't run extraction in parallel. Will run detection first "
+                                      "then alignment (2 passes). Useful if VRAM is at a "
+                                      "premium."})
+        argument_list.append({"opts": ("-s", "--skip-existing"),
+                              "action": "store_true",
+                              "dest": "skip_existing",
+                              "group": "settings",
+                              "default": False,
+                              "help": "Skips frames that have already been extracted and exist in "
+                                      "the alignments file"})
+        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
+                              "action": "store_true",
+                              "dest": "skip_faces",
+                              "group": "settings",
+                              "default": False,
+                              "help": "Skip frames that already have detected faces in the "
+                                      "alignments file"})
         return argument_list
 
 
@@ -1185,7 +1185,7 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",
-                              "group": "training",
+                              "group": "model",
                               "default": False,
                               "backend": "nvidia",
                               "help": "Sets allow_growth option of Tensorflow to spare memory "

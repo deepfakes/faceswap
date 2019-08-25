@@ -40,8 +40,8 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                      self.__class__.__name__, parent, options, label_width, columns, radio_columns,
                      header_text, blank_nones)
         gui_style = ttk.Style()
-        
-        gui_style.configure('WinGrayBG.TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
+
+        gui_style.configure('BlueText.TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
         super().__init__(parent)
 
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -143,7 +143,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             else:
                 group_frame = ttk.LabelFrame(opts_frame,
                                              text="" if is_master else group.title(),
-                                             name=group.lower(), style="WinGrayBG.TLabelframe")
+                                             name=group.lower(), style="BlueText.TLabelframe")
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
@@ -325,8 +325,7 @@ class ControlBuilder():
         if helptext.startswith("R|"):
             helptext = helptext[2:].replace("\nL|", "\n - ").replace("\n", "\n\n")
         else:
-            helptext = " ".join(helptext.split())
-        helptext = helptext.replace("%%", "%")
+            helptext = helptext.replace("\n\t", "\n  - ").replace("%%", "%")
         helptext = ". ".join(i.capitalize() for i in helptext.split(". "))
         helptext = self.title + " - " + helptext
         logger.debug("Formatted control help: (title: '%s', help: '%s'", self.title, helptext)
@@ -427,12 +426,17 @@ class ControlBuilder():
     def radio_control(self, choices, columns):
         """ Create a group of radio buttons """
         logger.debug("Adding radio group: %s", self.title)
+        all_help = [line for line in self.helptext.splitlines()]
+        if any(line.startswith(" - ") for line in all_help):
+            intro = all_help[0]
         helpitems = {re.sub(r'[^A-Za-z0-9\-]+', '',
                             line.split()[1].lower()): " ".join(line.split()[1:])
-                     for line in self.helptext.splitlines()
+                     for line in all_help
                      if line.startswith(" - ")}
 
-        ctl = ttk.LabelFrame(self.frame, text=self.title.replace("_", " ").title(), style="WinGrayBG.TLabelframe")
+        ctl = ttk.LabelFrame(self.frame,
+                             text=self.title.replace("_", " ").title(),
+                             style="BlueText.TLabelframe")
         radio_holder = AutoFillContainer(ctl, columns)
         for idx, choice in enumerate(choices):
             frame_id = idx % columns
@@ -443,8 +447,10 @@ class ControlBuilder():
             if choice.lower() in helpitems:
                 self.helpset = True
                 helptext = helpitems[choice.lower()].capitalize()
-                helptext = '. '.join(item.capitalize() for item in helptext.split('. '))
-                Tooltip(radio, text=helptext)
+                helptext = "{}\n\n - {}".format(
+                    intro,
+                    '. '.join(item.capitalize() for item in helptext.split('. ')))
+                Tooltip(radio, text=helptext, wraplength=400)
             radio.pack(anchor=tk.W)
             logger.debug("Adding radio option %s to column %s", choice, frame_id)
         return radio_holder.parent
@@ -517,11 +523,11 @@ class FileBrowser():
     @property
     def helptext(self):
         """ Dict containing tooltip text for buttons """
-        retval = dict(folder="Select a folder",
-                      load="Select a file",
-                      load_multi="Select 1 or several files",
-                      context="Filebrowser changes depending on selected action",
-                      save="Select a save location")
+        retval = dict(folder="Select a folder...",
+                      load="Select a file...",
+                      load_multi="Select one or more files...",
+                      context="Select a file or folder...",
+                      save="Select a save location...")
         return retval
 
     def add_browser_buttons(self):
