@@ -53,7 +53,7 @@ class Mask(Masker):
             with keras.backend.tf.device("/cpu:0"):
                 self.model = keras.models.load_model(self.model_path)
             o = Activation('softmax', name='softmax')(self.model.layers[-1].output)
-            self.model = keras.models.Model(input=self.model.input, output=[o])
+            self.model = keras.models.Model(inputs=self.model.input, outputs=[o])
             self.init.set()
             logger.info("Initialized VGG Mask Network(500)")
         except Exception as err:
