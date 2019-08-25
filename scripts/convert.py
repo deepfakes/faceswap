@@ -653,8 +653,8 @@ class Predict():
             logger.trace("Putting to queue. ('%s', detected_faces: %s, swapped_faces: %s)",
                          item["filename"], len(item["detected_faces"]),
                          item["swapped_faces"].shape[0])
-            self.out_queue.put(item)
             pointer += num_faces
+        self.out_queue.put(batch)
         logger.trace("Queued out batch. Batchsize: %s", len(batch))
 
 
