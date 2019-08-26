@@ -106,7 +106,8 @@ class ModelBase():
                               "augment_color": augment_color,
                               "no_flip": no_flip,
                               "pingpong": self.vram_savings.pingpong,
-                              "snapshot_interval": snapshot_interval}
+                              "snapshot_interval": snapshot_interval,
+                              }
 
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -253,7 +254,9 @@ class ModelBase():
             if "multi_gpu_model" in str(err).lower():
                 raise FaceswapError(str(err)) from err
             raise err
-        self.log_summary()
+        
+        self.set_networks_trainable()
+        self.log_summary()        
         self.compile_predictors(initialize=True)
 
     def get_inputs(self):
@@ -355,6 +358,29 @@ class ModelBase():
         self.build_autoencoders(inputs)
         self.compile_predictors(initialize=False)
         logger.debug("Reset models")
+        
+    def set_networks_trainable(self):
+        """ Set model's networks trainable state prior to compiling """
+        logger.debug("Setting Networks traiable state")
+                
+        super().set_networks_trainable()
+        
+        train_encoder=self.config.get("encoder_trainable", True)
+        train_decoder_a=self.config.get("decoder_a_trainable", True)
+        train_decoder_b=self.config.get("decoder_b_trainable", True)
+        
+        encoder = self.networks['encoder'].network        
+        for layer in encoder.layers:
+            layer.trainable = train_encoder       
+        logger.debug("Encoder trainable: {}".format(train_encoder))  
+        decoder_a = self.networks['decoder_a'].network
+        for layer in decoder_a.layers:
+            layer.trainable = train_decoder_a
+        logger.debug("Decoder A(Old Face) trainable: {}".format(train_decoder_a))
+        decoder_b = self.networks['decoder_b'].network
+        for layer in decoder_b.layers:
+            layer.trainable = train_decoder_b
+        logger.debug("Decoder B(New Face) trainable: {}".format(train_decoder_b))
 
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
