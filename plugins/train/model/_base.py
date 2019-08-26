@@ -106,8 +106,7 @@ class ModelBase():
                               "augment_color": augment_color,
                               "no_flip": no_flip,
                               "pingpong": self.vram_savings.pingpong,
-                              "snapshot_interval": snapshot_interval,
-                              }
+                              "snapshot_interval": snapshot_interval}
 
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
