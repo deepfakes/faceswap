@@ -254,9 +254,9 @@ class ModelBase():
             if "multi_gpu_model" in str(err).lower():
                 raise FaceswapError(str(err)) from err
             raise err
-        
+
         self.set_networks_trainable()
-        self.log_summary()        
+        self.log_summary()
         self.compile_predictors(initialize=True)
 
     def get_inputs(self):
@@ -358,21 +358,21 @@ class ModelBase():
         self.build_autoencoders(inputs)
         self.compile_predictors(initialize=False)
         logger.debug("Reset models")
-        
+
     def set_networks_trainable(self):
         """ Set model's networks trainable state prior to compiling """
         logger.debug("Setting Networks traiable state")
-                
+
         super().set_networks_trainable()
-        
-        train_encoder=self.config.get("encoder_trainable", True)
-        train_decoder_a=self.config.get("decoder_a_trainable", True)
-        train_decoder_b=self.config.get("decoder_b_trainable", True)
-        
-        encoder = self.networks['encoder'].network        
+
+        train_encoder = self.config.get("encoder_trainable", True)
+        train_decoder_a = self.config.get("decoder_a_trainable", True)
+        train_decoder_b = self.config.get("decoder_b_trainable", True)
+
+        encoder = self.networks['encoder'].network
         for layer in encoder.layers:
-            layer.trainable = train_encoder       
-        logger.debug("Encoder trainable: {}".format(train_encoder))  
+            layer.trainable = train_encoder
+        logger.debug("Encoder trainable: {}".format(train_encoder))
         decoder_a = self.networks['decoder_a'].network
         for layer in decoder_a.layers:
             layer.trainable = train_decoder_a
