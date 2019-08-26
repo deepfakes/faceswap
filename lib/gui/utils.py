@@ -15,6 +15,8 @@ from PIL import Image, ImageDraw, ImageTk
 
 from lib.Serializer import JSONSerializer
 
+from ._config import Config as UserConfig
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 _IMAGES = None
@@ -629,6 +631,7 @@ class Config():
         self.statusbar = statusbar
         self.serializer = JSONSerializer
         self.tk_vars = self.set_tk_vars()
+        self.user_config = UserConfig(None)
         self.command_notebook = None  # set in command.py
         self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)

@@ -29,29 +29,26 @@ class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root = master
 
         self.file_menu = FileMenu(self)
-        self.edit_menu = tk.Menu(self, tearoff=0)
+        self.settings_menu = SettingsMenu(self)
         self.tools_menu = ToolsMenu(self)
 
         self.add_cascade(label="File", menu=self.file_menu, underline=0)
-        self.build_edit_menu()
+        self.add_cascade(label="Settings", menu=self.settings_menu, underline=0)
         self.add_cascade(label="Tools", menu=self.tools_menu, underline=0)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build_edit_menu(self):
-        """ Add the edit menu to the menu bar """
-        logger.debug("Building Edit menu")
-        configs = self.scan_for_configs()
-        for name in sorted(list(configs.keys())):
-            label = "Configure {} Plugins...".format(name.title())
-            config = configs[name]
-            self.edit_menu.add_command(
-                label=label,
-                underline=10,
-                command=lambda conf=(name, config), root=self.root: popup_config(conf, root))
-        self.add_cascade(label="Edit", menu=self.edit_menu, underline=0)
-        logger.debug("Built Edit menu")
 
-    def scan_for_configs(self):
+class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
+    """ Settings menu items and functions """
+    def __init__(self, parent):
+        logger.debug("Initializing %s", self.__class__.__name__)
+        super().__init__(parent, tearoff=0)
+        self.root = parent.root
+        self.configs = self.scan_for_plugin_configs()
+        self.build()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def scan_for_plugin_configs(self):
         """ Scan for config.ini file locations """
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         plugins_path = os.path.join(root_path, "plugins")
@@ -74,6 +71,24 @@ class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
         config = module.Config(None)
         logger.debug("Found '%s' config at '%s'", plugin_type, config.configfile)
         return config
+
+    def build(self):
+        """ Add the settings menu to the menu bar """
+        logger.debug("Building settings menu")
+        for name in sorted(list(self.configs.keys())):
+            label = "Configure {} Plugins...".format(name.title())
+            config = self.configs[name]
+            self.add_command(
+                label=label,
+                underline=10,
+                command=lambda conf=(name, config), root=self.root: popup_config(conf, root))
+        self.add_separator()
+        conf = get_config().user_config
+        self.add_command(
+            label="GUI Settings...",
+            underline=10,
+            command=lambda conf=("GUI", conf), root=self.root: popup_config(conf, root))
+        logger.debug("Built settings menu")
 
 
 class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors

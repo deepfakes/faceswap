@@ -24,6 +24,7 @@ class FaceswapGui(tk.Tk):
         self.initialize_globals(pathscript)
         self.set_geometry()
         self.wrapper = ProcessWrapper(pathscript)
+        self.objects = dict()
 
         get_images().delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
@@ -48,12 +49,18 @@ class FaceswapGui(tk.Tk):
 
     def set_geometry(self):
         """ Set GUI geometry """
-        scaling_factor = get_config().scaling_factor
-        self.tk.call("tk", "scaling", scaling_factor)
-        width = int(1200 * scaling_factor)
-        height = int(640 * scaling_factor)
-        logger.debug("Geometry: %sx%s", width, height)
-        self.geometry("{}x{}+80+80".format(str(width), str(height)))
+        fullscreen = get_config().user_config.config_dict["fullscreen"]
+        if fullscreen and sys.platform == "win32":
+            self.state('zoomed')
+        elif fullscreen:
+            self.attributes('-zoomed', True)
+        else:
+            scaling_factor = get_config().scaling_factor
+            self.tk.call("tk", "scaling", scaling_factor)
+            width = int(1200 * scaling_factor)
+            height = int(640 * scaling_factor)
+            logger.debug("Geometry: %sx%s", width, height)
+            self.geometry("{}x{}+80+80".format(str(width), str(height)))
 
     def build_gui(self, debug_console):
         """ Build the GUI """
@@ -64,9 +71,10 @@ class FaceswapGui(tk.Tk):
 
         topcontainer, bottomcontainer = self.add_containers()
 
-        CommandNotebook(topcontainer)
-        DisplayNotebook(topcontainer)
-        ConsoleOut(bottomcontainer, debug_console)
+        self.objects["command"] = CommandNotebook(topcontainer)
+        self.objects["display"] = DisplayNotebook(topcontainer)
+        self.objects["console"] = ConsoleOut(bottomcontainer, debug_console)
+        self.update_idletasks()
         logger.debug("Built GUI")
 
     def add_containers(self):
@@ -75,15 +83,17 @@ class FaceswapGui(tk.Tk):
         logger.debug("Adding containers")
         maincontainer = tk.PanedWindow(self,
                                        sashrelief=tk.RAISED,
-                                       orient=tk.VERTICAL)
+                                       orient=tk.VERTICAL,
+                                       name="panedwindow_main")
         maincontainer.pack(fill=tk.BOTH, expand=True)
 
         topcontainer = tk.PanedWindow(maincontainer,
                                       sashrelief=tk.RAISED,
-                                      orient=tk.HORIZONTAL)
+                                      orient=tk.HORIZONTAL,
+                                      name="panedwindow_top")
         maincontainer.add(topcontainer)
 
-        bottomcontainer = ttk.Frame(maincontainer, height=150)
+        bottomcontainer = ttk.Frame(maincontainer, height=150, name="frame_bottom")
         maincontainer.add(bottomcontainer)
 
         logger.debug("Added containers")

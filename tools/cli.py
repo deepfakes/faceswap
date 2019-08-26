@@ -235,10 +235,15 @@ class EffmpegArgs(FaceSwapArgs):
                               "default": "extract",
                               "help": "R|Choose which action you want ffmpeg "
                                       "ffmpeg to do."
-                                      "\nL|'slice' cuts a portion of the video "
-                                      "into a separate video file."
-                                      "\nL|'get-fps' returns the chosen video's "
-                                      "fps."})
+                                      "\nL|'extract': turns videos into images "
+                                      "\nL|'gen-vid': turns images into videos "
+                                      "\nL|'get-fps' returns the chosen video's fps."
+                                      "\nL|'get-info' returns information about a video."
+                                      "\nL|'mux-audio' add audio from one video to another."
+                                      "\nL|'rescale' resize video."
+                                      "\nL|'rotate' rotate video."
+                                      "\nL|'slice' cuts a portion of the video into a separate "
+                                      "video file."})
 
         argument_list.append({"opts": ('-i', '--input'),
                               "action": ContextFullPaths,
@@ -458,18 +463,6 @@ class SortArgs(FaceSwapArgs):
                               "help": "Output directory for sorted aligned "
                                       "faces."})
 
-        argument_list.append({"opts": ('-k', '--keep'),
-                              "action": 'store_true',
-                              "dest": 'keep_original',
-                              "default": False,
-                              "group": "output",
-                              "help": "Keeps the original files in the input "
-                                      "directory. Be careful when using this "
-                                      "with rename grouping and no specified "
-                                      "output directory as this would keep "
-                                      "the original and renamed files in the "
-                                      "same directory."})
-
         argument_list.append({"opts": ('-s', '--sort-by'),
                               "action": Radio,
                               "type": str,
@@ -477,7 +470,7 @@ class SortArgs(FaceSwapArgs):
                                           "face-yaw", "hist", "hist-dissim"),
                               "dest": 'sort_method',
                               "group": "sort settings",
-                              "default": "hist",
+                              "default": "face",
                               "help": "R|Sort by method. Choose how images are sorted. "
                                       "\nL|'blur': Sort faces by blurriness."
                                       "\nL|'face': Use VGG Face to sort by face similarity. This "
@@ -498,7 +491,17 @@ class SortArgs(FaceSwapArgs):
                                       "\nL|'hist-dissim': Like 'hist' but sorts by "
                                       "dissimilarity."
                                       "\nDefault: hist"})
-
+        argument_list.append({"opts": ('-k', '--keep'),
+                              "action": 'store_true',
+                              "dest": 'keep_original',
+                              "default": False,
+                              "group": "output",
+                              "help": "Keeps the original files in the input "
+                                      "directory. Be careful when using this "
+                                      "with rename grouping and no specified "
+                                      "output directory as this would keep "
+                                      "the original and renamed files in the "
+                                      "same directory."})
         argument_list.append({"opts": ('-t', '--ref_threshold'),
                               "action": Slider,
                               "min_max": (-1.0, 10.0),

@@ -17,11 +17,8 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
 
     def __init__(self, parent):
         logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
-        scaling_factor = get_config().scaling_factor
-        width = int(420 * scaling_factor)
-        height = int(500 * scaling_factor)
-
         self.actionbtns = dict()
+        width, height = self.get_initial_dimensions()
         super().__init__(parent, width=width, height=height)
         parent.add(self)
 
@@ -30,6 +27,21 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.build_tabs()
         get_config().command_notebook = self
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def get_initial_dimensions():
+        """ Set the initial dimensions """
+        w_width = get_config().root.winfo_width()
+        w_height = get_config().root.winfo_height()
+        config = get_config().user_config.config_dict
+        width_ratio = config["options_panel_width"] / 100.0
+        height_ratio = 1 - config["console_panel_height"] / 100.0
+        width = round(w_width * width_ratio)
+        height = round(w_height * height_ratio)
+        logger.debug("Setting layout: (w_width: %s, w_height: %s, width_ratio: %s, height_ratio: "
+                     "%s, width: %s, height: %s", w_width, w_height, width_ratio, height_ratio,
+                     width, height)
+        return width, height
 
     def set_running_task_trace(self):
         """ Set trigger action for the running task
@@ -57,8 +69,8 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         logger.debug("Update Action Buttons: (args: %s", args)
         tk_vars = get_config().tk_vars
 
-        for cmd in self.actionbtns.keys():
-            btnact = self.actionbtns[cmd]
+        for cmd, action in self.actionbtns.items():
+            btnact = action
             if tk_vars["runningtask"].get():
                 ttl = "Terminate"
                 hlp = "Exit the running process"
@@ -83,7 +95,7 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
     def __init__(self, parent, category, command):
         logger.debug("Initializing %s: (category: '%s', command: '%s')",
                      self.__class__.__name__, category, command)
-        super().__init__(parent)
+        super().__init__(parent, name="tab_{}".format(command.lower()))
 
         self.category = category
         self.actionbtns = parent.actionbtns
@@ -96,7 +108,7 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Build the tab """
         logger.debug("Build Tab: '%s'", self.command)
         options = get_config().cli_opts.opts[self.command]
-        ControlPanel(self, options, label_width=16, radio_columns=3, columns=1)
+        ControlPanel(self, options, label_width=16, option_columns=3, columns=1)
         self.add_frame_separator()
 
         ActionFrame(self)
