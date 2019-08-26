@@ -633,6 +633,7 @@ class Config():
         self.tk_vars = self.set_tk_vars()
         self.user_config = UserConfig(None)
         self.command_notebook = None  # set in command.py
+        self.initial_dimensions = (1200, 640)  # set in gui.py
         self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)
 

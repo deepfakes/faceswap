@@ -31,8 +31,7 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     @staticmethod
     def get_initial_dimensions():
         """ Set the initial dimensions """
-        w_width = get_config().root.winfo_width()
-        w_height = get_config().root.winfo_height()
+        w_width, w_height = get_config().initial_dimensions
         config = get_config().user_config.config_dict
         width_ratio = config["options_panel_width"] / 100.0
         height_ratio = 1 - config["console_panel_height"] / 100.0

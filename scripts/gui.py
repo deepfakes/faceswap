@@ -50,17 +50,22 @@ class FaceswapGui(tk.Tk):
     def set_geometry(self):
         """ Set GUI geometry """
         fullscreen = get_config().user_config.config_dict["fullscreen"]
+        scaling_factor = get_config().scaling_factor
+
+        if fullscreen:
+            initial_dimensions = (self.winfo_screenwidth(), self.winfo_screenheight())
+        else:
+            initial_dimensions = (round(1200 * scaling_factor), round(640 * scaling_factor))
+
         if fullscreen and sys.platform == "win32":
             self.state('zoomed')
         elif fullscreen:
             self.attributes('-zoomed', True)
         else:
-            scaling_factor = get_config().scaling_factor
-            self.tk.call("tk", "scaling", scaling_factor)
-            width = int(1200 * scaling_factor)
-            height = int(640 * scaling_factor)
-            logger.debug("Geometry: %sx%s", width, height)
-            self.geometry("{}x{}+80+80".format(str(width), str(height)))
+            self.geometry("{}x{}+80+80".format(str(initial_dimensions[0]),
+                                               str(initial_dimensions[1])))
+        logger.debug("Geometry: %sx%s", *initial_dimensions)
+        get_config().initial_dimensions = initial_dimensions
 
     def build_gui(self, debug_console):
         """ Build the GUI """
