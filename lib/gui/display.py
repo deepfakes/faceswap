@@ -20,7 +20,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
-        ttk.Notebook.__init__(self, parent, width=780)
+        super().__init__(parent)
         parent.add(self)
         tk_vars = get_config().tk_vars
         self.wrapper_var = tk_vars["display"]

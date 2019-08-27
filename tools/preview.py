@@ -115,7 +115,11 @@ class Preview():
 
     def build_ui(self):
         """ Build the UI elements for displaying preview and options """
-        container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
+        container = tk.PanedWindow(self.root,
+                                   sashrelief=tk.RIDGE,
+                                   sashwidth=4,
+                                   sashpad=8,
+                                   orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
         container.preview_display = self.display
         self.image_canvas = ImagesCanvas(container, self.tk_vars)
