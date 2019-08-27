@@ -104,7 +104,8 @@ class CliOptions():
                 "sysbrowser": self.get_sysbrowser(opt, command),
                 "group": opt.get("group", None),
                 "helptext": opt["help"],
-                "opts": opt["opts"]}
+                "opts": opt["opts"],
+                "nargs": opt.get("nargs", None)}
             logger.trace("Processed: %s", opt)
         return gui_options
 
