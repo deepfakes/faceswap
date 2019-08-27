@@ -18,8 +18,7 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     def __init__(self, parent):
         logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
         self.actionbtns = dict()
-        width, height = self.get_initial_dimensions()
-        super().__init__(parent, width=width, height=height)
+        super().__init__(parent)
         parent.add(self)
 
         self.tools_notebook = ToolsNotebook(self)
@@ -28,19 +27,18 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         get_config().command_notebook = self
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def get_initial_dimensions():
+    def set_initial_geometry(self, app_width, app_height):
         """ Set the initial dimensions """
-        w_width, w_height = get_config().initial_dimensions
-        config = get_config().user_config.config_dict
+        config = get_config().user_config_dict
         width_ratio = config["options_panel_width"] / 100.0
         height_ratio = 1 - config["console_panel_height"] / 100.0
-        width = round(w_width * width_ratio)
-        height = round(w_height * height_ratio)
+        width = round(app_width * width_ratio)
+        height = round(app_height * height_ratio)
         logger.debug("Setting layout: (w_width: %s, w_height: %s, width_ratio: %s, height_ratio: "
-                     "%s, width: %s, height: %s", w_width, w_height, width_ratio, height_ratio,
+                     "%s, width: %s, height: %s", app_width, app_height, width_ratio, height_ratio,
                      width, height)
-        return width, height
+        self.configure(width=width, height=height)
+        self.update_idletasks()
 
     def set_running_task_trace(self):
         """ Set trigger action for the running task
@@ -108,7 +106,9 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Build Tab: '%s'", self.command)
         options = get_config().cli_opts.opts[self.command]
         info = options.get("helptext", None)
-        ControlPanel(self, {k: v for k, v in options.items() if k != "helptext"},
+        if info is not None:
+            del options["helptext"]
+        ControlPanel(self, options,
                      label_width=16, option_columns=3, columns=1, header_text=info)
         self.add_frame_separator()
 

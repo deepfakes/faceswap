@@ -22,7 +22,10 @@ class FaceswapGui(tk.Tk):
         super().__init__()
 
         self.initialize_globals(pathscript)
+        self.set_fonts()
+        self.set_styles()
         self.set_geometry()
+
         self.wrapper = ProcessWrapper(pathscript)
         self.objects = dict()
 
@@ -40,6 +43,20 @@ class FaceswapGui(tk.Tk):
         initialize_config(self, cliopts, scaling_factor, pathcache, statusbar, session)
         initialize_images()
 
+    @staticmethod
+    def set_fonts():
+        """ Set global default font """
+        tk.font.nametofont("TkFixedFont").configure(size=get_config().default_font[1])
+        for font in ("TkDefaultFont", "TkHeadingFont", "TkMenuFont"):
+            tk.font.nametofont(font).configure(family=get_config().default_font[0],
+                                               size=get_config().default_font[1])
+
+    @staticmethod
+    def set_styles():
+        """ Set global custom styles """
+        gui_style = ttk.Style()
+        gui_style.configure('TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
+
     def get_scaling(self):
         """ Get the display DPI """
         dpi = self.winfo_fpixels("1i")
@@ -49,7 +66,7 @@ class FaceswapGui(tk.Tk):
 
     def set_geometry(self):
         """ Set GUI geometry """
-        fullscreen = get_config().user_config.config_dict["fullscreen"]
+        fullscreen = get_config().user_config_dict["fullscreen"]
         scaling_factor = get_config().scaling_factor
 
         if fullscreen:
@@ -65,7 +82,6 @@ class FaceswapGui(tk.Tk):
             self.geometry("{}x{}+80+80".format(str(initial_dimensions[0]),
                                                str(initial_dimensions[1])))
         logger.debug("Geometry: %sx%s", *initial_dimensions)
-        get_config().initial_dimensions = initial_dimensions
 
     def build_gui(self, debug_console):
         """ Build the GUI """
@@ -81,6 +97,7 @@ class FaceswapGui(tk.Tk):
         self.objects["console"] = ConsoleOut(bottomcontainer, debug_console)
         self.set_initial_focus()
         self.update_idletasks()
+        self.objects["command"].set_initial_geometry(self.winfo_width(), self.winfo_height())
         logger.debug("Built GUI")
 
     def add_containers(self):
@@ -113,7 +130,7 @@ class FaceswapGui(tk.Tk):
     def set_initial_focus():
         """ Set the tab focus from settings """
         config = get_config()
-        tab = config.user_config.config_dict["tab"]
+        tab = config.user_config_dict["tab"]
         logger.debug("Setting focus for tab: %s", tab)
         tabs = config.command_tabs
         if tab in tabs:

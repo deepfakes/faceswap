@@ -8,7 +8,7 @@ from tkinter import ttk
 from itertools import zip_longest
 
 from .tooltip import Tooltip
-from .utils import ContextMenu, FileHandler, get_images
+from .utils import ContextMenu, FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _TOOLTIPS = dict()
 
 
-def get_tooltip(widget, text, wraplength=400):
+def get_tooltip(widget, text, wraplength=600):
     """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip """
     global _TOOLTIPS  # pylint:disable=global-statement
     _TOOLTIPS[str(widget)] = {"text": text,
@@ -54,9 +54,6 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                      "option_columns: %s, header_text: %s, blank_nones: %s)",
                      self.__class__.__name__, parent, options, label_width, columns,
                      option_columns, header_text, blank_nones)
-        gui_style = ttk.Style()
-
-        gui_style.configure('BlueText.TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
         super().__init__(parent)
 
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -94,8 +91,11 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Plugin information """
         gui_style = ttk.Style()
         gui_style.configure('White.TFrame', background='#FFFFFF')
-        gui_style.configure('Header.TLabel', background='#FFFFFF', font=("", 9, "bold"))
-        gui_style.configure('Body.TLabel', background='#FFFFFF', font=("", 9))
+        gui_style.configure('Header.TLabel',
+                            background='#FFFFFF',
+                            font=get_config().default_font + ("bold", ))
+        gui_style.configure('Body.TLabel',
+                            background='#FFFFFF')
 
         info_frame = ttk.Frame(frame, style='White.TFrame', relief=tk.SOLID)
         info_frame.pack(fill=tk.X, side=tk.TOP, expand=True, padx=10, pady=10)
@@ -159,7 +159,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             else:
                 group_frame = ttk.LabelFrame(opts_frame,
                                              text="" if is_master else group.title(),
-                                             name=group.lower(), style="BlueText.TLabelframe")
+                                             name=group.lower())
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
@@ -206,7 +206,7 @@ class AutoFillContainer():
         logger.debug("Initializing: %s: (parent: %s, columns: %s)", self.__class__.__name__,
                      parent, columns)
         self.max_columns = 4
-        self.single_column_width = 288
+        self.single_column_width = self.scale_column_width(288, 9)
         self.max_width = self.max_columns * self.single_column_width
         self.parent = parent
         self.columns = min(columns, self.max_columns)
@@ -215,6 +215,18 @@ class AutoFillContainer():
         self._widget_config = []  # Master list of all children in order
         self.subframes = self.set_subframes()
         logger.debug("Initialized: %s: (items: %s)", self.__class__.__name__, self.items)
+
+    @staticmethod
+    def scale_column_width(original_size, original_fontsize):
+        """ Scale the column width based on selected font size """
+        font_size = get_config().user_config_dict["font_size"]
+        if font_size == original_fontsize:
+            return original_size
+        scale = 1 + (((font_size / original_fontsize) - 1) / 2)
+        retval = round(original_size * scale)
+        logger.debug("scaled column width: (old_width: %s, scale: %s, new_width:%s)",
+                     original_size, scale, retval)
+        return retval
 
     @property
     def items(self):
@@ -520,7 +532,7 @@ class ControlBuilder():
         lbl = ttk.Label(self.frame, text=title, width=self.label_width, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.helptext is not None:
-            get_tooltip(lbl, text=self.helptext, wraplength=400)
+            get_tooltip(lbl, text=self.helptext, wraplength=600)
         logger.debug("Built control label: '%s'", self.title)
 
     def build_one_control(self, choices, dtype, rounding, min_max,
@@ -542,7 +554,7 @@ class ControlBuilder():
         if self.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
             if self.helptext is not None and not self.helpset:
-                get_tooltip(ctl, text=self.helptext, wraplength=400)
+                get_tooltip(ctl, text=self.helptext, wraplength=600)
 
         logger.debug("Built control: '%s'", self.title)
 
@@ -564,7 +576,6 @@ class ControlBuilder():
                      if line.startswith(" - ")}
         ctl = ttk.LabelFrame(self.frame,
                              text=self.title.replace("_", " ").title(),
-                             style="BlueText.TLabelframe",
                              name="radio_labelframe")
         radio_holder = AutoFillContainer(ctl, columns)
         for idx, choice in enumerate(choices):
@@ -579,7 +590,7 @@ class ControlBuilder():
                 helptext = "{}\n\n - {}".format(
                     '. '.join(item.capitalize() for item in helptext.split('. ')),
                     intro)
-                get_tooltip(radio, text=helptext, wraplength=400)
+                get_tooltip(radio, text=helptext, wraplength=600)
             radio.pack(anchor=tk.W)
             logger.debug("Adding radio option %s to column %s", choice, frame_id)
         return radio_holder.parent
@@ -588,7 +599,11 @@ class ControlBuilder():
         """ A slider control with corresponding Entry box """
         logger.debug("Add slider control to Options Frame: (title: '%s', dtype: %s, rounding: %s, "
                      "min_max: %s)", self.title, dtype, rounding, min_max)
-        tbox = ttk.Entry(self.frame, width=8, textvariable=self.tk_var, justify=tk.RIGHT)
+        tbox = ttk.Entry(self.frame,
+                         width=8,
+                         textvariable=self.tk_var,
+                         justify=tk.RIGHT,
+                         font=get_config().default_font)
         tbox.pack(padx=(0, 5), side=tk.RIGHT)
         ctl = self.control(
             self.frame,
@@ -611,7 +626,9 @@ class ControlBuilder():
         else:
             if sysbrowser is not None:
                 self.filebrowser = FileBrowser(self.tk_var, self.frame, sysbrowser)
-            ctl = self.control(self.frame, textvariable=self.tk_var)
+            ctl = self.control(self.frame,
+                               textvariable=self.tk_var,
+                               font=get_config().default_font)
             rc_menu = ContextMenu(ctl)
             rc_menu.cm_bind()
         if choices:
@@ -628,7 +645,7 @@ class ControlBuilder():
                            variable=self.tk_var,
                            text=self.title.replace("_", " ").title(),
                            name=self.title.lower())
-        get_tooltip(ctl, text=self.helptext, wraplength=400)
+        get_tooltip(ctl, text=self.helptext, wraplength=600)
         ctl.pack(side=tk.TOP, anchor=tk.W)
         logger.debug("Added control checkframe: '%s'", self.title)
         return ctl
@@ -669,7 +686,7 @@ class FileBrowser():
                                  image=img,
                                  command=lambda cmd=action: cmd(self.tk_var, self.filetypes))
             fileopn.pack(padx=(0, 5), side=tk.RIGHT)
-            get_tooltip(fileopn, text=self.helptext[browser], wraplength=400)
+            get_tooltip(fileopn, text=self.helptext[browser], wraplength=600)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, self.filetypes)
 

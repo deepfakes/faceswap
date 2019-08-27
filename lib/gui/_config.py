@@ -4,6 +4,7 @@
 import logging
 import sys
 import os
+from tkinter import font
 
 from lib.config import FaceswapConfig
 
@@ -42,6 +43,14 @@ class Config(FaceswapConfig):
             section=section, title="console_panel_height", datatype=int, default=20,
             min_max=(10, 90), rounding=1, group="layout",
             info="How tall the bottom console panel is as a percentage of GUI height at startup.")
+        self.add_item(
+            section=section, title="font", datatype=str,
+            choices=["default"] + sorted(font.families()), default="default", group="font",
+            info="Global font")
+        self.add_item(
+            section=section, title="font_size", datatype=int, default=9,
+            min_max=(6, 12), rounding=1, group="font",
+            info="Global font size.")
 
 
 def get_commands():
