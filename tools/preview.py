@@ -245,13 +245,14 @@ class Samples():
             idx = 0
             while idx < self.sample_size:
                 logger.debug("Predicting face %s of %s", idx + 1, self.sample_size)
-                item = self.predictor.out_queue.get()
-                if item == "EOF":
+                items = self.predictor.out_queue.get()
+                if items == "EOF":
                     logger.debug("Received EOF")
                     break
-                self.predicted_images.append(item)
-                logger.debug("Predicted face %s of %s", idx + 1, self.sample_size)
-                idx += 1
+                for item in items:
+                    self.predicted_images.append(item)
+                    logger.debug("Predicted face %s of %s", idx + 1, self.sample_size)
+                    idx += 1
         logger.debug("Predicted faces")
 
 
