@@ -27,19 +27,6 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         get_config().command_notebook = self
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_initial_geometry(self, app_width, app_height):
-        """ Set the initial dimensions """
-        config = get_config().user_config_dict
-        width_ratio = config["options_panel_width"] / 100.0
-        height_ratio = 1 - config["console_panel_height"] / 100.0
-        width = round(app_width * width_ratio)
-        height = round(app_height * height_ratio)
-        logger.debug("Setting layout: (w_width: %s, w_height: %s, width_ratio: %s, height_ratio: "
-                     "%s, width: %s, height: %s", app_width, app_height, width_ratio, height_ratio,
-                     width, height)
-        self.configure(width=width, height=height)
-        self.update_idletasks()
-
     def set_running_task_trace(self):
         """ Set trigger action for the running task
             to change the action buttons text and command """

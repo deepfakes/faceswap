@@ -90,14 +90,13 @@ class FaceswapGui(tk.Tk):
         self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
         self.configure(menu=MainMenuBar(self))
 
-        topcontainer, bottomcontainer = self.add_containers()
+        self.add_containers()
 
-        self.objects["command"] = CommandNotebook(topcontainer)
-        self.objects["display"] = DisplayNotebook(topcontainer)
-        self.objects["console"] = ConsoleOut(bottomcontainer, debug_console)
+        self.objects["command"] = CommandNotebook(self.objects["containers"]["top"])
+        self.objects["display"] = DisplayNotebook(self.objects["containers"]["top"])
+        self.objects["console"] = ConsoleOut(self.objects["containers"]["bottom"], debug_console)
         self.set_initial_focus()
-        self.update_idletasks()
-        self.objects["command"].set_initial_geometry(self.winfo_width(), self.winfo_height())
+        self.set_layout()
         logger.debug("Built GUI")
 
     def add_containers(self):
@@ -122,9 +121,11 @@ class FaceswapGui(tk.Tk):
 
         bottomcontainer = ttk.Frame(maincontainer, name="frame_bottom")
         maincontainer.add(bottomcontainer)
+        self.objects["containers"] = dict(main=maincontainer,
+                                          top=topcontainer,
+                                          bottom=bottomcontainer)
 
         logger.debug("Added containers")
-        return topcontainer, bottomcontainer
 
     @staticmethod
     def set_initial_focus():
@@ -141,6 +142,24 @@ class FaceswapGui(tk.Tk):
                 config.command_notebook.select(tabs["tools"])
                 config.command_notebook.tools_notebook.select(tool_tabs[tab])
         logger.debug("Focus set to: %s", tab)
+
+    def set_layout(self):
+        """ Set initial layout """
+        self.update_idletasks()
+        root = get_config().root
+        config = get_config().user_config_dict
+        r_width = root.winfo_width()
+        r_height = root.winfo_height()
+        w_ratio = config["options_panel_width"] / 100.0
+        h_ratio = 1 - (config["console_panel_height"] / 100.0)
+        width = round(r_width * w_ratio)
+        height = round(r_height * h_ratio)
+        logger.debug("Setting Initial Layout: (root_width: %s, root_height: %s, width_ratio: %s, "
+                     "height_ratio: %s, width: %s, height: %s", r_width, r_height, w_ratio,
+                     h_ratio, width, height)
+        self.objects["containers"]["top"].sash_place(0, width, 1)
+        self.objects["containers"]["main"].sash_place(0, 1, height)
+        self.update_idletasks()
 
     def close_app(self):
         """ Close Python. This is here because the graph
