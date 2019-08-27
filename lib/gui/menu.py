@@ -6,6 +6,8 @@ import logging
 import os
 import sys
 import tkinter as tk
+import webbrowser
+
 
 from importlib import import_module
 from subprocess import Popen, PIPE, STDOUT
@@ -17,6 +19,10 @@ import update_deps
 from .utils import get_config
 from .popup_configure import popup_config
 
+_RESOURCES = [("faceswap.dev - Guides and Forum", "https://www.faceswap.dev"),
+              ("Patreon - Support this project", "https://www.patreon.com/faceswap"),
+              ("Discord - The FaceSwap Discord server", "https://discord.gg/VasFUAy"),
+              ("Github - Our Source Code", "https://github.com/deepfakes/faceswap")]
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -30,11 +36,11 @@ class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
 
         self.file_menu = FileMenu(self)
         self.settings_menu = SettingsMenu(self)
-        self.tools_menu = ToolsMenu(self)
+        self.help_menu = HelpMenu(self)
 
         self.add_cascade(label="File", menu=self.file_menu, underline=0)
         self.add_cascade(label="Settings", menu=self.settings_menu, underline=0)
-        self.add_cascade(label="Tools", menu=self.tools_menu, underline=0)
+        self.add_cascade(label="Help", menu=self.help_menu, underline=0)
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
@@ -157,32 +163,50 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.build_recent_menu()
 
 
-class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
-    """ Tools menu items and functions """
+class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
+    """ Help menu items and functions """
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent, tearoff=0)
         self.root = parent.root
+        self.recources_menu = tk.Menu(self, tearoff=0)
         self.build()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self):
-        """ Build the tools menu """
-        logger.debug("Building Tools menu")
+        """ Build the help menu """
+        logger.debug("Building Help menu")
+
         self.add_command(label="Check for updates...",
                          underline=0,
+                         command=lambda action="check": self.in_thread(action))
+        self.add_command(label="Update Faceswap...",
+                         underline=0,
                          command=lambda action="update": self.in_thread(action))
+        self.add_separator()
+        self.build_recources_menu()
+        self.add_cascade(label="Resources", underline=0, menu=self.recources_menu)
+        self.add_separator()
         self.add_command(label="Output System Information",
                          underline=0,
                          command=lambda action="output_sysinfo": self.in_thread(action))
-        logger.debug("Built Tools menu")
+        logger.debug("Built help menu")
+
+    def build_recources_menu(self):
+        """ Build resources menu """
+        logger.debug("Building Resources Files menu")
+        for resource in _RESOURCES:
+            self.recources_menu.add_command(
+                label=resource[0],
+                command=lambda link=resource[1]: webbrowser.open_new(link))
+        logger.debug("Built resources menu")
 
     def in_thread(self, action):
         """ Perform selected action inside a thread """
-        logger.debug("Performing tools action: %s", action)
+        logger.debug("Performing help action: %s", action)
         thread = MultiThread(getattr(self, action), thread_count=1)
         thread.start()
-        logger.debug("Performed tools action: %s", action)
+        logger.debug("Performed help action: %s", action)
 
     @staticmethod
     def clear_console():
@@ -205,6 +229,15 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         print(info)
         self.root.config(cursor="")
 
+    def check(self):
+        """ Check for updates and clone repo """
+        logger.debug("Checking for updates...")
+        self.root.config(cursor="watch")
+        encoding = locale.getpreferredencoding()
+        logger.debug("Encoding: %s", encoding)
+        self.check_for_updates(encoding, check=True)
+        self.root.config(cursor="")
+
     def update(self):
         """ Check for updates and clone repo """
         logger.debug("Updating Faceswap...")
@@ -220,7 +253,7 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="")
 
     @staticmethod
-    def check_for_updates(encoding):
+    def check_for_updates(encoding, check=False):
         """ Check whether an update is required """
         # Do the check
         logger.info("Checking for updates...")
@@ -230,8 +263,6 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT)
         stdout, _ = cmd.communicate()
         retcode = cmd.poll()
-        logger.debug("'%s' output: %s", gitcmd, stdout.decode(encoding))
-        logger.debug("'%s' returncode: %s", gitcmd, retcode)
         if retcode != 0:
             msg = ("Git is not installed or you are not running a cloned repo. "
                    "Unable to check for updates")
@@ -245,12 +276,13 @@ class ToolsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                     msg = "Faceswap is up to date."
                     break
                 if line.lower().startswith("your branch is behind"):
+                    msg = "There are updates available"
                     update = True
                     break
                 if "have diverged" in line.lower():
                     msg = "Your branch has diverged from the remote repo. Not updating"
                     break
-        if not update:
+        if not update or check:
             logger.info(msg)
         logger.debug("Checked for update. Update required: %s", update)
         return update
