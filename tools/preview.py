@@ -115,7 +115,11 @@ class Preview():
 
     def build_ui(self):
         """ Build the UI elements for displaying preview and options """
-        container = tk.PanedWindow(self.root, sashrelief=tk.RAISED, orient=tk.VERTICAL)
+        container = tk.PanedWindow(self.root,
+                                   sashrelief=tk.RIDGE,
+                                   sashwidth=4,
+                                   sashpad=8,
+                                   orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
         container.preview_display = self.display
         self.image_canvas = ImagesCanvas(container, self.tk_vars)
@@ -902,7 +906,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  rounding=val["rounding"],
                                  min_max=val["min_max"],
                                  helptext=val["helptext"],
-                                 radio_columns=4)
+                                 option_columns=4)
             parent.config_tools.tk_vars.setdefault(config_key, dict())[key] = ctl.tk_var
         self.add_frame_separator()
         self.add_actions(parent, config_key)

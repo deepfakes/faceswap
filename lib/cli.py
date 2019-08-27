@@ -355,6 +355,7 @@ class FaceSwapArgs():
                  description="default", subparsers=None):
 
         self.global_arguments = self.get_global_arguments()
+        self.info = self.get_info()
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
         self.process_suppressions()
@@ -367,6 +368,12 @@ class FaceSwapArgs():
 
         script = ScriptExecutor(command, subparsers)
         self.parser.set_defaults(func=script.execute_script)
+
+    @staticmethod
+    def get_info():
+        """ Return command information for display in the GUI.
+            Override for command specific info """
+        return None
 
     @staticmethod
     def get_argument_list():
@@ -503,6 +510,11 @@ class ExtractArgs(ExtractConvertArgs):
     """ Class to parse the command line arguments for extraction.
         Inherits base options from ExtractConvertArgs where arguments
         that are used for both extract and convert should be placed """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Extract faces from image or video sources"
 
     @staticmethod
     def get_optional_arguments():
@@ -733,6 +745,11 @@ class ConvertArgs(ExtractConvertArgs):
         that are used for both extract and convert should be placed """
 
     @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Swap the original faces in a source video/images to your final faces"
+
+    @staticmethod
     def get_optional_arguments():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
@@ -959,6 +976,13 @@ class ConvertArgs(ExtractConvertArgs):
 
 class TrainArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for training """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return ("Train a model on extracted original (A) and swap (B) faces\n"
+                "Training models can take a long time. Anything from 24hrs to "
+                "over a week")
 
     @staticmethod
     def get_argument_list():

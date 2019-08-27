@@ -11,6 +11,12 @@ from lib.utils import _image_extensions
 class AlignmentsArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Aligments tool """
 
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return ("Alignments tool\nThis tool allows you to perform numerous actions on or using an "
+                "alignments file against its corresponding faceset/frame source.")
+
     def get_argument_list(self):
         frames_dir = " Must Pass in a frames folder/source video file (-fr)."
         faces_dir = " Must Pass in a faces folder (-fc)."
@@ -168,6 +174,12 @@ class AlignmentsArgs(FaceSwapArgs):
 
 class PreviewArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Preview (Convert Settings) tool """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Preview tool\nAllows you to configure your convert settings with a live preview"
+
     def get_argument_list(self):
 
         argument_list = list()
@@ -207,6 +219,11 @@ class PreviewArgs(FaceSwapArgs):
 
 class EffmpegArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for EFFMPEG tool """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "A wrapper for ffmpeg for performing image <> video converting."
 
     @staticmethod
     def __parse_transpose(value):
@@ -430,6 +447,11 @@ class RestoreArgs(FaceSwapArgs):
     """ Class to restore model files from backup """
 
     @staticmethod
+    def get_info():
+        """ Return command information """
+        return "A tool for restoring models from backup (.bk) files"
+
+    @staticmethod
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both argparse and gui """
         argument_list = list()
@@ -444,6 +466,11 @@ class RestoreArgs(FaceSwapArgs):
 
 class SortArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for sort tool """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Sort faces using a number of different techniques"
 
     @staticmethod
     def get_argument_list():

@@ -71,8 +71,9 @@ class CliOptions():
         for classname in mod_classes:
             logger.debug("Processing: (classname: '%s')", classname)
             command = self.format_command_name(classname)
-            options = self.get_cli_arguments(cli_source, classname, command)
+            info, options = self.get_cli_arguments(cli_source, classname, command)
             options = self.process_options(options, command)
+            options["helptext"] = info
             logger.debug("Processed: (classname: '%s', command: '%s', options: %s)",
                          classname, command, options)
             subopts[command] = options
@@ -82,7 +83,7 @@ class CliOptions():
     def get_cli_arguments(cli_source, classname, command):
         """ Extract the options from the main and tools cli files """
         meth = getattr(cli_source, classname)(None, command)
-        return meth.argument_list + meth.optional_arguments + meth.global_arguments
+        return meth.info, meth.argument_list + meth.optional_arguments + meth.global_arguments
 
     def process_options(self, command_options, command):
         """ Process the options for a single command """

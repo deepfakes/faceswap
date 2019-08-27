@@ -79,6 +79,7 @@ class FaceswapGui(tk.Tk):
         self.objects["command"] = CommandNotebook(topcontainer)
         self.objects["display"] = DisplayNotebook(topcontainer)
         self.objects["console"] = ConsoleOut(bottomcontainer, debug_console)
+        self.set_initial_focus()
         self.update_idletasks()
         logger.debug("Built GUI")
 
@@ -87,22 +88,42 @@ class FaceswapGui(tk.Tk):
             hold each main area of the gui """
         logger.debug("Adding containers")
         maincontainer = tk.PanedWindow(self,
-                                       sashrelief=tk.RAISED,
+                                       sashrelief=tk.RIDGE,
+                                       sashwidth=4,
+                                       sashpad=8,
                                        orient=tk.VERTICAL,
-                                       name="panedwindow_main")
+                                       name="pw_main")
         maincontainer.pack(fill=tk.BOTH, expand=True)
 
         topcontainer = tk.PanedWindow(maincontainer,
-                                      sashrelief=tk.RAISED,
+                                      sashrelief=tk.RIDGE,
+                                      sashwidth=4,
+                                      sashpad=8,
                                       orient=tk.HORIZONTAL,
-                                      name="panedwindow_top")
+                                      name="pw_top")
         maincontainer.add(topcontainer)
 
-        bottomcontainer = ttk.Frame(maincontainer, height=150, name="frame_bottom")
+        bottomcontainer = ttk.Frame(maincontainer, name="frame_bottom")
         maincontainer.add(bottomcontainer)
 
         logger.debug("Added containers")
         return topcontainer, bottomcontainer
+
+    @staticmethod
+    def set_initial_focus():
+        """ Set the tab focus from settings """
+        config = get_config()
+        tab = config.user_config.config_dict["tab"]
+        logger.debug("Setting focus for tab: %s", tab)
+        tabs = config.command_tabs
+        if tab in tabs:
+            config.command_notebook.select(tabs[tab])
+        else:
+            tool_tabs = config.tools_command_tabs
+            if tab in tool_tabs:
+                config.command_notebook.select(tabs["tools"])
+                config.command_notebook.tools_notebook.select(tool_tabs[tab])
+        logger.debug("Focus set to: %s", tab)
 
     def close_app(self):
         """ Close Python. This is here because the graph
