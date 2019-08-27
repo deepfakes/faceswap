@@ -907,7 +907,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  rounding=val["rounding"],
                                  min_max=val["min_max"],
                                  helptext=val["helptext"],
-                                 option_columns=4)
+                                 radio_columns=4)
             parent.config_tools.tk_vars.setdefault(config_key, dict())[key] = ctl.tk_var
         self.add_frame_separator()
         self.add_actions(parent, config_key)
