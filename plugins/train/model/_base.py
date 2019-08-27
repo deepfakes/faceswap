@@ -362,8 +362,6 @@ class ModelBase():
         """ Set model's networks trainable state prior to compiling """
         logger.debug("Setting Networks traiable state")
 
-        super().set_networks_trainable()
-
         train_encoder = self.config.get("encoder_trainable", True)
         train_decoder_a = self.config.get("decoder_a_trainable", True)
         train_decoder_b = self.config.get("decoder_b_trainable", True)
