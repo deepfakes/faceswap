@@ -92,13 +92,14 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Build the tab """
         logger.debug("Build Tab: '%s'", self.command)
         options = get_config().cli_opts.opts[self.command]
-        info = options.get("helptext", None)
-        if info is not None:
-            del options["helptext"]
-        ControlPanel(self, options,
-                     label_width=16, option_columns=3, columns=1, header_text=info)
+        cp_opts = [val["cpanel_option"] for key, val in options.items() if key != "helptext"]
+        ControlPanel(self,
+                     cp_opts,
+                     label_width=16,
+                     option_columns=3,
+                     columns=1,
+                     header_text=options.get("helptext", None))
         self.add_frame_separator()
-
         ActionFrame(self)
         logger.debug("Built Tab: '%s'", self.command)
 
