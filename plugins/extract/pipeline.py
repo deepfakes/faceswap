@@ -35,6 +35,7 @@ class Extractor():
         self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
         self.masker = self.load_masker(masker, loglevel, configfile)
         self.is_parallel = self.set_parallel_processing(multiprocess)
+        print("multi: ", self.is_parallel, multiprocess)
         self.processes = list()
         self.queues = self.add_queues()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -53,7 +54,10 @@ class Extractor():
     @property
     def output_queue(self):
         """ Return the correct output queue depending on the current phase """
-        qname = "extract_mask_out" if self.final_pass else "extract_mask_in"
+        qname_dict = {"detect":  "extract_align_in",
+                      "align":   "extract_mask_in",
+                      "mask":    "extract_mask_out"}
+        qname = "extract_mask_out" if self.final_pass else qname_dict[self.phase]
         retval = self.queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -108,14 +112,16 @@ class Extractor():
         aligner_vram = self.aligner.vram
         masker_vram = self.masker.vram
 
+        if not multiprocess:
+            logger.debug("Parallel processing disabled by cli.")
+            return False
+
         if detector_vram == 0 or aligner_vram == 0 or masker_vram == 0:
             logger.debug("At least one of aligner, detector or masker have no VRAM requirements. "
                          "Enabling parallel processing.")
             return True
 
-        if not multiprocess:
-            logger.debug("Parallel processing disabled by cli.")
-            return False
+
 
         gpu_stats = GPUStats()
         if gpu_stats.is_plaidml and (not self.detector.supports_plaidml or
@@ -198,9 +204,8 @@ class Extractor():
         kwargs = {"in_queue": self.queues["extract_mask_in"],
                   "out_queue": self.queues["extract_mask_out"]}
 
-        process = SpawnProcess(self.masker.run, **kwargs)
-        # mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
-        # process = mp_func(self.detector.run, **kwargs)
+        mp_func = PoolProcess if self.masker.parent_is_pool else SpawnProcess
+        process = mp_func(self.masker.run, **kwargs)
         event = process.event if hasattr(process, "event") else None
         error = process.error if hasattr(process, "error") else None
         process.start()
@@ -317,5 +322,5 @@ class Extractor():
                 queue_manager.del_queue(q_name)
             logger.debug("Detection Complete")
         else:
-            logger.debug("Switching to align phase")
-            self.phase = "align"
+            logger.debug("Switching to next phase")
+            self.phase = "align" if self.phase == "detect" else "mask"

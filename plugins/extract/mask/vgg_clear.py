@@ -40,7 +40,8 @@ class Mask(Masker):
                          model_filename=model_filename,
                          input_size=300,
                          **kwargs)
-        self.vram = 0
+        self.vram = 3000
+        self.min_vram = 1024
         self.model = None
         self.supports_plaidml = True
 
@@ -50,8 +51,7 @@ class Mask(Masker):
             super().initialize(*args, **kwargs)
             logger.info("Initializing VGG Mask Network(300)...")
             logger.debug("VGG initialize: (args: %s kwargs: %s)", args, kwargs)
-            with keras.backend.tf.device("/cpu:0"):
-                self.model = keras.models.load_model(self.model_path)
+            self.model = keras.models.load_model(self.model_path)
             o = Activation('softmax', name='softmax')(self.model.layers[-1].output)
             self.model = keras.models.Model(inputs=self.model.input, outputs=[o])
             self.init.set()
@@ -73,6 +73,7 @@ class Mask(Masker):
         masks = np.array(np.zeros(images.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
         original_size, resized_faces = self.resize_inputs(images, self.input_size)
         batch_size = min(resized_faces.shape[0], 8)
+        print(batch_size)
         batches = ((resized_faces.shape[0] - 1) // batch_size) + 1
         even_split_section = batches * batch_size
         faces_batched = np.split(resized_faces[:even_split_section], batches)

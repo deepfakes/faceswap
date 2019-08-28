@@ -7,7 +7,6 @@ import logging
 
 import cv2
 import numpy as np
-from lib.model.masks import Mask
 
 from plugins.plugin_loader import PluginLoader
 
@@ -126,7 +125,9 @@ class Converter():
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
         new_image = (predicted["image"] / 255.).astype("float32")
+        print("before: ",new_image.shape)
         frame_size = (new_image.shape[1], new_image.shape[0])
+        # print("old: ", [item.reference_face.shape for item in predicted["detected_faces"]], "   new: ", [item.shape for item in predicted["swapped_faces"]])
         dual_generator = zip(predicted["swapped_faces"], predicted["detected_faces"])
         for new_face, detected_face in dual_generator:
             src_face = detected_face.reference_face
@@ -169,13 +170,14 @@ class Converter():
         logger.trace("Compositing face into frame")
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
-        mask = new_image[:, :, -1:]
-        foreground = new_image[:, :, :3] * 255.
-        background = predicted["image"][:, :, :3]
+        print("after: ",new_image.shape)        
+        mask = new_image[..., -1:]
+        foreground = new_image[..., :3] * 255.
+        background = predicted["image"][..., :3]
         frame = foreground * mask + background * (1. - mask)
         if self.draw_transparent:
             frame = np.concatenate((frame, mask * 255.), axis=-1)
-        frame = np.clip(frame, 0., 255.)
+        np.clip(frame, 0., 255.)
         logger.trace("Swapped frame created")
         return frame
 

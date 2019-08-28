@@ -325,7 +325,6 @@ class DiskIO():
                 else:
                     logger.trace("Discarding frame: '%s'", filename)
                 continue
-
             detected_faces = self.get_detected_faces(filename, image)
             item = dict(filename=filename, image=image, detected_faces=detected_faces)
             self.pre_process.do_actions(item)
@@ -394,7 +393,7 @@ class DiskIO():
 
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face)
+            detected_face.from_bounding_box_dict(face, image=image)
             detected_face.landmarksXY = landmarks[idx]
             final_faces.append(detected_face)
         return final_faces
@@ -546,7 +545,10 @@ class Predict():
                                    os.path.basename(item["filename"]))
 
                 self.load_aligned(item)
-
+                #print("marks: ", item['detected_faces'][0].landmarksXY)
+                #print("image: ", item['detected_faces'][0].image.shape)
+                #print("ref: ", item['detected_faces'][0].reference_face.shape)
+                #print("feed: ", item['detected_faces'][0].feed_face.shape)
                 faces_seen += faces_count
                 batch.append(item)
 
@@ -562,12 +564,12 @@ class Predict():
                 detected_batch = [detected_face for item in batch
                                   for detected_face in item["detected_faces"]]
                 if faces_seen != 0:
-                    feed_faces = self.compile_feed_faces(detected_batch)
+                    feed_faces, output_masks = self.compile_feed_faces(detected_batch)
                     batch_size = None
                     if is_plaidml and feed_faces.shape[0] != self.batchsize:
                         logger.verbose("Fallback to BS=1")
                         batch_size = 1
-                    predicted = self.predict(feed_faces, batch_size)
+                    predicted = self.predict(feed_faces, output_masks, batch_size)
                 else:
                     predicted = list()
 
@@ -605,10 +607,11 @@ class Predict():
         """ Compile the faces for feeding into the predictor """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
         feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
+        output_masks = np.stack([detected_face.reference_face for detected_face in detected_faces])
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
-        return feed_faces
+        return feed_faces[..., :3], output_masks[..., 3:]
 
-    def predict(self, feed_faces, batch_size=None):
+    def predict(self, feed_faces, output_masks, batch_size=None):
         """ Perform inference on the feed """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))
         feed = [feed_faces]
@@ -619,20 +622,18 @@ class Predict():
         predicted = self.predictor(feed, batch_size=batch_size)
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
-        predicted = self.filter_multi_out(predicted) if predicted else predicted
+        predicted = self.filter_multi_out(predicted, output_masks)
         logger.trace("Final shape: %s", predicted.shape)
         return predicted
 
-    def filter_multi_out(self, predicted):
+    def filter_multi_out(self, predicted, output_masks):
         """ Filter the predicted output to the final output """
         predicted = predicted if isinstance(predicted, list) else [predicted]
         face = predicted[self.output_indices["face"]]
         mask_idx = self.output_indices["mask"]
-        mask = predicted[mask_idx] if mask_idx is not None else None
-        predicted = [face, mask] if mask is not None else [face]
+        mask = predicted[mask_idx] if mask_idx is not None else output_masks
+        predicted = np.concatenate([face, mask], axis=-1)
         logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
-        # Compile masks into alpha channel or keep raw faces
-        predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
         return predicted
 
     def queue_out_frames(self, batch, swapped_faces):

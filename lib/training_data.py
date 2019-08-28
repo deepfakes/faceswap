@@ -30,6 +30,7 @@ class TrainingDataGenerator():
         self.model_input_size = model_input_size
         self.model_output_shapes = model_output_shapes
         self.output_sizes = [shape[1] for shape in model_output_shapes if shape[2] == 3]
+        self.face_output_shapes = [shape for shape in model_output_shapes if shape[2] == 3]
         self.training_opts = training_opts
         self.landmarks = self.training_opts.get("landmarks", None)
         self.fixed_producer_dispatcher = None  # Set by FPD when loading
@@ -52,10 +53,10 @@ class TrainingDataGenerator():
         queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
         training_size = self.training_opts.get("training_size", 256)
         batch_shape = list(((batchsize, training_size, training_size, 4),
-                            (batchsize, self.model_input_size, self.model_input_size, 3)))
-        if (self.training_opts["penalized_mask_loss"] or self.training_opts["replicate_input_mask"]):
-            batch_shape.extend(tuple((batchsize, self.model_input_size, self.model_input_size, 1)))
-        batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
+                            (batchsize, self.model_input_size, self.model_input_size, 3),
+                            (batchsize, self.model_input_size, self.model_input_size, 1)))
+        batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.face_output_shapes]))
+        batch_shape.extend(tuple([(batchsize, ) + self.face_output_shapes[-1][:-1] + (1,)]))
         logger.debug("Batch shapes: %s", batch_shape)
 
         self.fixed_producer_dispatcher = FixedProducerDispatcher(
@@ -160,6 +161,9 @@ class TrainingDataGenerator():
         logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
                      filename, side, is_display)
         image = cv2_read_img(filename, raise_error=True)
+        if self.training_opts["warp_to_landmarks"]:
+            landmarks = self.get_landmarks(filename, image, side)
+            dst_pts = self.get_closest_match(filename, side, landmarks)
         image = self.processing.color_adjust(image,
                                              self.training_opts["augment_color"],
                                              is_display)
@@ -171,8 +175,6 @@ class TrainingDataGenerator():
         sample = image.copy()
 
         if self.training_opts["warp_to_landmarks"]:
-            landmarks = self.get_landmarks(filename, image, side)
-            dst_pts = self.get_closest_match(filename, side, landmarks)
             warped_image, target_images = self.processing.warp_landmarks(image, landmarks, dst_pts)
         else:
             warped_image, target_images = self.processing.warp_control_points(image)
@@ -184,13 +186,11 @@ class TrainingDataGenerator():
 
     def compile_images(self, sample, warped_image, target_images):
         """ Compile the warped images, target images and mask for feed """
-        compiled_images = [sample, warped_image[..., :3]]
-        if self.training_opts["penalized_mask_loss"]:
-            compiled_images.append(warped_image[..., 3:4])
+        compiled_images = [sample, warped_image[..., :3], warped_image[..., 3:4]]
         for target_image in target_images:
             compiled_images.append(target_image[..., :3])
             final_output = target_image.shape[1] == max(self.output_sizes)
-            if final_output and self.training_opts["replicate_input_mask"]:
+            if final_output:
                 compiled_images.append(target_image[..., 3:4])
 
         logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
@@ -260,7 +260,9 @@ class ImageManipulation():
             face = img[..., :3]
             face = self.random_clahe(face)
             face = self.random_lab(face)
+            img = img.astype("float32")
             img[..., :3] = face
+            img[..., -1] /= 255.
         else:
             img = img.astype("float32") / 255.
         return img

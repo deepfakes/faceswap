@@ -299,9 +299,11 @@ class Batcher():
         batch = next(self.feed)
         use_mask =  (self.model.training_opts["penalized_mask_loss"] or
                      self.model.training_opts["replicate_input_mask"])
-        cutoff = 3 if use_mask else 2
-        x = batch[1:cutoff]
-        y = batch[cutoff:]
+        x = batch[1:3] if use_mask else batch[1:2]
+        y = batch[3:] if self.model.training_opts["replicate_input_mask"] else batch[3:-1]
+        # print("shapes")
+        # print("x: ", [np.mean(item, axis=(0,1,2)) for item in x])
+        # print("y: ", [np.mean(item, axis=(0,1,2)) for item in y])
         return x, y
 
     def generate_preview(self, do_preview):
@@ -313,11 +315,11 @@ class Batcher():
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
         self.samples = batch[0]
-        use_mask =  (self.model.training_opts["penalized_mask_loss"] or
-                     self.model.training_opts["replicate_input_mask"])
-        cutoff = 3 if use_mask else 2
-        y = batch[cutoff:]
-        self.target = [y[self.model.largest_face_index], y[-1]]
+        y = batch[3:]
+        self.target = [y[self.model.largest_face_index]]
+        if (self.model.training_opts["penalized_mask_loss"] or
+            self.model.training_opts["replicate_input_mask"]):
+            self.target.append(y[-1])
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -346,12 +348,12 @@ class Batcher():
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         samples = batch[0]
-        use_mask =  (self.model.training_opts["penalized_mask_loss"] or
-                     self.model.training_opts["replicate_input_mask"])
-        cutoff = 3 if use_mask else 2
-        y = batch[cutoff:]
+        y = batch[3:]
         batchsize = len(samples)
-        images = [y[self.model.largest_face_index], y[-1]]
+        images = [y[self.model.largest_face_index]]
+        if (self.model.training_opts["penalized_mask_loss"] or
+            self.model.training_opts["replicate_input_mask"]):
+            self.target.append(y[-1])
         sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 
@@ -518,12 +520,13 @@ class Samples():
     @staticmethod
     def compile_masked(faces, masks):
         """ Add the mask to the faces for masked preview """
+        # pylint: disable=no-member
         retval = list()
         masks3 = np.tile(1 - np.rint(masks), 3)
         for mask in masks3:
             mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
         for previews in faces:
-            images = np.array([cv2.addWeighted(img, 1.0,  # pylint: disable=no-member
+            images = np.array([cv2.addWeighted(img, 1.0,
                                                masks3[idx], 0.3,
                                                0)
                                for idx, img in enumerate(previews)])

@@ -64,6 +64,7 @@ class Masker():
         self.loglevel = loglevel
         self.input_size = input_size
         self.extract = Extract()
+        self.parent_is_pool = False
         self.init = None
         self.error = None
 

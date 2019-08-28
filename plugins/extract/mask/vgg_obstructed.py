@@ -40,7 +40,8 @@ class Mask(Masker):
                          model_filename=model_filename,
                          input_size=500,
                          **kwargs)
-        self.vram = 0
+        self.vram = 3000
+        self.min_vram = 1024
         self.model = None
         self.supports_plaidml = True
 
@@ -50,8 +51,7 @@ class Mask(Masker):
             super().initialize(*args, **kwargs)
             logger.info("Initializing VGG Mask Network(500)...")
             logger.debug("VGG initialize: (args: %s kwargs: %s)", args, kwargs)
-            with keras.backend.tf.device("/cpu:0"):
-                self.model = keras.models.load_model(self.model_path)
+            self.model = keras.models.load_model(self.model_path)
             o = Activation('softmax', name='softmax')(self.model.layers[-1].output)
             self.model = keras.models.Model(inputs=self.model.input, outputs=[o])
             self.init.set()
