@@ -35,7 +35,6 @@ class Extractor():
         self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
         self.masker = self.load_masker(masker, loglevel, configfile)
         self.is_parallel = self.set_parallel_processing(multiprocess)
-        print("multi: ", self.is_parallel, multiprocess)
         self.processes = list()
         self.queues = self.add_queues()
         logger.debug("Initialized %s", self.__class__.__name__)

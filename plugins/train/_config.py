@@ -69,13 +69,6 @@ class Config(FaceswapConfig):
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
         self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool,
-            default=True, group="mask",
-            info="Image loss function is weighted by mask presence. For areas of "
-                 "the image without the facial mask, reconstuction errors will be "
-                 "ignored while the masked face area is prioritized. May increase "
-                 "overall quality by focusing attention on the core face area.")
-        self.add_item(
             section=section, title="replicate_input_mask", datatype=bool,
             default=False, group="mask",
             info="Dedicate portions of the model to learning how to duplicate the input "
@@ -123,6 +116,13 @@ class Config(FaceswapConfig):
                  "sizing. More complex padding schemes can reduce artifacts at the "
                  "border of the image."
                  "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
+        self.add_item(
+            section=section, title="penalized_mask_loss", datatype=bool,
+            default=True, group="mask",
+            info="Image loss function is weighted by mask presence. For areas of "
+                 "the image without the facial mask, reconstuction errors will be "
+                 "ignored while the masked face area is prioritized. May increase "
+                 "overall quality by focusing attention on the core face area.")
         self.add_item(
             section=section, title="loss_function", datatype=str, group="loss",
             default="mae",
