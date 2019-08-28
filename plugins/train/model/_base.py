@@ -360,7 +360,7 @@ class ModelBase():
 
     def set_networks_trainable(self):
         """ Set model's networks trainable state prior to compiling """
-        logger.debug("Setting Networks traiable state")
+        logger.debug("Setting Networks trainable state")
 
         train_encoder = self.config.get("encoder_trainable", True)
         train_decoder_a = self.config.get("decoder_a_trainable", True)
