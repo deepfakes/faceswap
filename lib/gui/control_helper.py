@@ -6,6 +6,7 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from itertools import zip_longest
+from functools import partial
 
 from .tooltip import Tooltip
 from .utils import ContextMenu, FileHandler, get_config, get_images
@@ -16,15 +17,25 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # Because we need to add them back to newly cloned widgets
 _TOOLTIPS = dict()
 
+# We store commands globally when they are created
+# Because we need to add them back to newly cloned widgets
+_COMMANDS = dict()
+
 
 def get_tooltip(widget, text, wraplength=600):
     """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip """
-    global _TOOLTIPS  # pylint:disable=global-statement
     _TOOLTIPS[str(widget)] = {"text": text,
                               "wraplength": wraplength}
     logger.debug("Adding to tooltips dict: (widget: %s. text: '%s', wraplength: %s)",
                  widget, text, wraplength)
     return Tooltip(widget, text=text, wraplength=wraplength)
+
+
+def add_command(name, func):
+    """ For controls that execute commands, the command must be added to the _COMMAND list so that
+        it can be added back to the widget during cloning """
+    logger.debug("Adding to commands: %s - %s", name, func)
+    _COMMANDS[name] = func
 
 
 def set_slider_rounding(value, var, d_type, round_to, min_max):
@@ -214,7 +225,7 @@ class AutoFillContainer():
         self._idx = 0
         self._widget_config = []  # Master list of all children in order
         self.subframes = self.set_subframes()
-        logger.debug("Initialized: %s: (items: %s)", self.__class__.__name__, self.items)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @staticmethod
     def scale_column_width(original_size, original_fontsize):
@@ -310,16 +321,19 @@ class AutoFillContainer():
     @staticmethod
     def config_cleaner(widget):
         """ Some options don't like to be copied, so this returns a cleaned
-            configuration from a widget """
+            configuration from a widget
+            We use config() instead of configure() because some items (TScale) do
+            not populate configure()"""
         new_config = dict()
-        if widget.configure() is None:
-            return None
-        for key, val in widget.configure().items():
+        for key in widget.config():
             if key == "class":
                 continue
-            if key in ("anchor", "justify") and val[3] == "":
+            val = widget.cget(key)
+            if key in ("anchor", "justify") and val == "":
                 continue
-            new_config[key] = widget.cget(key)
+            # Return correct command from master command dict
+            val = _COMMANDS[val] if key == "command" and val != "" else val
+            new_config[key] = val
         return new_config
 
     @staticmethod
@@ -327,13 +341,6 @@ class AutoFillContainer():
         """ Some options don't like to be copied, so this returns a cleaned
             configuration from a widget """
         return {key: val for key, val in widget.pack_info().items() if key != "in"}
-
-    def unpack_originals(self):
-        """ The original widgets must be unpacked but not destroyed
-            as we need to reference them for cloning """
-        for subframe in self.subframes:
-            for child in subframe.winfo_children():
-                child.pack_forget()
 
     def destroy_children(self):
         """ Destroy the currently existing widgets """
@@ -353,7 +360,7 @@ class AutoFillContainer():
         """ Widgets cannot be given a new parent so we need to clone
             them and then pack the new widget """
         for widget_dict in widget_dicts:
-            logger.debug(widget_dict["id"])
+            logger.debug("Cloning widget: %s", widget_dict)
             old_children = [] if old_children is None else old_children
             new_children = [] if new_children is None else new_children
             if widget_dict.get("parent", None) is not None:
@@ -450,11 +457,10 @@ class ControlBuilder():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     # Frame, control type and varable
-    @staticmethod
-    def control_frame(parent):
+    def control_frame(self, parent):
         """ Frame to hold control and it's label """
         logger.debug("Build control frame")
-        frame = ttk.Frame(parent)
+        frame = ttk.Frame(parent, name="fr_{}".format(self.title.lower()))
         frame.pack(fill=tk.X)
         logger.debug("Built control frame")
         return frame
@@ -513,7 +519,7 @@ class ControlBuilder():
     def build_control(self, choices, dtype, rounding, min_max, sysbrowser, option_columns,
                       control_width):
         """ Build the correct control type for the option passed through """
-        logger.debug("Build confog option control")
+        logger.debug("Build config option control")
         if self.control not in (ttk.Checkbutton, ttk.Radiobutton):
             self.build_control_label()
         self.build_one_control(choices,
@@ -605,11 +611,13 @@ class ControlBuilder():
                          justify=tk.RIGHT,
                          font=get_config().default_font)
         tbox.pack(padx=(0, 5), side=tk.RIGHT)
-        ctl = self.control(
-            self.frame,
-            variable=self.tk_var,
-            command=lambda val, var=self.tk_var, dt=dtype, rn=rounding, mm=min_max:
-            set_slider_rounding(val, var, dt, rn, mm))
+        cmd = partial(set_slider_rounding,
+                      var=self.tk_var,
+                      d_type=dtype,
+                      round_to=rounding,
+                      min_max=min_max)
+        ctl = self.control(self.frame, variable=self.tk_var, command=cmd)
+        add_command(ctl.cget("command"), cmd)
         rc_menu = ContextMenu(tbox)
         rc_menu.cm_bind()
         ctl["from_"] = min_max[0]
@@ -678,13 +686,13 @@ class FileBrowser():
 
     def add_browser_buttons(self):
         """ Add correct file browser button for control """
-        logger.debug("Adding browser buttons: (sysbrowser: '%s'", self.browser)
+        logger.debug("Adding browser buttons: (sysbrowser: %s", self.browser)
         for browser in self.browser:
             img = get_images().icons[browser]
             action = getattr(self, "ask_" + browser)
-            fileopn = ttk.Button(self.frame,
-                                 image=img,
-                                 command=lambda cmd=action: cmd(self.tk_var, self.filetypes))
+            cmd = partial(action, filepath=self.tk_var, filetypes=self.filetypes)
+            fileopn = ttk.Button(self.frame, image=img, command=cmd)
+            add_command(fileopn.cget("command"), cmd)
             fileopn.pack(padx=(0, 5), side=tk.RIGHT)
             get_tooltip(fileopn, text=self.helptext[browser], wraplength=600)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",

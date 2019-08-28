@@ -632,14 +632,10 @@ class Config():
         self.serializer = JSONSerializer
         self.tk_vars = self.set_tk_vars()
         self.user_config = UserConfig(None)
+        self.user_config_dict = self.user_config.config_dict
         self.command_notebook = None  # set in command.py
         self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def user_config_dict(self):
-        """ Return the dictionary from user_config """
-        return self.user_config.config_dict
 
     @property
     def default_font(self):
