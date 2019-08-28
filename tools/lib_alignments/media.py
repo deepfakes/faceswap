@@ -133,7 +133,7 @@ class MediaLoader():
 
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
-                os.path.splitext(self.folder)[1] in _video_extensions):
+                os.path.splitext(self.folder)[1].lower() in _video_extensions):
             logger.verbose("Video exists at: '%s'", self.folder)
             retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this

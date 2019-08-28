@@ -94,7 +94,7 @@ class ConfigurePlugins(tk.Toplevel):
         """ Build a plugin config page """
         logger.debug("Building plugin config page: '%s'", category)
         plugins = sorted(list(key for key in self.config_dict_gui[category].keys()))
-        panel_kwargs = dict(columns=2, radio_columns=2, blank_nones=False)
+        panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False)
         if any(plugin != category for plugin in plugins):
             page = ttk.Notebook(container)
             page.pack(side=tk.TOP, fill=tk.BOTH, expand=True)

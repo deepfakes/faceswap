@@ -86,6 +86,8 @@ class Converter():
                 in_queue.put(items)
                 break
 
+            if isinstance(items, dict):
+                items = [items]
             for item in items:
                 logger.trace("Patch queue got: '%s'", item["filename"])
                 try:
