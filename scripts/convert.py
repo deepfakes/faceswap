@@ -313,7 +313,7 @@ class DiskIO():
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if image is None or (not image.any() and image.ndim not in ((2, 3))):
+            if image is None or (not image.any() and image.ndim not in ((2, 3, 4))):
                 # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
