@@ -445,7 +445,7 @@ def camel_case_split(identifier):
     return [m.group(0) for m in matches]
 
 
-def safe_shutdown():
+def safe_shutdown(got_error=False):
     """ Close queues, threads and processes in event of crash """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("Safely shutting down")
@@ -458,6 +458,7 @@ def safe_shutdown():
     while not queue_manager._log_queue.empty():  # pylint:disable=protected-access
         continue
     queue_manager.manager.shutdown()
+    exit(1 if got_error else 0)
 
 
 class FaceswapError(Exception):
