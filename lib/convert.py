@@ -113,6 +113,7 @@ class Converter():
         new_image = self.get_new_image(predicted)
         patched_face = self.post_warp_adjustments(predicted, new_image)
         patched_face = self.scale_image(patched_face)
+        print("patched mean: ", patched_face.shape, "---", np.mean(patched_face, axis=(0,1)))
         patched_face = np.rint(patched_face).astype("uint8")
         if self.writer_pre_encode is not None:
             patched_face = self.writer_pre_encode(patched_face)
@@ -124,24 +125,25 @@ class Converter():
         # pylint: disable=no-member
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
-        new_image = (predicted["image"] / 255.).astype("float32")
-        print("before: ",new_image.shape)
-        frame_size = (new_image.shape[1], new_image.shape[0])
+        print("predicted[image]: ",predicted["image"].shape, predicted["image"].dtype)
+        frame = predicted["image"].astype("float32") / 255.
+        print("before: ",frame.shape)
+        frame_size = (frame.shape[1], frame.shape[0])
         # print("old: ", [item.reference_face.shape for item in predicted["detected_faces"]], "   new: ", [item.shape for item in predicted["swapped_faces"]])
         dual_generator = zip(predicted["swapped_faces"], predicted["detected_faces"])
         for new_face, detected_face in dual_generator:
+            print("new_facw: ", new_face.shape)
             src_face = detected_face.reference_face
+            print("src_facw: ", src_face.shape)
             new_face = self.pre_warp_adjustments(src_face, new_face)
-
+            interpolator = detected_face.reference_interpolators[1]
             # Warp face with the mask
-            new_image = cv2.warpAffine(
-                new_face,
-                detected_face.reference_matrix,
-                frame_size,
-                new_image,
-                flags=cv2.WARP_INVERSE_MAP | detected_face.reference_interpolators[1],
-                borderMode=cv2.BORDER_TRANSPARENT)
-
+            new_image = cv2.warpAffine(new_face,
+                                       detected_face.reference_matrix,
+                                       frame_size,
+                                       frame,
+                                       flags=cv2.WARP_INVERSE_MAP | interpolator,
+                                       borderMode=cv2.BORDER_TRANSPARENT)
             new_image = np.clip(new_image, 0., 1.)
         logger.trace("Got filename: '%s'. (new_image: %s)", predicted["filename"], new_image.shape)
         return new_image
@@ -160,6 +162,7 @@ class Converter():
     def get_image_mask(self, new_face):
         """ Get the image mask """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
+        print("face_new: ", new_face.shape)
         new_face = self.adjustments["box"].run(new_face)
         mask = self.adjustments["mask"].run(new_face)
         logger.trace("Got mask. Image shape: %s, Mask shape: %s", new_face.shape, mask.shape)

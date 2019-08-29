@@ -263,12 +263,10 @@ class ModelBase():
         logger.debug("Getting inputs")
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
-        mask_idx = [idx for idx, name in enumerate(output_network.output_names)
-                    if name.startswith("mask")]
-        if mask_idx:
+        if self.config["replicate_input_mask"] or self.config["penalized_mask_loss"]:
             # Add the final mask shape as input
-            mask_shape = output_network.output_shapes[mask_idx[0]]
-            inputs.append(Input(shape=mask_shape[1:], name="mask_in"))
+            mask_shape = output_network.output_shapes[-1]
+            inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
         logger.debug("Got inputs: %s", inputs)
         return inputs
 
@@ -753,7 +751,7 @@ class Loss():
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
                 loss_funcs.append(self.selected_mask_loss)
-            elif self.mask_input is not None and self.config.get("penalized_mask_loss", False):
+            elif self.config["penalized_mask_loss"]:
                 face_size = self.output_shapes[idx][1]
                 mask_size = self.mask_shape[1]
                 scaling = face_size / mask_size

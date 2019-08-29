@@ -254,8 +254,8 @@ class DiskIO():
 
     def load_extractor(self):
         """ Set on the fly extraction """
-        if self.alignments.have_alignments_file:
-            return None
+        # if self.alignments.have_alignments_file:
+        #    return None
 
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
@@ -386,7 +386,7 @@ class DiskIO():
                "image": image}
         self.extractor.input_queue.put(inp)
         faces = next(self.extractor.detected_faces())
-
+        print(faces["landmarks"])
         landmarks = faces["landmarks"]
         detected_faces = faces["detected_faces"]
         final_faces = list()
@@ -608,6 +608,7 @@ class Predict():
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
         feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
         output_masks = np.stack([detected_face.reference_face for detected_face in detected_faces])
+        print("feed and mask: ", feed_faces.shape, output_masks.shape)
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces[..., :3], output_masks[..., 3:]
 

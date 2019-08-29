@@ -43,6 +43,7 @@ class Adjustment():
         """ Perform selected adjustment on face """
         logger.trace("Performing color adjustment")
         # Remove mask for processing
+        print("face shapes: ", old_face.shape, new_face.shape, raw_mask.shape)
         reinsert_mask = False
         if new_face.shape[2] == 4:
             reinsert_mask = True
