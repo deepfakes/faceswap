@@ -45,8 +45,8 @@ class Config(FaceswapConfig):
             info="How tall the bottom console panel is as a percentage of GUI height at startup.")
         self.add_item(
             section=section, title="font", datatype=str,
-            choices=["default"] + sorted(font.families()), default="default", group="font",
-            info="Global font")
+            choices=get_clean_fonts(),
+            default="default", group="font", info="Global font")
         self.add_item(
             section=section, title="font_size", datatype=int, default=9,
             min_max=(6, 12), rounding=1, group="font",
@@ -67,3 +67,11 @@ def get_commands():
              and os.path.splitext(item)[0] not in ("gui", "cli")
              and not os.path.splitext(item)[0].startswith("_")]
     return commands + tools
+
+
+def get_clean_fonts():
+    """ Return the font list with any @prefixed or non-unicode characters stripped
+        and default prefixed """
+    cleaned_fonts = sorted([fnt for fnt in font.families()
+                            if not fnt.startswith("@") and not any([ord(c) > 127 for c in fnt])])
+    return ["default"] + cleaned_fonts

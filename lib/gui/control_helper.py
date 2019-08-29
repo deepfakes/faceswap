@@ -41,7 +41,7 @@ def add_command(name, func):
     """ For controls that execute commands, the command must be added to the _COMMAND list so that
         it can be added back to the widget during cloning """
     logger.debug("Adding to commands: %s - %s", name, func)
-    _RECREATE_OBJECTS["commands"][name] = func
+    _RECREATE_OBJECTS["commands"][str(name)] = func
 
 
 def set_slider_rounding(value, var, d_type, round_to, min_max):
