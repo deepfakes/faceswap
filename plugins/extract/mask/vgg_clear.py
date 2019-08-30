@@ -73,7 +73,6 @@ class Mask(Masker):
         masks = np.array(np.zeros(images.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
         original_size, resized_faces = self.resize_inputs(images, self.input_size)
         batch_size = min(resized_faces.shape[0], 8)
-        print(batch_size)
         batches = ((resized_faces.shape[0] - 1) // batch_size) + 1
         even_split_section = batches * batch_size
         faces_batched = np.split(resized_faces[:even_split_section], batches)

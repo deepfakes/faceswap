@@ -287,7 +287,8 @@ class Draw():
         legacy.process()
 
         logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256,
+                                              align_eyes=self.arguments.align_eyes)
         frames_drawn = 0
         for frame in tqdm(self.frames.file_list_sorted, desc="Drawing landmarks"):
             frame_name = frame["frame_fullname"]
@@ -328,7 +329,8 @@ class Extract():
         self.type = arguments.job.replace("extract-", "")
         self.faces_dir = arguments.faces_dir
         self.frames = Frames(arguments.frames_dir)
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=arguments.size)
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=arguments.size,
+                                              align_eyes=arguments.align_eyes)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):

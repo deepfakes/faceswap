@@ -447,6 +447,7 @@ class Manual():
                      self.__class__.__name__, alignments, arguments)
         self.arguments = arguments
         self.alignments = alignments
+        self.align_eyes = arguments.align_eyes
         self.frames = Frames(arguments.frames_dir)
         self.extracted_faces = None
         self.interface = None
@@ -461,7 +462,8 @@ class Manual():
         legacy.process()
 
         logger.info("[MANUAL PROCESSING]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256,
+                                              align_eyes=self.align_eyes)
         self.interface = Interface(self.alignments, self.frames)
         self.help = Help(self.interface)
         self.mouse_handler = MouseHandler(self.interface, self.arguments.loglevel)
