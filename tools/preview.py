@@ -975,7 +975,9 @@ class ControlBuilder():
     # TODO Expand out for cli options
     """
     Builds and returns a frame containing a tkinter control with label
+
     Currently only setup for config items
+
     Parameters
     ----------
     parent: tkinter object
