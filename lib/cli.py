@@ -15,7 +15,6 @@ from importlib import import_module
 
 from lib.logger import crash_log, log_setup
 from lib.utils import FaceswapError, get_backend, safe_shutdown
-from lib.model.masks import get_available_masks, get_default_mask
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -809,7 +808,7 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
-            "choices": get_available_masks() + ["predicted"],
+            "choices": PluginLoader.get_available_extractors("mask") + ["predicted"],
             "group": "plugins",
             "default": "predicted",
             "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
@@ -821,8 +820,7 @@ class ConvertArgs(ExtractConvertArgs):
                     "further up the forehead. May perform badly on difficult angles."
                     "\nL|facehull: Face cutout based on landmarks."
                     "\nL|predicted: The predicted mask generated from the model. If the model was "
-                    "not trained with a mask then this will fallback to "
-                    "'{}'".format(get_default_mask()) +
+                    "not trained with a mask then this will fallback to components."
                     "\nL|none: Don't use a mask."})
         argument_list.append({
             "opts": ("-sc", "--scaling"),

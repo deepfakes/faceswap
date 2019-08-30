@@ -8,7 +8,6 @@ import sys
 from importlib import import_module
 
 from lib.config import FaceswapConfig
-from lib.model.masks import get_available_masks
 from lib.utils import full_path_split
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

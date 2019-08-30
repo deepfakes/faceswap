@@ -48,7 +48,7 @@ class Adjustment():
             predicted requested but not available """
         logger.debug("Requested mask_type: %s", mask_type)
         if mask_type == "predicted" and not predicted_available:
-            mask_type = model_masks.get_default_mask()
+            mask_type = "components"
             logger.warning("Predicted selected, but the model was not trained with a mask. "
                            "Switching to '%s'", mask_type)
         logger.debug("Returning mask_type: %s", mask_type)

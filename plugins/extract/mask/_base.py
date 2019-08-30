@@ -31,21 +31,6 @@ from lib.utils import GetModel
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-def get_available_masks():
-    """ Return a list of the available masks for cli """
-    masks = ["none", "components", "extended", "vgg_300", "vgg_500", "unet_256"]
-    logger.debug(masks)
-    return masks
-
-
-def get_default_mask():
-    """ Set the default mask for cli """
-    masks = get_available_masks()
-    default = "components" if "components" in masks else masks[0]
-    logger.debug("Default mask is %s", default)
-    return default
-
-
 class Masker():
     """ Face Mask Object
     Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
