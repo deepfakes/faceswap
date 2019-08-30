@@ -301,9 +301,6 @@ class Batcher():
                      self.model.training_opts["replicate_input_mask"])
         x = batch[1:3] if use_mask else batch[1:2]
         y = batch[3:] if self.model.training_opts["replicate_input_mask"] else batch[3:-1]
-        # print("shapes")
-        # print("x: ", [np.mean(item, axis=(0,1,2)) for item in x])
-        # print("y: ", [np.mean(item, axis=(0,1,2)) for item in y])
         return x, y
 
     def generate_preview(self, do_preview):
