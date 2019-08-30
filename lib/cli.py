@@ -114,15 +114,17 @@ class ScriptExecutor():
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
+        success = False
         if get_backend() == "amd":
             plaidml_found = self.setup_amd(arguments.loglevel)
             if not plaidml_found:
-                safe_shutdown()
-                exit(1)
+                safe_shutdown(got_error=True)
+                return
         try:
             script = self.import_script()
             process = script(arguments)
             process.process()
+            success = True
         except FaceswapError as err:
             for line in str(err).splitlines():
                 logger.error(line)
@@ -141,7 +143,7 @@ class ScriptExecutor():
                             "before reporting", crash_file)
 
         finally:
-            safe_shutdown()
+            safe_shutdown(got_error=not success)
 
     @staticmethod
     def setup_amd(loglevel):
@@ -355,6 +357,7 @@ class FaceSwapArgs():
                  description="default", subparsers=None):
 
         self.global_arguments = self.get_global_arguments()
+        self.info = self.get_info()
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
         self.process_suppressions()
@@ -367,6 +370,12 @@ class FaceSwapArgs():
 
         script = ScriptExecutor(command, subparsers)
         self.parser.set_defaults(func=script.execute_script)
+
+    @staticmethod
+    def get_info():
+        """ Return command information for display in the GUI.
+            Override for command specific info """
+        return None
 
     @staticmethod
     def get_argument_list():
@@ -505,6 +514,11 @@ class ExtractArgs(ExtractConvertArgs):
         that are used for both extract and convert should be placed """
 
     @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Extract faces from image or video sources"
+
+    @staticmethod
     def get_optional_arguments():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
@@ -608,18 +622,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Filters out faces detected below this size. Length, in "
                                       "pixels across the diagonal of the bounding box. Set to 0 "
                                       "for off"})
-        argument_list.append({"opts": ("-een", "--extract-every-n"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "extract_every_n",
-                              "min_max": (1, 100),
-                              "default": 1,
-                              "rounding": 1,
-                              "group": "Face Processing",
-                              "help": "Extract every 'nth' frame. This option will skip frames "
-                                      "when extracting faces. For example a value of 1 will "
-                                      "extract faces from every frame, a value of 10 will extract "
-                                      "faces from every 10th frame."})
         argument_list.append({"opts": ("-n", "--nfilter"),
                               "action": FilesFullPaths,
                               "filetypes": "image",
@@ -671,13 +673,18 @@ class ExtractArgs(ExtractConvertArgs):
                                       "threshold. Discarded images are moved into a \"blurry\" "
                                       "sub-folder. Lower values allow more blur. Set to 0.0 to "
                                       "turn off."})
-        argument_list.append({"opts": ("-sp", "--singleprocess"),
-                              "action": "store_true",
-                              "default": False,
-                              "backend": "nvidia",
-                              "help": "Don't run extraction in parallel. Will run detection first "
-                                      "then alignment (2 passes). Useful if VRAM is at a "
-                                      "premium."})
+        argument_list.append({"opts": ("-een", "--extract-every-n"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "extract_every_n",
+                              "min_max": (1, 100),
+                              "default": 1,
+                              "rounding": 1,
+                              "group": "output",
+                              "help": "Extract every 'nth' frame. This option will skip frames "
+                                      "when extracting faces. For example a value of 1 will "
+                                      "extract faces from every frame, a value of 10 will extract "
+                                      "faces from every 10th frame."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
@@ -688,23 +695,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "The output size of extracted faces. Make sure that the "
                                       "model you intend to train supports your required size. "
                                       "This will only need to be changed for hi-res models."})
-        argument_list.append({"opts": ("-s", "--skip-existing"),
-                              "action": "store_true",
-                              "dest": "skip_existing",
-                              "default": False,
-                              "help": "Skips frames that have already been extracted and exist in "
-                                      "the alignments file"})
-        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
-                              "action": "store_true",
-                              "dest": "skip_faces",
-                              "default": False,
-                              "help": "Skip frames that already have detected faces in the "
-                                      "alignments file"})
-        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
-                              "action": "store_true",
-                              "dest": "debug_landmarks",
-                              "default": False,
-                              "help": "Draw landmarks on the ouput faces for debugging purposes."})
         argument_list.append({"opts": ("-si", "--save-interval"),
                               "dest": "save_interval",
                               "type": int,
@@ -720,6 +710,34 @@ class ExtractArgs(ExtractConvertArgs):
                                       "saved out during the second pass. WARNING: Don't interrupt "
                                       "the script when writing the file because it might get "
                                       "corrupted. Set to 0 to turn off"})
+        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
+                              "action": "store_true",
+                              "dest": "debug_landmarks",
+                              "group": "output",
+                              "default": False,
+                              "help": "Draw landmarks on the ouput faces for debugging purposes."})
+        argument_list.append({"opts": ("-sp", "--singleprocess"),
+                              "action": "store_true",
+                              "default": False,
+                              "backend": "nvidia",
+                              "group": "settings",
+                              "help": "Don't run extraction in parallel. Will run detection first "
+                                      "then alignment (2 passes). Useful if VRAM is at a "
+                                      "premium."})
+        argument_list.append({"opts": ("-s", "--skip-existing"),
+                              "action": "store_true",
+                              "dest": "skip_existing",
+                              "group": "settings",
+                              "default": False,
+                              "help": "Skips frames that have already been extracted and exist in "
+                                      "the alignments file"})
+        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
+                              "action": "store_true",
+                              "dest": "skip_faces",
+                              "group": "settings",
+                              "default": False,
+                              "help": "Skip frames that already have detected faces in the "
+                                      "alignments file"})
         return argument_list
 
 
@@ -727,6 +745,11 @@ class ConvertArgs(ExtractConvertArgs):
     """ Class to parse the command line arguments for conversion.
         Inherits base options from ExtractConvertArgs where arguments
         that are used for both extract and convert should be placed """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Swap the original faces in a source video/images to your final faces"
 
     @staticmethod
     def get_optional_arguments():
@@ -933,17 +956,20 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({"opts": ("-k", "--keep-unchanged"),
                               "action": "store_true",
                               "dest": "keep_unchanged",
+                              "group": "Frame Processing",
                               "default": False,
                               "help": "When used with --frame-ranges outputs the unchanged frames "
                                       "that are not processed instead of discarding them."})
         argument_list.append({"opts": ("-s", "--swap-model"),
                               "action": "store_true",
                               "dest": "swap_model",
+                              "group": "settings",
                               "default": False,
                               "help": "Swap the model. Instead converting from of A -> B, "
                                       "converts B -> A"})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
+                              "group": "settings",
                               "default": False,
                               "help": "Disable multiprocessing. Slower but less resource "
                                       "intensive."})
@@ -952,6 +978,13 @@ class ConvertArgs(ExtractConvertArgs):
 
 class TrainArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for training """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return ("Train a model on extracted original (A) and swap (B) faces\n"
+                "Training models can take a long time. Anything from 24hrs to "
+                "over a week")
 
     @staticmethod
     def get_argument_list():
@@ -1068,15 +1101,39 @@ class TrainArgs(FaceSwapArgs):
                               "group": "training",
                               "default": 1,
                               "help": "Number of GPUs to use for training"})
-        argument_list.append({"opts": ("-ps", "--preview-scale"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "preview_scale",
-                              "min_max": (25, 200),
-                              "group": "training",
-                              "rounding": 25,
-                              "default": 50,
-                              "help": "Percentage amount to scale the preview by."})
+        argument_list.append({"opts": ("-msg", "--memory-saving-gradients"),
+                              "action": "store_true",
+                              "dest": "memory_saving_gradients",
+                              "group": "VRAM Savings",
+                              "default": False,
+                              "backend": "nvidia",
+                              "help": "Trades off VRAM usage against computation time. Can fit "
+                                      "larger models into memory at a cost of slower training "
+                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
+                                      "training time. NB: Launch time will be significantly "
+                                      "delayed. Switching sides using ping-pong training will "
+                                      "take longer."})
+        argument_list.append({"opts": ("-o", "--optimizer-savings"),
+                              "dest": "optimizer_savings",
+                              "action": "store_true",
+                              "default": False,
+                              "group": "VRAM Savings",
+                              "backend": "nvidia",
+                              "help": "To save VRAM some optimizer gradient calculations can be "
+                                      "performed on the CPU rather than the GPU. This allows you "
+                                      "to increase batchsize at a training speed/system RAM "
+                                      "cost."})
+        argument_list.append({"opts": ("-pp", "--ping-pong"),
+                              "action": "store_true",
+                              "dest": "pingpong",
+                              "group": "VRAM Savings",
+                              "default": False,
+                              "backend": "nvidia",
+                              "help": "Enable ping pong training. Trains one side at a time, "
+                                      "switching sides at each save iteration. Training will "
+                                      "take 2 to 4 times longer, with about a 30%%-50%% reduction "
+                                      "in VRAM useage. NB: Preview won't show until both sides "
+                                      "have been trained once."})
         argument_list.append({"opts": ("-s", "--save-interval"),
                               "type": int,
                               "action": Slider,
@@ -1129,20 +1186,32 @@ class TrainArgs(FaceSwapArgs):
                                       "folder at every save iteration. If the input folders are "
                                       "supplied but no output folder, it will default to your "
                                       "model folder /timelapse/"})
+        argument_list.append({"opts": ("-ps", "--preview-scale"),
+                              "type": int,
+                              "action": Slider,
+                              "dest": "preview_scale",
+                              "min_max": (25, 200),
+                              "group": "preview",
+                              "rounding": 25,
+                              "default": 50,
+                              "help": "Percentage amount to scale the preview by."})
         argument_list.append({"opts": ("-p", "--preview"),
                               "action": "store_true",
                               "dest": "preview",
+                              "group": "preview",
                               "default": False,
                               "help": "Show training preview output. in a separate window."})
         argument_list.append({"opts": ("-w", "--write-image"),
                               "action": "store_true",
                               "dest": "write_image",
+                              "group": "preview",
                               "default": False,
                               "help": "Writes the training result to a file. The image will be "
                                       "stored in the root of your FaceSwap folder."})
         argument_list.append({"opts": ("-ag", "--allow-growth"),
                               "action": "store_true",
                               "dest": "allow_growth",
+                              "group": "model",
                               "default": False,
                               "backend": "nvidia",
                               "help": "Sets allow_growth option of Tensorflow to spare memory "
@@ -1150,43 +1219,15 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-nl", "--no-logs"),
                               "action": "store_true",
                               "dest": "no_logs",
+                              "group": "training",
                               "default": False,
                               "help": "Disables TensorBoard logging. NB: Disabling logs means "
                                       "that you will not be able to use the graph or analysis "
                                       "for this session in the GUI."})
-        argument_list.append({"opts": ("-msg", "--memory-saving-gradients"),
-                              "action": "store_true",
-                              "dest": "memory_saving_gradients",
-                              "default": False,
-                              "backend": "nvidia",
-                              "help": "Trades off VRAM usage against computation time. Can fit "
-                                      "larger models into memory at a cost of slower training "
-                                      "speed. 50%%-150%% batch size increase for 20%%-50%% longer "
-                                      "training time. NB: Launch time will be significantly "
-                                      "delayed. Switching sides using ping-pong training will "
-                                      "take longer."})
-        argument_list.append({"opts": ("-o", "--optimizer-savings"),
-                              "dest": "optimizer_savings",
-                              "action": "store_true",
-                              "default": False,
-                              "backend": "nvidia",
-                              "help": "To save VRAM some optimizer gradient calculations can be "
-                                      "performed on the CPU rather than the GPU. This allows you "
-                                      "to increase batchsize at a training speed/system RAM "
-                                      "cost."})
-        argument_list.append({"opts": ("-pp", "--ping-pong"),
-                              "action": "store_true",
-                              "dest": "pingpong",
-                              "default": False,
-                              "backend": "nvidia",
-                              "help": "Enable ping pong training. Trains one side at a time, "
-                                      "switching sides at each save iteration. Training will "
-                                      "take 2 to 4 times longer, with about a 30%%-50%% reduction "
-                                      "in VRAM useage. NB: Preview won't show until both sides "
-                                      "have been trained once."})
         argument_list.append({"opts": ("-wl", "--warp-to-landmarks"),
                               "action": "store_true",
                               "dest": "warp_to_landmarks",
+                              "group": "training",
                               "default": False,
                               "help": "Warps training faces to closely matched Landmarks from the "
                                       "opposite face-set rather than randomly warping the face. "
@@ -1196,6 +1237,7 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-nf", "--no-flip"),
                               "action": "store_true",
                               "dest": "no_flip",
+                              "group": "training",
                               "default": False,
                               "help": "To effectively learn, a random set of images are flipped "
                                       "horizontally. Sometimes it is desirable for this not to "
@@ -1204,6 +1246,7 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({"opts": ("-nac", "--no-augment-color"),
                               "action": "store_true",
                               "dest": "no_augment_color",
+                              "group": "training",
                               "default": False,
                               "help": "Color augmentation helps make the model less susceptible "
                                       "to color differences between the A and B sets, at an "

@@ -43,7 +43,8 @@ class Sort():
 
         # Set output dir to the same value as input dir
         # if the user didn't specify it.
-        if self.args.output_dir.lower() == "_output_dir":
+        if self.args.output_dir is None:
+            logger.verbose("No output directory provided. Using input dir as output dir.")
             self.args.output_dir = self.args.input_dir
 
         # Assigning default threshold values based on grouping method

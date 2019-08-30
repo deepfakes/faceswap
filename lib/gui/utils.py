@@ -15,6 +15,8 @@ from PIL import Image, ImageDraw, ImageTk
 
 from lib.Serializer import JSONSerializer
 
+from ._config import Config as UserConfig
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 _IMAGES = None
@@ -536,7 +538,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     def build_console(self):
         """ Build and place the console """
         logger.debug("Build console")
-        self.console.config(width=100, height=6, bg="gray90", fg="black")
+        self.console.config(width=100, height=6, bg="gray90", fg="black", state="disabled")
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self, command=self.console.yview)
@@ -573,7 +575,9 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         if not self.console_clear.get():
             logger.debug("Console not set for clearing. Skipping")
             return
+        self.console.configure(state="normal")
         self.console.delete(1.0, tk.END)
+        self.console.configure(state="disabled")
         self.console_clear.set(False)
         logger.debug("Cleared console")
 
@@ -603,8 +607,10 @@ class SysOutRouter():
 
     def write(self, string):
         """ Capture stdout/stderr """
+        self.console.configure(state="normal")
         self.console.insert(tk.END, string, self.get_tag(string))
         self.console.see(tk.END)
+        self.console.configure(state="disabled")
 
     @staticmethod
     def flush():
@@ -629,9 +635,19 @@ class Config():
         self.statusbar = statusbar
         self.serializer = JSONSerializer
         self.tk_vars = self.set_tk_vars()
+        self.user_config = UserConfig(None)
+        self.user_config_dict = self.user_config.config_dict
         self.command_notebook = None  # set in command.py
         self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def default_font(self):
+        """ Return the selected font """
+        font = self.user_config_dict["font"]
+        if font == "default":
+            font = tk.font.nametofont("TkDefaultFont").configure()["family"]
+        return (font, self.user_config_dict["font_size"])
 
     @property
     def command_tabs(self):

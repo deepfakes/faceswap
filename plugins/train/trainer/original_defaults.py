@@ -53,6 +53,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 2,
         "min_max": (2, 16),
+        "group": "evaluation"
     },
     "zoom_amount": {
         "default": 5,

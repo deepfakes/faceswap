@@ -12,7 +12,6 @@ from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-
 class Converter():
     """ Swap a source face with a target """
     def __init__(self, output_dir, output_size, output_has_mask,
@@ -78,30 +77,34 @@ class Converter():
         logger.debug("Starting convert process. (in_queue: %s, out_queue: %s, completion_queue: "
                      "%s)", in_queue, out_queue, completion_queue)
         while True:
-            item = in_queue.get()
-            if item == "EOF":
+            items = in_queue.get()
+            if items == "EOF":
                 logger.debug("EOF Received")
                 logger.debug("Patch queue finished")
                 # Signal EOF to other processes in pool
                 logger.debug("Putting EOF back to in_queue")
-                in_queue.put(item)
+                in_queue.put(items)
                 break
-            logger.trace("Patch queue got: '%s'", item["filename"])
 
-            try:
-                image = self.patch_image(item)
-            except Exception as err:  # pylint: disable=broad-except
-                # Log error and output original frame
-                logger.error("Failed to convert: '%s'. Reason: %s", item["filename"], str(err))
-                image = item["image"]
-                # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
-                import sys
-                import traceback
-                exc_info = sys.exc_info()
-                traceback.print_exception(*exc_info)
+            if isinstance(items, dict):
+                items = [items]
+            for item in items:
+                logger.trace("Patch queue got: '%s'", item["filename"])
+                try:
+                    image = self.patch_image(item)
+                except Exception as err:  # pylint: disable=broad-except
+                    # Log error and output original frame
+                    logger.error("Failed to convert image: '%s'. Reason: %s",
+                                 item["filename"], str(err))
+                    image = item["image"]
+                    # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
+                    # import sys
+                    # import traceback
+                    # exc_info = sys.exc_info()
+                    # traceback.print_exception(*exc_info)
 
-            logger.trace("Out queue put: %s", item["filename"])
-            out_queue.put((item["filename"], image))
+                logger.trace("Out queue put: %s", item["filename"])
+                out_queue.put((item["filename"], image))
         logger.debug("Completed convert process")
         # Signal that this process has finished
         if completion_queue is not None:
@@ -168,12 +171,12 @@ class Converter():
         logger.trace("Got mask. Image shape: %s, Mask shape: %s", new_face.shape, mask.shape)
         return new_face, mask
 
-    def post_warp_adjustments(self, predicted, new_image):
+    def post_warp_adjustments(self, background, new_image):
         """ Apply fixes to the image after warping """
         logger.trace("Compositing face into frame")
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
-        print("after: ",new_image.shape)        
+        print("after: ",new_image.shape)
         mask = new_image[..., -1:]
         foreground = new_image[..., :3] * 255.
         background = predicted["image"][..., :3]

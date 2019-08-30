@@ -11,6 +11,12 @@ from lib.utils import _image_extensions
 class AlignmentsArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Aligments tool """
 
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return ("Alignments tool\nThis tool allows you to perform numerous actions on or using an "
+                "alignments file against its corresponding faceset/frame source.")
+
     def get_argument_list(self):
         frames_dir = " Must Pass in a frames folder/source video file (-fr)."
         faces_dir = " Must Pass in a faces folder (-fc)."
@@ -117,7 +123,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "action": Radio,
             "type": str,
             "choices": ("console", "file", "move"),
-            "group": "output",
+            "group": "processing",
             "default": "console",
             "help": "R|How to output discovered items ('faces' and 'frames' only):"
                     "\nL|'console': Print the list of frames to the screen. (DEFAULT)"
@@ -132,7 +138,7 @@ class AlignmentsArgs(FaceSwapArgs):
                               "min_max": (1, 100),
                               "default": 1,
                               "rounding": 1,
-                              "group": "output",
+                              "group": "extract",
                               "help": "Extract every 'nth' frame. This option will skip frames "
                                       "when extracting faces. For example a value of 1 will "
                                       "extract faces from every frame, a value of 10 will extract "
@@ -142,11 +148,12 @@ class AlignmentsArgs(FaceSwapArgs):
                               "action": Slider,
                               "min_max": (128, 512),
                               "default": 256,
-                              "group": "output",
+                              "group": "extract",
                               "rounding": 64,
                               "help": "The output size of extracted faces. (extract only)"})
         argument_list.append({"opts": ("-dm", "--disable-monitor"),
                               "action": "store_true",
+                              "group": "manual tool",
                               "dest": "disable_monitor",
                               "default": False,
                               "help": "Enable this option if manual "
@@ -157,6 +164,12 @@ class AlignmentsArgs(FaceSwapArgs):
 
 class PreviewArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Preview (Convert Settings) tool """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Preview tool\nAllows you to configure your convert settings with a live preview"
+
     def get_argument_list(self):
 
         argument_list = list()
@@ -198,6 +211,11 @@ class EffmpegArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for EFFMPEG tool """
 
     @staticmethod
+    def get_info():
+        """ Return command information """
+        return "A wrapper for ffmpeg for performing image <> video converting."
+
+    @staticmethod
     def __parse_transpose(value):
         index = 0
         opts = ["(0, 90CounterClockwise&VerticalFlip)",
@@ -224,10 +242,15 @@ class EffmpegArgs(FaceSwapArgs):
                               "default": "extract",
                               "help": "R|Choose which action you want ffmpeg "
                                       "ffmpeg to do."
-                                      "\nL|'slice' cuts a portion of the video "
-                                      "into a separate video file."
-                                      "\nL|'get-fps' returns the chosen video's "
-                                      "fps."})
+                                      "\nL|'extract': turns videos into images "
+                                      "\nL|'gen-vid': turns images into videos "
+                                      "\nL|'get-fps' returns the chosen video's fps."
+                                      "\nL|'get-info' returns information about a video."
+                                      "\nL|'mux-audio' add audio from one video to another."
+                                      "\nL|'rescale' resize video."
+                                      "\nL|'rotate' rotate video."
+                                      "\nL|'slice' cuts a portion of the video into a separate "
+                                      "video file."})
 
         argument_list.append({"opts": ('-i', '--input'),
                               "action": ContextFullPaths,
@@ -391,6 +414,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-q', '--quiet'),
                               "action": "store_true",
                               "dest": "quiet",
+                              "group": "settings",
                               "default": False,
                               "help": "Reduces output verbosity so that only "
                                       "serious errors are printed. If both "
@@ -400,6 +424,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-v', '--verbose'),
                               "action": "store_true",
                               "dest": "verbose",
+                              "group": "settings",
                               "default": False,
                               "help": "Increases output verbosity. If both "
                                       "quiet and verbose are set, verbose "
@@ -410,6 +435,11 @@ class EffmpegArgs(FaceSwapArgs):
 
 class RestoreArgs(FaceSwapArgs):
     """ Class to restore model files from backup """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "A tool for restoring models from backup (.bk) files"
 
     @staticmethod
     def get_argument_list():
@@ -426,6 +456,11 @@ class RestoreArgs(FaceSwapArgs):
 
 class SortArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for sort tool """
+
+    @staticmethod
+    def get_info():
+        """ Return command information """
+        return "Sort faces using a number of different techniques"
 
     @staticmethod
     def get_argument_list():
@@ -445,17 +480,6 @@ class SortArgs(FaceSwapArgs):
                               "help": "Output directory for sorted aligned "
                                       "faces."})
 
-        argument_list.append({"opts": ('-k', '--keep'),
-                              "action": 'store_true',
-                              "dest": 'keep_original',
-                              "default": False,
-                              "help": "Keeps the original files in the input "
-                                      "directory. Be careful when using this "
-                                      "with rename grouping and no specified "
-                                      "output directory as this would keep "
-                                      "the original and renamed files in the "
-                                      "same directory."})
-
         argument_list.append({"opts": ('-s', '--sort-by'),
                               "action": Radio,
                               "type": str,
@@ -463,7 +487,7 @@ class SortArgs(FaceSwapArgs):
                                           "face-yaw", "hist", "hist-dissim"),
                               "dest": 'sort_method',
                               "group": "sort settings",
-                              "default": "hist",
+                              "default": "face",
                               "help": "R|Sort by method. Choose how images are sorted. "
                                       "\nL|'blur': Sort faces by blurriness."
                                       "\nL|'face': Use VGG Face to sort by face similarity. This "
@@ -484,7 +508,17 @@ class SortArgs(FaceSwapArgs):
                                       "\nL|'hist-dissim': Like 'hist' but sorts by "
                                       "dissimilarity."
                                       "\nDefault: hist"})
-
+        argument_list.append({"opts": ('-k', '--keep'),
+                              "action": 'store_true',
+                              "dest": 'keep_original',
+                              "default": False,
+                              "group": "output",
+                              "help": "Keeps the original files in the input "
+                                      "directory. Be careful when using this "
+                                      "with rename grouping and no specified "
+                                      "output directory as this would keep "
+                                      "the original and renamed files in the "
+                                      "same directory."})
         argument_list.append({"opts": ('-t', '--ref_threshold'),
                               "action": Slider,
                               "min_max": (-1.0, 10.0),
@@ -567,13 +601,13 @@ class SortArgs(FaceSwapArgs):
                               "type": str.upper,
                               "choices": ("CPU", "GPU"),
                               "default": "GPU",
-                              "group": "sort settings",
+                              "group": "settings",
                               "help": "Backend to use for VGG Face inference."
                                       "Only used for sort by 'face'."})
 
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',
-                              "group": "output",
+                              "group": "settings",
                               "default": False,
                               "help": "Logs file renaming changes if "
                                       "grouping by renaming, or it logs the "
@@ -586,7 +620,7 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({"opts": ('-lf', '--log-file'),
                               "action": SaveFileFullPaths,
                               "filetypes": "alignments",
-                              "group": "output",
+                              "group": "settings",
                               "dest": 'log_file_path',
                               "default": 'sort_log.json',
                               "help": "Specify a log file to use for saving "

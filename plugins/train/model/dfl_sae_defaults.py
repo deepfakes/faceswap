@@ -53,6 +53,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 16,
         "min_max": (64, 256),
+        "group": "size",
         "fixed": True,
     },
     "clipnorm": {
@@ -61,6 +62,7 @@ _DEFAULTS = {
                 "the expense of VRAM.",
         "datatype": bool,
         "fixed": False,
+        "group": "settings",
     },
     "architecture": {
         "default": "df",
