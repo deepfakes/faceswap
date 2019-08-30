@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Obtain information about the running system, environment and gpu """
 
+import json
 import locale
 import os
 import platform
@@ -19,7 +20,7 @@ class SysInfo():
 
     def __init__(self):
         gpu_stats = GPUStats(log=False)
-
+        self.configs = Configs().configs
         self.platform = platform.platform()
         self.system = platform.system()
         self.machine = platform.machine()
@@ -346,6 +347,8 @@ class SysInfo():
             return retval
         retval += "\n\n============== Conda Packages ==============\n"
         retval += self.installed_conda
+        retval += "\n\n================= Configs =================="
+        retval += self.configs
         return retval
 
     def format_ram(self):
@@ -365,6 +368,64 @@ def get_sysinfo():
     except Exception as err:  # pylint: disable=broad-except
         retval = "Exception occured trying to retrieve sysinfo: {}".format(err)
     return retval
+
+
+class Configs():
+    """ Parses the config files in /config and outputs the information """
+
+    def __init__(self):
+        self.config_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), "config")
+        self.configs = self.get_configs()
+
+    def get_configs(self):
+        """ Return the configs from the config dir """
+        config_files = [os.path.join(self.config_dir, cfile)
+                        for cfile in os.listdir(self.config_dir)
+                        if os.path.basename(cfile) == ".faceswap"
+                        or os.path.splitext(cfile)[1] == ".ini"]
+        return self.parse_configs(config_files)
+
+    def parse_configs(self, config_files):
+        """ Parse the config files into the output format """
+        formatted = ""
+        for cfile in config_files:
+            fname = os.path.basename(cfile)
+            ext = os.path.splitext(cfile)[1]
+            formatted += "\n--------- {} ---------\n".format(fname)
+            if ext == ".ini":
+                formatted += self.parse_ini(cfile)
+            elif fname == ".faceswap":
+                formatted += self.parse_json(cfile)
+        return formatted
+
+    def parse_ini(self, config_file):
+        """ Parse an INI file converting it to a dict """
+        formatted = ""
+        with open(config_file, "r") as cfile:
+            for line in cfile.readlines():
+                line = line.strip()
+                if line.startswith("#") or not line:
+                    continue
+                item = line.split("=")
+                if len(item) == 1:
+                    formatted += "\n{}\n".format(item[0].strip())
+                else:
+                    formatted += self.format_text(item[0], item[1])
+        return formatted
+
+    def parse_json(self, config_file):
+        """ Parse a Json File converting it to a dict """
+        formatted = ""
+        with open(config_file, "r") as cfile:
+            conf_dict = json.load(cfile)
+            for key in sorted(conf_dict.keys()):
+                formatted += self.format_text(key, conf_dict[key])
+        return formatted
+
+    @staticmethod
+    def format_text(key, val):
+        """Format the text for output """
+        return "{0: <25} {1}\n".format(key.strip() + ":", val.strip())
 
 
 sysinfo = get_sysinfo()  # pylint: disable=invalid-name
