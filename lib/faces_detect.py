@@ -143,7 +143,7 @@ class DetectedFace():
         self.feed["matrix"] = get_align_mat(self, size)
 
         face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
-        np.clip(face / 255., 0., 1., out=face)
+        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
@@ -165,7 +165,7 @@ class DetectedFace():
                                           self.reference["matrix"],
                                           size,
                                           self.reference["padding"])
-        np.clip(face / 255., 0., 1., out=face)
+        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",
