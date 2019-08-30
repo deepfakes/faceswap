@@ -118,7 +118,7 @@ class Config(FaceswapConfig):
                  "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool,
-            default=True, group="mask",
+            default=True, group="loss",
             info="Image loss function is weighted by mask presence. For areas of "
                  "the image without the facial mask, reconstuction errors will be "
                  "ignored while the masked face area is prioritized. May increase "
