@@ -133,7 +133,7 @@ class MediaLoader():
 
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
-                os.path.splitext(self.folder)[1].lower() in _video_extensions):
+                os.path.splitext(self.folder)[1] in _video_extensions):
             logger.verbose("Video exists at: '%s'", self.folder)
             retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this
@@ -191,9 +191,11 @@ class MediaLoader():
     @staticmethod
     def save_image(output_folder, filename, image):
         """ Save an image """
+        # pylint: disable=no-member
         output_file = os.path.join(output_folder, filename)
+        output_file = os.path.splitext(output_file)[0]+'.png'
         logger.trace("Saving image: '%s'", output_file)
-        cv2.imwrite(output_file, image)  # pylint: disable=no-member
+        cv2.imwrite(output_file, image)
 
 
 class Faces(MediaLoader):
@@ -290,12 +292,10 @@ class Frames(MediaLoader):
 class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
-    def __init__(self, frames, alignments, size=256, align_eyes=False):
-        logger.trace("Initializing %s: (size: %s, align_eyes: %s)",
-                     self.__class__.__name__, size, align_eyes)
+    def __init__(self, frames, alignments, size=256):
+        logger.trace("Initializing %s: size: %s", self.__class__.__name__, size)
         self.size = size
         self.padding = int(size * 0.1875)
-        self.align_eyes = align_eyes
         self.alignments = alignments
         self.frames = frames
 
@@ -324,7 +324,7 @@ class ExtractedFaces():
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        face.load_aligned(image, size=self.size, align_eyes=self.align_eyes)
+        face.load_aligned(image, size=self.size)
         return face
 
     def get_faces_in_frame(self, frame, update=False):
