@@ -137,8 +137,9 @@ class ScriptExecutor():
             crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
             logger.critical("An unexpected crash has occurred. Crash report written to '%s'. "
-                            "Please verify you are running the latest version of faceswap "
-                            "before reporting", crash_file)
+                            "You MUST provide this file if seeking assistance. Please verify you "
+                            "are running the latest version of faceswap before reporting",
+                            crash_file)
 
         finally:
             safe_shutdown()
