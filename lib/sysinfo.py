@@ -20,6 +20,7 @@ class SysInfo():
 
     def __init__(self):
         gpu_stats = GPUStats(log=False)
+        self.state_file = State().state_file
         self.configs = Configs().configs
         self.platform = platform.platform()
         self.system = platform.system()
@@ -347,6 +348,7 @@ class SysInfo():
             return retval
         retval += "\n\n============== Conda Packages ==============\n"
         retval += self.installed_conda
+        retval += self.state_file
         retval += "\n\n================= Configs =================="
         retval += self.configs
         return retval
@@ -426,6 +428,41 @@ class Configs():
     def format_text(key, val):
         """Format the text for output """
         return "{0: <25} {1}\n".format(key.strip() + ":", val.strip())
+
+
+class State():
+    """ State file for training command """
+    def __init__(self):
+        self.model_dir = self.get_arg("-m", "--model-dir")
+        self.trainer = self.get_arg("-t", "--trainer")
+        self.state_file = self.get_state_file()
+
+    @property
+    def is_training(self):
+        """ Return whether this has been called during training """
+        return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
+
+    @staticmethod
+    def get_arg(*args):
+        """ Return the value for a given option from sys.argv. Returns None if not found """
+        cmd = sys.argv
+        for opt in args:
+            if opt in cmd:
+                return cmd[cmd.index(opt) + 1]
+        return None
+
+    def get_state_file(self):
+        """ Return the state file in a string """
+        if not self.is_training or self.model_dir is None or self.trainer is None:
+            return ""
+        fname = os.path.join(self.model_dir, "{}_state.json".format(self.trainer))
+        if not os.path.isfile(fname):
+            return ""
+
+        retval = "\n\n=============== State File =================\n"
+        with open(fname, "r") as sfile:
+            retval += sfile.read()
+        return retval
 
 
 sysinfo = get_sysinfo()  # pylint: disable=invalid-name
