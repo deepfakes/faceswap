@@ -88,10 +88,10 @@ class Mask(Masker):
             generator = (cv2.resize(face, (0, 0), fx=scale, fy=scale, interpolation=method) for face in faces)
             faces = np.array(tuple(generator))
         if height>width:
-            padding=((0, 0), (0, 0), (0, height-width))
+            padding=((0, 0), (0, 0), (0, height-width), (0, 0))
         else:
-            padding=((0, 0), (0, width-height), (0, 0))
-        np.pad(faces, padding, mode='constant', constant_values=0.0)
+            padding=((0, 0), (0, width-height), (0, 0), (0, 0))
+        np.pad(faces, padding, 'constant', constant_values=0.0)
         return image_size, faces
 
     @staticmethod
