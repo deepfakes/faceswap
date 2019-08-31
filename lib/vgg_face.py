@@ -38,7 +38,7 @@ class VGGFace():
     def get_model(self, git_model_id, model_filename, backend):
         """ Check if model is available, if not, download and unzip it """
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
+        cache_path = os.path.join(root_path, "plugins", "extract", "recognition", ".cache")
         model = GetModel(model_filename, cache_path, git_model_id).model_path
         model = cv2.dnn.readNetFromCaffe(model[1], model[0])  # pylint: disable=no-member
         model.setPreferableTarget(self.get_backend(backend))

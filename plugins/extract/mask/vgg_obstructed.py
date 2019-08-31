@@ -79,23 +79,6 @@ class Mask(Masker):
         return faces, masks
 
     @staticmethod
-    def resize_inputs(faces, target_size):
-        """ resize input and output of mask models appropriately """
-        _, height, width, _ = faces.shape
-        image_size = max(height, width)
-        scale = target_size / image_size
-        if image_size != target_size:
-            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
-            generator = (cv2.resize(face, (0, 0), fx=scale, fy=scale, interpolation=method) for face in faces)
-            faces = np.array(tuple(generator))
-        if height>width:
-            padding=((0, 0), (0, 0), (0, height-width), (0, 0))
-        else:
-            padding=((0, 0), (0, width-height), (0, 0), (0, 0))
-        np.pad(faces, padding, 'constant', constant_values=0.0)
-        return image_size, faces
-
-    @staticmethod
     def postprocessing(mask):
         """ Post-processing of Nirkin style segmentation masks """
         # pylint: disable=no-member

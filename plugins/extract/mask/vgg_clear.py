@@ -47,7 +47,9 @@ class Mask(Masker):
         images = images[None, ...] if images.ndim == 3 else images
         means = means[None, ...] if means.ndim == 1 else means
         masks = np.array(np.zeros(images.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
-        original_size, resized_faces = self.resize_inputs(images, self.input_size)
+        padding, original_size, resized_faces = self.resize_inputs(images, self.input_size)
+        height_slice = slice(0, -padding[1][1])
+        width_slice = slice(0, -padding[1][1])
         batch_size = min(resized_faces.shape[0], 8)
         batches = ((resized_faces.shape[0] - 1) // batch_size) + 1
         even_split_section = batches * batch_size
@@ -71,28 +73,11 @@ class Mask(Masker):
             results[results < 0.05] = 0.
             results[results > 0.95] = 1.
             results *= 255.
-            _, results = self.resize_inputs(results, original_size)
+            _, _, resized = self.resize_inputs(results[:, height_slice, width_slice, :], original_size)
             batch_slice = slice(i * batch_size, (i + 1) * batch_size)
-            masks[batch_slice] = results[..., None].astype('uint8')
+            masks[batch_slice] = resized[..., None].astype('uint8')
         faces = np.concatenate((faces[..., :3], masks[0]), axis=-1)
         return faces, masks
-
-    @staticmethod
-    def resize_inputs(faces, target_size):
-        """ resize input and output of mask models appropriately """
-        _, height, width, _ = faces.shape
-        image_size = max(height, width)
-        scale = target_size / image_size
-        if image_size != target_size:
-            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
-            generator = (cv2.resize(face, (0, 0), fx=scale, fy=scale, interpolation=method) for face in faces)
-            faces = np.array(tuple(generator))
-        if height>width:
-            padding=((0, 0), (0, 0), (0, height-width), (0, 0))
-        else:
-            padding=((0, 0), (0, width-height), (0, 0), (0, 0))
-        np.pad(faces, padding, 'constant', constant_values=0.0)
-        return image_size, faces
 
     @staticmethod
     def postprocessing(mask):
