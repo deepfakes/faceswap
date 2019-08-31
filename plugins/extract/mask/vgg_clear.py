@@ -81,11 +81,17 @@ class Mask(Masker):
     def resize_inputs(faces, target_size):
         """ resize input and output of mask models appropriately """
         _, height, width, _ = faces.shape
-        image_size = min(height, width)
+        image_size = max(height, width)
+        scale = target_size / image_size
         if image_size != target_size:
             method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
-            generator = (cv2.resize(face, (target_size, target_size), method) for face in faces)
+            generator = (cv2.resize(face, (0, 0), fx=scale, fy=scale, interpolation=method) for face in faces)
             faces = np.array(tuple(generator))
+        if height>width:
+            padding=((0, 0), (0, 0), (0, height-width))
+        else:
+            padding=((0, 0), (0, width-height), (0, 0))
+        np.pad(faces, padding, mode='constant', constant_values=0.0)
         return image_size, faces
 
     @staticmethod

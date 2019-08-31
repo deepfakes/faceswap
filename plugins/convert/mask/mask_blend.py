@@ -16,8 +16,7 @@ class Mask(Adjustment):
 
     def process(self, new_face):
         """ Return mask and perform processing """
-        mask = new_face[..., 3:]
-        print("mask11: ", mask.shape)
+        mask = new_face[..., 3:4]
         if not self.skip:
             if self.do_erode:
                 mask = self.erode(mask)
@@ -59,5 +58,4 @@ class Mask(Adjustment):
                             self.config["radius"],
                             self.config["passes"])
         mask = raw_mask.blurred
-        print("mask22: ", mask.shape)
         return mask

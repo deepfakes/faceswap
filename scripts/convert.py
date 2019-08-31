@@ -255,7 +255,7 @@ class DiskIO():
     def load_extractor(self):
         """ Set on the fly extraction """
         # if self.alignments.have_alignments_file:
-        #    return None
+        #     return None
 
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
@@ -266,9 +266,12 @@ class DiskIO():
                               aligner="cv2-dnn",
                               masker="components",
                               loglevel=self.args.loglevel,
-                              multiprocess=False,
+                              multiprocess=True,
                               rotate_images=None,
                               min_size=20)
+        if self.alignments.have_alignments_file:
+            extractor.multiprocess = False
+            extractor.phase = 'mask'
         extractor.launch()
         logger.debug("Loaded extractor")
         return extractor
@@ -325,6 +328,7 @@ class DiskIO():
                 else:
                     logger.trace("Discarding frame: '%s'", filename)
                 continue
+
             detected_faces = self.get_detected_faces(filename, image)
             item = dict(filename=filename, image=image, detected_faces=detected_faces)
             self.pre_process.do_actions(item)
@@ -351,24 +355,30 @@ class DiskIO():
     def get_detected_faces(self, filename, image):
         """ Return detected faces from alignments or detector """
         logger.trace("Getting faces for: '%s'", filename)
-        if not self.extractor:
-            detected_faces = self.alignments_faces(os.path.basename(filename), image)
+        if self.alignments.have_alignments_file:
+            detected_faces = self.alignments_faces(filename, image)
         else:
             detected_faces = self.detect_faces(filename, image)
         logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)
         return detected_faces
 
-    def alignments_faces(self, frame, image):
+    def alignments_faces(self, filename, image):
         """ Get the face from alignments file """
+        frame = os.path.basename(filename)
         if not self.check_alignments(frame):
             return list()
-
         faces = self.alignments.get_faces_in_frame(frame)
         detected_faces = list()
 
         for rawface in faces:
             face = DetectedFace()
             face.from_alignment(rawface, image=image)
+            inp = {"filename"   : filename,
+                   "image"      : face.image}
+            self.extractor.input_queue.put(inp)
+            masked = next(self.extractor.detected_faces())
+            face.image = masked["image"]
+            print("and here too", face.image.shape)
             detected_faces.append(face)
         return detected_faces
 
@@ -382,20 +392,21 @@ class DiskIO():
 
     def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
-        inp = {"filename": filename,
-               "image": image}
+        inp = {"filename"   : filename,
+               "image"      : image}
         self.extractor.input_queue.put(inp)
         faces = next(self.extractor.detected_faces())
-        print(faces["landmarks"])
+        sys.stdout.flush()
         landmarks = faces["landmarks"]
         detected_faces = faces["detected_faces"]
         final_faces = list()
 
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face, image=image)
+            detected_face.from_bounding_box_dict(face, faces["image"])
             detected_face.landmarksXY = landmarks[idx]
             final_faces.append(detected_face)
+            sys.stdout.flush()
         return final_faces
 
     # Saving tasks
@@ -545,10 +556,6 @@ class Predict():
                                    os.path.basename(item["filename"]))
 
                 self.load_aligned(item)
-                #print("marks: ", item['detected_faces'][0].landmarksXY)
-                #print("image: ", item['detected_faces'][0].image.shape)
-                #print("ref: ", item['detected_faces'][0].reference_face.shape)
-                #print("feed: ", item['detected_faces'][0].feed_face.shape)
                 faces_seen += faces_count
                 batch.append(item)
 
@@ -557,7 +564,6 @@ class Predict():
                 logger.trace("Continuing. Current batchsize: %s, consecutive_no_faces: %s",
                              faces_seen, consecutive_no_faces)
                 continue
-
             if batch:
                 logger.trace("Batching to predictor. Frames: %s, Faces: %s",
                              len(batch), faces_seen)
@@ -589,14 +595,14 @@ class Predict():
         """ Load the feed faces and reference output faces """
         logger.trace("Loading aligned faces: '%s'", item["filename"])
         for detected_face in item["detected_faces"]:
-            detected_face.load_feed_face(item["image"],
+            detected_face.load_feed_face(detected_face.image,
                                          size=self.input_size,
                                          coverage_ratio=self.coverage_ratio,
                                          dtype="float32")
             if self.input_size == self.output_size:
                 detected_face.reference = detected_face.feed
             else:
-                detected_face.load_reference_face(item["image"],
+                detected_face.load_reference_face(detected_face.image,
                                                   size=self.output_size,
                                                   coverage_ratio=self.coverage_ratio,
                                                   dtype="float32")
@@ -608,7 +614,6 @@ class Predict():
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
         feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
         output_masks = np.stack([detected_face.reference_face for detected_face in detected_faces])
-        print("feed and mask: ", feed_faces.shape, output_masks.shape)
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces[..., :3], output_masks[..., 3:]
 
@@ -634,6 +639,8 @@ class Predict():
         mask_idx = self.output_indices["mask"]
         mask = predicted[mask_idx] if mask_idx is not None else output_masks
         predicted = np.concatenate([face, mask], axis=-1)
+        print("predicted", predicted.shape)
+        sys.stdout.flush()
         logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 

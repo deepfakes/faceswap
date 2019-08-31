@@ -116,7 +116,6 @@ class Converter():
         new_image = self.get_new_image(predicted)
         patched_face = self.post_warp_adjustments(predicted, new_image)
         patched_face = self.scale_image(patched_face)
-        print("patched mean: ", patched_face.shape, "---", np.mean(patched_face, axis=(0,1)))
         patched_face = np.rint(patched_face).astype("uint8")
         if self.writer_pre_encode is not None:
             patched_face = self.writer_pre_encode(patched_face)
@@ -128,23 +127,21 @@ class Converter():
         # pylint: disable=no-member
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
-        print("predicted[image]: ",predicted["image"].shape, predicted["image"].dtype)
-        frame = predicted["image"].astype("float32") / 255.
-        print("before: ",frame.shape)
-        frame_size = (frame.shape[1], frame.shape[0])
-        # print("old: ", [item.reference_face.shape for item in predicted["detected_faces"]], "   new: ", [item.shape for item in predicted["swapped_faces"]])
+        original_frame = predicted["image"].astype("float32") / 255.
+        frame_size = (original_frame.shape[1], original_frame.shape[0])
+        print(len(predicted["swapped_faces"]), len(predicted["detected_faces"]))
         dual_generator = zip(predicted["swapped_faces"], predicted["detected_faces"])
-        for new_face, detected_face in dual_generator:
-            print("new_facw: ", new_face.shape)
-            src_face = detected_face.reference_face
-            print("src_facw: ", src_face.shape)
+        for new_face, old_face in dual_generator:
+            print("predicted[image]: ", new_face.shape)
+            print("old face: ", old_face.reference_face.shape)
+            src_face = old_face.reference_face
             new_face = self.pre_warp_adjustments(src_face, new_face)
-            interpolator = detected_face.reference_interpolators[1]
+            interpolator = old_face.reference_interpolators[1]
             # Warp face with the mask
             new_image = cv2.warpAffine(new_face,
-                                       detected_face.reference_matrix,
+                                       old_face.reference_matrix,
                                        frame_size,
-                                       frame,
+                                       original_frame,
                                        flags=cv2.WARP_INVERSE_MAP | interpolator,
                                        borderMode=cv2.BORDER_TRANSPARENT)
             new_image = np.clip(new_image, 0., 1.)
@@ -154,29 +151,30 @@ class Converter():
     def pre_warp_adjustments(self, old_face, new_face):
         """ Run the pre-warp adjustments """
         logger.trace("old_face shape: %s, new_face shape: %s", old_face.shape, new_face.shape)
-        new_face, mask = self.get_image_mask(new_face)
+        old_face, new_face, mask = self.get_image_mask(old_face, new_face)
+        print("here now 1")
         if self.adjustments["color"] is not None:
             new_face = self.adjustments["color"].run(old_face, new_face, mask)
+        print("here now 2")
         if self.adjustments["seamless"] is not None:
             new_face = self.adjustments["seamless"].run(old_face, new_face, mask)
+        print("here now 3")
         logger.trace("returning: new_face shape %s", new_face.shape)
         return new_face
 
-    def get_image_mask(self, new_face):
+    def get_image_mask(self, old_face, new_face):
         """ Get the image mask """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
-        print("face_new: ", new_face.shape)
         new_face = self.adjustments["box"].run(new_face)
         mask = self.adjustments["mask"].run(new_face)
         logger.trace("Got mask. Image shape: %s, Mask shape: %s", new_face.shape, mask.shape)
-        return new_face, mask
+        return old_face[..., :3], new_face[..., :3], mask
 
-    def post_warp_adjustments(self, background, new_image):
+    def post_warp_adjustments(self, predicted, new_image):
         """ Apply fixes to the image after warping """
         logger.trace("Compositing face into frame")
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
-        print("after: ",new_image.shape)
         mask = new_image[..., -1:]
         foreground = new_image[..., :3] * 255.
         background = predicted["image"][..., :3]
@@ -193,6 +191,6 @@ class Converter():
         if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
             interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA
-            frame = cv2.resize(frame, fx=self.scale, fy=self.scale, interpolation=interp)
+            frame = cv2.resize(frame, (0, 0), fx=self.scale, fy=self.scale, interpolation=interp)
             logger.trace("resized frame: %s", frame.shape)
         return frame

@@ -309,7 +309,6 @@ class Extractor():
                     raise Exception(err)
             except QueueEmpty:
                 continue
-
             yield faces
         for process in self.processes:
             logger.trace("Joining process: %s", process)
@@ -322,4 +321,5 @@ class Extractor():
             logger.debug("Detection Complete")
         else:
             logger.debug("Switching to next phase")
+            
             self.phase = "align" if self.phase == "detect" else "mask"

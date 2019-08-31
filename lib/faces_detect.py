@@ -1,7 +1,7 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 import logging
-
+import sys
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
@@ -143,11 +143,10 @@ class DetectedFace():
         self.feed["size"] = size
         self.feed["padding"] = self.padding_from_coverage(size, coverage_ratio)
         self.feed["matrix"] = get_align_mat(self, size, should_align_eyes=False)
-
         face = np.clip(AlignerExtract().transform(image,
                                                   self.feed["matrix"],
                                                   size,
-                                                  self.feed["padding"])[:, :, :3] / 255.0,
+                                                  self.feed["padding"]) / 255.0,
                        0.0, 1.0)
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
@@ -169,7 +168,7 @@ class DetectedFace():
         face = np.clip(AlignerExtract().transform(image,
                                                   self.reference["matrix"],
                                                   size,
-                                                  self.reference["padding"])[:, :, :3] / 255.0,
+                                                  self.reference["padding"]) / 255.0,
                        0.0, 1.0)
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 

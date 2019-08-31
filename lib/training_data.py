@@ -55,7 +55,7 @@ class TrainingDataGenerator():
         mask_out_size = self.face_output_shapes[-1][1]
         batch_shape = list(((batchsize, training_size, training_size, 4),
                             (batchsize, self.model_input_size, self.model_input_size, 3),
-                            (batchsize, 128, 128, 1)))
+                            (batchsize, self.model_input_size, self.model_input_size, 1)))
         batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.face_output_shapes]))
         batch_shape.extend(tuple([(batchsize, ) + self.face_output_shapes[-1][:-1] + (1,)]))
         logger.debug("Batch shapes: %s", batch_shape)
@@ -187,13 +187,12 @@ class TrainingDataGenerator():
 
     def compile_images(self, sample, warped_image, target_images):
         """ Compile the warped images, target images and mask for feed """
-        compiled_images = [sample, warped_image[..., :3]]
+        compiled_images = [sample, warped_image[..., :3], warped_image[..., 3:4]]
         for target_image in target_images:
             compiled_images.append(target_image[..., :3])
             final_output = target_image.shape[1] == max(self.output_sizes)
             if final_output:
                 compiled_images.append(target_image[..., 3:4])
-                compiled_images.insert(2, target_image[..., 3:4])
         logger.trace("Final shapes: %s", [img.shape for img in compiled_images])
         return compiled_images
 

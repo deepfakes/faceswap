@@ -299,7 +299,7 @@ class Batcher():
         batch = next(self.feed)
         use_mask =  (self.model.training_opts["penalized_mask_loss"] or
                      self.model.training_opts["replicate_input_mask"])
-        x = batch[1:3] if use_mask else batch[1:2]
+        x = batch[1:2] + batch[-1:] if use_mask else batch[1:2]
         y = batch[3:] if self.model.training_opts["replicate_input_mask"] else batch[3:-1]
         return x, y
 
@@ -312,11 +312,12 @@ class Batcher():
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
         self.samples = batch[0]
-        y = batch[3:]
-        self.target = [y[self.model.largest_face_index]]
-        if (self.model.training_opts["penalized_mask_loss"] or
-            self.model.training_opts["replicate_input_mask"]):
-            self.target.append(y[-1])
+        self.target = batch[-2:]
+        # y = batch[3:]
+        # self.target = [y[self.model.largest_face_index]]
+        # if (self.model.training_opts["penalized_mask_loss"] or
+        #     self.model.training_opts["replicate_input_mask"]):
+        #     self.target.append(y[-1])
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -345,12 +346,13 @@ class Batcher():
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         samples = batch[0]
-        y = batch[3:]
+        # y = batch[3:]
         batchsize = len(samples)
-        images = [y[self.model.largest_face_index]]
-        if (self.model.training_opts["penalized_mask_loss"] or
-            self.model.training_opts["replicate_input_mask"]):
-            self.target.append(y[-1])
+        images = batch[-2:]
+        # images = [y[self.model.largest_face_index]]
+        # if (self.model.training_opts["penalized_mask_loss"] or
+        #    self.model.training_opts["replicate_input_mask"]):
+        #    images.append(y[-1])
         sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 
@@ -445,6 +447,7 @@ class Samples():
         """ Return the sample predictions from the model """
         logger.debug("Getting Predictions")
         preds = dict()
+        print([item.shape for item in feed_a], [item.shape.as_list() for item in self.model.predictors["a"].inputs])
         preds["a_a"] = self.model.predictors["a"].predict(feed_a)
         preds["b_a"] = self.model.predictors["b"].predict(feed_a)
         preds["a_b"] = self.model.predictors["a"].predict(feed_b)
