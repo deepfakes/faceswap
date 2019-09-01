@@ -57,7 +57,7 @@ class VGGFace():
         """ Return encodings for given image from vgg_face """
         if face.shape[0] != self.input_size:
             face = self.resize_face(face)
-        blob = cv2.dnn.blobFromImage(face,  # pylint: disable=no-member
+        blob = cv2.dnn.blobFromImage(face[..., :3],  # pylint: disable=no-member
                                      1.0,
                                      (self.input_size, self.input_size),
                                      self.average_img,
