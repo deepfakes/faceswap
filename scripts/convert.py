@@ -190,7 +190,7 @@ class DiskIO():
     @property
     def pre_encode(self):
         """ Return the writer's pre-encoder """
-        dummy = np.zeros((20, 20, 3)).astype("uint8")
+        dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self.writer.pre_encode(dummy)
         retval = None if test is None else self.writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
@@ -211,7 +211,7 @@ class DiskIO():
         """ Return the writer plugin """
         args = [self.args.output_dir]
         if self.args.writer in ("ffmpeg", "gif"):
-            args.append(self.total_count)
+            args.extend([self.total_count, self.frame_ranges])
         if self.args.writer == "ffmpeg":
             if self.images.is_video:
                 args.append(self.args.input_dir)
@@ -312,7 +312,8 @@ class DiskIO():
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if image is None or not image.any():
+            if image is None or (not image.any() and image.ndim not in ((2, 3))):
+                # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
             if self.check_skipframe(filename):
@@ -344,6 +345,7 @@ class DiskIO():
             return False
         idx = int(indices[0]) if indices else None
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self.frame_ranges))
+        logger.trace("idx: %s, skipframe: %s", idx, skipframe)
         return skipframe
 
     def get_detected_faces(self, filename, image):
@@ -435,6 +437,8 @@ class Predict():
         self.faces_count = 0
         self.verify_output = False
         self.model = self.load_model()
+        self.output_indices = {"face": self.model.largest_face_index,
+                               "mask": self.model.largest_mask_index}
         self.predictor = self.model.converter(self.args.swap_model)
         self.queues = dict()
 
@@ -460,9 +464,8 @@ class Predict():
     @property
     def input_mask(self):
         """ Return the input mask """
-        mask = np.zeros(self.model.state.mask_shapes[0], dtype="float32")
-        retval = np.expand_dims(mask, 0)
-        return retval
+        mask = np.zeros((1, ) + self.model.state.mask_shapes[0], dtype="float32")
+        return mask
 
     @property
     def has_predicted_mask(self):
@@ -523,6 +526,7 @@ class Predict():
         faces_seen = 0
         consecutive_no_faces = 0
         batch = list()
+        is_plaidml = GPUStats().is_plaidml
         while True:
             item = self.in_queue.get()
             if item != "EOF":
@@ -558,7 +562,11 @@ class Predict():
                                   for detected_face in item["detected_faces"]]
                 if faces_seen != 0:
                     feed_faces = self.compile_feed_faces(detected_batch)
-                    predicted = self.predict(feed_faces)
+                    batch_size = None
+                    if is_plaidml and feed_faces.shape[0] != self.batchsize:
+                        logger.verbose("Fallback to BS=1")
+                        batch_size = 1
+                    predicted = self.predict(feed_faces, batch_size)
                 else:
                     predicted = list()
 
@@ -599,7 +607,7 @@ class Predict():
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces
 
-    def predict(self, feed_faces):
+    def predict(self, feed_faces, batch_size=None):
         """ Perform inference on the feed """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))
         feed = [feed_faces]
@@ -607,15 +615,28 @@ class Predict():
             feed.append(np.repeat(self.input_mask, feed_faces.shape[0], axis=0))
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
 
-        predicted = self.predictor(feed)
+        predicted = self.predictor(feed, batch_size=batch_size)
         predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
+
+        predicted = self.filter_multi_out(predicted)
 
         # Compile masks into alpha channel or keep raw faces
         predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
         predicted = predicted.astype("float32")
 
         logger.trace("Final shape: %s", predicted.shape)
+        return predicted
+
+    def filter_multi_out(self, predicted):
+        """ Filter the predicted output to the final output """
+        if not predicted:
+            return predicted
+        face = predicted[self.output_indices["face"]]
+        mask_idx = self.output_indices["mask"]
+        mask = predicted[mask_idx] if mask_idx is not None else None
+        predicted = [face, mask] if mask is not None else [face]
+        logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 
     def queue_out_frames(self, batch, swapped_faces):
@@ -632,8 +653,8 @@ class Predict():
             logger.trace("Putting to queue. ('%s', detected_faces: %s, swapped_faces: %s)",
                          item["filename"], len(item["detected_faces"]),
                          item["swapped_faces"].shape[0])
-            self.out_queue.put(item)
             pointer += num_faces
+        self.out_queue.put(batch)
         logger.trace("Queued out batch. Batchsize: %s", len(batch))
 
 

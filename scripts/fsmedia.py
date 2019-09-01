@@ -11,14 +11,13 @@ from pathlib import Path
 
 import cv2
 import imageio
-import imageio_ffmpeg as im_ffm
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
-from lib.utils import (camel_case_split, cv2_read_img, get_folder, get_image_paths,
-                       set_system_verbosity, _video_extensions)
+from lib.utils import (camel_case_split, count_frames_and_secs, cv2_read_img, get_folder,
+                       get_image_paths, set_system_verbosity, _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -140,13 +139,13 @@ class Images():
         self.args = arguments
         self.is_video = self.check_input_folder()
         self.input_images = self.get_input_images()
+        self.images_found = self.count_images()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @property
-    def images_found(self):
+    def count_images(self):
         """ Number of images or frames """
         if self.is_video:
-            retval = int(im_ffm.count_frames_and_secs(self.args.input_dir)[0])
+            retval = int(count_frames_and_secs(self.args.input_dir)[0])
         else:
             retval = len(self.input_images)
         return retval
@@ -451,6 +450,7 @@ class FaceFilter(PostProcessAction):
         ret_faces = list()
         for idx, detect_face in enumerate(output_item["detected_faces"]):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
+            check_item.load_aligned(output_item["image"])
             if not self.filter.check(check_item):
                 logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
                                output_item["filename"], idx)

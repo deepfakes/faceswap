@@ -134,7 +134,6 @@ class Train():
 
             if self.args.allow_growth:
                 self.set_tf_allow_growth()
-
             model = self.load_model()
             trainer = self.load_trainer(model)
             self.run_training_cycle(model, trainer)
@@ -157,7 +156,7 @@ class Train():
         augment_color = not self.args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            self.args.gpus,
+            gpus=self.args.gpus,
             configfile=configfile,
             snapshot_interval=self.args.snapshot_interval,
             no_logs=self.args.no_logs,

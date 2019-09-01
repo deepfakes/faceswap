@@ -19,7 +19,7 @@ from lib.faces_detect import DetectedFace
 from lib.multithreading import SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import cv2_read_img
-from lib.vgg_face import VGGFace
+from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.plugin_loader import PluginLoader
 
 from . import cli
@@ -43,7 +43,8 @@ class Sort():
 
         # Set output dir to the same value as input dir
         # if the user didn't specify it.
-        if self.args.output_dir.lower() == "_output_dir":
+        if self.args.output_dir is None:
+            logger.verbose("No output directory provided. Using input dir as output dir.")
             self.args.output_dir = self.args.input_dir
 
         # Assigning default threshold values based on grouping method
@@ -57,7 +58,7 @@ class Sort():
 
         # Load VGG Face if sorting by face
         if self.args.sort_method.lower() == "face":
-            self.vgg_face = VGGFace(backend=self.args.backend)
+            self.vgg_face = VGGFace(backend=self.args.backend, loglevel=self.args.loglevel)
 
         # If logging is enabled, prepare container
         if self.args.log_changes:

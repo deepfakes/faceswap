@@ -58,6 +58,7 @@ _DEFAULTS = {
                 "input.\nScaling will adjust image brightness to avoid washed out portions in "
                 "the resulting color transfer that can be caused by clipping.",
         "datatype": bool,
+        "group": "method",
         "rounding": None,
         "min_max": None,
         "choices": [],
@@ -72,6 +73,7 @@ _DEFAULTS = {
                 "scaling factor proposed in the paper. This method seems to produce more "
                 "consistently aesthetically pleasing results.",
         "datatype": bool,
+        "group": "method",
         "rounding": None,
         "min_max": None,
         "choices": [],

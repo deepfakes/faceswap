@@ -148,17 +148,16 @@ class TrainerBase():
         logger.debug("Tensorflow version: %s", tf_version)
         if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
             kwargs["update_freq"] = "batch"
+        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 13):
+            kwargs["profile_batch"] = 0
         logger.debug(kwargs)
         return kwargs
 
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
         logger.trace(loss)
-        output = [", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
-                                                    side.capitalize(),
-                                                    this_loss)
-                             for idx, this_loss in enumerate(loss[side])])
-                  for side in sorted(list(loss.keys()))]
+        output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
+                  for side in sorted(loss.keys())]
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
@@ -263,10 +262,10 @@ class Batcher():
         """ Pass arguments to TrainingDataGenerator and return object """
         logger.debug("Loading generator: %s", self.side)
         input_size = self.model.input_shape[0]
-        output_size = self.model.output_shape[0]
-        logger.debug("input_size: %s, output_size: %s", input_size, output_size)
+        output_shapes = self.model.output_shapes
+        logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
-                                          output_size,
+                                          output_shapes,
                                           self.model.training_opts,
                                           self.config)
         return generator
@@ -296,21 +295,12 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        batch = batch[1:]   # Remove full size samples from batch
-        if self.use_mask:
-            batch = self.compile_mask(batch)
+        feed = batch[1]
+        batch = batch[2:]   # Remove full size samples and feed from batch
+        mask = batch[-1]
+        batch = [[feed, mask], batch] if self.use_mask else [feed, batch]
         self.generate_preview(do_preview)
         return batch
-
-    def compile_mask(self, batch):
-        """ Compile the mask into training data """
-        logger.trace("Compiling Mask: (side: '%s')", self.side)
-        mask = batch[-1]
-        retval = list()
-        for idx in range(len(batch) - 1):
-            image = batch[idx]
-            retval.append([image, mask])
-        return retval
 
     def generate_preview(self, do_preview):
         """ Generate the preview if a preview iteration """
@@ -322,11 +312,13 @@ class Batcher():
         if self.preview_feed is None:
             self.set_preview_feed()
         batch = next(self.preview_feed)
-        self.samples = batch[0]
-        batch = batch[1:]   # Remove full size samples from batch
+        self.samples, feed = batch[:2]
+        batch = batch[2:]   # Remove full size samples and feed from batch
+        self.target = batch[self.model.largest_face_index]
         if self.use_mask:
-            batch = self.compile_mask(batch)
-        self.target = batch[1]
+            mask = batch[-1]
+            batch = [[feed, mask], batch]
+            self.target = [self.target, mask]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -358,12 +350,14 @@ class Batcher():
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples = batch[0]
-        batch = batch[1:]   # Remove full size samples from batch
+        samples, feed = batch[:2]
         batchsize = len(samples)
+        batch = batch[2:]   # Remove full size samples and feed from batch
+        images = batch[self.model.largest_face_index]
         if self.use_mask:
-            batch = self.compile_mask(batch)
-        images = batch[1]
+            mask = batch[-1]
+            batch = [[feed, mask], batch]
+            images = [images, mask]
         sample = self.compile_sample(batchsize, samples=samples, images=images)
         return sample
 
@@ -462,11 +456,10 @@ class Samples():
         preds["b_a"] = self.model.predictors["b"].predict(feed_a)
         preds["a_b"] = self.model.predictors["a"].predict(feed_b)
         preds["b_b"] = self.model.predictors["b"].predict(feed_b)
-
-        # Get the returned image from predictors that emit multiple items
+        # Get the returned largest image from predictors that emit multiple items
         if not isinstance(preds["a_a"], np.ndarray):
             for key, val in preds.items():
-                preds[key] = val[0]
+                preds[key] = val[self.model.largest_face_index]
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
@@ -661,7 +654,7 @@ class PingPong():
         self.model = model
         self.sides = sides
         self.side = sorted(sides)[0]
-        self.loss = {side: dict() for side in sides}
+        self.loss = {side: [0] for side in sides}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def switch(self):

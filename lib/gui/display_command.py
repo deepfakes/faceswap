@@ -12,7 +12,8 @@ from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .tooltip import Tooltip
 from .stats import Calculations
-from .utils import FileHandler, get_config, get_images, set_slider_rounding
+from .control_helper import set_slider_rounding
+from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -191,7 +192,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
-                text="Graph updates every 100 iterations. Click to refresh now.",
+                text="Graph updates at every model save. Click to refresh now.",
                 wraplength=200)
         logger.debug("Added refresh option")
 
@@ -251,7 +252,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add a single graph to the graph window """
         logger.trace("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-        for loss_key in self.display_item.loss_keys:
+        display_tabs = sorted(self.display_item.loss_keys)
+        if any(key.startswith("total") for key in display_tabs):
+            total_idx = [idx for idx, key in enumerate(display_tabs) if key.startswith("total")][0]
+            display_tabs.insert(0, display_tabs.pop(total_idx))
+        for loss_key in display_tabs:
             tabname = loss_key.replace("_", " ").title()
             if tabname in existing:
                 continue

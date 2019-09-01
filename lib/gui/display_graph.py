@@ -83,8 +83,8 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.calcs = data
         self.ylabel = ylabel
-        self.colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges",
-                           "Greys", "copper", "summer", "bone"]
+        self.colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges", "Greys", "copper",
+                           "summer", "bone", "hot", "cool", "pink", "Wistia", "spring", "winter"]
         self.lines = list()
         self.toolbar = None
         self.fig = Figure(figsize=(4, 4), dpi=75)

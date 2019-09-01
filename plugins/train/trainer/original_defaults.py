@@ -53,6 +53,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 2,
         "min_max": (2, 16),
+        "group": "evaluation"
     },
     "zoom_amount": {
         "default": 5,
@@ -60,6 +61,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 25),
+        "group": "image augmentation",
     },
     "rotation_range": {
         "default": 10,
@@ -67,6 +69,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 25),
+        "group": "image augmentation",
     },
     "shift_range": {
         "default": 5,
@@ -75,6 +78,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 25),
+        "group": "image augmentation",
     },
     "flip_chance": {
         "default": 50,
@@ -83,6 +87,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 75),
+        "group": "image augmentation",
     },
     "color_lightness": {
         "default": 30,
@@ -91,6 +96,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 75),
+        "group": "color augmentation",
     },
     "color_ab": {
         "default": 8,
@@ -100,6 +106,7 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 50),
+        "group": "color augmentation",
     },
     "color_clahe_chance": {
         "default": 50,
@@ -110,6 +117,7 @@ _DEFAULTS = {
         "rounding": 1,
         "min_max": (0, 75),
         "fixed": False,
+        "group": "color augmentation",
     },
     "color_clahe_max_size": {
         "default": 4,
@@ -121,5 +129,6 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (1, 8),
+        "group": "color augmentation",
     },
 }

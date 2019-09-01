@@ -7,11 +7,12 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
+from .control_helper import ControlBuilder
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
 from .tooltip import Tooltip
-from .utils import ControlBuilder, FileHandler, get_config, get_images, LongRunningTask
+from .utils import FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -117,7 +118,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         session = get_config().session
         if not session.initialized:
             logger.debug("Training not running")
-            print("Training not running")
+            return
+        if session.logging_disabled:
+            logger.trace("Logging disabled. Not triggering analysis update")
             return
         msg = "Currently running training session"
         self.session = session
@@ -139,7 +142,12 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             self.after(1000, lambda msg=message: self.set_session_summary(msg))
         else:
             logger.debug("Retrieving data from thread")
-            self.summary = self.thread.get_result()
+            result = self.thread.get_result()
+            if result is None:
+                logger.debug("No result from session summary. Clearing analysis view")
+                self.clear_session()
+                return
+            self.summary = result
             self.thread = None
             self.set_info("Session: {}".format(message))
             self.stats.session = self.session
@@ -153,10 +161,14 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def clear_session(self):
         """ Clear sessions stats """
         logger.debug("Clearing session")
+        if self.session is None:
+            logger.trace("No session loaded. Returning")
+            return
         self.summary = None
         self.stats.session = None
         self.stats.tree_clear()
         self.reset_session_info()
+        self.session = None
 
     def save_session(self):
         """ Save sessions stats to csv """
@@ -358,8 +370,8 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
             'iconphoto',
             toplevel._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         position = self.data_popup_get_position()
-        height = int(720 * scaling_factor)
-        width = int(400 * scaling_factor)
+        height = int(900 * scaling_factor)
+        width = int(480 * scaling_factor)
         toplevel.geometry("{}x{}+{}+{}".format(str(height),
                                                str(width),
                                                str(position[0]),
@@ -559,12 +571,13 @@ class SessionPopUp(tk.Toplevel):
             text = loss_key.replace("_", " ").title()
             helptext = "Display {}".format(text)
             var = tk.BooleanVar()
-            if loss_key.startswith("loss"):
+            if loss_key.startswith("total"):
                 var.set(True)
             lk_vars[loss_key] = var
 
             if len(loss_keys) == 1:
                 # Don't display if there's only one item
+                var.set(True)
                 break
 
             if not section_added:

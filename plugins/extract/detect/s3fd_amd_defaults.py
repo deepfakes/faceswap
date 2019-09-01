@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Iae Model plugin.
+    The default options for the faceswap S3Fd-AMD Detect plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -42,25 +42,34 @@
 
 
 _HELPTEXT = (
-    "Intermediate Auto Encoder. Based on Original Model, uses intermediate layers to try to "
-    "better get details"
-)
+    "S3FD-AMD Detector options. Uses keras backend to support AMD cards.\n"
+    "Fast on GPU, slow on CPU. Can detect more faces and fewer false "
+    "positives than other GPU detectors, but is a lot more resource intensive."
+    )
 
 
 _DEFAULTS = {
-    "coverage": {
-        "default": 62.5,
-        "info": "How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
-        "rounding": 1,
-        "min_max": (62.5, 100.0),
+    "confidence": {
+        "default": 50,
+        "info": "The confidence level at which the detector has succesfully found a face.\n"
+                "Higher levels will be more discriminating, lower levels will have more false "
+                "positives.",
+        "datatype": int,
+        "rounding": 5,
+        "min_max": (25, 100),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
     },
+    "batch-size": {
+        "default": 8,
+        "info": "The batch size to use. Normally higher batch sizes equal better performance.\n"
+                "A batchsize of 8 requires about 2 GB vram.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (1, 32),
+        "choices": [],
+        "gui_radio": False,
+        "fixed": True,
+    }
 }

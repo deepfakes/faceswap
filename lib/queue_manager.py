@@ -62,13 +62,13 @@ class QueueManager():
         del self.queues[name]
         logger.debug("QueueManager deleted: '%s'", name)
 
-    def get_queue(self, name, maxsize=0):
+    def get_queue(self, name, maxsize=0, multiprocessing_queue=True):
         """ Return a queue from the manager
             If it doesn't exist, create it """
         logger.debug("QueueManager getting: '%s'", name)
         queue = self.queues.get(name, None)
         if not queue:
-            self.add_queue(name, maxsize)
+            self.add_queue(name, maxsize, multiprocessing_queue)
             queue = self.queues[name]
         logger.debug("QueueManager got: '%s'", name)
         return queue

@@ -9,12 +9,11 @@ from tqdm import tqdm
 import cv2
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
-import imageio_ffmpeg as im_ffm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import (_image_extensions, _video_extensions, cv2_read_img, hash_image_file,
-                       hash_encode_image)
+from lib.utils import (_image_extensions, _video_extensions, count_frames_and_secs, cv2_read_img,
+                       hash_image_file, hash_encode_image)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -94,6 +93,7 @@ class MediaLoader():
     def __init__(self, folder):
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
+        self._count = None
         self.folder = folder
         self.vid_reader = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
@@ -109,11 +109,13 @@ class MediaLoader():
     @property
     def count(self):
         """ Number of faces or frames """
+        if self._count is not None:
+            return self._count
         if self.is_video:
-            retval = int(im_ffm.count_frames_and_secs(self.folder)[0])
+            self._count = int(count_frames_and_secs(self.folder)[0])
         else:
-            retval = len(self.file_list_sorted)
-        return retval
+            self._count = len(self.file_list_sorted)
+        return self._count
 
     def check_input_folder(self):
         """ makes sure that the frames or faces folder exists
@@ -131,7 +133,7 @@ class MediaLoader():
 
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
-                os.path.splitext(self.folder)[1] in _video_extensions):
+                os.path.splitext(self.folder)[1].lower() in _video_extensions):
             logger.verbose("Video exists at: '%s'", self.folder)
             retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this

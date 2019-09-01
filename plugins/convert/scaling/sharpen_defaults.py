@@ -71,6 +71,7 @@ _DEFAULTS = {
         "min_max": (100, 500),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "radius": {
@@ -87,6 +88,7 @@ _DEFAULTS = {
         "min_max": (0.1, 5.0),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "threshold": {
@@ -103,6 +105,7 @@ _DEFAULTS = {
         "min_max": (1.0, 10.0),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
 }

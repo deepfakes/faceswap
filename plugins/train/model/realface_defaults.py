@@ -49,21 +49,6 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "coverage": {
-        "default": 62.5,
-        "info": "How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
-        "rounding": 1,
-        "min_max": (62.5, 100.0),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
     "input_size": {
         "default": 64,
         "info": "Resolution (in pixels) of the input image to train on.\n"
@@ -76,6 +61,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "size"
     },
     "output_size": {
         "default": 128,
@@ -88,6 +74,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "size"
     },
     "dense_nodes": {
         "default": 1536,
@@ -100,6 +87,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network"
     },
     "complexity_encoder": {
         "default": 128,
@@ -110,6 +98,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network"
     },
     "complexity_decoder": {
         "default": 512,
@@ -120,17 +109,6 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    },
-    "learning_rate": {
-        "default": 5e-05,
-        "info": "Learning rate - how fast your network will learn.\n"
-                "Note that: Higher values might result in RSoD failure.\n"
-                "This option can be updated for existing models.",
-        "datatype": float,
-        "rounding": 6,
-        "min_max": (5e-06, 0.0001),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": False,
+        "group": "network"
     },
 }
