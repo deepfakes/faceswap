@@ -63,7 +63,7 @@ class VGGFace2():
         """ Return encodings for given image from vgg_face """
         if face.shape[0] != self.input_size:
             face = self.resize_face(face)
-        face = np.expand_dims(face - self.average_img, axis=0)
+        face = face[None, :, :, :3] - self.average_img
         preds = self.model.predict(face)
         return preds[0, :]
 

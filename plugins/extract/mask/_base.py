@@ -168,10 +168,11 @@ class Masker():
         # _, height, width, _ = faces.shape
         height, width, _ = faces.shape
         if height > width:
-            padding=((0, 0), (0, 0), (0, height-width), (0, 0))
-        else:
-            padding=((0, 0), (0, width-height), (0, 0), (0, 0))
-        faces = np.pad(faces, padding, 'constant', constant_values=0.0)
+            padding = ((0, 0), (0, 0), (0, height-width), (0, 0))
+            faces = np.pad(faces, padding, 'constant', constant_values=0.0)
+        elif height < width:
+            padding = ((0, 0), (0, width-height), (0, 0), (0, 0))
+            faces = np.pad(faces, padding, 'constant', constant_values=0.0)
         return padding, image_size, faces
 
     # <<< FINALIZE METHODS >>> #
