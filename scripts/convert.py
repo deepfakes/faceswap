@@ -6,6 +6,7 @@ import re
 import os
 import sys
 from threading import Event
+from time import sleep
 
 from cv2 import imwrite  # pylint:disable=no-name-in-module
 import numpy as np
@@ -16,8 +17,8 @@ from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
-from lib.multithreading import MultiThread, PoolProcess, total_cpus
-from lib.queue_manager import queue_manager, QueueEmpty
+from lib.multithreading import MultiThread, total_cpus
+from lib.queue_manager import queue_manager
 from lib.utils import FaceswapError, get_folder, get_image_paths, hash_image_file
 from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
@@ -32,6 +33,7 @@ class Convert():
         self.args = arguments
         Utils.set_verbosity(self.args.loglevel)
 
+        self.patch_threads = None
         self.images = Images(self.args)
         self.validate()
         self.alignments = Alignments(self.args, False, self.images.is_video)
@@ -83,9 +85,8 @@ class Convert():
         if (self.args.writer == "ffmpeg" and
                 not self.images.is_video and
                 self.args.reference_video is None):
-            logger.error("Output as video selected, but using frames as input. You must provide a "
-                         "reference video ('-ref', '--reference-video').")
-            exit(1)
+            raise FaceswapError("Output as video selected, but using frames as input. You must "
+                                "provide a reference video ('-ref', '--reference-video').")
         output_dir = get_folder(self.args.output_dir)
         logger.info("Output Directory: %s", output_dir)
 
@@ -93,7 +94,7 @@ class Convert():
         """ Add the queues for convert """
         logger.debug("Adding queues. Queue size: %s", self.queue_size)
         for qname in ("convert_in", "convert_out", "patch"):
-            queue_manager.add_queue(qname, self.queue_size)
+            queue_manager.add_queue(qname, self.queue_size, multiprocessing_queue=False)
 
     def process(self):
         """ Process the conversion """
@@ -121,27 +122,17 @@ class Convert():
         logger.debug("Converting images")
         save_queue = queue_manager.get_queue("convert_out")
         patch_queue = queue_manager.get_queue("patch")
-        completion_queue = queue_manager.get_queue("patch_completed")
-        pool = PoolProcess(self.converter.process, patch_queue, save_queue,
-                           completion_queue=completion_queue,
-                           processes=self.pool_processes)
-        pool.start()
-        completed_count = 0
+        self.patch_threads = MultiThread(self.converter.process, patch_queue, save_queue,
+                                         thread_count=self.pool_processes, name="patch")
+
+        self.patch_threads.start()
         while True:
             self.check_thread_error()
             if self.disk_io.completion_event.is_set():
                 logger.debug("DiskIO completion event set. Joining Pool")
                 break
-            try:
-                completed = completion_queue.get(True, 1)
-            except QueueEmpty:
-                continue
-            completed_count += completed
-            logger.debug("Total process pools completed: %s of %s", completed_count, pool.procs)
-            if completed_count == pool.procs:
-                logger.debug("All processes completed. Joining Pool")
-                break
-        pool.join()
+            sleep(1)
+        self.patch_threads.join()
 
         logger.debug("Putting EOF")
         save_queue.put("EOF")
@@ -149,7 +140,10 @@ class Convert():
 
     def check_thread_error(self):
         """ Check and raise thread errors """
-        for thread in (self.predictor.thread, self.disk_io.load_thread, self.disk_io.save_thread):
+        for thread in (self.predictor.thread,
+                       self.disk_io.load_thread,
+                       self.disk_io.save_thread,
+                       self.patch_threads):
             thread.check_and_raise_error()
 
 
@@ -238,15 +232,13 @@ class DiskIO():
         logger.debug("minframe: %s, maxframe: %s", minframe, maxframe)
 
         if minframe is None or maxframe is None:
-            logger.error("Frame Ranges specified, but could not determine frame numbering "
-                         "from filenames")
-            exit(1)
+            raise FaceswapError("Frame Ranges specified, but could not determine frame numbering "
+                                "from filenames")
 
         retval = list()
         for rng in self.args.frame_ranges:
             if "-" not in rng:
-                logger.error("Frame Ranges not specified in the correct format")
-                exit(1)
+                raise FaceswapError("Frame Ranges not specified in the correct format")
             start, end = rng.split("-")
             retval.append((max(int(start), minframe), min(int(end), maxframe)))
         logger.debug("frame ranges: %s", retval)
@@ -289,7 +281,9 @@ class DiskIO():
             q_name = "convert_out"
         else:
             q_name = task
-        setattr(self, "{}_queue".format(task), queue_manager.get_queue(q_name))
+        setattr(self,
+                "{}_queue".format(task),
+                queue_manager.get_queue(q_name, multiprocessing_queue=False))
         logger.debug("Added queue for task: '%s'", task)
 
     def start_thread(self, task):
@@ -312,7 +306,7 @@ class DiskIO():
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if image is None or (not image.any() and image.ndim not in ((2, 3))):
+            if image is None or (not image.any() and image.ndim not in (2, 3)):
                 # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
@@ -488,8 +482,7 @@ class Predict():
         logger.debug("Loading Model")
         model_dir = get_folder(self.args.model_dir, make_folder=False)
         if not model_dir:
-            logger.error("%s does not exist.", self.args.model_dir)
-            exit(1)
+            raise FaceswapError("{} does not exist.".format(self.args.model_dir))
         trainer = self.get_trainer(model_dir)
         gpus = 1 if not hasattr(self.args, "gpus") else self.args.gpus
         model = PluginLoader.get_model(trainer)(model_dir, gpus, predict=True)
@@ -505,9 +498,9 @@ class Predict():
         statefile = [fname for fname in os.listdir(str(model_dir))
                      if fname.endswith("_state.json")]
         if len(statefile) != 1:
-            logger.error("There should be 1 state file in your model folder. %s were found. "
-                         "Specify a trainer with the '-t', '--trainer' option.", len(statefile))
-            exit(1)
+            raise FaceswapError("There should be 1 state file in your model folder. {} were "
+                                "found. Specify a trainer with the '-t', '--trainer' "
+                                "option.".format(len(statefile)))
         statefile = os.path.join(str(model_dir), statefile[0])
 
         with open(statefile, "rb") as inp:
@@ -515,9 +508,8 @@ class Predict():
             trainer = state.get("name", None)
 
         if not trainer:
-            logger.error("Trainer name could not be read from state file. "
-                         "Specify a trainer with the '-t', '--trainer' option.")
-            exit(1)
+            raise FaceswapError("Trainer name could not be read from state file. "
+                                "Specify a trainer with the '-t', '--trainer' option.")
         logger.debug("Trainer from state file: '%s'", trainer)
         return trainer
 
@@ -702,9 +694,8 @@ class OptionalActions():
                 face_hashes.append(hash_image_file(face))
             logger.debug("Face Hashes: %s", (len(face_hashes)))
             if not face_hashes:
-                logger.error("Aligned directory is empty, no faces will be converted!")
-                exit(1)
-            elif len(face_hashes) <= len(self.input_images) / 3:
+                raise FaceswapError("Aligned directory is empty, no faces will be converted!")
+            if len(face_hashes) <= len(self.input_images) / 3:
                 logger.warning("Aligned directory contains far fewer images than the input "
                                "directory, are you sure this is the right folder?")
         return face_hashes
