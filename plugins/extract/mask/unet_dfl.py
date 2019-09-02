@@ -13,10 +13,10 @@ class Mask(Masker):
         model_filename = "DFL_256_sigmoid_v1.h5"
         super().__init__(git_model_id=git_model_id,
                          model_filename=model_filename,
-                         input_size=256,
                          **kwargs)
         self.vram = 3000
         self.min_vram = 1024
+        self.input_size = 256
         self.model = None
         self.supports_plaidml = True
 
@@ -34,69 +34,33 @@ class Mask(Masker):
             raise err
 
     # MASK PROCESSING
-    def build_masks(self, faces, landmarks):
+    def build_masks(self, image, detected_face):
         """ Function for creating facehull masks
             Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
         """
-        postprocess_test = False
-        images = faces.astype("float32") / 255.
-        images = images[None, ...] if images.ndim == 3 else images
-        masks = np.array(np.zeros(images.shape[:-1] + (1, )), dtype='uint8', ndmin=4)
-        original_size, resized_faces = self.resize_inputs(images, self.input_size)
-        batch_size = min(resized_faces.shape[0], 8)
-        batches = ((resized_faces.shape[0] - 1) // batch_size) + 1
-        even_split_section = batches * batch_size
-        faces_batched = np.split(resized_faces[:even_split_section], batches)
-        masks_batched = np.split(masks[:even_split_section], batches)
-        if resized_faces.shape[0] % batch_size != 0:
-            faces_batched.append(resized_faces[even_split_section:])
-            masks_batched.append(masks[even_split_section:])
-        for i, model_input in enumerate(faces_batched):
-            # pylint: disable=no-member
-            results = self.model.predict_on_batch(model_input)
-            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
-            if postprocess_test:
-                generator = (self.postprocessing(mask[:, :, None]) for mask in results)
-            results = np.array(tuple(generator))[..., None]
-            results[results < 0.05] = 0.
-            results[results > 0.95] = 1.
-            results *= 255.
-            _, results = self.resize_inputs(results, original_size)
-            batch_slice = slice(i * batch_size, (i + 1) * batch_size)
-            masks[batch_slice] = results.astype('uint8')
-        faces = np.concatenate((faces[..., :3], masks[0]), axis=-1)
-        return faces, masks
-
-    @staticmethod
-    def postprocessing(mask):
-        """ Post-processing of Nirkin style segmentation masks """
         # pylint: disable=no-member
-        # Select_largest_segment
-        pop_small_segments = False  # Don't do this right now
-        if pop_small_segments:
-            results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
-            _, labels, stats, _ = results
-            segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
-            mask[labels != segments_ranked_by_area[0, 0]] = 0.
+        postprocess_test = False
+        image = np.array(image)
+        detected_face.load_aligned(image, size=self.input_size, align_eyes=False, dtype='float32')
+        feed_face = detected_face.aligned["face"]
+        mask = np.zeros(feed_face.shape[:-1] + (1, ), dtype='float32')
+        model_input = feed_face / 255.
+        
+        results = self.model.predict_on_batch(model_input[None, :, :, :3])
+        generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in results)
+        if postprocess_test:
+            generator = (self.postprocessing(mask[..., None]) for mask in results)
+        results = np.array(tuple(generator))[..., None]
+        results[results < 0.05] = 0.
+        results[results > 0.95] = 1.
+        results *= 255.
 
-        # Smooth contours
-        smooth_contours = False  # Don't do this right now
-        if smooth_contours:
-            iters = 2
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
-            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
-            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
-            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+        detected_face.aligned.clear()
+        detected_face.load_aligned(image, size=self.crop_size, align_eyes=False)
+        output_face = detected_face.aligned["face"]
+        resized_masked = self.resize_inputs(results, self.crop_size).astype('uint8')
+        resized_masked = np.squeeze(resized_masked, axis=0)
+        masked_img = np.concatenate((output_face[..., :3], resized_masked), axis=-1)
+        detected_face.aligned["face"] = masked_img
+        return detected_face
 
-        # Fill holes
-        fill_holes = True
-        if fill_holes:
-            not_holes = mask.copy()
-            not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
-            cv2.floodFill(not_holes, None, (0, 0), 255)
-            holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]
-            mask = cv2.bitwise_or(mask, holes)
-            mask = np.expand_dims(mask, axis=-1)
-
-        return mask

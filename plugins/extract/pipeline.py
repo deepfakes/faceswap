@@ -24,16 +24,16 @@ class Extractor():
     """
     def __init__(self, detector, aligner, masker, loglevel,
                  configfile=None, multiprocess=False, rotate_images=None, min_size=20,
-                 normalize_method=None):
+                 normalize_method=None, crop_size=256):
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, loglevel: %s, "
                      "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s)", self.__class__.__name__, detector, aligner, masker,
-                     loglevel, configfile, multiprocess, rotate_images, min_size,
-                     normalize_method)
+                     "normalize_method: %s,  min_size: %s)", self.__class__.__name__, detector,
+                     aligner, masker, loglevel, configfile, multiprocess, rotate_images, min_size,
+                     normalize_method, crop_size)
         self.phase = "detect"
         self.detector = self.load_detector(detector, loglevel, rotate_images, min_size, configfile)
         self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
-        self.masker = self.load_masker(masker, loglevel, configfile)
+        self.masker = self.load_masker(masker, loglevel, configfile, crop_size)
         self.is_parallel = self.set_parallel_processing(multiprocess)
         self.processes = list()
         self.queues = self.add_queues()
@@ -97,12 +97,13 @@ class Extractor():
         return aligner
 
     @staticmethod
-    def load_masker(masker, loglevel, configfile):
+    def load_masker(masker, loglevel, configfile, crop_size):
         """ Set global arguments and load masker plugin """
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
         masker = PluginLoader.get_masker(masker_name)(loglevel=loglevel,
-                                                      configfile=configfile)
+                                                      configfile=configfile,
+                                                      crop_size=crop_size)
         return masker
 
     def set_parallel_processing(self, multiprocess):

@@ -239,14 +239,7 @@ class Extract():
     def align_face(self, faces, align_eyes, size, filename):
         """ Align the detected face and add the destination file path """
         final_faces = list()
-        image = faces["image"]
-        landmarks = faces["landmarks"]
-        detected_faces = faces["detected_faces"]
-        for idx, face in enumerate(detected_faces):
-            detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face, image)
-            detected_face.landmarksXY = landmarks[idx]
-            detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
+        for detected_face in faces["faces"]:
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces

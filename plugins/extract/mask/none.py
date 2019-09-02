@@ -11,7 +11,6 @@ class Mask(Masker):
         model_filename = None
         super().__init__(git_model_id=git_model_id,
                          model_filename=model_filename,
-                         input_size=256,
                          **kwargs)
         self.vram = 0
         self.model = None
@@ -30,10 +29,11 @@ class Mask(Masker):
             raise err
 
     # MASK PROCESSING
-    def build_masks(self, faces, landmarks):
+    def build_masks(self, image, detected_face):
         """ Function for creating facehull masks
             Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
         """
-        masks = np.full(faces.shape[:-1] + (1,), fill_value=255, dtype='uint8')
-        faces = np.concatenate((faces[..., :3], masks), axis=-1)
-        return faces, masks
+        masks = np.full(image.shape[:-1] + (1,), fill_value=255, dtype='uint8')
+        masked_img = np.concatenate((image[..., :3], masks), axis=-1)
+        detected_face.load_aligned(masked_img, size=self.crop_size, align_eyes=False)
+        return detected_face

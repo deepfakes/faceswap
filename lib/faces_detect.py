@@ -1,7 +1,7 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 import logging
-import sys
+
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling

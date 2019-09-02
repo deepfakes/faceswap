@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 from io import StringIO
-
+from lib.faces_detect import DetectedFace
 from lib.aligner import Extract
 from lib.gpu_stats import GPUStats
 from lib.utils import GetModel
@@ -41,13 +41,13 @@ class Masker():
                     1 - Returns a single channel mask
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
-    def __init__(self, loglevel, configfile=None, git_model_id=None,
-                 model_filename=None, input_size=256):
-        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, git_model_id: %s, "
-                     "model_filename: '%s', input_size: %s)", self.__class__.__name__, loglevel,
-                     configfile, git_model_id, model_filename, input_size)
+    def __init__(self, loglevel='VERBOSE', configfile=None, crop_size=256, git_model_id=None,
+                 model_filename=None):
+        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, crop_size: %s, "
+                     "git_model_id: %s, model_filename: '%s')", self.__class__.__name__, loglevel,
+                     configfile, crop_size, git_model_id, model_filename)
         self.loglevel = loglevel
-        self.input_size = input_size
+        self.crop_size = crop_size
         self.extract = Extract()
         self.parent_is_pool = False
         self.init = None
@@ -133,13 +133,13 @@ class Masker():
 
             logger.trace("Masking faces")
             try:
-                item["image"], item["mask"] = self.process_masks(item["image"], item["landmarks"])
+                item["faces"] = self.process_masks(item["image"], item["landmarks"], item["detected_faces"])
                 logger.trace("Masked faces: %s", item["filename"])
             except ValueError as err:
                 logger.warning("Image '%s' could not be processed. This may be due to corrupted "
                                "data: %s", item["filename"], str(err))
                 item["detected_faces"] = list()
-                item["mask"] = list()
+                item["faces"] = list()
                 # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
                 import sys
                 exc_info = sys.exc_info()
@@ -147,33 +147,32 @@ class Masker():
             self.finalize(item)
         logger.debug("Completed Mask")
 
-    def process_masks(self, image, landmarks):
+    def process_masks(self, image, landmarks, detected_faces):
         """ Align image and process landmarks """
         logger.trace("Processing masks")
         retval = list()
-        faces, masks = self.build_masks(image, np.array(landmarks))
+        for face, landmark in zip(detected_faces, landmarks):
+            detected_face = DetectedFace()
+            detected_face.from_bounding_box_dict(face, image)
+            detected_face.landmarksXY = landmark
+            detected_face = self.build_masks(image, detected_face)
+            retval.append(detected_face)
         logger.trace("Processed masks")
-        return faces, masks
+        return retval
 
     @staticmethod
-    def resize_inputs(faces, target_size):
+    def resize_inputs(image, target_size):
         """ resize input and output of mask models appropriately """
-        _, height, width, _ = faces.shape
+        _, height, width, channels = image.shape
         image_size = max(height, width)
         scale = target_size / image_size
-        if image_size != target_size:
-            method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
-            generator = (cv2.resize(face, (0, 0), fx=scale, fy=scale, interpolation=method) for face in faces)
-            faces = np.array(tuple(generator))
-        # _, height, width, _ = faces.shape
-        height, width, _ = faces.shape
-        if height > width:
-            padding = ((0, 0), (0, 0), (0, height-width), (0, 0))
-            faces = np.pad(faces, padding, 'constant', constant_values=0.0)
-        elif height < width:
-            padding = ((0, 0), (0, width-height), (0, 0), (0, 0))
-            faces = np.pad(faces, padding, 'constant', constant_values=0.0)
-        return padding, image_size, faces
+        if scale == 1.:
+            return image
+        method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
+        generator = (cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
+        resized = np.array(tuple(generator))
+        resized = resized if channels > 1 else resized[..., None]
+        return resized 
 
     # <<< FINALIZE METHODS >>> #
     def finalize(self, output):
@@ -216,3 +215,36 @@ class Masker():
             yield item
             if item == "EOF":
                 break
+
+    @staticmethod
+    def postprocessing(mask):
+        """ Post-processing of Nirkin style segmentation masks """
+        # pylint: disable=no-member
+        # Select_largest_segment
+        pop_small_segments = False  # Don't do this right now
+        if pop_small_segments:
+            results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+            _, labels, stats, _ = results
+            segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
+            mask[labels != segments_ranked_by_area[0, 0]] = 0.
+
+        # Smooth contours
+        smooth_contours = False  # Don't do this right now
+        if smooth_contours:
+            iters = 2
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+
+        # Fill holes
+        fill_holes = True
+        if fill_holes:
+            not_holes = mask.copy()
+            not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
+            cv2.floodFill(not_holes, None, (0, 0), 255)
+            holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]
+            mask = cv2.bitwise_or(mask, holes)
+            mask = np.expand_dims(mask, axis=-1)
+        return mask

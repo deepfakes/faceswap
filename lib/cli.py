@@ -709,6 +709,12 @@ class ExtractArgs(ExtractConvertArgs):
                                       "saved out during the second pass. WARNING: Don't interrupt "
                                       "the script when writing the file because it might get "
                                       "corrupted. Set to 0 to turn off"})
+        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
+                              "action": "store_true",
+                              "dest": "debug_landmarks",
+                              "group": "output",
+                              "default": False,
+                              "help": "Draw landmarks on the ouput faces for debugging purposes."})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
@@ -716,12 +722,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "default": False,
                               "help": "Perform extra alignment to ensure left/right eyes are at "
                                       "the same height"})
-        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
-                              "action": "store_true",
-                              "dest": "debug_landmarks",
-                              "group": "output",
-                              "default": False,
-                              "help": "Draw landmarks on the ouput faces for debugging purposes."})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,

@@ -13,7 +13,6 @@ class Mask(Masker):
         model_filename = None
         super().__init__(git_model_id=git_model_id,
                          model_filename=model_filename,
-                         input_size=256,
                          **kwargs)
         self.vram = 0
         self.model = None
@@ -32,20 +31,21 @@ class Mask(Masker):
             raise err
 
     # MASK PROCESSING
-    def build_masks(self, faces, landmarks):
+    def build_masks(self, image, detected_face):
         """ Function for creating facehull masks
             Faces may be of shape (batch_size, height, width, 3)
         """
-        faces_np = faces[None, ...] if faces.ndim == 3 else faces
-        masks = np.ones(faces_np.shape[:-1] + (1,), dtype='uint8')
-        for i, landmark in enumerate(landmarks[:1, ...]):
-            parts = self.parse_parts(landmark)
-            for item in parts:
-                # pylint: disable=no-member
-                hull = cv2.convexHull(np.concatenate(item)).astype("int32")
-                cv2.fillConvexPoly(masks[i], hull, 255)
-        faces = np.concatenate((faces[..., :3], masks[0]), axis=-1)
-        return faces, masks
+        image = np.array(image)
+        landmarks = np.array(detected_face.landmarksXY)
+        mask = np.zeros(image.shape[:-1] + (1,), dtype='uint8')
+        parts = self.parse_parts(landmarks)
+        for item in parts:
+            # pylint: disable=no-member
+            hull = cv2.convexHull(np.concatenate(item)).astype("int32")
+            cv2.fillConvexPoly(mask, hull, 255)
+        masked_img = np.concatenate((image[..., :3], mask), axis=-1)
+        detected_face.load_aligned(masked_img, size=self.crop_size, align_eyes=False)
+        return detected_face
 
     @staticmethod
     def parse_parts(landmarks):
