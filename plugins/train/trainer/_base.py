@@ -422,6 +422,7 @@ class Samples():
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
+        print(figure.shape, header.shape)
         figure = np.vstack((header, figure))
 
         logger.debug("Compiled sample")
@@ -541,7 +542,7 @@ class Samples():
         new_images = list()
         for idx, img in enumerate(backgrounds):
             img[offset:offset + foregrounds[idx].shape[0],
-                offset:offset + foregrounds[idx].shape[1]] = foregrounds[idx]
+                offset:offset + foregrounds[idx].shape[1],:3] = foregrounds[idx]
             new_images.append(img)
         retval = np.array(new_images)
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
@@ -570,14 +571,14 @@ class Samples():
                   for idx in range(len(texts))]
         logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
                      texts, text_sizes, text_x, text_y)
-        header_box = np.ones((height, total_width, 3), np.float32)
+        header_box = np.ones((height, total_width, 4), np.float32)
         for idx, text in enumerate(texts):
             cv2.putText(header_box,  # pylint: disable=no-member
                         text,
                         (text_x[idx], text_y),
                         font,
                         self.scaling,
-                        (0, 0, 0),
+                        (0, 0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)  # pylint: disable=no-member
         logger.debug("header_box.shape: %s", header_box.shape)
