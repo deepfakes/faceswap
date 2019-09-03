@@ -48,6 +48,8 @@ class ScriptExecutor():
         min_ver = 1.12
         max_ver = 1.14
         try:
+            # Ensure tensorflow doesn't pin all threads to one core when using tf-mkl
+            os.environ["KMP_AFFINITY"] = "disabled"
             import tensorflow as tf
         except ImportError as err:
             raise FaceswapError("There was an error importing Tensorflow. This is most likely "
