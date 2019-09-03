@@ -153,13 +153,12 @@ def cv2_read_img(filename, raise_error=False):
         Logs an error if the image returned is None. or an error has occured.
 
         Pass raise_error=True if error should be raised """
-    # pylint:disable=no-member,c-extension-no-member
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.trace("Requested image: '%s'", filename)
     success = True
     image = None
     try:
-        image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+        image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)  # pylint:disable=no-member,c-extension-no-member
         if image is None:
             raise ValueError
     except TypeError:
@@ -197,9 +196,8 @@ def hash_image_file(filename):
 def hash_encode_image(image, extension):
     """ Encode the image, get the hash and return the hash with
         encoded image """
-    # pylint:disable=no-member, c-extension-no-member
-    img = cv2.imencode(extension, image)[1]
-    f_hash = sha1(cv2.imdecode(img, cv2.IMREAD_UNCHANGED)).hexdigest()
+    img = cv2.imencode(extension, image)[1]  # pylint: disable=no-member
+    f_hash = sha1(cv2.imdecode(img, cv2.IMREAD_UNCHANGED)).hexdigest()# pylint:disable=no-member, c-extension-no-member
     return f_hash, img
 
 
@@ -385,8 +383,8 @@ def rotate_landmarks(face, rotation_matrix):
 
     logger.trace("Original landmarks: %s", landmarks)
 
-    rotation_matrix = cv2.invertAffineTransform(  # pylint:disable=no-member
-        rotation_matrix)
+    rotation_matrix = cv2.invertAffineTransform(rotation_matrix)  # pylint:disable=no-member
+        
     rotated = list()
     for item in (bounding_box, landmarks):
         if not item:

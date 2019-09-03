@@ -521,15 +521,13 @@ class Samples():
     @staticmethod
     def compile_masked(faces, masks):
         """ Add the mask to the faces for masked preview """
-        # pylint: disable=no-member
         retval = list()
         masks3 = np.tile(1 - np.rint(masks), 3)
         for mask in masks3:
             mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
         for previews in faces:
-            images = np.array([cv2.addWeighted(img, 1.0,
-                                               masks3[idx], 0.3,
-                                               0)
+            images = np.array([cv2.addWeighted(img,  # pylint: disable=no-member
+                                               1.0, masks3[idx], 0.3, 0)
                                for idx, img in enumerate(previews)])
             retval.append(images)
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])

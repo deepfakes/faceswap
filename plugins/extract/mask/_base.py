@@ -168,8 +168,9 @@ class Masker():
         scale = target_size / image_size
         if scale == 1.:
             return image
-        method = cv2.INTER_CUBIC if image_size < target_size else cv2.INTER_AREA
-        generator = (cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
+        method = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
+        generator = (cv2.resize(img,  # pylint: disable=no-member
+                                (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
         resized = np.array(tuple(generator))
         resized = resized if channels > 1 else resized[..., None]
         return resized 
@@ -223,7 +224,9 @@ class Masker():
         # Select_largest_segment
         pop_small_segments = False  # Don't do this right now
         if pop_small_segments:
-            results = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
+            results = cv2.connectedComponentsWithStats(mask,  # pylint: disable=no-member
+                                                       4,
+                                                       cv2.CV_32S)  # pylint: disable=no-member
             _, labels, stats, _ = results
             segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
             mask[labels != segments_ranked_by_area[0, 0]] = 0.
@@ -232,19 +235,24 @@ class Masker():
         smooth_contours = False  # Don't do this right now
         if smooth_contours:
             iters = 2
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
-            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
-            cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=iters)
-            cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=iters)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT,  # pylint: disable=no-member
+                                               (5, 5))
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN,  # pylint: disable=no-member
+                             kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE,  # pylint: disable=no-member
+                             kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE,  # pylint: disable=no-member
+                             kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN,  # pylint: disable=no-member
+                             kernel, iterations=iters)
 
         # Fill holes
         fill_holes = True
         if fill_holes:
             not_holes = mask.copy()
             not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
-            cv2.floodFill(not_holes, None, (0, 0), 255)
-            holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]
-            mask = cv2.bitwise_or(mask, holes)
+            cv2.floodFill(not_holes, None, (0, 0), 255)  # pylint: disable=no-member
+            holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]  # pylint: disable=no-member
+            mask = cv2.bitwise_or(mask, holes)  # pylint: disable=no-member
             mask = np.expand_dims(mask, axis=-1)
         return mask

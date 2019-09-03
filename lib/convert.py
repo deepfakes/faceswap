@@ -124,7 +124,6 @@ class Converter():
 
     def get_new_image(self, predicted):
         """ Get the new face from the predictor and apply box manipulations """
-        # pylint: disable=no-member
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
         original_frame = predicted["image"].astype("float32") / 255.
@@ -137,13 +136,14 @@ class Converter():
             src_face = old_face.reference_face
             new_face = self.pre_warp_adjustments(src_face, new_face)
             interpolator = old_face.reference_interpolators[1]
+            flags = cv2.WARP_INVERSE_MAP + interpolator  # pylint: disable=no-member
             # Warp face with the mask
-            new_image = cv2.warpAffine(new_face,
+            new_image = cv2.warpAffine(new_face,  # pylint: disable=no-member
                                        old_face.reference_matrix,
                                        frame_size,
                                        original_frame,
-                                       flags=cv2.WARP_INVERSE_MAP | interpolator,
-                                       borderMode=cv2.BORDER_TRANSPARENT)
+                                       flags=flags,
+                                       borderMode=cv2.BORDER_TRANSPARENT)  # pylint: disable=no-member
             new_image = np.clip(new_image, 0., 1.)
         logger.trace("Got filename: '%s'. (new_image: %s)", predicted["filename"], new_image.shape)
         return new_image
@@ -187,10 +187,10 @@ class Converter():
 
     def scale_image(self, frame):
         """ Scale the image if requested """
-        # pylint: disable=no-member
         if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
-            interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA
-            frame = cv2.resize(frame, (0, 0), fx=self.scale, fy=self.scale, interpolation=interp)
+            interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
+            frame = cv2.resize(frame,  # pylint: disable=no-member
+                               (0, 0), fx=self.scale, fy=self.scale, interpolation=interp)
             logger.trace("resized frame: %s", frame.shape)
         return frame
