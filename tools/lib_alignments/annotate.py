@@ -56,7 +56,7 @@ class Annotate():
                         self.image,
                         str(idx),
                         top_left,
-                        cv2.FONT_HERSHEY_DUPLEX, # pylint: disable=no-member
+                        cv2.FONT_HERSHEY_DUPLEX,  # pylint: disable=no-member
                         1.0,
                         color,
                         thickness)
