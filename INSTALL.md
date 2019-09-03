@@ -183,9 +183,9 @@ python setup.py
 If setup fails for any reason you can still manually install the packages listed within requirements.txt
 
 ### About some of the options
-   - CUDA: For acceleration. Requires a good nVidia Graphics Card (which supports CUDA inside)
+   - CUDA: For acceleration. Requires a good Nvidia Graphics Card (which supports CUDA inside)
    - Docker: Provide a ready-made image. Hide trivial details. Get you straight to the project.
-   - nVidia-Docker: Access to the nVidia GPU on host machine from inside container.
+   - nvidia-docker: Access to the Nvidia GPU on host machine from inside container.
 
 CUDA with Docker in 20 minutes.
 ```
