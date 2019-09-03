@@ -89,9 +89,9 @@ class Extract():
         r_eye = np.array(r_eye_points + r_brow_points).reshape((-1, 2)).astype(int).flatten()
         mouth = np.array(mouth_points + nose_points + chin_points)
         mouth = mouth.reshape((-1, 2)).astype(int).flatten()
-        l_eye_hull = cv2.convexHull(l_eye.reshape((-1, 2))  # pylint: disable=no-member
-        r_eye_hull = cv2.convexHull(r_eye.reshape((-1, 2))  # pylint: disable=no-member
-        mouth_hull = cv2.convexHull(mouth.reshape((-1, 2))  # pylint: disable=no-member
+        l_eye_hull = cv2.convexHull(l_eye.reshape((-1, 2)))  # pylint: disable=no-member
+        r_eye_hull = cv2.convexHull(r_eye.reshape((-1, 2)))  # pylint: disable=no-member
+        mouth_hull = cv2.convexHull(mouth.reshape((-1, 2)))  # pylint: disable=no-member
 
         mask = np.zeros((size, size, 3), dtype=float)
         cv2.fillConvexPoly(mask,  # pylint: disable=no-member
