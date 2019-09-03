@@ -40,7 +40,7 @@ class Annotate():
             bottom_right = (alignment["x"] + alignment["w"], alignment["y"] + alignment["h"])
             logger.trace("Drawing bounding box: (top_left: %s, bottom_right: %s, color: %s, "
                          "thickness: %s)", top_left, bottom_right, color, thickness)
-            cv2.rectangle(# pylint: disable=no-member
+            cv2.rectangle(  # pylint: disable=no-member
                           self.image, top_left, bottom_right, color, thickness)
 
     def draw_extract_box(self, color_id=2, thickness=1):
@@ -52,7 +52,7 @@ class Annotate():
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, roi)
             top_left = [point for point in roi.squeeze()[0]]
             top_left = (top_left[0], top_left[1] - 10)
-            cv2.putText(# pylint: disable=no-member
+            cv2.putText(  # pylint: disable=no-member
                         self.image,
                         str(idx),
                         top_left,
@@ -60,7 +60,7 @@ class Annotate():
                         1.0,
                         color,
                         thickness)
-            cv2.polylines(# pylint: disable=no-member
+            cv2.polylines(  # pylint: disable=no-member
                           self.image, [roi], True, color, thickness)
 
     def draw_landmarks(self, color_id=3, radius=1):
@@ -71,7 +71,7 @@ class Annotate():
             logger.trace("Drawing Landmarks: (landmarks: %s, color: %s, radius: %s)",
                          landmarks, color, radius)
             for (pos_x, pos_y) in landmarks:
-                cv2.circle(# pylint: disable=no-member
+                cv2.circle(  # pylint: disable=no-member
                            self.image, (pos_x, pos_y), radius, color, -1)
 
     def draw_landmarks_mesh(self, color_id=4, thickness=1):
@@ -92,7 +92,7 @@ class Annotate():
             for key, val in FACIAL_LANDMARKS_IDXS.items():
                 points = np.array([landmarks[val[0]:val[1]]], np.int32)
                 fill_poly = bool(key in ("right_eye", "left_eye", "mouth"))
-                cv2.polylines(# pylint: disable=no-member
+                cv2.polylines(  # pylint: disable=no-member
                               self.image, points, fill_poly, color, thickness)
 
     def draw_grey_out_faces(self, live_face):
@@ -104,7 +104,7 @@ class Annotate():
         for idx, roi in enumerate(self.roi):
             if idx != int(live_face):
                 logger.trace("Greying out face: (idx: %s, roi: %s)", idx, roi)
-                cv2.fillPoly(# pylint: disable=no-member
+                cv2.fillPoly(  # pylint: disable=no-member
                              overlay, roi, (0, 0, 0))
-        cv2.addWeighted(# pylint: disable=no-member
+        cv2.addWeighted(  # pylint: disable=no-member
                         overlay, alpha, self.image, 1. - alpha, 0., self.image)
