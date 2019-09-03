@@ -222,7 +222,7 @@ class BackgroundGenerator(FSThread):
         https://stackoverflow.com/questions/7323664/ """
     # See below why prefetch count is flawed
     def __init__(self, generator, prefetch=1, queue=None):
-        FSThread.__init__(self, target=self._run)
+        super().__init__(target=self._run)
         self.queue = queue or Queue.Queue(prefetch)
         self.generator = generator
         self.daemon = True
@@ -233,10 +233,6 @@ class BackgroundGenerator(FSThread):
             Note: put blocks only if put is called while queue has already
             reached max size => this makes 2 prefetched items! One in the
             queue, one waiting for insertion! """
-        # Ensure all cores can be used when using openblas
-        import numpy
-        if hasattr(os, "sched_setaffinity"):
-            os.sched_setaffinity(0, range(total_cpus()))
         try:
             for item in self.generator:
                 self.queue.put(item)

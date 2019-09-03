@@ -25,8 +25,8 @@ import logging
 import os
 import time
 
-import numpy as np
 import cv2
+import numpy as np
 
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
