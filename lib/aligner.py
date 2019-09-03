@@ -35,46 +35,46 @@ class Extract():
 
     def transform(self, image, mat, size, padding=0):
         """ Transform Image """
-        # pylint: disable=no-member
         logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         interpolators = get_matrix_scaling(matrix)
-        retval = cv2.warpAffine(image, matrix, (size, size), flags=interpolators[0])
+        retval = cv2.warpAffine(# pylint: disable=no-member
+                                image, matrix, (size, size), flags=interpolators[0])
         return retval
 
     def transform_points(self, points, mat, size, padding=0):
         """ Transform points along matrix """
-        # pylint: disable=no-member
         logger.trace("points: %s, matrix: %s, size: %s. padding: %s", points, mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         points = np.expand_dims(points, axis=1)
-        points = cv2.transform(points, matrix, points.shape)
+        points = cv2.transform(# pylint: disable=no-member
+                               points, matrix, points.shape)
         retval = np.squeeze(points)
         logger.trace("Returning: %s", retval)
         return retval
 
     def get_original_roi(self, mat, size, padding=0):
-        # pylint: disable=no-member
         """ Return the square aligned box location on the original image """
         logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         points = np.array([[0, 0], [0, size - 1], [size - 1, size - 1], [size - 1, 0]], np.int32)
         points = points.reshape((-1, 1, 2))
-        matrix = cv2.invertAffineTransform(matrix)
+        matrix = cv2.invertAffineTransform(# pylint: disable=no-member
+                                           matrix)
         logger.trace("Returning: (points: %s, matrix: %s", points, matrix)
-        return cv2.transform(points, matrix)
+        return cv2.transform(points, matrix) # pylint: disable=no-member
 
     @staticmethod
     def get_feature_mask(aligned_landmarks_68, size, padding=0, dilation=30):
         """ Return the face feature mask """
-        # pylint: disable=no-member
         logger.trace("aligned_landmarks_68: %s, size: %s, padding: %s, dilation: %s",
                      aligned_landmarks_68, size, padding, dilation)
         scale = size - 2 * padding
         translation = padding
         pad_mat = np.matrix([[scale, 0.0, translation], [0.0, scale, translation]])
         aligned_landmarks_68 = np.expand_dims(aligned_landmarks_68, axis=1)
-        aligned_landmarks_68 = cv2.transform(aligned_landmarks_68,
+        aligned_landmarks_68 = cv2.transform(# pylint: disable=no-member
+                                             aligned_landmarks_68,
                                              pad_mat,
                                              aligned_landmarks_68.shape)
         aligned_landmarks_68 = np.squeeze(aligned_landmarks_68)
@@ -85,25 +85,30 @@ class Extract():
         nose_points = aligned_landmarks_68[27:36].tolist()
         chin_points = aligned_landmarks_68[8:11].tolist()
         mouth_points = aligned_landmarks_68[48:68].tolist()
-        l_eye_points = l_eye_points + l_brow_points
-        r_eye_points = r_eye_points + r_brow_points
-        mouth_points = mouth_points + nose_points + chin_points
+        # TOFO remove excessive reshapes and flattens
+        l_eye_points = np.array(l_eye_points + l_brow_points).reshape((-1, 2))
+        r_eye_points = np.array(r_eye_points + r_brow_points).reshape((-1, 2))
+        mouth_points = np.array(mouth_points + nose_points + chin_points).reshape((-1, 2))
 
-        l_eye_hull = cv2.convexHull(np.array(l_eye_points).reshape(
-            (-1, 2)).astype(int)).flatten().reshape((-1, 2))
-        r_eye_hull = cv2.convexHull(np.array(r_eye_points).reshape(
-            (-1, 2)).astype(int)).flatten().reshape((-1, 2))
-        mouth_hull = cv2.convexHull(np.array(mouth_points).reshape(
-            (-1, 2)).astype(int)).flatten().reshape((-1, 2))
+        l_eye_hull = cv2.convexHull(# pylint: disable=no-member
+                                    l_eye_points.astype(int).flatten().reshape((-1, 2))
+        r_eye_hull = cv2.convexHull(# pylint: disable=no-member
+                                    r_eye_points.astype(int).flatten().reshape((-1, 2))
+        mouth_hull = cv2.convexHull(# pylint: disable=no-member
+                                    mouth_points.astype(int).flatten().reshape((-1, 2))
 
         mask = np.zeros((size, size, 3), dtype=float)
-        cv2.fillConvexPoly(mask, l_eye_hull, (1, 1, 1))
-        cv2.fillConvexPoly(mask, r_eye_hull, (1, 1, 1))
-        cv2.fillConvexPoly(mask, mouth_hull, (1, 1, 1))
+        cv2.fillConvexPoly(# pylint: disable=no-member
+                           mask, l_eye_hull, (1, 1, 1))
+        cv2.fillConvexPoly(# pylint: disable=no-member
+                           mask, r_eye_hull, (1, 1, 1))
+        cv2.fillConvexPoly(# pylint: disable=no-member
+                           mask, mouth_hull, (1, 1, 1))
 
         if dilation > 0:
             kernel = np.ones((dilation, dilation), np.uint8)
-            mask = cv2.dilate(mask, kernel, iterations=1)
+            mask = cv2.dilate(# pylint: disable=no-member
+                              mask, kernel, iterations=1)
 
         logger.trace("Returning: %s", mask)
         return mask
@@ -111,14 +116,13 @@ class Extract():
 
 def get_matrix_scaling(mat):
     """ Get the correct interpolator """
-    # pylint: disable=no-member
     x_scale = np.sqrt(mat[0, 0] * mat[0, 0] + mat[0, 1] * mat[0, 1])
     y_scale = (mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]) / x_scale
     avg_scale = (x_scale + y_scale) * 0.5
     if avg_scale >= 1.:
-        interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA
+        interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA # pylint: disable=no-member
     else:
-        interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC
+        interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC # pylint: disable=no-member
     logger.trace("interpolator: %s, inverse interpolator: %s", interpolators[0], interpolators[1])
     return interpolators
 

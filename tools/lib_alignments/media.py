@@ -191,11 +191,10 @@ class MediaLoader():
     @staticmethod
     def save_image(output_folder, filename, image):
         """ Save an image """
-        # pylint: disable=no-member
         output_file = os.path.join(output_folder, filename)
         output_file = os.path.splitext(output_file)[0]+'.png'
         logger.trace("Saving image: '%s'", output_file)
-        cv2.imwrite(output_file, image)
+        cv2.imwrite(output_file, image) # pylint: disable=no-member
 
 
 class Faces(MediaLoader):
