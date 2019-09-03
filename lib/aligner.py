@@ -38,8 +38,8 @@ class Extract():
         logger.trace("matrix: %s, size: %s. padding: %s", mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         interpolators = get_matrix_scaling(matrix)
-        retval = cv2.warpAffine(  # pylint: disable=no-member
-                                image, matrix, (size, size), flags=interpolators[0])
+        retval = cv2.warpAffine(image,  # pylint: disable=no-member
+                                matrix, (size, size), flags=interpolators[0])
         return retval
 
     def transform_points(self, points, mat, size, padding=0):
@@ -47,8 +47,8 @@ class Extract():
         logger.trace("points: %s, matrix: %s, size: %s. padding: %s", points, mat, size, padding)
         matrix = self.transform_matrix(mat, size, padding)
         points = np.expand_dims(points, axis=1)
-        points = cv2.transform(  # pylint: disable=no-member
-                               points, matrix, points.shape)
+        points = cv2.transform(points,  # pylint: disable=no-member
+                               matrix, points.shape)
         retval = np.squeeze(points)
         logger.trace("Returning: %s", retval)
         return retval
@@ -59,8 +59,7 @@ class Extract():
         matrix = self.transform_matrix(mat, size, padding)
         points = np.array([[0, 0], [0, size - 1], [size - 1, size - 1], [size - 1, 0]], np.int32)
         points = points.reshape((-1, 1, 2))
-        matrix = cv2.invertAffineTransform(  # pylint: disable=no-member
-                                           matrix)
+        matrix = cv2.invertAffineTransform(matrix)  # pylint: disable=no-member
         logger.trace("Returning: (points: %s, matrix: %s", points, matrix)
         return cv2.transform(points, matrix)  # pylint: disable=no-member
 
@@ -73,8 +72,7 @@ class Extract():
         translation = padding
         pad_mat = np.matrix([[scale, 0.0, translation], [0.0, scale, translation]])
         aligned_landmarks_68 = np.expand_dims(aligned_landmarks_68, axis=1)
-        aligned_landmarks_68 = cv2.transform(  # pylint: disable=no-member
-                                             aligned_landmarks_68,
+        aligned_landmarks_68 = cv2.transform(aligned_landmarks_68,  # pylint: disable=no-member
                                              pad_mat,
                                              aligned_landmarks_68.shape)
         aligned_landmarks_68 = np.squeeze(aligned_landmarks_68)
@@ -98,17 +96,17 @@ class Extract():
                                     mouth_points.astype(int).flatten().reshape((-1, 2))
 
         mask = np.zeros((size, size, 3), dtype=float)
-        cv2.fillConvexPoly(  # pylint: disable=no-member
-                           mask, l_eye_hull, (1, 1, 1))
-        cv2.fillConvexPoly(  # pylint: disable=no-member
-                           mask, r_eye_hull, (1, 1, 1))
-        cv2.fillConvexPoly(  # pylint: disable=no-member
-                           mask, mouth_hull, (1, 1, 1))
+        cv2.fillConvexPoly(mask,  # pylint: disable=no-member
+                           l_eye_hull, (1, 1, 1))
+        cv2.fillConvexPoly(mask,  # pylint: disable=no-member
+                           r_eye_hull, (1, 1, 1))
+        cv2.fillConvexPoly(mask,  # pylint: disable=no-member
+                           mouth_hull, (1, 1, 1))
 
         if dilation > 0:
             kernel = np.ones((dilation, dilation), np.uint8)
-            mask = cv2.dilate(  # pylint: disable=no-member
-                              mask, kernel, iterations=1)
+            mask = cv2.dilate(mask,  # pylint: disable=no-member
+                              kernel, iterations=1)
 
         logger.trace("Returning: %s", mask)
         return mask
