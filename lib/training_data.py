@@ -59,22 +59,9 @@ class TrainingDataGenerator():
                      is_preview, is_timelapse)
         self.batchsize = batchsize
         is_display = is_preview or is_timelapse
-        generator = self.minibatch(images, side, is_display, do_shuffle, batchsize)
-        batcher = BackgroundGenerator(generator, 1)
+        args = (images, side, is_display, do_shuffle, batchsize)
+        batcher = BackgroundGenerator(self.minibatch, thread_count=2, args=args)
         return batcher.iterator()
-
-    @staticmethod
-    def make_queue(side, is_preview, is_timelapse):
-        """ Create the queue for the BackgroundGenerator """
-        q_name = "_{}".format(side)
-        if is_preview:
-            q_name = "{}{}".format("preview", q_name)
-        elif is_timelapse:
-            q_name = "{}{}".format("timelapse", q_name)
-        else:
-            q_name = "{}{}".format("train", q_name)
-        q_name = "training_data_{}".format(q_name)
-        return queue_manager.get_queue(q_name, 1, multiprocessing_queue=False)
 
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
@@ -111,7 +98,7 @@ class TrainingDataGenerator():
                 img_path = next(img_iter)
                 data = self.process_face(img_path, side, is_display)
                 batch.append(data)
-            batch = list(zip(*batch))  # TODO: think about something nicer
+            batch = list(zip(*batch))
             batch = [np.array(x, dtype="float32") for x in batch]
             logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
                          "is_display: %s)",

@@ -178,7 +178,7 @@ class MultiThread():
     @property
     def errors(self):
         """ Return a list of thread errors """
-        return [thread.err for thread in self._threads]
+        return [thread.err for thread in self._threads if thread.err]
 
     def check_and_raise_error(self):
         """ Checks for errors in thread and raises them in caller """
@@ -217,24 +217,26 @@ class MultiThread():
         logger.debug("Joined all Threads: '%s'", self._name)
 
 
-class BackgroundGenerator(FSThread):
+class BackgroundGenerator(MultiThread):
     """ Run a queue in the background. From:
         https://stackoverflow.com/questions/7323664/ """
     # See below why prefetch count is flawed
-    def __init__(self, generator, prefetch=1, queue=None):
-        super().__init__(target=self._run)
+    def __init__(self, generator, prefetch=1, thread_count=2,
+                 queue=None, args=None, kwargs=None):
+        super().__init__(target=self._run, thread_count=thread_count)
         self.queue = queue or Queue.Queue(prefetch)
         self.generator = generator
-        self.daemon = True
+        self._gen_args = args or tuple()
+        self._gen_kwargs = kwargs or dict()
         self.start()
 
     def _run(self):
         """ Put until queue size is reached.
             Note: put blocks only if put is called while queue has already
-            reached max size => this makes 2 prefetched items! One in the
-            queue, one waiting for insertion! """
+            reached max size => this makes prefetch + thread_count prefetched items!
+            N in the the queue, one waiting for insertion per thread! """
         try:
-            for item in self.generator:
+            for item in self.generator(*self._gen_args, **self._gen_kwargs):
                 self.queue.put(item)
             self.queue.put(None)
         except Exception:
