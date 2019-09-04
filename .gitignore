@@ -27,6 +27,7 @@
 !plugins/convert/*
 !tools
 !tools/lib*
+!.travis.yml
 *.ini
 *.pyc
 __pycache__/

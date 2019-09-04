@@ -114,15 +114,17 @@ class ScriptExecutor():
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
+        success = False
         if get_backend() == "amd":
             plaidml_found = self.setup_amd(arguments.loglevel)
             if not plaidml_found:
-                safe_shutdown()
-                exit(1)
+                safe_shutdown(got_error=True)
+                return
         try:
             script = self.import_script()
             process = script(arguments)
             process.process()
+            success = True
         except FaceswapError as err:
             for line in str(err).splitlines():
                 logger.error(line)
@@ -142,7 +144,7 @@ class ScriptExecutor():
                             crash_file)
 
         finally:
-            safe_shutdown()
+            safe_shutdown(got_error=not success)
 
     @staticmethod
     def setup_amd(loglevel):
@@ -783,14 +785,14 @@ class ConvertArgs(ExtractConvertArgs):
                     "configurable settings in '/config/convert.ini' or 'Edit > Configure "
                     "Convert Plugins':"
                     "\nL|avg-color: Adjust the mean of each color channel in the swapped "
-                    "reconstruction to equal the mean of the masked area in the orginal image."
+                    "reconstruction to equal the mean of the masked area in the original image."
                     "\nL|color-transfer: Transfers the color distribution from the source to the "
                     "target image using the mean and standard deviations of the L*a*b* "
                     "color space."
                     "\nL|manual-balance: Manually adjust the balance of the image in a variety of "
                     "color spaces. Best used with the Preview tool to set correct values."
                     "\nL|match-hist: Adjust the histogram of each color channel in the swapped "
-                    "reconstruction to equal the histogram of the masked area in the orginal "
+                    "reconstruction to equal the histogram of the masked area in the original "
                     "image."
                     "\nL|seamless-clone: Use cv2's seamless clone function to remove extreme "
                     "gradients at the mask seam by smoothing colors. Generally does not give "
@@ -931,7 +933,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "The maximum number of parallel processes for performing "
                                       "conversion. Converting images is system RAM heavy so it is "
                                       "possible to run out of memory if you have a lot of "
-                                      "processes and not enough RAM to accomodate them all. "
+                                      "processes and not enough RAM to accommodate them all. "
                                       "Setting this to 0 will use the maximum available. No "
                                       "matter what you set this to, it will never attempt to use "
                                       "more processes than are available on your system. If "
