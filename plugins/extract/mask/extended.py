@@ -40,9 +40,9 @@ class Mask(Masker):
         mask = np.zeros(image.shape[:-1] + (1,), dtype='uint8')
         parts = self.parse_parts(landmarks)
         for item in parts:
-            # pylint: disable=no-member
-            hull = cv2.convexHull(np.concatenate(item)).astype("int32")
-            cv2.fillConvexPoly(mask, hull, 255)
+            np.concatenate(item)
+            hull = cv2.convexHull(item).astype("int32")  # pylint: disable=no-member
+            cv2.fillConvexPoly(mask, hull, 255)  # pylint: disable=no-member
         masked_img = np.concatenate((image[..., :3], mask), axis=-1)
         detected_face.image = masked_img
         detected_face.load_aligned(masked_img, size=self.crop_size, align_eyes=False)

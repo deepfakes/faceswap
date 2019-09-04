@@ -125,7 +125,6 @@ class Converter():
 
     def get_new_image(self, predicted):
         """ Get the new face from the predictor and apply box manipulations """
-        # pylint: disable=no-member
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
         original_frame = predicted["image"].astype("float32") / 255.
@@ -140,6 +139,8 @@ class Converter():
             new_face = self.pre_warp_adjustments(old_face.reference_face, new_face)
             print("new_face2: ", new_face.shape, np.mean(new_face, axis = (0,1)))
             print("new_image: ", new_image.shape, np.mean(new_image, axis = (0,1)))
+            interpolator = old_face.reference_interpolators[1]
+            flags = cv2.WARP_INVERSE_MAP + interpolator  # pylint: disable=no-member
             cv2.warpAffine(new_face,
                            old_face.reference_matrix,
                            frame_size,
@@ -186,10 +187,10 @@ class Converter():
 
     def scale_image(self, frame):
         """ Scale the image if requested """
-        # pylint: disable=no-member
         if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
-            interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA
-            frame = cv2.resize(frame, (0, 0), fx=self.scale, fy=self.scale, interpolation=interp)
+            interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
+            frame = cv2.resize(frame,  # pylint: disable=no-member
+                               (0, 0), fx=self.scale, fy=self.scale, interpolation=interp)
             logger.trace("resized frame: %s", frame.shape)
         return frame

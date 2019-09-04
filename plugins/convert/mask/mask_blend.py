@@ -30,14 +30,13 @@ class Mask(Adjustment):
     # MASK MANIPULATIONS
     def erode(self, mask):
         """ Erode/dilate mask if requested """
-        # pylint: disable=no-member
         kernel = self.get_erosion_kernel(mask)
         if self.config["erosion"] > 0.:
             logger.trace("Eroding mask")
-            mask = cv2.erode(mask, kernel, iterations=1)
+            mask = cv2.erode(mask, kernel, iterations=1)  # pylint: disable=no-member
         else:
             logger.trace("Dilating mask")
-            mask = cv2.dilate(mask, kernel, iterations=1)
+            mask = cv2.dilate(mask, kernel, iterations=1)  # pylint: disable=no-member
         return mask
 
     def get_erosion_kernel(self, mask):
@@ -46,7 +45,8 @@ class Mask(Adjustment):
         erosion_ratio = self.config["erosion"] / 100.
         mask_radius = np.sqrt(np.sum(mask)) / 2.
         kernel_size = int(max(1., abs(erosion_ratio * mask_radius)))
-        erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
+                                                   (kernel_size, kernel_size))
         logger.trace("erosion_kernel shape: %s", erosion_kernel.shape)
         return erosion_kernel
 

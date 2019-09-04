@@ -119,8 +119,7 @@ class BlurMask():
     @property
     def func_mapping(self):
         """ Return a dict of function name to cv2 function """
-        # pylint: disable = no-member
-        return dict(gaussian=cv2.GaussianBlur, normalized=cv2.blur)
+        return dict(gaussian=cv2.GaussianBlur, normalized=cv2.blur)  # pylint: disable=no-member
 
     @property
     def kwarg_requirements(self):
