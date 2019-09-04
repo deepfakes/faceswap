@@ -170,6 +170,7 @@ class TrainerBase():
         do_snapshot = (snapshot_interval != 0 and
                        self.model.iterations >= snapshot_interval and
                        self.model.iterations % snapshot_interval == 0)
+
         loss = dict()
         try:
             for side, batcher in self.batchers.items():
@@ -207,9 +208,6 @@ class TrainerBase():
             if do_snapshot:
                 self.model.do_snapshot()
         except Exception as err:
-            #  Shutdown the FixedProducerDispatchers then continue to raise error
-            for batcher in self.batchers.values():
-                batcher.shutdown_feed()
             raise err
 
     def store_history(self, side, loss):
@@ -253,7 +251,6 @@ class Batcher():
 
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
-        self.shutdown_feed = generator.join_subprocess
 
         self.preview_feed = None
         self.timelapse_feed = None
