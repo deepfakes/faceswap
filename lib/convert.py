@@ -98,10 +98,10 @@ class Converter():
                                  item["filename"], str(err))
                     image = item["image"]
                     # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
-                    # import sys
-                    # import traceback
-                    # exc_info = sys.exc_info()
-                    # traceback.print_exception(*exc_info)
+                    import sys
+                    import traceback
+                    exc_info = sys.exc_info()
+                    traceback.print_exception(*exc_info)
 
                 logger.trace("Out queue put: %s", item["filename"])
                 out_queue.put((item["filename"], image))
@@ -113,10 +113,11 @@ class Converter():
     def patch_image(self, predicted):
         """ Patch the image """
         logger.trace("Patching image: '%s'", predicted["filename"])
-        new_image = self.get_new_image(predicted)
-        patched_face = self.post_warp_adjustments(predicted, new_image)
+        new_image, original_frame = self.get_new_image(predicted)
+        patched_face = self.post_warp_adjustments(original_frame, new_image)
         patched_face = self.scale_image(patched_face)
         patched_face = np.rint(patched_face).astype("uint8")
+        print("patched_face: ", patched_face.shape, np.mean(patched_face, axis = (0,1)))
         if self.writer_pre_encode is not None:
             patched_face = self.writer_pre_encode(patched_face)
         logger.trace("Patched image: '%s'", predicted["filename"])
@@ -128,37 +129,36 @@ class Converter():
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
         original_frame = predicted["image"].astype("float32") / 255.
+        blank_mask = np.zeros(original_frame.shape[:-1] + (1,), dtype="float32")
+        new_image = np.concatenate([original_frame, blank_mask], axis=-1)
         frame_size = (original_frame.shape[1], original_frame.shape[0])
-        print(len(predicted["swapped_faces"]), len(predicted["detected_faces"]))
+
         dual_generator = zip(predicted["swapped_faces"], predicted["detected_faces"])
         for new_face, old_face in dual_generator:
-            print("predicted[image]: ", new_face.shape)
-            print("old face: ", old_face.reference_face.shape)
-            src_face = old_face.reference_face
-            new_face = self.pre_warp_adjustments(src_face, new_face)
-            interpolator = old_face.reference_interpolators[1]
-            # Warp face with the mask
-            new_image = cv2.warpAffine(new_face,
-                                       old_face.reference_matrix,
-                                       frame_size,
-                                       original_frame,
-                                       flags=cv2.WARP_INVERSE_MAP | interpolator,
-                                       borderMode=cv2.BORDER_TRANSPARENT)
-            new_image = np.clip(new_image, 0., 1.)
+            print("new_face1: ", new_face.shape, np.mean(new_face, axis = (0,1)))
+            print("old_face: ", old_face.reference_face.shape, np.mean(old_face.reference_face, axis = (0,1)))
+            new_face = self.pre_warp_adjustments(old_face.reference_face, new_face)
+            print("new_face2: ", new_face.shape, np.mean(new_face, axis = (0,1)))
+            print("new_image: ", new_image.shape, np.mean(new_image, axis = (0,1)))
+            cv2.warpAffine(new_face,
+                           old_face.reference_matrix,
+                           frame_size,
+                           new_image,
+                           flags=cv2.WARP_INVERSE_MAP | old_face.reference_interpolators[1],
+                           borderMode=cv2.BORDER_TRANSPARENT)
+            np.clip(new_image, 0., 1., out=new_image)
         logger.trace("Got filename: '%s'. (new_image: %s)", predicted["filename"], new_image.shape)
-        return new_image
+        return new_image, original_frame
 
     def pre_warp_adjustments(self, old_face, new_face):
         """ Run the pre-warp adjustments """
         logger.trace("old_face shape: %s, new_face shape: %s", old_face.shape, new_face.shape)
         old_face, new_face, mask = self.get_image_mask(old_face, new_face)
-        print("here now 1")
         if self.adjustments["color"] is not None:
             new_face = self.adjustments["color"].run(old_face, new_face, mask)
-        print("here now 2")
         if self.adjustments["seamless"] is not None:
             new_face = self.adjustments["seamless"].run(old_face, new_face, mask)
-        print("here now 3")
+        new_face = np.concatenate([new_face, mask], axis=-1)
         logger.trace("returning: new_face shape %s", new_face.shape)
         return new_face
 
@@ -170,18 +170,17 @@ class Converter():
         logger.trace("Got mask. Image shape: %s, Mask shape: %s", new_face.shape, mask.shape)
         return old_face[..., :3], new_face[..., :3], mask
 
-    def post_warp_adjustments(self, predicted, new_image):
+    def post_warp_adjustments(self, background, new_image):
         """ Apply fixes to the image after warping """
         logger.trace("Compositing face into frame")
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
         mask = new_image[..., -1:]
-        foreground = new_image[..., :3] * 255.
-        background = predicted["image"][..., :3]
+        foreground = new_image[..., :3]
         frame = foreground * mask + background * (1. - mask)
         if self.draw_transparent:
-            frame = np.concatenate((frame, mask * 255.), axis=-1)
-        np.clip(frame, 0., 255.)
+            frame = np.concatenate((frame, mask), axis=-1)
+        np.clip(frame * 255., 0., 255., out=frame)
         logger.trace("Swapped frame created")
         return frame
 

@@ -44,6 +44,7 @@ class Mask(Masker):
             hull = cv2.convexHull(np.concatenate(item)).astype("int32")
             cv2.fillConvexPoly(mask, hull, 255)
         masked_img = np.concatenate((image[..., :3], mask), axis=-1)
+        detected_face.image = masked_img
         detected_face.load_aligned(masked_img, size=self.crop_size, align_eyes=False)
         return detected_face
 

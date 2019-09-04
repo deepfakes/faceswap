@@ -225,7 +225,11 @@ class Extract():
 
     def output_processing(self, faces, align_eyes, size, filename):
         """ Prepare faces for output """
-        self.align_face(faces, align_eyes, size, filename)
+        final_faces = list()
+        for detected_face in faces["faces"]:
+            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
+                                "face": detected_face})
+        faces["detected_faces"] = final_faces
         self.post_process.do_actions(faces)
 
         faces_count = len(faces["detected_faces"])
@@ -235,14 +239,6 @@ class Extract():
 
         if not self.verify_output and faces_count > 1:
             self.verify_output = True
-
-    def align_face(self, faces, align_eyes, size, filename):
-        """ Align the detected face and add the destination file path """
-        final_faces = list()
-        for detected_face in faces["faces"]:
-            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
-                                "face": detected_face})
-        faces["detected_faces"] = final_faces
 
     def output_faces(self, filename, faces):
         """ Output faces to save thread """

@@ -183,7 +183,9 @@ class Extractor():
                 prior to giving the remaining to the detector
             If not multiprocessing:
                 Launches the relevant plugin for the current phase """
+        print('in launch')
         if self.is_parallel:
+            print('in parallel')
             logger.debug("Launching aligner and detector")
             self.launch_aligner()
             self.launch_detector()
@@ -195,6 +197,7 @@ class Extractor():
             logger.debug("Launching aligner")
             self.launch_aligner()
         else:
+            print('in masker')
             logger.debug("Launching masker")
             self.launch_masker()
 

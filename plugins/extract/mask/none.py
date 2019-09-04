@@ -35,5 +35,6 @@ class Mask(Masker):
         """
         masks = np.full(image.shape[:-1] + (1,), fill_value=255, dtype='uint8')
         masked_img = np.concatenate((image[..., :3], masks), axis=-1)
+        detected_face.image = masked_img
         detected_face.load_aligned(masked_img, size=self.crop_size, align_eyes=False)
         return detected_face

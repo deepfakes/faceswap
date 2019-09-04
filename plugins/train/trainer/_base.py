@@ -422,7 +422,6 @@ class Samples():
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
-        print(figure.shape, header.shape)
         figure = np.vstack((header, figure))
 
         logger.debug("Compiled sample")
@@ -448,7 +447,6 @@ class Samples():
         """ Return the sample predictions from the model """
         logger.debug("Getting Predictions")
         preds = dict()
-        print([item.shape for item in feed_a], [item.shape.as_list() for item in self.model.predictors["a"].inputs])
         preds["a_a"] = self.model.predictors["a"].predict(feed_a)
         preds["b_a"] = self.model.predictors["b"].predict(feed_a)
         preds["a_b"] = self.model.predictors["a"].predict(feed_b)
