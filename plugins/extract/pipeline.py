@@ -24,16 +24,22 @@ class Extractor():
     """
     def __init__(self, detector, aligner, masker, loglevel,
                  configfile=None, multiprocess=False, rotate_images=None, min_size=20,
-                 normalize_method=None, crop_size=256):
+                 normalize_method=None, input_size=256, output_size=256, coverage_ratio=1.):
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, loglevel: %s, "
                      "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s,  min_size: %s)", self.__class__.__name__, detector,
-                     aligner, masker, loglevel, configfile, multiprocess, rotate_images, min_size,
-                     normalize_method, crop_size)
+                     "normalize_method: %s, input_size: %s, output_size: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, detector, aligner, masker, loglevel, configfile,
+                     multiprocess, rotate_images, min_size, normalize_method, input_size,
+                     output_size, coverage_ratio)
         self.phase = "detect"
         self.detector = self.load_detector(detector, loglevel, rotate_images, min_size, configfile)
         self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
-        self.masker = self.load_masker(masker, loglevel, configfile, crop_size)
+        self.masker = self.load_masker(masker,
+                                       loglevel,
+                                       configfile,
+                                       input_size,
+                                       output_size,
+                                       coverage_ratio)
         self.is_parallel = self.set_parallel_processing(multiprocess)
         self.processes = list()
         self.queues = self.add_queues()
@@ -97,13 +103,15 @@ class Extractor():
         return aligner
 
     @staticmethod
-    def load_masker(masker, loglevel, configfile, crop_size):
+    def load_masker(masker, loglevel, configfile, input_size, output_size, coverage_ratio):
         """ Set global arguments and load masker plugin """
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
         masker = PluginLoader.get_masker(masker_name)(loglevel=loglevel,
                                                       configfile=configfile,
-                                                      crop_size=crop_size)
+                                                      input_size=input_size,
+                                                      output_size=output_size,
+                                                      coverage_ratio=coverage_ratio)
         return masker
 
     def set_parallel_processing(self, multiprocess):
@@ -121,33 +129,15 @@ class Extractor():
                          "Enabling parallel processing.")
             return True
 
-
-
         gpu_stats = GPUStats()
-        if gpu_stats.is_plaidml and (not self.detector.supports_plaidml or
-                                     not self.aligner.supports_plaidml or
-                                     not self.masker.supports_plaidml):
-            logger.debug("At least one of aligner, detector or masker does not support plaidML. "
-                         "Enabling parallel processing.")
-            return True
-
-        if not gpu_stats.is_plaidml and (
-               (self.detector.supports_plaidml and aligner_vram != 0) or
-               (self.aligner.supports_plaidml and detector_vram != 0) or
-               (self.masker.supports_plaidml and masker_vram != 0)):
-            logger.warning("Keras + non-Keras aligner/detector/masker combination does not "
-                           "support parallel processing. Switching to serial.")
-            return False
-
-        if self.detector.supports_plaidml and (self.aligner.supports_plaidml and
-                                               self.masker.supports_plaidml):
-            logger.debug("Both aligner and detector support plaidML. Disabling parallel "
-                         "processing.")
-            return False
-
         if gpu_stats.device_count == 0:
             logger.debug("No GPU detected. Enabling parallel processing.")
             return True
+
+        if gpu_stats.is_plaidml:
+            return (bool(self.detector.supports_plaidml) +
+                    bool(self.aligner.supports_plaidml) +
+                    bool(self.masker.supports_plaidml)) <= 1
 
         required_vram = detector_vram + aligner_vram + masker_vram + 320  # 320MB buffer
         stats = gpu_stats.get_card_most_free()
@@ -191,6 +181,7 @@ class Extractor():
             self.launch_detector()
             self.launch_masker()
         elif self.phase == "detect":
+            print('in detector')
             logger.debug("Launching detector")
             self.launch_detector()
         elif self.phase == "align":
@@ -313,6 +304,7 @@ class Extractor():
                     raise Exception(err)
             except QueueEmpty:
                 continue
+
             yield faces
         for process in self.processes:
             logger.trace("Joining process: %s", process)
@@ -324,6 +316,5 @@ class Extractor():
                 queue_manager.del_queue(q_name)
             logger.debug("Detection Complete")
         else:
-            logger.debug("Switching to next phase")
-            
             self.phase = "align" if self.phase == "detect" else "mask"
+            logger.debug("Switching to %s phase", self.phase)

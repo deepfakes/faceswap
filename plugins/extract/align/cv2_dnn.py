@@ -84,7 +84,7 @@ class Align(Aligner):
             interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
         else:
             interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
+        print(face.shape, self.input_size)
         face = cv2.resize(face,  # pylint:disable=no-member
                           dsize=(int(self.input_size), int(self.input_size)),
                           interpolation=interpolation)

@@ -69,10 +69,10 @@ class Detect(Detector):
                 bboxes = self.model.finalize_predictions(predictions)
                 for bbox, item in zip(bboxes, items):
                     s3fd_opts = item["_s3fd"]
-                    detected_faces = self.process_output(bbox, s3fd_opts)
+                    face_bounding_boxes = self.process_output(bbox, s3fd_opts)
                     did_rotation = s3fd_opts["rotations"].pop(0) != 0
-                    if detected_faces:
-                        item["detected_faces"] = detected_faces
+                    if face_bounding_boxes:
+                        item["face_bounding_boxes"] = face_bounding_boxes
                         del item["_s3fd"]
                         self.finalize(item)
                         if did_rotation:
@@ -86,7 +86,7 @@ class Detect(Detector):
                     else:
                         logger.trace("No face detected for %s.", item["filename"])
                         open_rot_jobs -= 1
-                        item["detected_faces"] = []
+                        item["face_bounding_boxes"] = []
                         del item["_s3fd"]
                         self.finalize(item)
             if got_first_eof and open_rot_jobs <= 0:

@@ -7,12 +7,12 @@
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>}
+     "face_bounding_boxes": <list of bounding box dicts from lib/plugins/extract/detect/_base>}
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <four channel source image>,
-     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>,
+     "face_bounding_boxes": <list of bounding box dicts from lib/plugins/extract/detect/_base>,
      "mask": <one channel mask image>}
     """
 
@@ -21,6 +21,7 @@ import os
 import traceback
 import cv2
 import numpy as np
+import keras
 
 from io import StringIO
 from lib.faces_detect import DetectedFace
@@ -41,13 +42,16 @@ class Masker():
                     1 - Returns a single channel mask
                     3 - Returns a 3 channel mask
                     4 - Returns the original image with the mask in the alpha channel """
-    def __init__(self, loglevel='VERBOSE', configfile=None, crop_size=256, git_model_id=None,
-                 model_filename=None):
-        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, crop_size: %s, "
-                     "git_model_id: %s, model_filename: '%s')", self.__class__.__name__, loglevel,
-                     configfile, crop_size, git_model_id, model_filename)
+    def __init__(self, loglevel='VERBOSE', configfile=None, input_size=256, output_size=256,
+                 coverage_ratio=1., git_model_id=None, model_filename=None):
+        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, input_size: %s, "
+                     "output_size: %s, coverage_ratio: %s,git_model_id: %s, model_filename: '%s')",
+                     self.__class__.__name__, loglevel, configfile, input_size, output_size,
+                     coverage_ratio, git_model_id, model_filename)
         self.loglevel = loglevel
-        self.crop_size = crop_size
+        self.input_size = input_size
+        self.output_size = output_size
+        self.coverage_ratio = coverage_ratio
         self.extract = Extract()
         self.parent_is_pool = False
         self.init = None
@@ -82,6 +86,37 @@ class Masker():
         self.error = kwargs["error"]
         self.queues["in"] = kwargs["in_queue"]
         self.queues["out"] = kwargs["out_queue"]
+
+    def configure_session(self):
+        """ Set the TF Session and initialize """
+        # Must import tensorflow inside the spawned process
+        # for Windows machines
+        global tf  # pylint: disable = invalid-name,global-statement
+        import tensorflow as tflow
+        tf = tflow
+
+        card_id, vram_free, vram_total = self.get_vram_free()
+        vram_ratio = 1. if vram_free <= self.vram else self.vram / vram_total
+        config = tf.ConfigProto()
+        if card_id != -1:
+            config.gpu_options.visible_device_list = str(card_id)
+        config.gpu_options.allow_growth = True
+        config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
+
+        self.mask_session = tf.Session(config=config)
+        self.mask_graph = tf.get_default_graph()
+        keras.backend.set_session(self.mask_session)
+
+        with self.mask_graph.as_default():
+            with self.mask_session.as_default():
+                if any("gpu" in str(device).lower() for device in self.mask_session.list_devices()):
+                    logger.debug("Using GPU")
+                    # self.batch_size = int(alloc / self.vram)
+                else:
+                    logger.warning("Using CPU")
+                    # self.batch_size = int(alloc / self.vram)
+            self.model = self.load_model()
+            self.model._make_predict_function()
 
     def build_masks(self, faces, means, landmarks):
         """ Override to build the mask """
@@ -133,13 +168,18 @@ class Masker():
 
             logger.trace("Masking faces")
             try:
-                item["faces"] = self.process_masks(item["image"], item["landmarks"], item["detected_faces"])
+                item["masked_faces"] = self.process_masks(item["image"],
+                                                          item["landmarks"],
+                                                          item["face_bounding_boxes"],
+                                                          input_size = self.input_size,
+                                                          output_size = self.output_size,
+                                                          coverage_ratio = self.coverage_ratio)
                 logger.trace("Masked faces: %s", item["filename"])
             except ValueError as err:
                 logger.warning("Image '%s' could not be processed. This may be due to corrupted "
                                "data: %s", item["filename"], str(err))
-                item["detected_faces"] = list()
-                item["faces"] = list()
+                item["face_bounding_boxes"] = list()
+                item["masked_faces"] = list()
                 # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
                 import sys
                 exc_info = sys.exc_info()
@@ -147,21 +187,21 @@ class Masker():
             self.finalize(item)
         logger.debug("Completed Mask")
 
-    def process_masks(self, image, landmarks, detected_faces):
+    def process_masks(self, image, landmarks, face_bounding_boxes, input_size, output_size, coverage_ratio):
         """ Align image and process landmarks """
         logger.trace("Processing masks")
         retval = list()
-        for face, landmark in zip(detected_faces, landmarks):
+        for face_box, landmark in zip(face_bounding_boxes, landmarks):
             detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face, image)
+            detected_face.from_bounding_box_dict(face_box, image)
             detected_face.landmarksXY = landmark
-            detected_face = self.build_masks(image, detected_face)
+            detected_face = self.build_masks(image, detected_face, input_size, output_size, coverage_ratio)
             retval.append(detected_face)
         logger.trace("Processed masks")
         return retval
 
     @staticmethod
-    def resize_inputs(image, target_size):
+    def resize(image, target_size):
         """ resize input and output of mask models appropriately """
         _, height, width, channels = image.shape
         image_size = max(height, width)

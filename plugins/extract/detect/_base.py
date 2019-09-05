@@ -8,7 +8,7 @@
     For each source frame, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of dicts containing bounding box points>}}
+     "face_bounding_boxes": <list of dicts containing bounding box points>}}
 
     - Use the function self.to_bounding_box_dict(left, right, top, bottom) to define the dict
     """
@@ -143,29 +143,29 @@ class Detector():
                                           if key != "image"})
             # Prevent zero size faces
             iheight, iwidth = output["image"].shape[:2]
-            output["detected_faces"] = [
-                f for f in output.get("detected_faces", list())
+            output["face_bounding_boxes"] = [
+                f for f in output.get("face_bounding_boxes", list())
                 if f["right"] > 0 and f["left"] < iwidth
                 and f["bottom"] > 0 and f["top"] < iheight
             ]
-            if self.min_size > 0 and output.get("detected_faces", None):
-                output["detected_faces"] = self.filter_small_faces(output["detected_faces"])
+            if self.min_size > 0 and output.get("face_bounding_boxes", None):
+                output["face_bounding_boxes"] = self.filter_small_faces(output["face_bounding_boxes"])
         else:
             logger.trace("Item out: %s", output)
         self.queues["out"].put(output)
 
-    def filter_small_faces(self, detected_faces):
+    def filter_small_faces(self, face_bounding_boxes):
         """ Filter out any faces smaller than the min size threshold """
         retval = list()
-        for face in detected_faces:
-            width = face["right"] - face["left"]
-            height = face["bottom"] - face["top"]
+        for face_box in face_bounding_boxes:
+            width = face_box["right"] - face_box["left"]
+            height = face_box["bottom"] - face_box["top"]
             face_size = (width ** 2 + height ** 2) ** 0.5
             if face_size < self.min_size:
                 logger.debug("Removing detected face: (face_size: %s, min_size: %s",
                              face_size, self.min_size)
                 continue
-            retval.append(face)
+            retval.append(face_box)
         return retval
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #

@@ -29,9 +29,9 @@ class DetectedFace():
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
-    def extract_ratio(self):
-        """ The ratio of padding to add for training images """
-        return 0.375
+    def training_coverage(self):
+        """ The coverage ratio to add for training images """
+        return 1.0
 
     @property
     def landmarks_as_xy(self):
@@ -95,7 +95,7 @@ class DetectedFace():
                      self.x, self.w, self.y, self.h, self.landmarksXY)
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, align_eyes=False, dtype=None):
+    def load_aligned(self, image, size=256, coverage_ratio=1., align_eyes=False, dtype=None):
         """ No need to load aligned information for all uses of this
             class, so only call this to load the information for easy
             reference to aligned properties for this face """
@@ -105,9 +105,8 @@ class DetectedFace():
         else:
             logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
                          size, align_eyes, dtype)
-            padding = int(size * self.extract_ratio) // 2
             self.aligned["size"] = size
-            self.aligned["padding"] = padding
+            self.aligned["padding"] = self.padding_from_coverage(size, coverage_ratio)
             self.aligned["align_eyes"] = align_eyes
             self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
             self.aligned["face"] = None
@@ -117,7 +116,7 @@ class DetectedFace():
                 image,
                 self.aligned["matrix"],
                 size,
-                padding)
+                self.aligned["padding"])
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded aligned face: %s", {key: val
@@ -127,8 +126,7 @@ class DetectedFace():
     def padding_from_coverage(self, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image """
-        adjusted_ratio = coverage_ratio - (1 - self.extract_ratio)
-        padding = round((size * adjusted_ratio) / 2)
+        padding = int((size * (coverage_ratio - 0.625)) / 2)
         logger.trace(padding)
         return padding
 
@@ -143,11 +141,10 @@ class DetectedFace():
         self.feed["size"] = size
         self.feed["padding"] = self.padding_from_coverage(size, coverage_ratio)
         self.feed["matrix"] = get_align_mat(self, size, should_align_eyes=False)
-        face = np.clip(AlignerExtract().transform(image,
+        face = AlignerExtract().transform(image,
                                                   self.feed["matrix"],
                                                   size,
-                                                  self.feed["padding"]) / 255.0,
-                       0.0, 1.0)
+                                                  self.feed["padding"])
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
@@ -165,11 +162,10 @@ class DetectedFace():
         self.reference["padding"] = self.padding_from_coverage(size, coverage_ratio)
         self.reference["matrix"] = get_align_mat(self, size, should_align_eyes=False)
 
-        face = np.clip(AlignerExtract().transform(image,
+        face = AlignerExtract().transform(image,
                                                   self.reference["matrix"],
                                                   size,
-                                                  self.reference["padding"]) / 255.0,
-                       0.0, 1.0)
+                                                  self.reference["padding"])
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",

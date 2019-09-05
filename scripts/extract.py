@@ -226,7 +226,7 @@ class Extract():
     def output_processing(self, faces, align_eyes, size, filename):
         """ Prepare faces for output """
         final_faces = list()
-        for detected_face in faces["faces"]:
+        for detected_face in faces["masked_faces"]:
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
@@ -249,8 +249,7 @@ class Extract():
             out_filename = "{}_{}{}".format(str(output_file), str(idx), extension)
 
             face = detected_face["face"]
-            resized_face = face.aligned_face
-
+            resized_face = face.feed_face
             face.hash, img = hash_encode_image(resized_face, extension)
             self.save_queue.put((out_filename, img))
             final_faces.append(face.to_alignment())

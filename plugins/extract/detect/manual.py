@@ -25,8 +25,8 @@ class Detect(Detector):
                 break
             face = item["face"]
 
-            bounding_box = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3])]
-            item["detected_faces"] = bounding_box
+            face_bounding_boxes = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3])]
+            item["face_bounding_boxes"] = face_bounding_boxes
             self.finalize(item)
 
         self.queues["out"].put("EOF")

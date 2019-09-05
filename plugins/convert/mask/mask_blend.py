@@ -22,8 +22,8 @@ class Mask(Adjustment):
                 mask = self.erode(mask)
             if self.do_blend:
                 mask = self.blend(mask)
-        mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
-        mask = np.clip(mask, 0., 1.)
+        mask = mask[..., None] if mask.ndim != 3 else mask
+        np.clip(mask, 0., 1., out=mask)
         logger.trace("mask shape: %s", mask.shape)
         return mask
 
@@ -41,7 +41,6 @@ class Mask(Adjustment):
 
     def get_erosion_kernel(self, mask):
         """ Get the erosion kernel """
-        # pylint: disable=no-member
         erosion_ratio = self.config["erosion"] / 100.
         mask_radius = np.sqrt(np.sum(mask)) / 2.
         kernel_size = int(max(1., abs(erosion_ratio * mask_radius)))

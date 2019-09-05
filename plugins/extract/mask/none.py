@@ -29,12 +29,18 @@ class Mask(Masker):
             raise err
 
     # MASK PROCESSING
-    def build_masks(self, image, detected_face):
+    def build_masks(self, image, detected_face, input_size, output_size, coverage_ratio):
         """ Function for creating facehull masks
             Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
         """
         masks = np.full(image.shape[:-1] + (1,), fill_value=255, dtype='uint8')
         masked_img = np.concatenate((image[..., :3], masks), axis=-1)
         detected_face.image = masked_img
-        detected_face.load_aligned(masked_img, size=self.crop_size, align_eyes=False)
+        detected_face.load_feed_face(masked_img,
+                                     size=input_size,
+                                     coverage_ratio=coverage_ratio)
+        if input_size != output_size:
+            detected_face.load_reference_face(masked_img,
+                                              size=output_size,
+                                              coverage_ratio=coverage_ratio)
         return detected_face

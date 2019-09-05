@@ -42,10 +42,7 @@ class Adjustment():
     def run(self, old_face, new_face, raw_mask):
         """ Perform selected adjustment on face """
         logger.trace("Performing color adjustment")
-        # Remove mask for processing
-        print("face shapes: ", old_face.shape, new_face.shape, raw_mask.shape)
         new_face = self.process(old_face, new_face, raw_mask)
-        np.clip(new_face, 0.0, 1.0)
-        new_face = np.concatenate((new_face, raw_mask), axis=-1)
+        np.clip(new_face, 0.0, 1.0, out=new_face)
         logger.trace("Performed color adjustment")
         return new_face

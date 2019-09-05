@@ -145,8 +145,8 @@ class Detect(Detector):
                 if faces.any():
                     break
 
-            detected_faces = self.process_output(faces, points, rotmat, scale)
-            item["detected_faces"] = detected_faces
+            face_bounding_boxes = self.process_output(faces, points, rotmat, scale)
+            item["face_bounding_boxes"] = face_bounding_boxes
             self.finalize(item)
 
         logger.debug("Thread Completed Detect")

@@ -71,8 +71,8 @@ class Detect(Detector):
                 if faces:
                     break
 
-            detected_faces = self.process_output(faces, rotmat, scale)
-            item["detected_faces"] = detected_faces
+            face_bounding_boxes = self.process_output(faces, rotmat, scale)
+            item["face_bounding_boxes"] = face_bounding_boxes
             self.finalize(item)
 
         self.queues["out"].put("EOF")

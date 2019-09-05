@@ -8,12 +8,12 @@
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>}
+     "face_bounding_boxes": <list of bounding box dicts from in lib/plugins/extract/detect/_base>}
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>,
+     "face_bounding_boxes": <list of bounding box dicts from in lib/plugins/extract/detect/_base>,
      "landmarks": <list of landmarks>}
     """
 
@@ -135,12 +135,12 @@ class Aligner():
 
             logger.trace("Aligning faces")
             try:
-                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
+                item["landmarks"] = self.process_landmarks(image, item["face_bounding_boxes"])
                 logger.trace("Aligned faces: %s", item["landmarks"])
             except ValueError as err:
                 logger.warning("Image '%s' could not be processed. This may be due to corrupted "
                                "data: %s", item["filename"], str(err))
-                item["detected_faces"] = list()
+                item["face_bounding_boxes"] = list()
                 item["landmarks"] = list()
                 # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
                 # import sys
@@ -160,12 +160,12 @@ class Aligner():
             cvt_image = image.copy()
         return cvt_image
 
-    def process_landmarks(self, image, detected_faces):
+    def process_landmarks(self, image, face_bounding_boxes):
         """ Align image and process landmarks """
         logger.trace("Processing landmarks")
         retval = list()
-        for detected_face in detected_faces:
-            feed_dict = self.align_image(detected_face, image)
+        for face_box in face_bounding_boxes:
+            feed_dict = self.align_image(face_box, image)
             self.normalize_face(feed_dict)
             landmarks = self.predict_landmarks(feed_dict)
             retval.append(landmarks)
