@@ -170,8 +170,8 @@ class TrainerBase():
         do_snapshot = (snapshot_interval != 0 and
                        self.model.iterations >= snapshot_interval and
                        self.model.iterations % snapshot_interval == 0)
-        loss = dict()
 
+        loss = dict()
         try:
             for side, batcher in self.batchers.items():
                 if self.pingpong.active and side != self.pingpong.side:
@@ -252,6 +252,7 @@ class Batcher():
 
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
+
         self.preview_feed = None
         self.timelapse_feed = None
         self.set_preview_feed()
