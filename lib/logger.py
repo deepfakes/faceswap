@@ -136,7 +136,7 @@ def stream_handler(loglevel, is_gui):
 
 
 def crash_handler(log_format):
-    """ Add a handler that sores the last 50 debug lines to 'debug_buffer'
+    """ Add a handler that sores the last 100 debug lines to 'debug_buffer'
         for use in crash reports """
     log_crash = logging.StreamHandler(debug_buffer)
     log_crash.setFormatter(log_format)
@@ -186,5 +186,5 @@ logging.setLogRecordFactory(faceswap_logrecord)
 # Set logger class to custom logger
 logging.setLoggerClass(MultiProcessingLogger)
 
-# Stores the last 50 debug messages
-debug_buffer = RollingBuffer(maxlen=50)  # pylint: disable=invalid-name
+# Stores the last 100 debug messages
+debug_buffer = RollingBuffer(maxlen=100)  # pylint: disable=invalid-name

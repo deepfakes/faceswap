@@ -85,6 +85,8 @@ install:
   - conda activate faceswap;
   - conda --version ; python --version ; pip --version;
   - python setup.py --installer;
+  # For debugging purposes
+  - df -h
 
 script:
   - python simple_tests.py;
