@@ -100,7 +100,6 @@ class Masker():
         config = tf.ConfigProto()
         if card_id != -1:
             config.gpu_options.visible_device_list = str(card_id)
-        config.gpu_options.allow_growth = True
         config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
 
         self.mask_session = tf.Session(config=config)
@@ -169,6 +168,7 @@ class Masker():
             logger.trace("Masking faces")
             try:
                 item["masked_faces"] = self.process_masks(item["image"],
+                                                          item["filename"],
                                                           item["landmarks"],
                                                           item["face_bounding_boxes"],
                                                           input_size = self.input_size,
@@ -187,14 +187,13 @@ class Masker():
             self.finalize(item)
         logger.debug("Completed Mask")
 
-    def process_masks(self, image, landmarks, face_bounding_boxes, input_size, output_size, coverage_ratio):
+    def process_masks(self, image, filename, landmarks, face_bounding_boxes, input_size, output_size, coverage_ratio):
         """ Align image and process landmarks """
         logger.trace("Processing masks")
         retval = list()
         for face_box, landmark in zip(face_bounding_boxes, landmarks):
-            detected_face = DetectedFace()
+            detected_face = DetectedFace(landmarksXY=landmark, filename=filename)
             detected_face.from_bounding_box_dict(face_box, image)
-            detected_face.landmarksXY = landmark
             detected_face = self.build_masks(image, detected_face, input_size, output_size, coverage_ratio)
             retval.append(detected_face)
         logger.trace("Processed masks")

@@ -13,7 +13,7 @@ class DetectedFace():
     """ Detected face and landmark information """
     def __init__(  # pylint: disable=invalid-name
             self, image=None, x=None, w=None, y=None, h=None,
-            landmarksXY=None):
+            landmarksXY=None, filename=None):
         logger.trace("Initializing %s", self.__class__.__name__)
         self.image = image
         self.x = x
@@ -21,6 +21,7 @@ class DetectedFace():
         self.y = y
         self.h = h
         self.landmarksXY = landmarksXY
+        self.filename = filename
         self.hash = None  # Hash must be set when the file is saved due to image compression
 
         self.aligned = dict()

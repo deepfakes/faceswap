@@ -15,8 +15,8 @@ class Mask(Masker):
         super().__init__(git_model_id=git_model_id,
                          model_filename=model_filename,
                          **kwargs)
-        self.vram = 3000
-        self.min_vram = 1024
+        self.vram = 2000  # TODO determine
+        self.min_vram = 1024  # TODO determine
         self.mask_input_size = 300
         self.model = None
         self.supports_plaidml = True
@@ -80,7 +80,7 @@ class Mask(Masker):
             ref_face = detected_face.reference["face"]
             ref_mask = self.resize(results, output_size).astype('uint8')
             ref_mask = np.squeeze(ref_mask, axis=0)
-            ref_img = np.concatenate((ref[..., :3], ref_mask), axis=-1)
+            ref_img = np.concatenate((ref_face[..., :3], ref_mask), axis=-1)
             detected_face.reference["face"] = ref_img
         return detected_face
 
