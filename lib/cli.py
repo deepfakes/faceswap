@@ -47,6 +47,8 @@ class ScriptExecutor():
         min_ver = 1.12
         max_ver = 1.14
         try:
+            # Ensure tensorflow doesn't pin all threads to one core when using tf-mkl
+            os.environ["KMP_AFFINITY"] = "disabled"
             import tensorflow as tf
         except ImportError as err:
             raise FaceswapError("There was an error importing Tensorflow. This is most likely "
@@ -138,8 +140,9 @@ class ScriptExecutor():
             crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
             logger.critical("An unexpected crash has occurred. Crash report written to '%s'. "
-                            "Please verify you are running the latest version of faceswap "
-                            "before reporting", crash_file)
+                            "You MUST provide this file if seeking assistance. Please verify you "
+                            "are running the latest version of faceswap before reporting",
+                            crash_file)
 
         finally:
             safe_shutdown(got_error=not success)
@@ -790,14 +793,14 @@ class ConvertArgs(ExtractConvertArgs):
                     "configurable settings in '/config/convert.ini' or 'Edit > Configure "
                     "Convert Plugins':"
                     "\nL|avg-color: Adjust the mean of each color channel in the swapped "
-                    "reconstruction to equal the mean of the masked area in the orginal image."
+                    "reconstruction to equal the mean of the masked area in the original image."
                     "\nL|color-transfer: Transfers the color distribution from the source to the "
                     "target image using the mean and standard deviations of the L*a*b* "
                     "color space."
                     "\nL|manual-balance: Manually adjust the balance of the image in a variety of "
                     "color spaces. Best used with the Preview tool to set correct values."
                     "\nL|match-hist: Adjust the histogram of each color channel in the swapped "
-                    "reconstruction to equal the histogram of the masked area in the orginal "
+                    "reconstruction to equal the histogram of the masked area in the original "
                     "image."
                     "\nL|seamless-clone: Use cv2's seamless clone function to remove extreme "
                     "gradients at the mask seam by smoothing colors. Generally does not give "
@@ -937,7 +940,7 @@ class ConvertArgs(ExtractConvertArgs):
                               "help": "The maximum number of parallel processes for performing "
                                       "conversion. Converting images is system RAM heavy so it is "
                                       "possible to run out of memory if you have a lot of "
-                                      "processes and not enough RAM to accomodate them all. "
+                                      "processes and not enough RAM to accommodate them all. "
                                       "Setting this to 0 will use the maximum available. No "
                                       "matter what you set this to, it will never attempt to use "
                                       "more processes than are available on your system. If "
