@@ -19,7 +19,7 @@ class Extract():
         """ Extract a face from an image """
         logger.trace("size: %s", size)
         padding = int(size * 0.1875)
-        alignment = get_align_mat(face, size)
+        alignment = get_align_mat(face)
         extracted = self.transform(image, alignment, size, padding)
         logger.trace("Returning face and alignment matrix: (alignment_matrix: %s)", alignment)
         return extracted, alignment
@@ -123,8 +123,7 @@ def get_matrix_scaling(mat):
     return interpolators
 
 
-def get_align_mat(face, size):
+def get_align_mat(face):
     """ Return the alignment Matrix """
-    logger.trace("size: %s", size)
     mat_umeyama = umeyama(np.array(face.landmarks_as_xy[17:]), True)[0:2]
     return mat_umeyama

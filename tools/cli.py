@@ -30,10 +30,10 @@ class AlignmentsArgs(FaceSwapArgs):
             "opts": ("-j", "--job"),
             "action": Radio,
             "type": str,
-            "choices": ("draw", "extract", "extract-large", "manual", "merge",
-                        "missing-alignments", "missing-frames", "legacy", "leftover-faces",
-                        "multi-faces", "no-faces", "reformat", "remove-faces", "remove-frames",
-                        "rename", "sort-x", "sort-y", "spatial", "update-hashes"),
+            "choices": ("draw", "extract", "extract-large", "extract-aligneyes", "manual",
+                        "merge", "missing-alignments", "missing-frames", "legacy",
+                        "leftover-faces", "multi-faces", "no-faces", "reformat", "remove-faces",
+                        "remove-frames", "rename", "sort-x", "sort-y", "spatial", "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform. "
                     "NB: All actions require an alignments file (-a) to be passed in."
@@ -44,9 +44,15 @@ class AlignmentsArgs(FaceSwapArgs):
                     "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
                     "the '-een' (--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir +
-                    "\nL|'extract-large' - Extract all faces that have not been upscaled. Useful "
+                    "\nL|'extract-large': - Extract all faces that have not been upscaled. Useful "
                     "for excluding low-res images from a training set.. Can pass in the '-een' "
                     "(--extract-every-n) parameter to only extract every nth frame." +
+                    frames_and_faces_dir +
+                    "\nL|'extract-aligneyes': Re-extract faces from the source frames/video "
+                    "based on alignment data. Also adjust the alignment matrix to force the "
+                    "horizontal alignment of eyes. This is a lot quicker than re-detecting faces."
+                    "Can pass in the '-een' (--extract-every-n) parameter to only extract every "
+                    "nth frame." +
                     frames_and_faces_dir +
                     "\nL|'manual': Manually view and edit landmarks." + frames_dir +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "

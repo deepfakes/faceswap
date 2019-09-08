@@ -107,7 +107,7 @@ class DetectedFace():
             padding = int(size * self.extract_ratio) // 2
             self.aligned["size"] = size
             self.aligned["padding"] = padding
-            self.aligned["matrix"] = get_align_mat(self, size)
+            self.aligned["matrix"] = get_align_mat(self)
             self.aligned["face"] = None
         if image is not None and self.aligned["face"] is None:
             logger.trace("Getting aligned face")
@@ -140,7 +140,7 @@ class DetectedFace():
 
         self.feed["size"] = size
         self.feed["padding"] = self.padding_from_coverage(size, coverage_ratio)
-        self.feed["matrix"] = get_align_mat(self, size)
+        self.feed["matrix"] = get_align_mat(self)
 
         face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
         face = np.clip(face[:, :, :3] / 255., 0., 1.)
@@ -159,7 +159,7 @@ class DetectedFace():
 
         self.reference["size"] = size
         self.reference["padding"] = self.padding_from_coverage(size, coverage_ratio)
-        self.reference["matrix"] = get_align_mat(self, size)
+        self.reference["matrix"] = get_align_mat(self)
 
         face = AlignerExtract().transform(image,
                                           self.reference["matrix"],

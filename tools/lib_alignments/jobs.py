@@ -328,7 +328,11 @@ class Extract():
         self.type = arguments.job.replace("extract-", "")
         self.faces_dir = arguments.faces_dir
         self.frames = Frames(arguments.frames_dir)
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=arguments.size)
+        align_eyes = True if self.type == "aligneyes" else False
+        self.extracted_faces = ExtractedFaces(self.frames,
+                                              self.alignments,
+                                              size=arguments.size,
+                                              align_eyes=align_eyes)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
