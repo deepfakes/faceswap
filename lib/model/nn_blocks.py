@@ -137,7 +137,7 @@ class NNBlocks():
         if not res_block_follows:
             var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
         if self.use_subpixel:
-            var_x = SubPixelUpscaling(name="{}_subpixel".format(name), 
+            var_x = SubPixelUpscaling(name="{}_subpixel".format(name),
                                       scale_factor=scale_factor)(var_x)
         else:
             var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
