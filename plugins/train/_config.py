@@ -166,7 +166,7 @@ class Config(FaceswapConfig):
                  "inability of the model to find the best solution. "
                  "Values that are too small might be unable to escape from dead-ends "
                  "and find the best global minimum.")
-        
+
     def load_module(self, filename, module_path, plugin_type):
         """ Load the defaults module and add defaults """
         logger.debug("Adding defaults: (filename: %s, module_path: %s, plugin_type: %s",
