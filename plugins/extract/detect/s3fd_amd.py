@@ -14,6 +14,7 @@ import keras.backend as K
 from lib.multithreading import FSThread
 from lib.queue_manager import queue_manager
 import queue
+from os.path import basename
 
 
 class Detect(Detector):
@@ -62,7 +63,7 @@ class Detect(Detector):
         while True:
             job = in_queue.get()
             if job == "EOF":
-                logger.debug("Post processing got EOF")
+                logger.debug("S3fd-amd post processing got EOF")
                 got_first_eof = True
             else:
                 predictions, items = job
@@ -77,14 +78,15 @@ class Detect(Detector):
                         self.finalize(item)
                         if did_rotation:
                             open_rot_jobs -= 1
-                            logger.debug("Found face after rotation.")
+                            logger.trace("Found face after rotation.")
                     elif s3fd_opts["rotations"]:  # we have remaining rotations
+                        logger.trace("No face detected, remaining rotations: %s", s3fd_opts["rotations"])
                         if not did_rotation:
                             open_rot_jobs += 1
                         logger.trace("Rotate face %s and try again.", item["filename"])
                         again_queue.put(item)
                     else:
-                        logger.trace("No face detected for %s.", item["filename"])
+                        logger.debug("No face detected for %s.", item["filename"])
                         open_rot_jobs -= 1
                         item["detected_faces"] = []
                         del item["_s3fd"]
@@ -100,7 +102,7 @@ class Detect(Detector):
         while True:
             job = in_queue.get()
             if job == "EOF":
-                logger.debug("Prediction processing got EOF")
+                logger.debug("S3fd-amd prediction processing got EOF")
                 if got_first_eof:
                     break
                 out_queue.put(job)
@@ -113,7 +115,6 @@ class Detect(Detector):
     def detect_faces(self, *args, **kwargs):
         """ Detect faces in rgb image """
         super().detect_faces(*args, **kwargs)
-        logger.debug("Launching Detect")
         self.rotate_queue = queue_manager.get_queue("s3fd_rotate", 8, False)
         prediction_queue = queue_manager.get_queue("s3fd_pred", 8, False)
         post_queue = queue_manager.get_queue("s3fd_post", 8, False)
@@ -128,11 +129,14 @@ class Detect(Detector):
 
         got_first_eof = False
         while True:
+            worker.check_and_raise_error()
+            post_worker.check_and_raise_error()
             got_eof, in_batch = self.get_batch()
             batch = list()
             for item in in_batch:
                 s3fd_opts = item.setdefault("_s3fd", {})
                 if "scaled_img" not in s3fd_opts:
+                    logger.trace("Resizing %s" % basename(item["filename"]))
                     detect_image, scale, pads = self.compile_detection_image(
                         item["image"], is_square=True, pad_to=self.target
                     )
@@ -142,8 +146,11 @@ class Detect(Detector):
                     s3fd_opts["rotmatrix"] = None  # the first "rotation" is always 0
                     img = s3fd_opts["scaled_img"] = detect_image
                 else:
+                    logger.trace("Rotating %s" % basename(item["filename"]))
                     angle = s3fd_opts["rotations"][0]
-                    img, rotmat = self.rotate_image(s3fd_opts["scaled_img"], angle)
+                    img, rotmat = self.rotate_image_by_angle(
+                        s3fd_opts["scaled_img"], angle, *self.target
+                    )
                     s3fd_opts["rotmatrix"] = rotmat
                 batch.append((img, item))
 
@@ -154,12 +161,16 @@ class Detect(Detector):
                 prediction_queue.put((batch_data, batch_items))
 
             if got_eof:
-                logger.info("Main worker got EOF")
+                logger.debug("S3fd-amd main worker got EOF")
                 prediction_queue.put("EOF")
+                # Required to prevent hanging when less then BS items are in the
+                # again queue and we won't receive new images.
+                self.batch_size = 1
                 if got_first_eof:
                     break
                 got_first_eof = True
 
+        logger.debug("Joining s3fd-amd worker")
         worker.join()
         post_worker.join()
         for qname in ():
