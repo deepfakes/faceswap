@@ -166,22 +166,7 @@ class Config(FaceswapConfig):
                  "inability of the model to find the best solution. "
                  "Values that are too small might be unable to escape from dead-ends "
                  "and find the best global minimum.")
-        self.add_item(
-            section=section, title="encoder_trainable", datatype=bool,
-            default=True, fixed=False, group="optimizer",
-            info="Specify whther to train Encoder. "
-                 "\nHelpful with pre-trained models. ")
-        self.add_item(
-            section=section, title="decoder_a_trainable", datatype=bool,
-            default=True, fixed=False, group="optimizer",
-            info="Specify whther to train Decoder A(old face). "
-                 "\nHelpful with pre-trained models. ")
-        self.add_item(
-            section=section, title="decoder_b_trainable", datatype=bool,
-            default=True, fixed=False, group="optimizer",
-            info="Specify whther to train Decoder B(new face). "
-                 "\nHelpful with pre-trained models. ")
-
+        
     def load_module(self, filename, module_path, plugin_type):
         """ Load the defaults module and add defaults """
         logger.debug("Adding defaults: (filename: %s, module_path: %s, plugin_type: %s",
