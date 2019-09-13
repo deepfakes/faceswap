@@ -3,12 +3,9 @@
 
 import logging
 import multiprocessing as mp
-from multiprocessing.sharedctypes import RawArray
-from ctypes import c_float
 
 import queue as Queue
 import sys
-import os
 import threading
 from lib.logger import LOG_QUEUE, set_root_logger
 
@@ -180,6 +177,11 @@ class MultiThread():
         """ Return a list of thread errors """
         return [thread.err for thread in self._threads if thread.err]
 
+    @property
+    def name(self):
+        """ Return thread name """
+        return self._name
+
     def check_and_raise_error(self):
         """ Checks for errors in thread and raises them in caller """
         if not self.has_error:
@@ -223,6 +225,7 @@ class BackgroundGenerator(MultiThread):
     # See below why prefetch count is flawed
     def __init__(self, generator, prefetch=1, thread_count=2,
                  queue=None, args=None, kwargs=None):
+        # pylint:disable=too-many-arguments
         super().__init__(target=self._run, thread_count=thread_count)
         self.queue = queue or Queue.Queue(prefetch)
         self.generator = generator

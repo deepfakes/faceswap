@@ -8,8 +8,8 @@ so that the vram is released on subprocess exit """
 import logging
 
 from lib.gpu_stats import GPUStats
-from lib.multithreading import PoolProcess, SpawnProcess
 from lib.queue_manager import queue_manager, QueueEmpty
+from lib.utils import get_backend
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -22,20 +22,21 @@ class Extractor():
         and can be accessed from:
             Extractor.input_queue
     """
-    def __init__(self, detector, aligner, loglevel,
+    def __init__(self, detector, aligner,
                  configfile=None, multiprocess=False, rotate_images=None, min_size=20,
                  normalize_method=None):
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, loglevel: %s, configfile: %s, "
+        logger.debug("Initializing %s: (detector: %s, aligner: %s, configfile: %s, "
                      "multiprocess: %s, rotate_images: %s, min_size: %s, "
                      "normalize_method: %s)", self.__class__.__name__, detector, aligner,
-                     loglevel, configfile, multiprocess, rotate_images, min_size,
-                     normalize_method)
+                     configfile, multiprocess, rotate_images, min_size, normalize_method)
+        self.vram_buffer = 320
         self.phase = "detect"
-        self.detector = self.load_detector(detector, loglevel, rotate_images, min_size, configfile)
-        self.aligner = self.load_aligner(aligner, loglevel, configfile, normalize_method)
+        self.queue_size = 32
+        self.detector = self.load_detector(detector, rotate_images, min_size, configfile)
+        self.aligner = self.load_aligner(aligner, configfile, normalize_method)
         self.is_parallel = self.set_parallel_processing(multiprocess)
-        self.processes = list()
         self.queues = self.add_queues()
+        self.threads = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -71,33 +72,40 @@ class Extractor():
         logger.trace(retval)
         return retval
 
+    @property
+    def active_plugins(self):
+        """ Return the plugins that are currently active based on pass """
+        if self.passes == 1:
+            retval = [self.detector, self.aligner]
+        elif self.passes == 2 and not self.final_pass:
+            retval = [self.detector]
+        else:
+            retval = [self.aligner]
+        logger.trace("Active plugins: %s", retval)
+        return retval
+
     @staticmethod
-    def load_detector(detector, loglevel, rotation, min_size, configfile):
+    def load_detector(detector, rotation, min_size, configfile):
         """ Set global arguments and load detector plugin """
         detector_name = detector.replace("-", "_").lower()
         logger.debug("Loading Detector: '%s'", detector_name)
-        detector = PluginLoader.get_detector(detector_name)(loglevel=loglevel,
-                                                            rotation=rotation,
+        detector = PluginLoader.get_detector(detector_name)(rotation=rotation,
                                                             min_size=min_size,
                                                             configfile=configfile)
         return detector
 
     @staticmethod
-    def load_aligner(aligner, loglevel, configfile, normalize_method):
+    def load_aligner(aligner, configfile, normalize_method):
         """ Set global arguments and load aligner plugin """
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
-        aligner = PluginLoader.get_aligner(aligner_name)(loglevel=loglevel,
-                                                         configfile=configfile,
+        aligner = PluginLoader.get_aligner(aligner_name)(configfile=configfile,
                                                          normalize_method=normalize_method)
         return aligner
 
     def set_parallel_processing(self, multiprocess):
         """ Set whether to run detect and align together or separately """
-        detector_vram = self.detector.vram
-        aligner_vram = self.aligner.vram
-
-        if detector_vram == 0 or aligner_vram == 0:
+        if self.detector.vram == 0 or self.aligner.vram == 0:
             logger.debug("At least one of aligner or detector have no VRAM requirement. "
                          "Enabling parallel processing.")
             return True
@@ -107,51 +115,56 @@ class Extractor():
             return False
 
         gpu_stats = GPUStats()
-        if gpu_stats.is_plaidml and (not self.detector.supports_plaidml or
-                                     not self.aligner.supports_plaidml):
-            logger.debug("At least one of aligner or detector does not support plaidML. "
-                         "Enabling parallel processing.")
-            return True
-
-        if not gpu_stats.is_plaidml and (
-                (self.detector.supports_plaidml and aligner_vram != 0) or
-                (self.aligner.supports_plaidml and detector_vram != 0)):
-            logger.warning("Keras + non-Keras aligner/detector combination does not support "
-                           "parallel processing. Switching to serial.")
-            return False
-
-        if self.detector.supports_plaidml and self.aligner.supports_plaidml:
-            logger.debug("Both aligner and detector support plaidML. Disabling parallel "
-                         "processing.")
-            return False
-
         if gpu_stats.device_count == 0:
             logger.debug("No GPU detected. Enabling parallel processing.")
             return True
 
-        required_vram = detector_vram + aligner_vram + 320  # 320MB buffer
+        if get_backend() == "amd":
+            logger.debug("Parallel processing discabled by amd")
+            return False
+
+        vram_required = self.detector.vram + self.aligner.vram + self.vram_buffer
         stats = gpu_stats.get_card_most_free()
-        free_vram = int(stats["free"])
+        vram_free = int(stats["free"])
         logger.verbose("%s - %sMB free of %sMB",
                        stats["device"],
-                       free_vram,
+                       vram_free,
                        int(stats["total"]))
-        if free_vram <= required_vram:
+        if vram_free <= vram_required:
             logger.warning("Not enough free VRAM for parallel processing. "
                            "Switching to serial")
             return False
+
+        self.set_extractor_batchsize(vram_required, vram_free)
         return True
+
+    def set_extractor_batchsize(self, vram_required, vram_free):
+        """ Sets the batchsize of the used plugins based on their vram and
+            vram_per_batch_requirements """
+        batch_required = ((self.aligner.vram_per_batch * self.aligner.batchsize) +
+                          (self.detector.vram_per_batch * self.detector.batchsize))
+        plugin_required = vram_required + batch_required
+        if plugin_required <= vram_free:
+            logger.verbose("Plugin requirements within threshold: (plugin_required: %sMB, "
+                           "vram_free: %sMB)", plugin_required, vram_free)
+            return
+        # Hacky split across 2 plugins
+        available_for_batching = (vram_free - vram_required) // 2
+        self.aligner.batchsize = max(1, available_for_batching // self.aligner.vram_per_batch)
+        self.detector.batchsize = max(1, available_for_batching // self.detector.vram_per_batch)
+        logger.verbose("Reset batchsizes: (aligner: %s, detector: %s)",
+                       self.aligner.batchsize, self.detector.batchsize)
 
     def add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
         for task in ("extract_detect_in", "extract_align_in", "extract_align_out"):
             # Limit queue size to avoid stacking ram
-            size = 32
+            self.queue_size = 32
             if task == "extract_detect_in" or (not self.is_parallel
                                                and task == "extract_align_in"):
-                size = 64
-            queue_manager.add_queue(task, maxsize=size)
+                self.queue_size = 64
+            queue_manager.add_queue(task, maxsize=self.queue_size, multiprocessing_queue=False)
             queues[task] = queue_manager.get_queue(task)
         logger.debug("Queues: %s", queues)
         return queues
@@ -167,77 +180,31 @@ class Extractor():
             If not multiprocessing:
                 Launches the relevant plugin for the current phase """
         if self.is_parallel:
-            logger.debug("Launching aligner and detector")
             self.launch_aligner()
             self.launch_detector()
         elif self.phase == "detect":
-            logger.debug("Launching detector")
             self.launch_detector()
         else:
-            logger.debug("Launching aligner")
             self.launch_aligner()
 
     def launch_aligner(self):
         """ Launch the face aligner """
         logger.debug("Launching Aligner")
-        kwargs = {"in_queue": self.queues["extract_align_in"],
-                  "out_queue": self.queues["extract_align_out"]}
-
-        process = SpawnProcess(self.aligner.run, **kwargs)
-        event = process.event
-        error = process.error
-        process.start()
-        self.processes.append(process)
-
-        # Wait for Aligner to take it's VRAM
-        # The first ever load of the model for FAN has reportedly taken
-        # up to 3-4 minutes, hence high timeout.
-        # TODO investigate why this is and fix if possible
-        for mins in reversed(range(5)):
-            for seconds in range(60):
-                event.wait(seconds)
-                if event.is_set():
-                    break
-                if error.is_set():
-                    break
-            if event.is_set():
-                break
-            if mins == 0 or error.is_set():
-                raise ValueError("Error initializing Aligner")
-            logger.info("Waiting for Aligner... Time out in %s minutes", mins)
-
+        kwargs = dict(in_queue=self.queues["extract_align_in"],
+                      out_queue=self.queues["extract_align_out"],
+                      queue_size=self.queue_size)
+        self.aligner.initialize(**kwargs)
+        self.aligner.start()
         logger.debug("Launched Aligner")
 
     def launch_detector(self):
         """ Launch the face detector """
         logger.debug("Launching Detector")
-        kwargs = {"in_queue": self.queues["extract_detect_in"],
-                  "out_queue": self.queues["extract_align_in"]}
-        mp_func = PoolProcess if self.detector.parent_is_pool else SpawnProcess
-        process = mp_func(self.detector.run, **kwargs)
-
-        event = process.event if hasattr(process, "event") else None
-        error = process.error if hasattr(process, "error") else None
-        process.start()
-        self.processes.append(process)
-
-        if event is None:
-            logger.debug("Launched Detector")
-            return
-
-        for mins in reversed(range(5)):
-            for seconds in range(60):
-                event.wait(seconds)
-                if event.is_set():
-                    break
-                if error and error.is_set():
-                    break
-            if event.is_set():
-                break
-            if mins == 0 or (error and error.is_set()):
-                raise ValueError("Error initializing Detector")
-            logger.info("Waiting for Detector... Time out in %s minutes", mins)
-
+        kwargs = dict(in_queue=self.queues["extract_detect_in"],
+                      out_queue=self.queues["extract_align_in"],
+                      queue_size=self.queue_size)
+        self.detector.initialize(**kwargs)
+        self.detector.start()
         logger.debug("Launched Detector")
 
     def detected_faces(self):
@@ -248,22 +215,16 @@ class Extractor():
         out_queue = self.output_queue
         while True:
             try:
+                if self.check_and_raise_error():
+                    break
                 faces = out_queue.get(True, 1)
                 if faces == "EOF":
                     break
-                if isinstance(faces, dict) and faces.get("exception"):
-                    pid = faces["exception"][0]
-                    t_back = faces["exception"][1].getvalue()
-                    err = "Error in child process {}. {}".format(pid, t_back)
-                    raise Exception(err)
             except QueueEmpty:
                 continue
 
             yield faces
-        for process in self.processes:
-            logger.trace("Joining process: %s", process)
-            process.join()
-            del process
+        self.join_threads()
         if self.final_pass:
             # Cleanup queues
             for q_name in self.queues.keys():
@@ -272,3 +233,15 @@ class Extractor():
         else:
             logger.debug("Switching to align phase")
             self.phase = "align"
+
+    def check_and_raise_error(self):
+        """ Check all threads for errors and raise if one occurs """
+        for plugin in self.active_plugins:
+            if plugin.check_and_raise_error():
+                return True
+        return False
+
+    def join_threads(self):
+        """ Join threads for current pass """
+        for plugin in self.active_plugins:
+            plugin.join()

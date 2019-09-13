@@ -354,13 +354,14 @@ def rotate_landmarks(face, rotation_matrix):
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
                  rotation_matrix, type(face))
+    rotated_landmarks = None
     # Detected Face Object
     if isinstance(face, DetectedFace):
         bounding_box = [[face.x, face.y],
                         [face.x + face.w, face.y],
                         [face.x + face.w, face.y + face.h],
                         [face.x, face.y + face.h]]
-        landmarks = face.landmarksXY
+        landmarks = face.landmarks_xy
 
     # Alignments Dict
     elif isinstance(face, dict) and "x" in face:
@@ -371,7 +372,7 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)],
                         [face.get("x", 0),
                          face.get("y", 0) + face.get("h", 0)]]
-        landmarks = face.get("landmarksXY", list())
+        landmarks = face.get("landmarks_xy", list())
 
     # Bounding Box Dict
     elif isinstance(face, dict) and "left" in face:
@@ -415,7 +416,7 @@ def rotate_landmarks(face, rotation_matrix):
         face.r = 0
         if len(rotated) > 1:
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face.landmarksXY = rotated_landmarks
+            face.landmarks_xy = rotated_landmarks
     elif isinstance(face, dict) and "x" in face:
         face["x"] = int(pt_x)
         face["y"] = int(pt_y)
@@ -424,7 +425,7 @@ def rotate_landmarks(face, rotation_matrix):
         face["r"] = 0
         if len(rotated) > 1:
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face["landmarksXY"] = rotated_landmarks
+            face["landmarks_xy"] = rotated_landmarks
     else:
         face["left"] = int(pt_x)
         face["top"] = int(pt_y)

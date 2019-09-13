@@ -109,6 +109,7 @@ class QueueManager():
             logged to INFO so it also displays in console
         """
         while True:
+            logger.info("====================================================")
             for name in sorted(self.queues.keys()):
                 logger.info("%s: %s", name, self.queues[name].qsize())
             sleep(update_secs)

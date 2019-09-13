@@ -10,17 +10,46 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class DetectedFace():
-    """ Detected face and landmark information """
+    """ Detected face and landmark information 
+        
+    Holds information about a detected face, it's location in a source image
+    and the face's 68 point landmarks.
+
+    Methods for aligning a face are also callable from here.
+
+    Parameters
+    ----------
+    image: np.ndarray, optional
+        The source frame that holds the face. Required if calling any face alignment method
+    x: int
+        The left most point (in pixels) of the face's bounding box as discovered in
+        ``plugins.extract.detect``
+    w: int
+        The width (in pixels) of the face's bounding box as discovered in
+        ``plugins.extract.detect``
+    y: int
+        The top most point (in pixels) of the face's bounding box as discovered in
+        ``plugins.extract.detect``
+    h: int
+        The height (in pixels) of the face's bounding box as discovered in
+        ``plugins.extract.detect``
+    landmarks_xy: list
+        The 68 point landmarks as discovered in ``plugins.extract.align``. Should be a
+        ``list`` of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
+    """
     def __init__(  # pylint: disable=invalid-name
             self, image=None, x=None, w=None, y=None, h=None,
-            landmarksXY=None):
-        logger.trace("Initializing %s", self.__class__.__name__)
+            landmarks_xy=None):
+        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s)",
+                     self.__class__.__name__,
+                     image.shape if image is not None and image.any() else image,
+                     x, w, y, h, landmarks_xy)
         self.image = image
         self.x = x
         self.w = w
         self.y = y
         self.h = h
-        self.landmarksXY = landmarksXY
+        self.landmarks_xy = landmarks_xy
         self.hash = None  # Hash must be set when the file is saved due to image compression
 
         self.aligned = dict()
@@ -29,16 +58,33 @@ class DetectedFace():
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
-    def extract_ratio(self):
+    def left(self):
+        """int: Left point (in pixels) of face detection bounding box within the parent image """
+        return self.x
+
+    @property
+    def top(self):
+        """int: Top point (in pixels) of face detection bounding box within the parent image """
+        return self.y
+
+    @property
+    def right(self):
+        """int: Right point (in pixels) of face detection bounding box within the parent image """
+        return self.x + self.w
+
+    @property
+    def bottom(self):
+        """int: Bottom point (in pixels) of face detection bounding box within the parent image """
+        return self.y + self.h
+
+    @property
+    def _extract_ratio(self):
         """ The ratio of padding to add for training images """
         return 0.375
 
-    @property
-    def landmarks_as_xy(self):
-        """ Landmarks as XY """
-        return self.landmarksXY
 
     def to_bounding_box_dict(self):
+        # TODO Remove this
         """ Return Bounding Box as a bounding box dixt """
         retval = dict(left=self.x, top=self.y, right=self.x + self.w, bottom=self.y + self.h)
         logger.trace("Returning: %s", retval)
@@ -72,7 +118,7 @@ class DetectedFace():
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
-        alignment["landmarksXY"] = self.landmarksXY
+        alignment["landmarks_xy"] = self.landmarks_xy
         alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
         return alignment
@@ -85,14 +131,14 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.landmarksXY = alignment["landmarksXY"]
+        self.landmarks_xy = alignment["landmarks_xy"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         if image is not None and image.any():
             self.image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
                      "landmarks: %s)",
-                     self.x, self.w, self.y, self.h, self.landmarksXY)
+                     self.x, self.w, self.y, self.h, self.landmarks_xy)
 
     # <<< Aligned Face methods and properties >>> #
     def load_aligned(self, image, size=256, align_eyes=False, dtype=None):
@@ -105,7 +151,7 @@ class DetectedFace():
         else:
             logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
                          size, align_eyes, dtype)
-            padding = int(size * self.extract_ratio) // 2
+            padding = int(size * self._extract_ratio) // 2
             self.aligned["size"] = size
             self.aligned["padding"] = padding
             self.aligned["align_eyes"] = align_eyes
@@ -127,7 +173,7 @@ class DetectedFace():
     def padding_from_coverage(self, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image """
-        adjusted_ratio = coverage_ratio - (1 - self.extract_ratio)
+        adjusted_ratio = coverage_ratio - (1 - self._extract_ratio)
         padding = round((size * adjusted_ratio) / 2)
         logger.trace(padding)
         return padding
@@ -189,7 +235,7 @@ class DetectedFace():
     @property
     def aligned_landmarks(self):
         """ Return the landmarks location transposed to extracted face """
-        landmarks = AlignerExtract().transform_points(self.landmarksXY,
+        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
                                                       self.aligned["matrix"],
                                                       self.aligned["size"],
                                                       self.aligned["padding"])
@@ -242,7 +288,7 @@ class DetectedFace():
     @property
     def reference_landmarks(self):
         """ Return the landmarks location transposed to reference face """
-        landmarks = AlignerExtract().transform_points(self.landmarksXY,
+        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
                                                       self.reference["matrix"],
                                                       self.reference["size"],
                                                       self.reference["padding"])

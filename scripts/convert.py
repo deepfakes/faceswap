@@ -256,7 +256,6 @@ class DiskIO():
                        "superior results")
         extractor = Extractor(detector="cv2-dnn",
                               aligner="cv2-dnn",
-                              loglevel=self.args.loglevel,
                               multiprocess=False,
                               rotate_images=None,
                               min_size=20)
@@ -388,7 +387,7 @@ class DiskIO():
         for idx, face in enumerate(detected_faces):
             detected_face = DetectedFace()
             detected_face.from_bounding_box_dict(face)
-            detected_face.landmarksXY = landmarks[idx]
+            detected_face.landmarks_xy = landmarks[idx]
             final_faces.append(detected_face)
         return final_faces
 

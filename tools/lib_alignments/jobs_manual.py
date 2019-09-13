@@ -617,7 +617,7 @@ class Manual():
     def set_faces(self, frame):
         """ Pass the current frame faces to faces window """
         faces = self.extracted_faces.get_faces_in_frame(frame)
-        landmarks = [{"landmarksXY": face.aligned_landmarks}
+        landmarks = [{"landmarks_xy": face.aligned_landmarks}
                      for face in self.extracted_faces.faces]
         return FacesDisplay(faces, landmarks, self.extracted_faces.size, self.interface)
 
@@ -1009,5 +1009,5 @@ class MouseHandler():
         alignment["w"] = bbox["right"] - bbox["left"]
         alignment["y"] = bbox["top"]
         alignment["h"] = bbox["bottom"] - bbox["top"]
-        alignment["landmarksXY"] = landmarks
+        alignment["landmarks_xy"] = landmarks
         return alignment
