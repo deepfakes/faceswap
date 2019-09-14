@@ -789,7 +789,6 @@ class MouseHandler():
         logger.debug("Initialize Extractor")
         extractor = Extractor("manual", "fan", multiprocess=True, normalize_method="hist")
         self.queues["in"] = extractor.input_queue
-        self.queues["out"] = extractor.output_queue
         # Set the batchsizes to 1
         extractor.detector.batchsize = 1
         extractor.aligner.batchsize = 1

@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # TODO cv2-dnn detector can't be with gpu
 # TODO convert on the fly
 # TODO Cpu mode
-# TODO Face Filter
 # TODO Docstrings
-# TODO CPU Backend in KSession
 
 
 def get_config(plugin_name, configfile=None):
