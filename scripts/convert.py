@@ -380,15 +380,7 @@ class DiskIO():
         self.extractor.input_queue.put(inp)
         faces = next(self.extractor.detected_faces())
 
-        landmarks = faces["landmarks"]
-        detected_faces = faces["detected_faces"]
-        final_faces = list()
-
-        for idx, face in enumerate(detected_faces):
-            detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face)
-            detected_face.landmarks_xy = landmarks[idx]
-            final_faces.append(detected_face)
+        final_faces = [face for face in faces["detected_faces"]]
         return final_faces
 
     # Saving tasks
