@@ -371,7 +371,7 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)],
                         [face.get("x", 0),
                          face.get("y", 0) + face.get("h", 0)]]
-        landmarks = face.get("landmarks_XY", list())
+        landmarks = face.get("landmarksXY", list())
 
     else:
         raise ValueError("Unsupported face type")

@@ -91,7 +91,7 @@ class DetectedFace():
         -------
         alignment: dict
             The alignment dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
-            ``landmarks_XY``, ``hash``.
+            ``landmarksXY``, ``hash``.
         """
 
         alignment = dict()
@@ -99,7 +99,7 @@ class DetectedFace():
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
-        alignment["landmarks_XY"] = self.landmarks_xy
+        alignment["landmarksXY"] = self.landmarks_xy
         alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
         return alignment
@@ -112,7 +112,7 @@ class DetectedFace():
         ----------
         alignment: dict
             A dictionary entry for a face from an alignments file containing the keys
-            ``x``, ``w``, ``y``, ``h``, ``landmarks_XY``. Optionally the key ``hash``
+            ``x``, ``w``, ``y``, ``h``, ``landmarksXY``. Optionally the key ``hash``
             will be provided, but not all use cases will know the face hash at this time.
         image: numpy.ndarray, optional
             If an image is passed in, then the ``image`` attribute will
@@ -125,7 +125,7 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.landmarks_xy = alignment["landmarks_XY"]
+        self.landmarks_xy = alignment["landmarksXY"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         if image is not None and image.any():
