@@ -16,9 +16,8 @@ from ._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO cv2-dnn detector can't be with gpu
-# TODO convert on the fly
 # TODO Cpu mode
+# TODO Run with warnings mode
 # TODO Docstrings
 
 

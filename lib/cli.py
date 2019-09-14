@@ -979,8 +979,8 @@ class TrainArgs(FaceSwapArgs):
     def get_info():
         """ Return command information """
         return ("Train a model on extracted original (A) and swap (B) faces.\n"
-                "Training models can take a long time. Anything from 24hrs to "
-                "over a week")
+                "Training models can take a long time. Anything from 24hrs to over a week\n"
+                "Model plugins can be configured in the 'Settings' Menu")
 
     @staticmethod
     def get_argument_list():
