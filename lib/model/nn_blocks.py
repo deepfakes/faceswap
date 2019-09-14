@@ -110,7 +110,7 @@ class NNBlocks():
         return var_x
 
     def upscale(self, inp, filters, kernel_size=3, padding="same",
-                use_instance_norm=False, res_block_follows=False, **kwargs):
+                use_instance_norm=False, res_block_follows=False, scale_factor=2, **kwargs):
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s)",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
@@ -137,9 +137,10 @@ class NNBlocks():
         if not res_block_follows:
             var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
         if self.use_subpixel:
-            var_x = SubPixelUpscaling(name="{}_subpixel".format(name))(var_x)
+            var_x = SubPixelUpscaling(name="{}_subpixel".format(name),
+                                      scale_factor=scale_factor)(var_x)
         else:
-            var_x = PixelShuffler(name="{}_pixelshuffler".format(name))(var_x)
+            var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
         return var_x
 
     # <<< DFaker Model Blocks >>> #
