@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # TODO convert on the fly
 # TODO Cpu mode
 # TODO Face Filter
-# TODO Move logging out of MP
 # TODO Docstrings
+# TODO CPU Backend in KSession
 
 
 def get_config(plugin_name, configfile=None):

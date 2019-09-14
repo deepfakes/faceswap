@@ -453,9 +453,6 @@ def safe_shutdown(got_error=False):
     from lib.queue_manager import queue_manager
     queue_manager.terminate_queues()
     logger.debug("Cleanup complete. Shutting down queue manager and exiting")
-    queue_manager._log_queue.put(None)  # pylint:disable=protected-access
-    while not queue_manager._log_queue.empty():  # pylint:disable=protected-access
-        continue
     exit(1 if got_error else 0)
 
 
