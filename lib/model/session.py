@@ -60,10 +60,10 @@ class KSession():
     def _set_session(self):
         """ Sets the session and graph.
 
-        If the backend is not Nvidia then this does nothing and the global ``Keras`` ``Session``
+        If the backend is AMD then this does nothing and the global ``Keras`` ``Session``
         is used
         """
-        if get_backend() != "nvidia":
+        if get_backend() == "amd":
             return None
 
         self.graph = tf.Graph()
