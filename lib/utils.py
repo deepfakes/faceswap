@@ -451,9 +451,7 @@ def safe_shutdown(got_error=False):
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("Safely shutting down")
     from lib.queue_manager import queue_manager
-    from lib.multithreading import terminate_processes
     queue_manager.terminate_queues()
-    terminate_processes()
     logger.debug("Cleanup complete. Shutting down queue manager and exiting")
     queue_manager._log_queue.put(None)  # pylint:disable=protected-access
     while not queue_manager._log_queue.empty():  # pylint:disable=protected-access

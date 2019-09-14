@@ -2,71 +2,18 @@
 """ Multithreading/processing utils for faceswap """
 
 import logging
-import multiprocessing as mp
+from multiprocessing import cpu_count
 
 import queue as Queue
 import sys
 import threading
-from lib.logger import LOG_QUEUE, set_root_logger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_launched_processes = set()  # pylint: disable=invalid-name
 
 
 def total_cpus():
     """ Return total number of cpus """
-    return mp.cpu_count()
-
-
-class SpawnProcess(mp.context.SpawnProcess):
-    """ Process in spawnable context
-        Must be spawnable to share CUDA across processes """
-    def __init__(self, target, in_queue, out_queue, *args, **kwargs):
-        name = target.__qualname__
-        logger.debug("Initializing %s: (target: '%s', args: %s, kwargs: %s)",
-                     self.__class__.__name__, name, args, kwargs)
-        ctx = mp.get_context("spawn")
-        self.event = ctx.Event()
-        self.error = ctx.Event()
-        kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
-        super().__init__(target=target, name=name, args=args, kwargs=kwargs)
-        self.daemon = True
-        logger.debug("Initialized %s: '%s'", self.__class__.__name__, name)
-
-    def build_target_kwargs(self, in_queue, out_queue, kwargs):
-        """ Add standard kwargs to passed in kwargs list """
-        kwargs["event"] = self.event
-        kwargs["error"] = self.error
-        kwargs["log_init"] = set_root_logger
-        kwargs["log_queue"] = LOG_QUEUE
-        kwargs["log_level"] = logger.getEffectiveLevel()
-        kwargs["in_queue"] = in_queue
-        kwargs["out_queue"] = out_queue
-        return kwargs
-
-    def run(self):
-        """ Add logger to spawned process """
-        logger_init = self._kwargs["log_init"]
-        log_queue = self._kwargs["log_queue"]
-        log_level = self._kwargs["log_level"]
-        logger_init(log_level, log_queue)
-        super().run()
-
-    def start(self):
-        """ Add logging to start function """
-        logger.debug("Spawning Process: (name: '%s', args: %s, kwargs: %s, daemon: %s)",
-                     self._name, self._args, self._kwargs, self.daemon)
-        super().start()
-        _launched_processes.add(self)
-        logger.debug("Spawned Process: (name: '%s', PID: %s)", self._name, self.pid)
-
-    def join(self, timeout=None):
-        """ Add logging to join function """
-        logger.debug("Joining Process: (name: '%s', PID: %s)", self._name, self.pid)
-        super().join(timeout=timeout)
-        if self in _launched_processes:
-            _launched_processes.remove(self)
-        logger.debug("Joined Process: (name: '%s', PID: %s)", self._name, self.pid)
+    return cpu_count()
 
 
 class FSThread(threading.Thread):
@@ -201,22 +148,3 @@ class BackgroundGenerator(MultiThread):
                 logger.debug("Got EOF OR NONE in BackgroundGenerator")
                 break
             yield next_item
-
-
-def terminate_processes():
-    """ Join all active processes on unexpected shutdown
-
-        If the process is doing long running work, make sure you
-        have a mechanism in place to terminate this work to avoid
-        long blocks
-    """
-
-    logger.debug("Processes to join: %s", [process
-                                           for process in _launched_processes
-                                           if isinstance(process, mp.pool.Pool)
-                                           or process.is_alive()])
-    for process in list(_launched_processes):
-        if isinstance(process, mp.pool.Pool):
-            process.terminate()
-        if isinstance(process, mp.pool.Pool) or process.is_alive():
-            process.join()
