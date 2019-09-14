@@ -197,16 +197,6 @@ class Detector(Extractor):
                             y=int(round(top)),
                             h=int(round(bottom - top)))
 
-    # TODO Check sort tool is compatible with switch from to_bounding_box_dict to DetectedFace
-    def set_predetected(self, width, height):
-        """ Set a bounding box dict for predetected faces """
-        # Predetected_face is used for sort tool.
-        # Landmarks should not be extracted again from predetected faces,
-        # because face data is lost, resulting in a large variance
-        # against extract from original image
-        logger.debug("Setting predetected face")
-        return [self.to_detected_face(0, 0, width, height)]
-
     # <<< PROTECTED ACCESS METHODS >>> #
     # <<< PREDICT WRAPPER >>> #
     def _predict(self, batch):

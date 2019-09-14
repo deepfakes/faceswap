@@ -39,9 +39,7 @@ class DetectedFace():
         The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
         of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
     """
-    def __init__(  # pylint: disable=invalid-name
-            self, image=None, x=None, w=None, y=None, h=None,
-            landmarks_xy=None):
+    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None):
         logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
@@ -85,13 +83,6 @@ class DetectedFace():
     def _extract_ratio(self):
         """ float: The ratio of padding to add for training images """
         return 0.375
-
-    def to_bounding_box_dict(self):
-        # TODO Remove this
-        """ Return Bounding Box as a bounding box dixt """
-        retval = dict(left=self.x, top=self.y, right=self.x + self.w, bottom=self.y + self.h)
-        logger.trace("Returning: %s", retval)
-        return retval
 
     def to_alignment(self):
         """  Return the detected face formatted for an alignments file

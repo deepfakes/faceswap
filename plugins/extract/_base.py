@@ -17,13 +17,12 @@ from ._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO cv2-dnn detector can't be with gpu
-# Sort
-# convert on the fly
-# Cpu mode
-# Face Filter
-# Remove all of Multiprocessing
-# Move Queue out of MP
-# Move logging out of MP
+# TODO convert on the fly
+# TODO Cpu mode
+# TODO Face Filter
+# TODO Remove all of Multiprocessing
+# TODO Move Queue out of MP
+# TODO Move logging out of MP
 # TODO Docstrings
 
 
