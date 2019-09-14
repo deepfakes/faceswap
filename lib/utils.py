@@ -349,8 +349,7 @@ def rotate_landmarks(face, rotation_matrix):
     # pylint:disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
-        Pass in a DetectedFace object, Alignments dict or bounding box dict
-        (as defined in lib/plugins/extract/detect/_base.py) """
+        Pass in a DetectedFace object or Alignments dict """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
                  rotation_matrix, type(face))
@@ -372,15 +371,7 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)],
                         [face.get("x", 0),
                          face.get("y", 0) + face.get("h", 0)]]
-        landmarks = face.get("landmarks_xy", list())
-
-    # Bounding Box Dict
-    elif isinstance(face, dict) and "left" in face:
-        bounding_box = [[face["left"], face["top"]],
-                        [face["right"], face["top"]],
-                        [face["right"], face["bottom"]],
-                        [face["left"], face["bottom"]]]
-        landmarks = list()
+        landmarks = face.get("landmarks_XY", list())
 
     else:
         raise ValueError("Unsupported face type")
@@ -417,15 +408,6 @@ def rotate_landmarks(face, rotation_matrix):
         if len(rotated) > 1:
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
             face.landmarks_xy = rotated_landmarks
-    elif isinstance(face, dict) and "x" in face:
-        face["x"] = int(pt_x)
-        face["y"] = int(pt_y)
-        face["w"] = int(width)
-        face["h"] = int(height)
-        face["r"] = 0
-        if len(rotated) > 1:
-            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face["landmarks_xy"] = rotated_landmarks
     else:
         face["left"] = int(pt_x)
         face["top"] = int(pt_y)
