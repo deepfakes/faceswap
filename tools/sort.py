@@ -87,8 +87,8 @@ class Sort():
     @staticmethod
     def launch_aligner():
         """ Load the aligner plugin to retrieve landmarks """
-        kwargs = dict(in_queue=queue_manager.get_queue("in", multiprocessing_queue=False),
-                      out_queue=queue_manager.get_queue("out", multiprocessing_queue=False),
+        kwargs = dict(in_queue=queue_manager.get_queue("in"),
+                      out_queue=queue_manager.get_queue("out"),
                       queue_size=8)
         aligner = PluginLoader.get_aligner("fan")(normalize_method="hist")
         aligner.batchsize = 1

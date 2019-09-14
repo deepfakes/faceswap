@@ -20,8 +20,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # TODO convert on the fly
 # TODO Cpu mode
 # TODO Face Filter
-# TODO Remove all of Multiprocessing
-# TODO Move Queue out of MP
 # TODO Move logging out of MP
 # TODO Docstrings
 
@@ -320,8 +318,7 @@ class Extractor():
         for q_name in queues:
             self._queues[q_name] = queue_manager.get_queue(
                 name="{}_{}".format(self._plugin_type, q_name),
-                maxsize=self.queue_size,
-                multiprocessing_queue=False)
+                maxsize=self.queue_size)
 
     # <<< THREAD METHODS >>> #
     def _compile_threads(self):

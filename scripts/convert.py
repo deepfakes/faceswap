@@ -94,7 +94,7 @@ class Convert():
         """ Add the queues for convert """
         logger.debug("Adding queues. Queue size: %s", self.queue_size)
         for qname in ("convert_in", "convert_out", "patch"):
-            queue_manager.add_queue(qname, self.queue_size, multiprocessing_queue=False)
+            queue_manager.add_queue(qname, self.queue_size)
 
     def process(self):
         """ Process the conversion """
@@ -282,7 +282,7 @@ class DiskIO():
             q_name = task
         setattr(self,
                 "{}_queue".format(task),
-                queue_manager.get_queue(q_name, multiprocessing_queue=False))
+                queue_manager.get_queue(q_name))
         logger.debug("Added queue for task: '%s'", task)
 
     def start_thread(self, task):

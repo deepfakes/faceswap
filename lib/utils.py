@@ -456,7 +456,6 @@ def safe_shutdown(got_error=False):
     queue_manager._log_queue.put(None)  # pylint:disable=protected-access
     while not queue_manager._log_queue.empty():  # pylint:disable=protected-access
         continue
-    queue_manager.manager.shutdown()
     exit(1 if got_error else 0)
 
 

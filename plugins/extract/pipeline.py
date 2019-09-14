@@ -164,7 +164,7 @@ class Extractor():
             if task == "extract_detect_in" or (not self.is_parallel
                                                and task == "extract_align_in"):
                 self.queue_size = 64
-            queue_manager.add_queue(task, maxsize=self.queue_size, multiprocessing_queue=False)
+            queue_manager.add_queue(task, maxsize=self.queue_size)
             queues[task] = queue_manager.get_queue(task)
         logger.debug("Queues: %s", queues)
         return queues
