@@ -3,7 +3,6 @@
 
 import logging
 
-from lib.faces_detect import DetectedFace
 from lib.logger import get_loglevel
 from lib.vgg_face import VGGFace
 from lib.utils import cv2_read_img
@@ -100,13 +99,8 @@ class FaceFilter():
         """ Align the faces for vgg_face input """
         for filename, face in self.filters.items():
             logger.debug("Loading aligned face: '%s'", filename)
-            bounding_box = face["detected_faces"][0]
             image = face["image"]
-            landmarks = face["landmarks"][0]
-
-            detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(bounding_box, image)
-            detected_face.landmarks_xy = landmarks
+            detected_face = face["detected_faces"][0]
             detected_face.load_aligned(image, size=224)
             face["face"] = detected_face.aligned_face
             del face["image"]
