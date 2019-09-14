@@ -526,7 +526,12 @@ class ExtractArgs(ExtractConvertArgs):
     def get_optional_arguments():
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
-        backend = get_backend()
+        if get_backend() == "cpu":
+            default_detector = default_aligner = "cv2-dnn"
+        else:
+            default_detector = "s3fd"
+            default_aligner = "fan"
+
         argument_list = []
         argument_list.append({"opts": ("--serializer", ),
                               "type": str.lower,
@@ -537,19 +542,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Serializer for alignments file. If yaml is chosen and not "
                                       "available, then json will be used as the default "
                                       "fallback."})
-        s3fd = "s3fd"
-        fan = "fan"
-        if backend == "cpu":
-            default_detector = default_aligner = "cv2-dnn"
-        else:
-            default_detector = s3fd
-            default_aligner = fan
-        if backend == "amd":
-            default_detector += "-amd"
-            default_aligner += "-amd"
-            s3fd += "-amd"
-            fan += "-amd"
-
         argument_list.append({
             "opts": ("-D", "--detector"),
             "action": Radio,
@@ -559,13 +551,12 @@ class ExtractArgs(ExtractConvertArgs):
             "group": "Plugins",
             "help": "R|Detector to use. Some of these have configurable settings in "
                     "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
-                    "\nL|'cv2-dnn': A CPU only extractor, is the least reliable, but uses least "
+                    "\nL|cv2-dnn: A CPU only extractor, is the least reliable, but uses least "
                     "resources and runs fast on CPU. Use this if not using a GPU and time is "
                     "important."
-                    "\nL|'mtcnn': Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
-                    "detectors but can often return more false positives. NB: Runs on CPU for AMD "
-                    "cards."
-                    "\nL|'" + s3fd + "': Fast on GPU, slow on CPU. Can detect more faces and "
+                    "\nL|mtcnn: Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
+                    "detectors but can often return more false positives."
+                    "\nL|s3fd: Fast on GPU, slow on CPU. Can detect more faces and "
                     "fewer false positives than other GPU detectors, but is a lot more resource "
                     "intensive."})
         argument_list.append({
@@ -576,10 +567,10 @@ class ExtractArgs(ExtractConvertArgs):
             "default": default_aligner,
             "group": "Plugins",
             "help": "R|Aligner to use."
-                    "\nL|'cv2-dnn': A cpu only CNN based landmark detector. Faster, less "
+                    "\nL|cv2-dnn: A cpu only CNN based landmark detector. Faster, less "
                     "resource intensive, but less accurate. Only use this if not using a gpu "
                     " and time is important."
-                    "\nL|'" + fan + "': Face Alignment Network. Best aligner. GPU "
+                    "\nL|fan: Face Alignment Network. Best aligner. GPU "
                     "heavy, slow when not running on GPU"})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
@@ -593,11 +584,11 @@ class ExtractArgs(ExtractConvertArgs):
                                       "extraction speed cost. Different methods will yield "
                                       "different results on different sets. NB: This does not "
                                       "impact the output face, just the input to the aligner."
-                                      "\nL|'none': Don't perform normalization on the face."
-                                      "\nL|'clahe': Perform Contrast Limited Adaptive Histogram "
+                                      "\nL|none: Don't perform normalization on the face."
+                                      "\nL|clahe: Perform Contrast Limited Adaptive Histogram "
                                       "Equalization on the face."
-                                      "\nL|'hist': Equalize the histograms on the RGB channels."
-                                      "\nL|'mean': Normalize the face colors to the mean."})
+                                      "\nL|hist: Equalize the histograms on the RGB channels."
+                                      "\nL|mean: Normalize the face colors to the mean."})
         argument_list.append({"opts": ("-r", "--rotate-images"),
                               "type": str,
                               "dest": "rotate_images",

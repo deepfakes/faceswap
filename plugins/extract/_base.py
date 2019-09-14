@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO cv2-dnn detector can't be with gpu
 # Sort
-# config - cv2-dnn
 # convert on the fly
-# cli/plugins (nvidia/amd)
 # Cpu mode
 # Face Filter
 # Remove all of Multiprocessing
