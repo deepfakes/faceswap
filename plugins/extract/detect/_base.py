@@ -56,7 +56,7 @@ class Detector(Extractor):
 
     """
 
-    def __init__(self, git_model_id, model_filename,
+    def __init__(self, git_model_id=None, model_filename=None,
                  configfile=None, rotation=None, min_size=0):
         logger.debug("Initializing %s: (rotation: %s, min_size: %s)", self.__class__.__name__,
                      rotation, min_size)
@@ -83,7 +83,9 @@ class Detector(Extractor):
 
         >>> {'filename': [<filenames of source frames>],
         >>>  'image': [<source images>],
-        >>>  'feed_image': <np.array of images standardized for prediction>,
+        >>>  'scaled_image': <np.array of images standardized for prediction>,
+        >>>  'scale': [<scaling factors for each image>],
+        >>>  'pad': [<padding for each image>],
         >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
 
         Parameters

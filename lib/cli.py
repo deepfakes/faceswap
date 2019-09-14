@@ -519,7 +519,8 @@ class ExtractArgs(ExtractConvertArgs):
     @staticmethod
     def get_info():
         """ Return command information """
-        return "Extract faces from image or video sources"
+        return ("Extract faces from image or video sources.\n"
+                "Extraction plugins can be configured in the 'Settings' Menu")
 
     @staticmethod
     def get_optional_arguments():
@@ -752,7 +753,8 @@ class ConvertArgs(ExtractConvertArgs):
     @staticmethod
     def get_info():
         """ Return command information """
-        return "Swap the original faces in a source video/images to your final faces"
+        return ("Swap the original faces in a source video/images to your final faces.\n"
+                "Conversion plugins can be configured in the 'Settings' Menu")
 
     @staticmethod
     def get_optional_arguments():
@@ -985,7 +987,7 @@ class TrainArgs(FaceSwapArgs):
     @staticmethod
     def get_info():
         """ Return command information """
-        return ("Train a model on extracted original (A) and swap (B) faces\n"
+        return ("Train a model on extracted original (A) and swap (B) faces.\n"
                 "Training models can take a long time. Anything from 24hrs to "
                 "over a week")
 

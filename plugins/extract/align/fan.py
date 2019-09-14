@@ -32,6 +32,10 @@ class Align(Aligner):
         model_kwargs = dict(custom_objects={'TorchBatchNorm2D': TorchBatchNorm2D})
         self.model = KSession(self.name, self.model_path, model_kwargs=model_kwargs)
         self.model.load_model()
+        # Feed a placeholder so Aligner is primed for Manual tool
+        placeholder = np.zeros((self.batchsize, 3, self.input_size, self.input_size),
+                               dtype="float32")
+        self.model.predict(placeholder)
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """

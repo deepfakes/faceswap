@@ -1,32 +1,39 @@
 #!/usr/bin/env python3
 """ Manual face detection plugin """
 
-from ._base import Detector, logger
+import numpy as np
+from ._base import Detector
 
 
 class Detect(Detector):
     """ Manual Detector """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.name = "Manual"
+        self.input_size = 1440  # Arbitrary size for manual tool
+        self.vram = 0
+        self.vram_warnings = 0
+        self.vram_per_batch = 1
+        self.batchsize = 1
 
-    def initialize(self, *args, **kwargs):
-        """ Create the mtcnn detector """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing Manual Detector...")
-        self.init.set()
-        logger.info("Initialized Manual Detector.")
+    def _compile_detection_image(self, input_image):
+        """ Override compile detection image for manual. No face is actually fed into a model """
+        return input_image, 1, (0, 0)
 
-    def detect_faces(self, *args, **kwargs):
-        """ Return the given bounding box in a bounding box dict """
-        super().detect_faces(*args, **kwargs)
-        while True:
-            item = self.get_item()
-            if item == "EOF":
-                break
-            face = item["face"]
+    def init_model(self):
+        """ No model for Manual """
+        return
 
-            bounding_box = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3])]
-            item["detected_faces"] = bounding_box
-            self.finalize(item)
+    def process_input(self, batch):
+        """ No pre-processing for Manual. Just set a dummy feed """
+        batch["feed"] = batch["scaled_image"]
+        return batch
 
-        self.queues["out"].put("EOF")
+    def predict(self, batch):
+        """ No prediction for Manual """
+        batch["prediction"] = [np.array(batch["manual_face"])]
+        return batch
+
+    def process_output(self, batch):
+        """ Post process the detected faces """
+        return batch
