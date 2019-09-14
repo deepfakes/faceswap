@@ -18,60 +18,6 @@ def total_cpus():
     return mp.cpu_count()
 
 
-class PoolProcess():
-    """ Pool multiple processes """
-    def __init__(self, method, in_queue, out_queue, *args, processes=None, **kwargs):
-        self._name = method.__qualname__
-        logger.debug("Initializing %s: (target: '%s', processes: %s)",
-                     self.__class__.__name__, self._name, processes)
-
-        self.procs = self.set_procs(processes)
-        ctx = mp.get_context("spawn")
-        self.pool = ctx.Pool(processes=self.procs,
-                             initializer=set_root_logger,
-                             initargs=(logger.getEffectiveLevel(), LOG_QUEUE))
-        self._method = method
-        self._kwargs = self.build_target_kwargs(in_queue, out_queue, kwargs)
-        self._args = args
-
-        logger.debug("Initialized %s: '%s'", self.__class__.__name__, self._name)
-
-    @staticmethod
-    def build_target_kwargs(in_queue, out_queue, kwargs):
-        """ Add standard kwargs to passed in kwargs list """
-        kwargs["in_queue"] = in_queue
-        kwargs["out_queue"] = out_queue
-        return kwargs
-
-    def set_procs(self, processes):
-        """ Set the number of processes to use """
-        processes = mp.cpu_count() if processes is None else processes
-        running_processes = len(mp.active_children())
-        avail_processes = max(mp.cpu_count() - running_processes, 1)
-        processes = min(avail_processes, processes)
-        logger.verbose("Processing '%s' in %s processes", self._name, processes)
-        return processes
-
-    def start(self):
-        """ Run the processing pool """
-        logging.debug("Pooling Processes: (target: '%s', args: %s, kwargs: %s)",
-                      self._name, self._args, self._kwargs)
-        for idx in range(self.procs):
-            logger.debug("Adding process %s of %s to mp.Pool '%s'",
-                         idx + 1, self.procs, self._name)
-            self.pool.apply_async(self._method, args=self._args, kwds=self._kwargs)
-            _launched_processes.add(self.pool)
-        logging.debug("Pooled Processes: '%s'", self._name)
-
-    def join(self):
-        """ Join the process """
-        logger.debug("Joining Pooled Process: '%s'", self._name)
-        self.pool.close()
-        self.pool.join()
-        _launched_processes.remove(self.pool)
-        logger.debug("Joined Pooled Process: '%s'", self._name)
-
-
 class SpawnProcess(mp.context.SpawnProcess):
     """ Process in spawnable context
         Must be spawnable to share CUDA across processes """
