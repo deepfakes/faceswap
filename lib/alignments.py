@@ -34,6 +34,7 @@ class Alignments():
         self.file = self.get_location(folder, filename)
 
         self.data = self.load()
+        self.update_legacy()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # << PROPERTIES >> #
@@ -272,6 +273,11 @@ class Alignments():
 
     # << LEGACY FUNCTIONS >> #
 
+    def update_legacy(self):
+        """ Update legacy alignments """
+        if self.has_legacy_landmarksxy():
+            logger.info("Updating legacy alignments")
+            self.update_legacy_landmarksxy()
     # < Rotation > #
     # The old rotation method would rotate the image to find a face, then
     # store the rotated landmarks along with a rotation value to tell the
@@ -361,3 +367,25 @@ class Alignments():
                            abs(count_match), msg, frame_name)
         for idx, i_hash in hashes.items():
             faces[idx]["hash"] = i_hash
+
+    # <landmarks> #
+    # Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance
+    def has_legacy_landmarksxy(self):
+        """ check for legacy landmarksXY keys """
+        logger.debug("checking legacy landmarksXY")
+        retval = (any(key == "landmarksXY"
+                      for alignments in self.data.values()
+                      for alignment in alignments
+                      for key in alignment))
+        logger.debug("legacy landmarksXY: %s", retval)
+        return retval
+
+    def update_legacy_landmarksxy(self):
+        """ Update landmarksXY to landmarks_xy and save alignments """
+        update_count = 0
+        for alignments in self.data.values():
+            for alignment in alignments:
+                alignment["landmarks_xy"] = alignment.pop("landmarksXY")
+                update_count += 1
+        logger.debug("Updated landmarks_xy: %s", update_count)
+        self.save()

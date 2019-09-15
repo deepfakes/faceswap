@@ -3,8 +3,6 @@
 
 import logging
 
-from lib.faces_detect import DetectedFace
-from lib.logger import get_loglevel
 from lib.vgg_face import VGGFace
 from lib.utils import cv2_read_img
 from plugins.extract.pipeline import Extractor
@@ -21,16 +19,25 @@ class FaceFilter():
     """ Face filter for extraction
         NB: we take only first face, so the reference file should only contain one face. """
 
-    def __init__(self, reference_file_paths, nreference_file_paths, detector, aligner, loglevel,
+    def __init__(self, reference_file_paths, nreference_file_paths, detector, aligner,
                  multiprocess=False, threshold=0.4):
         logger.debug("Initializing %s: (reference_file_paths: %s, nreference_file_paths: %s, "
-                     "detector: %s, aligner: %s. loglevel: %s, multiprocess: %s, threshold: %s)",
+                     "detector: %s, aligner: %s, multiprocess: %s, threshold: %s)",
                      self.__class__.__name__, reference_file_paths, nreference_file_paths,
-                     detector, aligner, loglevel, multiprocess, threshold)
-        self.numeric_loglevel = get_loglevel(loglevel)
+                     detector, aligner, multiprocess, threshold)
         self.vgg_face = VGGFace()
         self.filters = self.load_images(reference_file_paths, nreference_file_paths)
-        self.align_faces(detector, aligner, loglevel, multiprocess)
+        # TODO Revert face-filter to use the selected detector and aligner.
+        # Currently Tensorflow does not release vram after it has been allocated
+        # Whilst this vram can still be used, the pipeline for the extraction process can't see
+        # it so thinks there is not enough vram available.
+        # Either the pipeline will need to be changed to be re-usable by face-filter and extraction
+        # Or another vram measurement technique will need to be implemented to for when TF has
+        # already performed allocation. For now we force CPU detectors.
+
+        # self.align_faces(detector, aligner, multiprocess)
+        self.align_faces("cv2-dnn", "cv2-dnn", multiprocess)
+
         self.get_filter_encodings()
         self.threshold = threshold
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -49,38 +56,25 @@ class FaceFilter():
         return retval
 
     # Extraction pipeline
-    def align_faces(self, detector_name, aligner_name, loglevel, multiprocess):
+    def align_faces(self, detector_name, aligner_name, multiprocess):
         """ Use the requested detectors to retrieve landmarks for filter images """
-        extractor = Extractor(detector_name, aligner_name, loglevel, multiprocess=multiprocess)
+        extractor = Extractor(detector_name, aligner_name, multiprocess=multiprocess)
         self.run_extractor(extractor)
         del extractor
         self.load_aligned_face()
 
     def run_extractor(self, extractor):
         """ Run extractor to get faces """
-        exception = False
         for _ in range(extractor.passes):
             self.queue_images(extractor)
-            if exception:
-                break
             extractor.launch()
             for faces in extractor.detected_faces():
-                exception = faces.get("exception", False)
-                if exception:
-                    break
                 filename = faces["filename"]
                 detected_faces = faces["detected_faces"]
-
                 if len(detected_faces) > 1:
                     logger.warning("Multiple faces found in %s file: '%s'. Using first detected "
                                    "face.", self.filters[filename]["type"], filename)
-                    detected_faces = [detected_faces[0]]
-                self.filters[filename]["detected_faces"] = detected_faces
-
-                # Aligner output
-                if extractor.final_pass:
-                    landmarks = faces["landmarks"]
-                    self.filters[filename]["landmarks"] = landmarks
+                self.filters[filename]["detected_face"] = detected_faces[0]
 
     def queue_images(self, extractor):
         """ queue images for detection and alignment """
@@ -100,13 +94,8 @@ class FaceFilter():
         """ Align the faces for vgg_face input """
         for filename, face in self.filters.items():
             logger.debug("Loading aligned face: '%s'", filename)
-            bounding_box = face["detected_faces"][0]
             image = face["image"]
-            landmarks = face["landmarks"][0]
-
-            detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(bounding_box, image)
-            detected_face.landmarksXY = landmarks
+            detected_face = face["detected_face"]
             detected_face.load_aligned(image, size=224)
             face["face"] = detected_face.aligned_face
             del face["image"]
