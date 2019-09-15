@@ -49,6 +49,9 @@ class Backend():
 
     def get_backend(self):
         """ Return the backend from config/.faceswap """
+        # Intercept for sphinx docs build
+        if sys.argv[0].endswith("sphinx-build"):
+            return "nvidia"
         if not os.path.isfile(self.config_file):
             self.configure_backend()
         while True:
@@ -349,18 +352,18 @@ def rotate_landmarks(face, rotation_matrix):
     # pylint:disable=c-extension-no-member
     """ Rotate the landmarks and bounding box for faces
         found in rotated images.
-        Pass in a DetectedFace object, Alignments dict or bounding box dict
-        (as defined in lib/plugins/extract/detect/_base.py) """
+        Pass in a DetectedFace object or Alignments dict """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
                  rotation_matrix, type(face))
+    rotated_landmarks = None
     # Detected Face Object
     if isinstance(face, DetectedFace):
         bounding_box = [[face.x, face.y],
                         [face.x + face.w, face.y],
                         [face.x + face.w, face.y + face.h],
                         [face.x, face.y + face.h]]
-        landmarks = face.landmarksXY
+        landmarks = face.landmarks_xy
 
     # Alignments Dict
     elif isinstance(face, dict) and "x" in face:
@@ -371,15 +374,7 @@ def rotate_landmarks(face, rotation_matrix):
                          face.get("y", 0) + face.get("h", 0)],
                         [face.get("x", 0),
                          face.get("y", 0) + face.get("h", 0)]]
-        landmarks = face.get("landmarksXY", list())
-
-    # Bounding Box Dict
-    elif isinstance(face, dict) and "left" in face:
-        bounding_box = [[face["left"], face["top"]],
-                        [face["right"], face["top"]],
-                        [face["right"], face["bottom"]],
-                        [face["left"], face["bottom"]]]
-        landmarks = list()
+        landmarks = face.get("landmarks_xy", list())
 
     else:
         raise ValueError("Unsupported face type")
@@ -415,16 +410,7 @@ def rotate_landmarks(face, rotation_matrix):
         face.r = 0
         if len(rotated) > 1:
             rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face.landmarksXY = rotated_landmarks
-    elif isinstance(face, dict) and "x" in face:
-        face["x"] = int(pt_x)
-        face["y"] = int(pt_y)
-        face["w"] = int(width)
-        face["h"] = int(height)
-        face["r"] = 0
-        if len(rotated) > 1:
-            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face["landmarksXY"] = rotated_landmarks
+            face.landmarks_xy = rotated_landmarks
     else:
         face["left"] = int(pt_x)
         face["top"] = int(pt_y)
@@ -450,14 +436,8 @@ def safe_shutdown(got_error=False):
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("Safely shutting down")
     from lib.queue_manager import queue_manager
-    from lib.multithreading import terminate_processes
     queue_manager.terminate_queues()
-    terminate_processes()
     logger.debug("Cleanup complete. Shutting down queue manager and exiting")
-    queue_manager._log_queue.put(None)  # pylint:disable=protected-access
-    while not queue_manager._log_queue.empty():  # pylint:disable=protected-access
-        continue
-    queue_manager.manager.shutdown()
     exit(1 if got_error else 0)
 
 

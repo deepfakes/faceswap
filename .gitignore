@@ -7,12 +7,15 @@
 !*.nsi
 !*.png
 !*.py
+!*.rst
 !*.txt
 !.cache
 !Dockerfile*
 !requirements*
 !.install/
 !.install/windows
+!docs
+!docs/full
 !config/
 !lib/
 !lib/*

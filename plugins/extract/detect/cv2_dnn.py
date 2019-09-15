@@ -12,84 +12,50 @@ class Detect(Detector):
         git_model_id = 4
         model_filename = ["resnet_ssd_v1.caffemodel", "resnet_ssd_v1.prototxt"]
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.target = (300, 300)  # Doesn't use VRAM
-        self.vram = 0
-        self.detector = None
+        self.name = "cv2-DNN Detector"
+        self.input_size = 300
+        self.vram = 0  # CPU Only. Doesn't use VRAM
+        self.batchsize = 1
         self.confidence = self.config["confidence"] / 100
 
-    def initialize(self, *args, **kwargs):
-        """ Calculate batch size """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing cv2 DNN Detector...")
-        logger.verbose("Using CPU for detection")
-        self.detector = cv2.dnn.readNetFromCaffe(self.model_path[1],  # pylint: disable=no-member
-                                                 self.model_path[0])
-        self.detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
-        self.init.set()
-        logger.info("Initialized cv2 DNN Detector.")
+    def init_model(self):
+        """ Initialize CV2 DNN Detector Model"""
+        self.model = cv2.dnn.readNetFromCaffe(self.model_path[1],  # pylint: disable=no-member
+                                              self.model_path[0])
+        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
 
-    def detect_faces(self, *args, **kwargs):
-        """ Detect faces in grayscale image """
-        super().detect_faces(*args, **kwargs)
-        while True:
-            item = self.get_item()
-            if item == "EOF":
-                break
-            logger.trace("Detecting faces: %s", item["filename"])
-            [detect_image, scale] = self.compile_detection_image(item["image"],
-                                                                 is_square=True,
-                                                                 scale_up=True)
-            height, width = detect_image.shape[:2]
-            for angle in self.rotation:
-                current_image, rotmat = self.rotate_image(detect_image, angle)
-                logger.trace("Detecting faces")
+    def process_input(self, batch):
+        """ Compile the detection image(s) for prediction """
+        batch["feed"] = cv2.dnn.blobFromImages(batch["scaled_image"],  # pylint: disable=no-member
+                                               scalefactor=1.0,
+                                               size=(self.input_size, self.input_size),
+                                               mean=[104, 117, 123],
+                                               swapRB=False,
+                                               crop=False)
+        return batch
 
-                blob = cv2.dnn.blobFromImage(current_image,  # pylint: disable=no-member
-                                             1.0,
-                                             self.target,
-                                             [104, 117, 123],
-                                             False,
-                                             False)
-                self.detector.setInput(blob)
-                detected = self.detector.forward()
-                faces = list()
-                for i in range(detected.shape[2]):
-                    confidence = detected[0, 0, i, 2]
-                    if confidence >= self.confidence:
-                        logger.trace("Accepting due to confidence %s >= %s",
-                                     confidence, self.confidence)
-                        faces.append([(detected[0, 0, i, 3] * width),
-                                      (detected[0, 0, i, 4] * height),
-                                      (detected[0, 0, i, 5] * width),
-                                      (detected[0, 0, i, 6] * height)])
+    def predict(self, batch):
+        """ Run model to get predictions """
+        self.model.setInput(batch["feed"])
+        predictions = self.model.forward()
+        batch["prediction"] = self.finalize_predictions(predictions)
+        return batch
 
-                logger.trace("Detected faces: %s", [face for face in faces])
+    def finalize_predictions(self, predictions):
+        """ Filter faces based on confidence level """
+        faces = list()
+        for i in range(predictions.shape[2]):
+            confidence = predictions[0, 0, i, 2]
+            if confidence >= self.confidence:
+                logger.trace("Accepting due to confidence %s >= %s",
+                             confidence, self.confidence)
+                faces.append([(predictions[0, 0, i, 3] * self.input_size),
+                              (predictions[0, 0, i, 4] * self.input_size),
+                              (predictions[0, 0, i, 5] * self.input_size),
+                              (predictions[0, 0, i, 6] * self.input_size)])
+        logger.trace("faces: %s", faces)
+        return [np.array(faces)]
 
-                if angle != 0 and faces:
-                    logger.verbose("found face(s) by rotating image %s degrees", angle)
-
-                if faces:
-                    break
-
-            detected_faces = self.process_output(faces, rotmat, scale)
-            item["detected_faces"] = detected_faces
-            self.finalize(item)
-
-        self.queues["out"].put("EOF")
-        logger.debug("Detecting Faces Complete")
-
-    def process_output(self, faces, rotation_matrix, scale):
+    def process_output(self, batch):
         """ Compile found faces for output """
-        logger.trace("Processing Output: (faces: %s, rotation_matrix: %s)",
-                     faces, rotation_matrix)
-
-        faces = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3]) for face in faces]
-        if isinstance(rotation_matrix, np.ndarray):
-            faces = [self.rotate_rect(face, rotation_matrix)
-                     for face in faces]
-        detected = [self.to_bounding_box_dict(face["left"] / scale, face["top"] / scale,
-                                              face["right"] / scale, face["bottom"] / scale)
-                    for face in faces]
-
-        logger.trace("Processed Output: %s", detected)
-        return detected
+        return batch

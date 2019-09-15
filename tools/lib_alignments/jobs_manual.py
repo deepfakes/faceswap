@@ -7,10 +7,8 @@ import sys
 import cv2
 import numpy as np
 
-from lib.multithreading import SpawnProcess
-from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import get_backend
-from plugins.plugin_loader import PluginLoader
+from lib.queue_manager import queue_manager
+from plugins.extract.pipeline import Extractor
 from . import Annotate, ExtractedFaces, Frames, Legacy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -617,7 +615,7 @@ class Manual():
     def set_faces(self, frame):
         """ Pass the current frame faces to faces window """
         faces = self.extracted_faces.get_faces_in_frame(frame)
-        landmarks = [{"landmarksXY": face.aligned_landmarks}
+        landmarks = [{"landmarks_xy": face.aligned_landmarks}
                      for face in self.extracted_faces.faces]
         return FacesDisplay(faces, landmarks, self.extracted_faces.size, self.interface)
 
@@ -772,8 +770,8 @@ class MouseHandler():
         self.alignments = interface.alignments
         self.frames = interface.frames
 
-        self.extractor = dict()
-        self.init_extractor(loglevel)
+        self.queues = dict()
+        self.extractor = self.init_extractor()
 
         self.mouse_state = None
         self.last_move = None
@@ -786,61 +784,17 @@ class MouseHandler():
                       "bounding_box_orig": list()}
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def init_extractor(self, loglevel):
+    def init_extractor(self):
         """ Initialize Aligner """
         logger.debug("Initialize Extractor")
-        out_queue = queue_manager.get_queue("out")
-
-        d_kwargs = {"in_queue": queue_manager.get_queue("in"),
-                    "out_queue": queue_manager.get_queue("align")}
-        a_kwargs = {"in_queue": queue_manager.get_queue("align"),
-                    "out_queue": out_queue}
-
-        detector = PluginLoader.get_detector("manual")(loglevel=loglevel)
-        detect_process = SpawnProcess(detector.run, **d_kwargs)
-        d_event = detect_process.event
-        detect_process.start()
-
-        plugins = ["fan_amd"] if get_backend() == "amd" else ["fan"]
-        plugins.append("cv2_dnn")
-        for plugin in plugins:
-            aligner = PluginLoader.get_aligner(plugin)(loglevel=loglevel,
-                                                       normalize_method="hist")
-            align_process = SpawnProcess(aligner.run, **a_kwargs)
-            a_event = align_process.event
-            align_process.start()
-
-            # Wait for Aligner to initialize
-            # The first ever load of the model for FAN has reportedly taken
-            # up to 3-4 minutes, hence high timeout.
-            a_event.wait(300)
-            if not a_event.is_set():
-                if plugin.startswith("fan"):
-                    align_process.join()
-                    logger.error("Error initializing FAN. Trying CV2-DNN")
-                    continue
-                else:
-                    raise ValueError("Error inititalizing Aligner")
-            if plugin == "cv2_dnn":
-                break
-
-            try:
-                err = None
-                err = out_queue.get(True, 1)
-            except QueueEmpty:
-                pass
-            if not err:
-                break
-            align_process.join()
-            logger.error("Error initializing FAN. Trying CV2-DNN")
-
-        d_event.wait(10)
-        if not d_event.is_set():
-            raise ValueError("Error inititalizing Detector")
-
-        self.extractor["detect"] = detector
-        self.extractor["align"] = aligner
+        extractor = Extractor("manual", "fan", multiprocess=True, normalize_method="hist")
+        self.queues["in"] = extractor.input_queue
+        # Set the batchsizes to 1
+        extractor.set_batchsize("detector", 1)
+        extractor.set_batchsize("aligner", 1)
+        extractor.launch()
         logger.debug("Initialized Extractor")
+        return extractor
 
     def on_event(self, event, x, y, flags, param):  # pylint: disable=unused-argument,invalid-name
         """ Handle the mouse events """
@@ -970,22 +924,12 @@ class MouseHandler():
 
     def update_landmarks(self):
         """ Update the landmarks """
-        queue_manager.get_queue("in").put({"image": self.media["image"],
-                                           "filename": self.media["frame_id"],
-                                           "face": self.media["bounding_box"]})
-        landmarks = queue_manager.get_queue("out").get()
+        self.queues["in"].put({"image": self.media["image"],
+                               "filename": self.media["frame_id"],
+                               "manual_face": self.media["bounding_box"]})
+        detected_face = next(self.extractor.detected_faces())["detected_faces"][0]
+        alignment = detected_face.to_alignment()
 
-        if isinstance(landmarks, dict) and landmarks.get("exception"):
-            cv2.destroyAllWindows()  # pylint: disable=no-member
-            pid = landmarks["exception"][0]
-            t_back = landmarks["exception"][1].getvalue()
-            err = "Error in child process {}. {}".format(pid, t_back)
-            raise Exception(err)
-        if landmarks == "EOF":
-            exit(0)
-
-        alignment = self.extracted_to_alignment((landmarks["detected_faces"][0],
-                                                 landmarks["landmarks"][0]))
         frame = self.media["frame_id"]
 
         if self.interface.get_selected_face_id() is None:
@@ -999,15 +943,3 @@ class MouseHandler():
 
         self.interface.state["edit"]["updated"] = True
         self.interface.state["edit"]["update_faces"] = True
-
-    @staticmethod
-    def extracted_to_alignment(extract_data):
-        """ Convert Extracted Tuple to Alignments data """
-        alignment = dict()
-        bbox, landmarks = extract_data
-        alignment["x"] = bbox["left"]
-        alignment["w"] = bbox["right"] - bbox["left"]
-        alignment["y"] = bbox["top"]
-        alignment["h"] = bbox["bottom"] - bbox["top"]
-        alignment["landmarksXY"] = landmarks
-        return alignment

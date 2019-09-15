@@ -16,8 +16,7 @@ from tqdm import tqdm
 from lib.cli import FullHelpArgumentParser
 from lib import Serializer
 from lib.faces_detect import DetectedFace
-from lib.multithreading import SpawnProcess
-from lib.queue_manager import queue_manager, QueueEmpty
+from lib.queue_manager import queue_manager
 from lib.utils import cv2_read_img
 from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.plugin_loader import PluginLoader
@@ -85,48 +84,22 @@ class Sort():
 
         self.sort_process()
 
-    def launch_aligner(self):
+    @staticmethod
+    def launch_aligner():
         """ Load the aligner plugin to retrieve landmarks """
-        out_queue = queue_manager.get_queue("out")
-        kwargs = {"in_queue": queue_manager.get_queue("in"),
-                  "out_queue": out_queue}
-
-        for plugin in ("fan", "cv2_dnn"):
-            aligner = PluginLoader.get_aligner(plugin)(loglevel=self.args.loglevel)
-            process = SpawnProcess(aligner.run, **kwargs)
-            event = process.event
-            process.start()
-            # Wait for Aligner to take init
-            # The first ever load of the model for FAN has reportedly taken
-            # up to 3-4 minutes, hence high timeout.
-            event.wait(300)
-
-            if not event.is_set():
-                if plugin == "fan":
-                    process.join()
-                    logger.error("Error initializing FAN. Trying CV2-DNN")
-                    continue
-                else:
-                    raise ValueError("Error inititalizing Aligner")
-            if plugin == "cv2_dnn":
-                return
-
-            try:
-                err = None
-                err = out_queue.get(True, 1)
-            except QueueEmpty:
-                pass
-            if not err:
-                break
-            process.join()
-            logger.error("Error initializing FAN. Trying CV2-DNN")
+        kwargs = dict(in_queue=queue_manager.get_queue("in"),
+                      out_queue=queue_manager.get_queue("out"),
+                      queue_size=8)
+        aligner = PluginLoader.get_aligner("fan")(normalize_method="hist")
+        aligner.batchsize = 1
+        aligner.initialize(**kwargs)
+        aligner.start()
 
     @staticmethod
     def alignment_dict(image):
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        face = face.to_bounding_box_dict()
         return {"image": image,
                 "detected_faces": [face]}
 
@@ -134,9 +107,11 @@ class Sort():
     def get_landmarks(filename):
         """ Extract the face from a frame (If not alignments file found) """
         image = cv2_read_img(filename, raise_error=True)
-        queue_manager.get_queue("in").put(Sort.alignment_dict(image))
+        feed = Sort.alignment_dict(image)
+        feed["filename"] = filename
+        queue_manager.get_queue("in").put(feed)
         face = queue_manager.get_queue("out").get()
-        landmarks = face["landmarks"][0]
+        landmarks = face["detected_faces"][0].landmarks_xy
         return landmarks
 
     def sort_process(self):

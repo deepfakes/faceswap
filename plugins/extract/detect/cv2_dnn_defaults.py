@@ -22,6 +22,8 @@
                    <class 'str'>, <class 'bool'>.
         default:   [required] The default value for this option.
         info:      [required] A string describing what this option does.
+        group:     [optional]. A group for grouping options together in the GUI. If not
+                   provided this will not group this option with any others.
         choices:   [optional] If this option's datatype is of <class 'str'> then valid
                    selections can be defined here. This validates the option and also enables
                    a combobox / radio option in the GUI.
@@ -60,5 +62,5 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    }
+    },
 }
