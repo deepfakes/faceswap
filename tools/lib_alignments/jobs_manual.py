@@ -790,8 +790,8 @@ class MouseHandler():
         extractor = Extractor("manual", "fan", multiprocess=True, normalize_method="hist")
         self.queues["in"] = extractor.input_queue
         # Set the batchsizes to 1
-        extractor.detector.batchsize = 1
-        extractor.aligner.batchsize = 1
+        extractor.set_batchsize("detector", 1)
+        extractor.set_batchsize("aligner", 1)
         extractor.launch()
         logger.debug("Initialized Extractor")
         return extractor

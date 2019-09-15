@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-""" Base class for Faceswap Detect and Align Plugins
-    Detect and Align ``_base`` inherits from this
+""" Base class for Faceswap :mod:`~plugins.extract.detect` and :mod:`~plugins.extract.align`
+Plugins
 """
 import logging
 import os
@@ -18,11 +18,24 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Cpu mode
 # TODO Run with warnings mode
-# TODO Docstrings
 
 
-def get_config(plugin_name, configfile=None):
-    """ Return the config for the requested model """
+def _get_config(plugin_name, configfile=None):
+    """ Return the config for the requested model
+
+    Parameters
+    ----------
+    plugin_name: str
+        The module name of the child plugin.
+    configfile: str, optional
+        Path to a :file:`./config/<plugin_type>.ini` file for this plugin. Default: use system
+        config.
+
+    Returns
+    -------
+    config_dict, dict
+       A dictionary of configuration items from the config file
+    """
     return Config(plugin_name, configfile=configfile).config_dict
 
 
@@ -30,6 +43,15 @@ class Extractor():
     """ Extractor Plugin Object
 
     All ``_base`` classes for Aligners and Detectors inherit from this class.
+
+    This class sets up a pipeline for working with ML plugins.
+
+    Plugins are split into 3 threads, to utilize Numpy and CV2s parallel processing, as well as
+    allow the predict function of the model to sit in a dedicated thread.
+    A plugin is expected to have 3 core functions, each in their own thread:
+    - :func:`process_input()` - Prepare the data for feeding into a model
+    - :func:`predict` - Feed the data through the model
+    - :func:`process_output()` - Perform any data post-processing
 
     Parameters
     ----------
@@ -45,8 +67,8 @@ class Extractor():
         Path to a custom configuration ``ini`` file. Default: Use system configfile
 
 
-    The following attributes should be set in the plugin's ``__init__`` method after initializing
-    the parent.
+    The following attributes should be set in the plugin's :func:`__init__` method after
+    initializing the parent.
 
     Attributes
     ----------
@@ -59,14 +81,14 @@ class Extractor():
         Color format for model. Must be ``'BGR'``, ``'RGB'`` or ``'GRAY'``. Defaults to ``'BGR'``
         if not explicitly set.
     vram: int
-        Approximate VRAM used by the model at ``input_size``. Used to calculate the ``batchsize``.
-        Be conservative to avoid OOM.
+        Approximate VRAM used by the model at :attr:`input_size`. Used to calculate the
+        :attr:`batchsize`. Be conservative to avoid OOM.
     vram_warnings: int
-        Approximate VRAM used by the model at ``input_size`` that will still run, but generates
-        warnings. Used to calculate the ``batchsize``. Be conservative to avoid OOM.
+        Approximate VRAM used by the model at :attr:`input_size` that will still run, but generates
+        warnings. Used to calculate the :attr:`batchsize`. Be conservative to avoid OOM.
     vram_per_batch: int
         Approximate additional VRAM used by the model for each additional batch. Used to calculate
-        the ``batchsize``. Be conservative to avoid OOM.
+        the :attr:`batchsize`. Be conservative to avoid OOM.
 
     See Also
     --------
@@ -80,11 +102,11 @@ class Extractor():
                      " configfile: %s)", self.__class__.__name__, git_model_id,
                      model_filename, configfile)
 
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
+        self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
         self.model_path = self._get_model(git_model_id, model_filename)
-        """ str or list: path to the model file(s) (if required). Multiple model files should
+        """ str or list: Path to the model file(s) (if required). Multiple model files should
         be a list of strings """
 
         # << SET THE FOLLOWING IN PLUGINS __init__ IF DIFFERENT FROM DEFAULT >> #
@@ -97,18 +119,17 @@ class Extractor():
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
         self.queue_size = 32
-        """ int: Queue size for all internal queues.
-        Set in ``initialize`` """
+        """ int: Queue size for all internal queues. Set in :func:`initialize()` """
 
         self.model = None
         """varies: The model for this plugin.
-        Set in the ``init_model`` method """
+        Set in the plugin's :func:`init_model()` method """
 
         # For detectors that support batching, this should be set to  the calculated batch size
         # that the amount of available VRAM will support.
         self.batchsize = 1
-        """ int: Batchsize for feeding this model. For AMD + CPU this is set in ``extract.ini``.
-        For Nvidia this is calculated based on available VRAM """
+        """ int: Batchsize for feeding this model. The number of images the model should
+        feed through at once. """
 
         self._queues = dict()
         """ dict: in + out queues and internal queues for this plugin, """
@@ -127,7 +148,7 @@ class Extractor():
     def init_model(self):
         """ **Override method**
 
-        Override this metfod to execute the specific model initialization method """
+        Override this method to execute the specific model initialization method """
         raise NotImplementedError
 
     def process_input(self, batch):
@@ -143,7 +164,7 @@ class Extractor():
         Notes
         -----
         When preparing an input to the model a key ``feed`` must be added
-        to the ``batch`` ``dict`` which contains the input to the model.
+        to the :attr:`batch` ``dict`` which contains this input.
         """
         raise NotImplementedError
 
@@ -159,14 +180,14 @@ class Extractor():
 
         Notes
         -----
-        Input for ``predict`` should have been set in ``process_input`` with the addition
-        of a ``feed`` key to the ``batch`` ``dict``.
+        Input for :func:`predict` should have been set in :func:`process_input` with the addition
+        of a ``feed`` key to the :attr:`batch` ``dict``.
 
-        Output from the model should add the key ``prediction`` to the ``batch`` ``dict``.
+        Output from the model should add the key ``prediction`` to the :attr:`batch` ``dict``.
 
         For Detect:
-            the expected output for the ``prediction`` key of the ``batch`` dict should be a
-            ``list`` of ``batchsize`` of detected face points. These points should be either
+            the expected output for the ``prediction`` key of the :attr:`batch` dict should be a
+            ``list`` of :attr:`batchsize` of detected face points. These points should be either
             a ``list``, ``tuple`` or ``numpy.array`` with the first 4 items being the `left`,
             `top`, `right`, `bottom` points, in that order
         """
@@ -185,9 +206,10 @@ class Extractor():
         Notes
         -----
         For Align:
-            The key ``landmarks`` must be returned from this method. This should be a ``list`` of
-            ``batchsize`` containing a ``list``, ``tuple`` or ``np.array`` of (x, y) co-ords of the
-            68 point landmarks as calculated from the model.
+            The key ``landmarks`` must be returned in the :attr:`batch` ``dict`` from this method.
+            This should be a ``list`` or ``numpy.array`` of :attr:`batchsize` containing a
+            ``list``, ``tuple`` or ``numpy.array`` of `(x, y)` co-ords of the 68 point landmarks
+            as calculated from the :attr:`model`.
         """
         raise NotImplementedError
 
@@ -212,11 +234,11 @@ class Extractor():
         """ **Override method** (at `<plugin_type>` level)
 
         This method is overridable at the `<plugin_type>` level (ie.
-        ``plugins.extract.detect._base`` or ``plugins.extract.align._base``) and should not
+        :mod:`plugins.extract.detect._base` or :mod:`plugins.extract.align._base`) and should not
         be overriden within plugins themselves.
 
         Handles consistent finalization for all plugins that exist within that plugin type. Its
-        input is always the output from ``process_output``
+        input is always the output from :func:`process_output()`
 
         Parameters
         ----------
@@ -229,10 +251,10 @@ class Extractor():
         """ **Override method** (at `<plugin_type>` level)
 
         This method is overridable at the `<plugin_type>` level (ie.
-        ``plugins.extract.detect._base`` or ``plugins.extract.align._base``) and should not
+        :mod:`plugins.extract.detect._base` or :mod:`plugins.extract.align._base`) and should not
         be overriden within plugins themselves.
 
-        Get items from the queue in batches of ``batchsize``
+        Get items from the queue in batches of :attr:`batchsize`
 
         Parameters
         ----------

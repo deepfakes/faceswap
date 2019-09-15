@@ -10,7 +10,7 @@ For each source frame, the plugin must pass a dict to finalize containing:
 >>>  'image':  <source image>,
 >>>  'detected_faces': <list of DetectedFace objects containing bounding box points}}
 
-To get a DetectedFace object use the function:
+To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
 
 >>> face = self.to_detected_face(<face left>, <face top>, <face right>, <face bottom>)
 
@@ -38,7 +38,7 @@ class Detector(Extractor):
     rotation: str, optional
         Pass in a single number to use increments of that size up to 360, or pass in a ``list`` of
         ``ints`` to enumerate exactly what angles to check. Can also pass in ``'on'`` to increment
-        at 90 degree intervals. Default: `None`
+        at 90 degree intervals. Default: ``None``
     min_size: int, optional
         Filters out faces detected below this size. Length, in pixels across the diagonal of the
         bounding box. Set to ``0`` for off. Default: ``0``
@@ -50,9 +50,10 @@ class Detector(Extractor):
 
     See Also
     --------
+    plugins.extract.pipeline : The extraction pipeline for calling plugins
     plugins.extract.detect : Detector plugins
-    plugins.extract._base.py : Parent class for all extraction plugins
-    plugins.extract.align._base.py : Aligner parent class for extraction plugins.
+    plugins.extract._base : Parent class for all extraction plugins
+    plugins.extract.align._base : Aligner parent class for extraction plugins.
 
     """
 
@@ -74,12 +75,14 @@ class Detector(Extractor):
     def get_batch(self, queue):
         """ Get items for inputting to the detector plugin in batches
 
-        Items are returned from the ``queue`` in batches of ``self.batchsize``.
+        Items are returned from the ``queue`` in batches of
+        :attr:`~plugins.extract._base.Extractor.batchsize`
 
         Remember to put ``'EOF'`` to the out queue after processing
         the final batch
 
-        Outputs items in the following format. All lists are of length ``self.batchsize``:
+        Outputs items in the following format. All lists are of length
+        :attr:`~plugins.extract._base.Extractor.batchsize`:
 
         >>> {'filename': [<filenames of source frames>],
         >>>  'image': [<source images>],
@@ -97,9 +100,9 @@ class Detector(Extractor):
         Returns
         -------
         exhausted, bool
-            ``True`` if queue is exhausted, ``False`` if not
+            ``True`` if queue is exhausted, ``False`` if not.
         batch, dict
-            A dictionary of lists of ``self.batchsize``:
+            A dictionary of lists of :attr:`~plugins.extract._base.Extractor.batchsize`.
         """
         exhausted = False
         batch = dict()
@@ -128,8 +131,8 @@ class Detector(Extractor):
 
         This should be called as the final task of each ``plugin``.
 
-        It strips unneeded items from the ``batch`` ``dict`` and performs standard final processing
-        on each item
+        It strips unneeded items from the :attr:`batch` ``dict`` and performs standard final
+        processing on each item
 
         Outputs items in the format:
 
@@ -191,7 +194,7 @@ class Detector(Extractor):
 
     @staticmethod
     def to_detected_face(left, top, right, bottom):
-        """ Return a DetectedFace object for the bounding box """
+        """ Return a :class:`~lib.faces_detect.DetectedFace` object for the bounding box """
         return DetectedFace(x=int(round(left)),
                             w=int(round(right - left)),
                             y=int(round(top)),

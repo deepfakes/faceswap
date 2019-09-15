@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 class KSession():
     """ Handles the settings of backend sessions.
 
-    This class acts as a wrapper for various ``keras`` ``Model()`` functions, ensuring that actions
-    performed on a model are handled consistently within the correct graph.
+    This class acts as a wrapper for various :class:`keras.Model()` functions, ensuring that
+    actions performed on a model are handled consistently within the correct graph.
 
     Currently this only does anything for Nvidia users, making sure a unique graph and session is
     provided for the given model.
@@ -27,7 +27,7 @@ class KSession():
     model_path: str
         The path to the keras model file
     model_kwargs: dict
-        Any kwargs that need to be passed to ``keras.models.load_models()``
+        Any kwargs that need to be passed to :func:`keras.models.load_models()`
     """
     def __init__(self, name, model_path, model_kwargs=None):
         logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s)",
@@ -42,7 +42,7 @@ class KSession():
     def predict(self, feed):
         """ Get predictions from the model in the correct session.
 
-        This method is a wrapper for ``keras`` ``predict()`` function.
+        This method is a wrapper for :func:`keras.predict()` function.
 
         Parameters
         ----------
@@ -76,10 +76,10 @@ class KSession():
     def load_model(self):
         """ Loads a model within the correct session.
 
-            This method is a wrapper for ``keras.models.load_model()``. Loads a model and its
-            weights from the location defined during initialization of this class. Any additional
-            ``kwargs`` to be passed to ``keras.models.load_model()`` should also be defined during
-            initialization of the class.
+        This method is a wrapper for :func:`keras.models.load_model()`. Loads a model and its
+        weights from :attr:`model_path`. Any additional ``kwargs`` to be passed to
+        :func:`keras.models.load_model()` should also be defined during initialization of the
+        class.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
         if self._session is None:
@@ -92,13 +92,13 @@ class KSession():
     def define_model(self, function):
         """ Defines a given model in the correct session.
 
-        This method acts as a wrapper for ``keras.models.Model()`` to ensure that the model
+        This method acts as a wrapper for :class:`keras.models.Model()` to ensure that the model
         is defined within it's own graph.
 
         Parameters
         ----------
         function: function
-            A function that defines a ``keras`` ``Model`` and returns it's ``inputs`` and
+            A function that defines a :class:`keras.Model` and returns it's ``inputs`` and
             ``outputs``. The function that generates these results should be passed in, NOT the
             results themselves, as the function needs to be executed within the correct context.
         """
@@ -112,9 +112,9 @@ class KSession():
     def load_model_weights(self):
         """ Load model weights for a defined model inside the correct session.
 
-        This method is a wrapper for ``keras`` ``load_weights()``. Once a model has been defined in
-        ``define_model()`` this method can be called to load its weights in the correct graph from
-        the path defined during initialization of this class.
+        This method is a wrapper for :class:`keras.load_weights()`. Once a model has been defined
+        in :func:`define_model()` this method can be called to load its weights in the correct
+        graph from the :attr:`model_path` defined during initialization of this class.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
         if self._session is None:

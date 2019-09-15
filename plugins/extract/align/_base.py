@@ -5,15 +5,19 @@ All Aligner Plugins should inherit from this class.
 See the override methods for which methods are required.
 
 The plugin will receive a dict containing:
-    {"filename": <filename of source frame>,
-     "image": <source image>,
-     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>}
+
+>>> {"filename": [<filename of source frame>],
+>>>  "image": [<source image>],
+>>>  "detected_faces": [<list of DetectedFace objects]}
 
 For each source item, the plugin must pass a dict to finalize containing:
-    {"filename": <filename of source frame>,
-     "image": <source image>,
-     "detected_faces": <list of bounding box dicts as defined in lib/plugins/extract/detect/_base>}
+
+>>> {"filename": [<filename of source frame>],
+>>>  "image": [<source image>],
+>>>  "landmarks": [list of 68 point face landmarks]
+>>>  "detected_faces": [<list of DetectedFace objects>]}
 """
+
 
 import cv2
 import numpy as np
@@ -34,7 +38,7 @@ class Aligner(Extractor):
     model_filename: str
         The name of the model file to be loaded
     normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
-        Normalize the images fed to the aligner.Default: None
+        Normalize the images fed to the aligner. Default: ``None``
 
     Other Parameters
     ----------------
@@ -44,8 +48,8 @@ class Aligner(Extractor):
     See Also
     --------
     plugins.extract.align : Aligner plugins
-    plugins.extract._base.py : Parent class for all extraction plugins
-    plugins.extract.detect._base.py : Detector parent class for extraction plugins.
+    plugins.extract._base : Parent class for all extraction plugins
+    plugins.extract.detect._base : Detector parent class for extraction plugins.
 
     """
 
@@ -68,15 +72,17 @@ class Aligner(Extractor):
     def get_batch(self, queue):
         """ Get items for inputting into the aligner from the queue in batches
 
-        Items are returned from the ``queue`` in batches of ``self.batchsize``.
+        Items are returned from the ``queue`` in batches of
+        :attr:`~plugins.extract._base.Extractor.batchsize`
 
         To ensure consistent batchsizes for aligner the items are split into separate items for
-        each ``detected_face``.
+        each :class:`lib.faces_detect.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
         the final batch
 
-        Outputs items in the following format. All lists are of length ``self.batchsize``:
+        Outputs items in the following format. All lists are of length
+        :attr:`~plugins.extract._base.Extractor.batchsize`:
 
         >>> {'filename': [<filenames of source frames>],
         >>>  'image': [<source images>],
@@ -85,15 +91,14 @@ class Aligner(Extractor):
         Parameters
         ----------
         queue : queue.Queue()
-            The ``queue`` that the batch will be fed from. This will always be an output from
-            the ``detector`` plugin
+            The ``queue`` that the plugin will be fed from.
 
         Returns
         -------
         exhausted, bool
             ``True`` if queue is exhausted, ``False`` if not
         batch, dict
-            A dictionary of lists of ``self.batchsize``:
+            A dictionary of lists of :attr:`~plugins.extract._base.Extractor.batchsize`:
         """
         exhausted = False
         batch = dict()
@@ -155,8 +160,8 @@ class Aligner(Extractor):
 
         This should be called as the final task of each `plugin`.
 
-        It strips unneeded items from the ``batch`` ``dict`` and pairs the detected faces back up
-        with their original frame before yielding each frame.
+        It strips unneeded items from the :attr:`batch` ``dict`` and pairs the detected faces back
+        up with their original frame before yielding each frame.
 
         Outputs items in the format:
 
@@ -168,12 +173,13 @@ class Aligner(Extractor):
         ----------
         batch : dict
             The final ``dict`` from the `plugin` process. It must contain the `keys`:
+            ``detected_faces``, ``landmarks``, ``filename``, ``image``
 
         Yields
         ------
         dict
             A ``dict`` for each frame containing the ``image``, ``filename`` and list of
-            ``detected_faces``
+            :class:`lib.faces_detect.DetectedFace` objects.
 
         """
 
