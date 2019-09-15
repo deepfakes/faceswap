@@ -49,6 +49,9 @@ class Backend():
 
     def get_backend(self):
         """ Return the backend from config/.faceswap """
+        # Intercept for sphinx docs build
+        if sys.argv[0].endswith("sphinx-build"):
+            return "nvidia"
         if not os.path.isfile(self.config_file):
             self.configure_backend()
         while True:
