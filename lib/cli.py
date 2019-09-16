@@ -550,7 +550,7 @@ class ExtractArgs(ExtractConvertArgs):
             "default": default_detector,
             "group": "Plugins",
             "help": "R|Detector to use. Some of these have configurable settings in "
-                    "'/config/extract.ini' or 'Edit > Configure Extract Plugins':"
+                    "'/config/extract.ini' or 'Settings > Configure Extract Plugins':"
                     "\nL|cv2-dnn: A CPU only extractor, is the least reliable, but uses least "
                     "resources and runs fast on CPU. Use this if not using a GPU and time is "
                     "important."
@@ -777,7 +777,7 @@ class ConvertArgs(ExtractConvertArgs):
             "default": "avg-color",
             "group": "plugins",
             "help": "R|Performs color adjustment to the swapped face. Some of these options have "
-                    "configurable settings in '/config/convert.ini' or 'Edit > Configure "
+                    "configurable settings in '/config/convert.ini' or 'Settings > Configure "
                     "Convert Plugins':"
                     "\nL|avg-color: Adjust the mean of each color channel in the swapped "
                     "reconstruction to equal the mean of the masked area in the original image."
@@ -802,7 +802,7 @@ class ConvertArgs(ExtractConvertArgs):
             "group": "plugins",
             "default": "predicted",
             "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
-                    "'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
+                    "'/config/convert.ini' or 'Settings > Configure Convert Plugins':"
                     "\nL|components: An improved face hull mask using a facehull of 8 facial "
                     "parts."
                     "\nL|dfl_full: An improved face hull mask using a facehull of 3 facial parts."
@@ -822,7 +822,7 @@ class ConvertArgs(ExtractConvertArgs):
             "default": "none",
             "help": "R|Performs a scaling process to attempt to get better definition on the "
                     "final swap. Some of these options have configurable settings in "
-                    "'/config/convert.ini' or 'Edit > Configure Convert Plugins':"
+                    "'/config/convert.ini' or 'Settings > Configure Convert Plugins':"
                     "\nL|sharpen: Perform sharpening on the final face."
                     "\nL|none: Don't perform any scaling operations."})
         argument_list.append({"opts": ("-w", "--writer"),
@@ -833,8 +833,8 @@ class ConvertArgs(ExtractConvertArgs):
                               "group": "plugins",
                               "default": "opencv",
                               "help": "R|The plugin to use to output the converted images. The "
-                                      "writers are configurable in '/config/convert.ini' or 'Edit "
-                                      "> Configure Convert Plugins:'"
+                                      "writers are configurable in '/config/convert.ini' or "
+                                      "'Settings > Configure Convert Plugins:'"
                                       "\nL|ffmpeg: [video] Writes out the convert straight to "
                                       "video. When the input is a series of images then the "
                                       "'-ref' (--reference-video) parameter must be set."
@@ -1043,7 +1043,7 @@ class TrainArgs(FaceSwapArgs):
                               "default": PluginLoader.get_default_model(),
                               "group": "model",
                               "help": "R|Select which trainer to use. Trainers can be"
-                                      "configured from the edit menu or the config folder."
+                                      "configured from the Settings menu or the config folder."
                                       "\nL|original: The original model created by /u/deepfakes."
                                       "\nL|dfaker: 64px in/128px out model from dfaker. "
                                       "Enable 'warp-to-landmarks' for full dfaker method."
