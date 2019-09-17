@@ -297,9 +297,9 @@ class ExtractedFaces():
         logger.trace("Initializing %s: size: %s", self.__class__.__name__, size)
         self.size = size
         self.padding = int(size * 0.1875)
+        self.align_eyes_bool = align_eyes
         self.alignments = alignments
         self.frames = frames
-        self.align_eyes_bool = align_eyes
         self.current_frame = None
         self.faces = list()
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -370,7 +370,7 @@ class ExtractedFaces():
         leftEyeCenter = umeyama_landmarks[42:48].mean(axis=0)
         rightEyeCenter = umeyama_landmarks[36:42].mean(axis=0)
         eyesCenter = umeyama_landmarks[36:48].mean(axis=0)
-
+        print("here")
         dY = rightEyeCenter[1] - leftEyeCenter[1]
         dX = rightEyeCenter[0] - leftEyeCenter[0]
         theta = np.pi - np.arctan2(dY, dX)
