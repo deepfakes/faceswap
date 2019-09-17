@@ -444,7 +444,7 @@ class ModelBase():
             logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
             exit(0)
 
-        if not self.is_legacy:
+        if not self.is_legacy or not self.predict:
             K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():

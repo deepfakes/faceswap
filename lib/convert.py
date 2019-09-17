@@ -113,12 +113,10 @@ class Converter():
     def patch_image(self, predicted):
         """ Patch the image """
         logger.trace("Patching image: '%s'", predicted["filename"])
-        print("here")
         new_image, original_frame = self.get_new_image(predicted)
         patched_face = self.post_warp_adjustments(original_frame, new_image)
         patched_face = self.scale_image(patched_face)
         patched_face = np.rint(patched_face).astype("uint8")
-        print("patched_face: ", patched_face.shape, np.mean(patched_face, axis = (0,1)))
         if self.writer_pre_encode is not None:
             patched_face = self.writer_pre_encode(patched_face)
         logger.trace("Patched image: '%s'", predicted["filename"])

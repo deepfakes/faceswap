@@ -351,9 +351,7 @@ class DiskIO():
     def load(self, *args):  # pylint: disable=unused-argument
         """ Load the images with detected_faces"""
         logger.debug("Load Images: Start")
-        idx = 0
         for filename, image in self.images.load():
-            idx += 1
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
@@ -542,16 +540,16 @@ class Predict():
                 # these will stack up into RAM. Keep a count of consecutive frames with no faces.
                 # If self.batchsize number of frames appear, force the current batch through
                 # to clear RAM.
-                consecutive_no_faces = consecutive_no_faces + 1 if faces_count == 0 else 0
+                consecutive_no_faces += min(1, faces_count + 1)
                 self.faces_count += faces_count
                 if faces_count > 1:
                     self.verify_output = True
                     logger.verbose("Found more than one face in an image! '%s'",
                                    os.path.basename(item["filename"]))
-
                 self.load_aligned(item)
                 faces_seen += faces_count
                 batch.append(item)
+                print("fc, fc ", self.faces_count, faces_count, faces_seen, consecutive_no_faces)
 
             if item != "EOF" and (faces_seen < self.batchsize and
                                   consecutive_no_faces < self.batchsize):
@@ -559,7 +557,9 @@ class Predict():
                              faces_seen, consecutive_no_faces)
                 continue
 
+            print("outside")
             if batch:
+                print("inside")
                 logger.trace("Batching to predictor. Frames: %s, Faces: %s",
                              len(batch), faces_seen)
                 detected_batch = []
@@ -598,6 +598,8 @@ class Predict():
     def compile_feed_faces(self, detected_faces):
         """ Compile the faces for feeding into the predictor """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
+        print([detected_face.filename for detected_face in detected_faces])
+        print("before compile", )
         feed_faces = np.stack([detected_face.feed_face / 255. for detected_face in detected_faces])
         ref_faces = np.stack([detected_face.reference_face / 255. for detected_face in detected_faces])
         feed = [feed_faces[..., :3]]
@@ -609,7 +611,10 @@ class Predict():
     def predict(self, feed, ref_faces, batch_size=None):
         """ Perform inference on the feed """
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
+        print("batch size:  ", feed[0].shape)
         predicted = self.predictor(feed, batch_size=batch_size)
+        print("predicted", predicted.shape, " lll")
+        print("batch size:  ", batch_size)
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
         predicted = self.filter_multi_out(predicted, ref_faces)
         logger.trace("Final shape: %s", predicted.shape)

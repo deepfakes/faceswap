@@ -48,6 +48,7 @@ class Mask(Masker):
         detected_face.load_feed_face(masked_img,
                                      size=input_size,
                                      coverage_ratio=coverage_ratio)
+        print(detected_face.feed.keys())
         if input_size != output_size:
             detected_face.load_reference_face(masked_img,
                                               size=output_size,
