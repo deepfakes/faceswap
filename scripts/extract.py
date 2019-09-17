@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import get_folder, hash_encode_image
+from lib.utils import get_folder, hash_encode_image, deprecation_warning
 from plugins.extract.pipeline import Extractor
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -177,6 +177,10 @@ class Extract():
         to_process = self.process_item_count()
         size = self.args.size if hasattr(self.args, "size") else 256
         align_eyes = self.args.align_eyes if hasattr(self.args, "align_eyes") else False
+        if align_eyes:
+            deprecation_warning("Align eyes (-ae --align-eyes)",
+                                additional_info="This functionality will still be available "
+                                                "within the alignments tool.")
         exception = False
 
         for phase in range(self.extractor.passes):
