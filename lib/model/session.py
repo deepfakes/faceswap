@@ -5,6 +5,7 @@ import logging
 
 import tensorflow as tf
 from keras.models import load_model as k_load_model, Model
+import numpy as np
 
 from lib.utils import get_backend
 
@@ -39,7 +40,39 @@ class KSession():
         self._model = None
         logger.trace("Initialized: %s", self.__class__.__name__,)
 
-    def predict(self, feed):
+    def _amd_predict_with_optimized_batchsizes(self, feed, batch_size):
+        """ Minimizes the amount of kernels to be compiled when using
+        the ``Amd`` backend with varying batchsizes while trying to keep
+        the batchsize as high as possible.
+
+        Parameters
+        ----------
+        feed: numpy.ndarray or list
+            The feed to be provided to the model as input. This should be a ``numpy.ndarray``
+            for single inputs or a ``list`` of ``numpy.ndarrays`` for multiple inputs.
+        batch_size: int
+            The upper batchsize to use.
+        """
+        if isinstance(feed, np.ndarray):
+            feed = [feed]
+        items = feed[0].shape[0]
+        done_items = 0
+        results = list()
+        while done_items < items:
+            if batch_size < 4:  # Not much difference in BS < 4
+                batch_size = 1
+            batch_items = ((items - done_items) // batch_size) * batch_size
+            if batch_items:
+                pred_data = [x[done_items:done_items + batch_items] for x in feed]
+                pred = self._model.predict(pred_data, batch_size=batch_size)
+                done_items += batch_items
+                results.append(pred)
+            batch_size //= 2
+        if isinstance(results[0], np.ndarray):
+            return np.concatenate(results)
+        return [np.concatenate(x) for x in zip(*results)]
+
+    def predict(self, feed, batch_size=None):
         """ Get predictions from the model in the correct session.
 
         This method is a wrapper for :func:`keras.predict()` function.
@@ -51,11 +84,13 @@ class KSession():
             for single inputs or a ``list`` of ``numpy.ndarrays`` for multiple inputs.
         """
         if self._session is None:
-            return self._model.predict(feed)
+            if batch_size is None:
+                return self._model.predict(feed)
+            return self._amd_predict_with_optimized_batchsizes(feed, batch_size)
 
         with self._session.as_default():  # pylint: disable=not-context-manager
             with self._session.graph.as_default():
-                return self._model.predict(feed)
+                return self._model.predict(feed, batch_size=batch_size)
 
     def _set_session(self):
         """ Sets the session and graph.

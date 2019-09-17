@@ -323,8 +323,7 @@ class Extractor():
         """ Launch the face aligner """
         logger.debug("Launching Aligner")
         kwargs = dict(in_queue=self._queues["extract_align_in"],
-                      out_queue=self._queues["extract_align_out"],
-                      queue_size=self._queue_size)
+                      out_queue=self._queues["extract_align_out"])
         self._aligner.initialize(**kwargs)
         self._aligner.start()
         logger.debug("Launched Aligner")
@@ -333,8 +332,7 @@ class Extractor():
         """ Launch the face detector """
         logger.debug("Launching Detector")
         kwargs = dict(in_queue=self._queues["extract_detect_in"],
-                      out_queue=self._queues["extract_align_in"],
-                      queue_size=self._queue_size)
+                      out_queue=self._queues["extract_align_in"])
         self._detector.initialize(**kwargs)
         self._detector.start()
         logger.debug("Launched Detector")
