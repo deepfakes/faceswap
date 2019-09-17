@@ -302,7 +302,6 @@ class DiskIO():
         extractor = Extractor(detector="cv2-dnn",
                               aligner="cv2-dnn",
                               masker=self.args.mask_type,
-                              loglevel=self.args.loglevel,
                               multiprocess=True,
                               rotate_images=None,
                               min_size=20,

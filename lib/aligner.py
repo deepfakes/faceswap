@@ -139,7 +139,7 @@ def get_matrix_scaling(mat):
 def get_align_mat(face, size, should_align_eyes):
     """ Return the alignment Matrix """
     logger.trace("size: %s, should_align_eyes: %s", size, should_align_eyes)
-    mat_umeyama = umeyama(np.array(face.landmarks_as_xy[17:]), True)[0:2]
+    mat_umeyama = umeyama(np.array(face.landmarks_xy[17:]), True)[0:2]
 
     if should_align_eyes is False:
         return mat_umeyama
@@ -147,7 +147,7 @@ def get_align_mat(face, size, should_align_eyes):
     mat_umeyama = mat_umeyama * size
 
     # Convert to matrix
-    landmarks = np.matrix(face.landmarks_as_xy)
+    landmarks = np.matrix(face.landmarks_xy)
 
     # cv2 expects points to be in the form
     # np.array([ [[x1, y1]], [[x2, y2]], ... ]), we'll expand the dim

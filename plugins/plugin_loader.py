@@ -5,8 +5,6 @@ import logging
 import os
 from importlib import import_module
 
-from lib.utils import get_backend
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -56,23 +54,16 @@ class PluginLoader():
 
     @staticmethod
     def get_available_extractors(extractor_type):
-        """ Return a list of available models """
-        extractpath = os.path.join(os.path.dirname(__file__), "extract", extractor_type)
+        """ Return a list of available aligners/detectors """
+        extractpath = os.path.join(os.path.dirname(__file__),
+                                   "extract",
+                                   extractor_type)
         extractors = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(extractpath)
                             if not item.name.startswith("_")
                             and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py")
                             and item.name != "manual.py")
-        # TODO Remove this hacky fix when we move them to the same models
-        multi_versions = [extractor.replace("-amd", "")
-                          for extractor in extractors if extractor.endswith("-amd")]
-        if get_backend() == "amd":
-            for extractor in multi_versions:
-                extractors.remove(extractor)
-        else:
-            for extractor in multi_versions:
-                extractors.remove("{}-amd".format(extractor))
         return extractors
 
     @staticmethod
@@ -95,7 +86,9 @@ class PluginLoader():
     @staticmethod
     def get_available_convert_plugins(convert_category, add_none=True):
         """ Return a list of available models """
-        convertpath = os.path.join(os.path.dirname(__file__), "convert", convert_category)
+        convertpath = os.path.join(os.path.dirname(__file__),
+                                   "convert",
+                                   convert_category)
         converters = sorted(item.name.replace(".py", "").replace("_", "-")
                             for item in os.scandir(convertpath)
                             if not item.name.startswith("_")

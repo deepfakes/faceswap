@@ -667,7 +667,7 @@ class Reformat():
                      "y": top,
                      "h": bottom - top,
                      "hash": f_hash,
-                     "landmarksXY": dfl_alignments["source_landmarks"]}
+                     "landmarks_xy": dfl_alignments["source_landmarks"]}
         logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
         alignments.setdefault(sourcefile, list()).append(alignment)
 
@@ -974,7 +974,7 @@ class Spatial():
                 continue
             # We should only be normalizing a single face, so just take
             # the first landmarks found
-            landmarks = np.array(val[0]["landmarksXY"]).reshape(68, 2, 1)
+            landmarks = np.array(val[0]["landmarks_xy"]).reshape(68, 2, 1)
             start = end
             end = start + landmarks.shape[2]
             # Store in one big array
@@ -1047,7 +1047,7 @@ class Spatial():
             logger.trace("Updating: (frame: %s)", frame)
             landmarks_update = landmarks[:, :, idx].astype(int)
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self.alignments.data[frame][0]["landmarksXY"] = landmarks_xy
+            self.alignments.data[frame][0]["landmarks_xy"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
 

@@ -8,7 +8,6 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from lib.faces_detect import DetectedFace
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import get_folder, hash_encode_image
@@ -239,6 +238,17 @@ class Extract():
 
         if not self.verify_output and faces_count > 1:
             self.verify_output = True
+
+    def align_face(self, faces, align_eyes, size, filename):
+        """ Align the detected face and add the destination file path """
+        final_faces = list()
+        image = faces["image"]
+        detected_faces = faces["detected_faces"]
+        for face in detected_faces:
+            face.load_aligned(image, size=size, align_eyes=align_eyes)
+            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
+                                "face": face})
+        faces["detected_faces"] = final_faces
 
     def output_faces(self, filename, faces):
         """ Output faces to save thread """

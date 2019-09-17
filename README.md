@@ -15,7 +15,7 @@
 <br />Jennifer Lawrence/Steve Buscemi FaceSwap using the Villain model
 </p>
 
-[![Build Status](https://travis-ci.org/deepfakes/faceswap.svg?branch=master)](https://travis-ci.org/deepfakes/faceswap)
+[![Build Status](https://travis-ci.org/deepfakes/faceswap.svg?branch=master)](https://travis-ci.org/deepfakes/faceswap) [![Documentation Status](https://readthedocs.org/projects/faceswap/badge/?version=latest)](https://faceswap.readthedocs.io/en/latest/?badge=latest)
 
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
