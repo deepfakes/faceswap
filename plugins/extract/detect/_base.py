@@ -4,10 +4,10 @@
 All Detector Plugins should inherit from this class.
 See the override methods for which methods are required.
 
-    For each source frame, the plugin must pass a dict to finalize containing:
-    {"filename": <filename of source frame>,
-     "image": <source image>,
-     "face_bounding_boxes": <list of dicts containing bounding box points>}}
+For each source frame, the plugin must pass a dict to finalize containing:
+    {'filename': <filename of source frame>,
+     'image': <source image>,
+     'face_bounding_boxes': <list of dicts containing bounding box points>}}
 
 To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
 
@@ -174,7 +174,7 @@ class Detector(Extractor):
                                                                (face.right - pad[0]) / scale,
                                                                (face.bottom - pad[1]) / scale)
                                         for face in faces]
-                                    for scale, pad, faces in zip(batch["scale"],
+                                       for scale, pad, faces in zip(batch["scale"],
                                                                  batch["pad"],
                                                                  batch_faces)]
 
@@ -272,13 +272,12 @@ class Detector(Extractor):
             pad_r = (self.input_size - width) - pad_l
             pad_t = (self.input_size - height) // 2
             pad_b = (self.input_size - height) - pad_t
-            image = cv2.copyMakeBorder(  # pylint:disable=no-member
-                image,
-                pad_t,
-                pad_b,
-                pad_l,
-                pad_r,
-                cv2.BORDER_CONSTANT)  # pylint:disable=no-member
+            image = cv2.copyMakeBorder(image,  # pylint:disable=no-member
+                                       pad_t,
+                                       pad_b,
+                                       pad_l,
+                                       pad_r,
+                                       cv2.BORDER_CONSTANT)  # pylint:disable=no-member
         logger.trace("Padded image shape: %s", image.shape)
         return image
 

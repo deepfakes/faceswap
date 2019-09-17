@@ -199,7 +199,7 @@ def hash_image_file(filename):
 def hash_encode_image(image, extension):
     """ Encode the image, get the hash and return the hash with
         encoded image """
-    img = cv2.imencode(extension, image)[1]  # pylint: disable=no-member
+    img = cv2.imencode(extension, image)[1]  # pylint: disable=no-member,c-extension-no-member
     f_hash = sha1(cv2.imdecode(img, cv2.IMREAD_UNCHANGED)).hexdigest()# pylint:disable=no-member, c-extension-no-member
     return f_hash, img
 

@@ -61,7 +61,6 @@ class FaceFilter():
         extractor = Extractor(detector_name,
                               aligner_name,
                               masker_name,
-                              loglevel,
                               multiprocess=multiprocess)
         self.run_extractor(extractor)
         del extractor

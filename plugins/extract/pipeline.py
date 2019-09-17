@@ -69,15 +69,15 @@ class Extractor():
         self.phase = "detect"
         self._queue_size = 32
         self._vram_buffer = 320  # Leave a buffer for VRAM allocation
-        self.detector = self.load_detector(detector, rotate_images, min_size, configfile)
-        self.aligner = self.load_aligner(aligner, configfile, normalize_method)
-        self.masker = self.load_masker(masker,
-                                       configfile,
-                                       input_size,
-                                       output_size,
-                                       coverage_ratio)
-        self._is_parallel = self.set_parallel_processing(multiprocess)
-        self.queues = self.add_queues()
+        self._detector = self._load_detector(detector, rotate_images, min_size, configfile)
+        self._aligner = self._load_aligner(aligner, configfile, normalize_method)
+        self._masker = self._load_masker(masker,
+                                         configfile,
+                                         input_size,
+                                         output_size,
+                                         coverage_ratio)
+        self._is_parallel = self._set_parallel_processing(multiprocess)
+        self._queues = self._add_queues()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -99,9 +99,9 @@ class Extractor():
         >>>  'detected_faces: [<list of DetectedFace objects as generated from detect>]}
 
         """
-        qname_dict = {"detect":  "extract_detect_in",
-                      "align":   "extract_align_in",
-                      "mask":    "extract_mask_in"}
+        qname_dict = dict(detect="extract_detect_in",
+                          align="extract_align_in",
+                          mask="extract_mask_in")
         qname = "extract_detect_in" if self._s_parallel else qname_dict[self.phase]
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
@@ -181,20 +181,15 @@ class Extractor():
         >>>     extractor.launch():
         >>>         <do processing>
         """
-        print('in launch')
         if self._is_parallel:
-            print('in parallel')
-            self._launch_aligner()
             self._launch_detector()
+            self._launch_aligner()
             self._launch_masker()
         elif self.phase == "detect":
-            print('in detector')
             self._launch_detector()
         elif self.phase == "align":
-            print('in aligner')
             self._launch_aligner()
         else:
-            print('in masker')
             self._launch_masker()
 
     def detected_faces(self):
@@ -247,9 +242,9 @@ class Extractor():
     @property
     def _output_queue(self):
         """ Return the correct output queue depending on the current phase """
-        qname_dict = {"detect":  "extract_align_in",
-                      "align":   "extract_mask_in",
-                      "mask":    "extract_mask_out"}
+        qname_dict = dict(detect="extract_align_in",
+                          align="extract_mask_in",
+                          mask="extract_mask_out")
         qname = "extract_mask_out" if self.final_pass else qname_dict[self.phase]
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)

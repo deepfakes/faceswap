@@ -60,11 +60,6 @@ class DetectedFace():
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
-    def training_coverage(self):
-        """ The coverage ratio to add for training images """
-        return 1.0
-
-    @property
     def left(self):
         """int: Left point (in pixels) of face detection bounding box within the parent image """
         return self.x
@@ -83,6 +78,11 @@ class DetectedFace():
     def bottom(self):
         """int: Bottom point (in pixels) of face detection bounding box within the parent image """
         return self.y + self.h
+
+    @property
+    def training_coverage(self):
+        """ The coverage ratio to add for training images """
+        return 1.0
 
     def to_alignment(self):
         """  Return the detected face formatted for an alignments file
@@ -230,10 +230,11 @@ class DetectedFace():
         self.feed["size"] = size
         self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
         self.feed["matrix"] = get_align_mat(self, size, should_align_eyes=False)
+
         face = AlignerExtract().transform(image,
-                                                  self.feed["matrix"],
-                                                  size,
-                                                  self.feed["padding"])
+                                          self.feed["matrix"],
+                                          size,
+                                          self.feed["padding"])
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
@@ -269,9 +270,9 @@ class DetectedFace():
         self.reference["matrix"] = get_align_mat(self, size, should_align_eyes=False)
 
         face = AlignerExtract().transform(image,
-                                                  self.reference["matrix"],
-                                                  size,
-                                                  self.reference["padding"])
+                                          self.reference["matrix"],
+                                          size,
+                                          self.reference["padding"])
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",

@@ -4,16 +4,16 @@
 All Aligner Plugins should inherit from this class.
 See the override methods for which methods are required.
 
-    The plugin will receive a dict containing:
->>> {"filename": []<filename of source frame>],
->>>  "image": []<source image>],
->>>  "face_bounding_boxes": []<list of bounding box dicts from in lib/plugins/extract/detect/_base>]}
+The plugin will receive a dict containing:
+>>> {'filename': []<filename of source frame>],
+>>>  'image': []<source image>],
+>>>  'face_bounding_boxes": []<list of bounding box dicts from in lib/plugins/extract/detect/_base>]}
 
-    For each source item, the plugin must pass a dict to finalize containing:
->>> {"filename": []<filename of source frame>],
->>>  "image": [<source image>],
->>>  "face_bounding_boxes": [<list of bounding box dicts from in lib/plugins/extract/detect/_base>],
->>>  "landmarks": [<list of landmarks>]}
+For each source item, the plugin must pass a dict to finalize containing:
+>>> {'filename': []<filename of source frame>],
+>>>  'image': [<source image>],
+>>>  'face_bounding_boxes': [<list of bounding box dicts from in lib/plugins/extract/detect/_base>],
+>>>  'landmarks': [<list of landmarks>]}
 """
 
 
