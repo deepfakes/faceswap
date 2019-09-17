@@ -283,7 +283,6 @@ class PostProcess():
 
             face_filter = dict(detector=detector,
                                aligner=aligner,
-                               loglevel=self.args.loglevel,
                                multiprocess=not self.args.singleprocess)
             filter_lists = dict()
             if hasattr(self.args, "ref_threshold"):
@@ -405,7 +404,7 @@ class FaceFilter(PostProcessAction):
         self.filter = self.load_face_filter(**kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_face_filter(self, filter_lists, ref_threshold, aligner, detector, loglevel,
+    def load_face_filter(self, filter_lists, ref_threshold, aligner, detector,
                          multiprocess):
         """ Load faces to filter out of images """
         if not any(val for val in filter_lists.values()):
@@ -420,7 +419,6 @@ class FaceFilter(PostProcessAction):
                                     filter_files[1],
                                     detector,
                                     aligner,
-                                    loglevel,
                                     multiprocess,
                                     ref_threshold)
             logger.debug("Face filter: %s", facefilter)

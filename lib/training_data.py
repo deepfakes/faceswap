@@ -6,12 +6,12 @@ import logging
 from hashlib import sha1
 from random import random, shuffle, choice
 
-import cv2
 import numpy as np
+import cv2
 from scipy.interpolate import griddata
 
 from lib.model import masks
-from lib.multithreading import FixedProducerDispatcher
+from lib.multithreading import BackgroundGenerator
 from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
 from lib.utils import cv2_read_img, FaceswapError
@@ -33,8 +33,7 @@ class TrainingDataGenerator():
         self.training_opts = training_opts
         self.mask_class = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
-        self.fixed_producer_dispatcher = None  # Set by FPD when loading
-        self._nearest_landmarks = None
+        self._nearest_landmarks = {}
         self.processing = ImageManipulation(model_input_size,
                                             model_output_shapes,
                                             training_opts.get("coverage_ratio", 0.625),
@@ -60,81 +59,9 @@ class TrainingDataGenerator():
                      is_preview, is_timelapse)
         self.batchsize = batchsize
         is_display = is_preview or is_timelapse
-        queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
-        training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list((
-            (batchsize, training_size, training_size, 3),  # sample images
-            (batchsize, self.model_input_size, self.model_input_size, 3)))  # Training Image
-        # Target images
-        batch_shape.extend(tuple([(batchsize, ) + shape for shape in self.model_output_shapes]))
-        logger.debug("Batch shapes: %s", batch_shape)
-
-        self.fixed_producer_dispatcher = FixedProducerDispatcher(
-            method=self.load_batches,
-            shapes=batch_shape,
-            in_queue=queue_in,
-            out_queue=queue_out,
-            args=(images, side, is_display, do_shuffle, batchsize))
-        self.fixed_producer_dispatcher.start()
-        logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
-        return self.minibatch(side, is_display, self.fixed_producer_dispatcher)
-
-    def join_subprocess(self):
-        """ Join the FixedProduceerDispatcher subprocess from outside this module """
-        logger.debug("Joining FixedProducerDispatcher")
-        if self.fixed_producer_dispatcher is None:
-            logger.debug("FixedProducerDispatcher not yet initialized. Exiting")
-            return
-        self.fixed_producer_dispatcher.join()
-        logger.debug("Joined FixedProducerDispatcher")
-
-    @staticmethod
-    def make_queues(side, is_preview, is_timelapse):
-        """ Create the buffer token queues for Fixed Producer Dispatcher """
-        q_name = "_{}".format(side)
-        if is_preview:
-            q_name = "{}{}".format("preview", q_name)
-        elif is_timelapse:
-            q_name = "{}{}".format("timelapse", q_name)
-        else:
-            q_name = "{}{}".format("train", q_name)
-        q_names = ["{}_{}".format(q_name, direction) for direction in ("in", "out")]
-        logger.debug(q_names)
-        queues = [queue_manager.get_queue(queue) for queue in q_names]
-        return queues
-
-    def load_batches(self, mem_gen, images, side, is_display,
-                     do_shuffle=True, batchsize=0):
-        """ Load the warped images and target images to queue """
-        logger.debug("Loading batch: (image_count: %s, side: '%s', is_display: %s, "
-                     "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
-        self.validate_samples(images)
-        # Intialize this for each subprocess
-        self._nearest_landmarks = dict()
-
-        def _img_iter(imgs):
-            while True:
-                if do_shuffle:
-                    shuffle(imgs)
-                for img in imgs:
-                    yield img
-
-        img_iter = _img_iter(images)
-        epoch = 0
-        for memory_wrapper in mem_gen:
-            memory = memory_wrapper.get()
-            logger.trace("Putting to batch queue: (side: '%s', is_display: %s)",
-                         side, is_display)
-            for i, img_path in enumerate(img_iter):
-                imgs = self.process_face(img_path, side, is_display)
-                for j, img in enumerate(imgs):
-                    memory[j][i][:] = img
-                epoch += 1
-                if i == batchsize - 1:
-                    break
-            memory_wrapper.ready()
-        logger.debug("Finished batching: (epoch: %s, side: '%s', is_display: %s)",
-                     epoch, side, is_display)
+        args = (images, side, is_display, do_shuffle, batchsize)
+        batcher = BackgroundGenerator(self.minibatch, thread_count=2, args=args)
+        return batcher.iterator()
 
     def validate_samples(self, data):
         """ Check the total number of images against batchsize and return
@@ -150,22 +77,36 @@ class TrainingDataGenerator():
                     "your batch-size.")
             raise FaceswapError(msg) from err
 
-    @staticmethod
-    def minibatch(side, is_display, load_process):
+    def minibatch(self, images, side, is_display, do_shuffle, batchsize):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
-        logger.debug("Launching minibatch generator for queue (side: '%s', is_display: %s)",
+        logger.debug("Loading minibatch generator: (image_count: %s, side: '%s', is_display: %s, "
+                     "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
+        self.validate_samples(images)
+
+        def _img_iter(imgs):
+            while True:
+                if do_shuffle:
+                    shuffle(imgs)
+                for img in imgs:
+                    yield img
+
+        img_iter = _img_iter(images)
+        while True:
+            batch = list()
+            for _ in range(batchsize):
+                img_path = next(img_iter)
+                data = self.process_face(img_path, side, is_display)
+                batch.append(data)
+            batch = list(zip(*batch))
+            batch = [np.array(x, dtype="float32") for x in batch]
+            logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
+                         "is_display: %s)",
+                         len(batch), [item.shape for item in batch], side, is_display)
+            yield batch
+
+        logger.debug("Finished minibatch generator: (side: '%s', is_display: %s)",
                      side, is_display)
-        for batch_wrapper in load_process:
-            with batch_wrapper as batch:
-                logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
-                             "is_display: %s)",
-                             len(batch), [item.shape for item in batch], side, is_display)
-                yield batch
-        load_process.stop()
-        logger.debug("Finished minibatch generator for queue: (side: '%s', is_display: %s)",
-                     side, is_display)
-        load_process.join()
 
     def process_face(self, filename, side, is_display):
         """ Load an image and perform transformation and warping """
@@ -180,7 +121,6 @@ class TrainingDataGenerator():
         image = self.processing.color_adjust(image,
                                              self.training_opts["augment_color"],
                                              is_display)
-
         if not is_display:
             image = self.processing.random_transform(image)
             if not self.training_opts["no_flip"]:
