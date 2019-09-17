@@ -337,8 +337,8 @@ class SessionsSummary():
         logger.debug("Formatting stats")
         for summary in compiled_stats:
             hrs, mins, secs = convert_time(summary["elapsed"])
-            summary["start"] = time.strftime("%x %X", time.gmtime(summary["start"]))
-            summary["end"] = time.strftime("%x %X", time.gmtime(summary["end"]))
+            summary["start"] = time.strftime("%x %X", time.localtime(summary["start"]))
+            summary["end"] = time.strftime("%x %X", time.localtime(summary["end"]))
             summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
             summary["rate"] = "{0:.1f}".format(summary["rate"])
         return compiled_stats
