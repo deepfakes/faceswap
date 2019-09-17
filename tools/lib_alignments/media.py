@@ -370,7 +370,6 @@ class ExtractedFaces():
         leftEyeCenter = umeyama_landmarks[42:48].mean(axis=0)
         rightEyeCenter = umeyama_landmarks[36:42].mean(axis=0)
         eyesCenter = umeyama_landmarks[36:48].mean(axis=0)
-        print("here")
         dY = rightEyeCenter[1] - leftEyeCenter[1]
         dX = rightEyeCenter[0] - leftEyeCenter[0]
         theta = np.pi - np.arctan2(dY, dX)
