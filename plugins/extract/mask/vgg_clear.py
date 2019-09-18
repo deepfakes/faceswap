@@ -50,8 +50,8 @@ class Mask(Masker):
 
     def process_output(self, batch):
         """ Compile found faces for output """
-        for idx, (face, predictionb) in enumerate(zip(batch["detected_faces"], batch["prediction"])):
-            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in predictionb)
+        for idx, (face, prediction) in enumerate(zip(batch["detected_faces"], batch["prediction"])):
+            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in prediction)
             prediction = np.array(tuple(generator))
             prediction[prediction < 10.] = 0.
             prediction[prediction > 245.] = 255.
@@ -65,7 +65,7 @@ class Mask(Masker):
                                                                         feed_mask),
                                                                        axis=-1)
             if self.input_size != self.output_size:
-                face.load_reference_face(image,
+                face.load_reference_face(face.image,
                                          size=self.output_size,
                                          coverage_ratio=self.coverage_ratio)
                 ref_face = face.reference["face"][..., :3]
@@ -74,5 +74,3 @@ class Mask(Masker):
                                                                                  ref_mask),
                                                                                 axis=-1)
         return batch
-
-

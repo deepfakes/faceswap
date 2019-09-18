@@ -340,6 +340,20 @@ class DetectedFace():
         return self.feed["face"]
 
     @property
+    def feed_landmarks(self):
+        """ numpy.ndarray: The 68 point landmarks location transposed to the feed face box.
+        Only available after :func:`load_reference_face` has been called, otherwise returns
+        ``None``"""
+        if not self.feed:
+            return None
+        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
+                                                      self.feed["matrix"],
+                                                      self.feed["size"],
+                                                      self.feed["padding"])
+        logger.trace("Returning: %s", landmarks)
+        return landmarks
+
+    @property
     def _feed_matrix(self):
         """ numpy.ndarray: The adjusted matrix face sized for feeding into a model. Only available
         after :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """

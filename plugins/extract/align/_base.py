@@ -184,7 +184,7 @@ class Aligner(Extractor):
         """
         generator = zip(batch["detected_faces"], batch["filename"], batch["image"], batch["landmarks"])
         for face, filename, image, landmarks in generator:
-            face.landmarks_xy = [(pt[0], pt[1]) for pt in landmarks]
+            face.landmarks_xy = [(int(round(pt[0])), int(round(pt[1]))) for pt in landmarks]
             face.image = image
             face.filename = filename
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))

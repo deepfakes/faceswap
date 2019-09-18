@@ -231,7 +231,7 @@ class Extract():
         faces["detected_faces"] = final_faces
 
         if not faces["detected_faces"]:
-            logger.verbose("No faces were detected in image #: %s", os.path.basename(filename))
+            logger.verbose("No faces were detected in image: %s", os.path.basename(filename))
             if not self.verify_output:
                 self.verify_output = True
 

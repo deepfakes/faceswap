@@ -541,43 +541,48 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Serializer for alignments file. If yaml is chosen and not "
                                       "available, then json will be used as the default "
                                       "fallback."})
-        argument_list.append({
-            "opts": ("-D", "--detector"),
-            "action": Radio,
-            "type": str.lower,
-            "choices":  PluginLoader.get_available_extractors("detect"),
-            "default": default_detector,
-            "group": "Plugins",
-            "help": "R|Detector to use. Some of these have configurable settings in "
-                    "'/config/extract.ini' or 'Settings > Configure Extract Plugins':"
-                    "\nL|cv2-dnn: A CPU only extractor, is the least reliable, but uses least "
-                    "resources and runs fast on CPU. Use this if not using a GPU and time is "
-                    "important."
-                    "\nL|mtcnn: Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
-                    "detectors but can often return more false positives."
-                    "\nL|s3fd: Fast on GPU, slow on CPU. Can detect more faces and "
-                    "fewer false positives than other GPU detectors, but is a lot more resource "
-                    "intensive."})
-        argument_list.append({
-            "opts": ("-A", "--aligner"),
-            "action": Radio,
-            "type": str.lower,
-            "choices": PluginLoader.get_available_extractors("align"),
-            "default": default_aligner,
-            "group": "Plugins",
-            "help": "R|Aligner to use."
-                    "\nL|cv2-dnn: A cpu only CNN based landmark detector. Faster, less "
-                    "resource intensive, but less accurate. Only use this if not using a gpu "
-                    " and time is important."
-                    "\nL|fan: Face Alignment Network. Best aligner. GPU "
-                    "heavy, slow when not running on GPU"})
-        argument_list.append({
-            "opts": ("-M", "--masker"),
-            "action": Radio,
-            "type": str.lower,
-            "choices": PluginLoader.get_available_extractors("mask"),
-            "default": "components",
-            "help": "Help string"})
+        argument_list.append({"opts": ("-D", "--detector"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices":  PluginLoader.get_available_extractors("detect"),
+                              "default": default_detector,
+                              "group": "Plugins",
+                              "help": "R|Detector to use. Some of these have configurable "
+                                      "settings in '/config/extract.ini' or 'Settings > Configure "
+                                      "Extract 'Plugins':"
+                                      "\nL|cv2-dnn: A CPU only extractor which is the least "
+                                      "reliable and least resource intensive. Use this if not "
+                                      "using a GPU and time is important."
+                                      "\nL|mtcnn: Good detector. Fast on GPU, slow on CPU. Uses "
+                                      "fewer resources than other GPU detectors but can often "
+                                      "return more false positives."
+                                      "\nL|s3fd: Best detector. Fast on GPU, slow on CPU. Can "
+                                      "detect more faces and fewer false positives than other "
+                                      "GPU detectors, but is a lot more resource intensive."})
+        argument_list.append({"opts": ("-A", "--aligner"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_extractors("align"),
+                              "default": default_aligner,
+                              "group": "Plugins",
+                              "help": "R|Aligner to use."
+                                      "\nL|cv2-dnn: A CPU only landmark detector. Faster, less "
+                                      "resource intensive, but less accurate. Only use this if "
+                                      "not using a GPU and time is important."
+                                      "\nL|fan: Best aligner. Fast on GPU, slow on CPU."})
+        argument_list.append({"opts": ("-M", "--masker"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_extractors("mask"),
+                              "default": "components",
+                              "group": "Plugins",
+                              "help": "R|Masker to use."
+                                      "\nL|none: "
+                                      "\nL|components: "
+                                      "\nL|extended: "
+                                      "\nL|vgg-clear: "
+                                      "\nL|vgg-obstructed: "
+                                      "\nL|unet-dfl: "})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
                               "type": str.lower,

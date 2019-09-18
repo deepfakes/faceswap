@@ -9,38 +9,39 @@ class Mask(Masker):
     def __init__(self, **kwargs):
         git_model_id = None
         model_filename = None
-        super().__init__(git_model_id=git_model_id,
-                         model_filename=model_filename,
-                         **kwargs)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+        self.name = "without a mask"
+        self.colorformat = "BGR"
         self.vram = 0
-        self.model = None
-        self.supports_plaidml = True
+        self.vram_warnings = 0
+        self.vram_per_batch = 0
+        self.batchsize = 8
 
-    def initialize(self, *args, **kwargs):
-        """ Initialization tasks to run prior to alignments """
-        try:
-            super().initialize(*args, **kwargs)
-            logger.info("Initializing Dummy Mask Model...")
-            logger.debug("Dummy initialize: (args: %s kwargs: %s)", args, kwargs)
-            self.init.set()
-            logger.info("Initialized Dummy Mask Model")
-        except Exception as err:
-            self.error.set()
-            raise err
+    def init_model(self):
+        logger.debug("No mask model to initialize")
 
-    # MASK PROCESSING
-    def build_masks(self, image, detected_face, input_size, output_size, coverage_ratio):
-        """ Function for creating facehull masks
-            Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
-        """
-        masks = np.full(image.shape[:-1] + (1,), fill_value=255, dtype='uint8')
-        masked_img = np.concatenate((image[..., :3], masks), axis=-1)
-        detected_face.image = masked_img
-        detected_face.load_feed_face(masked_img,
-                                     size=input_size,
-                                     coverage_ratio=coverage_ratio)
-        if input_size != output_size:
-            detected_face.load_reference_face(masked_img,
-                                              size=output_size,
-                                              coverage_ratio=coverage_ratio)
-        return detected_face
+    def process_input(self, batch):
+        """ Compile the detected faces for prediction """
+        batch["feed"] = np.array([face.image for face in batch["detected_faces"]])
+        return batch
+
+    def predict(self, batch):
+        """ Run model to get predictions """
+        batch["prediction"] = np.full(batch["feed"].shape[:-1] + (1,),
+                                      fill_value=255,
+                                      dtype='uint8')
+        return batch
+
+    def process_output(self, batch):
+        """ Compile found faces for output """
+        generator = zip(batch["feed"], batch["detected_faces"], batch["prediction"])
+        for feed, face, prediction in generator:
+            face.image = np.concatenate((feed, prediction), axis=-1)
+            face.load_feed_face(face.image,
+                                size=self.input_size,
+                                coverage_ratio=self.coverage_ratio)
+            if self.input_size != self.output_size:
+                face.load_reference_face(face.image,
+                                         size=self.output_size,
+                                         coverage_ratio=self.coverage_ratio)
+        return batch
