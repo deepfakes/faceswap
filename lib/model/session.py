@@ -18,8 +18,8 @@ class KSession():
     This class acts as a wrapper for various :class:`keras.Model()` functions, ensuring that
     actions performed on a model are handled consistently within the correct graph.
 
-    Currently this only does anything for Nvidia users, making sure a unique graph and session is
-    provided for the given model.
+    This is an early implementation of this class, and should be expanded out over time
+    with relevant `AMD`, `CPU` and `NVIDIA` backend methods.
 
     Parameters
     ----------
@@ -39,6 +39,26 @@ class KSession():
         self._model_kwargs = model_kwargs
         self._model = None
         logger.trace("Initialized: %s", self.__class__.__name__,)
+
+    def predict(self, feed, batch_size=None):
+        """ Get predictions from the model in the correct session.
+
+        This method is a wrapper for :func:`keras.predict()` function.
+
+        Parameters
+        ----------
+        feed: numpy.ndarray or list
+            The feed to be provided to the model as input. This should be a ``numpy.ndarray``
+            for single inputs or a ``list`` of ``numpy.ndarrays`` for multiple inputs.
+        """
+        if self._session is None:
+            if batch_size is None:
+                return self._model.predict(feed)
+            return self._amd_predict_with_optimized_batchsizes(feed, batch_size)
+
+        with self._session.as_default():  # pylint: disable=not-context-manager
+            with self._session.graph.as_default():
+                return self._model.predict(feed, batch_size=batch_size)
 
     def _amd_predict_with_optimized_batchsizes(self, feed, batch_size):
         """ Minimizes the amount of kernels to be compiled when using
@@ -71,26 +91,6 @@ class KSession():
         if isinstance(results[0], np.ndarray):
             return np.concatenate(results)
         return [np.concatenate(x) for x in zip(*results)]
-
-    def predict(self, feed, batch_size=None):
-        """ Get predictions from the model in the correct session.
-
-        This method is a wrapper for :func:`keras.predict()` function.
-
-        Parameters
-        ----------
-        feed: numpy.ndarray or list
-            The feed to be provided to the model as input. This should be a ``numpy.ndarray``
-            for single inputs or a ``list`` of ``numpy.ndarrays`` for multiple inputs.
-        """
-        if self._session is None:
-            if batch_size is None:
-                return self._model.predict(feed)
-            return self._amd_predict_with_optimized_batchsizes(feed, batch_size)
-
-        with self._session.as_default():  # pylint: disable=not-context-manager
-            with self._session.graph.as_default():
-                return self._model.predict(feed, batch_size=batch_size)
 
     def _set_session(self):
         """ Sets the session and graph.

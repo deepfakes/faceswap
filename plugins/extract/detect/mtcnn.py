@@ -11,6 +11,7 @@ import numpy as np
 from lib.model.session import KSession
 from ._base import Detector, logger
 
+
 class Detect(Detector):
     """ MTCNN detector for face recognition """
     def __init__(self, **kwargs):
@@ -19,9 +20,9 @@ class Detect(Detector):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "MTCNN"
         self.input_size = 640
-        self.vram = 1408
-        self.vram_warnings = 512  # Will run at this with warnings
-        self.vram_per_batch = 1  # TODO implement batch support
+        self.vram = 320
+        self.vram_warnings = 64  # Will run at this with warnings
+        self.vram_per_batch = 32
         self.batchsize = self.config["batch-size"]
         self.kwargs = self.validate_kwargs()
 
@@ -190,7 +191,7 @@ class ONet(KSession):
 
 class MTCNN():
     """ MTCNN Detector for face alignment """
-    # TODO Batching
+    # TODO Batching for rnet and onet
 
     def __init__(self, model_path, minsize, threshold, factor):
         """
@@ -243,8 +244,9 @@ class MTCNN():
         for scale in self._pnet_scales:
             rwidth, rheight = int(width * scale), int(height * scale)
             batch = np.empty((batch_items, rheight, rwidth, 3), dtype="float32")
-            for b in range(batch_items):
-                batch[b, ...] = cv2.resize(images[b, ...], (rwidth, rheight))
+            for idx in range(batch_items):
+                batch[idx, ...] = cv2.resize(images[idx, ...],  # pylint:disable=no-member
+                                             (rwidth, rheight))
             output = self.pnet.predict(batch)
             cls_prob = output[0][..., 1]
             roi = output[1]
@@ -252,27 +254,27 @@ class MTCNN():
             out_side = max(out_h, out_w)
             cls_prob = np.swapaxes(cls_prob, 1, 2)
             roi = np.swapaxes(roi, 1, 3)
-            for b in range(batch_items):
+            for idx in range(batch_items):
                 # first index 0 = cls score, 1 = one hot repr
-                rectangle = detect_face_12net(cls_prob[b, ...],
-                                              roi[b, ...],
+                rectangle = detect_face_12net(cls_prob[idx, ...],
+                                              roi[idx, ...],
                                               out_side,
                                               1 / scale,
                                               width,
                                               height,
                                               self.threshold[0])
-                rectangles[b].extend(rectangle)
+                rectangles[idx].extend(rectangle)
         return [nms(x, 0.7, 'iou') for x in rectangles]
 
     def detect_rnet(self, images, rectangle_batch, height, width):
         """ second stage - refinement of face candidates with rnet """
         ret = []
         # TODO: batching
-        for b, rectangles in enumerate(rectangle_batch):
+        for idx, rectangles in enumerate(rectangle_batch):
             if not rectangles:
                 ret.append(list())
                 continue
-            image = images[b]
+            image = images[idx]
             crop_number = 0
             predict_24_batch = []
             for rect in rectangles:
@@ -295,11 +297,11 @@ class MTCNN():
         """ third stage - further refinement and facial landmarks positions with onet """
         ret = list()
         # TODO: batching
-        for b, rectangles in enumerate(rectangle_batch):
+        for idx, rectangles in enumerate(rectangle_batch):
             if not rectangles:
                 ret.append(list())
                 continue
-            image = images[b]
+            image = images[idx]
             crop_number = 0
             predict_batch = []
             for rect in rectangles:
