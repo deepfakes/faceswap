@@ -123,9 +123,10 @@ class Masker(Extractor):
             if not item["detected_faces"]:
                 self._queues["out"].put(item)
                 continue
-
             for f_idx, face in enumerate(item["detected_faces"]):
                 batch.setdefault("detected_faces", []).append(face)
+                batch.setdefault("filename", []).append(item["filename"])
+                batch.setdefault("image", []).append(item["image"])
                 idx += 1
                 if idx == self.batchsize:
                     frame_faces = len(item["detected_faces"])
@@ -191,7 +192,6 @@ class Masker(Extractor):
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
-        print(batch.kets())
         # self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()
@@ -213,9 +213,7 @@ class Masker(Extractor):
     @staticmethod
     def _resize(image, target_size):
         """ resize input and output of mask models appropriately """
-        print("image: ", image.shape)
         height, width, channels = image.shape
-        print(height, width, channels)
         image_size = max(height, width)
         scale = target_size / image_size
         if scale == 1.:
@@ -225,9 +223,7 @@ class Masker(Extractor):
         #                        (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
         #resized = np.array(tuple(generator))
         resized = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=method)
-        print("resized: ", resized.shape)
         resized = resized if channels > 1 else resized[..., None]
-        print("resized: ", resized.shape)
         return resized 
 
     @staticmethod

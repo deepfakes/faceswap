@@ -60,7 +60,6 @@ class Mask(Masker):
                                 size=self.input_size,
                                 coverage_ratio=self.coverage_ratio)
             feed_face = face.feed["face"][..., :3]
-            print("feed: ", feed_face.shape,"predb: ", predictionb.shape,"pred: ",  prediction.shape)
             feed_mask = self._resize(prediction, self.input_size).astype('uint8')
             batch["detected_faces"][idx].feed["face"] = np.concatenate((feed_face,
                                                                         feed_mask),

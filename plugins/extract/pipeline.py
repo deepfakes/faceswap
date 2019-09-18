@@ -181,18 +181,16 @@ class Extractor():
         >>>     extractor.launch():
         >>>         <do processing>
         """
+
         if self._is_parallel:
             self._launch_detector()
             self._launch_aligner()
             self._launch_masker()
         elif self.phase == "detect":
-            print("starting detection")
             self._launch_detector()
         elif self.phase == "align":
-            print("starting alignment")
             self._launch_aligner()
-        else:
-            print("starting masking")
+        elif self.phase == "mask":
             self._launch_masker()
 
     def detected_faces(self):
@@ -229,7 +227,6 @@ class Extractor():
                     break
             except QueueEmpty:
                 continue
-            print(self.phase)
             yield faces
         self._join_threads()
         if self.final_pass:

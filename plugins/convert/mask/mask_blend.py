@@ -56,5 +56,5 @@ class Mask(Adjustment):
                         mask,
                         self.config["radius"],
                         self.config["passes"])
-        mask = mask.blurred
-        return mask
+        blurred_mask = mask.blurred
+        return blurred_mask

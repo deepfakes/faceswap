@@ -325,7 +325,8 @@ class Extractor():
         self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
         self._compile_threads()
         self.init_model()
-        logger.info("Initialized %s %s with batchsize of %s", self.name, self.name, self.batchsize)
+        logger.info("Initialized %s (%s) with batchsize of %s",
+                    self.name, self._plugin_type, self.batchsize)
 
     def _add_queues(self, in_queue, out_queue, queues):
         """ Add the queues

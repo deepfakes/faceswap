@@ -222,7 +222,7 @@ class Extract():
         for thread in self.threads:
             thread.check_and_raise_error()
 
-    def output_processing(self, faces, align_eyes, size):
+    def output_processing(self, faces, align_eyes, size, filename):
         """ Prepare faces for output """
         final_faces = list()
         for detected_face in faces["detected_faces"]:
@@ -230,12 +230,10 @@ class Extract():
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
 
-        faces_count = len(faces["detected_faces"])
-        if faces_count == 0:
+        if not faces["detected_faces"]:
             logger.verbose("No faces were detected in image #: %s", os.path.basename(filename))
-
-        if not self.verify_output and faces_count > 1:
-            self.verify_output = True
+            if not self.verify_output:
+                self.verify_output = True
 
     def output_faces(self, filename, faces):
         """ Output faces to save thread """

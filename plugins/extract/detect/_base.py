@@ -5,9 +5,10 @@ All Detector Plugins should inherit from this class.
 See the override methods for which methods are required.
 
 For each source frame, the plugin must pass a dict to finalize containing:
-    {'filename': <filename of source frame>,
-     'image': <source image>,
-     'face_bounding_boxes': <list of dicts containing bounding box points>}}
+
+>>> {'filename': <filename of source frame>,
+>>>  'image':  <source image>,
+>>>  'detected_faces': <list of DetectedFace objects containing bounding box points}}
 
 To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
 
@@ -170,13 +171,13 @@ class Detector(Extractor):
 
         # Scale back out to original frame
         batch["detected_faces"] = [[self.to_detected_face((face.left - pad[0]) / scale,
-                                                               (face.top - pad[1]) / scale,
-                                                               (face.right - pad[0]) / scale,
-                                                               (face.bottom - pad[1]) / scale)
-                                        for face in faces]
-                                       for scale, pad, faces in zip(batch["scale"],
-                                                                 batch["pad"],
-                                                                 batch_faces)]
+                                                           (face.top - pad[1]) / scale,
+                                                           (face.right - pad[0]) / scale,
+                                                           (face.bottom - pad[1]) / scale)
+                                    for face in faces]
+                                   for scale, pad, faces in zip(batch["scale"],
+                                                                batch["pad"],
+                                                                batch_faces)]
 
         # Remove zero sized faces
         self._remove_zero_sized_faces(batch)
@@ -288,11 +289,11 @@ class Detector(Extractor):
             or face falls entirely outside of image """
         dims = [img.shape[:2] for img in batch["image"]]
         logger.trace("image dims: %s", dims)
-        batch["detected_faces"] = [[face for face in faces
-                                        if face.right > 0 and face.left < dim[1]
-                                        and face.bottom > 0 and face.top < dim[0]]
-                                       for dim, faces in zip(dims,
-                                                             batch.get("detected_faces", list()))]
+        batch["detected_faces"] = [[face
+                                    for face in faces
+                                    if face.right > 0 and face.left < dim[1]
+                                    and face.bottom > 0 and face.top < dim[0]]
+                                   for dim, faces in zip(dims, batch.get("detected_faces", []))]
 
     def _filter_small_faces(self, detected_faces):
         """ Filter out any faces smaller than the min size threshold """

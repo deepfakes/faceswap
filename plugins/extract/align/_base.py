@@ -5,15 +5,17 @@ All Aligner Plugins should inherit from this class.
 See the override methods for which methods are required.
 
 The plugin will receive a dict containing:
->>> {'filename': []<filename of source frame>],
->>>  'image': []<source image>],
->>>  'face_bounding_boxes": []<list of bounding box dicts from in lib/plugins/extract/detect/_base>]}
+
+>>> {"filename": [<filename of source frame>],
+>>>  "image": [<source image>],
+>>>  "detected_faces": [<list of DetectedFace objects]}
 
 For each source item, the plugin must pass a dict to finalize containing:
->>> {'filename': []<filename of source frame>],
->>>  'image': [<source image>],
->>>  'face_bounding_boxes': [<list of bounding box dicts from in lib/plugins/extract/detect/_base>],
->>>  'landmarks': [<list of landmarks>]}
+
+>>> {"filename": [<filename of source frame>],
+>>>  "image": [<source image>],
+>>>  "landmarks": [list of 68 point face landmarks]
+>>>  "detected_faces": [<list of DetectedFace objects>]}
 """
 
 
@@ -185,9 +187,10 @@ class Aligner(Extractor):
             face.landmarks_xy = [(pt[0], pt[1]) for pt in landmarks]
             face.image = image
             face.filename = filename
-
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
-        logger.trace("Item out: %s", {key: val for key, val in batch.items() if key != "image"})
+        logger.trace("Item out: %s", {key: val
+                                      for key, val in batch.items()
+                                      if key != "image"})
         for filename, image, face in zip(batch["filename"],
                                          batch["image"],
                                          batch["detected_faces"]):
