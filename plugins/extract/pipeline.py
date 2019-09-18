@@ -342,7 +342,7 @@ class Extractor():
             vram than is available. Nvidia only. """
         if (self._detector.vram == 0 and self._aligner.vram == 0) or get_backend() != "nvidia":
             logger.debug("Either detector and aligner have no VRAM requirements or not running "
-                         "on Nvidia. Not updating batchsize requirements/")
+                         "on Nvidia. Not updating batchsize requirements.")
             return
         stats = GPUStats().get_card_most_free()
         vram_free = int(stats["free"])

@@ -554,8 +554,8 @@ class ExtractArgs(ExtractConvertArgs):
                     "\nL|cv2-dnn: A CPU only extractor, is the least reliable, but uses least "
                     "resources and runs fast on CPU. Use this if not using a GPU and time is "
                     "important."
-                    "\nL|mtcnn: Fast on GPU, slow on CPU. Uses fewer resources than other GPU "
-                    "detectors but can often return more false positives."
+                    "\nL|mtcnn: Fast on CPU, Faster on GPU. Uses far fewer resources than other "
+                    "GPU detectors but can often return more false positives."
                     "\nL|s3fd: Fast on GPU, slow on CPU. Can detect more faces and "
                     "fewer false positives than other GPU detectors, but is a lot more resource "
                     "intensive."})
