@@ -169,17 +169,17 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="encoder_trainable", datatype=bool,
             default=True, fixed=False, group="optimizer",
-            info="Specify whther to train Encoder. "
+            info="Specify whether to train Encoder. "
                  "\nHelpful with pre-trained models. ")
         self.add_item(
             section=section, title="decoder_a_trainable", datatype=bool,
             default=True, fixed=False, group="optimizer",
-            info="Specify whther to train Decoder A(old face). "
+            info="Specify whether to train Decoder A(old face). "
                  "\nHelpful with pre-trained models. ")
         self.add_item(
             section=section, title="decoder_b_trainable", datatype=bool,
             default=True, fixed=False, group="optimizer",
-            info="Specify whther to train Decoder B(new face). "
+            info="Specify whether to train Decoder B(new face). "
                  "\nHelpful with pre-trained models. ")
 
     def load_module(self, filename, module_path, plugin_type):
