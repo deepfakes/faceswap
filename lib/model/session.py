@@ -69,7 +69,6 @@ class KSession():
         self.graph = tf.Graph()
         config = tf.ConfigProto()
         session = tf.Session(graph=tf.Graph(), config=config)
-        #  keras.backend.set_session(session)
         logger.debug("Creating tf.session: (graph: %s, session: %s, config: %s)",
                      session.graph, session, config)
         return session

@@ -227,6 +227,7 @@ class Extractor():
                     break
             except QueueEmpty:
                 continue
+
             yield faces
         self._join_threads()
         if self.final_pass:

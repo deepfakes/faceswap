@@ -14,12 +14,12 @@ from pathlib import Path
 from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
-
-import imageio_ffmpeg as im_ffm
 from tqdm import tqdm
-
 import numpy as np
 import cv2
+import imageio_ffmpeg as im_ffm
+
+
 
 
 from lib.faces_detect import DetectedFace
@@ -380,7 +380,7 @@ def rotate_landmarks(face, rotation_matrix):
     logger.trace("Original landmarks: %s", landmarks)
 
     rotation_matrix = cv2.invertAffineTransform(rotation_matrix)  # pylint:disable=no-member
-        
+
     rotated = list()
     for item in (bounding_box, landmarks):
         if not item:

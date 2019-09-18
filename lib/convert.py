@@ -4,7 +4,6 @@
     found on https://www.reddit.com/r/deepfakes/ """
 
 import logging
-import sys
 import cv2
 import numpy as np
 
@@ -113,16 +112,19 @@ class Converter():
     def patch_image(self, predicted):
         """ Patch the image """
         logger.trace("Patching image: '%s'", predicted["filename"])
-        new_image, original_frame = self.get_new_image(predicted)
+        frame_size = (predicted["image"].shape[1], predicted["image"].shape[0])
+        new_image, original_frame = self.get_new_image(predicted, frame_size)
         patched_face = self.post_warp_adjustments(original_frame, new_image)
         patched_face = self.scale_image(patched_face)
-        patched_face = np.rint(patched_face).astype("uint8")
+        patched_face = np.rint(patched_face,
+                               out=np.empty(patched_face.shape, dtype="uint8"),
+                               casting='unsafe')
         if self.writer_pre_encode is not None:
             patched_face = self.writer_pre_encode(patched_face)
         logger.trace("Patched image: '%s'", predicted["filename"])
         return patched_face
 
-    def get_new_image(self, predicted):
+    def get_new_image(self, predicted, frame_size):
         """ Get the new face from the predictor and apply box manipulations """
         logger.trace("Getting: (filename: '%s', faces: %s)",
                      predicted["filename"], len(predicted["swapped_faces"]))
@@ -173,6 +175,7 @@ class Converter():
         new_face = self.adjustments["box"].run(new_face)
         mask = self.adjustments["mask"].run(new_face)
         print("old_face, new_face, mask_b:,", old_face.shape, new_face.shape, mask.shape)
+        np.clip(new_face, 0.0, 1.0, out=new_face)
         logger.trace("Got mask. Image shape: %s, Mask shape: %s", new_face.shape, mask.shape)
         return old_face[..., :3], new_face[..., :3], mask
 
@@ -181,6 +184,7 @@ class Converter():
         logger.trace("Compositing face into frame")
         if self.adjustments["scaling"] is not None:
             new_image = self.adjustments["scaling"].run(new_image)
+
         mask = new_image[..., -1:]
         foreground = new_image[..., :3]
         frame = foreground * mask + background * (1. - mask)

@@ -6,6 +6,7 @@ import re
 import os
 import sys
 from threading import Event
+from time import sleep
 
 from cv2 import imwrite  # pylint:disable=no-name-in-module
 import numpy as np
@@ -16,8 +17,8 @@ from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
-from lib.multithreading import MultiThread, PoolProcess, total_cpus
-from lib.queue_manager import queue_manager, QueueEmpty
+from lib.multithreading import MultiThread, total_cpus
+from lib.queue_manager import queue_manager
 from lib.utils import FaceswapError, get_folder, get_image_paths, hash_image_file
 from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
@@ -32,6 +33,7 @@ class Convert():
         self.args = arguments
         Utils.set_verbosity(self.args.loglevel)
 
+        self.patch_threads = None
         self.images = Images(self.args)
         self.validate()
         self.alignments = Alignments(self.args, False, self.images.is_video)
@@ -122,8 +124,8 @@ class Convert():
         if (self.args.writer == "ffmpeg" and
                 not self.images.is_video and
                 self.args.reference_video is None):
-            logger.error("Output as video selected, but using frames as input. You must provide a "
-                         "reference video ('-ref', '--reference-video').")
+            raise FaceswapError("Output as video selected, but using frames as input. You must "
+                                "provide a reference video ('-ref', '--reference-video').")
             exit(1)
         output_dir = get_folder(self.args.output_dir)
         logger.info("Output Directory: %s", output_dir)
@@ -160,27 +162,17 @@ class Convert():
         logger.debug("Converting images")
         save_queue = queue_manager.get_queue("convert_out")
         patch_queue = queue_manager.get_queue("patch")
-        completion_queue = queue_manager.get_queue("patch_completed")
-        pool = PoolProcess(self.converter.process, patch_queue, save_queue,
-                           completion_queue=completion_queue,
-                           processes=self.pool_processes)
-        pool.start()
-        completed_count = 0
+        self.patch_threads = MultiThread(self.converter.process, patch_queue, save_queue,
+                                         thread_count=self.pool_processes, name="patch")
+
+        self.patch_threads.start()
         while True:
             self.check_thread_error()
             if self.disk_io.completion_event.is_set():
                 logger.debug("DiskIO completion event set. Joining Pool")
                 break
-            try:
-                completed = completion_queue.get(True, 1)
-            except QueueEmpty:
-                continue
-            completed_count += completed
-            logger.debug("Total process pools completed: %s of %s", completed_count, pool.procs)
-            if completed_count == pool.procs:
-                logger.debug("All processes completed. Joining Pool")
-                break
-        pool.join()
+            sleep(1)
+        self.patch_threads.join()
 
         logger.debug("Putting EOF")
         save_queue.put("EOF")
@@ -188,7 +180,10 @@ class Convert():
 
     def check_thread_error(self):
         """ Check and raise thread errors """
-        for thread in (self.predictor.thread, self.disk_io.load_thread, self.disk_io.save_thread):
+        for thread in (self.predictor.thread,
+                       self.disk_io.load_thread,
+                       self.disk_io.save_thread,
+                       self.patch_threads):
             thread.check_and_raise_error()
 
 
@@ -278,15 +273,13 @@ class DiskIO():
         logger.debug("minframe: %s, maxframe: %s", minframe, maxframe)
 
         if minframe is None or maxframe is None:
-            logger.error("Frame Ranges specified, but could not determine frame numbering "
-                         "from filenames")
-            exit(1)
+            raise FaceswapError("Frame Ranges specified, but could not determine frame numbering "
+                                "from filenames")
 
         retval = list()
         for rng in self.args.frame_ranges:
             if "-" not in rng:
-                logger.error("Frame Ranges not specified in the correct format")
-                exit(1)
+                raise FaceswapError("Frame Ranges not specified in the correct format")
             start, end = rng.split("-")
             retval.append((max(int(start), minframe), min(int(end), maxframe)))
         logger.debug("frame ranges: %s", retval)
@@ -333,7 +326,9 @@ class DiskIO():
             q_name = "convert_out"
         else:
             q_name = task
-        setattr(self, "{}_queue".format(task), queue_manager.get_queue(q_name))
+        setattr(self,
+                "{}_queue".format(task),
+                queue_manager.get_queue(q_name))
         logger.debug("Added queue for task: '%s'", task)
 
     def start_thread(self, task):
@@ -405,10 +400,11 @@ class DiskIO():
         frame = os.path.basename(filename)
         if not self.check_alignments(frame):
             return list()
+
         faces = self.alignments.get_faces_in_frame(frame)
         detected_faces = list()
 
-        for rawface in faces:
+        for rawface in faces:   # TODO change back to demp method
             face = DetectedFace()
             face.from_alignment(rawface, image=image)
             bounding_box = face.to_bounding_box_dict()
@@ -432,9 +428,8 @@ class DiskIO():
 
     def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
-        inp = {"filename"   : filename,
-               "image"      : image}
-        self.extractor.input_queue.put(inp)
+        input = dict(filename=filename, image=image)
+        self.extractor.input_queue.put(input)
         masked = next(self.extractor.detected_faces())
         return masked["masked_faces"]
 
@@ -539,13 +534,15 @@ class Predict():
                 # these will stack up into RAM. Keep a count of consecutive frames with no faces.
                 # If self.batchsize number of frames appear, force the current batch through
                 # to clear RAM.
-                consecutive_no_faces += min(1, faces_count + 1)
+                consecutive_no_faces = consecutive_no_faces + 1 if faces_count == 0 else 0
                 self.faces_count += faces_count
                 if faces_count > 1:
                     self.verify_output = True
                     logger.verbose("Found more than one face in an image! '%s'",
                                    os.path.basename(item["filename"]))
+
                 self.load_aligned(item)
+
                 faces_seen += faces_count
                 batch.append(item)
                 print("fc, fc ", self.faces_count, faces_count, faces_seen, consecutive_no_faces)
@@ -561,8 +558,8 @@ class Predict():
                 print("inside")
                 logger.trace("Batching to predictor. Frames: %s, Faces: %s",
                              len(batch), faces_seen)
-                detected_batch = []
-                detected_batch = [detected_face_list for item in batch
+                detected_batch = [detected_face_list
+                                  for item in batch
                                   for detected_face_list in item["detected_faces"]]
                 if faces_seen != 0:
                     feed_faces, ref_faces = self.compile_feed_faces(detected_batch)
@@ -597,10 +594,10 @@ class Predict():
     def compile_feed_faces(self, detected_faces):
         """ Compile the faces for feeding into the predictor """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        print([detected_face.filename for detected_face in detected_faces])
-        print("before compile", )
-        feed_faces = np.stack([detected_face.feed_face / 255. for detected_face in detected_faces])
-        ref_faces = np.stack([detected_face.reference_face / 255. for detected_face in detected_faces])
+        feed_faces = np.stack([detected_face.feed_face / 255.
+                               for detected_face in detected_faces])
+        ref_faces = np.stack([detected_face.reference_face / 255.
+                              for detected_face in detected_faces])
         feed = [feed_faces[..., :3]]
         if self.has_predicted_mask:
             feed.append(np.repeat(self.input_mask, feed_faces.shape[0], axis=0))
@@ -627,7 +624,6 @@ class Predict():
         mask = predicted[mask_idx] if mask_idx is not None else ref_faces[..., 3:4]
         predicted = np.concatenate([face, mask], axis=-1)
         print("predicted", predicted.shape, np.mean(predicted, axis=(0,1,2)))
-        sys.stdout.flush()
         logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 
@@ -694,9 +690,8 @@ class OptionalActions():
                 face_hashes.append(hash_image_file(face))
             logger.debug("Face Hashes: %s", (len(face_hashes)))
             if not face_hashes:
-                logger.error("Aligned directory is empty, no faces will be converted!")
-                exit(1)
-            elif len(face_hashes) <= len(self.input_images) / 3:
+                raise FaceswapError("Aligned directory is empty, no faces will be converted!")
+            if len(face_hashes) <= len(self.input_images) / 3:
                 logger.warning("Aligned directory contains far fewer images than the input "
                                "directory, are you sure this is the right folder?")
         return face_hashes

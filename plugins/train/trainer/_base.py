@@ -27,14 +27,13 @@ import time
 import cv2
 import numpy as np
 
-import tensorflow as tf
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
-
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator, stack_images
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -272,9 +271,9 @@ class Batcher():
     def train_one_batch(self):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        x, y = self.get_next()
+        model_inputs, model_targets = self.get_next()
         try:
-            loss = self.model.predictors[self.side].train_on_batch(x=x, y=y)
+            loss = self.model.predictors[self.side].train_on_batch(x=model_inputs, y=model_targets)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -295,11 +294,12 @@ class Batcher():
             Items should come out as: (sample, warped, targets, [mask]) """
         logger.debug("Generating targets")
         batch = next(self.feed)
-        use_mask =  (self.model.training_opts["penalized_mask_loss"] or
-                     self.model.training_opts["replicate_input_mask"])
-        x = batch[1:2] + batch[-1:] if use_mask else batch[1:2]
-        y = batch[3:] if self.model.training_opts["replicate_input_mask"] else batch[3:-1]
-        return x, y
+        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
+                           self.model.training_opts["replicate_input_mask"])
+        targets_use_mask = self.model.training_opts["replicate_input_mask"]
+        model_inputs = batch[1:2] + batch[-1:] if inputs_use_mask else batch[1:2]
+        model_targets = batch[3:] if targets_use_mask else batch[3:-1]
+        return model_inputs, model_targets
 
     def generate_preview(self, do_preview):
         """ Generate the preview if a preview iteration """
@@ -536,7 +536,7 @@ class Samples():
         new_images = list()
         for idx, img in enumerate(backgrounds):
             img[offset:offset + foregrounds[idx].shape[0],
-                offset:offset + foregrounds[idx].shape[1],:3] = foregrounds[idx]
+                offset:offset + foregrounds[idx].shape[1], :3] = foregrounds[idx]
             new_images.append(img)
         retval = np.array(new_images)
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)

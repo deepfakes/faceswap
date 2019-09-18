@@ -171,9 +171,9 @@ class Detector(Extractor):
 
         # Scale back out to original frame
         batch["detected_faces"] = [[self.to_detected_face((face.left - pad[0]) / scale,
-                                                           (face.top - pad[1]) / scale,
-                                                           (face.right - pad[0]) / scale,
-                                                           (face.bottom - pad[1]) / scale)
+                                                          (face.top - pad[1]) / scale,
+                                                          (face.right - pad[0]) / scale,
+                                                          (face.bottom - pad[1]) / scale)
                                     for face in faces]
                                    for scale, pad, faces in zip(batch["scale"],
                                                                 batch["pad"],
