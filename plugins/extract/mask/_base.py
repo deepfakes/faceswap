@@ -7,12 +7,12 @@
     The plugin will receive a dict containing:
     {"filename": <filename of source frame>,
      "image": <source image>,
-     "face_bounding_boxes": <list of bounding box dicts from lib/plugins/extract/detect/_base>}
+     "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>}
 
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <four channel source image>,
-     "face_bounding_boxes": <list of bounding box dicts from lib/plugins/extract/detect/_base>,
+     "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>,
      "mask": <one channel mask image>}
     """
 
@@ -26,235 +26,209 @@ import keras
 from io import StringIO
 from lib.faces_detect import DetectedFace
 from lib.aligner import Extract
-from lib.gpu_stats import GPUStats
-from lib.utils import GetModel
+from plugins.extract._base import Extractor, logger
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class Masker():
-    """ Face Mask Object
-    Faces may be of shape (batch_size, height, width, 3) or (height, width, 3)
-        of dtype unit8 and with range[0, 255]
-        Landmarks may be of shape (batch_size, 68, 2) or (68, 2)
-        Produced mask will be in range [0, 255]
-        channels: 1, 3 or 4:
-                    1 - Returns a single channel mask
-                    3 - Returns a 3 channel mask
-                    4 - Returns the original image with the mask in the alpha channel """
-    def __init__(self, loglevel='VERBOSE', configfile=None, input_size=256, output_size=256,
-                 coverage_ratio=1., git_model_id=None, model_filename=None):
-        logger.debug("Initializing %s: (loglevel: %s, configfile: %s, input_size: %s, "
-                     "output_size: %s, coverage_ratio: %s,git_model_id: %s, model_filename: '%s')",
-                     self.__class__.__name__, loglevel, configfile, input_size, output_size,
-                     coverage_ratio, git_model_id, model_filename)
-        self.loglevel = loglevel
+class Masker(Extractor):
+    """ Aligner plugin _base Object
+
+    All Aligner plugins must inherit from this class
+
+    Parameters
+    ----------
+    git_model_id: int
+        The second digit in the github tag that identifies this model. See
+        https://github.com/deepfakes-models/faceswap-models for more information
+    model_filename: str
+        The name of the model file to be loaded
+    normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
+        Normalize the images fed to the aligner. Default: ``None``
+
+    Other Parameters
+    ----------------
+    configfile: str, optional
+        Path to a custom configuration ``ini`` file. Default: Use system configfile
+
+    See Also
+    --------
+    plugins.extract.align : Aligner plugins
+    plugins.extract._base : Parent class for all extraction plugins
+    plugins.extract.detect._base : Detector parent class for extraction plugins.
+    plugins.extract.align._base : Aligner parent class for extraction plugins.
+    """
+
+    def __init__(self, git_model_id=None, model_filename=None,
+                 configfile=None, input_size=256, output_size=256, coverage_ratio=1.):
+        logger.debug("Initializing %s: (configfile: %s, input_size: %s, "
+                     "output_size: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, configfile, input_size, output_size, coverage_ratio)
+        super().__init__(git_model_id,
+                         model_filename,
+                         configfile=configfile)
         self.input_size = input_size
         self.output_size = output_size
         self.coverage_ratio = coverage_ratio
         self.extract = Extract()
-        self.parent_is_pool = False
-        self.init = None
-        self.error = None
 
-        # The input and output queues for the plugin.
-        # See lib.queue_manager.QueueManager for getting queues
-        self.queues = {"in": None, "out": None}
-
-        #  Get model if required
-        self.model_path = self.get_model(git_model_id, model_filename)
-
-        # Approximate VRAM required for masker. Used to calculate
-        # how many parallel processes / batches can be run.
-        # Be conservative to avoid OOM.
-        self.vram = None
-
-        # Set to true if the plugin supports PlaidML
-        self.supports_plaidml = False
-
+        self._plugin_type = "mask"
+        self._faces_per_filename = dict()  # Tracking for recompiling face batches
+        self._rollover = []  # Items that are rolled over from the previous batch in get_batch
+        self._output_faces = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    # <<< OVERRIDE METHODS >>> #
-    # These methods must be overriden when creating a plugin
-    def initialize(self, *args, **kwargs):
-        """ Inititalize the masker
-            Tasks to be run before any masking is performed.
-            Override for specific masker """
-        logger.debug("_base initialize %s: (PID: %s, args: %s, kwargs: %s)",
-                     self.__class__.__name__, os.getpid(), args, kwargs)
-        self.init = kwargs["event"]
-        self.error = kwargs["error"]
-        self.queues["in"] = kwargs["in_queue"]
-        self.queues["out"] = kwargs["out_queue"]
+    def get_batch(self, queue):
+        """ Get items for inputting into the aligner from the queue in batches
 
-    def configure_session(self):
-        """ Set the TF Session and initialize """
-        # Must import tensorflow inside the spawned process
-        # for Windows machines
-        global tf  # pylint: disable = invalid-name,global-statement
-        import tensorflow as tflow
-        tf = tflow
+        Items are returned from the ``queue`` in batches of
+        :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        card_id, vram_free, vram_total = self.get_vram_free()
-        vram_ratio = 1. if vram_free <= self.vram else self.vram / vram_total
-        config = tf.ConfigProto()
-        if card_id != -1:
-            config.gpu_options.visible_device_list = str(card_id)
-        config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
+        To ensure consistent batchsizes for aligner the items are split into separate items for
+        each :class:`lib.faces_detect.DetectedFace` object.
 
-        self.mask_session = tf.Session(config=config)
-        self.mask_graph = tf.get_default_graph()
-        keras.backend.set_session(self.mask_session)
+        Remember to put ``'EOF'`` to the out queue after processing
+        the final batch
 
-        with self.mask_graph.as_default():
-            with self.mask_session.as_default():
-                if any("gpu" in str(device).lower() for device in self.mask_session.list_devices()):
-                    logger.debug("Using GPU")
-                    # self.batch_size = int(alloc / self.vram)
-                else:
-                    logger.warning("Using CPU")
-                    # self.batch_size = int(alloc / self.vram)
-            self.model = self.load_model()
-            self.model._make_predict_function()
+        Outputs items in the following format. All lists are of length
+        :attr:`~plugins.extract._base.Extractor.batchsize`:
 
-    def build_masks(self, faces, means, landmarks):
-        """ Override to build the mask """
-        raise NotImplementedError
+        >>> {'filename': [<filenames of source frames>],
+        >>>  'image': [<source images>],
+        >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
 
-    # <<< GET MODEL >>> #
-    @staticmethod
-    def get_model(git_model_id, model_filename):
-        """ Check if model is available, if not, download and unzip it """
-        if model_filename is None:
-            logger.debug("No model_filename specified. Returning None")
-            return None
-        if git_model_id is None:
-            logger.debug("No git_model_id specified. Returning None")
-            return None
-        cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-        model = GetModel(model_filename, cache_path, git_model_id)
-        return model.model_path
+        Parameters
+        ----------
+        queue : queue.Queue()
+            The ``queue`` that the plugin will be fed from.
 
-    # <<< MASKING WRAPPER >>> #
-    def run(self, *args, **kwargs):
-        """ Parent align process.
-            This should always be called as the entry point so exceptions
-            are passed back to parent.
-            Do not override """
-        try:
-            self.mask(*args, **kwargs)
-        except Exception:  # pylint:disable=broad-except
-            logger.error("Caught exception in child process: %s", os.getpid())
-            # Display traceback if in initialization stage
-            if not self.init.is_set():
-                logger.exception("Traceback:")
-            tb_buffer = StringIO()
-            traceback.print_exc(file=tb_buffer)
-            exception = {"exception": (os.getpid(), tb_buffer)}
-            self.queues["out"].put(exception)
-            exit(1)
-
-    def mask(self, *args, **kwargs):
-        """ Process masks """
-        if not self.init:
-            self.initialize(*args, **kwargs)
-        logger.debug("Launching Mask: (args: %s kwargs: %s)", args, kwargs)
-
-        for item in self.get_item():
+        Returns
+        -------
+        exhausted, bool
+            ``True`` if queue is exhausted, ``False`` if not
+        batch, dict
+            A dictionary of lists of :attr:`~plugins.extract._base.Extractor.batchsize`:
+        """
+        exhausted = False
+        batch = dict()
+        idx = 0
+        while idx < self.batchsize:
+            item = self._collect_item(queue)
             if item == "EOF":
-                self.finalize(item)
+                logger.trace("EOF received")
+                exhausted = True
                 break
 
-            logger.trace("Masking faces")
-            try:
-                item["masked_faces"] = self.process_masks(item["image"],
-                                                          item["filename"],
-                                                          item["landmarks"],
-                                                          item["face_bounding_boxes"],
-                                                          input_size = self.input_size,
-                                                          output_size = self.output_size,
-                                                          coverage_ratio = self.coverage_ratio)
-                logger.trace("Masked faces: %s", item["filename"])
-            except ValueError as err:
-                logger.warning("Image '%s' could not be processed. This may be due to corrupted "
-                               "data: %s", item["filename"], str(err))
-                item["face_bounding_boxes"] = list()
-                item["masked_faces"] = list()
-                # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
-                import sys
-                exc_info = sys.exc_info()
-                traceback.print_exception(*exc_info)
-            self.finalize(item)
-        logger.debug("Completed Mask")
+            # Put frames with no faces into the out queue to keep TQDM consistent
+            if not item["detected_faces"]:
+                self._queues["out"].put(item)
+                continue
 
-    def process_masks(self, image, filename, landmarks, face_bounding_boxes, input_size, output_size, coverage_ratio):
-        """ Align image and process landmarks """
-        logger.trace("Processing masks")
-        retval = list()
-        for face_box, landmark in zip(face_bounding_boxes, landmarks):
-            detected_face = DetectedFace(landmarksXY=landmark, filename=filename)
-            detected_face.from_bounding_box_dict(face_box, image)
-            detected_face = self.build_masks(image, detected_face, input_size, output_size, coverage_ratio)
-            retval.append(detected_face)
-        logger.trace("Processed masks")
-        return retval
+            for f_idx, face in enumerate(item["detected_faces"]):
+                batch.setdefault("detected_faces", []).append(face)
+                idx += 1
+                if idx == self.batchsize:
+                    frame_faces = len(item["detected_faces"])
+                    if f_idx + 1 != frame_faces:
+                        self._rollover = {k: v[f_idx + 1:] if k == "detected_faces" else v
+                                          for k, v in item.items()}
+                        logger.trace("Rolled over %s faces of %s to next batch for '%s'",
+                                     len(self._rollover["detected_faces"]),
+                                     frame_faces, item["filename"])
+                    break
+        if batch:
+            logger.trace("Returning batch: %s", {k: v.shape if isinstance(v, np.ndarray) else v
+                                                 for k, v in batch.items()})
+        else:
+            logger.trace(item)
+        return exhausted, batch
 
+    def _collect_item(self, queue):
+        """ Collect the item from the _rollover dict or from the queue
+            Add face count per frame to self._faces_per_filename for joining
+            batches back up in finalize """
+        if self._rollover:
+            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",
+                         self._rollover["filename"], len(self._rollover["detected_faces"]))
+            item = self._rollover
+            self._rollover = dict()
+        else:
+            item = self._get_item(queue)
+            if item != "EOF":
+                logger.trace("Getting from queue: (filename: %s, faces: %s)",
+                             item["filename"], len(item["detected_faces"]))
+                self._faces_per_filename[item["filename"]] = len(item["detected_faces"])
+        return item
+
+    def _predict(self, batch):
+        """ Just return the aligner's predict function """
+        return self.predict(batch)
+
+    def finalize(self, batch):
+        """ Finalize the output from Aligner
+
+        This should be called as the final task of each `plugin`.
+
+        It strips unneeded items from the :attr:`batch` ``dict`` and pairs the detected faces back
+        up with their original frame before yielding each frame.
+
+        Outputs items in the format:
+
+        >>> {'image': [<original frame>],
+        >>>  'filename': [<frame filename>),
+        >>>  'detected_faces': [<lib.faces_detect.DetectedFace objects>]}
+
+        Parameters
+        ----------
+        batch : dict
+            The final ``dict`` from the `plugin` process. It must contain the `keys`:
+            ``detected_faces``, ``landmarks``, ``filename``, ``image``
+
+        Yields
+        ------
+        dict
+            A ``dict`` for each frame containing the ``image``, ``filename`` and list of
+            :class:`lib.faces_detect.DetectedFace` objects.
+
+        """
+        print(batch.kets())
+        # self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
+        logger.trace("Item out: %s", {key: val
+                                      for key, val in batch.items()
+                                      if key != "image"})
+        for filename, image, face in zip(batch["filename"],
+                                         batch["image"],
+                                         batch["detected_faces"]):
+            self._output_faces.append(face)
+            if len(self._output_faces) != self._faces_per_filename[filename]:
+                continue
+            retval = dict(filename=filename, image=image, detected_faces=self._output_faces)
+
+            self._output_faces = []
+            logger.trace("Yielding: (filename: '%s', image: %s, detected_faces: %s)",
+                         retval["filename"], retval["image"].shape, len(retval["detected_faces"]))
+            yield retval
+
+    # <<< PROTECTED ACCESS METHODS >>> #
     @staticmethod
-    def resize(image, target_size):
+    def _resize(image, target_size):
         """ resize input and output of mask models appropriately """
-        _, height, width, channels = image.shape
+        print("image: ", image.shape)
+        height, width, channels = image.shape
+        print(height, width, channels)
         image_size = max(height, width)
         scale = target_size / image_size
         if scale == 1.:
             return image
         method = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
-        generator = (cv2.resize(img,  # pylint: disable=no-member
-                                (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
-        resized = np.array(tuple(generator))
+        #generator = (cv2.resize(img,  # pylint: disable=no-member
+        #                        (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
+        #resized = np.array(tuple(generator))
+        resized = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=method)
+        print("resized: ", resized.shape)
         resized = resized if channels > 1 else resized[..., None]
+        print("resized: ", resized.shape)
         return resized 
-
-    # <<< FINALIZE METHODS >>> #
-    def finalize(self, output):
-        """ This should be called as the final task of each plugin
-            aligns faces and puts to the out queue """
-        if output == "EOF":
-            logger.trace("Item out: %s", output)
-            self.queues["out"].put("EOF")
-            return
-        logger.trace("Item out: %s", {key: val
-                                      for key, val in output.items()
-                                      if key != "image"})
-        self.queues["out"].put((output))
-
-    # <<< MISC METHODS >>> #
-    def get_vram_free(self):
-        """ Return free and total VRAM on card with most VRAM free"""
-        stats = GPUStats()
-        vram = stats.get_card_most_free(supports_plaidml=self.supports_plaidml)
-        logger.verbose("Using device %s with %sMB free of %sMB",
-                       vram["device"],
-                       int(vram["free"]),
-                       int(vram["total"]))
-        return int(vram["card_id"]), int(vram["free"]), int(vram["total"])
-
-    def get_item(self):
-        """ Yield one item from the queue """
-        while True:
-            item = self.queues["in"].get()
-            if isinstance(item, dict):
-                logger.trace("Item in: %s", {key: val
-                                             for key, val in item.items()
-                                             if key != "image"})
-                # Pass Detector failures straight out and quit
-                if item.get("exception", None):
-                    self.queues["out"].put(item)
-                    exit(1)
-            else:
-                logger.trace("Item in: %s", item)
-            yield item
-            if item == "EOF":
-                break
 
     @staticmethod
     def postprocessing(mask):

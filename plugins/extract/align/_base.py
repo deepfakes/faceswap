@@ -48,10 +48,10 @@ class Aligner(Extractor):
     plugins.extract.align : Aligner plugins
     plugins.extract._base : Parent class for all extraction plugins
     plugins.extract.detect._base : Detector parent class for extraction plugins.
-
+    plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
-    def __init__(self, git_model_id, model_filename,
+    def __init__(self, git_model_id=None, model_filename=None,
                  configfile=None, normalize_method=None):
         logger.debug("Initializing %s: (normalize_method: %s)", self.__class__.__name__,
                      normalize_method)
@@ -109,23 +109,23 @@ class Aligner(Extractor):
                 break
 
             # Put frames with no faces into the out queue to keep TQDM consistent
-            if not item["face_bounding_boxes"]:
+            if not item["detected_faces"]:
                 self._queues["out"].put(item)
                 continue
 
-            for f_idx, face in enumerate(item["face_bounding_boxes"]):
+            for f_idx, face in enumerate(item["detected_faces"]):
                 face.image = self._convert_color(item["image"])
-                batch.setdefault("face_bounding_boxes", []).append(face)
+                batch.setdefault("detected_faces", []).append(face)
                 batch.setdefault("filename", []).append(item["filename"])
                 batch.setdefault("image", []).append(item["image"])
                 idx += 1
                 if idx == self.batchsize:
-                    frame_faces = len(item["face_bounding_boxes"])
+                    frame_faces = len(item["detected_faces"])
                     if f_idx + 1 != frame_faces:
-                        self._rollover = {k: v[f_idx + 1:] if k == "face_bounding_boxes" else v
+                        self._rollover = {k: v[f_idx + 1:] if k == "detected_faces" else v
                                           for k, v in item.items()}
                         logger.trace("Rolled over %s faces of %s to next batch for '%s'",
-                                     len(self._rollover["face_bounding_boxes"]),
+                                     len(self._rollover["detected_faces"]),
                                      frame_faces, item["filename"])
                     break
         if batch:
@@ -141,15 +141,15 @@ class Aligner(Extractor):
             batches back up in finalize """
         if self._rollover:
             logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",
-                         self._rollover["filename"], len(self._rollover["face_bounding_boxes"]))
+                         self._rollover["filename"], len(self._rollover["detected_faces"]))
             item = self._rollover
             self._rollover = dict()
         else:
             item = self._get_item(queue)
             if item != "EOF":
                 logger.trace("Getting from queue: (filename: %s, faces: %s)",
-                             item["filename"], len(item["face_bounding_boxes"]))
-                self._faces_per_filename[item["filename"]] = len(item["face_bounding_boxes"])
+                             item["filename"], len(item["detected_faces"]))
+                self._faces_per_filename[item["filename"]] = len(item["detected_faces"])
         return item
 
     # <<< FINALIZE METHODS >>> #
@@ -165,13 +165,13 @@ class Aligner(Extractor):
 
         >>> {'image': [<original frame>],
         >>>  'filename': [<frame filename>),
-        >>>  'face_bounding_boxes': [<lib.faces_detect.DetectedFace objects>]}
+        >>>  'detected_faces': [<lib.faces_detect.DetectedFace objects>]}
 
         Parameters
         ----------
         batch : dict
             The final ``dict`` from the `plugin` process. It must contain the `keys`:
-            ``face_bounding_boxes``, ``landmarks``, ``filename``, ``image``
+            ``detected_faces``, ``landmarks``, ``filename``, ``image``
 
         Yields
         ------
@@ -180,17 +180,17 @@ class Aligner(Extractor):
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
+        generator = zip(batch["detected_faces"], batch["filename"], batch["image"], batch["landmarks"])
+        for face, filename, image, landmarks in generator:
+            face.landmarks_xy = [(pt[0], pt[1]) for pt in landmarks]
+            face.image = image
+            face.filename = filename
 
-        for face, landmarks in zip(batch["face_bounding_boxes"], batch["landmarks"]):
-            face.landmarks_xy = [(int(round(pt[0])), int(round(pt[1]))) for pt in landmarks]
-
-        self._remove_invalid_keys(batch, ("face_bounding_boxes", "filename", "image"))
-        logger.trace("Item out: %s", {key: val
-                                      for key, val in batch.items()
-                                      if key != "image"})
+        self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
+        logger.trace("Item out: %s", {key: val for key, val in batch.items() if key != "image"})
         for filename, image, face in zip(batch["filename"],
                                          batch["image"],
-                                         batch["face_bounding_boxes"]):
+                                         batch["detected_faces"]):
             self._output_faces.append(face)
             if len(self._output_faces) != self._faces_per_filename[filename]:
                 continue

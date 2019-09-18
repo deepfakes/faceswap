@@ -34,7 +34,6 @@ class Extract():
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
                                    self.args.masker,
-                                   self.args.loglevel,
                                    configfile=configfile,
                                    multiprocess=not self.args.singleprocess,
                                    rotate_images=self.args.rotate_images,
@@ -203,6 +202,7 @@ class Extract():
 
                 if self.extractor.final_pass:
                     self.output_processing(faces, align_eyes, size, filename)
+                    self.post_process.do_actions(faces)
                     self.output_faces(filename, faces)
                     if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
@@ -222,33 +222,20 @@ class Extract():
         for thread in self.threads:
             thread.check_and_raise_error()
 
-    def output_processing(self, faces, align_eyes, size, filename):
+    def output_processing(self, faces, align_eyes, size):
         """ Prepare faces for output """
         final_faces = list()
-        for detected_face in faces["masked_faces"]:
-            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
+        for detected_face in faces["detected_faces"]:
+            final_faces.append({"file_location": self.output_dir / Path(detected_face.filename).stem,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
-        self.post_process.do_actions(faces)
 
         faces_count = len(faces["detected_faces"])
         if faces_count == 0:
-            logger.verbose("No faces were detected in image: %s",
-                           os.path.basename(filename))
+            logger.verbose("No faces were detected in image #: %s", os.path.basename(filename))
 
         if not self.verify_output and faces_count > 1:
             self.verify_output = True
-
-    def align_face(self, faces, align_eyes, size, filename):
-        """ Align the detected face and add the destination file path """
-        final_faces = list()
-        image = faces["image"]
-        detected_faces = faces["detected_faces"]
-        for face in detected_faces:
-            face.load_aligned(image, size=size, align_eyes=align_eyes)
-            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
-                                "face": face})
-        faces["detected_faces"] = final_faces
 
     def output_faces(self, filename, faces):
         """ Output faces to save thread """

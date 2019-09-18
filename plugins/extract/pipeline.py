@@ -102,7 +102,7 @@ class Extractor():
         qname_dict = dict(detect="extract_detect_in",
                           align="extract_align_in",
                           mask="extract_mask_in")
-        qname = "extract_detect_in" if self._s_parallel else qname_dict[self.phase]
+        qname = "extract_detect_in" if self._is_parallel else qname_dict[self.phase]
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -186,10 +186,13 @@ class Extractor():
             self._launch_aligner()
             self._launch_masker()
         elif self.phase == "detect":
+            print("starting detection")
             self._launch_detector()
         elif self.phase == "align":
+            print("starting alignment")
             self._launch_aligner()
         else:
+            print("starting masking")
             self._launch_masker()
 
     def detected_faces(self):
@@ -226,7 +229,7 @@ class Extractor():
                     break
             except QueueEmpty:
                 continue
-
+            print(self.phase)
             yield faces
         self._join_threads()
         if self.final_pass:
@@ -255,17 +258,21 @@ class Extractor():
         """ Return the plugins that are currently active based on pass """
         if self.passes == 1:
             retval = [self._detector, self._aligner, self._masker]
-        elif self.passes == 3 and not self.final_pass:
+        elif self.passes == 3 and self.phase == 'detect':
             retval = [self._detector]
-        else:
+        elif self.passes == 3 and self.phase == 'align':
             retval = [self._aligner]
+        elif self.passes == 3 and self.phase == 'mask':
+            retval = [self._masker]
+        else:
+            retval = [None]
         logger.trace("Active plugins: %s", retval)
         return retval
 
     def _add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
-        tasks = ("extract_detect_in", "extract_align_in", "extract_mask_in", "extract_mask_out")
+        tasks = ["extract_detect_in", "extract_align_in", "extract_mask_in", "extract_mask_out"]
         for task in tasks:
             # Limit queue size to avoid stacking ram
             self._queue_size = 32
@@ -277,7 +284,7 @@ class Extractor():
         logger.debug("Queues: %s", queues)
         return queues
 
-    def set_parallel_processing(self, multiprocess):
+    def _set_parallel_processing(self, multiprocess):
         """ Set whether to run detect, align, and mask together or separately """
 
         if not multiprocess:

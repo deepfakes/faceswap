@@ -53,7 +53,7 @@ class Detector(Extractor):
     plugins.extract.detect : Detector plugins
     plugins.extract._base : Parent class for all extraction plugins
     plugins.extract.align._base : Aligner parent class for extraction plugins.
-
+    plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
     def __init__(self, git_model_id=None, model_filename=None,
@@ -169,7 +169,7 @@ class Detector(Extractor):
                            for faces, rotmat in zip(batch_faces, batch["rotmat"])]
 
         # Scale back out to original frame
-        batch["face_bounding_boxes"] = [[self.to_detected_face((face.left - pad[0]) / scale,
+        batch["detected_faces"] = [[self.to_detected_face((face.left - pad[0]) / scale,
                                                                (face.top - pad[1]) / scale,
                                                                (face.right - pad[0]) / scale,
                                                                (face.bottom - pad[1]) / scale)
@@ -180,10 +180,10 @@ class Detector(Extractor):
 
         # Remove zero sized faces
         self._remove_zero_sized_faces(batch)
-        if self.min_size > 0 and batch.get("face_bounding_boxes", None):
-            batch["face_bounding_boxes"] = self._filter_small_faces(batch["face_bounding_boxes"])
+        if self.min_size > 0 and batch.get("detected_faces", None):
+            batch["detected_faces"] = self._filter_small_faces(batch["detected_faces"])
 
-        self._remove_invalid_keys(batch, ("face_bounding_boxes", "filename", "image"))
+        self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         batch = self._dict_lists_to_list_dicts(batch)
 
         for item in batch:
@@ -288,16 +288,16 @@ class Detector(Extractor):
             or face falls entirely outside of image """
         dims = [img.shape[:2] for img in batch["image"]]
         logger.trace("image dims: %s", dims)
-        batch["face_bounding_boxes"] = [[face for face in faces
+        batch["detected_faces"] = [[face for face in faces
                                         if face.right > 0 and face.left < dim[1]
                                         and face.bottom > 0 and face.top < dim[0]]
                                        for dim, faces in zip(dims,
                                                              batch.get("detected_faces", list()))]
 
-    def _filter_small_faces(self, face_bounding_boxes):
+    def _filter_small_faces(self, detected_faces):
         """ Filter out any faces smaller than the min size threshold """
         retval = []
-        for faces in face_bounding_boxes:
+        for faces in detected_faces:
             this_image = []
             for face in faces:
                 face_size = (face.w ** 2 + face.h ** 2) ** 0.5

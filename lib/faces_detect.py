@@ -39,7 +39,7 @@ class DetectedFace():
         The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
         of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
     """
-    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None):
+    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None, filename=None):
         logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
@@ -50,7 +50,9 @@ class DetectedFace():
         self.y = y
         self.h = h
         self.landmarks_xy = landmarks_xy
+        self.filename = filename
         self.hash = None
+        self.face = None
         """ str: The hash of the face. This cannot be set until the file is saved due to image
         compression, but will be set if loading data from :func:`from_alignment` """
 
@@ -137,7 +139,7 @@ class DetectedFace():
     def _image_to_face(self, image):
         """ set self.image to be the cropped face from detected bounding box """
         logger.trace("Cropping face from image")
-        self.image = image[self.top: self.bottom,
+        self.face = image[self.top: self.bottom,
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
@@ -180,7 +182,7 @@ class DetectedFace():
             logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
                          size, align_eyes, dtype)
             self.aligned["size"] = size
-            self.aligned["padding"] = self.padding_from_coverage(size, coverage_ratio)
+            self.aligned["padding"] = self._padding_from_coverage(size, coverage_ratio)
             self.aligned["align_eyes"] = align_eyes
             self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
             self.aligned["face"] = None
