@@ -322,7 +322,7 @@ class Extractor():
                      self.__class__.__name__, args, kwargs)
         p_type = "Detector" if self._plugin_type == "detect" else "Aligner"
         logger.info("Initializing %s %s...", self.name, p_type)
-        self.queue_size = kwargs["queue_size"]
+        self.queue_size = 1
         self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
         self._compile_threads()
         self.init_model()
