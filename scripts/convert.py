@@ -349,7 +349,7 @@ class DiskIO():
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if image is None or (not image.any() and image.ndim not in ((2, 3, 4))):
+            if image is None or (not image.any() and image.ndim not in (2, 3, 4)):
                 # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
@@ -403,14 +403,15 @@ class DiskIO():
 
         faces = self.alignments.get_faces_in_frame(frame)
 
-        detected_faces = list()
+        masked_faces_list = list()
         for rawface in faces:
             face = DetectedFace()
             face.from_alignment(rawface, image=image)
-            input = dict(image=image, filename=filename, detected_faces=face)
-            self.extractor.input_queue.put(input)
+            feed = dict(image=image, filename=filename, detected_faces=face)
+            self.extractor.input_queue.put(feed)
             masked = next(self.extractor.detected_faces())
-        return masked["detected_faces"]
+            masked_faces_list.append(masked["detected_faces"])
+        return masked_faces_list
 
     def check_alignments(self, frame):
         """ If we have no alignments for this image, skip it """
@@ -422,10 +423,11 @@ class DiskIO():
 
     def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
-        input = dict(filename=filename, image=image)
-        self.extractor.input_queue.put(input)
+        feed = dict(filename=filename, image=image)
+        self.extractor.input_queue.put(feed)
         masked = next(self.extractor.detected_faces())
-        return masked["detected_faces"]
+        masked_faces_list = list(masked["detected_faces"])
+        return masked_faces_list
 
     # Saving tasks
     def save(self, completion_event):
@@ -618,7 +620,7 @@ class Predict():
         mask_idx = self.output_indices["mask"]
         mask = predicted[mask_idx] if mask_idx is not None else ref_faces[..., 3:4]
         predicted = np.concatenate([face, mask], axis=-1)
-        print("predicted", predicted.shape, np.mean(predicted, axis=(0,1,2)))
+        print("predicted", predicted.shape, np.mean(predicted, axis=(0, 1, 2)))
         logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 
