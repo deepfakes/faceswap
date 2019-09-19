@@ -223,7 +223,7 @@ def convert_to_secs(*args):
     return retval
 
 
-def count_frames_and_secs(path, timeout=15):
+def count_frames_and_secs(path, timeout=60):
     """
     Adapted From ffmpeg_imageio, to handle occasional hanging issue:
     https://github.com/imageio/imageio-ffmpeg
