@@ -10,11 +10,11 @@ import numpy as np
 import cv2
 from scipy.interpolate import griddata
 
+from lib.image import read_image
 from lib.model import masks
 from lib.multithreading import BackgroundGenerator
-from lib.queue_manager import queue_manager
 from lib.umeyama import umeyama
-from lib.utils import cv2_read_img, FaceswapError
+from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -112,7 +112,7 @@ class TrainingDataGenerator():
         """ Load an image and perform transformation and warping """
         logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
                      filename, side, is_display)
-        image = cv2_read_img(filename, raise_error=True)
+        image = read_image(filename, raise_error=True)
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             src_pts = self.get_landmarks(filename, image, side)
         if self.mask_class:

@@ -4,7 +4,7 @@
 import logging
 
 from lib.vgg_face import VGGFace
-from lib.utils import cv2_read_img
+from lib.image import read_image
 from plugins.extract.pipeline import Extractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -47,10 +47,10 @@ class FaceFilter():
         """ Load the images """
         retval = dict()
         for fpath in reference_file_paths:
-            retval[fpath] = {"image": cv2_read_img(fpath, raise_error=True),
+            retval[fpath] = {"image": read_image(fpath, raise_error=True),
                              "type": "filter"}
         for fpath in nreference_file_paths:
-            retval[fpath] = {"image": cv2_read_img(fpath, raise_error=True),
+            retval[fpath] = {"image": read_image(fpath, raise_error=True),
                              "type": "nfilter"}
         logger.debug("Loaded filter images: %s", {k: v["type"] for k, v in retval.items()})
         return retval

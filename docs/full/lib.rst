@@ -8,6 +8,7 @@ Subpackages
 
    lib.model
    lib.faces_detect
+   lib.image
 
 Module contents
 ---------------

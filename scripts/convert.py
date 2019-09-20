@@ -17,9 +17,10 @@ from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
+from lib.image import read_image_hash
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
-from lib.utils import FaceswapError, get_folder, get_image_paths, hash_image_file
+from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
 
@@ -682,7 +683,7 @@ class OptionalActions():
             file_list = [path for path in get_image_paths(input_aligned_dir)]
             logger.info("Getting Face Hashes for selected Aligned Images")
             for face in tqdm(file_list, desc="Hashing Faces"):
-                face_hashes.append(hash_image_file(face))
+                face_hashes.append(read_image_hash(face))
             logger.debug("Face Hashes: %s", (len(face_hashes)))
             if not face_hashes:
                 raise FaceswapError("Aligned directory is empty, no faces will be converted!")
@@ -746,5 +747,5 @@ class Legacy():
                 continue
             hash_faces = all_faces[frame]
             for index, face_path in hash_faces.items():
-                hash_faces[index] = hash_image_file(face_path)
+                hash_faces[index] = read_image_hash(face_path)
             self.alignments.add_face_hashes(frame, hash_faces)
