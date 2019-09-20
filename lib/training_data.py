@@ -4,13 +4,13 @@
 import logging
 
 from hashlib import sha1
-from random import random, shuffle, choice
+from random import shuffle, choice
 
 import numpy as np
 import cv2
 from scipy.interpolate import griddata
 
-from lib.image import read_image_batch
+from lib.image import batch_convert_color, read_image_batch
 from lib.model import masks
 from lib.multithreading import BackgroundGenerator
 from lib.umeyama import umeyama
@@ -123,15 +123,20 @@ class TrainingDataGenerator():
                 print("Orig:", image.dtype)
                 cv2.imwrite("/home/matt/fake/test/testing/{}_orig.png".format(idx), image)
 
-        # Set the processing training size on first image
-        if self.processing.training_size == 0:
-            self.processing.training_size = batch.shape[1]
+        # Initialize processing training size on first image
+        if not self.processing.initialized:
+            self.processing.initialize(batch.shape[1])
 
-        batch_processed = []
+        # Get Landmarks prior to manipulating the image
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             batch_src_pts = self.get_landmarks(filenames, batch, side)
 
-        # TODO Make sure mask can keep it's dtype
+        # Color augmentation before mask is added
+        batch = self.processing.color_adjust(batch,
+                                             self.training_opts["augment_color"],
+                                             is_display)
+
+        # Add mask to batch prior to transforms and warps
         if self.mask_class:
             batch = np.array([self.mask_class(src_pts, image, channels=4).mask
                               for src_pts, image in zip(batch_src_pts, batch)])
@@ -143,17 +148,13 @@ class TrainingDataGenerator():
             # TODO Remove this test
             for idx, image in enumerate(batch):
                 if side == "a" and not is_display:
-                    print("Tran:", image.dtype)
+                    print("Tran:", image.dtype, image.min(), image.max())
                     cv2.imwrite("/home/matt/fake/test/testing/{}_tran.png".format(idx), image)
         exit(0)
         sample = batch.copy()[..., :3]
+        batch_processed = []
 
         for filename, image, src_pts in zip(filenames, batch, batch_src_pts):
-
-            # TODO Try to avoid. This originally went after mask class but before random transform
-            image = self.processing.color_adjust(image,
-                                                 self.training_opts["augment_color"],
-                                                 is_display)
 
             if self.training_opts["warp_to_landmarks"]:
                 dst_pts = self.get_closest_match(filename, side, src_pts)
@@ -228,62 +229,72 @@ class ImageManipulation():
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
         self.scale = 5  # Normal random variable scale
 
-        # Set on first image load
+        # Set on first image load from initialize
+        self.initialized = False
         self.training_size = 0
+        self.constants = None
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def color_adjust(self, img, augment_color, is_display):
+    def initialize(self, training_size):
+        """ Initialize the constants once we have the training_size from the
+            first batch """
+        logger.debug("Initializing constants. training_size: %s", training_size)
+        self.training_size = training_size
+        self.constants = dict(clahe_base_contrast=training_size // 128)
+        self.initialized = True
+        logger.debug("Initialized constants: %s", self.constants)
+
+    def color_adjust(self, batch, augment_color, is_display):
         """ Color adjust RGB image """
-        logger.trace("Color adjusting image")
         if not is_display and augment_color:
             logger.trace("Augmenting color")
-            face, _ = self.separate_mask(img)
-            face = face.astype("uint8")
-            face = self.random_clahe(face)
-            face = self.random_lab(face)
-            img[:, :, :3] = face
-        return img.astype('float32') / 255.0
+            batch = batch_convert_color(batch, "BGR2LAB")
+            batch = self.random_clahe(batch)
+            batch = self.random_lab(batch)
+            batch = batch_convert_color(batch, "LAB2BGR")
+        return batch
 
-    def random_clahe(self, image):
-        """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
-        contrast_random = random()
-        if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
-            return image
+    def random_clahe(self, batch):
+        """ Randomly perform Contrast Limited Adaptive Histogram Equilization on
+        a batch of images """
+        base_contrast = self.constants["clahe_base_contrast"]
 
-        base_contrast = image.shape[0] // 128
-        grid_base = random() * self.config.get("color_clahe_max_size", 4)
-        contrast_adjustment = int(grid_base * (base_contrast / 2))
-        grid_size = base_contrast + contrast_adjustment
-        logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+        batch_random = np.random.rand(self.batchsize)
+        indices = np.where(batch_random > self.config.get("color_clahe_chance", 50) / 100)[0]
 
-        clahe = cv2.createCLAHE(clipLimit=2.0,
-                                tileGridSize=(grid_size, grid_size))
-        for chan in range(3):
-            image[:, :, chan] = clahe.apply(image[:, :, chan])
-        return image
+        grid_bases = np.rint(np.random.uniform(0,
+                                               self.config.get("color_clahe_max_size", 4),
+                                               size=indices.shape[0])).astype("uint8")
+        contrast_adjustment = (grid_bases * (base_contrast // 2))
+        grid_sizes = contrast_adjustment + base_contrast
+        logger.trace("Adjusting Contrast. Grid Sizes: %s", grid_sizes)
 
-    def random_lab(self, image):
-        """ Perform random color/lightness adjustment in L*a*b* colorspace """
+        clahes = [cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+                                  tileGridSize=(grid_size, grid_size))
+                  for grid_size in grid_sizes]
+
+        for idx, clahe in zip(indices, clahes):
+            batch[idx, :, :, 0] = clahe.apply(batch[idx, :, :, 0])
+        return batch
+
+    def random_lab(self, batch):
+        """ Perform random color/lightness adjustment in L*a*b* colorspace on a batch of images """
         amount_l = self.config.get("color_lightness", 30) / 100
         amount_ab = self.config.get("color_ab", 8) / 100
-
-        randoms = [(random() * amount_l * 2) - amount_l,  # L adjust
-                   (random() * amount_ab * 2) - amount_ab,  # A adjust
-                   (random() * amount_ab * 2) - amount_ab]  # B adjust
-
+        adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
+        randoms = (
+            (np.random.rand(self.batchsize, 1, 1, 3).astype("float32") * (adjust * 2)) - adjust)
         logger.trace("Random LAB adjustments: %s", randoms)
-        image = cv2.cvtColor(
-            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0
 
-        for idx, adjustment in enumerate(randoms):
-            if adjustment >= 0:
-                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
-            else:
-                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
-        image = cv2.cvtColor((image * 255.0).astype("uint8"),
-                             cv2.COLOR_LAB2BGR)
-        return image
+        for image, rand in zip(batch, randoms):
+            for idx in range(rand.shape[-1]):
+                adjustment = rand[:, :, idx]
+                if adjustment >= 0:
+                    image[:, :, idx] = ((255 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+                else:
+                    image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+        return batch
 
     @staticmethod
     def separate_mask(image):

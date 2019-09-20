@@ -81,10 +81,6 @@ def read_image_batch(filenames):
     Leverages multi-threading to load multiple images from disk at the same time
     leading to vastly reduced image read times.
 
-    Notes
-    -----
-    As the images are compiled into a batch, they must be all of the same dimensions.
-
     Parameters
     ----------
     filenames: list
@@ -94,6 +90,10 @@ def read_image_batch(filenames):
     -------
     numpy.ndarray
         The batch of images in `BGR` channel order.
+
+    Notes
+    -----
+    As the images are compiled into a batch, they must be all of the same dimensions.
     """
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
@@ -145,6 +145,44 @@ def encode_image_with_hash(image, extension):
     image_hash = sha1(cv2.imdecode(encoded_image,  # pylint:disable=no-member
                                    cv2.IMREAD_UNCHANGED)).hexdigest()  # pylint:disable=no-member
     return image_hash, encoded_image
+
+
+def batch_convert_color(batch, colorspace):
+    """ Convert a batch of images from one colorspace to another.
+
+    Converts a batch of images by reshaping the batch prior to conversion rather than iterating
+    over the images. This leads to a significant speed up in the convert process.
+
+    Parameters
+    ----------
+    batch: numpy.ndarray
+        A batch of images.
+    colorspace: str
+        The OpenCV Color Conversion Code suffix. For example for RGB to LAB this would be
+        ``'BGR2LAB'``.
+        See https://docs.opencv.org/4.1.1/d8/d01/group__imgproc__color__conversions.html for a full
+        list of color codes.
+
+    Returns
+    -------
+    numpy.ndarray
+        The batch converted to the requested color space.
+
+    Notes
+    -----
+    This function is only compatible for color space conversions that have the same image shape
+    for source and destination color spaces.
+
+    If you use :func:`batch_convert_color` with 8-bit images, the conversion will have some
+    information lost. For many cases, this will not be noticeable but it is recommended
+    to use 32-bit images in cases that need the full range of colors or that convert an image
+    before an operation and then convert back.
+    """
+    logger.trace("Batch converting: (batch shape: %s, colorspace: %s)", batch.shape, colorspace)
+    original_shape = batch.shape
+    batch = batch.reshape((original_shape[0] * original_shape[1], *original_shape[2:]))
+    batch = cv2.cvtColor(batch, getattr(cv2, "COLOR_{}".format(colorspace)))
+    return batch.reshape(original_shape)
 
 
 # ################### #
