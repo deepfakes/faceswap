@@ -14,7 +14,7 @@ class Mask(Masker):
         self.colorformat = "BGR"
         self.vram = 0
         self.vram_warnings = 0
-        self.vram_per_batch = 0
+        self.vram_per_batch = 30
         self.batchsize = 8
 
     def init_model(self):

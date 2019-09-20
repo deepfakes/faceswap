@@ -41,6 +41,7 @@ class Align(Aligner):
         self.input_size = 128
         self.colorformat = "RGB"
         self.vram = 0  # Doesn't use GPU
+        self.vram_per_batch = 0
         self.batchsize = 1
 
     def init_model(self):

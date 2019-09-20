@@ -414,7 +414,7 @@ class DiskIO():
                    "face_bounding_boxes"    : [bounding_box]}
             self.extractor.input_queue.put(inp)
             masked = next(self.extractor.detected_faces())
-            face.image = masked["masked_faces"]
+            face.image = masked["detected_faces"]
             detected_faces.append(face)
         return detected_faces
 
@@ -431,7 +431,7 @@ class DiskIO():
         input = dict(filename=filename, image=image)
         self.extractor.input_queue.put(input)
         masked = next(self.extractor.detected_faces())
-        return masked["masked_faces"]
+        return masked["detected_faces"]
 
     # Saving tasks
     def save(self, completion_event):
