@@ -27,17 +27,18 @@ class TrainingDataGenerator():
                      self.__class__.__name__, model_input_size, model_output_shapes,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
                      bool(training_opts.get("landmarks", None)), config)
-        self.batchsize = 0
+        self.config = config
         self.model_input_size = model_input_size
         self.model_output_shapes = model_output_shapes
         self.training_opts = training_opts
         self.mask_class = self.set_mask_class()
         self.landmarks = self.training_opts.get("landmarks", None)
         self._nearest_landmarks = {}
-        self.processing = ImageManipulation(model_input_size,
-                                            model_output_shapes,
-                                            training_opts.get("coverage_ratio", 0.625),
-                                            config)
+
+        # Batchsize and processing class are set when this class is called by a batcher
+        # from lib.training_data
+        self.batchsize = 0
+        self.processing = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_mask_class(self):
@@ -58,6 +59,11 @@ class TrainingDataGenerator():
                      "is_preview, %s, is_timelapse: %s)", len(images), batchsize, side, do_shuffle,
                      is_preview, is_timelapse)
         self.batchsize = batchsize
+        self.processing = ImageManipulation(batchsize,
+                                            self.model_input_size,
+                                            self.model_output_shapes,
+                                            self.training_opts.get("coverage_ratio", 0.625),
+                                            self.config)
         is_display = is_preview or is_timelapse
         args = (images, side, is_display, do_shuffle, batchsize)
         batcher = BackgroundGenerator(self.minibatch, thread_count=2, args=args)
@@ -110,22 +116,44 @@ class TrainingDataGenerator():
         logger.trace("Process batch: (filenames: '%s', side: '%s', is_display: %s)",
                      filenames, side, is_display)
         batch = read_image_batch(filenames)
+
+        # TODO Remove this test
+        for idx, image in enumerate(batch):
+            if side == "a" and not is_display:
+                print("Orig:", image.dtype)
+                cv2.imwrite("/home/matt/fake/test/testing/{}_orig.png".format(idx), image)
+
+        # Set the processing training size on first image
+        if self.processing.training_size == 0:
+            self.processing.training_size = batch.shape[1]
+
         batch_processed = []
         if self.mask_class or self.training_opts["warp_to_landmarks"]:
             batch_src_pts = self.get_landmarks(filenames, batch, side)
 
-        for filename, image, src_pts in zip(filenames, batch, batch_src_pts):
-            if self.mask_class:
-                image = self.mask_class(src_pts, image, channels=4).mask
+        # TODO Make sure mask can keep it's dtype
+        if self.mask_class:
+            batch = np.array([self.mask_class(src_pts, image, channels=4).mask
+                              for src_pts, image in zip(batch_src_pts, batch)])
 
+        if not is_display:
+            batch = self.processing.random_transform(batch)
+            if not self.training_opts["no_flip"]:
+                batch = self.processing.do_random_flip(batch)
+            # TODO Remove this test
+            for idx, image in enumerate(batch):
+                if side == "a" and not is_display:
+                    print("Tran:", image.dtype)
+                    cv2.imwrite("/home/matt/fake/test/testing/{}_tran.png".format(idx), image)
+        exit(0)
+        sample = batch.copy()[..., :3]
+
+        for filename, image, src_pts in zip(filenames, batch, batch_src_pts):
+
+            # TODO Try to avoid. This originally went after mask class but before random transform
             image = self.processing.color_adjust(image,
                                                  self.training_opts["augment_color"],
                                                  is_display)
-            if not is_display:
-                image = self.processing.random_transform(image)
-                if not self.training_opts["no_flip"]:
-                    image = self.processing.do_random_flip(image)
-            sample = image.copy()[:, :, :3]
 
             if self.training_opts["warp_to_landmarks"]:
                 dst_pts = self.get_closest_match(filename, side, src_pts)
@@ -146,7 +174,7 @@ class TrainingDataGenerator():
         src_points = [self.landmarks[side].get(sha1(face).hexdigest(), None) for face in batch]
 
         # Raise error on missing alignments
-        if None in src_points:
+        if not all(isinstance(pts, np.ndarray) for pts in src_points):
             indices = [idx for idx, hsh in enumerate(src_points) if hsh is None]
             missing = [filenames[idx] for idx in indices]
             msg = ("Files missing alignments for this batch: {}"
@@ -182,14 +210,15 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, input_size, output_shapes, coverage_ratio, config):
+    def __init__(self, batchsize, input_size, output_shapes, coverage_ratio, config):
         """ input_size: Size of the face input into the model
             output_shapes: Shapes that come out of the model
             coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
-        logger.debug("Initializing %s: (input_size: %s, output_shapes: %s, coverage_ratio: %s, "
-                     "config: %s)", self.__class__.__name__, input_size, output_shapes,
-                     coverage_ratio, config)
+        logger.debug("Initializing %s: (batchsize: %s, input_size: %s, output_shapes: %s, "
+                     "coverage_ratio: %s, config: %s)", self.__class__.__name__, batchsize,
+                     input_size, output_shapes, coverage_ratio, config)
+        self.batchsize = batchsize
         self.config = config
         # Transform and Warp args
         self.input_size = input_size
@@ -198,6 +227,10 @@ class ImageManipulation():
         # Warp args
         self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
         self.scale = 5  # Normal random variable scale
+
+        # Set on first image load
+        self.training_size = 0
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def color_adjust(self, img, augment_color, is_display):
@@ -224,7 +257,7 @@ class ImageManipulation():
         grid_size = base_contrast + contrast_adjustment
         logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
 
-        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+        clahe = cv2.createCLAHE(clipLimit=2.0,
                                 tileGridSize=(grid_size, grid_size))
         for chan in range(3):
             image[:, :, chan] = clahe.apply(image[:, :, chan])
@@ -240,16 +273,16 @@ class ImageManipulation():
                    (random() * amount_ab * 2) - amount_ab]  # B adjust
 
         logger.trace("Random LAB adjustments: %s", randoms)
-        image = cv2.cvtColor(  # pylint:disable=no-member
-            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
+        image = cv2.cvtColor(
+            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0
 
         for idx, adjustment in enumerate(randoms):
             if adjustment >= 0:
                 image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
             else:
                 image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
-        image = cv2.cvtColor((image * 255.0).astype("uint8"),  # pylint:disable=no-member
-                             cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
+        image = cv2.cvtColor((image * 255.0).astype("uint8"),
+                             cv2.COLOR_LAB2BGR)
         return image
 
     @staticmethod
@@ -270,43 +303,47 @@ class ImageManipulation():
         logger.trace("Coverage: %s", coverage)
         return coverage
 
-    def random_transform(self, image):
-        """ Randomly transform an image """
+    def random_transform(self, batch):
+        """ Randomly transform a batch """
         logger.trace("Randomly transforming image")
-        height, width = image.shape[0:2]
-
         rotation_range = self.config.get("rotation_range", 10)
-        rotation = np.random.uniform(-rotation_range, rotation_range)
-
         zoom_range = self.config.get("zoom_range", 5) / 100
-        scale = np.random.uniform(1 - zoom_range, 1 + zoom_range)
-
         shift_range = self.config.get("shift_range", 5) / 100
-        tnx = np.random.uniform(-shift_range, shift_range) * width
-        tny = np.random.uniform(-shift_range, shift_range) * height
 
-        mat = cv2.getRotationMatrix2D(  # pylint:disable=no-member
-            (width // 2, height // 2), rotation, scale)
-        mat[:, 2] += (tnx, tny)
-        result = cv2.warpAffine(  # pylint:disable=no-member
-            image, mat, (width, height),
-            borderMode=cv2.BORDER_REPLICATE)  # pylint:disable=no-member
+        rotation = np.random.uniform(-rotation_range,
+                                     rotation_range,
+                                     size=self.batchsize).astype("float32")
+        scale = np.random.uniform(1 - zoom_range,
+                                  1 + zoom_range,
+                                  size=self.batchsize).astype("float32")
+        tform = np.random.uniform(-shift_range,
+                                  shift_range,
+                                  size=(self.batchsize, 2)).astype("float32") * self.training_size
+
+        mats = np.array(
+            [cv2.getRotationMatrix2D((self.training_size // 2, self.training_size // 2),
+                                     rot,
+                                     scl)
+             for rot, scl in zip(rotation, scale)]).astype("float32")
+        mats[..., 2] += tform
+
+        result = np.array([cv2.warpAffine(image,
+                                          mat,
+                                          (self.training_size, self.training_size),
+                                          borderMode=cv2.BORDER_REPLICATE)
+                           for image, mat in zip(batch, mats)])
 
         logger.trace("Randomly transformed image")
         return result
 
-    def do_random_flip(self, image):
-        """ Perform flip on image if random number is within threshold """
+    def do_random_flip(self, batch):
+        """ Perform flip on images in batch if random number is within threshold """
         logger.trace("Randomly flipping image")
-        random_flip = self.config.get("random_flip", 50) / 100
-        if np.random.random() < random_flip:
-            logger.trace("Flip within threshold. Flipping")
-            retval = image[:, ::-1]
-        else:
-            logger.trace("Flip outside threshold. Not Flipping")
-            retval = image
-        logger.trace("Randomly flipped image")
-        return retval
+        randoms = np.random.rand(self.batchsize)
+        indices = np.where(randoms > self.config.get("random_flip", 50) / 100)[0]
+        batch[indices] = batch[indices, :, ::-1]
+        logger.trace("Randomly flipped %s images of %s", len(indices), self.batchsize)
+        return batch
 
     def random_warp(self, image):
         """ get pair of random warped images from aligned face image """
@@ -335,10 +372,10 @@ class ImageManipulation():
 
         for i, map_ in enumerate([mapx, mapy]):
             map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint:disable=no-member
+            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]
 
-        warped_image = cv2.remap(  # pylint:disable=no-member
-            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint:disable=no-member
+        warped_image = cv2.remap(
+            image, interp[0], interp[1], cv2.INTER_LINEAR)
         logger.trace("Warped image shape: %s", warped_image.shape)
 
         src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
@@ -346,7 +383,7 @@ class ImageManipulation():
         mats = [umeyama(src_points, True, dst_pts.T.reshape(-1, 2))[0:2]
                 for dst_pts in dst_points]
 
-        target_images = [cv2.warpAffine(image,  # pylint:disable=no-member
+        target_images = [cv2.warpAffine(image,
                                         mat,
                                         (self.output_sizes[idx], self.output_sizes[idx]))
                          for idx, mat in enumerate(mats)]
@@ -373,7 +410,7 @@ class ImageManipulation():
                        np.random.normal(size=dst_points.shape, scale=2.0))
         destination = destination.astype('uint8')
 
-        face_core = cv2.convexHull(np.concatenate(  # pylint:disable=no-member
+        face_core = cv2.convexHull(np.concatenate(
             [source[17:], destination[17:]], axis=0).astype(int))
 
         source = [(pty, ptx) for ptx, pty in source] + edge_anchors
@@ -384,7 +421,7 @@ class ImageManipulation():
             for idx, (pty, ptx) in enumerate(fpl):
                 if idx > 17:
                     break
-                elif cv2.pointPolygonTest(face_core,  # pylint:disable=no-member
+                elif cv2.pointPolygonTest(face_core,
                                           (pty, ptx),
                                           False) >= 0:
                     indicies_to_remove.add(idx)
@@ -399,23 +436,23 @@ class ImageManipulation():
         map_x_32 = map_x.astype('float32')
         map_y_32 = map_y.astype('float32')
 
-        warped_image = cv2.remap(image,  # pylint:disable=no-member
+        warped_image = cv2.remap(image,
                                  map_x_32,
                                  map_y_32,
-                                 cv2.INTER_LINEAR,  # pylint:disable=no-member
-                                 cv2.BORDER_TRANSPARENT)  # pylint:disable=no-member
+                                 cv2.INTER_LINEAR,
+                                 cv2.BORDER_TRANSPARENT)
         target_image = image
 
         # TODO Make sure this replacement is correct
         slices = slice(size // 2 - coverage, size // 2 + coverage)
 #        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
-        warped_image = cv2.resize(  # pylint:disable=no-member
+        warped_image = cv2.resize(
             warped_image[slices, slices, :], (self.input_size, self.input_size),
-            cv2.INTER_AREA)  # pylint:disable=no-member
+            cv2.INTER_AREA)
         logger.trace("Warped image shape: %s", warped_image.shape)
-        target_images = [cv2.resize(target_image[slices, slices, :],  # pylint:disable=no-member
+        target_images = [cv2.resize(target_image[slices, slices, :],
                                     (size, size),
-                                    cv2.INTER_AREA)  # pylint:disable=no-member
+                                    cv2.INTER_AREA)
                          for size in self.output_sizes]
 
         logger.trace("Target image shapea: %s", [img.shape for img in target_images])
