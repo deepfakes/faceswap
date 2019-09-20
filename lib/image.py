@@ -96,16 +96,13 @@ def read_image_batch(filenames):
         The batch of images in `BGR` channel order.
     """
     logger.trace("Requested batch: '%s'", filenames)
-    batch = []
     executor = futures.ThreadPoolExecutor()
     with executor:
         images = [executor.submit(read_image, filename, raise_error=True)
                   for filename in filenames]
-        for future in futures.as_completed(images):
-            batch.append(future.result())
-    images = np.array(batch)
-    logger.trace("Returning images: %s", images.shape)
-    return images
+        batch = np.array([future.result() for future in futures.as_completed(images)])
+    logger.trace("Returning images: %s", batch.shape)
+    return batch
 
 
 def read_image_hash(filename):
