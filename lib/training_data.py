@@ -109,11 +109,12 @@ class TrainingDataGenerator():
         """ Load a batch of images and perform transformation and warping """
         logger.trace("Process batch: (filenames: '%s', side: '%s', is_display: %s)",
                      filenames, side, is_display)
-        images = read_image_batch(filenames)
+        batch = read_image_batch(filenames)
         batch_processed = []
-        for filename, image in zip(filenames, images):
-            if self.mask_class or self.training_opts["warp_to_landmarks"]:
-                src_pts = self.get_landmarks(filename, image, side)
+        if self.mask_class or self.training_opts["warp_to_landmarks"]:
+            batch_src_pts = self.get_landmarks(filenames, batch, side)
+
+        for filename, image, src_pts in zip(filenames, batch, batch_src_pts):
             if self.mask_class:
                 image = self.mask_class(src_pts, image, channels=4).mask
 
@@ -139,22 +140,26 @@ class TrainingDataGenerator():
         logger.trace("Processed batch: (filenames: %s, side: '%s')", filenames, side)
         return batch_processed
 
-    def get_landmarks(self, filename, image, side):
-        """ Return the landmarks for this face """
-        logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
-        lm_key = sha1(image).hexdigest()
-        try:
-            src_points = self.landmarks[side][lm_key]
-        except KeyError as err:
-            msg = ("At least one of your images does not have a matching entry in your alignments "
-                   "file."
+    def get_landmarks(self, filenames, batch, side):
+        """ Return the landmarks for this batch """
+        logger.trace("Retrieving landmarks: (filenames: '%s', side: '%s'", filenames, side)
+        src_points = [self.landmarks[side].get(sha1(face).hexdigest(), None) for face in batch]
+
+        # Raise error on missing alignments
+        if None in src_points:
+            indices = [idx for idx, hsh in enumerate(src_points) if hsh is None]
+            missing = [filenames[idx] for idx in indices]
+            msg = ("Files missing alignments for this batch: {}"
+                   "\nAt least one of your images does not have a matching entry in your "
+                   "alignments file."
                    "\nIf you are training with a mask or using 'warp to landmarks' then every "
                    "face you intend to train on must exist within the alignments file."
-                   "\nThe specific file that caused the failure was '{}' which has a hash of {}."
-                   "\nMost likely there will be more than just this file missing from the "
+                   "\nThe specific files that caused this failure are listed above."
+                   "\nMost likely there will be more than just these files missing from the "
                    "alignments file. You can use the Alignments Tool to help identify missing "
-                   "alignments".format(lm_key, filename))
-            raise FaceswapError(msg) from err
+                   "alignments".format(missing))
+            raise FaceswapError(msg)
+
         logger.trace("Returning: (src_points: %s)", src_points)
         return src_points
 
