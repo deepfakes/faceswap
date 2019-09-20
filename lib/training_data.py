@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 from scipy.interpolate import griddata
 
-from lib.image import read_image
+from lib.image import read_image_batch
 from lib.model import masks
 from lib.multithreading import BackgroundGenerator
 from lib.umeyama import umeyama
@@ -93,11 +93,8 @@ class TrainingDataGenerator():
 
         img_iter = _img_iter(images)
         while True:
-            batch = list()
-            for _ in range(batchsize):
-                img_path = next(img_iter)
-                data = self.process_face(img_path, side, is_display)
-                batch.append(data)
+            img_paths = [next(img_iter) for _ in range(batchsize)]
+            batch = self.process_batch(img_paths, side, is_display)
             batch = list(zip(*batch))
             batch = [np.array(x, dtype="float32") for x in batch]
             logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
@@ -108,35 +105,39 @@ class TrainingDataGenerator():
         logger.debug("Finished minibatch generator: (side: '%s', is_display: %s)",
                      side, is_display)
 
-    def process_face(self, filename, side, is_display):
-        """ Load an image and perform transformation and warping """
-        logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
-                     filename, side, is_display)
-        image = read_image(filename, raise_error=True)
-        if self.mask_class or self.training_opts["warp_to_landmarks"]:
-            src_pts = self.get_landmarks(filename, image, side)
-        if self.mask_class:
-            image = self.mask_class(src_pts, image, channels=4).mask
+    def process_batch(self, filenames, side, is_display):
+        """ Load a batch of images and perform transformation and warping """
+        logger.trace("Process batch: (filenames: '%s', side: '%s', is_display: %s)",
+                     filenames, side, is_display)
+        images = read_image_batch(filenames)
+        batch_processed = []
+        for filename, image in zip(filenames, images):
+            if self.mask_class or self.training_opts["warp_to_landmarks"]:
+                src_pts = self.get_landmarks(filename, image, side)
+            if self.mask_class:
+                image = self.mask_class(src_pts, image, channels=4).mask
 
-        image = self.processing.color_adjust(image,
-                                             self.training_opts["augment_color"],
-                                             is_display)
-        if not is_display:
-            image = self.processing.random_transform(image)
-            if not self.training_opts["no_flip"]:
-                image = self.processing.do_random_flip(image)
-        sample = image.copy()[:, :, :3]
+            image = self.processing.color_adjust(image,
+                                                 self.training_opts["augment_color"],
+                                                 is_display)
+            if not is_display:
+                image = self.processing.random_transform(image)
+                if not self.training_opts["no_flip"]:
+                    image = self.processing.do_random_flip(image)
+            sample = image.copy()[:, :, :3]
 
-        if self.training_opts["warp_to_landmarks"]:
-            dst_pts = self.get_closest_match(filename, side, src_pts)
-            processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
-        else:
-            processed = self.processing.random_warp(image)
+            if self.training_opts["warp_to_landmarks"]:
+                dst_pts = self.get_closest_match(filename, side, src_pts)
+                processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
+            else:
+                processed = self.processing.random_warp(image)
 
-        processed.insert(0, sample)
-        logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
-                     filename, side, [img.shape for img in processed])
-        return processed
+            processed.insert(0, sample)
+            logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
+                         filename, side, [img.shape for img in processed])
+            batch_processed.append(processed)
+        logger.trace("Processed batch: (filenames: %s, side: '%s')", filenames, side)
+        return batch_processed
 
     def get_landmarks(self, filename, image, side):
         """ Return the landmarks for this face """

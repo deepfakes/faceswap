@@ -5,10 +5,12 @@ import logging
 import subprocess
 import sys
 
+from concurrent import futures
 from hashlib import sha1
 
 import cv2
 import imageio_ffmpeg as im_ffm
+import numpy as np
 
 from lib.utils import convert_to_secs, FaceswapError
 
@@ -71,6 +73,39 @@ def read_image(filename, raise_error=False):
             raise Exception(msg)
     logger.trace("Loaded image: '%s'. Success: %s", filename, success)
     return image
+
+
+def read_image_batch(filenames):
+    """ Load a batch of images from the given file locations.
+
+    Leverages multi-threading to load multiple images from disk at the same time
+    leading to vastly reduced image read times.
+
+    Notes
+    -----
+    As the images are compiled into a batch, they must be all of the same dimensions.
+
+    Parameters
+    ----------
+    filenames: list
+        A list of ``str`` full paths to the images to be loaded.
+
+    Returns
+    -------
+    numpy.ndarray
+        The batch of images in `BGR` channel order.
+    """
+    logger.trace("Requested batch: '%s'", filenames)
+    batch = []
+    executor = futures.ThreadPoolExecutor()
+    with executor:
+        images = [executor.submit(read_image, filename, raise_error=True)
+                  for filename in filenames]
+        for future in futures.as_completed(images):
+            batch.append(future.result())
+    images = np.array(batch)
+    logger.trace("Returning images: %s", images.shape)
+    return images
 
 
 def read_image_hash(filename):
