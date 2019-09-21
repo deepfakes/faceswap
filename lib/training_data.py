@@ -13,7 +13,6 @@ from scipy.interpolate import griddata
 from lib.image import batch_convert_color, read_image_batch
 from lib.model import masks
 from lib.multithreading import BackgroundGenerator
-from lib.umeyama import umeyama
 from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -60,12 +59,12 @@ class TrainingDataGenerator():
                      is_preview, is_timelapse)
         self.batchsize = batchsize
         self.processing = ImageManipulation(batchsize,
+                                            is_preview or is_timelapse,
                                             self.model_input_size,
                                             self.model_output_shapes,
                                             self.training_opts.get("coverage_ratio", 0.625),
                                             self.config)
-        is_display = is_preview or is_timelapse
-        args = (images, side, is_display, do_shuffle, batchsize)
+        args = (images, side, do_shuffle, batchsize)
         batcher = BackgroundGenerator(self.minibatch, thread_count=2, args=args)
         return batcher.iterator()
 
@@ -83,11 +82,11 @@ class TrainingDataGenerator():
                     "your batch-size.")
             raise FaceswapError(msg) from err
 
-    def minibatch(self, images, side, is_display, do_shuffle, batchsize):
+    def minibatch(self, images, side, do_shuffle, batchsize):
         """ A generator function that yields epoch, batchsize of warped_img
             and batchsize of target_img from the load queue """
-        logger.debug("Loading minibatch generator: (image_count: %s, side: '%s', is_display: %s, "
-                     "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
+        logger.debug("Loading minibatch generator: (image_count: %s, side: '%s', do_shuffle: %s)",
+                     len(images), side, do_shuffle)
         self.validate_samples(images)
 
         def _img_iter(imgs):
@@ -100,28 +99,25 @@ class TrainingDataGenerator():
         img_iter = _img_iter(images)
         while True:
             img_paths = [next(img_iter) for _ in range(batchsize)]
-            batch = self.process_batch(img_paths, side, is_display)
+            batch = self.process_batch(img_paths, side)
             batch = list(zip(*batch))
             batch = [np.array(x, dtype="float32") for x in batch]
-            logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
-                         "is_display: %s)",
-                         len(batch), [item.shape for item in batch], side, is_display)
+            logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s')",
+                         len(batch), [item.shape for item in batch], side)
             yield batch
 
-        logger.debug("Finished minibatch generator: (side: '%s', is_display: %s)",
-                     side, is_display)
+        logger.debug("Finished minibatch generator: (side: '%s')", side)
 
-    def process_batch(self, filenames, side, is_display):
+    def process_batch(self, filenames, side):
         """ Load a batch of images and perform transformation and warping """
-        logger.trace("Process batch: (filenames: '%s', side: '%s', is_display: %s)",
-                     filenames, side, is_display)
+        logger.trace("Process batch: (filenames: '%s', side: '%s')", filenames, side)
         batch = read_image_batch(filenames)
 
         # TODO Remove this test
-        for idx, image in enumerate(batch):
-            if side == "a" and not is_display:
-                print("Orig:", image.dtype)
-                cv2.imwrite("/home/matt/fake/test/testing/{}_orig.png".format(idx), image)
+        # for idx, image in enumerate(batch):
+        #     if side == "a" and not self.processing.is_display:
+        #         print("Orig:", image.dtype)
+        #         cv2.imwrite("/home/matt/fake/test/testing/{}_orig.png".format(idx), image)
 
         # Initialize processing training size on first image
         if not self.processing.initialized:
@@ -132,42 +128,60 @@ class TrainingDataGenerator():
             batch_src_pts = self.get_landmarks(filenames, batch, side)
 
         # Color augmentation before mask is added
-        batch = self.processing.color_adjust(batch,
-                                             self.training_opts["augment_color"],
-                                             is_display)
+        if self.training_opts["augment_color"]:
+            batch = self.processing.color_adjust(batch)
 
         # Add mask to batch prior to transforms and warps
         if self.mask_class:
             batch = np.array([self.mask_class(src_pts, image, channels=4).mask
                               for src_pts, image in zip(batch_src_pts, batch)])
 
-        if not is_display:
-            batch = self.processing.random_transform(batch)
-            if not self.training_opts["no_flip"]:
-                batch = self.processing.do_random_flip(batch)
-            # TODO Remove this test
-            for idx, image in enumerate(batch):
-                if side == "a" and not is_display:
-                    print("Tran:", image.dtype, image.min(), image.max())
-                    cv2.imwrite("/home/matt/fake/test/testing/{}_tran.png".format(idx), image)
-        exit(0)
-        sample = batch.copy()[..., :3]
-        batch_processed = []
+        # Random Transform and flip
+        batch = self.processing.random_transform(batch)
+        if not self.training_opts["no_flip"]:
+            batch = self.processing.do_random_flip(batch)
 
-        for filename, image, src_pts in zip(filenames, batch, batch_src_pts):
+        # TODO Remove this test
+        # for idx, image in enumerate(batch):
+        #     if side == "a" and not self.processing.is_display:
+        #         print("warp:", image.dtype, image.shape, image.min(), image.max())
+        #         cv2.imwrite("/home/matt/fake/test/testing/{}_tran.png".format(idx), image)
 
-            if self.training_opts["warp_to_landmarks"]:
-                dst_pts = self.get_closest_match(filename, side, src_pts)
-                processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
-            else:
-                processed = self.processing.random_warp(image)
+        samples = batch[..., :3]
 
-            processed.insert(0, sample)
-            logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
-                         filename, side, [img.shape for img in processed])
-            batch_processed.append(processed)
-        logger.trace("Processed batch: (filenames: %s, side: '%s')", filenames, side)
-        return batch_processed
+        # Get Targets
+        targets = self.processing.get_targets(batch)
+
+        # TODO Remove this test
+        # for idx, (tgt, mask) in enumerate(zip(targets[0][0], targets[1])):
+        #     if side == "a" and not self.processing.is_display:
+        #         print("tgt:", tgt.dtype, tgt.shape, tgt.min(), tgt.max())
+        #         print("mask:", mask.dtype, mask.shape, mask.min(), mask.max())
+        #         cv2.imwrite("/home/matt/fake/test/testing/{}_tgt.png".format(idx), tgt)
+        #         cv2.imwrite("/home/matt/fake/test/testing/{}_mask.png".format(idx), mask)
+
+        if self.training_opts["warp_to_landmarks"]:
+            # TODO
+            pass
+            # dst_pts = self.get_closest_match(filename, side, src_pts)
+            # processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
+        else:
+            batch = self.processing.random_warp(batch[..., :3])
+
+        # TODO Remove this test
+        # for idx, image in enumerate(batch):
+        #     if side == "a" and not self.processing.is_display:
+        #         print("warp:", image.dtype, image.shape, image.min(), image.max())
+        #         cv2.imwrite("/home/matt/fake/test/testing/{}_warp.png".format(idx), image)
+        # exit(0)
+        processed = [samples, batch, targets]
+
+        logger.trace("Processed batch: (filenames: %s, side: '%s', samples: %s, batch: %s, "
+                     "targets: %s)",
+                     filenames, side, processed[0].shape, processed[1].shape,
+                     [[img.shape for img in tgt] if isinstance(tgt, list) else tgt.shape
+                      for tgt in processed[2]])
+        return processed
 
     def get_landmarks(self, filenames, batch, side):
         """ Return the landmarks for this batch """
@@ -211,15 +225,17 @@ class TrainingDataGenerator():
 
 class ImageManipulation():
     """ Manipulations to be performed on training images """
-    def __init__(self, batchsize, input_size, output_shapes, coverage_ratio, config):
+    def __init__(self, batchsize, is_display, input_size, output_shapes, coverage_ratio, config):
         """ input_size: Size of the face input into the model
             output_shapes: Shapes that come out of the model
             coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
         """
-        logger.debug("Initializing %s: (batchsize: %s, input_size: %s, output_shapes: %s, "
-                     "coverage_ratio: %s, config: %s)", self.__class__.__name__, batchsize,
-                     input_size, output_shapes, coverage_ratio, config)
+        logger.debug("Initializing %s: (batchsize: %s, is_display: %s, input_size: %s, "
+                     "output_shapes: %s, coverage_ratio: %s, config: %s)",
+                     self.__class__.__name__, batchsize, is_display, input_size, output_shapes,
+                     coverage_ratio, config)
         self.batchsize = batchsize
+        self.is_display = is_display
         self.config = config
         # Transform and Warp args
         self.input_size = input_size
@@ -241,13 +257,35 @@ class ImageManipulation():
             first batch """
         logger.debug("Initializing constants. training_size: %s", training_size)
         self.training_size = training_size
-        self.constants = dict(clahe_base_contrast=training_size // 128)
+
+        coverage = int(self.training_size * self.coverage_ratio)
+
+        # Color Aug
+        clahe_base_contrast = training_size // 128
+        # Target Images
+        tgt_slices = slice(self.training_size // 2 - coverage // 2,
+                           self.training_size // 2 + coverage // 2)
+        # Warp
+        warp_range_ = np.linspace(self.training_size // 2 - coverage // 2,
+                                  self.training_size // 2 + coverage // 2, 5, dtype='float32')
+        warp_mapx = np.broadcast_to(warp_range_, (self.batchsize, 5, 5)).astype("float32")
+        warp_mapy = np.broadcast_to(warp_mapx[0].T, (self.batchsize, 5, 5)).astype("float32")
+
+        warp_pad = int(1.25 * self.input_size)
+        warp_slices = slice(warp_pad // 10, -warp_pad // 10)
+
+        self.constants = dict(clahe_base_contrast=clahe_base_contrast,
+                              tgt_slices=tgt_slices,
+                              warp_mapx=warp_mapx,
+                              warp_mapy=warp_mapy,
+                              warp_pad=warp_pad,
+                              warp_slices=warp_slices)
         self.initialized = True
         logger.debug("Initialized constants: %s", self.constants)
 
-    def color_adjust(self, batch, augment_color, is_display):
+    def color_adjust(self, batch):
         """ Color adjust RGB image """
-        if not is_display and augment_color:
+        if not self.is_display:
             logger.trace("Augmenting color")
             batch = batch_convert_color(batch, "BGR2LAB")
             batch = self.random_clahe(batch)
@@ -296,18 +334,6 @@ class ImageManipulation():
                     image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
         return batch
 
-    @staticmethod
-    def separate_mask(image):
-        """ Return the image and the mask from a 4 channel image """
-        mask = None
-        if image.shape[2] == 4:
-            logger.trace("Image contains mask")
-            mask = np.expand_dims(image[:, :, -1], axis=2)
-            image = image[:, :, :3]
-        else:
-            logger.trace("Image has no mask")
-        return image, mask
-
     def get_coverage(self, image):
         """ Return coverage value for given image """
         coverage = int(image.shape[0] * self.coverage_ratio)
@@ -316,6 +342,8 @@ class ImageManipulation():
 
     def random_transform(self, batch):
         """ Randomly transform a batch """
+        if self.is_display:
+            return batch
         logger.trace("Randomly transforming image")
         rotation_range = self.config.get("rotation_range", 10)
         zoom_range = self.config.get("zoom_range", 5) / 100
@@ -338,69 +366,77 @@ class ImageManipulation():
              for rot, scl in zip(rotation, scale)]).astype("float32")
         mats[..., 2] += tform
 
-        result = np.array([cv2.warpAffine(image,
-                                          mat,
-                                          (self.training_size, self.training_size),
-                                          borderMode=cv2.BORDER_REPLICATE)
-                           for image, mat in zip(batch, mats)])
+        batch = np.array([cv2.warpAffine(image,
+                                         mat,
+                                         (self.training_size, self.training_size),
+                                         borderMode=cv2.BORDER_REPLICATE)
+                          for image, mat in zip(batch, mats)])
 
         logger.trace("Randomly transformed image")
-        return result
+        return batch
 
     def do_random_flip(self, batch):
         """ Perform flip on images in batch if random number is within threshold """
-        logger.trace("Randomly flipping image")
-        randoms = np.random.rand(self.batchsize)
-        indices = np.where(randoms > self.config.get("random_flip", 50) / 100)[0]
-        batch[indices] = batch[indices, :, ::-1]
-        logger.trace("Randomly flipped %s images of %s", len(indices), self.batchsize)
+        if not self.is_display:
+            logger.trace("Randomly flipping image")
+            randoms = np.random.rand(self.batchsize)
+            indices = np.where(randoms > self.config.get("random_flip", 50) / 100)[0]
+            batch[indices] = batch[indices, :, ::-1]
+            logger.trace("Randomly flipped %s images of %s", len(indices), self.batchsize)
         return batch
 
-    def random_warp(self, image):
+    def get_targets(self, batch):
+        """ Get the target batch """
+        logger.trace("Compiling targets")
+        slices = self.constants["tgt_slices"]
+        target_batch = [np.array([cv2.resize(image[slices, slices, :],
+                                             (size, size),
+                                             cv2.INTER_AREA)
+                                  for image in batch])
+                        for size in self.output_sizes]
+        logger.trace("Target image shapes: %s",
+                     [tgt.shape for tgt_images in target_batch for tgt in tgt_images])
+
+        retval = self.separate_target_mask(target_batch)
+        logger.trace("Final shapes: %s", [[img.shape for img in batch]
+                                          if isinstance(batch, list)
+                                          else batch.shape
+                                          for batch in retval])
+        return retval
+
+    @staticmethod
+    def separate_target_mask(batch):
+        """ Return the batch and the batch of final masks from a batch of 4 channel images """
+        if all(tgt.shape[-1] == 4 for tgt in batch):
+            logger.trace("Batch contains mask")
+            sizes = [item.shape[1] for item in batch]
+            mask_batch = np.expand_dims(batch[sizes.index(max(sizes))][..., -1], axis=-1)
+            batch = [item[..., :3] for item in batch]
+            logger.trace("batch shapes: %s, mask_batch shape: %s",
+                         [tgt.shape for tgt in batch], mask_batch.shape)
+            return batch, mask_batch
+
+        logger.trace("Batch has no mask")
+        return batch
+
+    def random_warp(self, batch):
         """ get pair of random warped images from aligned face image """
-        logger.trace("Randomly warping image")
-        height, width = image.shape[0:2]
-        coverage = self.get_coverage(image) // 2
-        try:
-            assert height == width and height % 2 == 0
-        except AssertionError as err:
-            msg = ("Training images should be square with an even number of pixels across each "
-                   "side. An image was found with width: {}, height: {}."
-                   "\nMost likely this is a frame rather than a face within your training set. "
-                   "\nMake sure that the only images within your training set are faces generated "
-                   "from the Extract process.".format(width, height))
-            raise FaceswapError(msg) from err
+        logger.trace("Randomly warping batch")
+        mapx = self.constants["warp_mapx"]
+        mapy = self.constants["warp_mapy"]
+        pad = self.constants["warp_pad"]
+        slices = self.constants["warp_slices"]
 
-        range_ = np.linspace(height // 2 - coverage, height // 2 + coverage, 5, dtype='float32')
-        mapx = np.broadcast_to(range_, (5, 5)).copy()
-        mapy = mapx.T
-        # mapx, mapy = np.float32(np.meshgrid(range_,range_)) # instead of broadcast
+        rands = np.random.normal(size=(self.batchsize, 2, 5, 5),
+                                 scale=self.scale).astype("float32")
+        batch_maps = np.stack((mapx, mapy), axis=1) + rands
+        batch_interp = np.array([[cv2.resize(map_, (pad, pad))[slices, slices] for map_ in maps]
+                                 for maps in batch_maps])
+        warped_batch = np.array([cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
+                                 for image, interp in zip(batch, batch_interp)])
 
-        pad = int(1.25 * self.input_size)
-        slices = slice(pad // 10, -pad // 10)
-        dst_slices = [slice(0, (size + 1), (size // 4)) for size in self.output_sizes]
-        interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
-
-        for i, map_ in enumerate([mapx, mapy]):
-            map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]
-
-        warped_image = cv2.remap(
-            image, interp[0], interp[1], cv2.INTER_LINEAR)
-        logger.trace("Warped image shape: %s", warped_image.shape)
-
-        src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
-        dst_points = [np.mgrid[dst_slice, dst_slice] for dst_slice in dst_slices]
-        mats = [umeyama(src_points, True, dst_pts.T.reshape(-1, 2))[0:2]
-                for dst_pts in dst_points]
-
-        target_images = [cv2.warpAffine(image,
-                                        mat,
-                                        (self.output_sizes[idx], self.output_sizes[idx]))
-                         for idx, mat in enumerate(mats)]
-
-        logger.trace("Target image shapes: %s", [tgt.shape for tgt in target_images])
-        return self.compile_images(warped_image, target_images)
+        logger.trace("Warped image shape: %s", warped_batch.shape)
+        return warped_batch
 
     def random_warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
@@ -468,26 +504,6 @@ class ImageManipulation():
 
         logger.trace("Target image shapea: %s", [img.shape for img in target_images])
         return self.compile_images(warped_image, target_images)
-
-    def compile_images(self, warped_image, target_images):
-        """ Compile the warped images, target images and mask for feed """
-        warped_image, _ = self.separate_mask(warped_image)
-        final_target_images = list()
-        target_mask = None
-        for target_image in target_images:
-            image, mask = self.separate_mask(target_image)
-            final_target_images.append(image)
-            # Add the mask if it exists and is the same size as our largest output
-            if mask is not None and mask.shape[1] == max(self.output_sizes):
-                target_mask = mask
-
-        retval = [warped_image] + final_target_images
-        if target_mask is not None:
-            logger.trace("Target mask shape: %s", target_mask.shape)
-            retval.append(target_mask)
-
-        logger.trace("Final shapes: %s", [img.shape for img in retval])
-        return retval
 
 
 def stack_images(images):
