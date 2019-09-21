@@ -145,7 +145,7 @@ class TrainingDataGenerator():
 
         # Add samples to output if this is for display
         if self.processing.is_display:
-            processed["samples"] = batch[..., :3]
+            processed["samples"] = batch[..., :3].astype("float32") / 255.0
 
         # Get Targets
         processed.update(self.processing.get_targets(batch))
@@ -402,6 +402,7 @@ class ImageManipulation():
     @staticmethod
     def separate_target_mask(batch):
         """ Return the batch and the batch of final masks from a batch of 4 channel images """
+        batch = [tgt.astype("float32") / 255.0 for tgt in batch]
         if all(tgt.shape[-1] == 4 for tgt in batch):
             logger.trace("Batch contains mask")
             sizes = [item.shape[1] for item in batch]
@@ -432,7 +433,7 @@ class ImageManipulation():
                                  for image, interp in zip(batch, batch_interp)])
 
         logger.trace("Warped image shape: %s", warped_batch.shape)
-        return warped_batch
+        return warped_batch.astype("float32") / 255.0
 
     def random_warp_landmarks(self, image, src_points=None, dst_points=None):
         """ get warped image, target image and target mask
