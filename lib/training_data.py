@@ -109,6 +109,7 @@ class TrainingDataGenerator():
         batch = read_image_batch(filenames)
         processed = dict()
 
+        # TODO Check Timelapse works
         # TODO Remove this test
         # for idx, image in enumerate(batch):
         #     if side == "a" and not self.processing.is_display:

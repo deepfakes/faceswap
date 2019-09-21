@@ -310,10 +310,9 @@ class Batcher():
             self.set_preview_feed()
         batch = next(self.preview_feed)
         self.samples = batch["samples"]
+        self.target = [batch["targets"][self.model.largest_face_index]]
         if self.use_mask:
-            self.target = batch["targets"][self.model.largest_face_index]
-        else:
-            self.target = self.target + [batch["masks"]]
+            self.target += [batch["masks"]]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -346,7 +345,7 @@ class Batcher():
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         batchsize = len(batch["samples"])
-        images = batch["targets"][self.model.largest_face_index]
+        images = [batch["targets"][self.model.largest_face_index]]
         if self.use_mask:
             images = images + [batch["masks"]]
         sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
@@ -402,7 +401,7 @@ class Samples():
             predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
             display = self.to_full_frame(side, samples, predictions)
-            headers[side] = self.get_headers(side, other_side, display[0].shape[1])
+            headers[side] = self.get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
                 figures[side] = np.concatenate([figures[side],
@@ -541,22 +540,22 @@ class Samples():
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
         return retval
 
-    def get_headers(self, side, other_side, width):
+    def get_headers(self, side, width):
         """ Set headers for images """
-        logger.debug("side: '%s', other_side: '%s', width: %s",
-                     side, other_side, width)
+        logger.debug("side: '%s', width: %s",
+                     side, width)
+        titles = ("Original", "Swap") if side == "a" else ("Swap", "Original")
         side = side.upper()
-        other_side = other_side.upper()
         height = int(64 * self.scaling)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-        texts = ["Target {}".format(side),
-                 "{0} > {0}".format(side),
-                 "{} > {}".format(side, other_side)]
+        texts = ["{} ({})".format(titles[0], side),
+                 "{0} > {0}".format(titles[0]),
+                 "{} > {}".format(titles[0], titles[1])]
         text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
                                       font,
-                                      self.scaling,
+                                      self.scaling * 0.8,
                                       1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
@@ -570,7 +569,7 @@ class Samples():
                         text,
                         (text_x[idx], text_y),
                         font,
-                        self.scaling,
+                        self.scaling * 0.8,
                         (0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)  # pylint: disable=no-member
