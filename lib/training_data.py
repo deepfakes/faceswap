@@ -99,12 +99,7 @@ class TrainingDataGenerator():
         img_iter = _img_iter(images)
         while True:
             img_paths = [next(img_iter) for _ in range(batchsize)]
-            batch = self.process_batch(img_paths, side)
-            batch = list(zip(*batch))
-            batch = [np.array(x, dtype="float32") for x in batch]
-            logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s')",
-                         len(batch), [item.shape for item in batch], side)
-            yield batch
+            yield self.process_batch(img_paths, side)
 
         logger.debug("Finished minibatch generator: (side: '%s')", side)
 
@@ -112,6 +107,7 @@ class TrainingDataGenerator():
         """ Load a batch of images and perform transformation and warping """
         logger.trace("Process batch: (filenames: '%s', side: '%s')", filenames, side)
         batch = read_image_batch(filenames)
+        processed = dict()
 
         # TODO Remove this test
         # for idx, image in enumerate(batch):
@@ -147,10 +143,12 @@ class TrainingDataGenerator():
         #         print("warp:", image.dtype, image.shape, image.min(), image.max())
         #         cv2.imwrite("/home/matt/fake/test/testing/{}_tran.png".format(idx), image)
 
-        samples = batch[..., :3]
+        # Add samples to output if this is for display
+        if self.processing.is_display:
+            processed["samples"] = batch[..., :3]
 
         # Get Targets
-        targets = self.processing.get_targets(batch)
+        processed.update(self.processing.get_targets(batch))
 
         # TODO Remove this test
         # for idx, (tgt, mask) in enumerate(zip(targets[0][0], targets[1])):
@@ -166,7 +164,7 @@ class TrainingDataGenerator():
             # dst_pts = self.get_closest_match(filename, side, src_pts)
             # processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
         else:
-            batch = self.processing.random_warp(batch[..., :3])
+            processed["feed"] = self.processing.random_warp(batch[..., :3])
 
         # TODO Remove this test
         # for idx, image in enumerate(batch):
@@ -174,13 +172,11 @@ class TrainingDataGenerator():
         #         print("warp:", image.dtype, image.shape, image.min(), image.max())
         #         cv2.imwrite("/home/matt/fake/test/testing/{}_warp.png".format(idx), image)
         # exit(0)
-        processed = [samples, batch, targets]
-
-        logger.trace("Processed batch: (filenames: %s, side: '%s', samples: %s, batch: %s, "
-                     "targets: %s)",
-                     filenames, side, processed[0].shape, processed[1].shape,
-                     [[img.shape for img in tgt] if isinstance(tgt, list) else tgt.shape
-                      for tgt in processed[2]])
+        logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
+                     filenames,
+                     side,
+                     {k: v.shape if isinstance(v, np.ndarray) else[i.shape for i in v]
+                      for k, v in processed.items()})
         return processed
 
     def get_landmarks(self, filenames, batch, side):
@@ -398,10 +394,9 @@ class ImageManipulation():
                      [tgt.shape for tgt_images in target_batch for tgt in tgt_images])
 
         retval = self.separate_target_mask(target_batch)
-        logger.trace("Final shapes: %s", [[img.shape for img in batch]
-                                          if isinstance(batch, list)
-                                          else batch.shape
-                                          for batch in retval])
+        logger.trace("Final targets: %s",
+                     {k: v.shape if isinstance(v, np.ndarray) else [img.shape for img in v]
+                      for k, v in retval.items()})
         return retval
 
     @staticmethod
@@ -414,10 +409,11 @@ class ImageManipulation():
             batch = [item[..., :3] for item in batch]
             logger.trace("batch shapes: %s, mask_batch shape: %s",
                          [tgt.shape for tgt in batch], mask_batch.shape)
-            return batch, mask_batch
-
-        logger.trace("Batch has no mask")
-        return batch
+            retval = dict(targets=batch, masks=mask_batch)
+        else:
+            logger.trace("Batch has no mask")
+            retval = dict(targets=batch)
+        return retval
 
     def random_warp(self, batch):
         """ get pair of random warped images from aligned face image """

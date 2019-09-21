@@ -292,10 +292,10 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        feed = batch[1]
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        mask = batch[-1]
-        batch = [[feed, mask], batch] if self.use_mask else [feed, batch]
+        if self.use_mask:
+            batch = [[batch["feed"], batch["masks"]], batch["targets"] + [batch["masks"]]]
+        else:
+            batch = [batch["feed"], batch["targets"]]
         self.generate_preview(do_preview)
         return batch
 
@@ -309,13 +309,11 @@ class Batcher():
         if self.preview_feed is None:
             self.set_preview_feed()
         batch = next(self.preview_feed)
-        self.samples, feed = batch[:2]
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        self.target = batch[self.model.largest_face_index]
+        self.samples = batch["samples"]
         if self.use_mask:
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
-            self.target = [self.target, mask]
+            self.target = batch["targets"][self.model.largest_face_index]
+        else:
+            self.target = self.target + [batch["masks"]]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -347,15 +345,11 @@ class Batcher():
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples, feed = batch[:2]
-        batchsize = len(samples)
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        images = batch[self.model.largest_face_index]
+        batchsize = len(batch["samples"])
+        images = batch["targets"][self.model.largest_face_index]
         if self.use_mask:
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
-            images = [images, mask]
-        sample = self.compile_sample(batchsize, samples=samples, images=images)
+            images = images + [batch["masks"]]
+        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -405,7 +399,7 @@ class Samples():
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            predictions = [preds["{}_{}".format(side, side)],
+            predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
             display = self.to_full_frame(side, samples, predictions)
             headers[side] = self.get_headers(side, other_side, display[0].shape[1])
@@ -558,7 +552,7 @@ class Samples():
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
         texts = ["Target {}".format(side),
-                 "{} > {}".format(side, side),
+                 "{0} > {0}".format(side),
                  "{} > {}".format(side, other_side)]
         text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
                                       font,
