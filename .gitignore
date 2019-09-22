@@ -30,6 +30,8 @@
 !plugins/convert/*
 !tools
 !tools/lib*
+!_travis
+!_travis/*
 !.travis.yml
 *.ini
 *.pyc
