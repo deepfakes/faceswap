@@ -664,7 +664,7 @@ class Loss():
         loss_dict = dict(mae=losses.mean_absolute_error,
                          mse=losses.mean_squared_error,
                          logcosh=losses.logcosh,
-                         smooth_l=generalized_loss,
+                         smooth_loss=generalized_loss,
                          l_inf_norm=l_inf_norm,
                          ssim=DSSIMObjective(),
                          gmsd=gmsd_loss,

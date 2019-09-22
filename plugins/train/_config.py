@@ -130,7 +130,7 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="loss_function", datatype=str, group="loss",
             default="mae",
-            choices=["mae", "mse", "logcosh", "smooth_l1", "l_inf_norm", "ssim", "gmsd",
+            choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "gmsd",
                      "pixel_gradient_diff"],
             info="\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
                  "towards its median value in the training dataset. Robust to outliers but as "
