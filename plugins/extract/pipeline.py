@@ -77,6 +77,7 @@ class Extractor():
                                          output_size,
                                          coverage_ratio)
         self._is_parallel = self._set_parallel_processing(multiprocess)
+        self._set_extractor_batchsize()
         self._queues = self._add_queues()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -309,8 +310,6 @@ class Extractor():
             logger.warning("Not enough free VRAM for parallel processing. "
                            "Switching to serial")
             return False
-
-        self._set_extractor_batchsize(vram_required, vram_free)
         return True
 
     # << INTERNAL PLUGIN HANDLING >> #
@@ -348,8 +347,7 @@ class Extractor():
         """ Launch the face detector """
         logger.debug("Launching Detector")
         kwargs = dict(in_queue=self._queues["extract_detect_in"],
-                      out_queue=self._queues["extract_align_in"],
-                      queue_size=self._queue_size)
+                      out_queue=self._queues["extract_align_in"])
         self._detector.initialize(**kwargs)
         self._detector.start()
         logger.debug("Launched Detector")
@@ -358,8 +356,7 @@ class Extractor():
         """ Launch the face aligner """
         logger.debug("Launching Aligner")
         kwargs = dict(in_queue=self._queues["extract_align_in"],
-                      out_queue=self._queues["extract_mask_in"],
-                      queue_size=self._queue_size)
+                      out_queue=self._queues["extract_mask_in"])
         self._aligner.initialize(**kwargs)
         self._aligner.start()
         logger.debug("Launched Aligner")
@@ -368,32 +365,55 @@ class Extractor():
         """ Launch the face masker """
         logger.debug("Launching Masker")
         kwargs = dict(in_queue=self._queues["extract_mask_in"],
-                      out_queue=self._queues["extract_mask_out"],
-                      queue_size=self._queue_size)
+                      out_queue=self._queues["extract_mask_out"])
         self._masker.initialize(**kwargs)
         self._masker.start()
         logger.debug("Launched Masker")
 
-    def _set_extractor_batchsize(self, vram_required, vram_free):
-        """ Sets the batchsize of the used plugins based on their vram and
-            vram_per_batch_requirements """
-        batch_required = ((self._detector.vram_per_batch * self._detector.batchsize) +
-                          (self._aligner.vram_per_batch * self._aligner.batchsize) +
-                          (self._masker.vram_per_batch * self._masker.batchsize))
-        plugin_required = vram_required + batch_required
-        if plugin_required <= vram_free:
-            logger.verbose("Plugin requirements within threshold: (plugin_required: %sMB, "
-                           "vram_free: %sMB)", plugin_required, vram_free)
+    def _set_extractor_batchsize(self):
+        """ Sets the batchsize of the requested plugins based on their vram and
+            vram_per_batch_requirements if the the configured batchsize requires more
+            vram than is available. Nvidia only. """
+        if (self._detector.vram == 0 and self._aligner.vram == 0 and self._masker.vram == 0)
+           or get_backend() != "nvidia":
+            logger.debug("Either detector and aligner have no VRAM requirements or not running "
+                         "on Nvidia. Not updating batchsize requirements.")
             return
-        # Hacky split across 2 plugins
-        available_for_batching = (vram_free - vram_required) // 3
-        self._detector.batchsize = max(1, available_for_batching // self._detector.vram_per_batch)
-        self._aligner.batchsize = max(1, available_for_batching // self._aligner.vram_per_batch)
-        self._masker.batchsize = max(1, available_for_batching // self._masker.vram_per_batch)
-        logger.verbose("Reset batchsizes: (detector: %s, aligner: %s, masker: %s)",
-                       self._detector.batchsize,
-                       self._aligner.batchsize,
-                       self._masker.batchsize)
+        stats = GPUStats().get_card_most_free()
+        vram_free = int(stats["free"])
+        if self._is_parallel:
+            vram_required = self._detector.vram + self._aligner.vram + self._masker.vram +
+                            self._vram_buffer
+            batch_required = ((self._detector.vram_per_batch * self._detector.batchsize) +
+                              (self._aligner.vram_per_batch * self._aligner.batchsize) +
+                              (self._masker.vram_per_batch * self._masker.batchsize))
+            plugin_required = vram_required + batch_required
+            if plugin_required <= vram_free:
+                logger.debug("Plugin requirements within threshold: (plugin_required: %sMB, "
+                             "vram_free: %sMB)", plugin_required, vram_free)
+                return
+            # Hacky split across 2 plugins
+            available_vram = (vram_free - vram_required) // 3
+            for plugin in (self._detector, self._aligner, self._masker):
+                self._set_plugin_batchsize(plugin, available_vram)
+        else:
+            for plugin in (self._detector, self._aligner, self._masker):
+                vram_required = plugin.vram + self._vram_buffer
+                batch_required = plugin.vram_per_batch * plugin.batchsize
+                plugin_required = vram_required + batch_required
+                if plugin_required <= vram_free:
+                    logger.debug("%s requirements within threshold: (plugin_required: %sMB, "
+                                 "vram_free: %sMB)", plugin.name, plugin_required, vram_free)
+                    continue
+                available_vram = vram_free - vram_required
+                self._set_plugin_batchsize(plugin, available_vram)
+
+
+    @staticmethod
+    def _set_plugin_batchsize(plugin, available_vram):
+        """ Set the batchsize for the given plugin based on given available vram """
+        plugin.batchsize = max(1, available_vram // plugin.vram_per_batch)
+        logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
 
     def _join_threads(self):
         """ Join threads for current pass """

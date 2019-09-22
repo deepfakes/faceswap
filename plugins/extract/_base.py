@@ -321,7 +321,7 @@ class Extractor():
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
         logger.info("Initializing %s in %s phase...", self.name, self._plugin_type)
-        self.queue_size = kwargs["queue_size"]
+        self.queue_size = 1
         self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
         self._compile_threads()
         self.init_model()
