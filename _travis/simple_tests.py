@@ -84,10 +84,11 @@ def extract_args(detector, aligner, in_path, out_path, args=None):
     return _extract_args.split()
 
 
-def train_args(model, model_path, faces, alignments, iterations=5, bs=8):
+def train_args(model, model_path, faces, alignments, iterations=5, bs=8, extra_args=""):
     py_exe = sys.executable
-    args = "%s faceswap.py train -A %s -ala %s -B %s -alb %s -m %s -t %s -bs %i -it %s" % (
-        py_exe, faces, alignments, faces, alignments, model_path, model, bs, iterations
+    args = "%s faceswap.py train -A %s -ala %s -B %s -alb %s -m %s -t %s -bs %i -it %s %s" % (
+        py_exe, faces, alignments, faces,
+        alignments, model_path, model, bs, iterations, extra_args
     )
     return args.split()
 
@@ -120,6 +121,7 @@ if __name__ == '__main__':
     os.makedirs(vid_base, exist_ok=True)
     os.makedirs(img_base, exist_ok=True)
     py_exe = sys.executable
+    was_trained = False
 
     vid_path = download_file(vid_src, pathjoin(vid_base, "test.mp4"))
     if not vid_path:
@@ -157,15 +159,24 @@ if __name__ == '__main__':
             )
         )
 
-        trained = run_test(
-            "Train lightweight model for 5 iterations.",
+        run_test(
+            "Train lightweight model for 1 iteration with WTL.",
+            train_args(
+                "lightweight", pathjoin(vid_base, "model"),
+                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.json"),
+                iterations=1, extra_args="-wl"
+            )
+        )
+
+        was_trained = run_test(
+            "Train lightweight model for 5 iterations WITHOUT WTL.",
             train_args(
                 "lightweight", pathjoin(vid_base, "model"),
                 pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.json")
             )
         )
 
-    if trained:
+    if was_trained:
         run_test(
             "Convert video.",
             convert_args(
