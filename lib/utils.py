@@ -15,12 +15,10 @@ from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
 from tqdm import tqdm
+
 import numpy as np
 import cv2
 import imageio_ffmpeg as im_ffm
-
-
-
 
 from lib.faces_detect import DetectedFace
 
