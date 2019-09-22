@@ -14,7 +14,6 @@ import numpy as np
 
 from lib.utils import convert_to_secs, FaceswapError
 
-# pylint:disable=c-extension-no-member
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 # ################### #
@@ -49,7 +48,7 @@ def read_image(filename, raise_error=False):
     success = True
     image = None
     try:
-        image = cv2.imread(filename)  # pylint:disable=no-member
+        image = cv2.imread(filename)
         if image is None:
             raise ValueError
     except TypeError:
@@ -141,9 +140,8 @@ def encode_image_with_hash(image, extension):
     encoded_image: bytes
         The image encoded into the correct file format
     """
-    encoded_image = cv2.imencode(extension, image)[1]  # pylint:disable=no-member
-    image_hash = sha1(cv2.imdecode(encoded_image,  # pylint:disable=no-member
-                                   cv2.IMREAD_UNCHANGED)).hexdigest()  # pylint:disable=no-member
+    encoded_image = cv2.imencode(extension, image)[1]
+    image_hash = sha1(cv2.imdecode(encoded_image, cv2.IMREAD_UNCHANGED)).hexdigest()
     return image_hash, encoded_image
 
 

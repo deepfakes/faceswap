@@ -408,7 +408,6 @@ class DetectedFace():
 
 
 def rotate_landmarks(face, rotation_matrix):
-    # pylint:disable=c-extension-no-member
     """ Rotates the 68 point landmarks and detection bounding box around the given rotation matrix.
 
     Paramaters
@@ -453,7 +452,7 @@ def rotate_landmarks(face, rotation_matrix):
 
     logger.trace("Original landmarks: %s", landmarks)
 
-    rotation_matrix = cv2.invertAffineTransform(  # pylint:disable=no-member
+    rotation_matrix = cv2.invertAffineTransform(
         rotation_matrix)
     rotated = list()
     for item in (bounding_box, landmarks):
@@ -461,7 +460,7 @@ def rotate_landmarks(face, rotation_matrix):
             continue
         points = np.array(item, np.int32)
         points = np.expand_dims(points, axis=0)
-        transformed = cv2.transform(points,  # pylint:disable=no-member
+        transformed = cv2.transform(points,
                                     rotation_matrix).astype(np.int32)
         rotated.append(transformed.squeeze())
 
