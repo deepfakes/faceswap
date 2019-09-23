@@ -18,9 +18,11 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Check Timelapse works
-# TODO _get_closest_match
-# TODO _warp_to_landmarks + docstring in `warp`
+# TODO _warp_to_landmarks
 # TODO _speed up model saving + backup
+# TODO Analysis - corrupt data
+# TODO Analysis, don't re-run if already running
+# TODO Analysis, only calculate for current session
 
 
 class TrainingDataGenerator():
@@ -281,24 +283,36 @@ class TrainingDataGenerator():
             raise FaceswapError(msg)
 
         logger.trace("Returning: (src_points: %s)", src_points)
-        return src_points
+        return np.array(src_points)
 
-    def _get_closest_match(self, filename, side, src_points):
+    def _get_closest_match(self, filenames, side, batch_src_points):
         """ Only called if the config item ``warp_to_landmarks`` is ``True``. Gets the closest \
         matched 68 point landmarks from the opposite training set. """
-        logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
-                     filename, src_points)
+        logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
+                     filenames, batch_src_points)
         landmarks = self._landmarks["a"] if side == "b" else self._landmarks["b"]
-        closest_hashes = self._nearest_landmarks.get(filename)
-        if not closest_hashes:
-            dst_points_items = list(landmarks.items())
-            dst_points = list(x[1] for x in dst_points_items)
+        closest_hashes = [self._nearest_landmarks.get(filename) for filename in filenames]
+        if None in closest_hashes:
+            closest_hashes = self._cache_closest_hashes(filenames, batch_src_points, landmarks)
+
+        batch_dst_points = np.array([landmarks[choice(hsh)] for hsh in closest_hashes])
+        logger.trace("Returning: (batch_dst_points: %s)", batch_dst_points.shape)
+        return batch_dst_points
+
+    def _cache_closest_hashes(self, filenames, batch_src_points, landmarks):
+        """ Cache the nearest landmarks for this batch """
+        logger.trace("Caching closest hashes")
+        dst_landmarks = list(landmarks.items())
+        dst_points = np.array([lm[1] for lm in dst_landmarks])
+        batch_closest_hashes = list()
+
+        for filename, src_points in zip(filenames, batch_src_points):
             closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
-            closest_hashes = tuple(dst_points_items[i][0] for i in closest)
+            closest_hashes = tuple(dst_landmarks[i][0] for i in closest)
             self._nearest_landmarks[filename] = closest_hashes
-        dst_points = landmarks[choice(closest_hashes)]
-        logger.trace("Returning: (dst_points: %s)", dst_points)
-        return dst_points
+            batch_closest_hashes.append(closest_hashes)
+        logger.trace("Cached closest hashes")
+        return batch_closest_hashes
 
 
 class ImageAugmentation():
@@ -325,6 +339,15 @@ class ImageAugmentation():
     config: dict
         The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
         plugin configuration options.
+
+    Attributes
+    ----------
+    initialized: bool
+        Flag to indicate whether :class:`ImageAugmentation` has been initialized with the training
+        image size in order to cache certain augmentation operations (see :func:`initialize`)
+    is_display: bool
+        Flag to indicate whether these augmentations are for timelapses/preview images (``True``)
+        or standard training data (``False)``
     """
     def __init__(self, batchsize, is_display, input_size, output_shapes, coverage_ratio, config):
         logger.debug("Initializing %s: (batchsize: %s, is_display: %s, input_size: %s, "
