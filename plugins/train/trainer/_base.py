@@ -33,7 +33,7 @@ from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator, stack_images
+from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
@@ -696,3 +696,25 @@ class Landmarks():
                 detected_face.load_aligned(None, size=self.size, align_eyes=False)
                 landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks
+
+
+def stack_images(images):
+    """ Stack images """
+    logger.debug("Stack images")
+
+    def get_transpose_axes(num):
+        if num % 2 == 0:
+            logger.debug("Even number of images to stack")
+            y_axes = list(range(1, num - 1, 2))
+            x_axes = list(range(0, num - 1, 2))
+        else:
+            logger.debug("Odd number of images to stack")
+            y_axes = list(range(0, num - 1, 2))
+            x_axes = list(range(1, num - 1, 2))
+        return y_axes, x_axes, [num - 1]
+
+    images_shape = np.array(images.shape)
+    new_axes = get_transpose_axes(len(images_shape))
+    new_shape = [np.prod(images_shape[x]) for x in new_axes]
+    logger.debug("Stacked images")
+    return np.transpose(images, axes=np.concatenate(new_axes)).reshape(new_shape)
