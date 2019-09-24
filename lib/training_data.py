@@ -18,7 +18,6 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Check Timelapse works
-# TODO _warp_to_landmarks
 # TODO _speed up model saving + backup
 # TODO Analysis - corrupt data
 # TODO Analysis, don't re-run if already running
@@ -247,8 +246,10 @@ class TrainingDataGenerator():
 
         # Random Warp
         if to_landmarks:
-            warp_kwargs = dict(src_points=batch_src_pts,
-                               dst_points=self._get_closest_match(filenames, side, batch_src_pts))
+            warp_kwargs = dict(batch_src_points=batch_src_pts,
+                               batch_dst_points=self._get_closest_match(filenames,
+                                                                        side,
+                                                                        batch_src_pts))
         else:
             warp_kwargs = dict()
         processed["feed"] = self._processing.warp(batch[..., :3], to_landmarks, **warp_kwargs)
@@ -258,11 +259,12 @@ class TrainingDataGenerator():
                      side,
                      {k: v.shape if isinstance(v, np.ndarray) else[i.shape for i in v]
                       for k, v in processed.items()})
+
         return processed
 
     def _get_landmarks(self, filenames, batch, side):
         """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
-        config item ``warp_to_landmarks`` is ``True`` or if :attr:`mask_type` is not ``None``. If \
+        config item ``warp_to_landmarks`` is ``True`` or if :attr:`mask_type` is not ``None``. If
         the landmarks for an image cannot be found, then an error is raised. """
         logger.trace("Retrieving landmarks: (filenames: '%s', side: '%s'", filenames, side)
         src_points = [self._landmarks[side].get(sha1(face).hexdigest(), None) for face in batch]
@@ -393,7 +395,6 @@ class ImageAugmentation():
          """
         logger.debug("Initializing constants. training_size: %s", training_size)
         self._training_size = training_size
-
         coverage = int(self._training_size * self._coverage_ratio)
 
         # Color Aug
@@ -401,7 +402,8 @@ class ImageAugmentation():
         # Target Images
         tgt_slices = slice(self._training_size // 2 - coverage // 2,
                            self._training_size // 2 + coverage // 2)
-        # Warp
+
+        # Random Warp
         warp_range_ = np.linspace(self._training_size // 2 - coverage // 2,
                                   self._training_size // 2 + coverage // 2, 5, dtype='float32')
         warp_mapx = np.broadcast_to(warp_range_, (self._batchsize, 5, 5)).astype("float32")
@@ -410,12 +412,22 @@ class ImageAugmentation():
         warp_pad = int(1.25 * self._input_size)
         warp_slices = slice(warp_pad // 10, -warp_pad // 10)
 
+        # Random Warp Landmarks
+        p_mx = self._training_size - 1
+        p_hf = (self._training_size // 2) - 1
+        edge_anchors = np.array([(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
+                                 (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]).astype("int32")
+        edge_anchors = np.broadcast_to(edge_anchors, (self._batchsize, 8, 2))
+        grids = np.mgrid[0:p_mx:complex(self._training_size), 0:p_mx:complex(self._training_size)]
+
         self._constants = dict(clahe_base_contrast=clahe_base_contrast,
                                tgt_slices=tgt_slices,
                                warp_mapx=warp_mapx,
                                warp_mapy=warp_mapy,
                                warp_pad=warp_pad,
-                               warp_slices=warp_slices)
+                               warp_slices=warp_slices,
+                               warp_lm_edge_anchors=edge_anchors,
+                               warp_lm_grids=grids)
         self.initialized = True
         logger.debug("Initialized constants: %s", self._constants)
 
@@ -648,8 +660,8 @@ class ImageAugmentation():
             A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
         """
         if to_landmarks:
-            return self._random_warp(batch)
-        return self._random_warp_landmarks(batch, **kwargs)
+            return self._random_warp_landmarks(batch, **kwargs).astype("float32") / 255.0
+        return self._random_warp(batch).astype("float32") / 255.0
 
     def _random_warp(self, batch):
         """ Randomly warp the input batch """
@@ -668,70 +680,48 @@ class ImageAugmentation():
                                  for image, interp in zip(batch, batch_interp)])
 
         logger.trace("Warped image shape: %s", warped_batch.shape)
-        return warped_batch.astype("float32") / 255.0
+        return warped_batch
 
-    def _random_warp_landmarks(self, image, src_points=None, dst_points=None):
+    def _random_warp_landmarks(self, batch, batch_src_points, batch_dst_points):
         """ From dfaker. Warp the image to a similar set of landmarks from the opposite side """
         logger.trace("Randomly warping landmarks")
-        size = image.shape[0]
-        coverage = self.get_coverage(image) // 2
+        edge_anchors = self._constants["warp_lm_edge_anchors"]
+        grids = self._constants["warp_lm_grids"]
+        slices = self._constants["tgt_slices"]
 
-        p_mx = size - 1
-        p_hf = (size // 2) - 1
+        batch_dst = (batch_dst_points + np.random.normal(size=batch_dst_points.shape,
+                                                         scale=2.0)).astype("int32")
 
-        edge_anchors = [(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
-                        (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]
-        grid_x, grid_y = np.mgrid[0:p_mx:complex(size), 0:p_mx:complex(size)]
+        face_cores = [cv2.convexHull(np.concatenate([src[17:], dst[17:]], axis=0))
+                      for src, dst in zip(batch_src_points, batch_dst)]
 
-        source = src_points
-        destination = (dst_points.copy().astype('float32') +
-                       np.random.normal(size=dst_points.shape, scale=2.0))
-        destination = destination.astype('uint8')
+        batch_src = np.append(batch_src_points, edge_anchors, axis=1)
+        batch_dst = np.append(batch_dst, edge_anchors, axis=1)
 
-        face_core = cv2.convexHull(np.concatenate(
-            [source[17:], destination[17:]], axis=0).astype(int))
+        rem_indices = [list(set(idx for fpl in (src, dst)
+                                for idx, (pty, ptx) in enumerate(fpl)
+                                if cv2.pointPolygonTest(face_core, (pty, ptx), False) >= 0))
+                       for src, dst, face_core in zip(batch_src[:, :18, :],
+                                                      batch_dst[:, :18, :],
+                                                      face_cores)]
+        batch_src = [np.delete(src, idxs, axis=0) for idxs, src in zip(rem_indices, batch_src)]
+        batch_dst = [np.delete(dst, idxs, axis=0) for idxs, dst in zip(rem_indices, batch_dst)]
 
-        source = [(pty, ptx) for ptx, pty in source] + edge_anchors
-        destination = [(pty, ptx) for ptx, pty in destination] + edge_anchors
-
-        indicies_to_remove = set()
-        for fpl in source, destination:
-            for idx, (pty, ptx) in enumerate(fpl):
-                if idx > 17:
-                    break
-                elif cv2.pointPolygonTest(face_core,
-                                          (pty, ptx),
-                                          False) >= 0:
-                    indicies_to_remove.add(idx)
-
-        for idx in sorted(indicies_to_remove, reverse=True):
-            source.pop(idx)
-            destination.pop(idx)
-
-        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear")
-        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size)
-        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size)
-        map_x_32 = map_x.astype('float32')
-        map_y_32 = map_y.astype('float32')
-
-        warped_image = cv2.remap(image,
-                                 map_x_32,
-                                 map_y_32,
-                                 cv2.INTER_LINEAR,
-                                 cv2.BORDER_TRANSPARENT)
-        target_image = image
-
-        # TODO Make sure this replacement is correct
-        slices = slice(size // 2 - coverage, size // 2 + coverage)
-#        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
-        warped_image = cv2.resize(
-            warped_image[slices, slices, :], (self._input_size, self._input_size),
-            cv2.INTER_AREA)
-        logger.trace("Warped image shape: %s", warped_image.shape)
-        target_images = [cv2.resize(target_image[slices, slices, :],
-                                    (size, size),
-                                    cv2.INTER_AREA)
-                         for size in self._output_sizes]
-
-        logger.trace("Target image shapea: %s", [img.shape for img in target_images])
-        return self.compile_images(warped_image, target_images)
+        grid_z = np.array([griddata(dst, src, (grids[0], grids[1]), method="linear")
+                           for src, dst in zip(batch_src, batch_dst)])
+        maps = grid_z.reshape(self._batchsize,
+                              self._training_size,
+                              self._training_size,
+                              2).astype("float32")
+        warped_batch = np.array([cv2.remap(image,
+                                           map_[..., 1],
+                                           map_[..., 0],
+                                           cv2.INTER_LINEAR,
+                                           cv2.BORDER_TRANSPARENT)
+                                 for image, map_ in zip(batch, maps)])
+        warped_batch = np.array([cv2.resize(image[slices, slices, :],
+                                            (self._input_size, self._input_size),
+                                            cv2.INTER_AREA)
+                                 for image in warped_batch])
+        logger.trace("Warped batch shape: %s", warped_batch.shape)
+        return warped_batch
