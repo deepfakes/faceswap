@@ -469,6 +469,7 @@ class ModelBase():
         executor = futures.ThreadPoolExecutor()
         save_threads = [executor.submit(network.save, backup_func=backup_func)
                         for network in self.networks.values()]
+        save_threads.append(executor.submit(self.state.save, backup_func=backup_func))
         futures.wait(save_threads)
         # call result() to capture errors
         _ = [thread.result() for thread in save_threads]
