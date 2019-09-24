@@ -92,8 +92,8 @@ class Train():
         logger.info("Training data directory: %s", self.args.model_dir)
 
         # TODO Move these args to config and remove these deprecation warnings
-        if hasattr(self.args, "no_flip") and self.args.no_flip:
-            deprecation_warning("`-nf`, ``--no-flip``",
+        if hasattr(self.args, "warp_to_landmarks") and self.args.warp_to_landmarks:
+            deprecation_warning("`-wl`, ``--warp-to-landmarks``",
                                 additional_info="This option will be available within training "
                                                 "config settings (/config/train.ini).")
         if hasattr(self.args, "no_augment_color") and self.args.no_flip:
