@@ -337,7 +337,7 @@ class Batcher():
         if self.use_mask:
             retval = [tgt[0:num_images] for tgt in images]
         else:
-            retval = [images[0:num_images]]
+            retval = images[0:num_images]
         retval = samples + retval
         return retval
 
