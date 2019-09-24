@@ -112,6 +112,7 @@ class FileHandler():
                                ("MP4", "*.mp4"),
                                ("MPEG", "*.mpeg *.mpg"),
                                ("WebM", "*.webm"),
+                               ("Windows Media Video", "*.wmv"),
                                all_files]}
         # Add in multi-select options
         for key, val in filetypes.items():

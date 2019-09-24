@@ -20,7 +20,7 @@ from tqdm import tqdm
 _image_extensions = [  # pylint:disable=invalid-name
     ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 _video_extensions = [  # pylint:disable=invalid-name
-    ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm"]
+    ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv"]
 
 
 class Backend():
