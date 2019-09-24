@@ -35,7 +35,7 @@ def read_image(filename, raise_error=False):
     filename: str
         Full path to the image to be loaded.
     raise_error: bool, optional
-        If ``True``, then an any failures (including the returned image being ``None``) will be
+        If ``True``, then any failures (including the returned image being ``None``) will be
         raised. If ``False`` then an error message will be logged, but the error will not be
         raised. Default: ``False``
 
@@ -43,6 +43,14 @@ def read_image(filename, raise_error=False):
     -------
     numpy.ndarray
         The image in `BGR` channel order.
+
+    Example
+    -------
+    >>> image_file = "/path/to/image.png"
+    >>> try:
+    >>>    image = read_image(image_file, raise_error=True)
+    >>> except:
+    >>>     raise ValueError("There was an error")
     """
     logger.trace("Requested image: '%s'", filename)
     success = True
@@ -93,6 +101,11 @@ def read_image_batch(filenames):
     Notes
     -----
     As the images are compiled into a batch, they must be all of the same dimensions.
+
+    Example
+    -------
+    >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
+    >>> images = read_image_batch(image_filenames)
     """
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
@@ -116,6 +129,10 @@ def read_image_hash(filename):
     -------
     str
         The :func:`hashlib.hexdigest()` representation of the `sha1` hash of the given image.
+    Example
+    -------
+    >>> image_file = "/path/to/image.png"
+    >>> image_hash = read_image_hash(image_file)
     """
     img = read_image(filename, raise_error=True)
     image_hash = sha1(img).hexdigest()
@@ -139,6 +156,12 @@ def encode_image_with_hash(image, extension):
         The :func:`hashlib.hexdigest()` representation of the `sha1` hash of the encoded image
     encoded_image: bytes
         The image encoded into the correct file format
+
+    Example
+    -------
+    >>> image_file = "/path/to/image.png"
+    >>> image = read_image(image_file)
+    >>> image_hash, encoded_image = encode_image_with_hash(image, ".jpg")
     """
     encoded_image = cv2.imencode(extension, image)[1]
     image_hash = sha1(cv2.imdecode(encoded_image, cv2.IMREAD_UNCHANGED)).hexdigest()
@@ -146,7 +169,7 @@ def encode_image_with_hash(image, extension):
 
 
 def batch_convert_color(batch, colorspace):
-    """ Convert a batch of images from one colorspace to another.
+    """ Convert a batch of images from one color space to another.
 
     Converts a batch of images by reshaping the batch prior to conversion rather than iterating
     over the images. This leads to a significant speed up in the convert process.
@@ -156,7 +179,7 @@ def batch_convert_color(batch, colorspace):
     batch: numpy.ndarray
         A batch of images.
     colorspace: str
-        The OpenCV Color Conversion Code suffix. For example for RGB to LAB this would be
+        The OpenCV Color Conversion Code suffix. For example for BGR to LAB this would be
         ``'BGR2LAB'``.
         See https://docs.opencv.org/4.1.1/d8/d01/group__imgproc__color__conversions.html for a full
         list of color codes.
@@ -165,6 +188,11 @@ def batch_convert_color(batch, colorspace):
     -------
     numpy.ndarray
         The batch converted to the requested color space.
+
+    Example
+    -------
+    >>> images_bgr = numpy.array([image1, image2, image3])
+    >>> images_lab = batch_convert_color(images_bgr, "BGR2LAB")
 
     Notes
     -----
@@ -212,6 +240,11 @@ def count_frames_and_secs(filename, timeout=60):
         The number of frames in the given video file.
     nsecs: float
         The duration, in seconds, of the given video file.
+
+    Example
+    -------
+    >>> video = "/path/to/video.mp4"
+    >>> frames, secs = count_frames_and_secs(video)
     """
     # https://stackoverflow.com/questions/2017843/fetch-frame-count-with-ffmpeg
 

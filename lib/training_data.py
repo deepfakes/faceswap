@@ -18,10 +18,6 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Check Timelapse works
-# TODO _speed up model saving + backup
-# TODO Analysis - corrupt data
-# TODO Analysis, don't re-run if already running
-# TODO Analysis, only calculate for current session
 
 
 class TrainingDataGenerator():
@@ -288,7 +284,7 @@ class TrainingDataGenerator():
         return np.array(src_points)
 
     def _get_closest_match(self, filenames, side, batch_src_points):
-        """ Only called if the config item ``warp_to_landmarks`` is ``True``. Gets the closest \
+        """ Only called if the config item ``warp_to_landmarks`` is ``True``. Gets the closest
         matched 68 point landmarks from the opposite training set. """
         logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
                      filenames, batch_src_points)
@@ -652,8 +648,12 @@ class ImageAugmentation():
         kwargs: dict
             If :attr:`to_landmarks` is ``True`` the following additional kwargs must be passed in:
 
-            * **src_points** (`numpy.ndarray`) -
-            * **dst_points** (`numpy.ndarray`) -
+            * **batch_src_points** (`numpy.ndarray`) - A batch of 68 point landmarks for the \
+            source faces. This is a 3-dimensional array in the shape (`batchsize`, `68`, `2`).
+
+            * **batch_dst_points** (`numpy.ndarray`) - A batch of randomly chosen closest match \
+            destination faces landmarks. This is a 3-dimensional array in the shape (`batchsize`, \
+             `68`, `2`).
         Returns
         ----------
         numpy.ndarray
