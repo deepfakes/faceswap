@@ -14,8 +14,8 @@ from tqdm import tqdm
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.utils import (_image_extensions, _video_extensions, count_frames_and_secs, cv2_read_img,
-                       hash_image_file, hash_encode_image)
+from lib.image import count_frames_and_secs, encode_image_with_hash, read_image, read_image_hash
+from lib.utils import _image_extensions, _video_extensions
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -175,7 +175,7 @@ class MediaLoader():
         else:
             src = os.path.join(self.folder, filename)
             logger.trace("Loading image: '%s'", src)
-            image = cv2_read_img(src, raise_error=True)
+            image = read_image(src, raise_error=True)
         return image
 
     def load_video_frame(self, filename):
@@ -210,7 +210,7 @@ class Faces(MediaLoader):
                 continue
             filename = os.path.splitext(face)[0]
             file_extension = os.path.splitext(face)[1]
-            face_hash = hash_image_file(os.path.join(self.folder, face))
+            face_hash = read_image_hash(os.path.join(self.folder, face))
             retval = {"face_fullname": face,
                       "face_name": filename,
                       "face_extension": file_extension,
@@ -358,7 +358,7 @@ class ExtractedFaces():
     @staticmethod
     def save_face_with_hash(filename, extension, face):
         """ Save a face and return it's hash """
-        f_hash, img = hash_encode_image(face, extension)
+        f_hash, img = encode_image_with_hash(face, extension)
         logger.trace("Saving face: '%s'", filename)
         with open(filename, "wb") as out_file:
             out_file.write(img)

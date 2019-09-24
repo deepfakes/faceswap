@@ -33,7 +33,7 @@ from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator, stack_images
+from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
@@ -292,10 +292,10 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        feed = batch[1]
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        mask = batch[-1]
-        batch = [[feed, mask], batch] if self.use_mask else [feed, batch]
+        if self.use_mask:
+            batch = [[batch["feed"], batch["masks"]], batch["targets"] + [batch["masks"]]]
+        else:
+            batch = [batch["feed"], batch["targets"]]
         self.generate_preview(do_preview)
         return batch
 
@@ -309,13 +309,10 @@ class Batcher():
         if self.preview_feed is None:
             self.set_preview_feed()
         batch = next(self.preview_feed)
-        self.samples, feed = batch[:2]
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        self.target = batch[self.model.largest_face_index]
+        self.samples = batch["samples"]
+        self.target = [batch["targets"][self.model.largest_face_index]]
         if self.use_mask:
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
-            self.target = [self.target, mask]
+            self.target += [batch["masks"]]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -347,15 +344,11 @@ class Batcher():
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples, feed = batch[:2]
-        batchsize = len(samples)
-        batch = batch[2:]   # Remove full size samples and feed from batch
-        images = batch[self.model.largest_face_index]
+        batchsize = len(batch["samples"])
+        images = [batch["targets"][self.model.largest_face_index]]
         if self.use_mask:
-            mask = batch[-1]
-            batch = [[feed, mask], batch]
-            images = [images, mask]
-        sample = self.compile_sample(batchsize, samples=samples, images=images)
+            images = images + [batch["masks"]]
+        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -405,10 +398,10 @@ class Samples():
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            predictions = [preds["{}_{}".format(side, side)],
+            predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
             display = self.to_full_frame(side, samples, predictions)
-            headers[side] = self.get_headers(side, other_side, display[0].shape[1])
+            headers[side] = self.get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
                 figures[side] = np.concatenate([figures[side],
@@ -547,22 +540,22 @@ class Samples():
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
         return retval
 
-    def get_headers(self, side, other_side, width):
+    def get_headers(self, side, width):
         """ Set headers for images """
-        logger.debug("side: '%s', other_side: '%s', width: %s",
-                     side, other_side, width)
+        logger.debug("side: '%s', width: %s",
+                     side, width)
+        titles = ("Original", "Swap") if side == "a" else ("Swap", "Original")
         side = side.upper()
-        other_side = other_side.upper()
         height = int(64 * self.scaling)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-        texts = ["Target {}".format(side),
-                 "{} > {}".format(side, side),
-                 "{} > {}".format(side, other_side)]
+        texts = ["{} ({})".format(titles[0], side),
+                 "{0} > {0}".format(titles[0]),
+                 "{} > {}".format(titles[0], titles[1])]
         text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
                                       font,
-                                      self.scaling,
+                                      self.scaling * 0.8,
                                       1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
@@ -576,7 +569,7 @@ class Samples():
                         text,
                         (text_x[idx], text_y),
                         font,
-                        self.scaling,
+                        self.scaling * 0.8,
                         (0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)  # pylint: disable=no-member
@@ -703,3 +696,25 @@ class Landmarks():
                 detected_face.load_aligned(None, size=self.size)
                 landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks
+
+
+def stack_images(images):
+    """ Stack images """
+    logger.debug("Stack images")
+
+    def get_transpose_axes(num):
+        if num % 2 == 0:
+            logger.debug("Even number of images to stack")
+            y_axes = list(range(1, num - 1, 2))
+            x_axes = list(range(0, num - 1, 2))
+        else:
+            logger.debug("Odd number of images to stack")
+            y_axes = list(range(0, num - 1, 2))
+            x_axes = list(range(1, num - 1, 2))
+        return y_axes, x_axes, [num - 1]
+
+    images_shape = np.array(images.shape)
+    new_axes = get_transpose_axes(len(images_shape))
+    new_shape = [np.prod(images_shape[x]) for x in new_axes]
+    logger.debug("Stacked images")
+    return np.transpose(images, axes=np.concatenate(new_axes)).reshape(new_shape)

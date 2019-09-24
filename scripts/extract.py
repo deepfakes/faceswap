@@ -8,9 +8,10 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from lib.image import encode_image_with_hash
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import get_folder, hash_encode_image, deprecation_warning
+from lib.utils import get_folder, deprecation_warning
 from plugins.extract.pipeline import Extractor
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -255,7 +256,7 @@ class Extract():
             face = detected_face["face"]
             resized_face = face.aligned_face
 
-            face.hash, img = hash_encode_image(resized_face, extension)
+            face.hash, img = encode_image_with_hash(resized_face, extension)
             self.save_queue.put((out_filename, img))
             final_faces.append(face.to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces

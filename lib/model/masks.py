@@ -43,6 +43,8 @@ class Mask():
                      self.__class__.__name__, face.shape, channels, landmarks)
         self.landmarks = landmarks
         self.face = face
+        self.dtype = face.dtype
+        self.threshold = 255 if self.dtype == "uint8" else 255.0
         self.channels = channels
 
         mask = self.build_mask()
@@ -73,7 +75,7 @@ class Mask():
 class dfl_full(Mask):  # pylint: disable=invalid-name
     """ DFL facial mask """
     def build_mask(self):
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
+        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=self.dtype)
 
         nose_ridge = (self.landmarks[27:31], self.landmarks[33:34])
         jaw = (self.landmarks[0:17],
@@ -90,14 +92,14 @@ class dfl_full(Mask):  # pylint: disable=invalid-name
 
         for item in parts:
             merged = np.concatenate(item)
-            cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
+            cv2.fillConvexPoly(mask, cv2.convexHull(merged), self.threshold)
         return mask
 
 
 class components(Mask):  # pylint: disable=invalid-name
     """ Component model mask """
     def build_mask(self):
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
+        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=self.dtype)
 
         r_jaw = (self.landmarks[0:9], self.landmarks[17:18])
         l_jaw = (self.landmarks[8:17], self.landmarks[26:27])
@@ -117,7 +119,7 @@ class components(Mask):  # pylint: disable=invalid-name
 
         for item in parts:
             merged = np.concatenate(item)
-            cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
+            cv2.fillConvexPoly(mask, cv2.convexHull(merged), self.threshold)
         return mask
 
 
@@ -126,7 +128,7 @@ class extended(Mask):  # pylint: disable=invalid-name
         Based on components mask. Attempts to extend the eyebrow points up the forehead
     """
     def build_mask(self):
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
+        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=self.dtype)
 
         landmarks = self.landmarks.copy()
         # mid points between the side of face and eye point
@@ -161,15 +163,15 @@ class extended(Mask):  # pylint: disable=invalid-name
 
         for item in parts:
             merged = np.concatenate(item)
-            cv2.fillConvexPoly(mask, cv2.convexHull(merged), 255.)  # pylint: disable=no-member
+            cv2.fillConvexPoly(mask, cv2.convexHull(merged), self.threshold)
         return mask
 
 
 class facehull(Mask):  # pylint: disable=invalid-name
     """ Basic face hull mask """
     def build_mask(self):
-        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=np.float32)
-        hull = cv2.convexHull(  # pylint: disable=no-member
+        mask = np.zeros(self.face.shape[0:2] + (1, ), dtype=self.dtype)
+        hull = cv2.convexHull(
             np.array(self.landmarks).reshape((-1, 2)))
-        cv2.fillConvexPoly(mask, hull, 255.0, lineType=cv2.LINE_AA)  # pylint: disable=no-member
+        cv2.fillConvexPoly(mask, hull, self.threshold, lineType=cv2.LINE_AA)
         return mask

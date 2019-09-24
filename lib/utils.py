@@ -4,26 +4,17 @@
 import json
 import logging
 import os
-import subprocess
 import sys
 import urllib
 import warnings
 import zipfile
-from hashlib import sha1
+
 from pathlib import Path
 from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
 
-import imageio_ffmpeg as im_ffm
 from tqdm import tqdm
-
-import numpy as np
-import cv2
-
-
-from lib.faces_detect import DetectedFace
-
 
 # Global variables
 _image_extensions = [  # pylint:disable=invalid-name
@@ -132,6 +123,22 @@ def get_image_paths(directory):
     return dir_contents
 
 
+def convert_to_secs(*args):
+    """ converts a time to second. Either convert_to_secs(min, secs) or
+        convert_to_secs(hours, mins, secs). """
+    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger.debug("from time: %s", args)
+    retval = 0.0
+    if len(args) == 1:
+        retval = float(args[0])
+    elif len(args) == 2:
+        retval = 60 * float(args[0]) + float(args[1])
+    elif len(args) == 3:
+        retval = 3600 * float(args[0]) + 60 * float(args[1]) + float(args[2])
+    logger.debug("to secs: %s", retval)
+    return retval
+
+
 def full_path_split(path):
     """ Split a given path into all of it's separate components """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -149,147 +156,6 @@ def full_path_split(path):
             allparts.insert(0, parts[1])
     logger.trace("path: %s, allparts: %s", path, allparts)
     return allparts
-
-
-def cv2_read_img(filename, raise_error=False):
-    """ Read an image with cv2 and check that an image was actually loaded.
-        Logs an error if the image returned is None. or an error has occured.
-
-        Pass raise_error=True if error should be raised """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    logger.trace("Requested image: '%s'", filename)
-    success = True
-    image = None
-    try:
-        image = cv2.imread(filename)  # pylint:disable=no-member,c-extension-no-member
-        if image is None:
-            raise ValueError
-    except TypeError:
-        success = False
-        msg = "Error while reading image (TypeError): '{}'".format(filename)
-        logger.error(msg)
-        if raise_error:
-            raise Exception(msg)
-    except ValueError:
-        success = False
-        msg = ("Error while reading image. This is most likely caused by special characters in "
-               "the filename: '{}'".format(filename))
-        logger.error(msg)
-        if raise_error:
-            raise Exception(msg)
-    except Exception as err:  # pylint:disable=broad-except
-        success = False
-        msg = "Failed to load image '{}'. Original Error: {}".format(filename, str(err))
-        logger.error(msg)
-        if raise_error:
-            raise Exception(msg)
-    logger.trace("Loaded image: '%s'. Success: %s", filename, success)
-    return image
-
-
-def hash_image_file(filename):
-    """ Return an image file's sha1 hash """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    img = cv2_read_img(filename, raise_error=True)
-    img_hash = sha1(img).hexdigest()
-    logger.trace("filename: '%s', hash: %s", filename, img_hash)
-    return img_hash
-
-
-def hash_encode_image(image, extension):
-    """ Encode the image, get the hash and return the hash with
-        encoded image """
-    img = cv2.imencode(extension, image)[1]  # pylint:disable=no-member,c-extension-no-member
-    f_hash = sha1(
-        cv2.imdecode(  # pylint:disable=no-member,c-extension-no-member
-            img,
-            cv2.IMREAD_UNCHANGED)).hexdigest()  # pylint:disable=no-member,c-extension-no-member
-    return f_hash, img
-
-
-def convert_to_secs(*args):
-    """ converts a time to second. Either convert_to_secs(min, secs) or
-        convert_to_secs(hours, mins, secs). """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    logger.debug("from time: %s", args)
-    retval = 0.0
-    if len(args) == 1:
-        retval = float(args[0])
-    elif len(args) == 2:
-        retval = 60 * float(args[0]) + float(args[1])
-    elif len(args) == 3:
-        retval = 3600 * float(args[0]) + 60 * float(args[1]) + float(args[2])
-    logger.debug("to secs: %s", retval)
-    return retval
-
-
-def count_frames_and_secs(path, timeout=60):
-    """
-    Adapted From ffmpeg_imageio, to handle occasional hanging issue:
-    https://github.com/imageio/imageio-ffmpeg
-
-    Get the number of frames and number of seconds for the given video
-    file. Note that this operation can be quite slow for large files.
-
-    Disclaimer: I've seen this produce different results from actually reading
-    the frames with older versions of ffmpeg (2.x). Therefore I cannot say
-    with 100% certainty that the returned values are always exact.
-    """
-    # https://stackoverflow.com/questions/2017843/fetch-frame-count-with-ffmpeg
-
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    assert isinstance(path, str), "Video path must be a string"
-    exe = im_ffm.get_ffmpeg_exe()
-    iswin = sys.platform.startswith("win")
-    logger.debug("iswin: '%s'", iswin)
-    cmd = [exe, "-i", path, "-map", "0:v:0", "-c", "copy", "-f", "null", "-"]
-    logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
-    attempts = 3
-    for attempt in range(attempts):
-        try:
-            logger.debug("attempt: %s of %s", attempt + 1, attempts)
-            out = subprocess.check_output(cmd,
-                                          stderr=subprocess.STDOUT,
-                                          shell=iswin,
-                                          timeout=timeout)
-            logger.debug("Succesfully communicated with FFMPEG")
-            break
-        except subprocess.CalledProcessError as err:
-            out = err.output.decode(errors="ignore")
-            raise RuntimeError("FFMEG call failed with {}:\n{}".format(err.returncode, out))
-        except subprocess.TimeoutExpired as err:
-            this_attempt = attempt + 1
-            if this_attempt == attempts:
-                msg = ("FFMPEG hung while attempting to obtain the frame count. "
-                       "Sometimes this issue resolves itself, so you can try running again. "
-                       "Otherwise use the Effmpeg Tool to extract the frames from your video into "
-                       "a folder, and then run the requested Faceswap process on that folder.")
-                raise FaceswapError(msg) from err
-            logger.warning("FFMPEG hung while attempting to obtain the frame count. "
-                           "Retrying %s of %s", this_attempt + 1, attempts)
-            continue
-
-    # Note that other than with the subprocess calls below, ffmpeg wont hang here.
-    # Worst case Python will stop/crash and ffmpeg will continue running until done.
-
-    nframes = nsecs = None
-    for line in reversed(out.splitlines()):
-        if not line.startswith(b"frame="):
-            continue
-        line = line.decode(errors="ignore")
-        logger.debug("frame line: '%s'", line)
-        idx = line.find("frame=")
-        if idx >= 0:
-            splitframes = line[idx:].split("=", 1)[-1].lstrip().split(" ", 1)[0].strip()
-            nframes = int(splitframes)
-        idx = line.find("time=")
-        if idx >= 0:
-            splittime = line[idx:].split("=", 1)[-1].lstrip().split(" ", 1)[0].strip()
-            nsecs = convert_to_secs(*splittime.split(":"))
-        logger.debug("nframes: %s, nsecs: %s", nframes, nsecs)
-        return nframes, nsecs
-
-    raise RuntimeError("Could not get number of frames")  # pragma: no cover
 
 
 def backup_file(directory, filename):
@@ -346,80 +212,6 @@ def deprecation_warning(func_name, additional_info=None):
     if additional_info is not None:
         msg += " {}".format(additional_info)
     logger.warning(msg)
-
-
-def rotate_landmarks(face, rotation_matrix):
-    # pylint:disable=c-extension-no-member
-    """ Rotate the landmarks and bounding box for faces
-        found in rotated images.
-        Pass in a DetectedFace object or Alignments dict """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
-                 rotation_matrix, type(face))
-    rotated_landmarks = None
-    # Detected Face Object
-    if isinstance(face, DetectedFace):
-        bounding_box = [[face.x, face.y],
-                        [face.x + face.w, face.y],
-                        [face.x + face.w, face.y + face.h],
-                        [face.x, face.y + face.h]]
-        landmarks = face.landmarks_xy
-
-    # Alignments Dict
-    elif isinstance(face, dict) and "x" in face:
-        bounding_box = [[face.get("x", 0), face.get("y", 0)],
-                        [face.get("x", 0) + face.get("w", 0),
-                         face.get("y", 0)],
-                        [face.get("x", 0) + face.get("w", 0),
-                         face.get("y", 0) + face.get("h", 0)],
-                        [face.get("x", 0),
-                         face.get("y", 0) + face.get("h", 0)]]
-        landmarks = face.get("landmarks_xy", list())
-
-    else:
-        raise ValueError("Unsupported face type")
-
-    logger.trace("Original landmarks: %s", landmarks)
-
-    rotation_matrix = cv2.invertAffineTransform(  # pylint:disable=no-member
-        rotation_matrix)
-    rotated = list()
-    for item in (bounding_box, landmarks):
-        if not item:
-            continue
-        points = np.array(item, np.int32)
-        points = np.expand_dims(points, axis=0)
-        transformed = cv2.transform(points,  # pylint:disable=no-member
-                                    rotation_matrix).astype(np.int32)
-        rotated.append(transformed.squeeze())
-
-    # Bounding box should follow x, y planes, so get min/max
-    # for non-90 degree rotations
-    pt_x = min([pnt[0] for pnt in rotated[0]])
-    pt_y = min([pnt[1] for pnt in rotated[0]])
-    pt_x1 = max([pnt[0] for pnt in rotated[0]])
-    pt_y1 = max([pnt[1] for pnt in rotated[0]])
-    width = pt_x1 - pt_x
-    height = pt_y1 - pt_y
-
-    if isinstance(face, DetectedFace):
-        face.x = int(pt_x)
-        face.y = int(pt_y)
-        face.w = int(width)
-        face.h = int(height)
-        face.r = 0
-        if len(rotated) > 1:
-            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face.landmarks_xy = rotated_landmarks
-    else:
-        face["left"] = int(pt_x)
-        face["top"] = int(pt_y)
-        face["right"] = int(pt_x1)
-        face["bottom"] = int(pt_y1)
-        rotated_landmarks = face
-
-    logger.trace("Rotated landmarks: %s", rotated_landmarks)
-    return face
 
 
 def camel_case_split(identifier):

@@ -9,6 +9,7 @@ import os
 import sys
 import time
 
+from concurrent import futures
 from json import JSONDecodeError
 
 import keras
@@ -24,7 +25,6 @@ from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
-from lib.multithreading import MultiThread
 from lib.utils import deprecation_warning, FaceswapError
 from plugins.train._config import Config
 
@@ -466,21 +466,13 @@ class ModelBase():
         backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
         if backup_func:
             logger.info("Backing up models...")
-        save_threads = list()
-        for network in self.networks.values():
-            name = "save_{}".format(network.name)
-            save_threads.append(MultiThread(network.save,
-                                            name=name,
-                                            backup_func=backup_func))
-        save_threads.append(MultiThread(self.state.save,
-                                        name="save_state",
-                                        backup_func=backup_func))
-        for thread in save_threads:
-            thread.start()
-        for thread in save_threads:
-            if thread.has_error:
-                logger.error(thread.errors[0])
-            thread.join()
+        executor = futures.ThreadPoolExecutor()
+        save_threads = [executor.submit(network.save, backup_func=backup_func)
+                        for network in self.networks.values()]
+        save_threads.append(executor.submit(self.state.save, backup_func=backup_func))
+        futures.wait(save_threads)
+        # call result() to capture errors
+        _ = [thread.result() for thread in save_threads]
         msg = "[Saved models]"
         if save_averages:
             lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],

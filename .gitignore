@@ -28,6 +28,7 @@
 !plugins/extract/*
 !plugins/train/*
 !plugins/convert/*
+!.pylintrc
 !tools
 !tools/lib*
 !_travis
