@@ -17,8 +17,6 @@ from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Check Timelapse works
-
 
 class TrainingDataGenerator():
     """ A Training Data Generator for compiling data for feeding to a model.
