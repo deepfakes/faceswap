@@ -40,16 +40,16 @@ class AlignmentsArgs(FaceSwapArgs):
                     "NB: All actions require an alignments file (-a) to be passed in."
                     "\nL|'draw': Draw landmarks on frames in the selected folder/video. A "
                     "subfolder will be created within the frames folder to hold the output." +
-                    frames_dir + align_eyes +
+                    frames_dir +
                     "\nL|'extract': Re-extract faces from the source frames/video based on "
                     "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
                     "the '-een' (--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
-                    "\nL|'extract-large' - Extract all faces that have not been upscaled. Useful "
+                    "\nL|'extract-large': - Extract all faces that have not been upscaled. Useful "
                     "for excluding low-res images from a training set.. Can pass in the '-een' "
                     "(--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
-                    "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
+                    "\nL|'manual': Manually view and edit landmarks." + frames_dir +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
                     "separated list of alignments files with the -a flag. Optionally specify a "
                     "faces (-fc) folder to filter the final alignments file to only those faces "
@@ -158,9 +158,8 @@ class AlignmentsArgs(FaceSwapArgs):
                               "group": "extract",
                               "default": False,
                               "help": "Perform extra alignment to ensure "
-                                      "left/right eyes are  at the same "
-                                      "height. (Draw, Extract and manual "
-                                      "only)"})
+                                      "left/right eyes are at the same "
+                                      "height. (Extract only)"})
         argument_list.append({"opts": ("-dm", "--disable-monitor"),
                               "action": "store_true",
                               "group": "manual tool",

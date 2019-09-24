@@ -4,12 +4,14 @@
 
 import logging
 import os
+import cv2
+import numpy as np
 from tqdm import tqdm
 
-import cv2
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
 
+from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.utils import (_image_extensions, _video_extensions, count_frames_and_secs, cv2_read_img,
@@ -192,6 +194,7 @@ class MediaLoader():
     def save_image(output_folder, filename, image):
         """ Save an image """
         output_file = os.path.join(output_folder, filename)
+        output_file = os.path.splitext(output_file)[0]+'.png'
         logger.trace("Saving image: '%s'", output_file)
         cv2.imwrite(output_file, image)  # pylint: disable=no-member
 
@@ -291,14 +294,12 @@ class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
     def __init__(self, frames, alignments, size=256, align_eyes=False):
-        logger.trace("Initializing %s: (size: %s, align_eyes: %s)",
-                     self.__class__.__name__, size, align_eyes)
+        logger.trace("Initializing %s: size: %s", self.__class__.__name__, size)
         self.size = size
         self.padding = int(size * 0.1875)
-        self.align_eyes = align_eyes
+        self.align_eyes_bool = align_eyes
         self.alignments = alignments
         self.frames = frames
-
         self.current_frame = None
         self.faces = list()
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -314,8 +315,7 @@ class ExtractedFaces():
             self.faces = list()
             return
         image = self.frames.load_image(frame)
-        self.faces = [self.extract_one_face(alignment, image.copy())
-                      for alignment in alignments]
+        self.faces = [self.extract_one_face(alignment, image.copy()) for alignment in alignments]
         self.current_frame = frame
 
     def extract_one_face(self, alignment, image):
@@ -324,7 +324,8 @@ class ExtractedFaces():
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        face.load_aligned(image, size=self.size, align_eyes=self.align_eyes)
+        face.load_aligned(image, size=self.size)
+        face = self.align_eyes(face, image) if self.align_eyes_bool else face
         return face
 
     def get_faces_in_frame(self, frame, update=False):
@@ -362,3 +363,28 @@ class ExtractedFaces():
         with open(filename, "wb") as out_file:
             out_file.write(img)
         return f_hash
+
+    def align_eyes(self, face, image):
+        """ Re-extract a face with the pupils forced to be absolutely horizontally aligned """
+        umeyama_landmarks = face.aligned_landmarks
+        leftEyeCenter = umeyama_landmarks[42:48].mean(axis=0)
+        rightEyeCenter = umeyama_landmarks[36:42].mean(axis=0)
+        eyesCenter = umeyama_landmarks[36:48].mean(axis=0)
+        dY = rightEyeCenter[1] - leftEyeCenter[1]
+        dX = rightEyeCenter[0] - leftEyeCenter[0]
+        theta = np.pi - np.arctan2(dY, dX)
+        rot_cos = np.cos(theta)
+        rot_sin = np.sin(theta)
+        rotation_matrix = np.array([[rot_cos, -rot_sin, 0.],
+                                    [rot_sin, rot_cos, 0.],
+                                    [0., 0., 1.]])
+
+        mat_umeyama = np.concatenate((face.aligned["matrix"], np.array([[0., 0., 1.]])), axis=0)
+        corrected_mat = np.dot(rotation_matrix, mat_umeyama)
+        face.aligned["matrix"] = corrected_mat[:2]
+        face.aligned["face"] = AlignerExtract().transform(image,
+                                                          face.aligned["matrix"],
+                                                          face.aligned["size"],
+                                                          int(face.aligned["size"] * 0.375) // 2)
+        logger.trace("Adjusted matrix: %s", face.aligned["matrix"])
+        return face

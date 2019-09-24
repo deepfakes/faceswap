@@ -700,6 +700,6 @@ class Landmarks():
             for face in faces:
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
-                detected_face.load_aligned(None, size=self.size, align_eyes=False)
+                detected_face.load_aligned(None, size=self.size)
                 landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks

@@ -190,13 +190,14 @@ class Extract():
             detected_faces = dict()
             self.extractor.launch()
             self.check_thread_error()
-            for idx, faces in enumerate(tqdm(self.extractor.detected_faces(),
-                                             total=to_process,
-                                             file=sys.stdout,
-                                             desc="Running pass {} of {}: {}".format(
-                                                 phase + 1,
-                                                 self.extractor.passes,
-                                                 self.extractor.phase.title()))):
+            desc = "Running pass {} of {}: {}".format(phase + 1,
+                                                      self.extractor.passes,
+                                                      self.extractor.phase.title())
+            status_bar = tqdm(self.extractor.detected_faces(),
+                              total=to_process,
+                              file=sys.stdout,
+                              desc=desc)
+            for idx, faces in enumerate(status_bar):
                 self.check_thread_error()
                 exception = faces.get("exception", False)
                 if exception:
@@ -204,13 +205,14 @@ class Extract():
                 filename = faces["filename"]
 
                 if self.extractor.final_pass:
-                    self.output_processing(faces, align_eyes, size, filename)
+                    self.output_processing(faces, size, filename)
                     self.output_faces(filename, faces)
                     if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
                 else:
                     del faces["image"]
                     detected_faces[filename] = faces
+                status_bar.update(1)
 
             if is_final:
                 logger.debug("Putting EOF to save")
@@ -224,26 +226,25 @@ class Extract():
         for thread in self.threads:
             thread.check_and_raise_error()
 
-    def output_processing(self, faces, align_eyes, size, filename):
+    def output_processing(self, faces, size, filename):
         """ Prepare faces for output """
-        self.align_face(faces, align_eyes, size, filename)
+        self.align_face(faces, size, filename)
         self.post_process.do_actions(faces)
 
         faces_count = len(faces["detected_faces"])
         if faces_count == 0:
-            logger.verbose("No faces were detected in image: %s",
-                           os.path.basename(filename))
+            logger.verbose("No faces were detected in image: %s", os.path.basename(filename))
 
         if not self.verify_output and faces_count > 1:
             self.verify_output = True
 
-    def align_face(self, faces, align_eyes, size, filename):
+    def align_face(self, faces, size, filename):
         """ Align the detected face and add the destination file path """
         final_faces = list()
         image = faces["image"]
         detected_faces = faces["detected_faces"]
         for face in detected_faces:
-            face.load_aligned(image, size=size, align_eyes=align_eyes)
+            face.load_aligned(image, size=size)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
                                 "face": face})
         faces["detected_faces"] = final_faces
