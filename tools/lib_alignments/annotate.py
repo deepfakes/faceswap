@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ Tools for annotating an input image """
 
+from collections import OrderedDict
+
 import logging
 
 import cv2
@@ -60,7 +62,6 @@ class Annotate():
                         color,
                         thickness)
             cv2.polylines(self.image, [roi], True, color, thickness)  # pylint: disable=no-member
-                          
 
     def draw_landmarks(self, color_id=3, radius=1):
         """ Draw the facial landmarks """
@@ -76,7 +77,7 @@ class Annotate():
     def draw_landmarks_mesh(self, color_id=4, thickness=1):
         """ Draw the facial landmarks """
         color = self.colors[color_id]
-        FACIAL_LANDMARKS_IDXS = OrderedDict([("mouth", (48, 68)),
+        facial_landmarks_idxs = OrderedDict([("mouth", (48, 68)),
                                              ("right_eyebrow", (17, 22)),
                                              ("left_eyebrow", (22, 27)),
                                              ("right_eye", (36, 42)),
@@ -88,7 +89,7 @@ class Annotate():
             landmarks = alignment["landmarks_xy"]
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
                          landmarks, color, thickness)
-            for key, val in FACIAL_LANDMARKS_IDXS.items():
+            for key, val in facial_landmarks_idxs.items():
                 points = np.array([landmarks[val[0]:val[1]]], np.int32)
                 fill_poly = bool(key in ("right_eye", "left_eye", "mouth"))
                 cv2.polylines(self.image,  # pylint: disable=no-member
@@ -104,6 +105,6 @@ class Annotate():
             if idx != int(live_face):
                 logger.trace("Greying out face: (idx: %s, roi: %s)", idx, roi)
                 cv2.fillPoly(overlay, roi, (0, 0, 0))  # pylint: disable=no-member
-                             
+
         cv2.addWeighted(overlay,  # pylint: disable=no-member
                         alpha, self.image, 1. - alpha, 0., self.image)

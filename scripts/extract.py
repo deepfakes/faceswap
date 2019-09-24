@@ -176,11 +176,6 @@ class Extract():
         """ Run Face Detection """
         to_process = self.process_item_count()
         size = self.args.size if hasattr(self.args, "size") else 256
-        align_eyes = self.args.align_eyes if hasattr(self.args, "align_eyes") else False
-        if align_eyes:
-            deprecation_warning("Align eyes (-ae --align-eyes)",
-                                additional_info="This functionality will still be available "
-                                                "within the alignments tool.")
         exception = False
 
         for phase in range(self.extractor.passes):
