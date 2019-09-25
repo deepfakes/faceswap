@@ -7,7 +7,7 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
-from .control_helper import ControlBuilder
+from .control_helper import ControlBuilder, ControlPanelOption
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
@@ -609,16 +609,14 @@ class SessionPopUp(tk.Toplevel):
                 default = 0.90
                 rounding = 2
                 min_max = (0, 0.99)
-
-            ctl = ControlBuilder(frame,
-                                 text,
-                                 dtype,
-                                 default,
-                                 label_width=19,
-                                 rounding=rounding,
-                                 min_max=min_max,
-                                 helptext=self.set_help(item))
-            self.vars[item] = ctl.tk_var
+            slider = ControlPanelOption(text,
+                                        dtype,
+                                        default=default,
+                                        rounding=rounding,
+                                        min_max=min_max,
+                                        helptext=self.set_help(item))
+            self.vars[item] = slider.tk_var
+            ControlBuilder(frame, slider, 1, 19, None, True)
         logger.debug("Built Sliders")
 
     def opts_buttons(self, frame):
