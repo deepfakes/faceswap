@@ -16,7 +16,7 @@ from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager  # noqa pylint:disable=unused-import
-from lib.utils import get_folder, get_image_paths, set_system_verbosity
+from lib.utils import get_folder, get_image_paths, set_system_verbosity, deprecation_warning
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -90,6 +90,16 @@ class Train():
         """ Call the training process object """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self.args.model_dir)
+
+        # TODO Move these args to config and remove these deprecation warnings
+        if hasattr(self.args, "warp_to_landmarks") and self.args.warp_to_landmarks:
+            deprecation_warning("`-wl`, ``--warp-to-landmarks``",
+                                additional_info="This option will be available within training "
+                                                "config settings (/config/train.ini).")
+        if hasattr(self.args, "no_augment_color") and self.args.no_flip:
+            deprecation_warning("`-nac`, ``--no-augment-color``",
+                                additional_info="This option will be available within training "
+                                                "config settings (/config/train.ini).")
         set_system_verbosity(self.args.loglevel)
         thread = self.start_thread()
         # queue_manager.debug_monitor(1)

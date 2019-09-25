@@ -333,12 +333,11 @@ class Batcher():
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
-        samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
+        retval = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
         if self.use_mask:
-            retval = [tgt[0:num_images] for tgt in images]
+            retval.extend(tgt[0:num_images] for tgt in images)
         else:
-            retval = [images[0:num_images]]
-        retval = samples + retval
+            retval.extend(images[0:num_images])
         return retval
 
     def compile_timelapse_sample(self):
