@@ -423,7 +423,7 @@ class ImageAugmentation():
                                warp_lm_edge_anchors=edge_anchors,
                                warp_lm_grids=grids)
         self.initialized = True
-        logger.debug("Initialized constants: %s", {k:str(v) if isinstance(v, np.ndarray) else v
+        logger.debug("Initialized constants: %s", {k: str(v) if isinstance(v, np.ndarray) else v
                                                    for k, v in self._constants.items()})
 
     # <<< TARGET IMAGES >>> #

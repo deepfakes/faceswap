@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from numpy import ndarray
 
+
 class FaceswapLogger(logging.Logger):
     """ Create custom logger  with custom levels """
     def __init__(self, name):
@@ -68,6 +69,7 @@ class FaceswapFormatter(logging.Formatter):
                 arg = arg.replace("\n", "\\n").replace("\r", "\\r")
             new_args.append(arg)
         return tuple(new_args)
+
 
 class RollingBuffer(collections.deque):
     """File-like that keeps a certain number of lines of text in memory."""
