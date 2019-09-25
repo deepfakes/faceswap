@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageTk
 from lib.Serializer import JSONSerializer
 
 from ._config import Config as UserConfig
+from ._redirector import WidgetRedirector
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
@@ -511,6 +512,18 @@ class Images():
         self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
 
+class ReadOnlyText(tk.Text):  # pylint: disable=too-many-ancestors
+    """ A read only text widget that redirects a standard tk.Text widget's insert and delete
+    attributes.
+    Source: https://stackoverflow.com/questions/3842155
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.redirector = WidgetRedirector(self)
+        self.insert = self.redirector.register("insert", lambda *args, **kw: "break")
+        self.delete = self.redirector.register("delete", lambda *args, **kw: "break")
+
+
 class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ The Console out section of the GUI """
 
@@ -520,7 +533,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
                   fill=tk.BOTH, expand=True)
-        self.console = tk.Text(self)
+        self.console = ReadOnlyText(self)
         rc_menu = ContextMenu(self.console)
         rc_menu.cm_bind()
         self.console_clear = get_config().tk_vars['consoleclear']
@@ -539,7 +552,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     def build_console(self):
         """ Build and place the console """
         logger.debug("Build console")
-        self.console.config(width=100, height=6, bg="gray90", fg="black", state="disabled")
+        self.console.config(width=100, height=6, bg="gray90", fg="black")
         self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self, command=self.console.yview)
@@ -576,9 +589,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         if not self.console_clear.get():
             logger.debug("Console not set for clearing. Skipping")
             return
-        self.console.configure(state="normal")
         self.console.delete(1.0, tk.END)
-        self.console.configure(state="disabled")
         self.console_clear.set(False)
         logger.debug("Cleared console")
 
@@ -608,10 +619,8 @@ class SysOutRouter():
 
     def write(self, string):
         """ Capture stdout/stderr """
-        self.console.configure(state="normal")
         self.console.insert(tk.END, string, self.get_tag(string))
         self.console.see(tk.END)
-        self.console.configure(state="disabled")
 
     @staticmethod
     def flush():
