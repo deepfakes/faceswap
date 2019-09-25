@@ -260,7 +260,7 @@ class TrainingDataGenerator():
         """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
         config item ``warp_to_landmarks`` is ``True`` or if :attr:`mask_type` is not ``None``. If
         the landmarks for an image cannot be found, then an error is raised. """
-        logger.trace("Retrieving landmarks: (filenames: '%s', side: '%s'", filenames, side)
+        logger.trace("Retrieving landmarks: (filenames: %s, side: '%s')", filenames, side)
         src_points = [self._landmarks[side].get(sha1(face).hexdigest(), None) for face in batch]
 
         # Raise error on missing alignments
@@ -278,7 +278,7 @@ class TrainingDataGenerator():
                    "alignments".format(missing))
             raise FaceswapError(msg)
 
-        logger.trace("Returning: (src_points: %s)", src_points)
+        logger.trace("Returning: (src_points: %s)", [str(src) for src in src_points])
         return np.array(src_points)
 
     def _get_closest_match(self, filenames, side, batch_src_points):
@@ -423,7 +423,8 @@ class ImageAugmentation():
                                warp_lm_edge_anchors=edge_anchors,
                                warp_lm_grids=grids)
         self.initialized = True
-        logger.debug("Initialized constants: %s", self._constants)
+        logger.debug("Initialized constants: %s", {k:str(v) if isinstance(v, np.ndarray) else v
+                                                   for k, v in self._constants.items()})
 
     # <<< TARGET IMAGES >>> #
     def get_targets(self, batch):

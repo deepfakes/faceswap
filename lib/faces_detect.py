@@ -191,9 +191,9 @@ class DetectedFace():
                 padding)
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
 
-        logger.trace("Loaded aligned face: %s", {key: val
-                                                 for key, val in self.aligned.items()
-                                                 if key != "face"})
+        logger.trace("Loaded aligned face: %s", {k: str(v) if isinstance(v, np.ndarray) else v
+                                                 for k, v in self.aligned.items()
+                                                 if k != "face"})
 
     def _padding_from_coverage(self, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a

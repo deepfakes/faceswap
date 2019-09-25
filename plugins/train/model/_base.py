@@ -421,12 +421,12 @@ class ModelBase():
             return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
-            self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
+            self.predictors[side].summary(print_fn=lambda x: logger.verbose("%s", x))
             for name, nnmeta in self.networks.items():
                 if nnmeta.side is not None and nnmeta.side != side:
                     continue
                 logger.verbose("%s:", name.title())
-                nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
+                nnmeta.network.summary(print_fn=lambda x: logger.verbose("%s", x))
 
     def do_snapshot(self):
         """ Perform a model snapshot """

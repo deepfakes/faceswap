@@ -4,13 +4,13 @@ import collections
 import logging
 from logging.handlers import RotatingFileHandler
 import os
-import re
 import sys
 import traceback
 
 from datetime import datetime
 from tqdm import tqdm
 
+from numpy import ndarray
 
 class FaceswapLogger(logging.Logger):
     """ Create custom logger  with custom levels """
@@ -39,20 +39,35 @@ class FaceswapLogger(logging.Logger):
 
 
 class FaceswapFormatter(logging.Formatter):
-    """ Override formatter to strip newlines and multiple spaces from logger
-        Messages that begin with "R|" should be handled as is
-    """
+    """ Override formatter to strip newlines from logger arguments """
     def format(self, record):
-        if isinstance(record.msg, str):
-            if record.msg.startswith("R|"):
-                record.msg = record.msg[2:]
-                record.strip_spaces = False
-            elif record.strip_spaces:
-                record.msg = re.sub(" +",
-                                    " ",
-                                    record.msg.replace("\n", "\\n").replace("\r", "\\r"))
+        if isinstance(record.msg, str) and ("\n" in record.msg or "\r" in record.msg):
+            record.msg = record.msg.replace("\n", "\\n").replace("\r", "\\r")
+        if any(self.reformat_check(arg) for arg in record.args):
+            record.args = self.reformat_args(record.args)
         return super().format(record)
 
+    @staticmethod
+    def reformat_check(arg):
+        """ Check if the argument should be reformatted
+            The argument is a string with a line break
+            The argument is a numpy array
+        """
+        return ((isinstance(arg, str) and ("\n" in arg or "\r" in arg))
+                or isinstance(arg, ndarray))
+
+    @staticmethod
+    def reformat_args(args):
+        """ Reformat args that require new lines removing """
+        new_args = []
+        for arg in args:
+            if isinstance(arg, ndarray):
+                # Convert numpy arrays to string for reformatting
+                arg = str(ndarray)
+            if isinstance(arg, str) and ("\n" in arg or "\r" in arg):
+                arg = arg.replace("\n", "\\n").replace("\r", "\\r")
+            new_args.append(arg)
+        return tuple(new_args)
 
 class RollingBuffer(collections.deque):
     """File-like that keeps a certain number of lines of text in memory."""
