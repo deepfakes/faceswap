@@ -323,9 +323,8 @@ class Extract():
         Alignment data """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
         self.arguments = arguments
-        self.type = arguments.job.replace("extract-", "")
+        self.alignments = alignments
         self.faces_dir = arguments.faces_dir
         self.frames = Frames(arguments.frames_dir)
         self.extracted_faces = ExtractedFaces(self.frames,
@@ -375,7 +374,7 @@ class Extract():
 
             extracted_faces += self.output_faces(frame)
 
-        if extracted_faces != 0 and self.type != "large":
+        if extracted_faces != 0 and not self.arguments.large:
             self.alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
 
@@ -390,7 +389,7 @@ class Extract():
 
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), extension)
-            if self.type == "large":
+            if self.arguments.large:
                 self.frames.save_image(self.faces_dir, output, face.aligned_face)
             else:
                 output = os.path.join(self.faces_dir, output)
@@ -404,7 +403,7 @@ class Extract():
     def select_valid_faces(self, frame):
         """ Return valid faces for extraction """
         faces = self.extracted_faces.get_faces_in_frame(frame)
-        if self.type != "large":
+        if not self.arguments.large:
             valid_faces = faces
         else:
             sizes = self.extracted_faces.get_roi_size_for_frame(frame)
