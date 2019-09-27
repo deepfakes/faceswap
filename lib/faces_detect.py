@@ -2,6 +2,7 @@
 """ Face and landmarks detection for faceswap.py """
 import logging
 
+import cv2
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
@@ -141,7 +142,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, align_eyes=False, dtype=None):
+    def load_aligned(self, image, size=256, dtype=None):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -175,13 +176,11 @@ class DetectedFace():
             # Don't reload an already aligned face
             logger.trace("Skipping alignment calculation for already aligned face")
         else:
-            logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
-                         size, align_eyes, dtype)
+            logger.trace("Loading aligned face: (size: %s, dtype: %s)", size, dtype)
             padding = int(size * self._extract_ratio) // 2
             self.aligned["size"] = size
             self.aligned["padding"] = padding
-            self.aligned["align_eyes"] = align_eyes
-            self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
+            self.aligned["matrix"] = get_align_mat(self)
             self.aligned["face"] = None
         if image is not None and self.aligned["face"] is None:
             logger.trace("Getting aligned face")
@@ -192,9 +191,9 @@ class DetectedFace():
                 padding)
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
 
-        logger.trace("Loaded aligned face: %s", {key: val
-                                                 for key, val in self.aligned.items()
-                                                 if key != "face"})
+        logger.trace("Loaded aligned face: %s", {k: str(v) if isinstance(v, np.ndarray) else v
+                                                 for k, v in self.aligned.items()
+                                                 if k != "face"})
 
     def _padding_from_coverage(self, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
@@ -229,13 +228,10 @@ class DetectedFace():
 
         self.feed["size"] = size
         self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
-        self.feed["matrix"] = get_align_mat(self, size, should_align_eyes=False)
+        self.feed["matrix"] = get_align_mat(self)
 
-        face = np.clip(AlignerExtract().transform(image,
-                                                  self.feed["matrix"],
-                                                  size,
-                                                  self.feed["padding"])[:, :, :3] / 255.0,
-                       0.0, 1.0)
+        face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
+        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
@@ -268,13 +264,13 @@ class DetectedFace():
 
         self.reference["size"] = size
         self.reference["padding"] = self._padding_from_coverage(size, coverage_ratio)
-        self.reference["matrix"] = get_align_mat(self, size, should_align_eyes=False)
+        self.reference["matrix"] = get_align_mat(self)
 
-        face = np.clip(AlignerExtract().transform(image,
-                                                  self.reference["matrix"],
-                                                  size,
-                                                  self.reference["padding"])[:, :, :3] / 255.0,
-                       0.0, 1.0)
+        face = AlignerExtract().transform(image,
+                                          self.reference["matrix"],
+                                          size,
+                                          self.reference["padding"])
+        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",
@@ -404,3 +400,89 @@ class DetectedFace():
         if not self.reference:
             return None
         return get_matrix_scaling(self.reference_matrix)
+
+
+def rotate_landmarks(face, rotation_matrix):
+    """ Rotates the 68 point landmarks and detection bounding box around the given rotation matrix.
+
+    Paramaters
+    ----------
+    face: DetectedFace or dict
+        A :class:`DetectedFace` or an `alignments file` ``dict`` containing the 68 point landmarks
+        and the `x`, `w`, `y`, `h` detection bounding box points.
+    rotation_matrix: numpy.ndarray
+        The rotation matrix to rotate the given object by.
+
+    Returns
+    -------
+    DetectedFace or dict
+        The rotated :class:`DetectedFace` or `alignments file` ``dict`` with the landmarks and
+        detection bounding box points rotated by the given matrix. The return type is the same as
+        the input type for ``face``
+    """
+    logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
+                 rotation_matrix, type(face))
+    rotated_landmarks = None
+    # Detected Face Object
+    if isinstance(face, DetectedFace):
+        bounding_box = [[face.x, face.y],
+                        [face.x + face.w, face.y],
+                        [face.x + face.w, face.y + face.h],
+                        [face.x, face.y + face.h]]
+        landmarks = face.landmarks_xy
+
+    # Alignments Dict
+    elif isinstance(face, dict) and "x" in face:
+        bounding_box = [[face.get("x", 0), face.get("y", 0)],
+                        [face.get("x", 0) + face.get("w", 0),
+                         face.get("y", 0)],
+                        [face.get("x", 0) + face.get("w", 0),
+                         face.get("y", 0) + face.get("h", 0)],
+                        [face.get("x", 0),
+                         face.get("y", 0) + face.get("h", 0)]]
+        landmarks = face.get("landmarks_xy", list())
+
+    else:
+        raise ValueError("Unsupported face type")
+
+    logger.trace("Original landmarks: %s", landmarks)
+
+    rotation_matrix = cv2.invertAffineTransform(
+        rotation_matrix)
+    rotated = list()
+    for item in (bounding_box, landmarks):
+        if not item:
+            continue
+        points = np.array(item, np.int32)
+        points = np.expand_dims(points, axis=0)
+        transformed = cv2.transform(points,
+                                    rotation_matrix).astype(np.int32)
+        rotated.append(transformed.squeeze())
+
+    # Bounding box should follow x, y planes, so get min/max
+    # for non-90 degree rotations
+    pt_x = min([pnt[0] for pnt in rotated[0]])
+    pt_y = min([pnt[1] for pnt in rotated[0]])
+    pt_x1 = max([pnt[0] for pnt in rotated[0]])
+    pt_y1 = max([pnt[1] for pnt in rotated[0]])
+    width = pt_x1 - pt_x
+    height = pt_y1 - pt_y
+
+    if isinstance(face, DetectedFace):
+        face.x = int(pt_x)
+        face.y = int(pt_y)
+        face.w = int(width)
+        face.h = int(height)
+        face.r = 0
+        if len(rotated) > 1:
+            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
+            face.landmarks_xy = rotated_landmarks
+    else:
+        face["left"] = int(pt_x)
+        face["top"] = int(pt_y)
+        face["right"] = int(pt_x1)
+        face["bottom"] = int(pt_y1)
+        rotated_landmarks = face
+
+    logger.trace("Rotated landmarks: %s", rotated_landmarks)
+    return face

@@ -704,13 +704,6 @@ class ExtractArgs(ExtractConvertArgs):
                               "group": "output",
                               "default": False,
                               "help": "Draw landmarks on the ouput faces for debugging purposes."})
-        argument_list.append({"opts": ("-ae", "--align-eyes"),
-                              "action": "store_true",
-                              "dest": "align_eyes",
-                              "group": "output",
-                              "default": False,
-                              "help": "Perform extra alignment to ensure left/right eyes are at "
-                                      "the same height"})
         argument_list.append({"opts": ("-sp", "--singleprocess"),
                               "action": "store_true",
                               "default": False,

@@ -18,8 +18,7 @@ To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
 import cv2
 import numpy as np
 
-from lib.faces_detect import DetectedFace
-from lib.utils import rotate_landmarks
+from lib.faces_detect import DetectedFace, rotate_landmarks
 from plugins.extract._base import Extractor, logger
 
 

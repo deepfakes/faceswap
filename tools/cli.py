@@ -31,25 +31,21 @@ class AlignmentsArgs(FaceSwapArgs):
             "opts": ("-j", "--job"),
             "action": Radio,
             "type": str,
-            "choices": ("draw", "extract", "extract-large", "manual", "merge",
-                        "missing-alignments", "missing-frames", "legacy", "leftover-faces",
-                        "multi-faces", "no-faces", "reformat", "remove-faces", "remove-frames",
-                        "rename", "sort-x", "sort-y", "spatial", "update-hashes"),
+            "choices": ("draw", "extract", "manual", "merge", "missing-alignments",
+                        "missing-frames", "legacy", "leftover-faces", "multi-faces", "no-faces",
+                        "reformat", "remove-faces", "remove-frames", "rename", "sort-x", "sort-y",
+                        "spatial", "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform. "
                     "NB: All actions require an alignments file (-a) to be passed in."
                     "\nL|'draw': Draw landmarks on frames in the selected folder/video. A "
                     "subfolder will be created within the frames folder to hold the output." +
-                    frames_dir + align_eyes +
+                    frames_dir +
                     "\nL|'extract': Re-extract faces from the source frames/video based on "
                     "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
                     "the '-een' (--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
-                    "\nL|'extract-large' - Extract all faces that have not been upscaled. Useful "
-                    "for excluding low-res images from a training set.. Can pass in the '-een' "
-                    "(--extract-every-n) parameter to only extract every nth frame." +
-                    frames_and_faces_dir + align_eyes +
-                    "\nL|'manual': Manually view and edit landmarks." + frames_dir + align_eyes +
+                    "\nL|'manual': Manually view and edit landmarks." + frames_dir +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
                     "separated list of alignments files with the -a flag. Optionally specify a "
                     "faces (-fc) folder to filter the final alignments file to only those faces "
@@ -140,10 +136,10 @@ class AlignmentsArgs(FaceSwapArgs):
                               "default": 1,
                               "rounding": 1,
                               "group": "extract",
-                              "help": "Extract every 'nth' frame. This option will skip frames "
-                                      "when extracting faces. For example a value of 1 will "
-                                      "extract faces from every frame, a value of 10 will extract "
-                                      "faces from every 10th frame. (extract only)"})
+                              "help": "[Extract only] Extract every 'nth' frame. This option will "
+                                      "skip frames when extracting faces. For example a value of "
+                                      "1 will extract faces from every frame, a value of 10 will "
+                                      "extract faces from every 10th frame."})
         argument_list.append({"opts": ("-sz", "--size"),
                               "type": int,
                               "action": Slider,
@@ -151,16 +147,21 @@ class AlignmentsArgs(FaceSwapArgs):
                               "default": 256,
                               "group": "extract",
                               "rounding": 64,
-                              "help": "The output size of extracted faces. (extract only)"})
+                              "help": "[Extract only] The output size of extracted faces."})
         argument_list.append({"opts": ("-ae", "--align-eyes"),
                               "action": "store_true",
                               "dest": "align_eyes",
                               "group": "extract",
                               "default": False,
-                              "help": "Perform extra alignment to ensure "
-                                      "left/right eyes are  at the same "
-                                      "height. (Draw, Extract and manual "
-                                      "only)"})
+                              "help": "[Extract only] Perform extra alignment to ensure "
+                                      "left/right eyes are at the same height."})
+        argument_list.append({"opts": ("-l", "--large"),
+                              "action": "store_true",
+                              "group": "extract",
+                              "default": False,
+                              "help": "[Extract only] Only extract faces that have not been "
+                                      "upscaled to the required size (`-sz`, `--size). Useful "
+                                      "for excluding low-res images from a training set."})
         argument_list.append({"opts": ("-dm", "--disable-monitor"),
                               "action": "store_true",
                               "group": "manual tool",
