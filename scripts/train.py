@@ -8,6 +8,7 @@ import sys
 from threading import Lock
 from time import sleep
 
+import wandb
 import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
@@ -35,6 +36,13 @@ class Train():
         self.lock = Lock()
 
         self.trainer_name = self.args.trainer
+
+        # log parameters
+        if not self.args.no_wandb_logs:
+            wandb_config = {x: y for x, y in vars(arguments).items()
+                            if isinstance(y, (int, float, bool, type(None)))}
+            wandb.init(anonymous='allow', project="faceswap", config=wandb_config)
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_timelapse(self):

@@ -14,6 +14,7 @@
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
         no_logs:            Disable tensorboard logging
+        no_wandb_logs:      Disable Weights & Biases logging
         snapshot_interval:  Interval for saving model snapshots
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
         augment_color:      Perform random shifting of L*a*b* colors
@@ -28,6 +29,7 @@ import time
 import cv2
 import numpy as np
 
+import wandb
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
@@ -161,6 +163,14 @@ class TrainerBase():
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
+    def log_wandb(self, loss, samples):
+        """ Log losses and samples on Weights & Biases """
+        if self.model.training_opts["no_wandb_logs"]:
+            return None
+        if samples is not None:
+                wandb.log({"samples": wandb.Image(samples[:,:,::-1])}, commit=False)
+        wandb.log({'Loss {}'.format(side.capitalize()): loss[side][0] for side in sorted(loss.keys())})
+
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
@@ -197,9 +207,11 @@ class TrainerBase():
                     self.pingpong.loss[key] = val
                 self.print_loss(self.pingpong.loss)
 
-            if do_preview:
-                samples = self.samples.show_sample()
-                if samples is not None:
+            samples = self.samples.show_sample()            
+            self.log_wandb(loss, samples)
+            
+            if do_preview:                
+                if samples is not None:                    
                     viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
             if do_timelapse:
