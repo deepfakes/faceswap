@@ -8,8 +8,8 @@ from datetime import datetime
 
 import cv2
 
+from lib.faces_detect import rotate_landmarks
 from lib import Serializer
-from lib.utils import rotate_landmarks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

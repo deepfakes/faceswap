@@ -9,6 +9,7 @@ import os
 import sys
 import time
 
+from concurrent import futures
 from json import JSONDecodeError
 
 import keras
@@ -24,7 +25,6 @@ from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
-from lib.multithreading import MultiThread
 from lib.utils import deprecation_warning, FaceswapError
 from plugins.train._config import Config
 
@@ -420,12 +420,12 @@ class ModelBase():
             return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
-            self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
+            self.predictors[side].summary(print_fn=lambda x: logger.verbose("%s", x))
             for name, nnmeta in self.networks.items():
                 if nnmeta.side is not None and nnmeta.side != side:
                     continue
                 logger.verbose("%s:", name.title())
-                nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
+                nnmeta.network.summary(print_fn=lambda x: logger.verbose("%s", x))
 
     def do_snapshot(self):
         """ Perform a model snapshot """
@@ -465,21 +465,13 @@ class ModelBase():
         backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
         if backup_func:
             logger.info("Backing up models...")
-        save_threads = list()
-        for network in self.networks.values():
-            name = "save_{}".format(network.name)
-            save_threads.append(MultiThread(network.save,
-                                            name=name,
-                                            backup_func=backup_func))
-        save_threads.append(MultiThread(self.state.save,
-                                        name="save_state",
-                                        backup_func=backup_func))
-        for thread in save_threads:
-            thread.start()
-        for thread in save_threads:
-            if thread.has_error:
-                logger.error(thread.errors[0])
-            thread.join()
+        executor = futures.ThreadPoolExecutor()
+        save_threads = [executor.submit(network.save, backup_func=backup_func)
+                        for network in self.networks.values()]
+        save_threads.append(executor.submit(self.state.save, backup_func=backup_func))
+        futures.wait(save_threads)
+        # call result() to capture errors
+        _ = [thread.result() for thread in save_threads]
         msg = "[Saved models]"
         if save_averages:
             lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],
@@ -663,7 +655,7 @@ class Loss():
         loss_dict = dict(mae=losses.mean_absolute_error,
                          mse=losses.mean_squared_error,
                          logcosh=losses.logcosh,
-                         smooth_l=generalized_loss,
+                         smooth_loss=generalized_loss,
                          l_inf_norm=l_inf_norm,
                          ssim=DSSIMObjective(),
                          gmsd=gmsd_loss,

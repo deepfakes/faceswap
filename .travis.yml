@@ -21,6 +21,8 @@ cache:
 
 before_cache:
   # adapted from https://github.com/theochem/cgrid/blob/master/.travis.yml
+  - echo "Cleaning stuff in miniconda path. (${MINICONDA_PATH})"
+  - ls -la ${MINICONDA_PATH}
   - rm -rf ${MINICONDA_PATH}/conda-bld
   - rm -rf ${MINICONDA_PATH}/locks
   - rm -rf ${MINICONDA_PATH}/pkgs
@@ -29,7 +31,8 @@ before_cache:
   - rm -rf ${MINICONDA_PATH}/envs/*/locks
   - rm -rf ${MINICONDA_PATH}/envs/*/pkgs
   - rm -rf ${MINICONDA_PATH}/envs/*/var
-  # Clean out test results
+  - ls -la ${MINICONDA_PATH}
+  - echo "Cleaning test results"
   - rm -rf ${HOME}/cache/tests/*/faces
   - rm -rf ${HOME}/cache/tests/*/conv
   - rm -rf ${HOME}/cache/tests/*/*.json
@@ -89,5 +92,5 @@ install:
   - df -h
 
 script:
-  - python simple_tests.py;
+  - python _travis/simple_tests.py;
 

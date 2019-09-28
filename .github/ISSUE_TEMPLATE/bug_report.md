@@ -6,6 +6,11 @@ labels: ''
 assignees: ''
 
 ---
+*Note: For general usage questions and help, please use either our [FaceSwap Forum](https://faceswap.dev/forum) 
+or [FaceSwap Discord server](https://discord.gg/FC54sYg). General usage questions are liable to be closed without
+response.*
+
+**Crash reports MUST be included when reporting bugs.**
 
 **Describe the bug**
 A clear and concise description of what the bug is.
@@ -25,14 +30,12 @@ If applicable, add screenshots to help explain your problem.
 
 **Desktop (please complete the following information):**
  - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
-
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
-
+ - Python Version [e.g. 3.5, 3.6]
+ - Conda Version [e.g. 4.5.12]
+ - Commit ID [e.g. e83819f]
+ - 
 **Additional context**
 Add any other context about the problem here.
+
+**Crash Report**
+The crash report generated in the root of your Faceswap folder

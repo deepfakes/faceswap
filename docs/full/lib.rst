@@ -8,6 +8,8 @@ Subpackages
 
    lib.model
    lib.faces_detect
+   lib.image
+   lib.training_data
 
 Module contents
 ---------------

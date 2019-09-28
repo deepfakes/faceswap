@@ -29,7 +29,7 @@ import numpy as np
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator, stack_images
+from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
@@ -297,8 +297,8 @@ class Batcher():
         inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
                            self.model.training_opts["replicate_input_mask"])
         targets_use_mask = self.model.training_opts["replicate_input_mask"]
-        model_inputs = batch[1:2] + batch[-1:] if inputs_use_mask else batch[1:2]
-        model_targets = batch[3:] if targets_use_mask else batch[3:-1]
+        model_inputs = [batch["feed"], batch["masks"]] if inputs_use_mask [batch["feed"]]
+        model_targets = [batch["targets"]] if targets_use_mask else [batch["targets"]]
         return model_inputs, model_targets
 
     def generate_preview(self, do_preview):
@@ -309,13 +309,12 @@ class Batcher():
             return
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
-        self.samples = batch[0]
-        self.target = batch[-2:]
-        # y = batch[3:]
-        # self.target = [y[self.model.largest_face_index]]
-        # if (self.model.training_opts["penalized_mask_loss"] or
-        #     self.model.training_opts["replicate_input_mask"]):
-        #     self.target.append(y[-1])
+        self.samples = batch["samples"]
+        self.target = [batch["targets"][self.model.largest_face_index]]
+        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
+                           self.model.training_opts["replicate_input_mask"])
+        if inputs_use_mask:
+            self.target += [batch["masks"]]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -336,22 +335,25 @@ class Batcher():
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
-        samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
-        retval = samples + [tgt[0:num_images] for tgt in images]
+        retval = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
+        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
+                           self.model.training_opts["replicate_input_mask"])
+        if inputs_use_mask:
+            retval.extend(tgt[0:num_images] for tgt in images)
+        else:
+            retval.extend(images[0:num_images])
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples = batch[0]
-        # y = batch[3:]
-        batchsize = len(samples)
-        images = batch[-2:]
-        # images = [y[self.model.largest_face_index]]
-        # if (self.model.training_opts["penalized_mask_loss"] or
-        #    self.model.training_opts["replicate_input_mask"]):
-        #    images.append(y[-1])
-        sample = self.compile_sample(batchsize, samples=samples, images=images)
+        batchsize = len(batch["samples"])
+        images = [batch["targets"][self.model.largest_face_index]]
+        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
+                           self.model.training_opts["replicate_input_mask"])
+        if inputs_use_mask:
+            images += [batch["masks"]]
+        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -401,10 +403,10 @@ class Samples():
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            predictions = [preds["{}_{}".format(side, side)],
+            predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
             display = self.to_full_frame(side, samples, predictions)
-            headers[side] = self.get_headers(side, other_side, display[0].shape[1])
+            headers[side] = self.get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
                 figures[side] = np.concatenate([figures[side],
@@ -542,22 +544,22 @@ class Samples():
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
         return retval
 
-    def get_headers(self, side, other_side, width):
+    def get_headers(self, side, width):
         """ Set headers for images """
-        logger.debug("side: '%s', other_side: '%s', width: %s",
-                     side, other_side, width)
+        logger.debug("side: '%s', width: %s",
+                     side, width)
+        titles = ("Original", "Swap") if side == "a" else ("Swap", "Original")
         side = side.upper()
-        other_side = other_side.upper()
         height = int(64 * self.scaling)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-        texts = ["Target {}".format(side),
-                 "{} > {}".format(side, side),
-                 "{} > {}".format(side, other_side)]
+        texts = ["{} ({})".format(titles[0], side),
+                 "{0} > {0}".format(titles[0]),
+                 "{} > {}".format(titles[0], titles[1])]
         text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
                                       font,
-                                      self.scaling,
+                                      self.scaling * 0.8,
                                       1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
@@ -571,8 +573,8 @@ class Samples():
                         text,
                         (text_x[idx], text_y),
                         font,
-                        self.scaling,
-                        (0, 0, 0, 0),
+                        self.scaling * 0.8,
+                        (0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)  # pylint: disable=no-member
         logger.debug("header_box.shape: %s", header_box.shape)
@@ -695,6 +697,28 @@ class Landmarks():
             for face in faces:
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
-                detected_face.load_aligned(None, size=self.size, align_eyes=False)
+                detected_face.load_aligned(None, size=self.size)
                 landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks
+
+
+def stack_images(images):
+    """ Stack images """
+    logger.debug("Stack images")
+
+    def get_transpose_axes(num):
+        if num % 2 == 0:
+            logger.debug("Even number of images to stack")
+            y_axes = list(range(1, num - 1, 2))
+            x_axes = list(range(0, num - 1, 2))
+        else:
+            logger.debug("Odd number of images to stack")
+            y_axes = list(range(0, num - 1, 2))
+            x_axes = list(range(1, num - 1, 2))
+        return y_axes, x_axes, [num - 1]
+
+    images_shape = np.array(images.shape)
+    new_axes = get_transpose_axes(len(images_shape))
+    new_shape = [np.prod(images_shape[x]) for x in new_axes]
+    logger.debug("Stacked images")
+    return np.transpose(images, axes=np.concatenate(new_axes)).reshape(new_shape)
