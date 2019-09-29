@@ -53,7 +53,7 @@ class Detect(Detector):
 
     def init_model(self):
         """ Initialize S3FD Model"""
-        self.model = MTCNN(self.model_path, **self.kwargs)
+        self.model = MTCNN(self.model_path, self.config["allow_growth"], **self.kwargs)
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
@@ -105,8 +105,8 @@ class Detect(Detector):
 
 class PNet(KSession):
     """ Keras PNet model for MTCNN """
-    def __init__(self, model_path):
-        super().__init__("MTCNN-PNet", model_path)
+    def __init__(self, model_path, allow_growth):
+        super().__init__("MTCNN-PNet", model_path, allow_growth=allow_growth)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
@@ -128,8 +128,8 @@ class PNet(KSession):
 
 class RNet(KSession):
     """ Keras RNet model for MTCNN """
-    def __init__(self, model_path):
-        super().__init__("MTCNN-RNet", model_path)
+    def __init__(self, model_path, allow_growth):
+        super().__init__("MTCNN-RNet", model_path, allow_growth=allow_growth)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
@@ -158,8 +158,8 @@ class RNet(KSession):
 
 class ONet(KSession):
     """ Keras ONet model for MTCNN """
-    def __init__(self, model_path):
-        super().__init__("MTCNN-ONet", model_path)
+    def __init__(self, model_path, allow_growth):
+        super().__init__("MTCNN-ONet", model_path, allow_growth=allow_growth)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
@@ -193,7 +193,7 @@ class MTCNN():
     """ MTCNN Detector for face alignment """
     # TODO Batching for rnet and onet
 
-    def __init__(self, model_path, minsize, threshold, factor):
+    def __init__(self, model_path, allow_growth, minsize, threshold, factor):
         """
         minsize: minimum faces' size
         threshold: threshold=[th1, th2, th3], th1-3 are three steps's threshold
@@ -201,15 +201,16 @@ class MTCNN():
                 detect in the image.
         pnet, rnet, onet: caffemodel
         """
-        logger.debug("Initializing: %s: (model_path: '%s')",
-                     self.__class__.__name__, model_path)
+        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, minsize: %s, "
+                     "threshold: %s, factor: %s)", self.__class__.__name__, model_path,
+                     allow_growth, minsize, threshold, factor)
         self.minsize = minsize
         self.threshold = threshold
         self.factor = factor
 
-        self.pnet = PNet(model_path[0])
-        self.rnet = RNet(model_path[1])
-        self.onet = ONet(model_path[2])
+        self.pnet = PNet(model_path[0], allow_growth)
+        self.rnet = RNet(model_path[1], allow_growth)
+        self.onet = ONet(model_path[2], allow_growth)
         self._pnet_scales = None
         logger.debug("Initialized: %s", self.__class__.__name__)
 

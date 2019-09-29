@@ -30,7 +30,10 @@ class Align(Aligner):
     def init_model(self):
         """ Initialize FAN model """
         model_kwargs = dict(custom_objects={'TorchBatchNorm2D': TorchBatchNorm2D})
-        self.model = KSession(self.name, self.model_path, model_kwargs=model_kwargs)
+        self.model = KSession(self.name,
+                              self.model_path,
+                              model_kwargs=model_kwargs,
+                              allow_growth=self.config["allow_growth"])
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
         placeholder = np.zeros((self.batchsize, 3, self.input_size, self.input_size),
