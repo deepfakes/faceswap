@@ -182,6 +182,7 @@ class Aligner(Extractor):
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
+
         generator = zip(batch["detected_faces"], batch["filename"], batch["image"], batch["landmarks"])
         for face, filename, image, landmarks in generator:
             face.landmarks_xy = [(int(round(pt[0])), int(round(pt[1]))) for pt in landmarks]

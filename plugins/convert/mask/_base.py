@@ -42,18 +42,6 @@ class Adjustment():
         logger.debug("Config: %s", retval)
         return retval
 
-    @staticmethod
-    def get_mask_type(mask_type, predicted_available):
-        """ Return the requested mask type. Return default mask if
-            predicted requested but not available """
-        logger.debug("Requested mask_type: %s", mask_type)
-        if mask_type == "predicted" and not predicted_available:
-            mask_type = "components"
-            logger.warning("Predicted selected, but the model was not trained with a mask. "
-                           "Switching to '%s'", mask_type)
-        logger.debug("Returning mask_type: %s", mask_type)
-        return mask_type
-
     def process(self, *args, **kwargs):
         """ Override for specific color adjustment process """
         raise NotImplementedError

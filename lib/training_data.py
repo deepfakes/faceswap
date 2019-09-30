@@ -117,7 +117,10 @@ class TrainingDataGenerator():
             * **targets** (`list`) - A list of 4-dimensional ``numpy.ndarray`` s in the order \
             and size of each output of the model as defined in :attr:`model_output_shapes`. the \
             format of these arrays will be (`batchsize`, `height`, `width`, `3`). This is \
-            the :attr:`y` parameter for :func:`keras.models.model.train_on_batch`.
+            the :attr:`y` parameter for :func:`keras.models.model.train_on_batch` **NB:** \
+            masks are not included in the ``targets`` list. If required for feeding into the \
+            Keras model, they will need to be added to this list in \
+            :mod:`plugins.train.trainer._base` from the ``masks`` key.
 
             * **masks** (`numpy.ndarray`) - A 4-dimensional array containing the target masks in \
             the format (`batchsize`, `height`, `width`, `1`).
@@ -189,17 +192,16 @@ class TrainingDataGenerator():
         if not self._processing.initialized:
             self._processing.initialize(batch.shape[1])
 
-        # Get landmarks
+        # Get Landmarks prior to manipulating the image
         if self._training_opts["warp_to_landmarks"]:
             batch_src_pts = self._get_landmarks(filenames, batch, side)
+            batch_dst_pts = self._get_closest_match(filenames, side, batch_src_pts)
             warp_kwargs = dict(batch_src_points=batch_src_pts,
-                               batch_dst_points=self._get_closest_match(filenames,
-                                                                        side,
-                                                                        batch_src_pts))
+                               batch_dst_points=batch_dst_pts)
         else:
             warp_kwargs = dict()
 
-        # Color augmentation
+        # Color Augmentation of the image only
         if self._training_opts["augment_color"]:
             batch[..., :3] = self._processing.color_adjust(batch[..., :3])
 
@@ -215,7 +217,7 @@ class TrainingDataGenerator():
         # Get Targets
         processed.update(self._processing.get_targets(batch))
 
-        # Random Warp
+        # Random Warp # TODO change masks to have a input mask and a warped target mask
         processed["feed"] = [self._processing.warp(batch[..., :3],
                                                   self._training_opts["warp_to_landmarks"],
                                                   **warp_kwargs)]

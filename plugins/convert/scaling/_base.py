@@ -48,7 +48,7 @@ class Adjustment():
         reinsert_mask = False
         if new_face.shape[2] == 4:
             reinsert_mask = True
-            final_mask = new_face[..., 3:]
+            final_mask = new_face[..., 3:4]
             new_face = new_face[..., :3]
         new_face = self.process(new_face)
         np.clip(new_face, 0.0, 1.0, out=new_face)
