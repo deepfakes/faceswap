@@ -40,6 +40,7 @@ class ModelBase():
                  configfile=None,
                  snapshot_interval=0,
                  no_logs=False,
+                 no_wandb_logs=False,
                  warp_to_landmarks=False,
                  augment_color=True,
                  no_flip=False,
@@ -54,13 +55,13 @@ class ModelBase():
                  optimizer_savings=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
-                     "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
+                     "snapshot_interval: %s, no_logs: %s, no_wandb_logs: %s, warp_to_landmarks: %s, augment_color: "
                      "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
                      "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
                      "pingpong: %s, memory_saving_gradients: %s, optimizer_savings: %s, "
                      "predict: %s)",
                      self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
-                     no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
+                     no_logs, no_wandb_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
                      alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
                      memory_saving_gradients, optimizer_savings, predict)
 
@@ -81,6 +82,7 @@ class ModelBase():
                            self.name,
                            self.config_changeable_items,
                            no_logs,
+                           no_wandb_logs,
                            self.vram_savings.pingpong,
                            training_image_size)
 
@@ -223,6 +225,7 @@ class ModelBase():
         # Force number of preview images to between 2 and 16
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
+        self.training_opts["no_wandb_logs"] = self.state.current_session["no_wandb_logs"]
         self.training_opts["mask_type"] = self.config.get("mask_type", None)
         self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
         logger.debug("Set training data: %s", self.training_opts)
@@ -863,11 +866,11 @@ class NNMeta():
 class State():
     """ Class to hold the model's current state and autoencoder structure """
     def __init__(self, model_dir, model_name, config_changeable_items,
-                 no_logs, pingpong, training_image_size):
+                 no_logs, no_wandb_logs, pingpong, training_image_size):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
-                     "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
+                     "config_changeable_items: '%s', no_logs: %s, no_wandb_logs %s, pingpong: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
-                     config_changeable_items, no_logs, pingpong, training_image_size)
+                     config_changeable_items, no_logs, no_wandb_logs, pingpong, training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)
@@ -881,7 +884,7 @@ class State():
         self.config = dict()
         self.load(config_changeable_items)
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs, pingpong)
+        self.create_new_session(no_logs, no_wandb_logs, pingpong)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -918,11 +921,12 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs, pingpong):
+    def create_new_session(self, no_logs, no_wandb_logs, pingpong):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
+                                          "no_wandb_logs": no_wandb_logs,
                                           "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
