@@ -27,14 +27,19 @@ class KSession():
         The name of the model that is to be loaded
     model_path: str
         The path to the keras model file
-    model_kwargs: dict
-        Any kwargs that need to be passed to :func:`keras.models.load_models()`
+    model_kwargs: dict, optional
+        Any kwargs that need to be passed to :func:`keras.models.load_models()`. Default: None
+    allow_growth: bool, optional
+        Enable the Tensorflow GPU allow_growth configuration option. This option prevents "
+        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and "
+        slower performance. Default: False
     """
-    def __init__(self, name, model_path, model_kwargs=None):
-        logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s)",
-                     self.__class__.__name__, name, model_path, model_kwargs)
+    def __init__(self, name, model_path, model_kwargs=None, allow_growth=False):
+        logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s, "
+                     "allow_growth: %s)",
+                     self.__class__.__name__, name, model_path, model_kwargs, allow_growth)
         self._name = name
-        self._session = self._set_session()
+        self._session = self._set_session(allow_growth)
         self._model_path = model_path
         self._model_kwargs = model_kwargs
         self._model = None
@@ -92,7 +97,7 @@ class KSession():
             return np.concatenate(results)
         return [np.concatenate(x) for x in zip(*results)]
 
-    def _set_session(self):
+    def _set_session(self, allow_growth):
         """ Sets the session and graph.
 
         If the backend is AMD then this does nothing and the global ``Keras`` ``Session``
@@ -103,6 +108,8 @@ class KSession():
 
         self.graph = tf.Graph()
         config = tf.ConfigProto()
+        if allow_growth and get_backend() == "nvidia":
+            config.gpu_options.allow_growth = True  # pylint:disable=no-member
         session = tf.Session(graph=tf.Graph(), config=config)
         logger.debug("Creating tf.session: (graph: %s, session: %s, config: %s)",
                      session.graph, session, config)

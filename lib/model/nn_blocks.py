@@ -53,6 +53,9 @@ class NNBlocks():
             to conv_aware or he_uniform().
             if a specific initializer has been passed in then the specified initializer
             will be used rather than the default """
+        if "kernel_initializer" in kwargs:
+            logger.debug("Using model specified initializer: %s", kwargs["kernel_initializer"])
+            return kwargs
         if self.use_convaware_init:
             default = ConvolutionAware()
             if self.first_run:

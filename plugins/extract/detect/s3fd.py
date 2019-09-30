@@ -38,7 +38,7 @@ class Detect(Detector):
                                                 O2K_Pow=O2K_Pow,
                                                 O2K_ConstantLayer=O2K_ConstantLayer,
                                                 O2K_Div=O2K_Div))
-        self.model = S3fd(self.model_path, model_kwargs, confidence)
+        self.model = S3fd(self.model_path, model_kwargs, self.config["allow_growth"], confidence)
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
@@ -214,10 +214,10 @@ class O2K_Div(O2K_ElementwiseLayer):
 
 class S3fd(KSession):
     """ Keras Network """
-    def __init__(self, model_path, model_kwargs, confidence):
-        logger.debug("Initializing: %s: (model_path: '%s')",
-                     self.__class__.__name__, model_path)
-        super().__init__("S3FD", model_path, model_kwargs)
+    def __init__(self, model_path, model_kwargs, allow_growth, confidence):
+        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s)",
+                     self.__class__.__name__, model_path, allow_growth)
+        super().__init__("S3FD", model_path, model_kwargs=model_kwargs, allow_growth=allow_growth)
         self.load_model()
         self.confidence = confidence
         logger.debug("Initialized: %s", self.__class__.__name__)
