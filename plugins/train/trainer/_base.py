@@ -247,7 +247,7 @@ class Batcher():
         self.config = config
         self.target = None
         self.samples = None
-        self.mask = None
+        self.masks = None
 
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
@@ -294,11 +294,9 @@ class Batcher():
             Items should come out as: (sample, warped, targets, [mask]) """
         logger.debug("Generating targets")
         batch = next(self.feed)
-        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
-                           self.model.training_opts["replicate_input_mask"])
         targets_use_mask = self.model.training_opts["replicate_input_mask"]
-        model_inputs = [batch["feed"], batch["masks"]] if inputs_use_mask [batch["feed"]]
-        model_targets = [batch["targets"]] if targets_use_mask else [batch["targets"]]
+        model_inputs = batch["feed"] + batch["masks"] if self.use_mask else batch["feed"]
+        model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
         return model_inputs, model_targets
 
     def generate_preview(self, do_preview):
@@ -306,15 +304,13 @@ class Batcher():
         if not do_preview:
             self.samples = None
             self.target = None
+            self.masks = None
             return
         logger.debug("Generating preview")
         batch = next(self.preview_feed)
         self.samples = batch["samples"]
-        self.target = [batch["targets"][self.model.largest_face_index]]
-        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
-                           self.model.training_opts["replicate_input_mask"])
-        if inputs_use_mask:
-            self.target += [batch["masks"]]
+        self.target = batch["targets"][self.model.largest_face_index]
+        self.masks = batch["masks"][0]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -329,31 +325,24 @@ class Batcher():
                                                                is_preview=True)
         logger.debug("Set preview feed. Batchsize: %s", batchsize)
 
-    def compile_sample(self, batch_size, samples=None, images=None):
+    def compile_sample(self, batch_size, samples=None, images=None, masks=None):
         """ Training samples to display in the viewer """
         num_images = self.config.get("preview_images", 14)
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
-        retval = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
-        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
-                           self.model.training_opts["replicate_input_mask"])
-        if inputs_use_mask:
-            retval.extend(tgt[0:num_images] for tgt in images)
-        else:
-            retval.extend(images[0:num_images])
+        masks = masks if masks is not None else self.masks
+        samples = samples if samples is not None else self.samples
+        retval = [samples[0:num_images], images[0:num_images], masks[0:num_images]]
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         batchsize = len(batch["samples"])
-        images = [batch["targets"][self.model.largest_face_index]]
-        inputs_use_mask = (self.model.training_opts["penalized_mask_loss"] or
-                           self.model.training_opts["replicate_input_mask"])
-        if inputs_use_mask:
-            images += [batch["masks"]]
-        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
+        images = batch["targets"][self.model.largest_face_index]
+        masks= batch["masks"][0]
+        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images, masks=masks)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -422,7 +411,7 @@ class Samples():
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
-        figure = np.vstack((header, figure))
+        figure = np.concatenate((header, figure), axis=0)
 
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
@@ -567,7 +556,7 @@ class Samples():
                   for idx in range(len(texts))]
         logger.debug("texts: %s, text_sizes: %s, text_x: %s, text_y: %s",
                      texts, text_sizes, text_x, text_y)
-        header_box = np.ones((height, total_width, 4), np.float32)
+        header_box = np.ones((height, total_width, 3), np.float32)
         for idx, text in enumerate(texts):
             cv2.putText(header_box,  # pylint: disable=no-member
                         text,

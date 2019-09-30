@@ -131,7 +131,7 @@ class DetectedFace():
         self.landmarks_xy = alignment["landmarks_xy"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
-        if image.any():
+        if image:
             self._image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
                      "landmarks: %s)",
@@ -144,7 +144,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None):
+    def load_aligned(self, image, size=256, coverage_ratio=1.0, dtype=None):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -163,8 +163,6 @@ class DetectedFace():
             The size of the output face in pixels
         coverage_ratio: float
             The metric determining the field of view of the returned face
-        align_eyes: bool, optional
-            Optionally perform additional alignment to align eyes. Default: `False`
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
 

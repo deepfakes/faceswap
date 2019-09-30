@@ -247,7 +247,7 @@ class Extract():
 
             face = detected_face["face"]
             resized_face = face.feed_face
-            face.hash, img = hash_encode_image(resized_face, extension)
+            face.hash, img = encode_image_with_hash(resized_face, extension)
             self.save_queue.put((out_filename, img))
             final_faces.append(face.to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces

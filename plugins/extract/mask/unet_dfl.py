@@ -33,7 +33,6 @@ class Mask(Masker):
         for index, face in enumerate(batch["detected_faces"]):
             face.load_aligned(face.image,
                               size=self.mask_in_size,
-                              align_eyes=False,
                               dtype='float32')
             self.input[index] = face.aligned["face"]
         batch["feed"] = self.input / 255.

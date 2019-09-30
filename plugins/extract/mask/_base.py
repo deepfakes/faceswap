@@ -196,13 +196,10 @@ class Masker(Extractor):
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()
                                       if key != "image"})
-        print("herhehrehrheh")
         for filename, image, face in zip(batch["filename"],
                                          batch["image"],
                                          batch["detected_faces"]):
             self._output_faces.append(face)
-            print("_output_faces: ", len(_output_faces))
-            print("self._faces_per_filename[filename]: ", len(self._faces_per_filename[filename]))
             if len(self._output_faces) != self._faces_per_filename[filename]:
                 continue
             retval = dict(filename=filename, image=image, detected_faces=self._output_faces)
