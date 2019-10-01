@@ -46,10 +46,9 @@ class Mask(Masker):
             face.load_feed_face(face.image,
                                 size=self.input_size,
                                 coverage_ratio=self.coverage_ratio)
-            if self.input_size != self.output_size:
-                face.load_reference_face(face.image,
-                                         size=self.output_size,
-                                         coverage_ratio=self.coverage_ratio)
+            face.load_reference_face(face.image,
+                                     size=self.output_size,
+                                     coverage_ratio=self.coverage_ratio)
         return batch
 
     @staticmethod

@@ -118,7 +118,6 @@ class Masker(Extractor):
                 logger.trace("EOF received")
                 exhausted = True
                 break
-
             # Put frames with no faces into the out queue to keep TQDM consistent
             if not item["detected_faces"]:
                 self._queues["out"].put(item)

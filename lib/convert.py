@@ -136,14 +136,7 @@ class Converter():
 
         dual_generator = zip(predicted["swapped_faces"], predicted["detected_faces"])
         for new_face, old_face in dual_generator:
-            print("new_face1: ", new_face.shape, np.mean(new_face, axis = (0,1)))
-            print("old_face: ", old_face.reference_face.shape, np.mean(old_face.reference_face, axis = (0,1)))
-            print("marixes: ", old_face.feed_matrix, old_face.reference_matrix)
-            sys.stdout.flush()
-            new_face = self.pre_warp_adjustments(old_face.reference_face, new_face)
-            print("new_face2: ", new_face.shape, np.mean(new_face, axis = (0,1)))
-            print("new_image: ", new_image.shape, np.mean(new_image, axis = (0,1)))
-            sys.stdout.flush()
+            new_face = self.pre_warp_adjustments(old_face.reference_face / 255., new_face)
             interpolator = old_face.reference_interpolators[1]
             flags = cv2.WARP_INVERSE_MAP + interpolator  # pylint: disable=no-member
             new_image = cv2.warpAffine(new_face,
@@ -153,7 +146,6 @@ class Converter():
                            flags=cv2.WARP_INVERSE_MAP | old_face.reference_interpolators[1],
                            borderMode=cv2.BORDER_TRANSPARENT)
             np.clip(new_image, 0., 1., out=new_image)
-            print("new_image2: ", new_image.shape, np.mean(new_image, axis = (0,1)))
         logger.trace("Got filename: '%s'. (new_image: %s)", predicted["filename"], new_image.shape)
         return new_image, original_frame
 
@@ -172,10 +164,8 @@ class Converter():
     def get_image_mask(self, old_face, new_face):
         """ Get the image mask """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
-        print("old_face, new_face, mask_a:,", old_face.shape, new_face.shape)
         new_face = self.adjustments["box"].run(new_face)
         mask = self.adjustments["mask"].run(new_face)
-        print("old_face, new_face, mask_b:,", old_face.shape, new_face.shape, mask.shape)
         np.clip(new_face, 0.0, 1.0, out=new_face)
         logger.trace("Got mask. Image shape: %s, Mask shape: %s", new_face.shape, mask.shape)
         return old_face[..., :3], new_face[..., :3], mask

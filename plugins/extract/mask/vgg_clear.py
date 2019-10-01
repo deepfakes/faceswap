@@ -63,13 +63,12 @@ class Mask(Masker):
             batch["detected_faces"][idx].feed["face"] = np.concatenate((feed_face,
                                                                         feed_mask),
                                                                        axis=-1)
-            if self.input_size != self.output_size:
-                face.load_reference_face(face.image,
-                                         size=self.output_size,
-                                         coverage_ratio=self.coverage_ratio)
-                ref_face = face.reference["face"][..., :3]
-                ref_mask = self._resize(prediction, self.output_size).astype('uint8')
-                batch["detected_faces"][idx].reference["face"] = np.concatenate((ref_face,
-                                                                                 ref_mask),
-                                                                                axis=-1)
+            face.load_reference_face(face.image,
+                                     size=self.output_size,
+                                     coverage_ratio=self.coverage_ratio)
+            ref_face = face.reference["face"][..., :3]
+            ref_mask = self._resize(prediction, self.output_size).astype('uint8')
+            batch["detected_faces"][idx].reference["face"] = np.concatenate((ref_face,
+                                                                             ref_mask),
+                                                                            axis=-1)
         return batch
