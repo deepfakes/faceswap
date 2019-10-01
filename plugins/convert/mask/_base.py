@@ -109,11 +109,13 @@ class BlurMask():
         """ Return a dict of function name to cv2 function """
         return dict(gaussian=cv2.GaussianBlur,  # pylint: disable = no-member
                     normalized=cv2.blur)  # pylint: disable = no-member
+
     @property
     def kwarg_requirements(self):
         """ Return a dict of function name to a list of required kwargs """
         return dict(gaussian=["ksize", "sigmaX"],
                     normalized=["ksize"])
+
     @property
     def kwarg_mapping(self):
         """ Return a dict of kwarg names to config item names """
