@@ -299,10 +299,10 @@ class Extractor():
             logger.debug("Parallel processing discabled by amd")
             return False
 
-        vram_required = self._detector.vram +
-                        self._aligner.vram +
-                        self._masker.vram +
-                        self._vram_buffer
+        vram_required = (self._detector.vram +
+                         self._aligner.vram +
+                         self._masker.vram +
+                         self._vram_buffer)
         stats = gpu_stats.get_card_most_free()
         vram_free = int(stats["free"])
         logger.verbose("%s - %sMB free of %sMB",
@@ -397,7 +397,7 @@ class Extractor():
                 logger.debug("Plugin requirements within threshold: (plugin_required: %sMB, "
                              "vram_free: %sMB)", plugin_required, vram_free)
                 return
-            # Hacky split across 2 plugins
+            # Hacky split across 3 plugins
             available_vram = (vram_free - vram_required) // 3
             for plugin in (self._detector, self._aligner, self._masker):
                 self._set_plugin_batchsize(plugin, available_vram)
@@ -412,7 +412,6 @@ class Extractor():
                     continue
                 available_vram = vram_free - vram_required
                 self._set_plugin_batchsize(plugin, available_vram)
-
 
     @staticmethod
     def _set_plugin_batchsize(plugin, available_vram):

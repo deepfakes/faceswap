@@ -275,7 +275,8 @@ class ModelBase():
 
             Inputs is defined in self.get_inputs() and is standardized for all models
                 if will generally be in the order:
-                [face (the input for image), mask (the input for mask if it is used)]
+                [face (the input for image),
+                 mask (the input for mask if it is used)]
         """
         raise NotImplementedError
 

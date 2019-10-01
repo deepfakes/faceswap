@@ -203,7 +203,6 @@ class Extract():
 
                 if self.extractor.final_pass:
                     self.output_processing(faces, size, filename)
-                    self.post_process.do_actions(faces)
                     self.output_faces(filename, faces)
                     if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
@@ -232,11 +231,14 @@ class Extract():
             final_faces.append({"file_location": filename,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
+        self.post_process.do_actions(faces)
 
-        if not faces["detected_faces"]:
+        faces_count = len(faces["detected_faces"])
+        if faces_count == 0:
             logger.verbose("No faces were detected in image: %s", os.path.basename(filename))
-            if not self.verify_output:
-                self.verify_output = True
+
+        if not self.verify_output and faces_count > 1:
+            self.verify_output = True
 
     def output_faces(self, filename, faces):
         """ Output faces to save thread """
