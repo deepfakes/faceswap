@@ -140,11 +140,11 @@ class Converter():
             interpolator = old_face.reference_interpolators[1]
             flags = cv2.WARP_INVERSE_MAP + interpolator  # pylint: disable=no-member
             new_image = cv2.warpAffine(new_face,
-                           old_face.reference_matrix,
-                           frame_size,
-                           new_image,
-                           flags=cv2.WARP_INVERSE_MAP | old_face.reference_interpolators[1],
-                           borderMode=cv2.BORDER_TRANSPARENT)
+                                       old_face.reference_matrix,
+                                       frame_size,
+                                       new_image,
+                                       flags=flags,
+                                       borderMode=cv2.BORDER_TRANSPARENT)
             np.clip(new_image, 0., 1., out=new_image)
         logger.trace("Got filename: '%s'. (new_image: %s)", predicted["filename"], new_image.shape)
         return new_image, original_frame
@@ -189,7 +189,7 @@ class Converter():
         """ Scale the image if requested """
         if self.scale != 1.:
             logger.trace("source frame: %s", frame.shape)
-            interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
+            interp = cv2.INTER_CUBIC if self.scale > 1. else cv2.INTER_AREA
             frame = cv2.resize(frame,  # pylint: disable=no-member
                                (0, 0), fx=self.scale, fy=self.scale, interpolation=interp)
             logger.trace("resized frame: %s", frame.shape)

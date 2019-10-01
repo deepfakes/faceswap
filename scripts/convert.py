@@ -427,37 +427,6 @@ class DiskIO():
         feed = dict(filename=filename, image=image)
         self.extractor.input_queue.put(feed)
         masked_faces = next(self.extractor.detected_faces())
-        '''
-        for phase in range(self.extractor.passes):
-            is_final = self.extractor.final_pass
-            detected_faces = dict()
-            self.extractor.launch()
-            for idx, faces in enumerate(tqdm(self.extractor.detected_faces(),
-                                             total=to_process,
-                                             file=sys.stdout,
-                                             desc="Running pass {} of {}: {}".format(
-                                                 phase + 1,
-                                                 self.extractor.passes,
-                                                 self.extractor.phase.title()))):
-                filename = faces["filename"]
-
-                if self.extractor.final_pass:
-                    self.output_processing(faces, align_eyes, size, filename)
-                    self.post_process.do_actions(faces)
-                    self.output_faces(filename, faces)
-                    if self.save_interval and (idx + 1) % self.save_interval == 0:
-                        self.alignments.save()
-                else:
-                    del faces["image"]
-                    detected_faces[filename] = faces
-
-            if not self.extractor.final_pass:
-                logger.debug("Reloading images")
-                self.threaded_io("reload", detected_faces)
-        '''
-        
-        
-        
         return masked_faces
 
     # Saving tasks

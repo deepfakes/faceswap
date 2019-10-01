@@ -34,7 +34,7 @@ class Mask(Masker):
             for item in parts:
                 item = np.concatenate(item)
                 hull = cv2.convexHull(item).astype('int32')  # pylint: disable=no-member
-                cv2.fillConvexPoly(mask, hull, 255, lineType=cv2.LINE_AA)  # pylint: disable=no-member
+                cv2.fillConvexPoly(mask, hull, 255, lineType=cv2.LINE_AA)
         batch["prediction"] = masks
         return batch
 

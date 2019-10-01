@@ -299,7 +299,10 @@ class Extractor():
             logger.debug("Parallel processing discabled by amd")
             return False
 
-        vram_required = self._detector.vram + self._aligner.vram + self._masker.vram + self._vram_buffer
+        vram_required = self._detector.vram +
+                        self._aligner.vram +
+                        self._masker.vram +
+                        self._vram_buffer
         stats = gpu_stats.get_card_most_free()
         vram_free = int(stats["free"])
         logger.verbose("%s - %sMB free of %sMB",
@@ -371,9 +374,11 @@ class Extractor():
         logger.debug("Launched Masker")
 
     def _set_extractor_batchsize(self):
-        """ Sets the batchsize of the requested plugins based on their vram and
-            vram_per_batch_requirements if the the configured batchsize requires more
-            vram than is available. Nvidia only. """
+        """ 
+        Sets the batchsize of the requested plugins based on their vram and
+        vram_per_batch_requirements if the the configured batchsize requires more
+        vram than is available. Nvidia only.
+        """
         if (self._detector.vram == 0 and self._aligner.vram == 0 and self._masker.vram == 0
             or get_backend() != "nvidia"):
             logger.debug("Either detector and aligner have no VRAM requirements or not running "

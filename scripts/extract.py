@@ -228,7 +228,8 @@ class Extract():
         """ Prepare faces for output """
         final_faces = list()
         for detected_face in faces["detected_faces"]:
-            final_faces.append({"file_location": self.output_dir / Path(detected_face.filename).stem,
+            filename = self.output_dir / Path(detected_face.filename).stem
+            final_faces.append({"file_location": filename,
                                 "face": detected_face})
         faces["detected_faces"] = final_faces
 

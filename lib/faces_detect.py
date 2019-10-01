@@ -40,11 +40,13 @@ class DetectedFace():
         The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
         of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
     """
-    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None, filename=None):
-        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s)",
+    def __init__(self, image=None, x=None, w=None, y=None, h=None,
+                 landmarks_xy=None, filename=None):
+        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, "
+                     "landmarks_xy: %s, filename: %s")",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
-                     x, w, y, h, landmarks_xy)
+                     x, w, y, h, landmarks_xy, filename)
         self.image = image
         self.x = x
         self.w = w

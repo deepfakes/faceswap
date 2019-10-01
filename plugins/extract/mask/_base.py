@@ -218,12 +218,9 @@ class Masker(Extractor):
         if scale == 1.:
             return image
         method = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
-        #generator = (cv2.resize(img,  # pylint: disable=no-member
-        #                        (0, 0), fx=scale, fy=scale, interpolation=method) for img in image)
-        #resized = np.array(tuple(generator))
         resized = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=method)
         resized = resized if channels > 1 else resized[..., None]
-        return resized 
+        return resized
 
     @staticmethod
     def postprocessing(mask):

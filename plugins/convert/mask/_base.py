@@ -85,7 +85,7 @@ class BlurMask():
             ksize = kwargs["ksize"][0]
             logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))
             blurred = func(blurred, **kwargs)
-            ksize = int(ksize * self.multipass_factor)
+            ksize = int(round(ksize * self.multipass_factor))
             kwargs["ksize"] = self.get_kernel_tuple(ksize)
         logger.trace("Returning blurred mask. Shape: %s", blurred.shape)
         return blurred
@@ -107,17 +107,18 @@ class BlurMask():
     @property
     def func_mapping(self):
         """ Return a dict of function name to cv2 function """
-        return dict(gaussian=cv2.GaussianBlur, normalized=cv2.blur)  # pylint: disable=no-member
-
+        return dict(gaussian=cv2.GaussianBlur,  # pylint: disable = no-member
+                    normalized=cv2.blur)  # pylint: disable = no-member
     @property
     def kwarg_requirements(self):
         """ Return a dict of function name to a list of required kwargs """
-        return dict(gaussian=["ksize", "sigmaX"], normalized=["ksize"])
-
+        return dict(gaussian=["ksize", "sigmaX"],
+                    normalized=["ksize"])
     @property
     def kwarg_mapping(self):
         """ Return a dict of kwarg names to config item names """
-        return dict(ksize=self.kernel_size, sigmaX=self.sigma)
+        return dict(ksize=self.kernel_size,
+                    sigmaX=self.sigma)
 
     def get_kernel_size(self, radius_ratio):
         """ Set the kernel size to absolute """

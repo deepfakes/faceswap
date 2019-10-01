@@ -341,8 +341,11 @@ class Batcher():
         batch = next(self.timelapse_feed)
         batchsize = len(batch["samples"])
         images = batch["targets"][self.model.largest_face_index]
-        masks= batch["masks"][0]
-        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images, masks=masks)
+        masks = batch["masks"][0]
+        sample = self.compile_sample(batchsize, 
+                                     samples=batch["samples"],
+                                     images=images,
+                                     masks=masks)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):

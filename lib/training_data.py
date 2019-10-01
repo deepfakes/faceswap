@@ -219,8 +219,8 @@ class TrainingDataGenerator():
 
         # Random Warp # TODO change masks to have a input mask and a warped target mask
         processed["feed"] = [self._processing.warp(batch[..., :3],
-                                                  self._training_opts["warp_to_landmarks"],
-                                                  **warp_kwargs)]
+                                                   self._training_opts["warp_to_landmarks"],
+                                                   **warp_kwargs)]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
                      filenames,

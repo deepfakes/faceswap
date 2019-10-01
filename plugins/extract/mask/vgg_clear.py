@@ -49,17 +49,17 @@ class Mask(Masker):
 
     def process_output(self, batch):
         """ Compile found faces for output """
-        for idx, (face, prediction) in enumerate(zip(batch["detected_faces"], batch["prediction"])):
-            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in prediction)
-            prediction = np.array(tuple(generator))
-            prediction[prediction < 10.] = 0.
-            prediction[prediction > 245.] = 255.
+        for idx, (face, predicts) in enumerate(zip(batch["detected_faces"], batch["prediction"])):
+            generator = (cv2.GaussianBlur(mask, (7, 7), 0) for mask in predicts)
+            predicted = np.array(tuple(generator))
+            predicted[predicted < 10.] = 0.
+            predicted[predicted > 245.] = 255.
 
             face.load_feed_face(face.image,
                                 size=self.input_size,
                                 coverage_ratio=self.coverage_ratio)
             feed_face = face.feed["face"][..., :3]
-            feed_mask = self._resize(prediction, self.input_size).astype('uint8')
+            feed_mask = self._resize(predicted, self.input_size).astype('uint8')
             batch["detected_faces"][idx].feed["face"] = np.concatenate((feed_face,
                                                                         feed_mask),
                                                                        axis=-1)
@@ -67,7 +67,7 @@ class Mask(Masker):
                                      size=self.output_size,
                                      coverage_ratio=self.coverage_ratio)
             ref_face = face.reference["face"][..., :3]
-            ref_mask = self._resize(prediction, self.output_size).astype('uint8')
+            ref_mask = self._resize(predicted, self.output_size).astype('uint8')
             batch["detected_faces"][idx].reference["face"] = np.concatenate((ref_face,
                                                                              ref_mask),
                                                                             axis=-1)
