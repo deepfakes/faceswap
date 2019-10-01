@@ -43,9 +43,8 @@ class Convert():
         self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
 
         self.add_queues()
-        self.model = self.load_model()
-        self.disk_io = DiskIO(self.alignments, self.images, self.model, arguments)
-        self.predictor = Predict(self.disk_io.load_queue, self.model, self.queue_size, arguments)
+        self.disk_io = DiskIO(self.alignments, self.images, arguments)
+        self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
 
         configfile = self.args.configfile if hasattr(self.args, "configfile") else None
         self.converter = Converter(get_folder(self.args.output_dir),
@@ -80,44 +79,6 @@ class Convert():
         retval = 1 if retval == 0 else retval
         logger.debug(retval)
         return retval
-
-    def load_model(self):
-        """ Load the model requested for conversion """
-        logger.debug("Loading Model")
-        model_dir = get_folder(self.args.model_dir, make_folder=False)
-        if not model_dir:
-            logger.error("%s does not exist.", self.args.model_dir)
-            exit(1)
-        trainer = self.get_trainer(model_dir)
-        gpus = 1 if not hasattr(self.args, "gpus") else self.args.gpus
-        model = PluginLoader.get_model(trainer)(model_dir, gpus, predict=True)
-        logger.debug("Loaded Model")
-        return model
-
-    def get_trainer(self, model_dir):
-        """ Return the trainer name if provided, or read from state file """
-        if hasattr(self.args, "trainer") and self.args.trainer:
-            logger.debug("Trainer name provided: '%s'", self.args.trainer)
-            return self.args.trainer
-
-        statefile = [fname for fname in os.listdir(str(model_dir))
-                     if fname.endswith("_state.json")]
-        if len(statefile) != 1:
-            logger.error("There should be 1 state file in your model folder. %s were found. "
-                         "Specify a trainer with the '-t', '--trainer' option.", len(statefile))
-            exit(1)
-        statefile = os.path.join(str(model_dir), statefile[0])
-
-        with open(statefile, "rb") as inp:
-            state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-            trainer = state.get("name", None)
-
-        if not trainer:
-            logger.error("Trainer name could not be read from state file. "
-                         "Specify a trainer with the '-t', '--trainer' option.")
-            exit(1)
-        logger.debug("Trainer from state file: '%s'", trainer)
-        return trainer
 
     def validate(self):
         """ Make the output folder if it doesn't exist and check that video flag is
@@ -191,12 +152,11 @@ class DiskIO():
     """ Background threads to:
             Load images from disk and get the detected faces
             Save images back to disk """
-    def __init__(self, alignments, images, model, arguments):
+    def __init__(self, alignments, images, arguments):
         logger.debug("Initializing %s: (alignments: %s, images: %s, arguments: %s)",
                      self.__class__.__name__, alignments, images, arguments)
         self.alignments = alignments
         self.images = images
-        self.model = model
         self.args = arguments
         self.pre_process = PostProcess(arguments)
         self.completion_event = Event()
@@ -287,6 +247,9 @@ class DiskIO():
 
     def load_extractor(self):
         """ Set on the fly extraction """
+        if self.alignments.have_alignments_file:
+            return None
+
         logger.debug("Loading extractor")
         logger.warning("No Alignments file found. Extracting on the fly.")
         logger.warning("NB: This will use the inferior cv2-dnn for extraction "
@@ -294,18 +257,9 @@ class DiskIO():
                        "superior results")
         extractor = Extractor(detector="cv2-dnn",
                               aligner="cv2-dnn",
-                              masker=self.args.mask_type,
-                              multiprocess=True,
+                              multiprocess=False,
                               rotate_images=None,
-                              min_size=20,
-                              input_size=self.model.input_shape[0],
-                              output_size=self.model.output_shape[0],
-                              coverage_ratio=1.)
-        if self.alignments.have_alignments_file:
-            extractor.multiprocess = False
-            extractor._is_parallel = False
-            extractor._masker.batchsize = 1
-            extractor.phase = 'mask'
+                              min_size=20)
         extractor.launch()
         logger.debug("Loaded extractor")
         return extractor
@@ -346,11 +300,13 @@ class DiskIO():
     def load(self, *args):  # pylint: disable=unused-argument
         """ Load the images with detected_faces"""
         logger.debug("Load Images: Start")
+        idx = 0
         for filename, image in self.images.load():
+            idx += 1
             if self.load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if image is None or (not image.any() and image.ndim not in (2, 3, 4)):
+            if image is None or (not image.any() and image.ndim not in (2, 3)):
                 # All black frames will return not np.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
@@ -362,9 +318,9 @@ class DiskIO():
                 else:
                     logger.trace("Discarding frame: '%s'", filename)
                 continue
-            item = self.get_detected_faces(filename, np.array(image))
-            # detected_faces = self.get_detected_faces(filename, image)
-            # item = dict(filename=filename, image=image, detected_faces=detected_faces)
+
+            detected_faces = self.get_detected_faces(filename, image)
+            item = dict(filename=filename, image=image, detected_faces=detected_faces)
             self.pre_process.do_actions(item)
             self.load_queue.put(item)
 
@@ -389,30 +345,26 @@ class DiskIO():
     def get_detected_faces(self, filename, image):
         """ Return detected faces from alignments or detector """
         logger.trace("Getting faces for: '%s'", filename)
-        if self.alignments.have_alignments_file:
-            detected_faces = self.alignments_faces(filename, image)
+        if not self.extractor:
+            detected_faces = self.alignments_faces(os.path.basename(filename), image)
         else:
             detected_faces = self.detect_faces(filename, image)
-        logger.trace("Got %s faces for: '%s'", len(detected_faces["detected_faces"]), filename)
+        logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)
         return detected_faces
 
-    def alignments_faces(self, filename, image):
+    def alignments_faces(self, frame, image):
         """ Get the face from alignments file """
-        frame = os.path.basename(filename)
         if not self.check_alignments(frame):
-            return dict()
+            return list()
 
         faces = self.alignments.get_faces_in_frame(frame)
+        detected_faces = list()
 
-        detected_faces_list = list()
         for rawface in faces:
             face = DetectedFace()
             face.from_alignment(rawface, image=image)
-            detected_faces_list.append(face)
-        feed = dict(image=image, filename=filename, detected_faces=detected_faces_list)
-        self.extractor.input_queue.put(feed)
-        masked_faces = next(self.extractor.detected_faces())
-        return masked_faces
+            detected_faces.append(face)
+        return detected_faces
 
     def check_alignments(self, frame):
         """ If we have no alignments for this image, skip it """
@@ -424,10 +376,13 @@ class DiskIO():
 
     def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
-        feed = dict(filename=filename, image=image)
-        self.extractor.input_queue.put(feed)
-        masked_faces = next(self.extractor.detected_faces())
-        return masked_faces
+        inp = {"filename": filename,
+               "image": image}
+        self.extractor.input_queue.put(inp)
+        faces = next(self.extractor.detected_faces())
+
+        final_faces = [face for face in faces["detected_faces"]]
+        return final_faces
 
     # Saving tasks
     def save(self, completion_event):
@@ -457,7 +412,7 @@ class DiskIO():
 
 class Predict():
     """ Predict faces from incoming queue """
-    def __init__(self, in_queue, model, queue_size, arguments):
+    def __init__(self, in_queue, queue_size, arguments):
         logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
                      self.__class__.__name__, arguments, queue_size, in_queue)
         self.batchsize = self.get_batchsize(queue_size)
@@ -467,7 +422,7 @@ class Predict():
         self.serializer = Serializer.get_serializer("json")
         self.faces_count = 0
         self.verify_output = False
-        self.model = model
+        self.model = self.load_model()
         self.output_indices = {"face": self.model.largest_face_index,
                                "mask": self.model.largest_mask_index}
         self.predictor = self.model.converter(self.args.swap_model)
@@ -514,6 +469,42 @@ class Predict():
         logger.debug("Got batchsize: %s", batchsize)
         return batchsize
 
+    def load_model(self):
+        """ Load the model requested for conversion """
+        logger.debug("Loading Model")
+        model_dir = get_folder(self.args.model_dir, make_folder=False)
+        if not model_dir:
+            raise FaceswapError("{} does not exist.".format(self.args.model_dir))
+        trainer = self.get_trainer(model_dir)
+        gpus = 1 if not hasattr(self.args, "gpus") else self.args.gpus
+        model = PluginLoader.get_model(trainer)(model_dir, gpus, predict=True)
+        logger.debug("Loaded Model")
+        return model
+
+    def get_trainer(self, model_dir):
+        """ Return the trainer name if provided, or read from state file """
+        if hasattr(self.args, "trainer") and self.args.trainer:
+            logger.debug("Trainer name provided: '%s'", self.args.trainer)
+            return self.args.trainer
+
+        statefile = [fname for fname in os.listdir(str(model_dir))
+                     if fname.endswith("_state.json")]
+        if len(statefile) != 1:
+            raise FaceswapError("There should be 1 state file in your model folder. {} were "
+                                "found. Specify a trainer with the '-t', '--trainer' "
+                                "option.".format(len(statefile)))
+        statefile = os.path.join(str(model_dir), statefile[0])
+
+        with open(statefile, "rb") as inp:
+            state = self.serializer.unmarshal(inp.read().decode("utf-8"))
+            trainer = state.get("name", None)
+
+        if not trainer:
+            raise FaceswapError("Trainer name could not be read from state file. "
+                                "Specify a trainer with the '-t', '--trainer' option.")
+        logger.debug("Trainer from state file: '%s'", trainer)
+        return trainer
+
     def predict_faces(self):
         """ Get detected faces from images """
         faces_seen = 0
@@ -525,6 +516,7 @@ class Predict():
             if item != "EOF":
                 logger.trace("Got from queue: '%s'", item["filename"])
                 faces_count = len(item["detected_faces"])
+
                 # Safety measure. If a large stream of frames appear that do not have faces,
                 # these will stack up into RAM. Keep a count of consecutive frames with no faces.
                 # If self.batchsize number of frames appear, force the current batch through
@@ -535,6 +527,8 @@ class Predict():
                     self.verify_output = True
                     logger.verbose("Found more than one face in an image! '%s'",
                                    os.path.basename(item["filename"]))
+
+                self.load_aligned(item)
 
                 faces_seen += faces_count
                 batch.append(item)
@@ -548,20 +542,20 @@ class Predict():
             if batch:
                 logger.trace("Batching to predictor. Frames: %s, Faces: %s",
                              len(batch), faces_seen)
-                detected_batch = [detected_face
-                                  for item in batch
+                detected_batch = [detected_face for item in batch
                                   for detected_face in item["detected_faces"]]
                 if faces_seen != 0:
-                    feed_faces, ref_faces = self.compile_feed_faces(detected_batch)
+                    feed_faces = self.compile_feed_faces(detected_batch)
                     batch_size = None
                     if is_plaidml and feed_faces.shape[0] != self.batchsize:
                         logger.verbose("Fallback to BS=1")
                         batch_size = 1
-                    predicted = self.predict(feed_faces, ref_faces, batch_size)
+                    predicted = self.predict(feed_faces, batch_size)
                 else:
                     predicted = list()
 
                 self.queue_out_frames(batch, predicted)
+
             consecutive_no_faces = 0
             faces_seen = 0
             batch = list()
@@ -572,37 +566,60 @@ class Predict():
         self.out_queue.put("EOF")
         logger.debug("Load queue complete")
 
-    def compile_feed_faces(self, detected_faces):
+    def load_aligned(self, item):
+        """ Load the feed faces and reference output faces """
+        logger.trace("Loading aligned faces: '%s'", item["filename"])
+        for detected_face in item["detected_faces"]:
+            detected_face.load_feed_face(item["image"],
+                                         size=self.input_size,
+                                         coverage_ratio=self.coverage_ratio,
+                                         dtype="float32")
+            if self.input_size == self.output_size:
+                detected_face.reference = detected_face.feed
+            else:
+                detected_face.load_reference_face(item["image"],
+                                                  size=self.output_size,
+                                                  coverage_ratio=self.coverage_ratio,
+                                                  dtype="float32")
+        logger.trace("Loaded aligned faces: '%s'", item["filename"])
+
+    @staticmethod
+    def compile_feed_faces(detected_faces):
         """ Compile the faces for feeding into the predictor """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        feed_faces = np.stack([face.feed_face for face in detected_faces])
-        if self.input_size == self.output_size:
-            ref_faces = feed_faces
-        else:
-            ref_faces = np.stack([face.reference_face for face in detected_faces])
-        feed = [feed_faces[..., :3] / 255.]
-        target = ref_faces / 255.
+        feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
+        logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
+        return feed_faces
+
+    def predict(self, feed_faces, batch_size=None):
+        """ Perform inference on the feed """
+        logger.trace("Predicting: Batchsize: %s", len(feed_faces))
+        feed = [feed_faces]
         if self.has_predicted_mask:
             feed.append(np.repeat(self.input_mask, feed_faces.shape[0], axis=0))
-        logger.trace("Compiled Feed faces. Shape: %s", [item.shape for item in feed])
-        return feed, target
-
-    def predict(self, feed, ref_faces, batch_size=None):
-        """ Perform inference on the feed """
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
+
         predicted = self.predictor(feed, batch_size=batch_size)
+        predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
-        predicted = self.filter_multi_out(predicted, ref_faces)
+
+        predicted = self.filter_multi_out(predicted)
+
+        # Compile masks into alpha channel or keep raw faces
+        predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
+        predicted = predicted.astype("float32")
+
         logger.trace("Final shape: %s", predicted.shape)
         return predicted
 
-    def filter_multi_out(self, predicted, ref_faces):
+    def filter_multi_out(self, predicted):
         """ Filter the predicted output to the final output """
-        predicted = predicted if isinstance(predicted, list) else [predicted]
+        if not predicted:
+            return predicted
         face = predicted[self.output_indices["face"]]
         mask_idx = self.output_indices["mask"]
-        mask = predicted[mask_idx] if mask_idx is not None else ref_faces[..., 3:4]
-        predicted = np.concatenate([face, mask], axis=-1)
+        mask = predicted[mask_idx] if mask_idx is not None else None
+        predicted = [face, mask] if mask is not None else [face]
         logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 
