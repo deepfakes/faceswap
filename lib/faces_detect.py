@@ -131,7 +131,7 @@ class DetectedFace():
         self.landmarks_xy = alignment["landmarks_xy"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
-        if image.any():
+        if image is not None and image.any():
             self.image = image
             self._image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
