@@ -47,9 +47,7 @@ class Alignments():
 
     def process(self):
         """ Main processing function of the Align tool """
-        if self.args.job.startswith("extract"):
-            job = Extract
-        elif self.args.job == "update-hashes":
+        if self.args.job == "update-hashes":
             job = UpdateHashes
         elif self.args.job.startswith("remove-"):
             job = RemoveAlignments

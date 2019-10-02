@@ -11,14 +11,14 @@ from pathlib import Path
 
 import cv2
 import imageio
-import imageio_ffmpeg as im_ffm
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
-from lib.utils import (camel_case_split, cv2_read_img, get_folder, get_image_paths,
-                       set_system_verbosity, _video_extensions)
+from lib.image import count_frames_and_secs, read_image
+from lib.utils import (camel_case_split, get_folder, get_image_paths, set_system_verbosity,
+                       _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -140,13 +140,13 @@ class Images():
         self.args = arguments
         self.is_video = self.check_input_folder()
         self.input_images = self.get_input_images()
+        self.images_found = self.count_images()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @property
-    def images_found(self):
+    def count_images(self):
         """ Number of images or frames """
         if self.is_video:
-            retval = int(im_ffm.count_frames_and_secs(self.args.input_dir)[0])
+            retval = int(count_frames_and_secs(self.args.input_dir)[0])
         else:
             retval = len(self.input_images)
         return retval
@@ -184,7 +184,7 @@ class Images():
         """ Load frames from disk """
         logger.debug("Input is separate Frames. Loading images")
         for filename in self.input_images:
-            image = cv2_read_img(filename, raise_error=False)
+            image = read_image(filename, raise_error=False)
             if image is None:
                 continue
             yield filename, image
@@ -193,7 +193,7 @@ class Images():
         """ Return frames from a video file """
         logger.debug("Input is video. Capturing frames")
         vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
-        reader = imageio.get_reader(self.args.input_dir)
+        reader = imageio.get_reader(self.args.input_dir, "ffmpeg")
         for i, frame in enumerate(reader):
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
@@ -213,13 +213,13 @@ class Images():
                 logger.trace("Extracted frame_no %s from filename '%s'", frame_no, filename)
             retval = self.load_one_video_frame(int(frame_no))
         else:
-            retval = cv2_read_img(filename, raise_error=True)
+            retval = read_image(filename, raise_error=True)
         return retval
 
     def load_one_video_frame(self, frame_no):
         """ Load a single frame from a video file """
         logger.trace("Loading video frame: %s", frame_no)
-        reader = imageio.get_reader(self.args.input_dir)
+        reader = imageio.get_reader(self.args.input_dir, "ffmpeg")
         reader.set_image_index(frame_no - 1)
         frame = reader.get_next_data()[:, :, ::-1]
         reader.close()
@@ -284,7 +284,6 @@ class PostProcess():
 
             face_filter = dict(detector=detector,
                                aligner=aligner,
-                               loglevel=self.args.loglevel,
                                multiprocess=not self.args.singleprocess)
             filter_lists = dict()
             if hasattr(self.args, "ref_threshold"):
@@ -406,7 +405,7 @@ class FaceFilter(PostProcessAction):
         self.filter = self.load_face_filter(**kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load_face_filter(self, filter_lists, ref_threshold, aligner, detector, loglevel,
+    def load_face_filter(self, filter_lists, ref_threshold, aligner, detector,
                          multiprocess):
         """ Load faces to filter out of images """
         if not any(val for val in filter_lists.values()):
@@ -421,7 +420,6 @@ class FaceFilter(PostProcessAction):
                                     filter_files[1],
                                     detector,
                                     aligner,
-                                    loglevel,
                                     multiprocess,
                                     ref_threshold)
             logger.debug("Face filter: %s", facefilter)

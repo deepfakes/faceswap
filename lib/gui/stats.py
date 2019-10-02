@@ -99,7 +99,7 @@ class TensorBoardLogs():
 class Session():
     """ The Loaded or current training session """
     def __init__(self, model_dir=None, model_name=None):
-        logger.debug("Initializing %s, model_dir: %s, model_name: %s)",
+        logger.debug("Initializing %s: (model_dir: %s, model_name: %s)",
                      self.__class__.__name__, model_dir, model_name)
         self.serializer = JSONSerializer
         self.state = None
@@ -271,6 +271,11 @@ class SessionsSummary():
         """ Return compiled stats """
         compiled = list()
         for sess_idx, ts_data in self.time_stats.items():
+            logger.debug("Compiling session ID: %s", sess_idx)
+            if self.session.state is None:
+                logger.debug("Session state dict doesn't exist. Most likely task has been "
+                             "terminated during compilation")
+                return None
             iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = ts_data["end_time"] - ts_data["start_time"]
             batchsize = self.session.total_batchsize.get(sess_idx, 0)
@@ -288,6 +293,8 @@ class SessionsSummary():
         """ Compile sessions stats with totals, format and return """
         logger.debug("Compiling sessions summary data")
         compiled_stats = self.sessions_stats
+        if compiled_stats is None:
+            return compiled_stats
         logger.debug("sessions_stats: %s", compiled_stats)
         total_stats = self.total_stats(compiled_stats)
         compiled_stats.append(total_stats)
@@ -300,9 +307,9 @@ class SessionsSummary():
         """ Return total stats """
         logger.debug("Compiling Totals")
         elapsed = 0
-        rate = 0
-        batchset = set()
+        examples = 0
         iterations = 0
+        batchset = set()
         total_summaries = len(sessions_stats)
         for idx, summary in enumerate(sessions_stats):
             if idx == 0:
@@ -310,7 +317,7 @@ class SessionsSummary():
             if idx == total_summaries - 1:
                 endtime = summary["end"]
             elapsed += summary["elapsed"]
-            rate += summary["rate"]
+            examples += (summary["batch"] * summary["iterations"])
             batchset.add(summary["batch"])
             iterations += summary["iterations"]
         batch = ",".join(str(bs) for bs in batchset)
@@ -318,7 +325,7 @@ class SessionsSummary():
                   "start": starttime,
                   "end": endtime,
                   "elapsed": elapsed,
-                  "rate": rate / total_summaries,
+                  "rate": examples / elapsed if elapsed != 0 else 0,
                   "batch": batch,
                   "iterations": iterations}
         logger.debug(totals)
@@ -330,8 +337,8 @@ class SessionsSummary():
         logger.debug("Formatting stats")
         for summary in compiled_stats:
             hrs, mins, secs = convert_time(summary["elapsed"])
-            summary["start"] = time.strftime("%x %X", time.gmtime(summary["start"]))
-            summary["end"] = time.strftime("%x %X", time.gmtime(summary["end"]))
+            summary["start"] = time.strftime("%x %X", time.localtime(summary["start"]))
+            summary["end"] = time.strftime("%x %X", time.localtime(summary["end"]))
             summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
             summary["rate"] = "{0:.1f}".format(summary["rate"])
         return compiled_stats

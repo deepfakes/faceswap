@@ -55,5 +55,6 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "settings",
     },
 }

@@ -61,6 +61,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "size"
     },
     "output_size": {
         "default": 128,
@@ -73,6 +74,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "size"
     },
     "dense_nodes": {
         "default": 1536,
@@ -85,6 +87,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network"
     },
     "complexity_encoder": {
         "default": 128,
@@ -95,6 +98,7 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network"
     },
     "complexity_decoder": {
         "default": 512,
@@ -105,5 +109,6 @@ _DEFAULTS = {
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network"
     },
 }

@@ -57,6 +57,7 @@ _DEFAULTS = {
         "min_max": None,
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
 }

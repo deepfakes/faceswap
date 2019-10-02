@@ -12,10 +12,11 @@ import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
+from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.queue_manager import queue_manager
-from lib.utils import cv2_read_img, get_folder, get_image_paths, set_system_verbosity
+from lib.queue_manager import queue_manager  # noqa pylint:disable=unused-import
+from lib.utils import get_folder, get_image_paths, set_system_verbosity, deprecation_warning
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -89,6 +90,16 @@ class Train():
         """ Call the training process object """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self.args.model_dir)
+
+        # TODO Move these args to config and remove these deprecation warnings
+        if hasattr(self.args, "warp_to_landmarks") and self.args.warp_to_landmarks:
+            deprecation_warning("`-wl`, ``--warp-to-landmarks``",
+                                additional_info="This option will be available within training "
+                                                "config settings (/config/train.ini).")
+        if hasattr(self.args, "no_augment_color") and self.args.no_flip:
+            deprecation_warning("`-nac`, ``--no-augment-color``",
+                                additional_info="This option will be available within training "
+                                                "config settings (/config/train.ini).")
         set_system_verbosity(self.args.loglevel)
         thread = self.start_thread()
         # queue_manager.debug_monitor(1)
@@ -176,7 +187,7 @@ class Train():
     @property
     def image_size(self):
         """ Get the training set image size for storing in model data """
-        image = cv2_read_img(self.images["a"][0], raise_error=True)
+        image = read_image(self.images["a"][0], raise_error=True)
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
@@ -242,15 +253,15 @@ class Train():
         """ Monitor the console, and generate + monitor preview if requested """
         is_preview = self.args.preview
         logger.debug("Launching Monitor")
-        logger.info("R|===================================================")
-        logger.info("R|  Starting")
+        logger.info("===================================================")
+        logger.info("  Starting")
         if is_preview:
-            logger.info("R|  Using live preview")
-        logger.info("R|  Press '%s' to save and quit",
+            logger.info("  Using live preview")
+        logger.info("  Press '%s' to save and quit",
                     "Terminate" if self.args.redirect_gui else "ENTER")
         if not self.args.redirect_gui:
-            logger.info("R|  Press 'S' to save model weights immediately")
-        logger.info("R|===================================================")
+            logger.info("  Press 'S' to save model weights immediately")
+        logger.info("===================================================")
 
         keypress = KBHit(is_gui=self.args.redirect_gui)
         err = False

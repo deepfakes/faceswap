@@ -16,9 +16,8 @@ from tqdm import tqdm
 from lib.cli import FullHelpArgumentParser
 from lib import Serializer
 from lib.faces_detect import DetectedFace
-from lib.multithreading import SpawnProcess
-from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import cv2_read_img
+from lib.image import read_image
+from lib.queue_manager import queue_manager
 from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.plugin_loader import PluginLoader
 
@@ -43,7 +42,8 @@ class Sort():
 
         # Set output dir to the same value as input dir
         # if the user didn't specify it.
-        if self.args.output_dir.lower() == "_output_dir":
+        if self.args.output_dir is None:
+            logger.verbose("No output directory provided. Using input dir as output dir.")
             self.args.output_dir = self.args.input_dir
 
         # Assigning default threshold values based on grouping method
@@ -84,58 +84,34 @@ class Sort():
 
         self.sort_process()
 
-    def launch_aligner(self):
+    @staticmethod
+    def launch_aligner():
         """ Load the aligner plugin to retrieve landmarks """
-        out_queue = queue_manager.get_queue("out")
-        kwargs = {"in_queue": queue_manager.get_queue("in"),
-                  "out_queue": out_queue}
-
-        for plugin in ("fan", "cv2_dnn"):
-            aligner = PluginLoader.get_aligner(plugin)(loglevel=self.args.loglevel)
-            process = SpawnProcess(aligner.run, **kwargs)
-            event = process.event
-            process.start()
-            # Wait for Aligner to take init
-            # The first ever load of the model for FAN has reportedly taken
-            # up to 3-4 minutes, hence high timeout.
-            event.wait(300)
-
-            if not event.is_set():
-                if plugin == "fan":
-                    process.join()
-                    logger.error("Error initializing FAN. Trying CV2-DNN")
-                    continue
-                else:
-                    raise ValueError("Error inititalizing Aligner")
-            if plugin == "cv2_dnn":
-                return
-
-            try:
-                err = None
-                err = out_queue.get(True, 1)
-            except QueueEmpty:
-                pass
-            if not err:
-                break
-            process.join()
-            logger.error("Error initializing FAN. Trying CV2-DNN")
+        kwargs = dict(in_queue=queue_manager.get_queue("in"),
+                      out_queue=queue_manager.get_queue("out"),
+                      queue_size=8)
+        aligner = PluginLoader.get_aligner("fan")(normalize_method="hist")
+        aligner.batchsize = 1
+        aligner.initialize(**kwargs)
+        aligner.start()
 
     @staticmethod
     def alignment_dict(image):
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        face = face.to_bounding_box_dict()
         return {"image": image,
                 "detected_faces": [face]}
 
     @staticmethod
     def get_landmarks(filename):
         """ Extract the face from a frame (If not alignments file found) """
-        image = cv2_read_img(filename, raise_error=True)
-        queue_manager.get_queue("in").put(Sort.alignment_dict(image))
+        image = read_image(filename, raise_error=True)
+        feed = Sort.alignment_dict(image)
+        feed["filename"] = filename
+        queue_manager.get_queue("in").put(feed)
         face = queue_manager.get_queue("out").get()
-        landmarks = face["landmarks"][0]
+        landmarks = face["detected_faces"][0].landmarks_xy
         return landmarks
 
     def sort_process(self):
@@ -185,7 +161,7 @@ class Sort():
         logger.info("Sorting by face similarity...")
 
         images = np.array(self.find_images(input_dir))
-        preds = np.array([self.vgg_face.predict(cv2_read_img(img, raise_error=True))
+        preds = np.array([self.vgg_face.predict(read_image(img, raise_error=True))
                           for img in tqdm(images, desc="loading", file=sys.stdout)])
         logger.info("Sorting. Depending on ths size of your dataset, this may take a few "
                     "minutes...")
@@ -288,7 +264,7 @@ class Sort():
         logger.info("Sorting by histogram similarity...")
 
         img_list = [
-            [img, cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256])]
+            [img, cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256])]
             for img in
             tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
         ]
@@ -318,7 +294,7 @@ class Sort():
 
         img_list = [
             [img,
-             cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256]), 0]
+             cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256]), 0]
             for img in
             tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
         ]
@@ -572,7 +548,7 @@ class Sort():
         input_dir = self.args.input_dir
         logger.info("Preparing to group...")
         if group_method == 'group_blur':
-            temp_list = [[img, self.estimate_blur(cv2_read_img(img, raise_error=True))]
+            temp_list = [[img, self.estimate_blur(read_image(img, raise_error=True))]
                          for img in
                          tqdm(self.find_images(input_dir),
                               desc="Reloading",
@@ -600,7 +576,7 @@ class Sort():
         elif group_method == 'group_hist':
             temp_list = [
                 [img,
-                 cv2.calcHist([cv2_read_img(img, raise_error=True)], [0], None, [256], [0, 256])]
+                 cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256])]
                 for img in
                 tqdm(self.find_images(input_dir),
                      desc="Reloading",
@@ -656,7 +632,7 @@ class Sort():
         Estimate the amount of blur an image has with the variance of the Laplacian.
         Normalize by pixel number to offset the effect of image size on pixel gradients & variance
         """
-        image = cv2_read_img(image_file, raise_error=True)
+        image = read_image(image_file, raise_error=True)
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)

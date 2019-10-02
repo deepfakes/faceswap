@@ -69,6 +69,7 @@ _DEFAULTS = {
                 "the source face.",
         "datatype": float,
         "rounding": 1,
+        "group": "settings",
         "min_max": (0.1, 25.0),
         "choices": [],
         "gui_radio": False,
@@ -87,6 +88,7 @@ _DEFAULTS = {
         "min_max": (0.1, 25.0),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "passes": {
@@ -100,6 +102,7 @@ _DEFAULTS = {
         "min_max": (1, 8),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
 }

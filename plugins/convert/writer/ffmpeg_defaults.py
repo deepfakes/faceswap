@@ -81,6 +81,7 @@ _DEFAULTS = {
         "min_max": (0, 51),
         "choices": [],
         "gui_radio": False,
+        "group": "quality",
         "fixed": True,
     },
     "preset": {
@@ -104,6 +105,7 @@ _DEFAULTS = {
             "veryslow",
         ],
         "gui_radio": True,
+        "group": "quality",
         "fixed": True,
     },
     "tune": {
@@ -131,6 +133,7 @@ _DEFAULTS = {
             "zerolatency",
         ],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "profile": {
@@ -142,6 +145,7 @@ _DEFAULTS = {
         "min_max": None,
         "choices": ["auto", "baseline", "main", "high", "high10", "high422", "high444"],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "level": {
@@ -175,6 +179,7 @@ _DEFAULTS = {
             "6.2",
         ],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
 }

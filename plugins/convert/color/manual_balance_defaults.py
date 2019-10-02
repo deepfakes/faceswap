@@ -68,6 +68,7 @@ _DEFAULTS = {
         "datatype": str,
         "rounding": None,
         "min_max": None,
+        "group": "color balance",
         "choices": ["RGB", "HSV", "LAB", "YCrCb"],
         "gui_radio": True,
         "fixed": True,
@@ -83,6 +84,7 @@ _DEFAULTS = {
         "rounding": 1,
         "min_max": (-100.0, 100.0),
         "choices": [],
+        "group": "color balance",
         "gui_radio": False,
         "fixed": True,
     },
@@ -98,6 +100,7 @@ _DEFAULTS = {
         "min_max": (-100.0, 100.0),
         "choices": [],
         "gui_radio": False,
+        "group": "color balance",
         "fixed": True,
     },
     "balance_3": {
@@ -112,6 +115,7 @@ _DEFAULTS = {
         "min_max": (-100.0, 100.0),
         "choices": [],
         "gui_radio": False,
+        "group": "color balance",
         "fixed": True,
     },
     "contrast": {
@@ -122,6 +126,7 @@ _DEFAULTS = {
         "min_max": (-100.0, 100.0),
         "choices": [],
         "gui_radio": False,
+        "group": "brightness contrast",
         "fixed": True,
     },
     "brightness": {
@@ -132,6 +137,7 @@ _DEFAULTS = {
         "min_max": (-100.0, 100.0),
         "choices": [],
         "gui_radio": False,
+        "group": "brightness contrast",
         "fixed": True,
     },
 }

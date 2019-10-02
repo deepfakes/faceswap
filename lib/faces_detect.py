@@ -2,6 +2,7 @@
 """ Face and landmarks detection for faceswap.py """
 import logging
 
+import cv2
 import numpy as np
 
 from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
@@ -10,18 +11,49 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class DetectedFace():
-    """ Detected face and landmark information """
-    def __init__(  # pylint: disable=invalid-name
-            self, image=None, x=None, w=None, y=None, h=None,
-            landmarksXY=None):
-        logger.trace("Initializing %s", self.__class__.__name__)
+    """ Detected face and landmark information
+
+    Holds information about a detected face, it's location in a source image
+    and the face's 68 point landmarks.
+
+    Methods for aligning a face are also callable from here.
+
+    Parameters
+    ----------
+    image: np.ndarray, optional
+        This is a generic image placeholder that should not be relied on to be holding a particular
+        image. It may hold the source frame that holds the face, a cropped face or a scaled image
+        depending on the method using this object.
+    x: int
+        The left most point (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    w: int
+        The width (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    y: int
+        The top most point (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    h: int
+        The height (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    landmarks_xy: list
+        The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
+        of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
+    """
+    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None):
+        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s)",
+                     self.__class__.__name__,
+                     image.shape if image is not None and image.any() else image,
+                     x, w, y, h, landmarks_xy)
         self.image = image
         self.x = x
         self.w = w
         self.y = y
         self.h = h
-        self.landmarksXY = landmarksXY
-        self.hash = None  # Hash must be set when the file is saved due to image compression
+        self.landmarks_xy = landmarks_xy
+        self.hash = None
+        """ str: The hash of the face. This cannot be set until the file is saved due to image
+        compression, but will be set if loading data from :func:`from_alignment` """
 
         self.aligned = dict()
         self.feed = dict()
@@ -29,87 +61,126 @@ class DetectedFace():
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
-    def extract_ratio(self):
-        """ The ratio of padding to add for training images """
-        return 0.375
+    def left(self):
+        """int: Left point (in pixels) of face detection bounding box within the parent image """
+        return self.x
 
     @property
-    def landmarks_as_xy(self):
-        """ Landmarks as XY """
-        return self.landmarksXY
+    def top(self):
+        """int: Top point (in pixels) of face detection bounding box within the parent image """
+        return self.y
 
-    def to_bounding_box_dict(self):
-        """ Return Bounding Box as a bounding box dixt """
-        retval = dict(left=self.x, top=self.y, right=self.x + self.w, bottom=self.y + self.h)
-        logger.trace("Returning: %s", retval)
-        return retval
+    @property
+    def right(self):
+        """int: Right point (in pixels) of face detection bounding box within the parent image """
+        return self.x + self.w
 
-    def from_bounding_box_dict(self, bounding_box_dict, image=None):
-        """ Set Bounding Box from a bounding box dict """
-        logger.trace("Creating from bounding box dict: %s", bounding_box_dict)
-        if not isinstance(bounding_box_dict, dict):
-            raise ValueError("Supplied Bounding Box is not a dictionary.")
-        self.x = bounding_box_dict["left"]
-        self.w = bounding_box_dict["right"] - bounding_box_dict["left"]
-        self.y = bounding_box_dict["top"]
-        self.h = bounding_box_dict["bottom"] - bounding_box_dict["top"]
-        if image is not None and image.any():
-            self.image_to_face(image)
-        logger.trace("Created from bounding box dict: (x: %s, w: %s, y: %s. h: %s)",
-                     self.x, self.w, self.y, self.h)
+    @property
+    def bottom(self):
+        """int: Bottom point (in pixels) of face detection bounding box within the parent image """
+        return self.y + self.h
 
-    def image_to_face(self, image):
-        """ Crop an image around bounding box to the face
-            and capture it's dimensions """
-        logger.trace("Cropping face from image")
-        self.image = image[self.y: self.y + self.h,
-                           self.x: self.x + self.w]
+    @property
+    def _extract_ratio(self):
+        """ float: The ratio of padding to add for training images """
+        return 0.375
 
     def to_alignment(self):
-        """ Convert a detected face to alignment dict """
+        """  Return the detected face formatted for an alignments file
+
+        returns
+        -------
+        alignment: dict
+            The alignment dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
+            ``landmarks_xy``, ``hash``.
+        """
+
         alignment = dict()
         alignment["x"] = self.x
         alignment["w"] = self.w
         alignment["y"] = self.y
         alignment["h"] = self.h
-        alignment["landmarksXY"] = self.landmarksXY
+        alignment["landmarks_xy"] = self.landmarks_xy
         alignment["hash"] = self.hash
         logger.trace("Returning: %s", alignment)
         return alignment
 
     def from_alignment(self, alignment, image=None):
-        """ Convert a face alignment to detected face object """
+        """ Set the attributes of this class from an alignments file and optionally load the face
+        into the ``image`` attribute.
+
+        Parameters
+        ----------
+        alignment: dict
+            A dictionary entry for a face from an alignments file containing the keys
+            ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``. Optionally the key ``hash``
+            will be provided, but not all use cases will know the face hash at this time.
+        image: numpy.ndarray, optional
+            If an image is passed in, then the ``image`` attribute will
+            be set to the cropped face based on the passed in bounding box co-ordinates
+        """
+
         logger.trace("Creating from alignment: (alignment: %s, has_image: %s)",
                      alignment, bool(image is not None))
         self.x = alignment["x"]
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.landmarksXY = alignment["landmarksXY"]
+        self.landmarks_xy = alignment["landmarks_xy"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         if image is not None and image.any():
-            self.image_to_face(image)
+            self._image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
                      "landmarks: %s)",
-                     self.x, self.w, self.y, self.h, self.landmarksXY)
+                     self.x, self.w, self.y, self.h, self.landmarks_xy)
+
+    def _image_to_face(self, image):
+        """ set self.image to be the cropped face from detected bounding box """
+        logger.trace("Cropping face from image")
+        self.image = image[self.top: self.bottom,
+                           self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, align_eyes=False, dtype=None):
-        """ No need to load aligned information for all uses of this
-            class, so only call this to load the information for easy
-            reference to aligned properties for this face """
-        # Don't reload an already aligned face:
+    def load_aligned(self, image, size=256, dtype=None):
+        """ Align a face from a given image.
+
+        Aligning a face is a relatively expensive task and is not required for all uses of
+        the :class:`~lib.faces_detect.DetectedFace` object, so call this function explicitly to
+        load an aligned face.
+
+        This method plugs into :mod:`lib.aligner` to perform face alignment based on this face's
+        ``landmarks_xy``. If the face has already been aligned, then this function will return
+        having performed no action.
+
+        Parameters
+        ----------
+        image: numpy.ndarray
+            The image that contains the face to be aligned
+        size: int
+            The size of the output face in pixels
+        align_eyes: bool, optional
+            Optionally perform additional alignment to align eyes. Default: `False`
+        dtype: str, optional
+            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+
+        Notes
+        -----
+        This method must be executed to get access to the following `properties`:
+            - :func:`original_roi`
+            - :func:`aligned_landmarks`
+            - :func:`aligned_face`
+            - :func:`adjusted_interpolators`
+        """
         if self.aligned:
+            # Don't reload an already aligned face
             logger.trace("Skipping alignment calculation for already aligned face")
         else:
-            logger.trace("Loading aligned face: (size: %s, align_eyes: %s, dtype: %s)",
-                         size, align_eyes, dtype)
-            padding = int(size * self.extract_ratio) // 2
+            logger.trace("Loading aligned face: (size: %s, dtype: %s)", size, dtype)
+            padding = int(size * self._extract_ratio) // 2
             self.aligned["size"] = size
             self.aligned["padding"] = padding
-            self.aligned["align_eyes"] = align_eyes
-            self.aligned["matrix"] = get_align_mat(self, size, align_eyes)
+            self.aligned["matrix"] = get_align_mat(self)
             self.aligned["face"] = None
         if image is not None and self.aligned["face"] is None:
             logger.trace("Getting aligned face")
@@ -120,57 +191,86 @@ class DetectedFace():
                 padding)
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
 
-        logger.trace("Loaded aligned face: %s", {key: val
-                                                 for key, val in self.aligned.items()
-                                                 if key != "face"})
+        logger.trace("Loaded aligned face: %s", {k: str(v) if isinstance(v, np.ndarray) else v
+                                                 for k, v in self.aligned.items()
+                                                 if k != "face"})
 
-    def padding_from_coverage(self, size, coverage_ratio):
+    def _padding_from_coverage(self, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image """
-        adjusted_ratio = coverage_ratio - (1 - self.extract_ratio)
+        adjusted_ratio = coverage_ratio - (1 - self._extract_ratio)
         padding = round((size * adjusted_ratio) / 2)
         logger.trace(padding)
         return padding
 
     def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
-        """ Return a face in the correct dimensions for feeding into a NN
+        """ Align a face in the correct dimensions for feeding into a model.
 
-            Coverage ratio should be the ratio of the extracted image that was used for
-            training """
+        Parameters
+        ----------
+        image: numpy.ndarray
+            The image that contains the face to be aligned
+        size: int
+            The size of the face in pixels to be fed into the model
+        coverage_ratio: float, optional
+            the ratio of the extracted image that was used for training. Default: `0.625`
+        dtype: str, optional
+            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+
+        Notes
+        -----
+        This method must be executed to get access to the following `properties`:
+            - :func:`feed_face`
+            - :func:`feed_interpolators`
+        """
         logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s)",
                      size, coverage_ratio, dtype)
 
         self.feed["size"] = size
-        self.feed["padding"] = self.padding_from_coverage(size, coverage_ratio)
-        self.feed["matrix"] = get_align_mat(self, size, should_align_eyes=False)
+        self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
+        self.feed["matrix"] = get_align_mat(self)
 
-        face = np.clip(AlignerExtract().transform(image,
-                                                  self.feed["matrix"],
-                                                  size,
-                                                  self.feed["padding"])[:, :, :3] / 255.0,
-                       0.0, 1.0)
+        face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
+        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
-                     self.feed_face.shape, self.feed_matrix)
+                     self.feed_face.shape, self._feed_matrix)
 
     def load_reference_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
-        """ Return a face in the correct dimensions for reference to the output from a NN
+        """ Align a face in the correct dimensions for reference against the output from a model.
 
-            Coverage ratio should be the ratio of the extracted image that was used for
-            training """
+        Parameters
+        ----------
+        image: numpy.ndarray
+            The image that contains the face to be aligned
+        size: int
+            The size of the face in pixels to be fed into the model
+        coverage_ratio: float, optional
+            the ratio of the extracted image that was used for training. Default: `0.625`
+        dtype: str, optional
+            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+
+        Notes
+        -----
+        This method must be executed to get access to the following `properties`:
+            - :func:`reference_face`
+            - :func:`reference_landmarks`
+            - :func:`reference_matrix`
+            - :func:`reference_interpolators`
+        """
         logger.trace("Loading reference face: (size: %s, coverage_ratio: %s, dtype: %s)",
                      size, coverage_ratio, dtype)
 
         self.reference["size"] = size
-        self.reference["padding"] = self.padding_from_coverage(size, coverage_ratio)
-        self.reference["matrix"] = get_align_mat(self, size, should_align_eyes=False)
+        self.reference["padding"] = self._padding_from_coverage(size, coverage_ratio)
+        self.reference["matrix"] = get_align_mat(self)
 
-        face = np.clip(AlignerExtract().transform(image,
-                                                  self.reference["matrix"],
-                                                  size,
-                                                  self.reference["padding"])[:, :, :3] / 255.0,
-                       0.0, 1.0)
+        face = AlignerExtract().transform(image,
+                                          self.reference["matrix"],
+                                          size,
+                                          self.reference["padding"])
+        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",
@@ -178,8 +278,10 @@ class DetectedFace():
 
     @property
     def original_roi(self):
-        """ Return the square aligned box location on the original
-            image """
+        """ numpy.ndarray: The location of the extracted face box within the original frame.
+        Only available after :func:`load_aligned` has been called, otherwise returns ``None``"""
+        if not self.aligned:
+            return None
         roi = AlignerExtract().get_original_roi(self.aligned["matrix"],
                                                 self.aligned["size"],
                                                 self.aligned["padding"])
@@ -188,8 +290,11 @@ class DetectedFace():
 
     @property
     def aligned_landmarks(self):
-        """ Return the landmarks location transposed to extracted face """
-        landmarks = AlignerExtract().transform_points(self.landmarksXY,
+        """ numpy.ndarray: The 68 point landmarks location transposed to the extracted face box.
+        Only available after :func:`load_aligned` has been called, otherwise returns ``None``"""
+        if not self.aligned:
+            return None
+        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
                                                       self.aligned["matrix"],
                                                       self.aligned["size"],
                                                       self.aligned["padding"])
@@ -198,12 +303,16 @@ class DetectedFace():
 
     @property
     def aligned_face(self):
-        """ Return aligned detected face """
-        return self.aligned["face"]
+        """ numpy.ndarray: The aligned detected face. Only available after :func:`load_aligned`
+        has been called with an image, otherwise returns ``None`` """
+        return self.aligned.get("face", None)
 
     @property
-    def adjusted_matrix(self):
-        """ Return adjusted matrix for size/padding combination """
+    def _adjusted_matrix(self):
+        """ numpy.ndarray: Adjusted matrix for size/padding combination. Only available after
+        :func:`load_aligned` has been called, otherwise returns ``None``"""
+        if not self.aligned:
+            return None
         mat = AlignerExtract().transform_matrix(self.aligned["matrix"],
                                                 self.aligned["size"],
                                                 self.aligned["padding"])
@@ -212,17 +321,26 @@ class DetectedFace():
 
     @property
     def adjusted_interpolators(self):
-        """ Return the interpolator and reverse interpolator for the adjusted matrix """
-        return get_matrix_scaling(self.adjusted_matrix)
+        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the adjusted matrix.
+        Only available after :func:`load_aligned` has been called, otherwise returns ``None``"""
+        if not self.aligned:
+            return None
+        return get_matrix_scaling(self._adjusted_matrix)
 
     @property
     def feed_face(self):
-        """ Return face for feeding into NN """
+        """ numpy.ndarray: The aligned face sized for feeding into a model. Only available after
+        :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """
+        if not self.feed:
+            return None
         return self.feed["face"]
 
     @property
-    def feed_matrix(self):
-        """ Return matrix for transforming feed face back to image """
+    def _feed_matrix(self):
+        """ numpy.ndarray: The adjusted matrix face sized for feeding into a model. Only available
+        after :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """
+        if not self.feed:
+            return None
         mat = AlignerExtract().transform_matrix(self.feed["matrix"],
                                                 self.feed["size"],
                                                 self.feed["padding"])
@@ -231,18 +349,30 @@ class DetectedFace():
 
     @property
     def feed_interpolators(self):
-        """ Return the interpolators for an input face """
-        return get_matrix_scaling(self.feed_matrix)
+        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the adjusted feed
+        matrix. Only available after :func:`load_feed_face` has been called, otherwise returns
+        ``None``"""
+        if not self.feed:
+            return None
+        return get_matrix_scaling(self._feed_matrix)
 
     @property
     def reference_face(self):
-        """ Return source face at size of output from NN for reference """
+        """ numpy.ndarray: The aligned face sized for reference against a face coming out of a
+        model. Only available after :func:`load_reference_face` has been called, otherwise
+        returns ``None``"""
+        if not self.reference:
+            return None
         return self.reference["face"]
 
     @property
     def reference_landmarks(self):
-        """ Return the landmarks location transposed to reference face """
-        landmarks = AlignerExtract().transform_points(self.landmarksXY,
+        """ numpy.ndarray: The 68 point landmarks location transposed to the reference face box.
+        Only available after :func:`load_reference_face` has been called, otherwise returns
+        ``None``"""
+        if not self.reference:
+            return None
+        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
                                                       self.reference["matrix"],
                                                       self.reference["size"],
                                                       self.reference["padding"])
@@ -251,7 +381,11 @@ class DetectedFace():
 
     @property
     def reference_matrix(self):
-        """ Return matrix for transforming output face back to image """
+        """ numpy.ndarray: The adjusted matrix face sized for refence against a face coming out of
+         a model. Only available after :func:`load_reference_face` has been called, otherwise
+         returns ``None``"""
+        if not self.reference:
+            return None
         mat = AlignerExtract().transform_matrix(self.reference["matrix"],
                                                 self.reference["size"],
                                                 self.reference["padding"])
@@ -260,5 +394,95 @@ class DetectedFace():
 
     @property
     def reference_interpolators(self):
-        """ Return the interpolators for an output face """
+        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the reference
+        matrix. Only available after :func:`load_reference_face` has been called, otherwise
+        returns ``None``"""
+        if not self.reference:
+            return None
         return get_matrix_scaling(self.reference_matrix)
+
+
+def rotate_landmarks(face, rotation_matrix):
+    """ Rotates the 68 point landmarks and detection bounding box around the given rotation matrix.
+
+    Paramaters
+    ----------
+    face: DetectedFace or dict
+        A :class:`DetectedFace` or an `alignments file` ``dict`` containing the 68 point landmarks
+        and the `x`, `w`, `y`, `h` detection bounding box points.
+    rotation_matrix: numpy.ndarray
+        The rotation matrix to rotate the given object by.
+
+    Returns
+    -------
+    DetectedFace or dict
+        The rotated :class:`DetectedFace` or `alignments file` ``dict`` with the landmarks and
+        detection bounding box points rotated by the given matrix. The return type is the same as
+        the input type for ``face``
+    """
+    logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
+                 rotation_matrix, type(face))
+    rotated_landmarks = None
+    # Detected Face Object
+    if isinstance(face, DetectedFace):
+        bounding_box = [[face.x, face.y],
+                        [face.x + face.w, face.y],
+                        [face.x + face.w, face.y + face.h],
+                        [face.x, face.y + face.h]]
+        landmarks = face.landmarks_xy
+
+    # Alignments Dict
+    elif isinstance(face, dict) and "x" in face:
+        bounding_box = [[face.get("x", 0), face.get("y", 0)],
+                        [face.get("x", 0) + face.get("w", 0),
+                         face.get("y", 0)],
+                        [face.get("x", 0) + face.get("w", 0),
+                         face.get("y", 0) + face.get("h", 0)],
+                        [face.get("x", 0),
+                         face.get("y", 0) + face.get("h", 0)]]
+        landmarks = face.get("landmarks_xy", list())
+
+    else:
+        raise ValueError("Unsupported face type")
+
+    logger.trace("Original landmarks: %s", landmarks)
+
+    rotation_matrix = cv2.invertAffineTransform(
+        rotation_matrix)
+    rotated = list()
+    for item in (bounding_box, landmarks):
+        if not item:
+            continue
+        points = np.array(item, np.int32)
+        points = np.expand_dims(points, axis=0)
+        transformed = cv2.transform(points,
+                                    rotation_matrix).astype(np.int32)
+        rotated.append(transformed.squeeze())
+
+    # Bounding box should follow x, y planes, so get min/max
+    # for non-90 degree rotations
+    pt_x = min([pnt[0] for pnt in rotated[0]])
+    pt_y = min([pnt[1] for pnt in rotated[0]])
+    pt_x1 = max([pnt[0] for pnt in rotated[0]])
+    pt_y1 = max([pnt[1] for pnt in rotated[0]])
+    width = pt_x1 - pt_x
+    height = pt_y1 - pt_y
+
+    if isinstance(face, DetectedFace):
+        face.x = int(pt_x)
+        face.y = int(pt_y)
+        face.w = int(width)
+        face.h = int(height)
+        face.r = 0
+        if len(rotated) > 1:
+            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
+            face.landmarks_xy = rotated_landmarks
+    else:
+        face["left"] = int(pt_x)
+        face["top"] = int(pt_y)
+        face["right"] = int(pt_x1)
+        face["bottom"] = int(pt_y1)
+        rotated_landmarks = face
+
+    logger.trace("Rotated landmarks: %s", rotated_landmarks)
+    return face

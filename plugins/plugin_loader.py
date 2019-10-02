@@ -49,7 +49,7 @@ class PluginLoader():
 
     @staticmethod
     def get_available_extractors(extractor_type):
-        """ Return a list of available models """
+        """ Return a list of available aligners/detectors """
         extractpath = os.path.join(os.path.dirname(__file__),
                                    "extract",
                                    extractor_type)
