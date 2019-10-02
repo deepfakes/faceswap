@@ -8,7 +8,6 @@ from tkinter import ttk
 from itertools import zip_longest
 from functools import partial
 
-
 from _tkinter import Tcl_Obj
 
 from .tooltip import Tooltip
