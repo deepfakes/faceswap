@@ -802,7 +802,7 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
-            "choices": PluginLoader.get_available_extractors("mask") + ["predicted"],
+            "choices": ["dfl_full", "components", "extended", "predicted"],
             "group": "plugins",
             "default": "predicted",
             "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "

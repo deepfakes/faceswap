@@ -43,7 +43,7 @@ class DetectedFace():
     def __init__(self, image=None, x=None, w=None, y=None, h=None,
                  landmarks_xy=None, filename=None):
         logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, "
-                     "landmarks_xy: %s, filename: %s")",
+                     "landmarks_xy: %s, filename: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
                      x, w, y, h, landmarks_xy, filename)

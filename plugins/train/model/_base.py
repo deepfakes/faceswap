@@ -264,10 +264,9 @@ class ModelBase():
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
         if self.config["replicate_input_mask"] or self.config["penalized_mask_loss"]:
-            mask_idx = [idx
-                        for idx, name in enumerate(output_network.output_names)
-                        if name.startswith("mask")]
-            mask_shape = output_network.output_shapes[mask_idx[0]]
+            # penalized mask doesn't have a mask ouput, so we can't use output shapes
+            # mask should always be last output..this needs to be a rule
+            mask_shape = output_network.output_shapes[-1]
             inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
         logger.debug("Got inputs: %s", inputs)
         return inputs
