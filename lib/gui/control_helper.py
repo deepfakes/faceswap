@@ -8,6 +8,9 @@ from tkinter import ttk
 from itertools import zip_longest
 from functools import partial
 
+
+from _tkinter import Tcl_Obj
+
 from .tooltip import Tooltip
 from .utils import ContextMenu, FileHandler, get_config, get_images
 
@@ -524,6 +527,7 @@ class AutoFillContainer():
             val = widget.cget(key)
             if key in ("anchor", "justify") and val == "":
                 continue
+            val = str(val) if isinstance(val, Tcl_Obj) else val
             # Return correct command from master command dict
             val = _RECREATE_OBJECTS["commands"][val] if key == "command" and val != "" else val
             new_config[key] = val
@@ -599,8 +603,8 @@ class ControlBuilder():
     blank_nones: bool
         Sets selected values to an empty string rather than None if this is true.
     """
-    def __init__(self, parent, option, option_columns, label_width,  # pylint: disable=too-many-arguments
-                 checkbuttons_frame, blank_nones):
+    def __init__(self, parent, option, option_columns,  # pylint: disable=too-many-arguments
+                 label_width, checkbuttons_frame, blank_nones):
         logger.debug("Initializing %s: (parent: %s, option: %s, option_columns: %s, "
                      "label_width: %s, checkbuttons_frame: %s, blank_nones: %s)",
                      self.__class__.__name__, parent, option, option_columns, label_width,
