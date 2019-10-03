@@ -193,7 +193,7 @@ class Images():
         """ Return frames from a video file """
         logger.debug("Input is video. Capturing frames")
         vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
-        reader = imageio.get_reader(self.args.input_dir)
+        reader = imageio.get_reader(self.args.input_dir, "ffmpeg")
         for i, frame in enumerate(reader):
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
@@ -219,7 +219,7 @@ class Images():
     def load_one_video_frame(self, frame_no):
         """ Load a single frame from a video file """
         logger.trace("Loading video frame: %s", frame_no)
-        reader = imageio.get_reader(self.args.input_dir)
+        reader = imageio.get_reader(self.args.input_dir, "ffmpeg")
         reader.set_image_index(frame_no - 1)
         frame = reader.get_next_data()[:, :, ::-1]
         reader.close()

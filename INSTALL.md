@@ -138,7 +138,7 @@ A desktop shortcut can be added to easily launch straight into the faceswap GUI:
 
 ## Updating faceswap
 It's good to keep faceswap up to date as new features are added and bugs are fixed. To do so:
-- If using the GUI you can go to the Tools Menu and select "Check for Updates...". This will update faceswap to the latest code and update your dependencies.
+- If using the GUI you can go to the Help menu and select "Check for Updates...". If updates are available go to the Help menu and select "Update Faceswap". Restart Faceswap to complete the update.
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
 - Enter the faceswap folder: `cd faceswap`
 - Enter the following `git pull --all`

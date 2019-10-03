@@ -139,7 +139,7 @@ class MediaLoader():
             logger.verbose("Video exists at: '%s'", self.folder)
             retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this
-            # retval = imageio.get_reader(self.folder)
+            # retval = imageio.get_reader(self.folder, "ffmpeg")
         else:
             logger.verbose("Folder exists at '%s'", self.folder)
             retval = None

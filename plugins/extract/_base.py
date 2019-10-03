@@ -9,9 +9,11 @@ import sys
 import cv2
 import numpy as np
 
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import GetModel
+from lib.utils import GetModel, FaceswapError
 from ._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -386,7 +388,18 @@ class Extractor():
                 batch = self._get_item(in_queue)
                 if batch == "EOF":
                     break
-            batch = function(batch)
+            try:
+                batch = function(batch)
+            except tf_errors.UnknownError as err:
+                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
+                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
+                       "combinations. You should enable `allow_growth` to attempt to resolve this "
+                       "issue:"
+                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
+                       "`allow_growth` option."
+                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
+                       "option to `True`.")
+                raise FaceswapError(msg) from err
             if func_name == "process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):
