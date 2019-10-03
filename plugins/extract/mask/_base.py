@@ -12,8 +12,7 @@
     For each source item, the plugin must pass a dict to finalize containing:
     {"filename": <filename of source frame>,
      "image": <four channel source image>,
-     "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>,
-     "mask": <one channel mask image>}
+     "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>
     """
 
 import logging
@@ -191,7 +190,7 @@ class Masker(Extractor):
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
-        #  self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
+        self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()
                                       if key != "image"})
@@ -225,9 +224,7 @@ class Masker(Extractor):
     @staticmethod
     def postprocessing(mask):
         """ Post-processing of Nirkin style segmentation masks """
-        # pylint: disable=no-member
         # Select_largest_segment
-        pop_small_segments = False  # Don't do this right now
         if pop_small_segments:
             results = cv2.connectedComponentsWithStats(mask,  # pylint: disable=no-member
                                                        4,
@@ -237,7 +234,6 @@ class Masker(Extractor):
             mask[labels != segments_ranked_by_area[0, 0]] = 0.
 
         # Smooth contours
-        smooth_contours = False  # Don't do this right now
         if smooth_contours:
             iters = 2
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT,  # pylint: disable=no-member
@@ -252,7 +248,6 @@ class Masker(Extractor):
                              kernel, iterations=iters)
 
         # Fill holes
-        fill_holes = True
         if fill_holes:
             not_holes = mask.copy()
             not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
