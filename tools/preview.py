@@ -732,7 +732,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Add the comboboxes to the Action Frame """
         for opt in self.options:
             if opt == "mask_type":
-                choices = PluginLoader.get_available_extractors("mask") + ["predicted"]
+                choices = ["dfl_full", "components", "extended", "predicted"]
             else:
                 choices = PluginLoader.get_available_convert_plugins(opt, True)
             choices = [self.format_to_display(choice) for choice in choices]

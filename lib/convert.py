@@ -141,7 +141,7 @@ class Converter():
                                            predicted["detected_faces"]):
             predicted_mask = new_face[:, :, -1] if new_face.shape[2] == 4 else None
             new_face = new_face[:, :, :3]
-            src_face = detected_face.reference_face
+            src_face = detected_face.reference_face / np.array(255.0, dtype="float32")
             interpolator = detected_face.reference_interpolators[1]
 
             new_face = self.pre_warp_adjustments(src_face, new_face, detected_face, predicted_mask)
