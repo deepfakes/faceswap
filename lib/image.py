@@ -215,7 +215,7 @@ def batch_convert_color(batch, colorspace):
 # <<< VIDEO UTILS >>> #
 # ################### #
 
-def count_frames_and_secs(filename, timeout=60):
+def count_frames_and_secs(filename, timeout=90):
     """ Count the number of frames and seconds in a video file.
 
     Adapted From :mod:`ffmpeg_imageio` to handle the issue of ffmpeg occasionally hanging
