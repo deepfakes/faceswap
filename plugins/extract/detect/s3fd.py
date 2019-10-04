@@ -225,7 +225,7 @@ class S3fd(KSession):
     @staticmethod
     def prepare_batch(batch):
         """ Prepare a batch for prediction """
-        batch = batch - np.array([104.0, 117.0, 123.0])
+        batch = batch[..., :3] - np.array([104.0, 117.0, 123.0])
         batch = batch.transpose(0, 3, 1, 2)
         return batch
 
