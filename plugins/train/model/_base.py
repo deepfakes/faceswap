@@ -881,7 +881,7 @@ class State():
         self.config = dict()
         self.load(config_changeable_items)
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs, pingpong)
+        self.create_new_session(no_logs, pingpong, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -918,7 +918,7 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs, pingpong):
+    def create_new_session(self, no_logs, pingpong, config_changeable_items):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
@@ -926,7 +926,8 @@ class State():
                                           "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
-                                          "iterations": 0}
+                                          "iterations": 0,
+                                          "config": config_changeable_items}
 
     def add_session_loss_names(self, side, loss_names):
         """ Add the session loss names to the sessions dictionary """
