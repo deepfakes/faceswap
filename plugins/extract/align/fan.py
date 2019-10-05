@@ -48,7 +48,7 @@ class Align(Aligner):
         faces = self.crop(batch)
         logger.trace("Aligned image around center")
         faces = self._normalize_faces(faces)
-        batch["feed"] = np.array(faces, dtype="float32").transpose((0, 3, 1, 2)) / 255.0
+        batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2)) / 255.0
         return batch
 
     def get_center_scale(self, detected_faces):

@@ -19,7 +19,7 @@ class Mask(Masker):
         self.vram = 3440
         self.vram_warnings = 1024  # TODO determine
         self.vram_per_batch = 64  # TODO determine
-        self.batchsize = 8
+        self.batchsize = self.config["batch-size"]
 
     def init_model(self):
         self.model = KSession(self.name, self.model_path, model_kwargs=dict())
@@ -34,7 +34,7 @@ class Mask(Masker):
             face.load_aligned(face.image,
                               size=self.mask_in_size,
                               dtype='float32')
-            self.input[index] = face.aligned["face"]
+            self.input[index] = face.aligned["face"][..., :3]
         batch["feed"] = self.input / 255.
         return batch
 

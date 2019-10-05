@@ -228,7 +228,7 @@ class Detector(Extractor):
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def _compile_detection_image(self, input_image):
         """ Compile the detection image for feeding into the model"""
-        image = self._convert_color(input_image)
+        image = self._convert_color(input_image[..., :3])
 
         image_size = image.shape[:2]
         scale = self._set_scale(image_size)

@@ -53,7 +53,7 @@ class Align(Aligner):
         """ Compile the detected faces for prediction """
         faces, batch["roi"] = self.align_image(batch["detected_faces"])
         faces = self._normalize_faces(faces)
-        batch["feed"] = np.array(faces, dtype="float32").transpose((0, 3, 1, 2))
+        batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2))
         return batch
 
     def align_image(self, detected_faces):

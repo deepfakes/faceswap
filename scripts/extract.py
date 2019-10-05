@@ -104,7 +104,7 @@ class Extract():
                 logger.trace("Skipping image: '%s'", filename)
                 continue
             item = {"filename": filename,
-                    "image": image}
+                    "image": image[..., :3]}
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
