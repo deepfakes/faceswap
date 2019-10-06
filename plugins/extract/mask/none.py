@@ -15,7 +15,7 @@ class Mask(Masker):
         self.vram = 0
         self.vram_warnings = 0
         self.vram_per_batch = 30
-        self.batchsize = 8
+        self.batchsize = self.config["batch-size"]
 
     def init_model(self):
         logger.debug("No mask model to initialize")
