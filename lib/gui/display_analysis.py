@@ -182,14 +182,12 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             logger.debug("No save file. Returning")
             return
 
-        write_dicts = [val for val in self.summary.values()]
-        fieldnames = sorted(key for key in write_dicts[0].keys())
-
         logger.debug("Saving to: '%s'", savefile)
+        fieldnames = sorted(key for key in self.summary[0].keys())
         with savefile as outfile:
             csvout = csv.DictWriter(outfile, fieldnames)
             csvout.writeheader()
-            for row in write_dicts:
+            for row in self.summary:
                 csvout.writerow(row)
 
 
