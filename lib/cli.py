@@ -586,7 +586,7 @@ class ExtractArgs(ExtractConvertArgs):
                                       "\nL|extended: Mask designed to provide facial segmentation "
                                       "based on the positioning of landmark locations. A convenx "
                                       "hull is constructed around the exterior of the landmarks "
-                                      "and the mask is extended upwards onto the forehed."
+                                      "and the mask is extended upwards onto the forehead."
                                       "\nL|vgg-clear: Mask designed to provide smart segmentation "
                                       "of mostly frontal faces clear of obstructions.  Profile "
                                       "faces and obstructions may result in sub-par performance."

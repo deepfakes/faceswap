@@ -245,7 +245,7 @@ class Extract():
         final_faces = list()
         for idx, detected_face in enumerate(faces["detected_faces"]):
             output_file = detected_face["file_location"]
-            extension = Path(filename).suffix
+            extension = '.png'
             out_filename = "{}_{}{}".format(str(output_file), str(idx), extension)
 
             face = detected_face["face"]

@@ -46,7 +46,7 @@
 _HELPTEXT = (
     "Extended options. Mask designed to provide facial segmentation based on the positioning of "
     "landmark locations. A convenx hull is constructed around the landmarks and the mask is "
-    "extended upwards onto the forehed."
+    "extended upwards onto the forehead."
     )
 
 
