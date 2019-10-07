@@ -46,7 +46,7 @@
 _HELPTEXT = (
     "VGG_Obstructed options. Mask designed to provide smart segmentation of mostly frontal faces. "
     "The mask model has been specifically trained to recognize some facial obstructions ( "
-    "hands and eyeglasses ). Profile faces may result in sub-par performance. "
+    "hands and eyeglasses ). Profile faces may result in sub-par performance."
     )
 
 

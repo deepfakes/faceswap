@@ -577,12 +577,29 @@ class ExtractArgs(ExtractConvertArgs):
                               "default": "components",
                               "group": "Plugins",
                               "help": "R|Masker to use."
-                                      "\nL|none: "
-                                      "\nL|components: "
-                                      "\nL|extended: "
-                                      "\nL|vgg-clear: "
-                                      "\nL|vgg-obstructed: "
-                                      "\nL|unet-dfl: "})
+                                      "\nL|none: An array of all ones is created to provide a 4th "
+                                      "channel that will not mask any portion of the image."
+                                      "\nL|components: Mask designed to provide facial "
+                                      "segmentation based on the positioning of landmark "
+                                      "locations. A convenx hull is constructed around the "
+                                      "exterior of the landmarks to create a mask."
+                                      "\nL|extended: Mask designed to provide facial segmentation "
+                                      "based on the positioning of landmark locations. A convenx "
+                                      "hull is constructed around the exterior of the landmarks "
+                                      "and the mask is extended upwards onto the forehed."
+                                      "\nL|vgg-clear: Mask designed to provide smart segmentation "
+                                      "of mostly frontal faces clear of obstructions.  Profile "
+                                      "faces and obstructions may result in sub-par performance."
+                                      "\nL|vgg-obstructed: Mask designed to provide smart "
+                                      "segmentation of mostly frontal faces. The mask model has "
+                                      "been specifically trained to recognize some facial "
+                                      "obstructions (hands and eyeglasses). Profile faces may "
+                                      "result in sub-par performance."
+                                      "\nL|unet-dfl: Mask designed to provide smart segmentation "
+                                      "of mostly frontal faces. The mask model has been trained "
+                                      "by community members and will need testing for further "
+                                      "description. Profile faces may result in sub-par "
+                                      "performance."})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
                               "type": str.lower,

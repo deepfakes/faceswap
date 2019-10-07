@@ -45,8 +45,8 @@
 
 _HELPTEXT = (
     "UNET_DFL options. Mask designed to provide smart segmentation of mostly frontal faces. "
-    "The mask model has been trained by community members.  Insert more commentary on testing "
-    "here. Profile faces may result in sub-par performance. "
+    "The mask model has been trained by community members. Insert more commentary on testing "
+    "here. Profile faces may result in sub-par performance."
     )
 
 

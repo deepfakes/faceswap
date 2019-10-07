@@ -45,7 +45,7 @@
 
 _HELPTEXT = (
     "VGG_Clear options. Mask designed to provide smart segmentation of mostly frontal faces clear "
-    "of obstructions.  Profile faces and obstructions may result in sub-par performance. "
+    "of obstructions.  Profile faces and obstructions may result in sub-par performance."
     )
 
 

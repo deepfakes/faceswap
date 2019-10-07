@@ -45,7 +45,8 @@
 
 _HELPTEXT = (
     "Components options. Mask designed to provide facial segmentation based on the positioning of "
-    "landmark locations. A convenx hull is constructed around the landmarks to create a mask."
+    "landmark locations. A convenx hull is constructed around the exterior of the landmarks to "
+    "create a mask."
     )
 
 
