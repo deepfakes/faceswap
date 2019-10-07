@@ -1,31 +1,36 @@
 #!/usr/bin/env python3
-""" Base class for Face Aligner plugins
+""" Base class for Face Masker plugins
+    Plugins should inherit from this class
 
-All Aligner Plugins should inherit from this class.
-See the override methods for which methods are required.
+    See the override methods for which methods are required.
 
-The plugin will receive a dict containing:
+    The plugin will receive a dict containing:
+    {"filename": <filename of source frame>,
+     "image": <source image>,
+     "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>}
 
->>> {"filename": [<filename of source frame>],
->>>  "image": [<source image>],
->>>  "detected_faces": [<list of DetectedFace objects]}
+    For each source item, the plugin must pass a dict to finalize containing:
+    {"filename": <filename of source frame>,
+     "image": <four channel source image>,
+     "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>
+    """
 
-For each source item, the plugin must pass a dict to finalize containing:
-
->>> {"filename": [<filename of source frame>],
->>>  "image": [<source image>],
->>>  "landmarks": [list of 68 point face landmarks]
->>>  "detected_faces": [<list of DetectedFace objects>]}
-"""
-
-
+import logging
+import os
+import traceback
 import cv2
 import numpy as np
+import keras
 
+from io import StringIO
+from lib.faces_detect import DetectedFace
+from lib.aligner import Extract
 from plugins.extract._base import Extractor, logger
 
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
-class Aligner(Extractor):
+
+class Masker(Extractor):
     """ Aligner plugin _base Object
 
     All Aligner plugins must inherit from this class
@@ -50,25 +55,28 @@ class Aligner(Extractor):
     plugins.extract.align : Aligner plugins
     plugins.extract._base : Parent class for all extraction plugins
     plugins.extract.detect._base : Detector parent class for extraction plugins.
-    plugins.extract.mask._base : Masker parent class for extraction plugins.
+    plugins.extract.align._base : Aligner parent class for extraction plugins.
     """
 
     def __init__(self, git_model_id=None, model_filename=None,
-                 configfile=None, normalize_method=None):
-        logger.debug("Initializing %s: (normalize_method: %s)", self.__class__.__name__,
-                     normalize_method)
+                 configfile=None, input_size=256, output_size=256, coverage_ratio=1.):
+        logger.debug("Initializing %s: (configfile: %s, input_size: %s, "
+                     "output_size: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, configfile, input_size, output_size, coverage_ratio)
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile)
-        self.normalize_method = normalize_method
+        self.input_size = input_size
+        self.output_size = output_size
+        self.coverage_ratio = coverage_ratio
+        self.extract = Extract()
 
-        self._plugin_type = "align"
+        self._plugin_type = "mask"
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
         self._rollover = []  # Items that are rolled over from the previous batch in get_batch
         self._output_faces = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    # << QUEUE METHODS >>> #
     def get_batch(self, queue):
         """ Get items for inputting into the aligner from the queue in batches
 
@@ -109,14 +117,11 @@ class Aligner(Extractor):
                 logger.trace("EOF received")
                 exhausted = True
                 break
-
             # Put frames with no faces into the out queue to keep TQDM consistent
             if not item["detected_faces"]:
                 self._queues["out"].put(item)
                 continue
-
             for f_idx, face in enumerate(item["detected_faces"]):
-                face.image = self._convert_color(item["image"])
                 batch.setdefault("detected_faces", []).append(face)
                 batch.setdefault("filename", []).append(item["filename"])
                 batch.setdefault("image", []).append(item["image"])
@@ -154,7 +159,10 @@ class Aligner(Extractor):
                 self._faces_per_filename[item["filename"]] = len(item["detected_faces"])
         return item
 
-    # <<< FINALIZE METHODS >>> #
+    def _predict(self, batch):
+        """ Just return the aligner's predict function """
+        return self.predict(batch)
+
     def finalize(self, batch):
         """ Finalize the output from Aligner
 
@@ -182,15 +190,6 @@ class Aligner(Extractor):
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
-
-        generator = zip(batch["detected_faces"],
-                        batch["filename"],
-                        batch["image"],
-                        batch["landmarks"])
-        for face, filename, image, landmarks in generator:
-            face.landmarks_xy = [(int(round(pt[0])), int(round(pt[1]))) for pt in landmarks]
-            face.image = image
-            face.filename = filename
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()
@@ -208,49 +207,52 @@ class Aligner(Extractor):
                          retval["filename"], retval["image"].shape, len(retval["detected_faces"]))
             yield retval
 
-    # <<< PROTECTED METHODS >>> #
-    # <<< PREDICT WRAPPER >>> #
-    def _predict(self, batch):
-        """ Just return the aligner's predict function """
-        return self.predict(batch)
-
-    # <<< FACE NORMALIZATION METHODS >>> #
-    def _normalize_faces(self, faces):
-        """ Normalizes the face for feeding into model
-
-        The normalization method is dictated by the cli argument:
-            -nh (--normalization)
-        """
-        if self.normalize_method is None:
-            return faces
-        logger.trace("Normalizing faces")
-        meth = getattr(self, "_normalize_{}".format(self.normalize_method.lower()))
-        faces = [meth(face) for face in faces]
-        logger.trace("Normalized faces")
-        return faces
+    # <<< PROTECTED ACCESS METHODS >>> #
+    @staticmethod
+    def _resize(image, target_size):
+        """ resize input and output of mask models appropriately """
+        height, width, channels = image.shape
+        image_size = max(height, width)
+        scale = target_size / image_size
+        if scale == 1.:
+            return image
+        method = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint: disable=no-member
+        resized = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=method)
+        resized = resized if channels > 1 else resized[..., None]
+        return resized
 
     @staticmethod
-    def _normalize_mean(face):
-        """ Normalize Face to the Mean """
-        face = face / 255.0
-        for chan in range(3):
-            layer = face[:, :, chan]
-            layer = (layer - layer.min()) / (layer.max() - layer.min())
-            face[:, :, chan] = layer
-        return face * 255.0
+    def postprocessing(mask):
+        """ Post-processing of Nirkin style segmentation masks """
+        # Select_largest_segment
+        if pop_small_segments:
+            results = cv2.connectedComponentsWithStats(mask,  # pylint: disable=no-member
+                                                       4,
+                                                       cv2.CV_32S)  # pylint: disable=no-member
+            _, labels, stats, _ = results
+            segments_ranked_by_area = np.argsort(stats[:, -1])[::-1]
+            mask[labels != segments_ranked_by_area[0, 0]] = 0.
 
-    @staticmethod
-    def _normalize_hist(face):
-        """ Equalize the RGB histogram channels """
-        for chan in range(3):
-            face[:, :, chan] = cv2.equalizeHist(face[:, :, chan])  # pylint: disable=no-member
-        return face
+        # Smooth contours
+        if smooth_contours:
+            iters = 2
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT,  # pylint: disable=no-member
+                                               (5, 5))
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN,  # pylint: disable=no-member
+                             kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE,  # pylint: disable=no-member
+                             kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_CLOSE,  # pylint: disable=no-member
+                             kernel, iterations=iters)
+            cv2.morphologyEx(mask, cv2.MORPH_OPEN,  # pylint: disable=no-member
+                             kernel, iterations=iters)
 
-    @staticmethod
-    def _normalize_clahe(face):
-        """ Perform Contrast Limited Adaptive Histogram Equalization """
-        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
-                                tileGridSize=(4, 4))
-        for chan in range(3):
-            face[:, :, chan] = clahe.apply(face[:, :, chan])
-        return face
+        # Fill holes
+        if fill_holes:
+            not_holes = mask.copy()
+            not_holes = np.pad(not_holes, ((2, 2), (2, 2), (0, 0)), 'constant')
+            cv2.floodFill(not_holes, None, (0, 0), 255)  # pylint: disable=no-member
+            holes = cv2.bitwise_not(not_holes)[2:-2, 2:-2]  # pylint: disable=no-member
+            mask = cv2.bitwise_or(mask, holes)  # pylint: disable=no-member
+            mask = np.expand_dims(mask, axis=-1)
+        return mask

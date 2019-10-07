@@ -53,7 +53,7 @@ class Detector(Extractor):
     plugins.extract.detect : Detector plugins
     plugins.extract._base : Parent class for all extraction plugins
     plugins.extract.align._base : Aligner parent class for extraction plugins.
-
+    plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
     def __init__(self, git_model_id=None, model_filename=None,
@@ -228,7 +228,7 @@ class Detector(Extractor):
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def _compile_detection_image(self, input_image):
         """ Compile the detection image for feeding into the model"""
-        image = self._convert_color(input_image)
+        image = self._convert_color(input_image[..., :3])
 
         image_size = image.shape[:2]
         scale = self._set_scale(image_size)
@@ -272,13 +272,12 @@ class Detector(Extractor):
             pad_r = (self.input_size - width) - pad_l
             pad_t = (self.input_size - height) // 2
             pad_b = (self.input_size - height) - pad_t
-            image = cv2.copyMakeBorder(  # pylint:disable=no-member
-                image,
-                pad_t,
-                pad_b,
-                pad_l,
-                pad_r,
-                cv2.BORDER_CONSTANT)  # pylint:disable=no-member
+            image = cv2.copyMakeBorder(image,  # pylint:disable=no-member
+                                       pad_t,
+                                       pad_b,
+                                       pad_l,
+                                       pad_r,
+                                       cv2.BORDER_CONSTANT)  # pylint:disable=no-member
         logger.trace("Padded image shape: %s", image.shape)
         return image
 
@@ -289,11 +288,11 @@ class Detector(Extractor):
             or face falls entirely outside of image """
         dims = [img.shape[:2] for img in batch["image"]]
         logger.trace("image dims: %s", dims)
-        batch["detected_faces"] = [[face for face in faces
+        batch["detected_faces"] = [[face
+                                    for face in faces
                                     if face.right > 0 and face.left < dim[1]
                                     and face.bottom > 0 and face.top < dim[0]]
-                                   for dim, faces in zip(dims,
-                                                         batch.get("detected_faces", list()))]
+                                   for dim, faces in zip(dims, batch.get("detected_faces", []))]
 
     def _filter_small_faces(self, detected_faces):
         """ Filter out any faces smaller than the min size threshold """

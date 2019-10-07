@@ -15,7 +15,6 @@ from importlib import import_module
 
 from lib.logger import crash_log, log_setup
 from lib.utils import FaceswapError, get_backend, safe_shutdown
-from lib.model.masks import get_available_masks, get_default_mask
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -542,36 +541,65 @@ class ExtractArgs(ExtractConvertArgs):
                               "help": "Serializer for alignments file. If yaml is chosen and not "
                                       "available, then json will be used as the default "
                                       "fallback."})
-        argument_list.append({
-            "opts": ("-D", "--detector"),
-            "action": Radio,
-            "type": str.lower,
-            "choices":  PluginLoader.get_available_extractors("detect"),
-            "default": default_detector,
-            "group": "Plugins",
-            "help": "R|Detector to use. Some of these have configurable settings in "
-                    "'/config/extract.ini' or 'Settings > Configure Extract Plugins':"
-                    "\nL|cv2-dnn: A CPU only extractor, is the least reliable, but uses least "
-                    "resources and runs fast on CPU. Use this if not using a GPU and time is "
-                    "important."
-                    "\nL|mtcnn: Fast on CPU, Faster on GPU. Uses far fewer resources than other "
-                    "GPU detectors but can often return more false positives."
-                    "\nL|s3fd: Fast on GPU, slow on CPU. Can detect more faces and "
-                    "fewer false positives than other GPU detectors, but is a lot more resource "
-                    "intensive."})
-        argument_list.append({
-            "opts": ("-A", "--aligner"),
-            "action": Radio,
-            "type": str.lower,
-            "choices": PluginLoader.get_available_extractors("align"),
-            "default": default_aligner,
-            "group": "Plugins",
-            "help": "R|Aligner to use."
-                    "\nL|cv2-dnn: A cpu only CNN based landmark detector. Faster, less "
-                    "resource intensive, but less accurate. Only use this if not using a gpu "
-                    " and time is important."
-                    "\nL|fan: Face Alignment Network. Best aligner. GPU "
-                    "heavy, slow when not running on GPU"})
+        argument_list.append({"opts": ("-D", "--detector"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices":  PluginLoader.get_available_extractors("detect"),
+                              "default": default_detector,
+                              "group": "Plugins",
+                              "help": "R|Detector to use. Some of these have configurable "
+                                      "settings in '/config/extract.ini' or 'Settings > Configure "
+                                      "Extract 'Plugins':"
+                                      "\nL|cv2-dnn: A CPU only extractor which is the least "
+                                      "reliable and least resource intensive. Use this if not "
+                                      "using a GPU and time is important."
+                                      "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses "
+                                      "fewer resources than other GPU detectors but can often "
+                                      "return more false positives."
+                                      "\nL|s3fd: Best detector. Fast on GPU, slow on CPU. Can "
+                                      "detect more faces and fewer false positives than other "
+                                      "GPU detectors, but is a lot more resource intensive."})
+        argument_list.append({"opts": ("-A", "--aligner"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_extractors("align"),
+                              "default": default_aligner,
+                              "group": "Plugins",
+                              "help": "R|Aligner to use."
+                                      "\nL|cv2-dnn: A CPU only landmark detector. Faster, less "
+                                      "resource intensive, but less accurate. Only use this if "
+                                      "not using a GPU and time is important."
+                                      "\nL|fan: Best aligner. Fast on GPU, slow on CPU."})
+        argument_list.append({"opts": ("-M", "--masker"),
+                              "action": Radio,
+                              "type": str.lower,
+                              "choices": PluginLoader.get_available_extractors("mask"),
+                              "default": "components",
+                              "group": "Plugins",
+                              "help": "R|Masker to use."
+                                      "\nL|none: An array of all ones is created to provide a 4th "
+                                      "channel that will not mask any portion of the image."
+                                      "\nL|components: Mask designed to provide facial "
+                                      "segmentation based on the positioning of landmark "
+                                      "locations. A convenx hull is constructed around the "
+                                      "exterior of the landmarks to create a mask."
+                                      "\nL|extended: Mask designed to provide facial segmentation "
+                                      "based on the positioning of landmark locations. A convenx "
+                                      "hull is constructed around the exterior of the landmarks "
+                                      "and the mask is extended upwards onto the forehead."
+                                      "\nL|vgg-clear: Mask designed to provide smart segmentation "
+                                      "of mostly frontal faces clear of obstructions.  Profile "
+                                      "faces and obstructions may result in sub-par performance."
+                                      "\nL|vgg-obstructed: Mask designed to provide smart "
+                                      "segmentation of mostly frontal faces. The mask model has "
+                                      "been specifically trained to recognize some facial "
+                                      "obstructions (hands and eyeglasses). Profile faces may "
+                                      "result in sub-par performance."
+                                      "\nL|unet-dfl: Mask designed to provide smart segmentation "
+                                      "of mostly frontal faces. The mask model has been trained "
+                                      "by community members and will need testing for further "
+                                      "description. Profile faces may result in sub-par "
+                                      "performance."})
         argument_list.append({"opts": ("-nm", "--normalization"),
                               "action": Radio,
                               "type": str.lower,
@@ -791,7 +819,7 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
-            "choices": get_available_masks() + ["predicted"],
+            "choices": ["dfl_full", "components", "extended", "predicted"],
             "group": "plugins",
             "default": "predicted",
             "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
@@ -803,8 +831,7 @@ class ConvertArgs(ExtractConvertArgs):
                     "further up the forehead. May perform badly on difficult angles."
                     "\nL|facehull: Face cutout based on landmarks."
                     "\nL|predicted: The predicted mask generated from the model. If the model was "
-                    "not trained with a mask then this will fallback to "
-                    "'{}'".format(get_default_mask()) +
+                    "not trained with a mask then this will fallback to components."
                     "\nL|none: Don't use a mask."})
         argument_list.append({
             "opts": ("-sc", "--scaling"),

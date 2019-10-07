@@ -36,7 +36,7 @@ class FaceFilter():
         # already performed allocation. For now we force CPU detectors.
 
         # self.align_faces(detector, aligner, multiprocess)
-        self.align_faces("cv2-dnn", "cv2-dnn", multiprocess)
+        self.align_faces("cv2-dnn", "cv2-dnn", "none", multiprocess)
 
         self.get_filter_encodings()
         self.threshold = threshold
@@ -56,9 +56,12 @@ class FaceFilter():
         return retval
 
     # Extraction pipeline
-    def align_faces(self, detector_name, aligner_name, multiprocess):
+    def align_faces(self, detector_name, aligner_name, masker_name, multiprocess):
         """ Use the requested detectors to retrieve landmarks for filter images """
-        extractor = Extractor(detector_name, aligner_name, multiprocess=multiprocess)
+        extractor = Extractor(detector_name,
+                              aligner_name,
+                              masker_name,
+                              multiprocess=multiprocess)
         self.run_extractor(extractor)
         del extractor
         self.load_aligned_face()

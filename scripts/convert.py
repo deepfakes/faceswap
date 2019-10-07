@@ -587,7 +587,7 @@ class Predict():
     def compile_feed_faces(detected_faces):
         """ Compile the faces for feeding into the predictor """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        feed_faces = np.stack([detected_face.feed_face for detected_face in detected_faces])
+        feed_faces = np.stack([detected_face.feed_face / 255. for detected_face in detected_faces])
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces
 

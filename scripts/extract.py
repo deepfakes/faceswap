@@ -34,6 +34,7 @@ class Extract():
         normalization = None if self.args.normalization == "none" else self.args.normalization
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
+                                   self.args.masker,
                                    configfile=configfile,
                                    multiprocess=not self.args.singleprocess,
                                    rotate_images=self.args.rotate_images,
@@ -103,7 +104,7 @@ class Extract():
                 logger.trace("Skipping image: '%s'", filename)
                 continue
             item = {"filename": filename,
-                    "image": image}
+                    "image": image[..., :3]}
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -224,7 +225,12 @@ class Extract():
 
     def output_processing(self, faces, size, filename):
         """ Prepare faces for output """
-        self.align_face(faces, size, filename)
+        final_faces = list()
+        for detected_face in faces["detected_faces"]:
+            filename = self.output_dir / Path(detected_face.filename).stem
+            final_faces.append({"file_location": filename,
+                                "face": detected_face})
+        faces["detected_faces"] = final_faces
         self.post_process.do_actions(faces)
 
         faces_count = len(faces["detected_faces"])
@@ -234,28 +240,16 @@ class Extract():
         if not self.verify_output and faces_count > 1:
             self.verify_output = True
 
-    def align_face(self, faces, size, filename):
-        """ Align the detected face and add the destination file path """
-        final_faces = list()
-        image = faces["image"]
-        detected_faces = faces["detected_faces"]
-        for face in detected_faces:
-            face.load_aligned(image, size=size)
-            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
-                                "face": face})
-        faces["detected_faces"] = final_faces
-
     def output_faces(self, filename, faces):
         """ Output faces to save thread """
         final_faces = list()
         for idx, detected_face in enumerate(faces["detected_faces"]):
             output_file = detected_face["file_location"]
-            extension = Path(filename).suffix
+            extension = '.png'
             out_filename = "{}_{}{}".format(str(output_file), str(idx), extension)
 
             face = detected_face["face"]
-            resized_face = face.aligned_face
-
+            resized_face = face.feed_face
             face.hash, img = encode_image_with_hash(resized_face, extension)
             self.save_queue.put((out_filename, img))
             final_faces.append(face.to_alignment())

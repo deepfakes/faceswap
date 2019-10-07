@@ -106,7 +106,10 @@ class ModelBase():
                               "augment_color": augment_color,
                               "no_flip": no_flip,
                               "pingpong": self.vram_savings.pingpong,
-                              "snapshot_interval": snapshot_interval}
+                              "snapshot_interval": snapshot_interval,
+                              "replicate_input_mask": self.config["replicate_input_mask"],
+                              "penalized_mask_loss": self.config["penalized_mask_loss"]}
+
 
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -223,7 +226,6 @@ class ModelBase():
         # Force number of preview images to between 2 and 16
         self.training_opts["training_size"] = self.state.training_size
         self.training_opts["no_logs"] = self.state.current_session["no_logs"]
-        self.training_opts["mask_type"] = self.config.get("mask_type", None)
         self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
         logger.debug("Set training data: %s", self.training_opts)
 
@@ -261,12 +263,11 @@ class ModelBase():
         logger.debug("Getting inputs")
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
-        mask_idx = [idx for idx, name in enumerate(output_network.output_names)
-                    if name.startswith("mask")]
-        if mask_idx:
-            # Add the final mask shape as input
-            mask_shape = output_network.output_shapes[mask_idx[0]]
-            inputs.append(Input(shape=mask_shape[1:], name="mask_in"))
+        if self.config["replicate_input_mask"] or self.config["penalized_mask_loss"]:
+            # penalized mask doesn't have a mask ouput, so we can't use output shapes
+            # mask should always be last output..this needs to be a rule
+            mask_shape = output_network.output_shapes[-1]
+            inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
         logger.debug("Got inputs: %s", inputs)
         return inputs
 
@@ -445,7 +446,7 @@ class ModelBase():
             logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
             exit(0)
 
-        if not self.is_legacy:
+        if not self.is_legacy or not self.predict:
             K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
@@ -579,7 +580,7 @@ class ModelBase():
         self.state.config["coverage"] = 62.5
         self.state.config["subpixel_upscaling"] = False
         self.state.config["reflect_padding"] = False
-        self.state.config["mask_type"] = None
+        self.state.config["replicate_input_mask"] = False
         self.state.config["lowmem"] = False
         self.encoder_dim = 1024
 
@@ -744,7 +745,7 @@ class Loss():
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
                 loss_funcs.append(self.selected_mask_loss)
-            elif self.mask_input is not None and self.config.get("penalized_mask_loss", False):
+            elif self.config["penalized_mask_loss"]:
                 face_size = self.output_shapes[idx][1]
                 mask_size = self.mask_shape[1]
                 scaling = face_size / mask_size

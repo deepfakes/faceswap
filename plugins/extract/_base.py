@@ -306,7 +306,7 @@ class Extractor():
             logger.debug("No git_model_id specified. Returning None")
             return None
         plugin_path = os.path.join(*self.__module__.split(".")[:-1])
-        if os.path.basename(plugin_path) in ("detect", "align"):
+        if os.path.basename(plugin_path) in ("detect", "align", "mask", "recognition"):
             base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
             cache_path = os.path.join(base_path, plugin_path, ".cache")
         else:
@@ -322,13 +322,13 @@ class Extractor():
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        p_type = "Detector" if self._plugin_type == "detect" else "Aligner"
-        logger.info("Initializing %s %s...", self.name, p_type)
+        logger.info("Initializing %s in %s phase...", self.name, self._plugin_type)
         self.queue_size = 1
         self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
         self._compile_threads()
         self.init_model()
-        logger.info("Initialized %s %s with batchsize of %s", self.name, p_type, self.batchsize)
+        logger.info("Initialized %s (%s) with batchsize of %s",
+                    self.name, self._plugin_type, self.batchsize)
 
     def _add_queues(self, in_queue, out_queue, queues):
         """ Add the queues

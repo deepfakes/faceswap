@@ -21,6 +21,11 @@ class PluginLoader():
         return PluginLoader._import("extract.align", name, disable_logging)
 
     @staticmethod
+    def get_masker(name, disable_logging=False):
+        """ Return requested detector plugin """
+        return PluginLoader._import("extract.mask", name, disable_logging)
+
+    @staticmethod
     def get_model(name, disable_logging=False):
         """ Return requested model plugin """
         return PluginLoader._import("train.model", name, disable_logging)

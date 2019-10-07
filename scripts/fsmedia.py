@@ -388,11 +388,10 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             face = detected_face["face"]
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
                          detected_face["file_location"].parts[-1], idx)
-            aligned_landmarks = face.aligned_landmarks
+            aligned_landmarks = face.feed_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(  # pylint: disable=no-member
-                    face.aligned_face,
-                    (pos_x, pos_y), 2, (0, 0, 255), -1)
+                cv2.circle(face.feed_face,  # pylint: disable=no-member
+                           (pos_x, pos_y), 2, (0, 0, 255, 255), -1)
 
 
 class FaceFilter(PostProcessAction):

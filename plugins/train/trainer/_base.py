@@ -7,18 +7,17 @@
 
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
-        alignments:         dict containing paths to alignments files for keys 'a' and 'b'
-        preview_scaling:    How much to scale the preview out by
-        training_size:      Size of the training images
-        coverage_ratio:     Ratio of face to be cropped out for training
-        mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
-                            Set to None for not used
-        no_logs:            Disable tensorboard logging
-        snapshot_interval:  Interval for saving model snapshots
-        warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
-        augment_color:      Perform random shifting of L*a*b* colors
-        no_flip:            Don't perform a random flip on the image
-        pingpong:           Train each side seperately per save iteration rather than together
+        alignments:             dict containing paths to alignments files for keys 'a' and 'b'
+        preview_scaling:        How much to scale the preview out by
+        training_size:          Size of the training images
+        coverage_ratio:         Ratio of face to be cropped out for training
+        replicate_input_mask:   Replicate input masks with additional model dedicated layers
+        no_logs:                Disable tensorboard logging
+        snapshot_interval:      Interval for saving model snapshots
+        warp_to_landmarks:      Use random_warp_landmarks instead of random_warp
+        augment_color:          Perform random shifting of L*a*b* colors
+        no_flip:                Don't perform a random flip on the image
+        pingpong:               Train each side seperately per save iteration rather than together
 """
 
 import logging
@@ -28,14 +27,13 @@ import time
 import cv2
 import numpy as np
 
-import tensorflow as tf
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
-
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -90,14 +88,15 @@ class TrainerBase():
     def landmarks_required(self):
         """ Return True if Landmarks are required """
         opts = self.model.training_opts
-        retval = bool(opts.get("mask_type", None) or opts["warp_to_landmarks"])
+        retval = opts["warp_to_landmarks"]
         logger.debug(retval)
         return retval
 
     @property
     def use_mask(self):
         """ Return True if a mask is requested """
-        retval = bool(self.model.training_opts.get("mask_type", None))
+        retval = (self.model.training_opts.get("replicate_input_mask", False) or
+                  self.model.training_opts.get("penalized_mask_loss", True))
         logger.debug(retval)
         return retval
 
@@ -176,10 +175,11 @@ class TrainerBase():
             for side, batcher in self.batchers.items():
                 if self.pingpong.active and side != self.pingpong.side:
                     continue
-                loss[side] = batcher.train_one_batch(do_preview)
+                loss[side] = batcher.train_one_batch()
                 if not do_preview and not do_timelapse:
                     continue
                 if do_preview:
+                    batcher.generate_preview(do_preview)
                     self.samples.images[side] = batcher.compile_sample(None)
                 if do_timelapse:
                     self.timelapse.get_sample(side, timelapse_kwargs)
@@ -247,13 +247,14 @@ class Batcher():
         self.config = config
         self.target = None
         self.samples = None
-        self.mask = None
+        self.masks = None
 
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
 
         self.preview_feed = None
         self.timelapse_feed = None
+        self.set_preview_feed()
 
     def load_generator(self):
         """ Pass arguments to TrainingDataGenerator and return object """
@@ -267,12 +268,12 @@ class Batcher():
                                           self.config)
         return generator
 
-    def train_one_batch(self, do_preview):
+    def train_one_batch(self):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        batch = self.get_next(do_preview)
+        model_inputs, model_targets = self.get_next()
         try:
-            loss = self.model.predictors[self.side].train_on_batch(*batch)
+            loss = self.model.predictors[self.side].train_on_batch(x=model_inputs, y=model_targets)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -288,31 +289,28 @@ class Batcher():
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self, do_preview):
+    def get_next(self):
         """ Return the next batch from the generator
-            Items should come out as: (warped, target [, mask]) """
+            Items should come out as: (sample, warped, targets, [mask]) """
+        logger.debug("Generating targets")
         batch = next(self.feed)
-        if self.use_mask:
-            batch = [[batch["feed"], batch["masks"]], batch["targets"] + [batch["masks"]]]
-        else:
-            batch = [batch["feed"], batch["targets"]]
-        self.generate_preview(do_preview)
-        return batch
+        targets_use_mask = self.model.training_opts["replicate_input_mask"]
+        model_inputs = batch["feed"] + batch["masks"] if self.use_mask else batch["feed"]
+        model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
+        return model_inputs, model_targets
 
     def generate_preview(self, do_preview):
         """ Generate the preview if a preview iteration """
         if not do_preview:
             self.samples = None
             self.target = None
+            self.masks = None
             return
         logger.debug("Generating preview")
-        if self.preview_feed is None:
-            self.set_preview_feed()
         batch = next(self.preview_feed)
         self.samples = batch["samples"]
-        self.target = [batch["targets"][self.model.largest_face_index]]
-        if self.use_mask:
-            self.target += [batch["masks"]]
+        self.target = batch["targets"][self.model.largest_face_index]
+        self.masks = batch["masks"][0]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -327,27 +325,27 @@ class Batcher():
                                                                is_preview=True)
         logger.debug("Set preview feed. Batchsize: %s", batchsize)
 
-    def compile_sample(self, batch_size, samples=None, images=None):
+    def compile_sample(self, batch_size, samples=None, images=None, masks=None):
         """ Training samples to display in the viewer """
         num_images = self.config.get("preview_images", 14)
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
-        retval = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
-        if self.use_mask:
-            retval.extend(tgt[0:num_images] for tgt in images)
-        else:
-            retval.extend(images[0:num_images])
+        masks = masks if masks is not None else self.masks
+        samples = samples if samples is not None else self.samples
+        retval = [samples[0:num_images], images[0:num_images], masks[0:num_images]]
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         batchsize = len(batch["samples"])
-        images = [batch["targets"][self.model.largest_face_index]]
-        if self.use_mask:
-            images = images + [batch["masks"]]
-        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
+        images = batch["targets"][self.model.largest_face_index]
+        masks = batch["masks"][0]
+        sample = self.compile_sample(batchsize, 
+                                     samples=batch["samples"],
+                                     images=images,
+                                     masks=masks)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -416,7 +414,7 @@ class Samples():
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
-        figure = np.vstack((header, figure))
+        figure = np.concatenate((header, figure), axis=0)
 
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
@@ -518,9 +516,8 @@ class Samples():
         for mask in masks3:
             mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
         for previews in faces:
-            images = np.array([cv2.addWeighted(img, 1.0,  # pylint: disable=no-member
-                                               masks3[idx], 0.3,
-                                               0)
+            images = np.array([cv2.addWeighted(img,  # pylint: disable=no-member
+                                               1.0, masks3[idx], 0.3, 0)
                                for idx, img in enumerate(previews)])
             retval.append(images)
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])
@@ -533,7 +530,7 @@ class Samples():
         new_images = list()
         for idx, img in enumerate(backgrounds):
             img[offset:offset + foregrounds[idx].shape[0],
-                offset:offset + foregrounds[idx].shape[1]] = foregrounds[idx]
+                offset:offset + foregrounds[idx].shape[1], :3] = foregrounds[idx]
             new_images.append(img)
         retval = np.array(new_images)
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)

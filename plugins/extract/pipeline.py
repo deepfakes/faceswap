@@ -57,18 +57,25 @@ class Extractor():
         The current phase that the pipeline is running. Used in conjunction with :attr:`passes` and
         :attr:`final_pass` to indicate to the caller which phase is being processed
     """
-    def __init__(self, detector, aligner,
-                 configfile=None, multiprocess=False, rotate_images=None, min_size=20,
-                 normalize_method=None):
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, configfile: %s, "
-                     "multiprocess: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s)", self.__class__.__name__, detector, aligner,
-                     configfile, multiprocess, rotate_images, min_size, normalize_method)
+    def __init__(self, detector, aligner, masker, configfile=None,
+                 multiprocess=False, rotate_images=None, min_size=20,
+                 normalize_method=None, input_size=256, output_size=256, coverage_ratio=1.):
+        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, "
+                     "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
+                     "normalize_method: %s, input_size: %s, output_size: %s, coverage_ratio: %s)",
+                     self.__class__.__name__, detector, aligner, masker, configfile,
+                     multiprocess, rotate_images, min_size, normalize_method, input_size,
+                     output_size, coverage_ratio)
         self.phase = "detect"
         self._queue_size = 32
         self._vram_buffer = 320  # Leave a buffer for VRAM allocation
         self._detector = self._load_detector(detector, rotate_images, min_size, configfile)
         self._aligner = self._load_aligner(aligner, configfile, normalize_method)
+        self._masker = self._load_masker(masker,
+                                         configfile,
+                                         input_size,
+                                         output_size,
+                                         coverage_ratio)
         self._is_parallel = self._set_parallel_processing(multiprocess)
         self._set_extractor_batchsize()
         self._queues = self._add_queues()
@@ -93,10 +100,10 @@ class Extractor():
         >>>  'detected_faces: [<list of DetectedFace objects as generated from detect>]}
 
         """
-        if self._is_parallel or self.phase == "detect":
-            qname = "extract_detect_in"
-        else:
-            qname = "extract_align_in"
+        qname_dict = dict(detect="extract_detect_in",
+                          align="extract_align_in",
+                          mask="extract_mask_in")
+        qname = "extract_detect_in" if self._is_parallel else qname_dict[self.phase]
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -120,7 +127,7 @@ class Extractor():
         >>>                                    "image": np.array(image),
         >>>                                    "detected_faces": [<DetectedFace objects]})
         """
-        retval = 1 if self._is_parallel else 2
+        retval = 1 if self._is_parallel else 3
         logger.trace(retval)
         return retval
 
@@ -142,7 +149,7 @@ class Extractor():
         >>>                                    "image": np.array(image),
         >>>                                    "detected_faces": [<DetectedFace objects]})
         """
-        retval = self._is_parallel or self.phase == "align"
+        retval = self._is_parallel or self.phase == "mask"
         logger.trace(retval)
         return retval
 
@@ -177,12 +184,15 @@ class Extractor():
         """
 
         if self._is_parallel:
-            self._launch_aligner()
             self._launch_detector()
+            self._launch_aligner()
+            self._launch_masker()
         elif self.phase == "detect":
             self._launch_detector()
-        else:
+        elif self.phase == "align":
             self._launch_aligner()
+        elif self.phase == "mask":
+            self._launch_masker()
 
     def detected_faces(self):
         """ Generator that returns results, frame by frame from the extraction pipeline
@@ -227,14 +237,17 @@ class Extractor():
                 queue_manager.del_queue(q_name)
             logger.debug("Detection Complete")
         else:
-            logger.debug("Switching to align phase")
-            self.phase = "align"
+            self.phase = "align" if self.phase == "detect" else "mask"
+            logger.debug("Switching to %s phase", self.phase)
 
     # <<< INTERNAL METHODS >>> #
     @property
     def _output_queue(self):
         """ Return the correct output queue depending on the current phase """
-        qname = "extract_align_out" if self.final_pass else "extract_align_in"
+        qname_dict = dict(detect="extract_align_in",
+                          align="extract_mask_in",
+                          mask="extract_mask_out")
+        qname = "extract_mask_out" if self.final_pass else qname_dict[self.phase]
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -243,18 +256,23 @@ class Extractor():
     def _active_plugins(self):
         """ Return the plugins that are currently active based on pass """
         if self.passes == 1:
-            retval = [self._detector, self._aligner]
-        elif self.passes == 2 and not self.final_pass:
+            retval = [self._detector, self._aligner, self._masker]
+        elif self.passes == 3 and self.phase == 'detect':
             retval = [self._detector]
-        else:
+        elif self.passes == 3 and self.phase == 'align':
             retval = [self._aligner]
+        elif self.passes == 3 and self.phase == 'mask':
+            retval = [self._masker]
+        else:
+            retval = [None]
         logger.trace("Active plugins: %s", retval)
         return retval
 
     def _add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
-        for task in ("extract_detect_in", "extract_align_in", "extract_align_out"):
+        tasks = ["extract_detect_in", "extract_align_in", "extract_mask_in", "extract_mask_out"]
+        for task in tasks:
             # Limit queue size to avoid stacking ram
             self._queue_size = 32
             if task == "extract_detect_in" or (not self._is_parallel
@@ -266,11 +284,7 @@ class Extractor():
         return queues
 
     def _set_parallel_processing(self, multiprocess):
-        """ Set whether to run detect and align together or separately """
-        if self._detector.vram == 0 or self._aligner.vram == 0:
-            logger.debug("At least one of aligner or detector have no VRAM requirement. "
-                         "Enabling parallel processing.")
-            return True
+        """ Set whether to run detect, align, and mask together or separately """
 
         if not multiprocess:
             logger.debug("Parallel processing disabled by cli.")
@@ -285,7 +299,10 @@ class Extractor():
             logger.debug("Parallel processing discabled by amd")
             return False
 
-        vram_required = self._detector.vram + self._aligner.vram + self._vram_buffer
+        vram_required = (self._detector.vram +
+                         self._aligner.vram +
+                         self._masker.vram +
+                         self._vram_buffer)
         stats = gpu_stats.get_card_most_free()
         vram_free = int(stats["free"])
         logger.verbose("%s - %sMB free of %sMB",
@@ -318,14 +335,16 @@ class Extractor():
                                                          normalize_method=normalize_method)
         return aligner
 
-    def _launch_aligner(self):
-        """ Launch the face aligner """
-        logger.debug("Launching Aligner")
-        kwargs = dict(in_queue=self._queues["extract_align_in"],
-                      out_queue=self._queues["extract_align_out"])
-        self._aligner.initialize(**kwargs)
-        self._aligner.start()
-        logger.debug("Launched Aligner")
+    @staticmethod
+    def _load_masker(masker, configfile, input_size, output_size, coverage_ratio):
+        """ Set global arguments and load masker plugin """
+        masker_name = masker.replace("-", "_").lower()
+        logger.debug("Loading Masker: '%s'", masker_name)
+        masker = PluginLoader.get_masker(masker_name)(configfile=configfile,
+                                                      input_size=input_size,
+                                                      output_size=output_size,
+                                                      coverage_ratio=coverage_ratio)
+        return masker
 
     def _launch_detector(self):
         """ Launch the face detector """
@@ -336,31 +355,54 @@ class Extractor():
         self._detector.start()
         logger.debug("Launched Detector")
 
+    def _launch_aligner(self):
+        """ Launch the face aligner """
+        logger.debug("Launching Aligner")
+        kwargs = dict(in_queue=self._queues["extract_align_in"],
+                      out_queue=self._queues["extract_mask_in"])
+        self._aligner.initialize(**kwargs)
+        self._aligner.start()
+        logger.debug("Launched Aligner")
+
+    def _launch_masker(self):
+        """ Launch the face masker """
+        logger.debug("Launching Masker")
+        kwargs = dict(in_queue=self._queues["extract_mask_in"],
+                      out_queue=self._queues["extract_mask_out"])
+        self._masker.initialize(**kwargs)
+        self._masker.start()
+        logger.debug("Launched Masker")
+
     def _set_extractor_batchsize(self):
-        """ Sets the batchsize of the requested plugins based on their vram and
-            vram_per_batch_requirements if the the configured batchsize requires more
-            vram than is available. Nvidia only. """
-        if (self._detector.vram == 0 and self._aligner.vram == 0) or get_backend() != "nvidia":
+        """ 
+        Sets the batchsize of the requested plugins based on their vram and
+        vram_per_batch_requirements if the the configured batchsize requires more
+        vram than is available. Nvidia only.
+        """
+        if (self._detector.vram == 0 and self._aligner.vram == 0 and self._masker.vram == 0
+            or get_backend() != "nvidia"):
             logger.debug("Either detector and aligner have no VRAM requirements or not running "
                          "on Nvidia. Not updating batchsize requirements.")
             return
         stats = GPUStats().get_card_most_free()
         vram_free = int(stats["free"])
         if self._is_parallel:
-            vram_required = self._detector.vram + self._aligner.vram + self._vram_buffer
-            batch_required = ((self._aligner.vram_per_batch * self._aligner.batchsize) +
-                              (self._detector.vram_per_batch * self._detector.batchsize))
+            vram_required = (self._detector.vram + self._aligner.vram + self._masker.vram +
+                             self._vram_buffer)
+            batch_required = ((self._detector.vram_per_batch * self._detector.batchsize) +
+                              (self._aligner.vram_per_batch * self._aligner.batchsize) +
+                              (self._masker.vram_per_batch * self._masker.batchsize))
             plugin_required = vram_required + batch_required
             if plugin_required <= vram_free:
                 logger.debug("Plugin requirements within threshold: (plugin_required: %sMB, "
                              "vram_free: %sMB)", plugin_required, vram_free)
                 return
-            # Hacky split across 2 plugins
-            available_vram = (vram_free - vram_required) // 2
-            for plugin in (self._aligner, self._detector):
+            # Hacky split across 3 plugins
+            available_vram = (vram_free - vram_required) // 3
+            for plugin in (self._detector, self._aligner, self._masker):
                 self._set_plugin_batchsize(plugin, available_vram)
         else:
-            for plugin in (self._aligner, self._detector):
+            for plugin in (self._detector, self._aligner, self._masker):
                 vram_required = plugin.vram + self._vram_buffer
                 batch_required = plugin.vram_per_batch * plugin.batchsize
                 plugin_required = vram_required + batch_required
