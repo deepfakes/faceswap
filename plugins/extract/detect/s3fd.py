@@ -230,13 +230,16 @@ class S3fd(KSession):
         batch = batch.transpose(0, 3, 1, 2)
         return batch
 
-    def finalize_predictions(self, batch_of_bounding_boxes):
+    def finalize_predictions(self, bounding_boxes_scales):
         """ Detect faces """
         ret = list()
-        print(len(batch_of_bounding_boxes))
-        for bounding_boxes in batch_of_bounding_boxes:
-            bboxlist = self._post_process(bounding_boxes)
-            bboxlist = self._nms(bboxlist, 0.3, 'iou') if bboxlist else None
+        batch_size = range(bounding_boxes_scales[0].shape[0])
+        for img in batch_size:
+            bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
+            bboxlist = self._post_process(bboxlist)
+            print(bboxlist.shape, np.mean(bboxlist))
+            print(bboxlist.shape, np.mean(bboxlist))
+            bboxlist = self._nms(bboxlist, 0.3, 'iou') if len(bboxlist)!=0 else []
             ret.append(bboxlist)
         return ret
 
@@ -256,10 +259,10 @@ class S3fd(KSession):
                 score = ocls[0, 1, hindex, windex]
                 loc = np.ascontiguousarray(oreg[0, :, hindex, windex]).reshape((1, 4))
                 priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
-                box = self.decode(loc, priors, variances)
+                box = self.decode(loc, priors)
                 x_1, y_1, x_2, y_2 = box[0] * 1.0
                 retval.append([x_1, y_1, x_2, y_2, score])
-        return_numpy = np.array(retval) if len(retval) == 0 else np.zeros((1, 5))
+        return_numpy = np.array(retval) if len(retval) != 0 else np.zeros((1, 5))
         return return_numpy
 
     @staticmethod
@@ -287,9 +290,12 @@ class S3fd(KSession):
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
-    @staticmethod
-    def _nms(boxes, threshold, method):
+    def _nms(self, boxes, threshold, method):
         """ Perform Non-Maximum Suppression """
+        print(len(boxes))
+        print(len(boxes))
+        print(type(boxes))
+        print(type(boxes))
         retained_box_indices = list()
         x_1, y_1, x_2, y_2, scores = np.split(boxes, 5, axis=1)
         areas = (x_2 - x_1 + 1) * (y_2 - y_1 + 1)
@@ -307,7 +313,7 @@ class S3fd(KSession):
                 overlap = max_area / (areas[best] + areas[rest] - max_area)
             if best >= self.confidence:
                 retained_box_indices.append(best)
-            indices = (overlap <= threshold)
-            order = order[indices[0] + 1]
+            indices = (overlap <= threshold)[0]
+            order = order[indices + 1]
 
         return boxes[retained_box_indices]
