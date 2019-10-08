@@ -219,29 +219,28 @@ class S3fd(KSession):
                      self.__class__.__name__, model_path, allow_growth)
         super().__init__("S3FD", model_path, model_kwargs=model_kwargs, allow_growth=allow_growth)
         self.load_model()
+        #self._model.summary()
         self.confidence = confidence
+        self.average_img = np.array([104.0, 117.0, 123.0])
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    @staticmethod
-    def prepare_batch(batch):
+    def prepare_batch(self, batch):
         """ Prepare a batch for prediction """
-        batch = batch - np.array([104.0, 117.0, 123.0])
+        batch = batch - self.average_img
         batch = batch.transpose(0, 3, 1, 2)
         return batch
 
-    def finalize_predictions(self, bboxlists):
+    def finalize_predictions(self, batch_of_bounding_boxes):
         """ Detect faces """
         ret = list()
-        for i in range(bboxlists[0].shape[0]):
-            bboxlist = [x[i:i+1, ...] for x in bboxlists]
-            bboxlist = self.post_process(bboxlist)
-            keep = self._nms(bboxlist, 0.3, 'iou') if bboxlist else []
-            bboxlist = bboxlist[keep, :]
-            bboxlist = [x for x in bboxlist if x[-1] >= self.confidence]
-            ret.append(np.array(bboxlist))
+        print(len(batch_of_bounding_boxes))
+        for bounding_boxes in batch_of_bounding_boxes:
+            bboxlist = self._post_process(bounding_boxes)
+            bboxlist = self._nms(bboxlist, 0.3, 'iou') if bboxlist else None
+            ret.append(bboxlist)
         return ret
 
-    def post_process(self, bboxlist):
+    def _post_process(self, bboxlist):
         """ Perform post processing on output
             TODO: do this on the batch.
         """
@@ -257,14 +256,11 @@ class S3fd(KSession):
                 score = ocls[0, 1, hindex, windex]
                 loc = np.ascontiguousarray(oreg[0, :, hindex, windex]).reshape((1, 4))
                 priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
-                variances = [0.1, 0.2]
                 box = self.decode(loc, priors, variances)
                 x_1, y_1, x_2, y_2 = box[0] * 1.0
                 retval.append([x_1, y_1, x_2, y_2, score])
-        retval = np.array(retval)
-        if len(retval) == 0:
-            retval = np.zeros((1, 5))
-        return retval
+        return_numpy = np.array(retval) if len(retval) == 0 else np.zeros((1, 5))
+        return return_numpy
 
     @staticmethod
     def softmax(inp, axis):
@@ -272,7 +268,7 @@ class S3fd(KSession):
         return np.exp(inp - logsumexp(inp, axis=axis, keepdims=True))
 
     @staticmethod
-    def decode(loc, priors, variances):
+    def decode(loc, priors):
         """Decode locations from predictions using priors to undo
         the encoding we did for offset regression at train time.
         Args:
@@ -284,9 +280,9 @@ class S3fd(KSession):
         Return:
             decoded bounding box predictions
         """
+        variances = [0.1, 0.2]
         boxes = np.concatenate((priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
-                                priors[:, 2:] * np.exp(loc[:, 2:] * variances[1])),
-                               1)
+                                priors[:, 2:] * np.exp(loc[:, 2:] * variances[1])), axis=1)
         boxes[:, :2] -= boxes[:, 2:] / 2
         boxes[:, 2:] += boxes[:, :2]
         return boxes
@@ -294,7 +290,7 @@ class S3fd(KSession):
     @staticmethod
     def _nms(boxes, threshold, method):
         """ Perform Non-Maximum Suppression """
-        retained_boxes = list()
+        retained_box_indices = list()
         x_1, y_1, x_2, y_2, scores = np.split(boxes, 5, axis=1)
         areas = (x_2 - x_1 + 1) * (y_2 - y_1 + 1)
         order = scores.argsort()[::-1]
@@ -309,9 +305,9 @@ class S3fd(KSession):
                 overlap = max_area / np.minimum(areas[best], areas[rest])
             else:
                 overlap = max_area / (areas[best] + areas[rest] - max_area)
-
-            retained_boxes.append(best)
+            if best >= self.confidence:
+                retained_box_indices.append(best)
             indices = (overlap <= threshold)
             order = order[indices[0] + 1]
 
-        return retained_boxes
+        return boxes[retained_box_indices]
