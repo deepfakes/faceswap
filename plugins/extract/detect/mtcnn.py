@@ -303,27 +303,23 @@ class MTCNN():
                 ret.append(list())
                 continue
             image = images[idx]
-            crop_number = 0
             predict_batch = []
             for rect in rectangles:
                 crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
-                scale_img = cv2.resize(crop_img, (48, 48))  # pylint:disable=no-member
+                scale_img = cv2.resize(crop_img, (48, 48))
                 predict_batch.append(scale_img)
-                crop_number += 1
             predict_batch = np.array(predict_batch)
             output = self.onet.predict(predict_batch, batch_size=128)
             cls_prob = output[0]
             roi_prob = output[1]
             pts_prob = output[2]  # index
-            ret.append(filter_face_48net(
-                cls_prob,
-                roi_prob,
-                pts_prob,
-                rectangles,
-                width,
-                height,
-                self.threshold[2]
-            ))
+            ret.append(filter_face_48net(cls_prob,
+                                         proi_prob,
+                                         pts_prob,
+                                         rectangles,
+                                         width,
+                                         height,
+                                         self.threshold[2]))
         return ret
 
 
@@ -471,6 +467,56 @@ def filter_face_48net(cls_prob, roi, pts, rectangles, width, height, threshold):
                          rect[10], rect[11], rect[12], rect[13], rect[14]])
     return nms(pick, 0.3, 'iom')
 
+def filter_face_48net_two(cls_prob, roi, pts, rectangles, width, height, threshold):
+    # pylint: disable=too-many-locals, too-many-arguments
+    """ Filter face position and calibrate bounding box on 12net's output
+    Input:
+        cls_prob  : cls_prob[1] is face possibility
+        roi       : roi offset
+        pts       : 5 landmark
+        rectangles: 12net's predict, rectangles[i][0:3] is the position, rectangles[i][4] is score
+        width     : image's origin width
+        height    : image's origin height
+        threshold : 0.7 can have 94% recall rate on CelebA-database
+    Output:
+        rectangles: face positions and landmarks
+    """
+    prob = cls_prob[:, 1]
+    pick = np.where(prob >= threshold)
+    rectangles = np.array(rectangles).T
+    sc_ = np.array([prob[pick]]).T
+    pts = pts.T
+    roi = roi.T
+    x_1 = rectangles[pick, 0]
+    y_1 = rectangles[pick, 1]
+    x_2 = rectangles[pick, 2]
+    y_2 = rectangles[pick, 3]
+    dx1 = roi[pick, 0]
+    dx2 = roi[pick, 1]
+    dx3 = roi[pick, 2]
+    dx4 = roi[pick, 3]
+    r_width = x_2-x_1
+    r_height = y_2-y_1
+
+    x_1 = (r_width * dx1 + x_1)[0]
+    x_2 = (r_width * dx3 + x_2)[0]
+    y_1 = (r_height * dx2 + y_1)[0]
+    y_2 = (r_height * dx4 + y_2)[0]
+    x_pts = (r_width * pts[pick, :5] + x_1)[0]
+    y_pts = (r_height * pts[pick, 5:] + y_1)[0]
+
+    rectangles = np.concatenate((x_1, y_1, x_2, y_2, sc_, x_pts, y_pts), axis=1)
+    pick = []
+    for rect in rectangles:
+        x_1 = int(max(0, rect[0]))
+        y_1 = int(max(0, rect[1]))
+        x_2 = int(min(width, rect[2]))
+        y_2 = int(min(height, rect[3]))
+        if x_2 > x_1 and y_2 > y_1:
+            pick.append([x_1, y_1, x_2, y_2,
+                         rect[4], rect[10], rect[5], rect[11], rect[6], rect[12],
+                         rect[7], rect[13], rect[8], rect[14], rect[9]])
+    return nms(pick, 0.3, 'iom')
 
 def nms(rectangles, threshold, method):
     # pylint:disable=too-many-locals
@@ -483,29 +529,24 @@ def nms(rectangles, threshold, method):
     if not rectangles:
         return rectangles
     boxes = np.array(rectangles)
-    x_1 = boxes[:, 0]
-    y_1 = boxes[:, 1]
-    x_2 = boxes[:, 2]
-    y_2 = boxes[:, 3]
-    var_s = boxes[:, 4]
-    area = np.multiply(x_2-x_1+1, y_2-y_1+1)
-    s_sort = np.array(var_s.argsort())
+    s_sort = boxes[:, 4].argsort()
+    area = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
     pick = []
     while len(s_sort) > 0:
         # s_sort[-1] have hightest prob score, s_sort[0:-1]->others
-        xx_1 = np.maximum(x_1[s_sort[-1]], x_1[s_sort[0:-1]])
-        yy_1 = np.maximum(y_1[s_sort[-1]], y_1[s_sort[0:-1]])
-        xx_2 = np.minimum(x_2[s_sort[-1]], x_2[s_sort[0:-1]])
-        yy_2 = np.minimum(y_2[s_sort[-1]], y_2[s_sort[0:-1]])
+        pick.append(s_sort[-1])
+        xx_1 = np.maximum(boxes[s_sort[-1], 0], boxes[s_sort[0:], 0])
+        yy_1 = np.maximum(boxes[s_sort[-1], 1], boxes[s_sort[0:], 1])
+        xx_2 = np.minimum(boxes[s_sort[-1], 2], boxes[s_sort[0:], 2])
+        yy_2 = np.minimum(boxes[s_sort[-1], 3], boxes[s_sort[0:], 3])
         width = np.maximum(0.0, xx_2 - xx_1 + 1)
         height = np.maximum(0.0, yy_2 - yy_1 + 1)
         inter = width * height
         if method == 'iom':
-            var_o = inter / np.minimum(area[s_sort[-1]], area[s_sort[0:-1]])
+            var_o = (inter / np.minimum(area[s_sort[-1]], area[s_sort[0:]]))[0]
         else:
-            var_o = inter / (area[s_sort[-1]] + area[s_sort[0:-1]] - inter)
-        pick.append(s_sort[-1])
-        s_sort = s_sort[np.where(var_o <= threshold)[0]]
+            var_o = (inter / (area[s_sort[-1]] + area[s_sort[0:]] - inter))[0]
+        s_sort = s_sort[var_o <= threshold]
     result_rectangle = boxes[pick].tolist()
     return result_rectangle
 
