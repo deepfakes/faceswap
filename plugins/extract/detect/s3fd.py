@@ -235,7 +235,7 @@ class S3fd(KSession):
         for i in range(bboxlists[0].shape[0]):
             bboxlist = [x[i:i+1, ...] for x in bboxlists]
             bboxlist = self.post_process(bboxlist)
-            keep = self.nms(bboxlist, 0.3)
+            keep = self._nms(bboxlist, 0.3, 'iou') if bboxlist else []
             bboxlist = bboxlist[keep, :]
             bboxlist = [x for x in bboxlist if x[-1] >= self.confidence]
             ret.append(np.array(bboxlist))
@@ -292,28 +292,26 @@ class S3fd(KSession):
         return boxes
 
     @staticmethod
-    def nms(dets, thresh):
-        # pylint:disable=too-many-locals
+    def _nms(boxes, threshold, method):
         """ Perform Non-Maximum Suppression """
-        keep = list()
-        if len(dets) == 0:
-            return keep
-
-        x_1, y_1, x_2, y_2, scores = dets[:, 0], dets[:, 1], dets[:, 2], dets[:, 3], dets[:, 4]
+        retained_boxes = list()
+        x_1, y_1, x_2, y_2, scores = np.split(boxes, 5, axis=1)
         areas = (x_2 - x_1 + 1) * (y_2 - y_1 + 1)
         order = scores.argsort()[::-1]
 
-        keep = []
         while order.size > 0:
-            i = order[0]
-            keep.append(i)
-            xx_1, yy_1 = np.maximum(x_1[i], x_1[order[1:]]), np.maximum(y_1[i], y_1[order[1:]])
-            xx_2, yy_2 = np.minimum(x_2[i], x_2[order[1:]]), np.minimum(y_2[i], y_2[order[1:]])
+            best = order[0]
+            rest = order[1:]
+            xx_1, yy_1 = np.maximum(x_1[best], x_1[rest]), np.maximum(y_1[best], y_1[rest])
+            xx_2, yy_2 = np.minimum(x_2[best], x_2[rest]), np.minimum(y_2[best], y_2[rest])
+            max_area = np.maximum(0., xx_2 - xx_1 + 1.) * np.maximum(0., yy_2 - yy_1 + 1.)
+            if method == 'iom':
+                overlap = max_area / np.minimum(areas[best], areas[rest])
+            else:
+                overlap = max_area / (areas[best] + areas[rest] - max_area)
 
-            width, height = np.maximum(0.0, xx_2 - xx_1 + 1), np.maximum(0.0, yy_2 - yy_1 + 1)
-            ovr = width * height / (areas[i] + areas[order[1:]] - width * height)
+            retained_boxes.append(best)
+            indices = (overlap <= threshold)
+            order = order[indices[0] + 1]
 
-            inds = np.where(ovr <= thresh)[0]
-            order = order[inds + 1]
-
-        return keep
+        return retained_boxes

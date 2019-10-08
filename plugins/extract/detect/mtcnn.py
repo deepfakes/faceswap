@@ -19,11 +19,11 @@ class Detect(Detector):
         model_filename = ["mtcnn_det_v2.1.h5", "mtcnn_det_v2.2.h5", "mtcnn_det_v2.3.h5"]
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "MTCNN"
-        self.input_size = 640
-        self.vram = 320
-        self.vram_warnings = 64  # Will run at this with warnings
-        self.vram_per_batch = 32
-        self.batchsize = self.config["batch-size"]
+        self.input_size = 1440
+        self.vram = 1408
+        self.vram_warnings = 512  # Will run at this with warnings
+        self.vram_per_batch = 1  # TODO implement batch support
+        self.batchsize = 1  # TODO implement batch support
         self.kwargs = self.validate_kwargs()
 
     def validate_kwargs(self):
@@ -53,7 +53,7 @@ class Detect(Detector):
 
     def init_model(self):
         """ Initialize S3FD Model"""
-        self.model = MTCNN(self.model_path, self.config["allow_growth"], **self.kwargs)
+        self.model = MTCNN(self.model_path, **self.kwargs)
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
@@ -65,7 +65,7 @@ class Detect(Detector):
         prediction, points = self.model.detect_faces(batch["feed"])
         logger.trace("filename: %s, prediction: %s, mtcnn_points: %s",
                      batch["filename"], prediction, points)
-        batch["prediction"], batch["mtcnn_points"] = prediction, points
+        batch["prediction"], batch["mtcnn_points"] = [prediction], [points]
         return batch
 
     def process_output(self, batch):
@@ -105,8 +105,8 @@ class Detect(Detector):
 
 class PNet(KSession):
     """ Keras PNet model for MTCNN """
-    def __init__(self, model_path, allow_growth):
-        super().__init__("MTCNN-PNet", model_path, allow_growth=allow_growth)
+    def __init__(self, model_path):
+        super().__init__("MTCNN-PNet", model_path)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
@@ -128,8 +128,8 @@ class PNet(KSession):
 
 class RNet(KSession):
     """ Keras RNet model for MTCNN """
-    def __init__(self, model_path, allow_growth):
-        super().__init__("MTCNN-RNet", model_path, allow_growth=allow_growth)
+    def __init__(self, model_path):
+        super().__init__("MTCNN-RNet", model_path)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
@@ -158,8 +158,8 @@ class RNet(KSession):
 
 class ONet(KSession):
     """ Keras ONet model for MTCNN """
-    def __init__(self, model_path, allow_growth):
-        super().__init__("MTCNN-ONet", model_path, allow_growth=allow_growth)
+    def __init__(self, model_path):
+        super().__init__("MTCNN-ONet", model_path)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
@@ -191,9 +191,9 @@ class ONet(KSession):
 
 class MTCNN():
     """ MTCNN Detector for face alignment """
-    # TODO Batching for rnet and onet
+    # TODO Batching
 
-    def __init__(self, model_path, allow_growth, minsize, threshold, factor):
+    def __init__(self, model_path, minsize, threshold, factor):
         """
         minsize: minimum faces' size
         threshold: threshold=[th1, th2, th3], th1-3 are three steps's threshold
@@ -201,126 +201,108 @@ class MTCNN():
                 detect in the image.
         pnet, rnet, onet: caffemodel
         """
-        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, minsize: %s, "
-                     "threshold: %s, factor: %s)", self.__class__.__name__, model_path,
-                     allow_growth, minsize, threshold, factor)
+        logger.debug("Initializing: %s: (model_path: '%s')",
+                     self.__class__.__name__, model_path)
         self.minsize = minsize
         self.threshold = threshold
         self.factor = factor
 
-        self.pnet = PNet(model_path[0], allow_growth)
-        self.rnet = RNet(model_path[1], allow_growth)
-        self.onet = ONet(model_path[2], allow_growth)
-        self._pnet_scales = None
+        self.pnet = PNet(model_path[0])
+        self.rnet = RNet(model_path[1])
+        self.onet = ONet(model_path[2])
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def detect_faces(self, batch):
         """Detects faces in an image, and returns bounding boxes and points for them.
         batch: input batch
         """
-        origin_h, origin_w = batch.shape[1:3]
-        rectangles = self.detect_pnet(batch, origin_h, origin_w)
-        rectangles = self.detect_rnet(batch, rectangles, origin_h, origin_w)
-        rectangles = self.detect_onet(batch, rectangles, origin_h, origin_w)
-        ret_boxes = list()
-        ret_points = list()
-        for rects in rectangles:
-            if rects:
-                total_boxes = np.array([result[:5] for result in rects])
-                points = np.array([result[5:] for result in rects]).T
-            else:
-                total_boxes = np.empty((0, 9))
-                points = np.empty(0)
-            ret_boxes.append(total_boxes)
-            ret_points.append(points)
-        return ret_boxes, ret_points
+        total_boxes = np.empty((0, 9))
+        points = np.empty(0)
+        # TODO Implement batch support
+        image = batch[0]
+        origin_h, origin_w = image.shape[:2]
+        rectangles = self.detect_pnet(image, origin_h, origin_w)
+        if not rectangles:
+            return total_boxes, points
+        rectangles = self.detect_rnet(image, rectangles, origin_h, origin_w)
+        if not rectangles:
+            return total_boxes, points
+        rectangles = self.detect_onet(image, rectangles, origin_h, origin_w)
+        if rectangles:
+            total_boxes = np.array([result[:5] for result in rectangles])
+            points = np.array([result[5:] for result in rectangles]).T
+        return total_boxes, points
 
-    def detect_pnet(self, images, height, width):
+    def detect_pnet(self, image, height, width):
         # pylint: disable=too-many-locals
         """ first stage - fast proposal network (pnet) to obtain face candidates """
-        if self._pnet_scales is None:
-            self._pnet_scales = calculate_scales(height, width, self.minsize, self.factor)
-        rectangles = [[] for _ in range(images.shape[0])]
-        batch_items = images.shape[0]
-        for scale in self._pnet_scales:
-            rwidth, rheight = int(width * scale), int(height * scale)
-            batch = np.empty((batch_items, rheight, rwidth, 3), dtype="float32")
-            for idx in range(batch_items):
-                batch[idx, ...] = cv2.resize(images[idx, ...],  # pylint:disable=no-member
-                                             (rwidth, rheight))
-            output = self.pnet.predict(batch)
-            cls_prob = output[0][..., 1]
-            roi = output[1]
-            out_h, out_w = cls_prob.shape[1:3]
+        scales = calculate_scales(height, width, self.minsize, self.factor)
+        rectangles = []
+        for scale in scales:
+            scale_img = cv2.resize(image,  # pylint:disable=no-member
+                                   (int(width * scale), int(height * scale)))
+            input_ = scale_img.reshape(1, *scale_img.shape)
+            output = self.pnet.predict(input_)
+            # .transpose(0, 2, 1, 3) should be added, but this seems wrong.
+            # first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
+            cls_prob = output[0][0][:, :, 1]
+            roi = output[1][0]
+            out_h, out_w = cls_prob.shape
             out_side = max(out_h, out_w)
-            cls_prob = np.swapaxes(cls_prob, 1, 2)
-            roi = np.swapaxes(roi, 1, 3)
-            for idx in range(batch_items):
-                # first index 0 = cls score, 1 = one hot repr
-                rectangle = detect_face_12net(cls_prob[idx, ...],
-                                              roi[idx, ...],
-                                              out_side,
-                                              1 / scale,
-                                              width,
-                                              height,
-                                              self.threshold[0])
-                rectangles[idx].extend(rectangle)
-        return [nms(x, 0.7, 'iou') for x in rectangles]
+            cls_prob = np.swapaxes(cls_prob, 0, 1)
+            roi = np.swapaxes(roi, 0, 2)
+            rectangle = detect_face_12net(cls_prob,
+                                          roi,
+                                          out_side,
+                                          1 / scale,
+                                          width,
+                                          height,
+                                          self.threshold[0])
+            rectangles.extend(rectangle)
+        return nms(rectangles, 0.7, 'iou')
 
-    def detect_rnet(self, images, rectangle_batch, height, width):
+    def detect_rnet(self, image, rectangles, height, width):
         """ second stage - refinement of face candidates with rnet """
-        ret = []
-        # TODO: batching
-        for idx, rectangles in enumerate(rectangle_batch):
-            if not rectangles:
-                ret.append(list())
-                continue
-            image = images[idx]
-            crop_number = 0
-            predict_24_batch = []
-            for rect in rectangles:
-                crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
-                scale_img = cv2.resize(crop_img, (24, 24))  # pylint:disable=no-member
-                predict_24_batch.append(scale_img)
-                crop_number += 1
-            predict_24_batch = np.array(predict_24_batch)
-            output = self.rnet.predict(predict_24_batch, batch_size=128)
-            cls_prob = output[0]
-            cls_prob = np.array(cls_prob)
-            roi_prob = output[1]
-            roi_prob = np.array(roi_prob)
-            ret.append(filter_face_24net(
-                cls_prob, roi_prob, rectangles, width, height, self.threshold[1]
-            ))
-        return ret
+        crop_number = 0
+        predict_24_batch = []
+        for rect in rectangles:
+            crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
+            scale_img = cv2.resize(crop_img, (24, 24))  # pylint:disable=no-member
+            predict_24_batch.append(scale_img)
+            crop_number += 1
 
-    def detect_onet(self, images, rectangle_batch, height, width):
+        predict_24_batch = np.array(predict_24_batch)
+        output = self.rnet.predict(predict_24_batch)
+
+        cls_prob = output[0]  # first 0 is to select cls, second batch number, always =0
+        cls_prob = np.array(cls_prob)
+        roi_prob = output[1]  # first 0 is to select roi, second batch number, always =0
+        roi_prob = np.array(roi_prob)
+        return filter_face_24net(cls_prob, roi_prob, rectangles, width, height, self.threshold[1])
+
+    def detect_onet(self, image, rectangles, height, width):
         """ third stage - further refinement and facial landmarks positions with onet """
-        ret = list()
-        # TODO: batching
-        for idx, rectangles in enumerate(rectangle_batch):
-            if not rectangles:
-                ret.append(list())
-                continue
-            image = images[idx]
-            predict_batch = []
-            for rect in rectangles:
-                crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
-                scale_img = cv2.resize(crop_img, (48, 48))
-                predict_batch.append(scale_img)
-            predict_batch = np.array(predict_batch)
-            output = self.onet.predict(predict_batch, batch_size=128)
-            cls_prob = output[0]
-            roi_prob = output[1]
-            pts_prob = output[2]  # index
-            ret.append(filter_face_48net(cls_prob,
-                                         proi_prob,
-                                         pts_prob,
-                                         rectangles,
-                                         width,
-                                         height,
-                                         self.threshold[2]))
-        return ret
+        crop_number = 0
+        predict_batch = []
+        for rect in rectangles:
+            crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
+            scale_img = cv2.resize(crop_img, (48, 48))  # pylint:disable=no-member
+            predict_batch.append(scale_img)
+            crop_number += 1
+
+        predict_batch = np.array(predict_batch)
+
+        output = self.onet.predict(predict_batch)
+        cls_prob = output[0]
+        roi_prob = output[1]
+        pts_prob = output[2]  # index
+        return filter_face_48net(cls_prob,
+                                 roi_prob,
+                                 pts_prob,
+                                 rectangles,
+                                 width,
+                                 height,
+                                 self.threshold[2])
 
 
 def detect_face_12net(cls_prob, roi, out_side, scale, width, height, threshold):
@@ -467,56 +449,6 @@ def filter_face_48net(cls_prob, roi, pts, rectangles, width, height, threshold):
                          rect[10], rect[11], rect[12], rect[13], rect[14]])
     return nms(pick, 0.3, 'iom')
 
-def filter_face_48net_two(cls_prob, roi, pts, rectangles, width, height, threshold):
-    # pylint: disable=too-many-locals, too-many-arguments
-    """ Filter face position and calibrate bounding box on 12net's output
-    Input:
-        cls_prob  : cls_prob[1] is face possibility
-        roi       : roi offset
-        pts       : 5 landmark
-        rectangles: 12net's predict, rectangles[i][0:3] is the position, rectangles[i][4] is score
-        width     : image's origin width
-        height    : image's origin height
-        threshold : 0.7 can have 94% recall rate on CelebA-database
-    Output:
-        rectangles: face positions and landmarks
-    """
-    prob = cls_prob[:, 1]
-    pick = np.where(prob >= threshold)
-    rectangles = np.array(rectangles).T
-    sc_ = np.array([prob[pick]]).T
-    pts = pts.T
-    roi = roi.T
-    x_1 = rectangles[pick, 0]
-    y_1 = rectangles[pick, 1]
-    x_2 = rectangles[pick, 2]
-    y_2 = rectangles[pick, 3]
-    dx1 = roi[pick, 0]
-    dx2 = roi[pick, 1]
-    dx3 = roi[pick, 2]
-    dx4 = roi[pick, 3]
-    r_width = x_2-x_1
-    r_height = y_2-y_1
-
-    x_1 = (r_width * dx1 + x_1)[0]
-    x_2 = (r_width * dx3 + x_2)[0]
-    y_1 = (r_height * dx2 + y_1)[0]
-    y_2 = (r_height * dx4 + y_2)[0]
-    x_pts = (r_width * pts[pick, :5] + x_1)[0]
-    y_pts = (r_height * pts[pick, 5:] + y_1)[0]
-
-    rectangles = np.concatenate((x_1, y_1, x_2, y_2, sc_, x_pts, y_pts), axis=1)
-    pick = []
-    for rect in rectangles:
-        x_1 = int(max(0, rect[0]))
-        y_1 = int(max(0, rect[1]))
-        x_2 = int(min(width, rect[2]))
-        y_2 = int(min(height, rect[3]))
-        if x_2 > x_1 and y_2 > y_1:
-            pick.append([x_1, y_1, x_2, y_2,
-                         rect[4], rect[10], rect[5], rect[11], rect[6], rect[12],
-                         rect[7], rect[13], rect[8], rect[14], rect[9]])
-    return nms(pick, 0.3, 'iom')
 
 def nms(rectangles, threshold, method):
     # pylint:disable=too-many-locals
@@ -529,24 +461,29 @@ def nms(rectangles, threshold, method):
     if not rectangles:
         return rectangles
     boxes = np.array(rectangles)
-    s_sort = boxes[:, 4].argsort()
-    area = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
+    x_1 = boxes[:, 0]
+    y_1 = boxes[:, 1]
+    x_2 = boxes[:, 2]
+    y_2 = boxes[:, 3]
+    var_s = boxes[:, 4]
+    area = np.multiply(x_2-x_1+1, y_2-y_1+1)
+    s_sort = np.array(var_s.argsort())
     pick = []
     while len(s_sort) > 0:
         # s_sort[-1] have hightest prob score, s_sort[0:-1]->others
-        pick.append(s_sort[-1])
-        xx_1 = np.maximum(boxes[s_sort[-1], 0], boxes[s_sort[0:], 0])
-        yy_1 = np.maximum(boxes[s_sort[-1], 1], boxes[s_sort[0:], 1])
-        xx_2 = np.minimum(boxes[s_sort[-1], 2], boxes[s_sort[0:], 2])
-        yy_2 = np.minimum(boxes[s_sort[-1], 3], boxes[s_sort[0:], 3])
+        xx_1 = np.maximum(x_1[s_sort[-1]], x_1[s_sort[0:-1]])
+        yy_1 = np.maximum(y_1[s_sort[-1]], y_1[s_sort[0:-1]])
+        xx_2 = np.minimum(x_2[s_sort[-1]], x_2[s_sort[0:-1]])
+        yy_2 = np.minimum(y_2[s_sort[-1]], y_2[s_sort[0:-1]])
         width = np.maximum(0.0, xx_2 - xx_1 + 1)
         height = np.maximum(0.0, yy_2 - yy_1 + 1)
         inter = width * height
         if method == 'iom':
-            var_o = (inter / np.minimum(area[s_sort[-1]], area[s_sort[0:]]))[0]
+            var_o = inter / np.minimum(area[s_sort[-1]], area[s_sort[0:-1]])
         else:
-            var_o = (inter / (area[s_sort[-1]] + area[s_sort[0:]] - inter))[0]
-        s_sort = s_sort[var_o <= threshold]
+            var_o = inter / (area[s_sort[-1]] + area[s_sort[0:-1]] - inter)
+        pick.append(s_sort[-1])
+        s_sort = s_sort[np.where(var_o <= threshold)[0]]
     result_rectangle = boxes[pick].tolist()
     return result_rectangle
 
