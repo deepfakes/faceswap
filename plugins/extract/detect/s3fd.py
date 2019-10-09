@@ -307,8 +307,8 @@ class S3fd(KSession):
             overlapping_boxes = (iou > threshold).nonzero()[0]
             if len(overlapping_boxes) != 0:
                 overlap_set = ranked_indices[overlapping_boxes + 1]
-                weighted = np.average(boxes[overlap_set, :4], axis=0, weights=boxes[overlap_set, 4])
-                boxes[best, :4] = weighted
+                vote = np.average(boxes[overlap_set, :4], axis=0, weights=boxes[overlap_set, 4])
+                boxes[best, :4] = vote
             retained_box_indices.append(best)
 
             non_overlapping_boxes = (iou <= threshold).nonzero()[0]
