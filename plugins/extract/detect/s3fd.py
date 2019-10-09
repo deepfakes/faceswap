@@ -219,7 +219,6 @@ class S3fd(KSession):
                      self.__class__.__name__, model_path, allow_growth)
         super().__init__("S3FD", model_path, model_kwargs=model_kwargs, allow_growth=allow_growth)
         self.load_model()
-        #self._model.summary()
         self.confidence = confidence
         self.average_img = np.array([104.0, 117.0, 123.0])
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -237,9 +236,7 @@ class S3fd(KSession):
         for img in batch_size:
             bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
             bboxlist = self._post_process(bboxlist)
-            print(bboxlist.shape, np.mean(bboxlist))
-            print(bboxlist.shape, np.mean(bboxlist))
-            bboxlist = self._nms(bboxlist, 0.3, 'iou') if len(bboxlist)!=0 else []
+            bboxlist = self._nms(bboxlist, 0.3)
             ret.append(bboxlist)
         return ret
 
@@ -290,30 +287,22 @@ class S3fd(KSession):
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
-    def _nms(self, boxes, threshold, method):
+    def _nms(self, all_boxes, threshold):
         """ Perform Non-Maximum Suppression """
-        print(len(boxes))
-        print(len(boxes))
-        print(type(boxes))
-        print(type(boxes))
         retained_box_indices = list()
-        x_1, y_1, x_2, y_2, scores = np.split(boxes, 5, axis=1)
-        areas = (x_2 - x_1 + 1) * (y_2 - y_1 + 1)
-        order = scores.argsort()[::-1]
-
-        while order.size > 0:
-            best = order[0]
-            rest = order[1:]
-            xx_1, yy_1 = np.maximum(x_1[best], x_1[rest]), np.maximum(y_1[best], y_1[rest])
-            xx_2, yy_2 = np.minimum(x_2[best], x_2[rest]), np.minimum(y_2[best], y_2[rest])
-            max_area = np.maximum(0., xx_2 - xx_1 + 1.) * np.maximum(0., yy_2 - yy_1 + 1.)
-            if method == 'iom':
-                overlap = max_area / np.minimum(areas[best], areas[rest])
-            else:
-                overlap = max_area / (areas[best] + areas[rest] - max_area)
-            if best >= self.confidence:
-                retained_box_indices.append(best)
-            indices = (overlap <= threshold)[0]
-            order = order[indices + 1]
-
+        confident_boxes = (all_boxes[:, 4] >= self.confidence).nonzero()[0]
+        boxes = all_boxes[confident_boxes]
+        areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
+        ranked_indices = boxes[:, 4].argsort()[::-1]
+        while ranked_indices.size > 0:
+            best = ranked_indices[0]
+            rest = ranked_indices[1:]
+            retained_box_indices.append(best)
+            max_of_xy = np.maximum(boxes[best, :2], boxes[rest, :2])
+            min_of_xy = np.minimum(boxes[best, 2:4], boxes[rest, 2:4])
+            width_height = np.maximum(0, min_of_xy - max_of_xy + 1)
+            intersection_areas = width_height[:, 0] * width_height[:, 1]
+            iou = intersection_areas / (areas[best] + areas[rest] - intersection_areas)
+            non_overlapping_boxes = (iou <= threshold).nonzero()[0]
+            ranked_indices = ranked_indices[non_overlapping_boxes + 1]
         return boxes[retained_box_indices]
