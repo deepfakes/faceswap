@@ -374,13 +374,13 @@ class Extractor():
         logger.debug("Launched Masker")
 
     def _set_extractor_batchsize(self):
-        """ 
+        """
         Sets the batchsize of the requested plugins based on their vram and
         vram_per_batch_requirements if the the configured batchsize requires more
         vram than is available. Nvidia only.
         """
         if (self._detector.vram == 0 and self._aligner.vram == 0 and self._masker.vram == 0
-            or get_backend() != "nvidia"):
+           or get_backend() != "nvidia"):
             logger.debug("Either detector and aligner have no VRAM requirements or not running "
                          "on Nvidia. Not updating batchsize requirements.")
             return

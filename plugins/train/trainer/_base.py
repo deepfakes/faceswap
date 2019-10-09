@@ -342,7 +342,7 @@ class Batcher():
         batchsize = len(batch["samples"])
         images = batch["targets"][self.model.largest_face_index]
         masks = batch["masks"][0]
-        sample = self.compile_sample(batchsize, 
+        sample = self.compile_sample(batchsize,
                                      samples=batch["samples"],
                                      images=images,
                                      masks=masks)
