@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+""" Dummy empty Mask for faceswap.py """
 
 import numpy as np
 from ._base import Masker, logger
@@ -10,12 +11,10 @@ class Mask(Masker):
         git_model_id = None
         model_filename = None
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.name = "without a mask"
-        self.colorformat = "BGR"
+        self.name = "None"
         self.vram = 0
-        self.vram_warnings = 0
-        self.vram_per_batch = 30
-        self.batchsize = self.config["batch-size"]
+        self.vram_per_batch = 0
+        self.batchsize = 1
 
     def init_model(self):
         logger.debug("No mask model to initialize")
@@ -29,7 +28,7 @@ class Mask(Masker):
         """ Run model to get predictions """
         batch["prediction"] = np.full(batch["feed"].shape[:-1] + (1,),
                                       fill_value=255,
-                                      dtype='uint8')
+                                      dtype="uint8")
         return batch
 
     def process_output(self, batch):

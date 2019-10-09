@@ -14,7 +14,7 @@ class Mask(Masker):
         model_filename = "DFL_256_sigmoid_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "U-Net Mask Network(256)"
-        self.mask_in_size = 256
+        self.input_size = 256
         self.colorformat = "BGR"
         self.vram = 3440
         self.vram_warnings = 1024  # TODO determine
@@ -24,7 +24,7 @@ class Mask(Masker):
     def init_model(self):
         self.model = KSession(self.name, self.model_path, model_kwargs=dict())
         self.model.load_model()
-        self.input = np.zeros((self.batchsize, self.mask_in_size, self.mask_in_size, 3),
+        self.input = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                               dtype="float32")
         self.model.predict(self.input)
 
@@ -32,7 +32,7 @@ class Mask(Masker):
         """ Compile the detected faces for prediction """
         for index, face in enumerate(batch["detected_faces"]):
             face.load_aligned(face.image,
-                              size=self.mask_in_size,
+                              size=self.input_size,
                               dtype='float32')
             self.input[index] = face.aligned["face"][..., :3]
         batch["feed"] = self.input / 255.

@@ -59,23 +59,18 @@ class Extractor():
     """
     def __init__(self, detector, aligner, masker, configfile=None,
                  multiprocess=False, rotate_images=None, min_size=20,
-                 normalize_method=None, input_size=256, output_size=256, coverage_ratio=1.):
+                 normalize_method=None):
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, "
                      "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s, input_size: %s, output_size: %s, coverage_ratio: %s)",
+                     "normalize_method: %s)",
                      self.__class__.__name__, detector, aligner, masker, configfile,
-                     multiprocess, rotate_images, min_size, normalize_method, input_size,
-                     output_size, coverage_ratio)
+                     multiprocess, rotate_images, min_size, normalize_method)
         self.phase = "detect"
         self._queue_size = 32
         self._vram_buffer = 320  # Leave a buffer for VRAM allocation
         self._detector = self._load_detector(detector, rotate_images, min_size, configfile)
         self._aligner = self._load_aligner(aligner, configfile, normalize_method)
-        self._masker = self._load_masker(masker,
-                                         configfile,
-                                         input_size,
-                                         output_size,
-                                         coverage_ratio)
+        self._masker = self._load_masker(masker, configfile)
         self._is_parallel = self._set_parallel_processing(multiprocess)
         self._set_extractor_batchsize()
         self._queues = self._add_queues()
@@ -336,14 +331,11 @@ class Extractor():
         return aligner
 
     @staticmethod
-    def _load_masker(masker, configfile, input_size, output_size, coverage_ratio):
+    def _load_masker(masker, configfile):
         """ Set global arguments and load masker plugin """
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
-        masker = PluginLoader.get_masker(masker_name)(configfile=configfile,
-                                                      input_size=input_size,
-                                                      output_size=output_size,
-                                                      coverage_ratio=coverage_ratio)
+        masker = PluginLoader.get_masker(masker_name)(configfile=configfile)
         return masker
 
     def _launch_detector(self):
@@ -374,15 +366,17 @@ class Extractor():
         logger.debug("Launched Masker")
 
     def _set_extractor_batchsize(self):
-        """ 
+        """
         Sets the batchsize of the requested plugins based on their vram and
         vram_per_batch_requirements if the the configured batchsize requires more
         vram than is available. Nvidia only.
         """
-        if (self._detector.vram == 0 and self._aligner.vram == 0 and self._masker.vram == 0
-            or get_backend() != "nvidia"):
-            logger.debug("Either detector and aligner have no VRAM requirements or not running "
-                         "on Nvidia. Not updating batchsize requirements.")
+        if get_backend() != "nvidia":
+            logger.debug("Backend is not Nvidia. Not updating batchsize requirements")
+            return
+        if self._detector.vram == 0 and self._aligner.vram == 0 and self._masker.vram == 0:
+            logger.debug("Either detector, aligner or masker have no VRAM requirements. Not "
+                         "updating batchsize requirements.")
             return
         stats = GPUStats().get_card_most_free()
         vram_free = int(stats["free"])

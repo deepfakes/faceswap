@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+""" Extended Mask for faceswap.py """
 
 import cv2
 import numpy as np
@@ -12,11 +13,9 @@ class Mask(Masker):
         model_filename = None
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "Extended"
-        self.colorformat = "BGR"
-        self.vram = 0
-        self.vram_warnings = 0
-        self.vram_per_batch = 30
-        self.batchsize = self.config["batch-size"]
+        self.vram = 0  # Doesn't use GPU
+        self.vram_per_batch = 0
+        self.batchsize = 1
 
     def init_model(self):
         logger.debug("No mask model to initialize")
@@ -28,12 +27,12 @@ class Mask(Masker):
 
     def predict(self, batch):
         """ Run model to get predictions """
-        masks = np.zeros(batch["feed"].shape[:-1] + (1,), dtype='uint8')
+        masks = np.zeros(batch["feed"].shape[:-1] + (1,), dtype="uint8")
         for mask, face in zip(masks, batch["detected_faces"]):
             parts = self.parse_parts(np.array(face.landmarks_xy))
             for item in parts:
                 item = np.concatenate(item)
-                hull = cv2.convexHull(item).astype('int32')  # pylint: disable=no-member
+                hull = cv2.convexHull(item).astype("int32")  # pylint: disable=no-member
                 cv2.fillConvexPoly(mask, hull, 255, lineType=cv2.LINE_AA)
         batch["prediction"] = masks
         return batch
