@@ -235,8 +235,8 @@ class S3fd(KSession):
         batch_size = range(bounding_boxes_scales[0].shape[0])
         for img in batch_size:
             bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
-            bboxlist = self._post_process(bboxlist)
-            bboxlist = self._nms(bboxlist, 0.3)
+            boxes = self._post_process(bboxlist)
+            bboxlist = self._nms(boxes, 0.3)
             ret.append(bboxlist)
         return ret
 
@@ -254,11 +254,12 @@ class S3fd(KSession):
             for _, hindex, windex in poss:
                 axc, ayc = stride / 2 + windex * stride, stride / 2 + hindex * stride
                 score = ocls[0, 1, hindex, windex]
-                loc = np.ascontiguousarray(oreg[0, :, hindex, windex]).reshape((1, 4))
-                priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
-                box = self.decode(loc, priors)
-                x_1, y_1, x_2, y_2 = box[0] * 1.0
-                retval.append([x_1, y_1, x_2, y_2, score])
+                if score >= self.confidence:
+                    loc = np.ascontiguousarray(oreg[0, :, hindex, windex]).reshape((1, 4))
+                    priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
+                    box = self.decode(loc, priors)
+                    x_1, y_1, x_2, y_2 = box[0] * 1.0
+                    retval.append([x_1, y_1, x_2, y_2, score])
         return_numpy = np.array(retval) if len(retval) != 0 else np.zeros((1, 5))
         return return_numpy
 
@@ -287,22 +288,29 @@ class S3fd(KSession):
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
-    def _nms(self, all_boxes, threshold):
+    def _nms(self, boxes, threshold):
         """ Perform Non-Maximum Suppression """
         retained_box_indices = list()
-        confident_boxes = (all_boxes[:, 4] >= self.confidence).nonzero()[0]
-        boxes = all_boxes[confident_boxes]
+
         areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
         ranked_indices = boxes[:, 4].argsort()[::-1]
         while ranked_indices.size > 0:
             best = ranked_indices[0]
             rest = ranked_indices[1:]
-            retained_box_indices.append(best)
+
             max_of_xy = np.maximum(boxes[best, :2], boxes[rest, :2])
             min_of_xy = np.minimum(boxes[best, 2:4], boxes[rest, 2:4])
             width_height = np.maximum(0, min_of_xy - max_of_xy + 1)
             intersection_areas = width_height[:, 0] * width_height[:, 1]
             iou = intersection_areas / (areas[best] + areas[rest] - intersection_areas)
+
+            overlapping_boxes = (iou > threshold).nonzero()[0]
+            if len(overlapping_boxes) != 0:
+                overlap_set = ranked_indices[overlapping_boxes]
+                weighted = np.average(boxes[overlap_set, :4], axis=0, weights=boxes[overlap_set, 4])
+                boxes[best, :4] = weighted
+            retained_box_indices.append(best)
+
             non_overlapping_boxes = (iou <= threshold).nonzero()[0]
             ranked_indices = ranked_indices[non_overlapping_boxes + 1]
         return boxes[retained_box_indices]
