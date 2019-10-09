@@ -236,7 +236,7 @@ class S3fd(KSession):
         for img in batch_size:
             bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
             boxes = self._post_process(bboxlist)
-            bboxlist = self._nms(boxes, 0.3)
+            bboxlist = self._nms(boxes, 0.5)
             ret.append(bboxlist)
         return ret
 
@@ -306,7 +306,7 @@ class S3fd(KSession):
 
             overlapping_boxes = (iou > threshold).nonzero()[0]
             if len(overlapping_boxes) != 0:
-                overlap_set = ranked_indices[overlapping_boxes]
+                overlap_set = ranked_indices[overlapping_boxes + 1]
                 weighted = np.average(boxes[overlap_set, :4], axis=0, weights=boxes[overlap_set, 4])
                 boxes[best, :4] = weighted
             retained_box_indices.append(best)
