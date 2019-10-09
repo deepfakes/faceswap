@@ -8,10 +8,10 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from lib.faces_detect import DetectedFace
+from lib.image import encode_image_with_hash
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import get_folder, hash_encode_image
+from lib.utils import get_folder, deprecation_warning
 from plugins.extract.pipeline import Extractor
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -34,7 +34,6 @@ class Extract():
         normalization = None if self.args.normalization == "none" else self.args.normalization
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
-                                   self.args.loglevel,
                                    configfile=configfile,
                                    multiprocess=not self.args.singleprocess,
                                    rotate_images=self.args.rotate_images,
@@ -178,7 +177,6 @@ class Extract():
         """ Run Face Detection """
         to_process = self.process_item_count()
         size = self.args.size if hasattr(self.args, "size") else 256
-        align_eyes = self.args.align_eyes if hasattr(self.args, "align_eyes") else False
         exception = False
 
         for phase in range(self.extractor.passes):
@@ -188,13 +186,14 @@ class Extract():
             detected_faces = dict()
             self.extractor.launch()
             self.check_thread_error()
-            for idx, faces in enumerate(tqdm(self.extractor.detected_faces(),
-                                             total=to_process,
-                                             file=sys.stdout,
-                                             desc="Running pass {} of {}: {}".format(
-                                                 phase + 1,
-                                                 self.extractor.passes,
-                                                 self.extractor.phase.title()))):
+            desc = "Running pass {} of {}: {}".format(phase + 1,
+                                                      self.extractor.passes,
+                                                      self.extractor.phase.title())
+            status_bar = tqdm(self.extractor.detected_faces(),
+                              total=to_process,
+                              file=sys.stdout,
+                              desc=desc)
+            for idx, faces in enumerate(status_bar):
                 self.check_thread_error()
                 exception = faces.get("exception", False)
                 if exception:
@@ -202,13 +201,14 @@ class Extract():
                 filename = faces["filename"]
 
                 if self.extractor.final_pass:
-                    self.output_processing(faces, align_eyes, size, filename)
+                    self.output_processing(faces, size, filename)
                     self.output_faces(filename, faces)
                     if self.save_interval and (idx + 1) % self.save_interval == 0:
                         self.alignments.save()
                 else:
                     del faces["image"]
                     detected_faces[filename] = faces
+                status_bar.update(1)
 
             if is_final:
                 logger.debug("Putting EOF to save")
@@ -222,32 +222,27 @@ class Extract():
         for thread in self.threads:
             thread.check_and_raise_error()
 
-    def output_processing(self, faces, align_eyes, size, filename):
+    def output_processing(self, faces, size, filename):
         """ Prepare faces for output """
-        self.align_face(faces, align_eyes, size, filename)
+        self.align_face(faces, size, filename)
         self.post_process.do_actions(faces)
 
         faces_count = len(faces["detected_faces"])
         if faces_count == 0:
-            logger.verbose("No faces were detected in image: %s",
-                           os.path.basename(filename))
+            logger.verbose("No faces were detected in image: %s", os.path.basename(filename))
 
         if not self.verify_output and faces_count > 1:
             self.verify_output = True
 
-    def align_face(self, faces, align_eyes, size, filename):
+    def align_face(self, faces, size, filename):
         """ Align the detected face and add the destination file path """
         final_faces = list()
         image = faces["image"]
-        landmarks = faces["landmarks"]
         detected_faces = faces["detected_faces"]
-        for idx, face in enumerate(detected_faces):
-            detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face, image)
-            detected_face.landmarksXY = landmarks[idx]
-            detected_face.load_aligned(image, size=size, align_eyes=align_eyes)
+        for face in detected_faces:
+            face.load_aligned(image, size=size)
             final_faces.append({"file_location": self.output_dir / Path(filename).stem,
-                                "face": detected_face})
+                                "face": face})
         faces["detected_faces"] = final_faces
 
     def output_faces(self, filename, faces):
@@ -261,7 +256,7 @@ class Extract():
             face = detected_face["face"]
             resized_face = face.aligned_face
 
-            face.hash, img = hash_encode_image(resized_face, extension)
+            face.hash, img = encode_image_with_hash(resized_face, extension)
             self.save_queue.put((out_filename, img))
             final_faces.append(face.to_alignment())
         self.alignments.data[os.path.basename(filename)] = final_faces

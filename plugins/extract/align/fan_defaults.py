@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap S3Fd-AMD Detect plugin.
+    The default options for the faceswap FAN Alignments plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -22,6 +22,8 @@
                    <class 'str'>, <class 'bool'>.
         default:   [required] The default value for this option.
         info:      [required] A string describing what this option does.
+        group:     [optional]. A group for grouping options together in the GUI. If not
+                   provided this will not group this option with any others.
         choices:   [optional] If this option's datatype is of <class 'str'> then valid
                    selections can be defined here. This validates the option and also enables
                    a combobox / radio option in the GUI.
@@ -42,32 +44,21 @@
 
 
 _HELPTEXT = (
-    "S3FD-AMD Detector options. Uses keras backend to support AMD cards.\n"
-    "Fast on GPU, slow on CPU. Can detect more faces and fewer false "
-    "positives than other GPU detectors, but is a lot more resource intensive."
+    "FAN Aligner options.Fast on GPU, slow on CPU. Best aligner."
     )
 
 
 _DEFAULTS = {
-    "confidence": {
-        "default": 50,
-        "info": "The confidence level at which the detector has succesfully found a face.\n"
-                "Higher levels will be more discriminating, lower levels will have more false "
-                "positives.",
-        "datatype": int,
-        "rounding": 5,
-        "min_max": (25, 100),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
     "batch-size": {
         "default": 8,
-        "info": "The batch size to use. Normally higher batch sizes equal better performance.\n"
-                "A batchsize of 8 requires about 2 GB vram.",
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered."
+                "\n\tAMD users: A batchsize of 8 requires about 4 GB vram.",
         "datatype": int,
         "rounding": 1,
-        "min_max": (1, 32),
+        "min_max": (1, 64),
         "choices": [],
         "gui_radio": False,
         "fixed": True,

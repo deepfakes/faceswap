@@ -287,8 +287,7 @@ class Draw():
         legacy.process()
 
         logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256,
-                                              align_eyes=self.arguments.align_eyes)
+        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
         frames_drawn = 0
         for frame in tqdm(self.frames.file_list_sorted, desc="Drawing landmarks"):
             frame_name = frame["frame_fullname"]
@@ -324,12 +323,13 @@ class Extract():
         Alignment data """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
         self.arguments = arguments
-        self.type = arguments.job.replace("extract-", "")
+        self.alignments = alignments
         self.faces_dir = arguments.faces_dir
         self.frames = Frames(arguments.frames_dir)
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=arguments.size,
+        self.extracted_faces = ExtractedFaces(self.frames,
+                                              self.alignments,
+                                              size=arguments.size,
                                               align_eyes=arguments.align_eyes)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -374,7 +374,7 @@ class Extract():
 
             extracted_faces += self.output_faces(frame)
 
-        if extracted_faces != 0 and self.type != "large":
+        if extracted_faces != 0 and not self.arguments.large:
             self.alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
 
@@ -389,7 +389,7 @@ class Extract():
 
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), extension)
-            if self.type == "large":
+            if self.arguments.large:
                 self.frames.save_image(self.faces_dir, output, face.aligned_face)
             else:
                 output = os.path.join(self.faces_dir, output)
@@ -403,7 +403,7 @@ class Extract():
     def select_valid_faces(self, frame):
         """ Return valid faces for extraction """
         faces = self.extracted_faces.get_faces_in_frame(frame)
-        if self.type != "large":
+        if not self.arguments.large:
             valid_faces = faces
         else:
             sizes = self.extracted_faces.get_roi_size_for_frame(frame)
@@ -667,7 +667,7 @@ class Reformat():
                      "y": top,
                      "h": bottom - top,
                      "hash": f_hash,
-                     "landmarksXY": dfl_alignments["source_landmarks"]}
+                     "landmarks_xy": dfl_alignments["source_landmarks"]}
         logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
         alignments.setdefault(sourcefile, list()).append(alignment)
 
@@ -974,7 +974,7 @@ class Spatial():
                 continue
             # We should only be normalizing a single face, so just take
             # the first landmarks found
-            landmarks = np.array(val[0]["landmarksXY"]).reshape(68, 2, 1)
+            landmarks = np.array(val[0]["landmarks_xy"]).reshape(68, 2, 1)
             start = end
             end = start + landmarks.shape[2]
             # Store in one big array
@@ -1047,7 +1047,7 @@ class Spatial():
             logger.trace("Updating: (frame: %s)", frame)
             landmarks_update = landmarks[:, :, idx].astype(int)
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self.alignments.data[frame][0]["landmarksXY"] = landmarks_xy
+            self.alignments.data[frame][0]["landmarks_xy"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
 

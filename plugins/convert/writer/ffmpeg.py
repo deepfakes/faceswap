@@ -51,7 +51,7 @@ class Writer(Output):
     @property
     def video_fps(self):
         """ Return the fps of source video """
-        reader = imageio.get_reader(self.source_video)
+        reader = imageio.get_reader(self.source_video, "ffmpeg")
         retval = reader.get_meta_data()["fps"]
         reader.close()
         logger.debug(retval)

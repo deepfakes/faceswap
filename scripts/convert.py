@@ -17,9 +17,10 @@ from lib import Serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
+from lib.image import read_image_hash
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
-from lib.utils import FaceswapError, get_folder, get_image_paths, hash_image_file
+from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.extract.pipeline import Extractor
 from plugins.plugin_loader import PluginLoader
 
@@ -94,7 +95,7 @@ class Convert():
         """ Add the queues for convert """
         logger.debug("Adding queues. Queue size: %s", self.queue_size)
         for qname in ("convert_in", "convert_out", "patch"):
-            queue_manager.add_queue(qname, self.queue_size, multiprocessing_queue=False)
+            queue_manager.add_queue(qname, self.queue_size)
 
     def process(self):
         """ Process the conversion """
@@ -256,7 +257,6 @@ class DiskIO():
                        "superior results")
         extractor = Extractor(detector="cv2-dnn",
                               aligner="cv2-dnn",
-                              loglevel=self.args.loglevel,
                               multiprocess=False,
                               rotate_images=None,
                               min_size=20)
@@ -283,7 +283,7 @@ class DiskIO():
             q_name = task
         setattr(self,
                 "{}_queue".format(task),
-                queue_manager.get_queue(q_name, multiprocessing_queue=False))
+                queue_manager.get_queue(q_name))
         logger.debug("Added queue for task: '%s'", task)
 
     def start_thread(self, task):
@@ -381,15 +381,7 @@ class DiskIO():
         self.extractor.input_queue.put(inp)
         faces = next(self.extractor.detected_faces())
 
-        landmarks = faces["landmarks"]
-        detected_faces = faces["detected_faces"]
-        final_faces = list()
-
-        for idx, face in enumerate(detected_faces):
-            detected_face = DetectedFace()
-            detected_face.from_bounding_box_dict(face)
-            detected_face.landmarksXY = landmarks[idx]
-            final_faces.append(detected_face)
+        final_faces = [face for face in faces["detected_faces"]]
         return final_faces
 
     # Saving tasks
@@ -691,7 +683,7 @@ class OptionalActions():
             file_list = [path for path in get_image_paths(input_aligned_dir)]
             logger.info("Getting Face Hashes for selected Aligned Images")
             for face in tqdm(file_list, desc="Hashing Faces"):
-                face_hashes.append(hash_image_file(face))
+                face_hashes.append(read_image_hash(face))
             logger.debug("Face Hashes: %s", (len(face_hashes)))
             if not face_hashes:
                 raise FaceswapError("Aligned directory is empty, no faces will be converted!")
@@ -755,5 +747,5 @@ class Legacy():
                 continue
             hash_faces = all_faces[frame]
             for index, face_path in hash_faces.items():
-                hash_faces[index] = hash_image_file(face_path)
+                hash_faces[index] = read_image_hash(face_path)
             self.alignments.add_face_hashes(frame, hash_faces)

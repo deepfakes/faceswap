@@ -457,7 +457,7 @@ class FacesDisplay():
         for image in self.source:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
-            detected_face.load_aligned(src_img, self.size, align_eyes=False)
+            detected_face.load_aligned(src_img, self.size)
             matrix = detected_face.aligned["matrix"]
             self.faces.setdefault("filenames",
                                   list()).append(os.path.splitext(image["filename"])[0])
