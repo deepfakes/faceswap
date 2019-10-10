@@ -946,6 +946,9 @@ class State():
     def load(self, config_changeable_items):
         """ Load state file """
         logger.debug("Loading State")
+        if not os.path.exists(self.filename):
+            logger.info("No existing state file found. Generating.")
+            return
         state = self.serializer.load(self.filename)
         self.name = state.get("name", self.name)
         self.sessions = state.get("sessions", dict())
