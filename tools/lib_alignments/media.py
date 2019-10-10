@@ -81,7 +81,7 @@ class AlignmentData(Alignments):
 
         self.serializer = self.get_serializer("", dst_fmt)
         filename = os.path.splitext(self.file)[0]
-        self.file = "{}.{}".format(filename, self.serializer.ext)
+        self.file = "{}.{}".format(filename, self.serializer.file_extension)
         logger.debug("Destination file: '%s'", self.file)
 
     def save(self):
@@ -364,15 +364,15 @@ class ExtractedFaces():
             out_file.write(img)
         return f_hash
 
-    def align_eyes(self, face, image):
+    @staticmethod
+    def align_eyes(face, image):
         """ Re-extract a face with the pupils forced to be absolutely horizontally aligned """
         umeyama_landmarks = face.aligned_landmarks
-        leftEyeCenter = umeyama_landmarks[42:48].mean(axis=0)
-        rightEyeCenter = umeyama_landmarks[36:42].mean(axis=0)
-        eyesCenter = umeyama_landmarks[36:48].mean(axis=0)
-        dY = rightEyeCenter[1] - leftEyeCenter[1]
-        dX = rightEyeCenter[0] - leftEyeCenter[0]
-        theta = np.pi - np.arctan2(dY, dX)
+        left_eye_center = umeyama_landmarks[42:48].mean(axis=0)
+        right_eye_center = umeyama_landmarks[36:42].mean(axis=0)
+        d_y = right_eye_center[1] - left_eye_center[1]
+        d_x = right_eye_center[0] - left_eye_center[0]
+        theta = np.pi - np.arctan2(d_y, d_x)
         rot_cos = np.cos(theta)
         rot_sin = np.sin(theta)
         rotation_matrix = np.array([[rot_cos, -rot_sin, 0.],

@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from shutil import copyfile, copytree, rmtree
 
-from lib import Serializer
+from lib.serializer import get_serializer
 from lib.utils import get_folder
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -131,13 +131,12 @@ class Backup():
 
     def get_session_names(self):
         """ Get the existing session names from state file """
-        serializer = Serializer.get_serializer("json")
+        serializer = get_serializer("json")
         state_file = os.path.join(self.model_dir,
-                                  "{}_state.{}".format(self.model_name, serializer.ext))
-        with open(state_file, "rb") as inp:
-            state = serializer.unmarshal(inp.read().decode("utf-8"))
-            session_names = ["session_{}".format(key)
-                             for key in state["sessions"].keys()]
+                                  "{}_state.{}".format(self.model_name, serializer.file_extension))
+        state = serializer.load(state_file)
+        session_names = ["session_{}".format(key)
+                         for key in state["sessions"].keys()]
         logger.debug("Session to restore: %s", session_names)
         return session_names
 
