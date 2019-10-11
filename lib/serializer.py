@@ -100,8 +100,6 @@ class Serializer():
             with open(filename, self._read_option) as s_file:
                 data = s_file.read()
                 logger.debug("stored data type: %s", type(data))
-                if isinstance(data, bytes):
-                    data = data.decode("utf-8")
                 retval = self.unmarshal(data)
         except IOError as err:
             msg = "Error reading from '{}': {}".format(filename, err.strerror)
@@ -189,7 +187,7 @@ class _YAMLSerializer(Serializer):
 
     @classmethod
     def _unmarshal(cls, data):
-        return yaml.load(data)
+        return yaml.load(data.decode("utf-8"))
 
 
 class _JSONSerializer(Serializer):
@@ -204,7 +202,7 @@ class _JSONSerializer(Serializer):
 
     @classmethod
     def _unmarshal(cls, data):
-        return json.loads(data)
+        return json.loads(data.decode("utf-8"))
 
 
 class _PickleSerializer(Serializer):
