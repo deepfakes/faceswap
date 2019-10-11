@@ -39,20 +39,26 @@ class DetectedFace():
     landmarks_xy: list
         The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
         of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
+    mask: dict
+        The generated mask(s) for the face as generated in :mod:`plugins.extract.mask`. Must be a
+        dict of `{name (str): mask (numpy.ndarray)}
     """
     def __init__(self, image=None, x=None, w=None, y=None, h=None,
-                 landmarks_xy=None, filename=None):
+                 landmarks_xy=None, mask=None, filename=None):
         logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, "
                      "landmarks_xy: %s, filename: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
-                     x, w, y, h, landmarks_xy, filename)
+                     x, w, y, h, landmarks_xy,
+                     {k: v.shape for k, v in mask} if mask is not None else mask,
+                     filename)
         self.image = image
-        self.x = x
-        self.w = w
-        self.y = y
-        self.h = h
+        self.x = x  # pylint:disable=invalid-name
+        self.w = w  # pylint:disable=invalid-name
+        self.y = y  # pylint:disable=invalid-name
+        self.h = h  # pylint:disable=invalid-name
         self.landmarks_xy = landmarks_xy
+        self.mask = dict() if mask is None else mask
         self.filename = filename
         self.hash = None
         self.face = None
@@ -96,7 +102,7 @@ class DetectedFace():
         -------
         alignment: dict
             The alignment dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
-            ``landmarks_xy``, ``hash``.
+            ``landmarks_xy``, ``mask``, ``hash``.
         """
 
         alignment = dict()
@@ -106,6 +112,7 @@ class DetectedFace():
         alignment["h"] = self.h
         alignment["landmarks_xy"] = self.landmarks_xy
         alignment["hash"] = self.hash
+        alignment["mask"] = self.mask
         logger.trace("Returning: %s", alignment)
         return alignment
 
@@ -117,8 +124,11 @@ class DetectedFace():
         ----------
         alignment: dict
             A dictionary entry for a face from an alignments file containing the keys
-            ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``. Optionally the key ``hash``
-            will be provided, but not all use cases will know the face hash at this time.
+            ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``.
+            Optionally the key ``hash`` will be provided, but not all use cases will know the
+            face hash at this time.
+            Optionally the key ``mask`` will be provided, but legacy alignments will not have
+            this key.
         image: numpy.ndarray, optional
             If an image is passed in, then the ``image`` attribute will
             be set to the cropped face based on the passed in bounding box co-ordinates
@@ -133,6 +143,8 @@ class DetectedFace():
         self.landmarks_xy = alignment["landmarks_xy"]
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
+        # Manual tool and legacy alignments will not have a mask
+        self.mask = alignment.get("mask", None)
         if image is not None and image.any():
             self.image = image
             self._image_to_face(image)
@@ -144,7 +156,7 @@ class DetectedFace():
         """ set self.image to be the cropped face from detected bounding box """
         logger.trace("Cropping face from image")
         self.face = image[self.top: self.bottom,
-                           self.left: self.right]
+                          self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
     def load_aligned(self, image, size=256, coverage_ratio=1.0, dtype=None):
@@ -199,7 +211,8 @@ class DetectedFace():
                                                  for k, v in self.aligned.items()
                                                  if k != "face"})
 
-    def _padding_from_coverage(self, size, coverage_ratio):
+    @staticmethod
+    def _padding_from_coverage(size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image """
         padding = int((size * (coverage_ratio - 0.625)) / 2)
@@ -240,7 +253,7 @@ class DetectedFace():
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
-                     self.feed_face.shape, self._feed_matrix)
+                     self.feed_face.shape, self.feed_matrix)
 
     def load_reference_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
         """ Align a face in the correct dimensions for reference against the output from a model.
@@ -354,7 +367,7 @@ class DetectedFace():
         return landmarks
 
     @property
-    def _feed_matrix(self):
+    def feed_matrix(self):
         """ numpy.ndarray: The adjusted matrix face sized for feeding into a model. Only available
         after :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """
         if not self.feed:
@@ -372,7 +385,7 @@ class DetectedFace():
         ``None``"""
         if not self.feed:
             return None
-        return get_matrix_scaling(self._feed_matrix)
+        return get_matrix_scaling(self.feed_matrix)
 
     @property
     def reference_face(self):

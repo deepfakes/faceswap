@@ -27,13 +27,14 @@ import time
 import cv2
 import numpy as np
 
+import tensorflow as tf
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
-import tensorflow as tf
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -342,7 +343,7 @@ class Batcher():
         batchsize = len(batch["samples"])
         images = batch["targets"][self.model.largest_face_index]
         masks = batch["masks"][0]
-        sample = self.compile_sample(batchsize, 
+        sample = self.compile_sample(batchsize,
                                      samples=batch["samples"],
                                      images=images,
                                      masks=masks)

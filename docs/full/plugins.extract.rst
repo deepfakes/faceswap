@@ -8,6 +8,7 @@ Subpackages
 
    plugins.extract.align
    plugins.extract.detect
+   plugins.extract.mask
 
 Submodules
 ----------

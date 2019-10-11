@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+""" Components Mask for faceswap.py """
 
 import cv2
 import numpy as np
@@ -11,44 +12,35 @@ class Mask(Masker):
         git_model_id = None
         model_filename = None
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+        self.input_size = 256
+        self.blur_kernel = None
         self.name = "Components"
-        self.colorformat = "BGR"
-        self.vram = 0
-        self.vram_warnings = 0
-        self.vram_per_batch = 30
-        self.batchsize = self.config["batch-size"]
+        self.vram = 0  # Doesn't use GPU
+        self.vram_per_batch = 0
+        self.batchsize = 1
 
     def init_model(self):
         logger.debug("No mask model to initialize")
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        batch["feed"] = np.array([face.image for face in batch["detected_faces"]])
+        batch["feed"] = np.zeros((self.batchsize, self.input_size, self.input_size, 1),
+                                 dtype="float32")
         return batch
 
     def predict(self, batch):
         """ Run model to get predictions """
-        masks = np.zeros(batch["feed"].shape[:-1] + (1,), dtype='uint8')
-        for mask, face in zip(masks, batch["detected_faces"]):
-            parts = self.parse_parts(np.array(face.landmarks_xy))
+        for mask, face in zip(batch["feed"], batch["detected_faces"]):
+            parts = self.parse_parts(np.array(face.feed_landmarks))
             for item in parts:
                 item = np.concatenate(item)
-                hull = cv2.convexHull(item).astype('int32')  # pylint: disable=no-member
-                cv2.fillConvexPoly(mask, hull, 255, lineType=cv2.LINE_AA)
-        batch["prediction"] = masks
+                hull = cv2.convexHull(item).astype("int32")  # pylint: disable=no-member
+                cv2.fillConvexPoly(mask, hull, 1.0, lineType=cv2.LINE_AA)
+        batch["prediction"] = batch["feed"]
         return batch
 
     def process_output(self, batch):
         """ Compile found faces for output """
-        generator = zip(batch["feed"], batch["detected_faces"], batch["prediction"])
-        for feed, face, prediction in generator:
-            face.image = np.concatenate((feed, prediction), axis=-1)
-            face.load_feed_face(face.image,
-                                size=self.input_size,
-                                coverage_ratio=self.coverage_ratio)
-            face.load_reference_face(face.image,
-                                     size=self.output_size,
-                                     coverage_ratio=self.coverage_ratio)
         return batch
 
     @staticmethod

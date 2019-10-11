@@ -44,7 +44,7 @@
 
 
 _HELPTEXT = (
-    "UNET_DFL options. Mask designed to provide smart segmentation of mostly frontal faces. "
+    "UNET_DFL options. Mask designed to provide smart segmentation of mostly frontal faces.\n"
     "The mask model has been trained by community members. Insert more commentary on testing "
     "here. Profile faces may result in sub-par performance."
     )
@@ -56,8 +56,7 @@ _DEFAULTS = {
         "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
                 "but setting it too high can harm performance.\n"
                 "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-                "accomodate then this will automatically be lowered."
-                "\n\tAMD users: A batchsize of 8 requires about xxxx GB vram.",
+                "accomodate then this will automatically be lowered.",
         "datatype": int,
         "rounding": 1,
         "min_max": (1, 64),
