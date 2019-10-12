@@ -114,12 +114,7 @@ class Alignments(AlignmentsBase):
             logger.warning("Skip Existing/Skip Faces selected, but no alignments file found!")
             return data
 
-        try:
-            with open(self.file, self.serializer.roptions) as align:
-                data = self.serializer.unmarshal(align.read())
-        except IOError as err:
-            logger.error("Error: '%s' not read: %s", self.file, err.strerror)
-            exit(1)
+        data = self.serializer.load(self.file)
 
         if skip_faces:
             # Remove items from algnments that have no faces so they will

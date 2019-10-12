@@ -9,7 +9,7 @@ from datetime import datetime
 import cv2
 
 from lib.faces_detect import rotate_landmarks
-from lib import Serializer
+from lib.serializer import get_serializer, get_serializer_from_filename
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -85,15 +85,15 @@ class Alignments():
                      filename, serializer)
         extension = os.path.splitext(filename)[1]
         if extension in (".json", ".p", ".yaml", ".yml"):
-            logger.debug("Serializer set from file extension: '%s'", extension)
-            retval = Serializer.get_serializer_from_ext(extension)
+            logger.debug("Serializer set from filename extension: '%s'", extension)
+            retval = get_serializer_from_filename(filename)
         elif serializer not in ("json", "pickle", "yaml"):
             raise ValueError("Error: {} is not a valid serializer. Use "
                              "'json', 'pickle' or 'yaml'")
         else:
             logger.debug("Serializer set from argument: '%s'", serializer)
-            retval = Serializer.get_serializer(serializer)
-        logger.verbose("Using '%s' serializer for alignments", retval.ext)
+            retval = get_serializer(serializer)
+        logger.verbose("Using '%s' serializer for alignments", retval.file_extension)
         return retval
 
     def get_location(self, folder, filename):
@@ -106,8 +106,9 @@ class Alignments():
         else:
             location = os.path.join(str(folder),
                                     "{}.{}".format(filename,
-                                                   self.serializer.ext))
-            logger.debug("File extension set from serializer: '%s'", self.serializer.ext)
+                                                   self.serializer.file_extension))
+            logger.debug("File extension set from serializer: '%s'",
+                         self.serializer.file_extension)
         logger.verbose("Alignments filepath: '%s'", location)
         return location
 
@@ -121,13 +122,8 @@ class Alignments():
             raise ValueError("Error: Alignments file not found at "
                              "{}".format(self.file))
 
-        try:
-            logger.info("Reading alignments from: '%s'", self.file)
-            with open(self.file, self.serializer.roptions) as align:
-                data = self.serializer.unmarshal(align.read())
-        except IOError as err:
-            logger.error("'%s' not read: %s", self.file, err.strerror)
-            exit(1)
+        logger.info("Reading alignments from: '%s'", self.file)
+        data = self.serializer.load(self.file)
         logger.debug("Loaded alignments")
         return data
 
@@ -140,13 +136,9 @@ class Alignments():
     def save(self):
         """ Write the serialized alignments file """
         logger.debug("Saving alignments")
-        try:
-            logger.info("Writing alignments to: '%s'", self.file)
-            with open(self.file, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(self.data))
-            logger.debug("Saved alignments")
-        except IOError as err:
-            logger.error("'%s' not written: %s", self.file, err.strerror)
+        logger.info("Writing alignments to: '%s'", self.file)
+        self.serializer.save(self.file, self.data)
+        logger.debug("Saved alignments")
 
     def backup(self):
         """ Backup copy of old alignments """

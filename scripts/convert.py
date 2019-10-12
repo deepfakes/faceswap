@@ -13,7 +13,7 @@ import numpy as np
 from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
-from lib import Serializer
+from lib.serializer import get_serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
@@ -419,7 +419,7 @@ class Predict():
         self.args = arguments
         self.in_queue = in_queue
         self.out_queue = queue_manager.get_queue("patch")
-        self.serializer = Serializer.get_serializer("json")
+        self.serializer = get_serializer("json")
         self.faces_count = 0
         self.verify_output = False
         self.model = self.load_model()
@@ -495,9 +495,8 @@ class Predict():
                                 "option.".format(len(statefile)))
         statefile = os.path.join(str(model_dir), statefile[0])
 
-        with open(statefile, "rb") as inp:
-            state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-            trainer = state.get("name", None)
+        state = self.serializer.load(statefile)
+        trainer = state.get("name", None)
 
         if not trainer:
             raise FaceswapError("Trainer name could not be read from state file. "

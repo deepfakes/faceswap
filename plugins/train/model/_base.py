@@ -10,7 +10,6 @@ import sys
 import time
 
 from concurrent import futures
-from json import JSONDecodeError
 
 import keras
 from keras import losses
@@ -19,7 +18,7 @@ from keras.layers import Input
 from keras.models import load_model, Model
 from keras.utils import get_custom_objects, multi_gpu_model
 
-from lib import Serializer
+from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
@@ -869,8 +868,8 @@ class State():
                      "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
                      config_changeable_items, no_logs, pingpong, training_image_size)
-        self.serializer = Serializer.get_serializer("json")
-        filename = "{}_state.{}".format(model_name, self.serializer.ext)
+        self.serializer = get_serializer("json")
+        filename = "{}_state.{}".format(model_name, self.serializer.file_extension)
         self.filename = str(model_dir / filename)
         self.name = model_name
         self.iterations = 0
@@ -948,42 +947,33 @@ class State():
     def load(self, config_changeable_items):
         """ Load state file """
         logger.debug("Loading State")
-        try:
-            with open(self.filename, "rb") as inp:
-                state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                self.name = state.get("name", self.name)
-                self.sessions = state.get("sessions", dict())
-                self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
-                self.iterations = state.get("iterations", 0)
-                self.training_size = state.get("training_size", 256)
-                self.inputs = state.get("inputs", dict())
-                self.config = state.get("config", dict())
-                logger.debug("Loaded state: %s", state)
-                self.replace_config(config_changeable_items)
-        except IOError as err:
-            logger.warning("No existing state file found. Generating.")
-            logger.debug("IOError: %s", str(err))
-        except JSONDecodeError as err:
-            logger.debug("JSONDecodeError: %s:", str(err))
+        if not os.path.exists(self.filename):
+            logger.info("No existing state file found. Generating.")
+            return
+        state = self.serializer.load(self.filename)
+        self.name = state.get("name", self.name)
+        self.sessions = state.get("sessions", dict())
+        self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
+        self.iterations = state.get("iterations", 0)
+        self.training_size = state.get("training_size", 256)
+        self.inputs = state.get("inputs", dict())
+        self.config = state.get("config", dict())
+        logger.debug("Loaded state: %s", state)
+        self.replace_config(config_changeable_items)
 
     def save(self, backup_func=None):
         """ Save iteration number to state file """
         logger.debug("Saving State")
         if backup_func:
             backup_func(self.filename)
-        try:
-            with open(self.filename, "wb") as out:
-                state = {"name": self.name,
-                         "sessions": self.sessions,
-                         "lowest_avg_loss": self.lowest_avg_loss,
-                         "iterations": self.iterations,
-                         "inputs": self.inputs,
-                         "training_size": self.training_size,
-                         "config": _CONFIG}
-                state_json = self.serializer.marshal(state)
-                out.write(state_json.encode("utf-8"))
-        except IOError as err:
-            logger.error("Unable to save model state: %s", str(err.strerror))
+        state = {"name": self.name,
+                 "sessions": self.sessions,
+                 "lowest_avg_loss": self.lowest_avg_loss,
+                 "iterations": self.iterations,
+                 "inputs": self.inputs,
+                 "training_size": self.training_size,
+                 "config": _CONFIG}
+        self.serializer.save(self.filename, state)
         logger.debug("Saved State")
 
     def replace_config(self, config_changeable_items):
