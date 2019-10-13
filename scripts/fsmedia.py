@@ -57,10 +57,8 @@ class Alignments(AlignmentsBase):
         self.args = arguments
         self.is_extract = is_extract
         folder, filename = self.set_folder_filename(input_is_video)
-        serializer = self.set_serializer()
         super().__init__(folder,
-                         filename=filename,
-                         serializer=serializer)
+                         filename=filename)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_folder_filename(self, input_is_video):
@@ -78,19 +76,6 @@ class Alignments(AlignmentsBase):
             filename = "alignments"
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
-
-    def set_serializer(self):
-        """ Set the serializer to be used for loading and
-            saving alignments """
-        if hasattr(self.args, "serializer") and self.args.serializer:
-            logger.debug("Serializer provided: '%s'", self.args.serializer)
-            serializer = self.args.serializer
-        else:
-            # If there is a full filename then this will be overriden
-            # by filename extension
-            serializer = "json"
-            logger.debug("No Serializer defaulting to: '%s'", serializer)
-        return serializer
 
     def load(self):
         """ Override  parent loader to handle skip existing on extract """
@@ -383,9 +368,9 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             face = detected_face["face"]
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
                          detected_face["file_location"].parts[-1], idx)
-            aligned_landmarks = face.feed_landmarks
+            aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(face.feed_face,  # pylint: disable=no-member
+                cv2.circle(face.feed_landmarks,  # pylint: disable=no-member
                            (pos_x, pos_y), 2, (0, 0, 255, 255), -1)
 
 

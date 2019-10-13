@@ -532,15 +532,6 @@ class ExtractArgs(ExtractConvertArgs):
             default_aligner = "fan"
 
         argument_list = []
-        argument_list.append({"opts": ("--serializer", ),
-                              "type": str.lower,
-                              "dest": "serializer",
-                              "default": "json",
-                              "choices": ("json", "pickle", "yaml"),
-                              "group": "Data",
-                              "help": "Serializer for alignments file. If yaml is chosen and not "
-                                      "available, then json will be used as the default "
-                                      "fallback."})
         argument_list.append({"opts": ("-D", "--detector"),
                               "action": Radio,
                               "type": str.lower,

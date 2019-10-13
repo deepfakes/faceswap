@@ -21,6 +21,7 @@ from lib.gui.tooltip import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
+from lib.model.masks import get_available_masks
 from lib.multithreading import MultiThread
 from lib.utils import FaceswapError, set_system_verbosity
 from lib.queue_manager import queue_manager
@@ -732,7 +733,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Add the comboboxes to the Action Frame """
         for opt in self.options:
             if opt == "mask_type":
-                choices = ["dfl_full", "components", "extended", "predicted"]
+                choices = get_available_masks() + ["predicted"]
             else:
                 choices = PluginLoader.get_available_convert_plugins(opt, True)
             choices = [self.format_to_display(choice) for choice in choices]

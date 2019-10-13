@@ -80,7 +80,7 @@ class Model(OriginalModel):
                                    name="face_out")
         outputs = [var_x]
 
-        if self.config.get("replicate_input_mask", False):
+        if self.config.get("mask_type", None):
             var_y = input_
             var_y = self.blocks.upscale(var_y, decoder_complexity)
             var_y = self.blocks.upscale(var_y, decoder_complexity)
@@ -129,7 +129,7 @@ class Model(OriginalModel):
                                    name="face_out")
         outputs = [var_x]
 
-        if self.config.get("replicate_input_mask", False):
+        if self.config.get("mask_type", None):
             var_y = input_
             var_y = self.blocks.upscale(var_y, decoder_complexity)
             if not self.lowmem:

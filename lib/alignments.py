@@ -18,19 +18,15 @@ class Alignments():
     """ Holds processes pertaining to the alignments file.
 
         folder:     folder alignments file is stored in
-        filename:   Filename of alignments file excluding extension. If a
+        filename:   Filename of alignments file. If a
                     valid extension is provided, then it will be used to
-                    decide the serializer, and the serializer argument will
-                    be ignored.
-        serializer: If provided, this will be the format that the data is
-                    saved in (if data is to be saved). Can be 'json', 'pickle'
-                    or 'yaml'
+                    decide the serializer otherwise compressed pickle is used.
     """
     # pylint: disable=too-many-public-methods
-    def __init__(self, folder, filename="alignments", serializer="json"):
-        logger.debug("Initializing %s: (folder: '%s', filename: '%s', serializer: '%s')",
-                     self.__class__.__name__, folder, filename, serializer)
-        self.serializer = self.get_serializer(filename, serializer)
+    def __init__(self, folder, filename="alignments"):
+        logger.debug("Initializing %s: (folder: '%s', filename: '%s')",
+                     self.__class__.__name__, folder, filename)
+        self.serializer = self.get_serializer(filename)
         self.file = self.get_location(folder, filename)
 
         self.data = self.load()
@@ -74,25 +70,21 @@ class Alignments():
     # << INIT FUNCTIONS >> #
 
     @staticmethod
-    def get_serializer(filename, serializer):
+    def get_serializer(filename):
         """ Set the serializer to be used for loading and
             saving alignments
 
             If a filename with a valid extension is passed in
             this will be used as the serializer, otherwise the
-            specified serializer will be used """
-        logger.debug("Getting serializer: (filename: '%s', serializer: '%s')",
-                     filename, serializer)
+            compressed pickle will be used """
+        logger.debug("Getting serializer: (filename: '%s')", filename)
         extension = os.path.splitext(filename)[1]
         if extension in (".json", ".p", ".yaml", ".yml"):
             logger.debug("Serializer set from filename extension: '%s'", extension)
             retval = get_serializer_from_filename(filename)
-        elif serializer not in ("json", "pickle", "yaml"):
-            raise ValueError("Error: {} is not a valid serializer. Use "
-                             "'json', 'pickle' or 'yaml'")
         else:
-            logger.debug("Serializer set from argument: '%s'", serializer)
-            retval = get_serializer(serializer)
+            logger.debug("Returning default Pickle serializer")
+            retval = get_serializer("compressed")
         logger.verbose("Using '%s' serializer for alignments", retval.file_extension)
         return retval
 

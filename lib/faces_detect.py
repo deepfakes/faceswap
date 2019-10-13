@@ -2,6 +2,8 @@
 """ Face and landmarks detection for faceswap.py """
 import logging
 
+from zlib import compress, decompress
+
 import cv2
 import numpy as np
 
@@ -41,12 +43,12 @@ class DetectedFace():
         of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
     mask: dict
         The generated mask(s) for the face as generated in :mod:`plugins.extract.mask`. Must be a
-        dict of `{name (str): mask (numpy.ndarray)}
+        dict of {**name** (`str`): :class:`Mask`}.
     """
     def __init__(self, image=None, x=None, w=None, y=None, h=None,
                  landmarks_xy=None, mask=None, filename=None):
         logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, "
-                     "landmarks_xy: %s, filename: %s)",
+                     "landmarks_xy: %s, mask: %s, filename: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
                      x, w, y, h, landmarks_xy,
@@ -94,6 +96,34 @@ class DetectedFace():
     def training_coverage(self):
         """ The coverage ratio to add for training images """
         return 1.0
+
+    def add_mask(self, name, mask, affine_matrix, frame_dims, interpolator):
+        """ Add a :class:`Mask` to this detected face
+
+        The mask should be the original output from  :mod:`plugins.extract.mask`
+        If a mask with this name already exists it will be overwritten by the given
+        mask.
+
+        Parameters
+        ----------
+        name: str
+            The name of the mask as defined by the :attr:`plugins.extract.mask._base.name`
+            parameter.
+        mask: numpy.ndarray
+            The mask that is to be added as output from :mod:`plugins.extract.mask`
+            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
+        affine_matrix: numpy.ndarray
+            The transformation matrix required to transform the mask to the original frame.
+        frame_dims: tuple
+            The `(height, width)` dimensions of the original frame that this mask was created from.
+        interpolator:
+            The CV2 interpolator required to transform this mask to it's original frame
+        """
+        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, frame_dims: %s, "
+                     "interpolator: %s", name, mask.shape, affine_matrix, frame_dims, interpolator)
+        fsmask = Mask()
+        fsmask.add(mask, affine_matrix, frame_dims, interpolator)
+        self.mask[name] = fsmask
 
     def to_alignment(self):
         """  Return the detected face formatted for an alignments file
@@ -436,7 +466,7 @@ class DetectedFace():
 def rotate_landmarks(face, rotation_matrix):
     """ Rotates the 68 point landmarks and detection bounding box around the given rotation matrix.
 
-    Paramaters
+    Parameters
     ----------
     face: DetectedFace or dict
         A :class:`DetectedFace` or an `alignments file` ``dict`` containing the 68 point landmarks
@@ -517,3 +547,80 @@ def rotate_landmarks(face, rotation_matrix):
 
     logger.trace("Rotated landmarks: %s", rotated_landmarks)
     return face
+
+
+class Mask():
+    """ Face Mask information and convenience methods
+
+    Holds a Faceswap mask as generated from :mod:`plugins.extract.mask` and the information
+    required to transform it to its original frame.
+
+    Holds convenience methods to handle the warping, storing and retrieval of the mask.
+
+    Parameters
+    ----------
+    storage_size: int, optional
+        The size (in pixels) that the mask should be stored at. Default: 128.
+
+    Attributes
+    ----------
+    storage_dims: tuple
+        The `(height, width)` of the stored mask.
+    """
+
+    def __init__(self, storage_size=128):
+        self.storage_dims = (storage_size, storage_size)
+
+        self._mask = None
+        self._original_dims = None
+        self._affine_matrix = None
+        self._frame_dims = None
+        self._intepolator = None
+
+    @property
+    def mask(self):
+        """ numpy.ndarray: The mask at the size of :attr:`storage_dims` """
+        return decompress(self._mask)
+
+    @property
+    def full_frame_mask(self):
+        """ numpy.ndarray: The mask affined to the original full frame """
+        mask = np.zeros(self._frame_dims + (1, ), dtype="uint8")
+        mask = cv2.warpAffine(cv2.resize(self.mask, self._original_dims, cv2.INTER_CUBIC),
+                              self._affine_matrix,
+                              self._frame_dims,
+                              mask,
+                              flags=cv2.WARP_INVERSE_MAP | self._intepolator,
+                              borderMode=cv2.BORDER_TRANSPARENT)
+        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s",
+                     mask.shape, mask.dtype, mask.min(), mask.max())
+        return mask
+
+    def add(self, mask, affine_matrix, frame_dims, interpolator):
+        """ Add a Faceswap mask to this :class:`Mask`.
+
+        The mask should be the original output from  :mod:`plugins.extract.mask`
+
+        Parameters
+        ----------
+        mask: numpy.ndarray
+            The mask that is to be added as output from :mod:`plugins.extract.mask`
+            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
+        affine_matrix: numpy.ndarray
+            The transformation matrix required to transform the mask to the original frame.
+        frame_dims: tuple
+            The `(height, width)` dimensions of the original frame that this mask was created from.
+        interpolator:
+            The CV2 interpolator required to transform this mask to it's original frame
+        """
+        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s, "
+                     "affine_matrix: %s, frame_dims: %s, interpolator: %s", mask.shape, mask.dtype,
+                     mask.min(), mask.max(), affine_matrix, frame_dims, interpolator)
+        self._original_dims = mask.shape[:2]
+        self._affine_matrix = affine_matrix
+        self._frame_dims = frame_dims
+        self._intepolator = interpolator
+        mask = (cv2.resize(mask,
+                           self.storage_dims,
+                           interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
+        self._mask = compress(mask)

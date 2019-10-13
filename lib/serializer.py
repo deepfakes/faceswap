@@ -2,10 +2,16 @@
 """
 Library for serializing python objects to and from various different serializer formats
 """
-import logging
+
 import json
+import logging
 import os
 import pickle
+import zlib
+
+from io import BytesIO
+
+import numpy as np
 
 from lib.utils import FaceswapError
 
@@ -101,6 +107,7 @@ class Serializer():
                 data = s_file.read()
                 logger.debug("stored data type: %s", type(data))
                 retval = self.unmarshal(data)
+
         except IOError as err:
             msg = "Error reading from '{}': {}".format(filename, err.strerror)
             raise FaceswapError(msg) from err
@@ -187,7 +194,7 @@ class _YAMLSerializer(Serializer):
 
     @classmethod
     def _unmarshal(cls, data):
-        return yaml.load(data.decode("utf-8"))
+        return yaml.load(data.decode("utf-8"), Loader=yaml.FullLoader)
 
 
 class _JSONSerializer(Serializer):
@@ -209,7 +216,7 @@ class _PickleSerializer(Serializer):
     """ Pickle Serializer """
     def __init__(self):
         super().__init__()
-        self._file_extension = "p"
+        self._file_extension = "pickle"
 
     @classmethod
     def _marshal(cls, data):
@@ -220,12 +227,54 @@ class _PickleSerializer(Serializer):
         return pickle.loads(data)
 
 
+class _NPYSerializer(Serializer):  # pylint:disable=abstract-method
+    """ NPY Serializer """
+    def __init__(self):
+        super().__init__()
+        self._file_extension = "npy"
+        self._bytes = BytesIO()
+
+    def _marshal(self, data):
+        """ NPY Marshal to bytesIO so standard bytes writer can write out """
+        b_handler = BytesIO()
+        np.save(b_handler, data)
+        b_handler.seek(0)
+        return b_handler.read()
+
+    def _unmarshal(self, data):
+        """ NPY Unmarshal to bytesIO so we can use numpy loader """
+        b_handler = BytesIO(data)
+        retval = np.load(b_handler)
+        del b_handler
+        if retval.dtype == "object":
+            retval = retval[()]
+        return retval
+
+
+class _CompressedSerializer(Serializer):
+    """ A compressed pickle serializer for Faceswap """
+    def __init__(self):
+        super().__init__()
+        self._file_extension = "fsc"
+        self._child = get_serializer("pickle")
+
+    def _marshal(self, data):
+        """ Pickle and compress data """
+        data = self._child._marshal(data)  # pylint: disable=protected-access
+        return zlib.compress(data)
+
+    def _unmarshal(self, data):
+        """ Decompress and unpicke data """
+        data = zlib.decompress(data)
+        return self._child._unmarshal(data)  # pylint: disable=protected-access
+
+
 def get_serializer(serializer):
     """ Obtain a serializer object
 
     Parameters
     ----------
-    serializer: {'json', 'pickle', yaml'}
+    serializer: {'json', 'pickle', yaml', 'npy', 'compressed'}
         The required serializer format
 
     Returns
@@ -237,17 +286,24 @@ def get_serializer(serializer):
     -------
     >>> serializer = get_serializer('json')
     """
-    if serializer.lower() == "json":
-        return _JSONSerializer()
-    if serializer.lower() == "pickle":
-        return _PickleSerializer()
-    if serializer.lower() == "yaml" and yaml is not None:
-        return _YAMLSerializer()
-    if serializer.lower() == "yaml" and yaml is None:
+    if serializer.lower() == "npy":
+        retval = _NPYSerializer()
+    elif serializer.lower() == "compressed":
+        retval = _CompressedSerializer()
+    elif serializer.lower() == "json":
+        retval = _JSONSerializer()
+    elif serializer.lower() == "pickle":
+        retval = _PickleSerializer()
+    elif serializer.lower() == "yaml" and yaml is not None:
+        retval = _YAMLSerializer()
+    elif serializer.lower() == "yaml" and yaml is None:
         logger.warning("You must have PyYAML installed to use YAML as the serializer."
                        "Switching to JSON as the serializer.")
-    logger.warning("Unrecognized serializer: '%s'. Returning json serializer", serializer)
-    return _JSONSerializer()
+        retval = _JSONSerializer
+    else:
+        logger.warning("Unrecognized serializer: '%s'. Returning json serializer", serializer)
+    logger.debug(retval)
+    return retval
 
 
 def get_serializer_from_filename(filename):
@@ -273,13 +329,21 @@ def get_serializer_from_filename(filename):
     logger.debug("extension: '%s'", extension)
 
     if extension == ".json":
-        return _JSONSerializer()
-    if extension == ".p":
-        return _PickleSerializer()
-    if extension in (".yaml", ".yml") and yaml is not None:
-        return _YAMLSerializer()
-    if extension in (".yaml", ".yml") and yaml is None:
+        retval = _JSONSerializer()
+    elif extension == ".p":
+        retval = _PickleSerializer()
+    elif extension == ".npy":
+        retval = _NPYSerializer()
+    elif extension == ".fsc":
+        retval = _CompressedSerializer()
+    elif extension in (".yaml", ".yml") and yaml is not None:
+        retval = _YAMLSerializer()
+    elif extension in (".yaml", ".yml") and yaml is None:
         logger.warning("You must have PyYAML installed to use YAML as the serializer.\n"
                        "Switching to JSON as the serializer.")
-    logger.warning("Unrecognized extension: '%s'. Returning json serializer", extension)
-    return _JSONSerializer()
+        retval = _JSONSerializer()
+    else:
+        logger.warning("Unrecognized extension: '%s'. Returning json serializer", extension)
+        retval = _JSONSerializer()
+    logger.debug(retval)
+    return retval

@@ -18,8 +18,6 @@ For each source item, the plugin must pass a dict to finalize containing:
 >>>  "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>}
 """
 
-import base64
-import zlib
 import cv2
 import numpy as np
 
@@ -189,26 +187,23 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
-        if self.blur_kernel is not None:
-            predicted = np.array([cv2.GaussianBlur(mask, (self.blur_kernel, self.blur_kernel), 0)
-                                  for mask in batch["prediction"]])
-        else:
-            predicted = batch["prediction"]
-        predicted[predicted < 0.04] = 0.0
-        predicted[predicted > 0.96] = 1.0
-        # TODO Convert this and landmarks_xy to numpy arrays once serialization
-        # decision is made, Hacky temp fix as can't serialize numpy arrays in json
-        # and tolist is hugely slow and gobbles ram
+        # TODO Migrate these settings to retrieval rather than storage
+        # if self.blur_kernel is not None:
+        #    predicted = np.array([cv2.GaussianBlur(mask, (self.blur_kernel, self.blur_kernel), 0)
+        #                          for mask in batch["prediction"]])
+        # else:
+        #    predicted = batch["prediction"]
+        # predicted[predicted < 0.04] = 0.0
+        # predicted[predicted > 0.96] = 1.0
+        # TODO Convert landmarks_xy to numpy arrays
         for mask, face in zip(batch["prediction"], batch["detected_faces"]):
-            placeholder = np.zeros(face.image.shape[:2] + (1, ), dtype="float32")
-            placeholder = (cv2.warpAffine(
-                mask,
-                face.feed_matrix,
-                (face.image.shape[1], face.image.shape[0]),
-                placeholder,
-                flags=cv2.WARP_INVERSE_MAP | face.feed_interpolators[1],
-                borderMode=cv2.BORDER_TRANSPARENT) * 255.0).astype("uint8")
-            face.mask[self.name] = base64.b64encode(zlib.compress(placeholder)).decode()
+            face.add_mask(self.name,
+                          mask,
+                          face.feed_matrix,
+                          (face.image.shape[1], face.image.shape[0]),
+                          face.feed_interpolators[1])
+            face.feed = None
+
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()

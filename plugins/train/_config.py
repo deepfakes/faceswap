@@ -8,6 +8,7 @@ import sys
 from importlib import import_module
 
 from lib.config import FaceswapConfig
+from lib.model.masks import get_available_masks
 from lib.utils import full_path_split
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -68,11 +69,15 @@ class Config(FaceswapConfig):
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
         self.add_item(
-            section=section, title="replicate_input_mask", datatype=bool,
-            default=False, group="mask",
-            info="Dedicate portions of the model to learning how to duplicate the input "
-                 "mask. Increases VRAM usage in exchange for a learning a quick ability "
-                 "to try to replicate more complex mask models.")
+            section=section, title="mask_type", datatype=str, default="none",
+            choices=get_available_masks(), group="mask",
+            info="The mask to be used for training:"
+                 "\n\t none: Doesn't use any mask."
+                 "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
+                 "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
+                 "\n\t extended: Based on components mask. Extends the eyebrow points to further "
+                 "up the forehead. May perform badly on difficult angles."
+                 "\n\t facehull: Face cutout based on landmarks")
         self.add_item(
             section=section, title="mask_blur", datatype=bool, default=False, group="mask",
             info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
