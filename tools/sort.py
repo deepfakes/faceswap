@@ -642,7 +642,7 @@ class Sort():
 
         progress_bar = tqdm(imgs, desc="Converting", file=sys.stdout)
         images = [np.einsum(operation, img[..., :3], conversion, optimize=path).astype('float32')
-                     for img in progress_bar]
+                  for img in progress_bar]
         return images
 
     @staticmethod

@@ -495,7 +495,7 @@ class SortArgs(FaceSwapArgs):
                               "action": Radio,
                               "type": str,
                               "choices": ("blur", "face", "face-cnn", "face-cnn-dissim",
-                                          "face-yaw", "hist", "hist-dissim","color-gray",
+                                          "face-yaw", "hist", "hist-dissim", "color-gray",
                                           "color-luma", "color-green", "color-orange"),
                               "dest": 'sort_method',
                               "group": "sort settings",
