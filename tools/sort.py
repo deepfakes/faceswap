@@ -343,7 +343,6 @@ class Sort():
 
         logger.info("Scoring each image...")
         if same_size:
-            print(converted_images[0].shape)
             scores = np.average(converted_images[0], axis=(1, 2))
         else:
             progress_bar = tqdm(converted_images, desc="Scoring", file=sys.stdout)
