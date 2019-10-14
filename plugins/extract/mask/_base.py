@@ -65,6 +65,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self.coverage_ratio = 1.0  # Overide for model specific coverage_ratio
 
         self._plugin_type = "mask"
+        self._storage_name = self.__module__.split(".")[-1].replace("_", "-")
+        self._storage_size = 128  # Size to store masks at. Leave this at default
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
         self._rollover = []  # Items that are rolled over from the previous batch in get_batch
         self._output_faces = []
@@ -197,11 +199,12 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         # predicted[predicted > 0.96] = 1.0
         # TODO Convert landmarks_xy to numpy arrays
         for mask, face in zip(batch["prediction"], batch["detected_faces"]):
-            face.add_mask(self.name,
+            face.add_mask(self._storage_name,
                           mask,
                           face.feed_matrix,
                           (face.image.shape[1], face.image.shape[0]),
-                          face.feed_interpolators[1])
+                          face.feed_interpolators[1],
+                          storage_size=self._storage_size)
             face.feed = None
 
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))

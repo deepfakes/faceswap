@@ -12,9 +12,8 @@ class Mask(Masker):
         git_model_id = 6
         model_filename = "DFL_256_sigmoid_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.name = "U-Net Mask Network(256)"
+        self.name = "U-Net"
         self.input_size = 256
-        self.blur_kernel = 5
         self.vram = 3440
         self.vram_warnings = 1024  # TODO determine
         self.vram_per_batch = 64  # TODO determine

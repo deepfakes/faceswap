@@ -13,7 +13,6 @@ class Mask(Masker):
         model_filename = None
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.input_size = 256
-        self.blur_kernel = None
         self.name = "Components"
         self.vram = 0  # Doesn't use GPU
         self.vram_per_batch = 0

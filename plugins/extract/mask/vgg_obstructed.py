@@ -12,9 +12,8 @@ class Mask(Masker):
         git_model_id = 5
         model_filename = "Nirkin_500_softmax_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.name = "VGG Mask Network(500)"
+        self.name = "VGG Obstructed"
         self.input_size = 500
-        self.blur_kernel = 9
         self.vram = 3000  # TODO determine
         self.vram_warnings = 1024  # TODO determine
         self.vram_per_batch = 64  # TODO determine
