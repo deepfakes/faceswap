@@ -5,10 +5,11 @@ import logging
 
 import tensorflow as tf
 from keras.layers import Activation
+from tensorflow.python import errors_impl as tf_error  # pylint:disable=no-name-in-module
 from keras.models import load_model as k_load_model, Model
 import numpy as np
 
-from lib.utils import get_backend
+from lib.utils import get_backend, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -111,8 +112,15 @@ class KSession():
         config = tf.ConfigProto()
         if allow_growth and get_backend() == "nvidia":
             config.gpu_options.allow_growth = True  # pylint:disable=no-member
-        session = tf.Session(graph=tf.Graph(), config=config)
-        logger.debug("Creating tf.session: (graph: %s, session: %s, config: %s)",
+        try:
+            session = tf.Session(graph=tf.Graph(), config=config)
+        except tf_error.InternalError as err:
+            if "driver version is insufficient" in str(err):
+                msg = ("Your Nvidia Graphics Driver is insufficient for running Faceswap. "
+                       "Please upgrade to the latest version.")
+                raise FaceswapError(msg) from err
+            raise err
+        logger.debug("Created tf.session: (graph: %s, session: %s, config: %s)",
                      session.graph, session, config)
         return session
 
