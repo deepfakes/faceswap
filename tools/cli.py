@@ -32,7 +32,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "action": Radio,
             "type": str,
             "choices": ("draw", "extract", "manual", "merge", "missing-alignments",
-                        "missing-frames", "legacy", "leftover-faces", "multi-faces", "no-faces",
+                        "missing-frames", "leftover-faces", "multi-faces", "no-faces",
                         "reformat", "remove-faces", "remove-frames", "rename", "sort-x", "sort-y",
                         "spatial", "update-hashes"),
             "required": True,
@@ -54,9 +54,6 @@ class AlignmentsArgs(FaceSwapArgs):
                     "alignments file." + output_opts + frames_dir +
                     "\nL|'missing-frames': Identify frames in the alignments file that do not "
                     "appear within the frames folder/video." + output_opts + frames_dir +
-                    "\nL|'legacy': This updates legacy alignments to the latest format by "
-                    "rotating the landmarks and bounding boxes and adding face_hashes." +
-                    frames_and_faces_dir +
                     "\nL|'leftover-faces': Identify faces in the faces folder that do not exist "
                     "in the alignments file." + output_opts + faces_dir +
                     "\nL|'multi-faces': Identify where multiple faces exist within the alignments "
@@ -109,12 +106,6 @@ class AlignmentsArgs(FaceSwapArgs):
                               "group": "data",
                               "help": "Directory containing source frames "
                                       "that faces were extracted from."})
-        argument_list.append({"opts": ("-fmt", "--alignment_format"),
-                              "type": str,
-                              "choices": ("json", "pickle", "yaml"),
-                              "group": "data",
-                              "help": "The file format to save the alignment "
-                                      "data in. Defaults to same as source."})
         argument_list.append({
             "opts": ("-o", "--output"),
             "action": Radio,

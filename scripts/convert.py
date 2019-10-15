@@ -38,8 +38,6 @@ class Convert():
         self.images = Images(self.args)
         self.validate()
         self.alignments = Alignments(self.args, False, self.images.is_video)
-        # Update Legacy alignments
-        Legacy(self.alignments, self.images.input_images, arguments.input_aligned_dir)
         self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
 
         self.add_queues()
@@ -690,61 +688,3 @@ class OptionalActions():
                 logger.warning("Aligned directory contains far fewer images than the input "
                                "directory, are you sure this is the right folder?")
         return face_hashes
-
-
-class Legacy():
-    """ Update legacy alignments:
-        - Rotate landmarks and bounding boxes on legacy alignments
-          and remove the 'r' parameter
-        - Add face hashes to alignments file
-        """
-    def __init__(self, alignments, frames, faces_dir):
-        self.alignments = alignments
-        self.frames = {os.path.basename(frame): frame
-                       for frame in frames}
-        self.process(faces_dir)
-
-    def process(self, faces_dir):
-        """ Run the rotate alignments process """
-        rotated = self.alignments.get_legacy_rotation()
-        hashes = self.alignments.get_legacy_no_hashes()
-        if not rotated and not hashes:
-            return
-        if rotated:
-            logger.info("Legacy rotated frames found. Converting...")
-            self.rotate_landmarks(rotated)
-            self.alignments.save()
-        if hashes and faces_dir:
-            logger.info("Legacy alignments found. Adding Face Hashes...")
-            self.add_hashes(hashes, faces_dir)
-            self.alignments.save()
-
-    def rotate_landmarks(self, rotated):
-        """ Rotate the landmarks """
-        for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
-            frame = self.frames.get(rotate_item, None)
-            if frame is None:
-                logger.debug("Skipping missing frame: '%s'", rotate_item)
-                continue
-            self.alignments.rotate_existing_landmarks(rotate_item, frame)
-
-    def add_hashes(self, hashes, faces_dir):
-        """ Add Face Hashes to the alignments file """
-        all_faces = dict()
-        face_files = sorted(face for face in os.listdir(faces_dir) if "_" in face)
-        for face in face_files:
-            filename, extension = os.path.splitext(face)
-            index = filename[filename.rfind("_") + 1:]
-            if not index.isdigit():
-                continue
-            orig_frame = filename[:filename.rfind("_")] + extension
-            all_faces.setdefault(orig_frame, dict())[int(index)] = os.path.join(faces_dir, face)
-
-        for frame in tqdm(hashes):
-            if frame not in all_faces.keys():
-                logger.warning("Skipping missing frame: '%s'", frame)
-                continue
-            hash_faces = all_faces[frame]
-            for index, face_path in hash_faces.items():
-                hash_faces[index] = read_image_hash(face_path)
-            self.alignments.add_face_hashes(frame, hash_faces)

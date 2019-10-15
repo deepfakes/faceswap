@@ -6,10 +6,8 @@ import logging
 import os
 from datetime import datetime
 
-import cv2
-
-from lib.faces_detect import rotate_landmarks
 from lib.serializer import get_serializer, get_serializer_from_filename
+from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -26,7 +24,7 @@ class Alignments():
     def __init__(self, folder, filename="alignments"):
         logger.debug("Initializing %s: (folder: '%s', filename: '%s')",
                      self.__class__.__name__, folder, filename)
-        self.serializer = self.get_serializer(filename)
+        self.serializer = get_serializer("compressed")
         self.file = self.get_location(folder, filename)
 
         self.data = self.load()
@@ -69,38 +67,21 @@ class Alignments():
 
     # << INIT FUNCTIONS >> #
 
-    @staticmethod
-    def get_serializer(filename):
-        """ Set the serializer to be used for loading and
-            saving alignments
-
-            If a filename with a valid extension is passed in
-            this will be used as the serializer, otherwise the
-            compressed pickle will be used """
-        logger.debug("Getting serializer: (filename: '%s')", filename)
-        extension = os.path.splitext(filename)[1]
-        if extension in (".json", ".p", ".yaml", ".yml"):
-            logger.debug("Serializer set from filename extension: '%s'", extension)
-            retval = get_serializer_from_filename(filename)
-        else:
-            logger.debug("Returning default Pickle serializer")
-            retval = get_serializer("compressed")
-        logger.verbose("Using '%s' serializer for alignments", retval.file_extension)
-        return retval
-
     def get_location(self, folder, filename):
         """ Return the path to alignments file """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
         extension = os.path.splitext(filename)[1]
         if extension in (".json", ".p", ".yaml", ".yml"):
-            logger.debug("File extension set from filename: '%s'", extension)
-            location = os.path.join(str(folder), filename)
-        else:
-            location = os.path.join(str(folder),
-                                    "{}.{}".format(filename,
-                                                   self.serializer.file_extension))
+            # Reformat legacy alignments file
+            filename = self.update_file_format(folder, filename)
+            logger.debug("Updated legacy alignments. New filename: '%s'", filename)
+        elif not extension:
+            filename = "{}.{}".format(filename, self.serializer.file_extension)
             logger.debug("File extension set from serializer: '%s'",
                          self.serializer.file_extension)
+        elif extension != ".fsa":
+            raise FaceswapError("{} is not a valid alignments file".format(filename))
+        location = os.path.join(str(folder), filename)
         logger.verbose("Alignments filepath: '%s'", location)
         return location
 
@@ -111,8 +92,8 @@ class Alignments():
             Override for custom loading logic """
         logger.debug("Loading alignments")
         if not self.have_alignments_file:
-            raise ValueError("Error: Alignments file not found at "
-                             "{}".format(self.file))
+            raise FaceswapError("Error: Alignments file not found at "
+                                "{}".format(self.file))
 
         logger.info("Reading alignments from: '%s'", self.file)
         data = self.serializer.load(self.file)
@@ -262,95 +243,21 @@ class Alignments():
         if self.has_legacy_landmarksxy():
             logger.info("Updating legacy alignments")
             self.update_legacy_landmarksxy()
-    # < Rotation > #
-    # The old rotation method would rotate the image to find a face, then
-    # store the rotated landmarks along with a rotation value to tell the
-    # convert process that it had to rotate the frame to find the landmarks.
-    # This is problematic for numerous reasons. The process now rotates the
-    # landmarks to correctly correspond with the original frame. The below are
-    # functions to convert legacy alignments to the currently supported
-    # infrastructure.
-    # This can eventually be removed
 
-    def get_legacy_rotation(self):
-        """ Return a list of frames with legacy rotations
-            Looks for an 'r' value in the alignments file that
-            is not zero """
-        logger.debug("Getting alignments containing legacy rotations")
-        keys = list()
-        for key, val in self.data.items():
-            if any(alignment.get("r", None) for alignment in val):
-                keys.append(key)
-        logger.debug("Got alignments containing legacy rotations: %s", len(keys))
-        return keys
+    # <File Format> #
+    # Serializer is now a compressed pickle .fsa format. This used to be any number of serializers
+    def update_file_format(self, folder, filename):
+        """ Convert old style alignments format to new style format """
+        logger.info("Reformatting legacy alignments file...")
+        old_location = os.path.join(str(folder), filename)
+        new_location = "{}.{}".format(os.path.splitext(old_location)[0],
+                                      self.serializer.file_extension)
+        logger.info("Old location: '%s', New location: '%s'", old_location, new_location)
 
-    def rotate_existing_landmarks(self, frame_name, frame):
-        """ Backwards compatability fix. Rotates the landmarks to
-            their correct position and deletes r
-
-            NB: The original frame must be passed in otherwise
-            the transformation cannot be performed """
-        logger.trace("Rotating existing landmarks for frame: '%s'", frame_name)
-        dims = frame.shape[:2]
-        for face in self.get_faces_in_frame(frame_name):
-            angle = face.get("r", 0)
-            if not angle:
-                logger.trace("Landmarks do not require rotation: '%s'", frame_name)
-                return
-            logger.trace("Rotating landmarks: (frame: '%s', angle: %s)", frame_name, angle)
-            r_mat = self.get_original_rotation_matrix(dims, angle)
-            rotate_landmarks(face, r_mat)
-            del face["r"]
-        logger.trace("Rotatated existing landmarks for frame: '%s'", frame_name)
-
-    @staticmethod
-    def get_original_rotation_matrix(dimensions, angle):
-        """ Calculate original rotation matrix and invert """
-        logger.trace("Getting original rotation matrix: (dimensions: %s, angle: %s)",
-                     dimensions, angle)
-        height, width = dimensions
-        center = (width/2, height/2)
-        r_mat = cv2.getRotationMatrix2D(  # pylint: disable=no-member
-            center, -1.0 * angle, 1.)
-
-        abs_cos = abs(r_mat[0, 0])
-        abs_sin = abs(r_mat[0, 1])
-        rotated_width = int(height*abs_sin + width*abs_cos)
-        rotated_height = int(height*abs_cos + width*abs_sin)
-        r_mat[0, 2] += rotated_width/2 - center[0]
-        r_mat[1, 2] += rotated_height/2 - center[1]
-        logger.trace("Returning rotation matrix: %s", r_mat)
-        return r_mat
-
-    # <Face Hashes> #
-    # The old index based method of face matching is problematic.
-    # The SHA1 Hash of the extracted face is now stored in the alignments file.
-    # This has it's own issues, but they are far reduced from the index/filename method
-    # This can eventually be removed
-    def get_legacy_no_hashes(self):
-        """ Get alignments without face hashes """
-        logger.debug("Getting alignments without face hashes")
-        keys = list()
-        for key, val in self.data.items():
-            for alignment in val:
-                if "hash" not in alignment.keys():
-                    keys.append(key)
-                    break
-        logger.debug("Got alignments without face hashes: %s", len(keys))
-        return keys
-
-    def add_face_hashes(self, frame_name, hashes):
-        """ Backward compatability fix. Add face hash to alignments """
-        logger.trace("Adding face hash: (frame: '%s', hashes: %s)", frame_name, hashes)
-        faces = self.get_faces_in_frame(frame_name)
-        count_match = len(faces) - len(hashes)
-        if count_match != 0:
-            msg = "more" if count_match > 0 else "fewer"
-            logger.warning("There are %s %s face(s) in the alignments file than exist in the "
-                           "faces folder. Check your sources for frame '%s'.",
-                           abs(count_match), msg, frame_name)
-        for idx, i_hash in hashes.items():
-            faces[idx]["hash"] = i_hash
+        load_serializer = get_serializer_from_filename(old_location)
+        data = load_serializer.load(old_location)
+        self.serializer.save(new_location, data)
+        return os.path.basename(new_location)
 
     # <landmarks> #
     # Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance

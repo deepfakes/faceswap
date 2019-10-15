@@ -255,7 +255,7 @@ class _CompressedSerializer(Serializer):
     """ A compressed pickle serializer for Faceswap """
     def __init__(self):
         super().__init__()
-        self._file_extension = "fsc"
+        self._file_extension = "fsa"
         self._child = get_serializer("pickle")
 
     def _marshal(self, data):
@@ -334,7 +334,7 @@ def get_serializer_from_filename(filename):
         retval = _PickleSerializer()
     elif extension == ".npy":
         retval = _NPYSerializer()
-    elif extension == ".fsc":
+    elif extension == ".fsa":
         retval = _CompressedSerializer()
     elif extension in (".yaml", ".yml") and yaml is not None:
         retval = _YAMLSerializer()

@@ -4,7 +4,7 @@ import logging
 
 from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Draw, # noqa pylint: disable=unused-import
-                             Extract, Legacy, Manual, Merge, Reformat, Rename,
+                             Extract, Manual, Merge, Reformat, Rename,
                              RemoveAlignments, Sort, Spatial, UpdateHashes)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -29,21 +29,12 @@ class Alignments():
             logger.error("More than one alignments file required for merging")
             exit(0)
 
-        dest_format = self.get_dest_format()
         if len(self.args.alignments_file) == 1:
-            retval = AlignmentData(self.args.alignments_file[0], dest_format)
+            retval = AlignmentData(self.args.alignments_file[0])
         else:
-            retval = [AlignmentData(a_file, dest_format) for a_file in self.args.alignments_file]
+            retval = [AlignmentData(a_file) for a_file in self.args.alignments_file]
         logger.debug("Alignments: %s", retval)
         return retval
-
-    def get_dest_format(self):
-        """ Set the destination format for Alignments """
-        dest_format = None
-        if hasattr(self.args, 'alignment_format') and self.args.alignment_format:
-            dest_format = self.args.alignment_format
-        logger.debug(dest_format)
-        return dest_format
 
     def process(self):
         """ Main processing function of the Align tool """

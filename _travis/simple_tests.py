@@ -154,7 +154,7 @@ if __name__ == '__main__':
             "Rename sorted faces.",
             (
                 py_exe, "tools.py", "alignments", "-j", "rename",
-                "-a", pathjoin(vid_base, "test_alignments.json"),
+                "-a", pathjoin(vid_base, "test_alignments.fsa"),
                 "-fc", pathjoin(vid_base, "faces_sorted"),
             )
         )
@@ -163,7 +163,7 @@ if __name__ == '__main__':
             "Train lightweight model for 1 iteration with WTL.",
             train_args(
                 "lightweight", pathjoin(vid_base, "model"),
-                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.json"),
+                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.fsa"),
                 iterations=1, extra_args="-wl"
             )
         )
@@ -172,7 +172,7 @@ if __name__ == '__main__':
             "Train lightweight model for 5 iterations WITHOUT WTL.",
             train_args(
                 "lightweight", pathjoin(vid_base, "model"),
-                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.json")
+                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.fsa")
             )
         )
 

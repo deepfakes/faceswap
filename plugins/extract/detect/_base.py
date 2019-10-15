@@ -18,7 +18,7 @@ To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
 import cv2
 import numpy as np
 
-from lib.faces_detect import DetectedFace, rotate_landmarks
+from lib.faces_detect import DetectedFace
 from plugins.extract._base import Extractor, logger
 
 
@@ -164,7 +164,7 @@ class Detector(Extractor):
                        for faces in batch["prediction"]]
         # Rotations
         if any(m.any() for m in batch["rotmat"]) and any(batch_faces):
-            batch_faces = [[self._rotate_rect(face, rotmat) if rotmat.any() else face
+            batch_faces = [[self._rotate_face(face, rotmat) if rotmat.any() else face
                             for face in faces]
                            for faces, rotmat in zip(batch_faces, batch["rotmat"])]
 
@@ -363,11 +363,47 @@ class Detector(Extractor):
         batch["rotmat"] = retval["rotmat"]
 
     @staticmethod
-    def _rotate_rect(bounding_box, rotation_matrix):
-        """ Rotate a bounding box dict based on the rotation_matrix"""
-        logger.trace("Rotating bounding box")
-        bounding_box = rotate_landmarks(bounding_box, rotation_matrix)
-        return bounding_box
+    def _rotate_face(face, rotation_matrix):
+        """ Rotates the detection bounding box around the given rotation matrix.
+
+        Parameters
+        ----------
+        face: :class:`DetectedFace`
+            A :class:`DetectedFace` containing the `x`, `w`, `y`, `h` detection bounding box
+            points.
+        rotation_matrix: numpy.ndarray
+            The rotation matrix to rotate the given object by.
+
+        Returns
+        -------
+        :class:`DetectedFace`
+            The same class with the detection bounding box points rotated by the given matrix.
+        """
+        logger.trace("Rotating face: (face: %s, rotation_matrix: %s)", face, rotation_matrix)
+        bounding_box = [[face.left, face.top],
+                        [face.right, face.top],
+                        [face.right, face.bottom],
+                        [face.left, face.bottom]]
+        rotation_matrix = cv2.invertAffineTransform(rotation_matrix)
+
+        points = np.array(bounding_box, "int32")
+        points = np.expand_dims(points, axis=0)
+        transformed = cv2.transform(points, rotation_matrix).astype("int32")
+        rotated = transformed.squeeze()
+
+        # Bounding box should follow x, y planes, so get min/max for non-90 degree rotations
+        pt_x = min([pnt[0] for pnt in rotated])
+        pt_y = min([pnt[1] for pnt in rotated])
+        pt_x1 = max([pnt[0] for pnt in rotated])
+        pt_y1 = max([pnt[1] for pnt in rotated])
+        width = pt_x1 - pt_x
+        height = pt_y1 - pt_y
+
+        face.x = int(pt_x)
+        face.y = int(pt_y)
+        face.w = int(width)
+        face.h = int(height)
+        return face
 
     def _rotate_image_by_angle(self, image, angle):
         """ Rotate an image by a given angle.
