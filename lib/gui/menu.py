@@ -13,7 +13,7 @@ from importlib import import_module
 from subprocess import Popen, PIPE, STDOUT
 
 from lib.multithreading import MultiThread
-from lib.Serializer import JSONSerializer
+from lib.serializer import get_serializer
 
 import update_deps
 from .utils import get_config
@@ -127,13 +127,12 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     def build_recent_menu(self):
         """ Load recent files into menu bar """
         logger.debug("Building Recent Files menu")
-        serializer = JSONSerializer
+        serializer = get_serializer("json")
         menu_file = os.path.join(self.config.pathcache, ".recent.json")
         if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self.clear_recent_files(serializer, menu_file)
-        with open(menu_file, "rb") as inp:
-            recent_files = serializer.unmarshal(inp.read().decode("utf-8"))
-            logger.debug("Loaded recent files: %s", recent_files)
+        recent_files = serializer.load(menu_file)
+        logger.debug("Loaded recent files: %s", recent_files)
         for recent_item in recent_files:
             filename, command = recent_item
             logger.debug("processing: ('%s', %s)", filename, command)
@@ -153,9 +152,7 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     def clear_recent_files(serializer, menu_file):
         """ Creates or clears recent file list """
         logger.debug("clearing recent files list: '%s'", menu_file)
-        recent_files = serializer.marshal(list())
-        with open(menu_file, "wb") as out:
-            out.write(recent_files.encode("utf-8"))
+        serializer.save(menu_file, list())
 
     def refresh_recent_menu(self):
         """ Refresh recent menu on save/load of files """
@@ -222,7 +219,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         try:
             from lib.sysinfo import sysinfo
             info = sysinfo
-        except Exception as err:
+        except Exception as err:  # pylint:disable=broad-except
             info = "Error obtaining system info: {}".format(str(err))
         self.clear_console()
         logger.debug("Obtained system information: %s", info)
