@@ -184,6 +184,10 @@ class PlaidMLStats():
         if _LOGGER:
             _LOGGER.debug("Obtaining largest %s device", category)
         indices = getattr(self, "{}_indices".format(category))
+        if not indices:
+            _LOGGER.error("Failed to automatically detect your GPU.")
+            _LOGGER.error("Please run `plaidml-setup` to set up your GPU.")
+            exit()
         max_vram = max([self.vram[idx] for idx in indices])
         if _LOGGER:
             _LOGGER.debug("Max VRAM: %s", max_vram)

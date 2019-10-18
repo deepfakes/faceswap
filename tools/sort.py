@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.cli import FullHelpArgumentParser
-from lib import Serializer
+from lib.serializer import get_serializer_from_filename
 from lib.faces_detect import DetectedFace
 from lib.image import read_image
 from lib.queue_manager import queue_manager
@@ -69,10 +69,7 @@ class Sort():
                                                        'sort_log.json')
 
             # Set serializer based on logfile extension
-            serializer_ext = os.path.splitext(
-                self.args.log_file_path)[-1]
-            self.serializer = Serializer.get_serializer_from_ext(
-                serializer_ext)
+            self.serializer = get_serializer_from_filename(self.args.log_file_path)
 
         # Prepare sort, group and final process method names
         _sort = "sort_" + self.args.sort_method.lower()
@@ -532,8 +529,7 @@ class Sort():
     def write_to_log(self, changes):
         """ Write the changes to log file """
         logger.info("Writing sort log to: '%s'", self.args.log_file_path)
-        with open(self.args.log_file_path, 'w') as lfile:
-            lfile.write(self.serializer.marshal(changes))
+        self.serializer.save(self.args.log_file_path, changes)
 
     def reload_images(self, group_method, img_list):
         """

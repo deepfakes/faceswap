@@ -327,7 +327,20 @@ class Extractor():
         self.queue_size = 1
         self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
         self._compile_threads()
-        self.init_model()
+        try:
+            self.init_model()
+        except tf_errors.UnknownError as err:
+            if "failed to get convolution algorithm" in str(err).lower():
+                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
+                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
+                       "combinations. You should enable `allow_growth` to attempt to resolve this "
+                       "issue:"
+                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
+                       "`allow_growth` option."
+                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
+                       "option to `True`.")
+                raise FaceswapError(msg) from err
+            raise err
         logger.info("Initialized %s %s with batchsize of %s", self.name, p_type, self.batchsize)
 
     def _add_queues(self, in_queue, out_queue, queues):
@@ -391,15 +404,17 @@ class Extractor():
             try:
                 batch = function(batch)
             except tf_errors.UnknownError as err:
-                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
-                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
-                       "combinations. You should enable `allow_growth` to attempt to resolve this "
-                       "issue:"
-                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
-                       "`allow_growth` option."
-                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
-                       "option to `True`.")
-                raise FaceswapError(msg) from err
+                if "failed to get convolution algorithm" in str(err).lower():
+                    msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
+                           "failure to launch cuDNN which can occur for some GPU/Tensorflow "
+                           "combinations. You should enable `allow_growth` to attempt to resolve "
+                           "this issue:"
+                           "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
+                           "`allow_growth` option."
+                           "\nCLI: Go to `faceswap/config/extract.ini` and change the "
+                           "`allow_growth option to `True`.")
+                    raise FaceswapError(msg) from err
+                raise err
             if func_name == "process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):

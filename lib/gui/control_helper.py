@@ -8,6 +8,8 @@ from tkinter import ttk
 from itertools import zip_longest
 from functools import partial
 
+from _tkinter import Tcl_Obj
+
 from .tooltip import Tooltip
 from .utils import ContextMenu, FileHandler, get_config, get_images
 
@@ -423,7 +425,7 @@ class AutoFillContainer():
 
     @property
     def items(self):
-        """ Returns the number if items held in this containter """
+        """ Returns the number of items held in this containter """
         return self._items
 
     @property
@@ -462,6 +464,9 @@ class AutoFillContainer():
             self.compile_widget_config()
         self.destroy_children()
         self.repack_columns()
+        # Reset counters
+        self._items = 0
+        self._idx = 0
         self.pack_widget_clones(self._widget_config)
 
     def validate(self, width):
@@ -524,6 +529,7 @@ class AutoFillContainer():
             val = widget.cget(key)
             if key in ("anchor", "justify") and val == "":
                 continue
+            val = str(val) if isinstance(val, Tcl_Obj) else val
             # Return correct command from master command dict
             val = _RECREATE_OBJECTS["commands"][val] if key == "command" and val != "" else val
             new_config[key] = val
@@ -544,9 +550,12 @@ class AutoFillContainer():
     def repack_columns(self):
         """ Repack or unpack columns based on display columns """
         for idx, subframe in enumerate(self.subframes):
+            logger.trace("Processing subframe: %s", subframe)
             if idx < self.columns and not subframe.winfo_ismapped():
+                logger.trace("Packing subframe: %s", subframe)
                 subframe.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N, expand=True, fill=tk.X)
             elif idx >= self.columns and subframe.winfo_ismapped():
+                logger.trace("Forgetting subframe: %s", subframe)
                 subframe.pack_forget()
 
     def pack_widget_clones(self, widget_dicts, old_children=None, new_children=None):
@@ -558,6 +567,7 @@ class AutoFillContainer():
             new_children = [] if new_children is None else new_children
             if widget_dict.get("parent", None) is not None:
                 parent = new_children[old_children.index(widget_dict["parent"])]
+                logger.trace("old parent: '%s', new_parent: '%s'", widget_dict["parent"], parent)
             else:
                 # Get the next subframe if this doesn't have a logged parent
                 parent = self.subframe
@@ -599,8 +609,8 @@ class ControlBuilder():
     blank_nones: bool
         Sets selected values to an empty string rather than None if this is true.
     """
-    def __init__(self, parent, option, option_columns, label_width,  # pylint: disable=too-many-arguments
-                 checkbuttons_frame, blank_nones):
+    def __init__(self, parent, option, option_columns,  # pylint: disable=too-many-arguments
+                 label_width, checkbuttons_frame, blank_nones):
         logger.debug("Initializing %s: (parent: %s, option: %s, option_columns: %s, "
                      "label_width: %s, checkbuttons_frame: %s, blank_nones: %s)",
                      self.__class__.__name__, parent, option, option_columns, label_width,
