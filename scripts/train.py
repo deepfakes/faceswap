@@ -38,7 +38,7 @@ class Train():
         self.trainer_name = self.args.trainer
 
         # log parameters
-        if not self.args.no_wandb_logs:
+        if self.args.wandb_logs:
             wandb_config = {x: y for x, y in vars(arguments).items()
                             if isinstance(y, (int, float, bool, type(None)))}
             wandb.init(anonymous='allow', project="faceswap", config=wandb_config)
@@ -179,7 +179,7 @@ class Train():
             configfile=configfile,
             snapshot_interval=self.args.snapshot_interval,
             no_logs=self.args.no_logs,
-            no_wandb_logs=self.args.no_wandb_logs,
+            wandb_logs=self.args.wandb_logs,
             warp_to_landmarks=self.args.warp_to_landmarks,
             augment_color=augment_color,
             no_flip=self.args.no_flip,

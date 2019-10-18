@@ -14,7 +14,7 @@
         mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
                             Set to None for not used
         no_logs:            Disable tensorboard logging
-        no_wandb_logs:      Disable Weights & Biases logging
+        wandb_logs:         Enable Weights & Biases logging
         snapshot_interval:  Interval for saving model snapshots
         warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
         augment_color:      Perform random shifting of L*a*b* colors
@@ -165,7 +165,7 @@ class TrainerBase():
 
     def log_wandb(self, loss, samples):
         """ Log losses and samples on Weights & Biases """
-        if self.model.training_opts["no_wandb_logs"]:
+        if not self.model.training_opts["wandb_logs"]:
             return None
         if samples is not None:
             wandb.log({"samples": wandb.Image(samples[:, :, ::-1])}, commit=False)
