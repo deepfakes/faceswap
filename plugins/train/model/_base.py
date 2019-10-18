@@ -55,15 +55,16 @@ class ModelBase():
                  optimizer_savings=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
-                     "snapshot_interval: %s, no_logs: %s, no_wandb_logs: %s, warp_to_landmarks: %s, augment_color: "
-                     "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
-                     "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
-                     "pingpong: %s, memory_saving_gradients: %s, optimizer_savings: %s, "
-                     "predict: %s)",
+                     "snapshot_interval: %s, no_logs: %s, no_wandb_logs: %s, warp_to_landmarks: "
+                     "%s, augment_color: %s, no_flip: %s, training_image_size, %s, "
+                     "alignments_paths: %s, preview_scale: %s, input_shape: %s, encoder_dim: %s, "
+                     "trainer: %s, pingpong: %s, memory_saving_gradients: %s, optimizer_savings: "
+                     "%s, predict: %s)",
                      self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
-                     no_logs, no_wandb_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
-                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
-                     memory_saving_gradients, optimizer_savings, predict)
+                     no_logs, no_wandb_logs, warp_to_landmarks, augment_color, no_flip,
+                     training_image_size, alignments_paths, preview_scale, input_shape,
+                     encoder_dim, trainer, pingpong, memory_saving_gradients, optimizer_savings,
+                     predict)
 
         self.predict = predict
         self.model_dir = model_dir
@@ -870,7 +871,8 @@ class State():
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
                      "config_changeable_items: '%s', no_logs: %s, no_wandb_logs %s, pingpong: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
-                     config_changeable_items, no_logs, no_wandb_logs, pingpong, training_image_size)
+                     config_changeable_items, no_logs, no_wandb_logs, pingpong,
+                     training_image_size)
         self.serializer = Serializer.get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.ext)
         self.filename = str(model_dir / filename)

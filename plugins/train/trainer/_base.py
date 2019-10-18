@@ -168,8 +168,9 @@ class TrainerBase():
         if self.model.training_opts["no_wandb_logs"]:
             return None
         if samples is not None:
-                wandb.log({"samples": wandb.Image(samples[:,:,::-1])}, commit=False)
-        wandb.log({'Loss {}'.format(side.capitalize()): loss[side][0] for side in sorted(loss.keys())})
+            wandb.log({"samples": wandb.Image(samples[:, :, ::-1])}, commit=False)
+        wandb.log({'Loss {}'.format(side.capitalize()): loss[side][0]
+                  for side in sorted(loss.keys())})
 
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
@@ -207,11 +208,11 @@ class TrainerBase():
                     self.pingpong.loss[key] = val
                 self.print_loss(self.pingpong.loss)
 
-            samples = self.samples.show_sample()            
+            samples = self.samples.show_sample()
             self.log_wandb(loss, samples)
-            
-            if do_preview:                
-                if samples is not None:                    
+
+            if do_preview:
+                if samples is not None:
                     viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
             if do_timelapse:
