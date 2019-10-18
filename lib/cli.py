@@ -14,6 +14,7 @@ import textwrap
 from importlib import import_module
 
 from lib.logger import crash_log, log_setup
+from lib.model.masks import get_available_masks, get_default_mask
 from lib.utils import FaceswapError, get_backend, safe_shutdown
 from plugins.plugin_loader import PluginLoader
 
@@ -399,38 +400,39 @@ class FaceSwapArgs():
         """ Arguments that are used in ALL parts of Faceswap
             DO NOT override this """
         global_args = list()
-        global_args.append({"opts": ("-C", "--configfile"),
-                            "action": FileFullPaths,
-                            "filetypes": "ini",
-                            "type": str,
-                            "group": "Global Options",
-                            "help": "Optionally overide the saved config with the path to a "
-                                    "custom config file."})
-        global_args.append({"opts": ("-L", "--loglevel"),
-                            "type": str.upper,
-                            "dest": "loglevel",
-                            "default": "INFO",
-                            "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
-                            "group": "Global Options",
-                            "help": "Log level. Stick with INFO or VERBOSE unless you need to "
-                                    "file an error report. Be careful with TRACE as it will "
-                                    "generate a lot of data"})
-        global_args.append({"opts": ("-LF", "--logfile"),
-                            "action": SaveFileFullPaths,
-                            "filetypes": 'log',
-                            "type": str,
-                            "dest": "logfile",
-                            "group": "Global Options",
-                            "help": "Path to store the logfile. Leave blank to store in the "
-                                    "faceswap folder",
-                            "default": None})
+        global_args.append({
+            "opts": ("-C", "--configfile"),
+            "action": FileFullPaths,
+            "filetypes": "ini",
+            "type": str,
+            "group": "Global Options",
+            "help": "Optionally overide the saved config with the path to a custom config file."})
+        global_args.append({
+            "opts": ("-L", "--loglevel"),
+            "type": str.upper,
+            "dest": "loglevel",
+            "default": "INFO",
+            "choices": ("INFO", "VERBOSE", "DEBUG", "TRACE"),
+            "group": "Global Options",
+            "help": "Log level. Stick with INFO or VERBOSE unless you need to file an error "
+                    "report. Be careful with TRACE as it will generate a lot of data"})
+        global_args.append({
+            "opts": ("-LF", "--logfile"),
+            "action": SaveFileFullPaths,
+            "filetypes": 'log',
+            "type": str,
+            "dest": "logfile",
+            "group": "Global Options",
+            "help": "Path to store the logfile. Leave blank to store in the faceswap folder",
+            "default": None})
         # This is a hidden argument to indicate that the GUI is being used,
         # so the preview window should be redirected Accordingly
-        global_args.append({"opts": ("-gui", "--gui"),
-                            "action": "store_true",
-                            "dest": "redirect_gui",
-                            "default": False,
-                            "help": argparse.SUPPRESS})
+        global_args.append({
+            "opts": ("-gui", "--gui"),
+            "action": "store_true",
+            "dest": "redirect_gui",
+            "default": False,
+            "help": argparse.SUPPRESS})
         return global_args
 
     @staticmethod
@@ -482,31 +484,32 @@ class ExtractConvertArgs(FaceSwapArgs):
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
         argument_list = list()
-        argument_list.append({"opts": ("-i", "--input-dir"),
-                              "action": DirOrFileFullPaths,
-                              "filetypes": "video",
-                              "dest": "input_dir",
-                              "required": True,
-                              "group": "Data",
-                              "help": "Input directory or video. Either a directory containing "
-                                      "the image files you wish to process or path to a video "
-                                      "file. NB: This should be the source video/frames NOT the "
-                                      "source faces."})
-        argument_list.append({"opts": ("-o", "--output-dir"),
-                              "action": DirFullPaths,
-                              "dest": "output_dir",
-                              "required": True,
-                              "group": "Data",
-                              "help": "Output directory. This is where the converted files will "
-                                      "be saved."})
-        argument_list.append({"opts": ("-al", "--alignments"),
-                              "action": FileFullPaths,
-                              "filetypes": "alignments",
-                              "type": str,
-                              "dest": "alignments_path",
-                              "group": "Data",
-                              "help": "Optional path to an alignments file. Leave blank if the "
-                                      "alignments file is at the default location."})
+        argument_list.append({
+            "opts": ("-i", "--input-dir"),
+            "action": DirOrFileFullPaths,
+            "filetypes": "video",
+            "dest": "input_dir",
+            "required": True,
+            "group": "Data",
+            "help": "Input directory or video. Either a directory containing the image files you "
+                    "wish to process or path to a video file. NB: This should be the source video/"
+                    "frames NOT the source faces."})
+        argument_list.append({
+            "opts": ("-o", "--output-dir"),
+            "action": DirFullPaths,
+            "dest": "output_dir",
+            "required": True,
+            "group": "Data",
+            "help": "Output directory. This is where the converted files will be saved."})
+        argument_list.append({
+            "opts": ("-al", "--alignments"),
+            "action": FileFullPaths,
+            "filetypes": "alignments",
+            "type": str,
+            "dest": "alignments_path",
+            "group": "Data",
+            "help": "Optional path to an alignments file. Leave blank if the alignments file is "
+                    "at the default location."})
         return argument_list
 
 
@@ -532,219 +535,220 @@ class ExtractArgs(ExtractConvertArgs):
             default_aligner = "fan"
 
         argument_list = []
-        argument_list.append({"opts": ("-D", "--detector"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "choices":  PluginLoader.get_available_extractors("detect"),
-                              "default": default_detector,
-                              "group": "Plugins",
-                              "help": "R|Detector to use. Some of these have configurable "
-                                      "settings in '/config/extract.ini' or 'Settings > Configure "
-                                      "Extract 'Plugins':"
-                                      "\nL|cv2-dnn: A CPU only extractor which is the least "
-                                      "reliable and least resource intensive. Use this if not "
-                                      "using a GPU and time is important."
-                                      "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses "
-                                      "fewer resources than other GPU detectors but can often "
-                                      "return more false positives."
-                                      "\nL|s3fd: Best detector. Fast on GPU, slow on CPU. Can "
-                                      "detect more faces and fewer false positives than other "
-                                      "GPU detectors, but is a lot more resource intensive."})
-        argument_list.append({"opts": ("-A", "--aligner"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_extractors("align"),
-                              "default": default_aligner,
-                              "group": "Plugins",
-                              "help": "R|Aligner to use."
-                                      "\nL|cv2-dnn: A CPU only landmark detector. Faster, less "
-                                      "resource intensive, but less accurate. Only use this if "
-                                      "not using a GPU and time is important."
-                                      "\nL|fan: Best aligner. Fast on GPU, slow on CPU."})
-        argument_list.append({"opts": ("-M", "--masker"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_extractors("mask"),
-                              "default": "components",
-                              "group": "Plugins",
-                              "help": "R|Masker to use."
-                                      "\nL|none: An array of all ones is created to provide a 4th "
-                                      "channel that will not mask any portion of the image."
-                                      "\nL|components: Mask designed to provide facial "
-                                      "segmentation based on the positioning of landmark "
-                                      "locations. A convex hull is constructed around the "
-                                      "exterior of the landmarks to create a mask."
-                                      "\nL|extended: Mask designed to provide facial segmentation "
-                                      "based on the positioning of landmark locations. A convex "
-                                      "hull is constructed around the exterior of the landmarks "
-                                      "and the mask is extended upwards onto the forehead."
-                                      "\nL|vgg-clear: Mask designed to provide smart segmentation "
-                                      "of mostly frontal faces clear of obstructions.  Profile "
-                                      "faces and obstructions may result in sub-par performance."
-                                      "\nL|vgg-obstructed: Mask designed to provide smart "
-                                      "segmentation of mostly frontal faces. The mask model has "
-                                      "been specifically trained to recognize some facial "
-                                      "obstructions (hands and eyeglasses). Profile faces may "
-                                      "result in sub-par performance."
-                                      "\nL|unet-dfl: Mask designed to provide smart segmentation "
-                                      "of mostly frontal faces. The mask model has been trained "
-                                      "by community members and will need testing for further "
-                                      "description. Profile faces may result in sub-par "
-                                      "performance."})
-        argument_list.append({"opts": ("-nm", "--normalization"),
-                              "action": Radio,
-                              "type": str.lower,
-                              "dest": "normalization",
-                              "choices": ["none", "clahe", "hist", "mean"],
-                              "default": "none",
-                              "group": "plugins",
-                              "help": "R|Performing normalization can help the aligner better "
-                                      "align faces with difficult lighting conditions at an "
-                                      "extraction speed cost. Different methods will yield "
-                                      "different results on different sets. NB: This does not "
-                                      "impact the output face, just the input to the aligner."
-                                      "\nL|none: Don't perform normalization on the face."
-                                      "\nL|clahe: Perform Contrast Limited Adaptive Histogram "
-                                      "Equalization on the face."
-                                      "\nL|hist: Equalize the histograms on the RGB channels."
-                                      "\nL|mean: Normalize the face colors to the mean."})
-        argument_list.append({"opts": ("-r", "--rotate-images"),
-                              "type": str,
-                              "dest": "rotate_images",
-                              "default": None,
-                              "group": "plugins",
-                              "help": "If a face isn't found, rotate the images to try to find a "
-                                      "face. Can find more faces at the cost of extraction speed. "
-                                      "Pass in a single number to use increments of that size up "
-                                      "to 360, or pass in a list of numbers to enumerate exactly "
-                                      "what angles to check"})
-        argument_list.append({"opts": ("-min", "--min-size"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "min_size",
-                              "min_max": (0, 1080),
-                              "default": 0,
-                              "rounding": 20,
-                              "group": "Face Processing",
-                              "help": "Filters out faces detected below this size. Length, in "
-                                      "pixels across the diagonal of the bounding box. Set to 0 "
-                                      "for off"})
-        argument_list.append({"opts": ("-n", "--nfilter"),
-                              "action": FilesFullPaths,
-                              "filetypes": "image",
-                              "dest": "nfilter",
-                              "nargs": "+",
-                              "default": None,
-                              "group": "Face Processing",
-                              "help": "Optionally filter out people who you do not wish to "
-                                      "process by passing in an image of that person. Should be a "
-                                      "front portrait with a single person in the image. Multiple "
-                                      "images can be added space separated. NB: Using face filter "
-                                      "will significantly decrease extraction speed and its "
-                                      "accuracy cannot be guaranteed."})
-        argument_list.append({"opts": ("-f", "--filter"),
-                              "action": FilesFullPaths,
-                              "filetypes": "image",
-                              "dest": "filter",
-                              "nargs": "+",
-                              "default": None,
-                              "group": "Face Processing",
-                              "help": "Optionally select people you wish to process by passing in "
-                                      "an image of that person. Should be a front portrait with a "
-                                      "single person in the image. Multiple images can be added "
-                                      "space separated. NB: Using face filter will significantly "
-                                      "decrease extraction speed and its accuracy cannot be "
-                                      "guaranteed."})
-        argument_list.append({"opts": ("-l", "--ref_threshold"),
-                              "action": Slider,
-                              "min_max": (0.01, 0.99),
-                              "rounding": 2,
-                              "type": float,
-                              "dest": "ref_threshold",
-                              "default": 0.4,
-                              "group": "Face Processing",
-                              "help": "For use with the optional nfilter/filter files. Threshold "
-                                      "for positive face recognition. Lower values are stricter. "
-                                      "NB: Using face filter will significantly decrease "
-                                      "extraction speed and its accuracy cannot be "
-                                      "guaranteed."})
-        argument_list.append({"opts": ("-bt", "--blur-threshold"),
-                              "type": float,
-                              "action": Slider,
-                              "min_max": (0.0, 100.0),
-                              "rounding": 1,
-                              "dest": "blur_thresh",
-                              "default": 0.0,
-                              "group": "Face Processing",
-                              "help": "Automatically discard images blurrier than the specified "
-                                      "threshold. Discarded images are moved into a \"blurry\" "
-                                      "sub-folder. Lower values allow more blur. Set to 0.0 to "
-                                      "turn off."})
-        argument_list.append({"opts": ("-een", "--extract-every-n"),
-                              "type": int,
-                              "action": Slider,
-                              "dest": "extract_every_n",
-                              "min_max": (1, 100),
-                              "default": 1,
-                              "rounding": 1,
-                              "group": "output",
-                              "help": "Extract every 'nth' frame. This option will skip frames "
-                                      "when extracting faces. For example a value of 1 will "
-                                      "extract faces from every frame, a value of 10 will extract "
-                                      "faces from every 10th frame."})
-        argument_list.append({"opts": ("-sz", "--size"),
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (128, 512),
-                              "default": 256,
-                              "rounding": 64,
-                              "group": "output",
-                              "help": "The output size of extracted faces. Make sure that the "
-                                      "model you intend to train supports your required size. "
-                                      "This will only need to be changed for hi-res models."})
-        argument_list.append({"opts": ("-si", "--save-interval"),
-                              "dest": "save_interval",
-                              "type": int,
-                              "action": Slider,
-                              "min_max": (0, 1000),
-                              "rounding": 10,
-                              "default": 0,
-                              "group": "output",
-                              "help": "Automatically save the alignments file after a set amount "
-                                      "of frames. By default the alignments file is only saved at "
-                                      "the end of the extraction process. NB: If extracting in 2 "
-                                      "passes then the alignments file will only start to be "
-                                      "saved out during the second pass. WARNING: Don't interrupt "
-                                      "the script when writing the file because it might get "
-                                      "corrupted. Set to 0 to turn off"})
-        argument_list.append({"opts": ("-dl", "--debug-landmarks"),
-                              "action": "store_true",
-                              "dest": "debug_landmarks",
-                              "group": "output",
-                              "default": False,
-                              "help": "Draw landmarks on the ouput faces for debugging purposes."})
-        argument_list.append({"opts": ("-sp", "--singleprocess"),
-                              "action": "store_true",
-                              "default": False,
-                              "backend": "nvidia",
-                              "group": "settings",
-                              "help": "Don't run extraction in parallel. Will run detection first "
-                                      "then alignment (2 passes). Useful if VRAM is at a "
-                                      "premium."})
-        argument_list.append({"opts": ("-s", "--skip-existing"),
-                              "action": "store_true",
-                              "dest": "skip_existing",
-                              "group": "settings",
-                              "default": False,
-                              "help": "Skips frames that have already been extracted and exist in "
-                                      "the alignments file"})
-        argument_list.append({"opts": ("-sf", "--skip-existing-faces"),
-                              "action": "store_true",
-                              "dest": "skip_faces",
-                              "group": "settings",
-                              "default": False,
-                              "help": "Skip frames that already have detected faces in the "
-                                      "alignments file"})
+        argument_list.append({
+            "opts": ("-D", "--detector"),
+            "action": Radio,
+            "type": str.lower,
+            "choices":  PluginLoader.get_available_extractors("detect"),
+            "default": default_detector,
+            "group": "Plugins",
+            "help": "R|Detector to use. Some of these have configurable settings in "
+                    "'/config/extract.ini' or 'Settings > Configure Extract 'Plugins':"
+                    "\nL|cv2-dnn: A CPU only extractor which is the least reliable and least "
+                    "resource intensive. Use this if not using a GPU and time is important."
+                    "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources "
+                    "than other GPU detectors but can often return more false positives."
+                    "\nL|s3fd: Best detector. Fast on GPU, slow on CPU. Can detect more faces and "
+                    "fewer false positives than other GPU detectors, but is a lot more resource "
+                    "intensive."})
+        argument_list.append({
+            "opts": ("-A", "--aligner"),
+            "action": Radio,
+            "type": str.lower,
+            "choices": PluginLoader.get_available_extractors("align"),
+            "default": default_aligner,
+            "group": "Plugins",
+            "help": "R|Aligner to use."
+                    "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
+                    "but less accurate. Only use this if not using a GPU and time is important."
+                    "\nL|fan: Best aligner. Fast on GPU, slow on CPU."})
+        argument_list.append({
+            "opts": ("-M", "--masker"),
+            "action": Radio,
+            "type": str.lower,
+            "choices": PluginLoader.get_available_extractors("mask"),
+            "default": "extended",
+            "group": "Plugins",
+            "help": "R|Masker to use. NB: Masker is not currently used by the rest of the process "
+                    "but this will store a mask in the alignments file for use when it has been "
+                    "implemented."
+                    "\nL|none: An array of all ones is created to provide a 4th channel that will "
+                    "not mask any portion of the image."
+                    "\nL|components: Mask designed to provide facial segmentation based on the "
+                    "positioning of landmark locations. A convex hull is constructed around the "
+                    "exterior of the landmarks to create a mask."
+                    "\nL|extended: Mask designed to provide facial segmentation based on the "
+                    "positioning of landmark locations. A convex hull is constructed around the "
+                    "exterior of the landmarks and the mask is extended upwards onto the forehead."
+                    "\nL|vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
+                    "faces clear of obstructions. Profile faces and obstructions may result in "
+                    "sub-par performance."
+                    "\nL|vgg-obstructed: Mask designed to provide smart segmentation of mostly "
+                    "frontal faces. The mask model has been specifically trained to recognize "
+                    "some facial obstructions (hands and eyeglasses). Profile faces may result in "
+                    "sub-par performance."
+                    "\nL|unet-dfl: Mask designed to provide smart segmentation of mostly frontal "
+                    "faces. The mask model has been trained by community members and will need "
+                    "testing for further description. Profile faces may result in sub-par "
+                    "performance."})
+        argument_list.append({
+            "opts": ("-nm", "--normalization"),
+            "action": Radio,
+            "type": str.lower,
+            "dest": "normalization",
+            "choices": ["none", "clahe", "hist", "mean"],
+            "default": "none",
+            "group": "plugins",
+            "help": "R|Performing normalization can help the aligner better align faces with "
+                    "difficult lighting conditions at an extraction speed cost. Different methods "
+                    "will yield different results on different sets. NB: This does not impact the "
+                    "output face, just the input to the aligner."
+                    "\nL|none: Don't perform normalization on the face."
+                    "\nL|clahe: Perform Contrast Limited Adaptive Histogram Equalization on the "
+                    "face."
+                    "\nL|hist: Equalize the histograms on the RGB channels."
+                    "\nL|mean: Normalize the face colors to the mean."})
+        argument_list.append({
+            "opts": ("-r", "--rotate-images"),
+            "type": str,
+            "dest": "rotate_images",
+            "default": None,
+            "group": "plugins",
+            "help": "If a face isn't found, rotate the images to try to find a face. Can find "
+                    "more faces at the cost of extraction speed. Pass in a single number to use "
+                    "increments of that size up to 360, or pass in a list of numbers to enumerate "
+                    "exactly what angles to check."})
+        argument_list.append({
+            "opts": ("-min", "--min-size"),
+            "type": int,
+            "action": Slider,
+            "dest": "min_size",
+            "min_max": (0, 1080),
+            "default": 0,
+            "rounding": 20,
+            "group": "Face Processing",
+            "help": "Filters out faces detected below this size. Length, in pixels across the "
+                    "diagonal of the bounding box. Set to 0 for off"})
+        argument_list.append({
+            "opts": ("-n", "--nfilter"),
+            "action": FilesFullPaths,
+            "filetypes": "image",
+            "dest": "nfilter",
+            "nargs": "+",
+            "default": None,
+            "group": "Face Processing",
+            "help": "Optionally filter out people who you do not wish to process by passing in an "
+                    "image of that person. Should be a front portrait with a single person in the "
+                    "image. Multiple images can be added space separated. NB: Using face filter "
+                    "will significantly decrease extraction speed and its accuracy cannot be "
+                    "guaranteed."})
+        argument_list.append({
+            "opts": ("-f", "--filter"),
+            "action": FilesFullPaths,
+            "filetypes": "image",
+            "dest": "filter",
+            "nargs": "+",
+            "default": None,
+            "group": "Face Processing",
+            "help": "Optionally select people you wish to process by passing in an image of that "
+                    "person. Should be a front portrait with a single person in the image. "
+                    "Multiple images can be added space separated. NB: Using face filter will "
+                    "significantly decrease extraction speed and its accuracy cannot be "
+                    "guaranteed."})
+        argument_list.append({
+            "opts": ("-l", "--ref_threshold"),
+            "action": Slider,
+            "min_max": (0.01, 0.99),
+            "rounding": 2,
+            "type": float,
+            "dest": "ref_threshold",
+            "default": 0.4,
+            "group": "Face Processing",
+            "help": "For use with the optional nfilter/filter files. Threshold for positive face "
+                    "recognition. Lower values are stricter. NB: Using face filter will "
+                    "significantly decrease extraction speed and its accuracy cannot be "
+                    "guaranteed."})
+        argument_list.append({
+            "opts": ("-bt", "--blur-threshold"),
+            "type": float,
+            "action": Slider,
+            "min_max": (0.0, 100.0),
+            "rounding": 1,
+            "dest": "blur_thresh",
+            "default": 0.0,
+            "group": "Face Processing",
+            "help": "Automatically discard images blurrier than the specified threshold. "
+                    "Discarded images are moved into a \"blurry\" sub-folder. Lower values allow "
+                    "more blur. Set to 0.0 to turn off."})
+        argument_list.append({
+            "opts": ("-een", "--extract-every-n"),
+            "type": int,
+            "action": Slider,
+            "dest": "extract_every_n",
+            "min_max": (1, 100),
+            "default": 1,
+            "rounding": 1,
+            "group": "output",
+            "help": "Extract every 'nth' frame. This option will skip frames when extracting "
+                    "faces. For example a value of 1 will extract faces from every frame, a value "
+                    "of 10 will extract faces from every 10th frame."})
+        argument_list.append({
+            "opts": ("-sz", "--size"),
+            "type": int,
+            "action": Slider,
+            "min_max": (128, 512),
+            "default": 256,
+            "rounding": 64,
+            "group": "output",
+            "help": "The output size of extracted faces. Make sure that the model you intend to "
+                    "train supports your required size. This will only need to be changed for "
+                    "hi-res models."})
+        argument_list.append({
+            "opts": ("-si", "--save-interval"),
+            "dest": "save_interval",
+            "type": int,
+            "action": Slider,
+            "min_max": (0, 1000),
+            "rounding": 10,
+            "default": 0,
+            "group": "output",
+            "help": "Automatically save the alignments file after a set amount of frames. By "
+                    "default the alignments file is only saved at the end of the extraction "
+                    "process. NB: If extracting in 2 passes then the alignments file will only "
+                    "start to be saved out during the second pass. WARNING: Don't interrupt the "
+                    "script when writing the file because it might get corrupted. Set to 0 to "
+                    "turn off"})
+        argument_list.append({
+            "opts": ("-dl", "--debug-landmarks"),
+            "action": "store_true",
+            "dest": "debug_landmarks",
+            "group": "output",
+            "default": False,
+            "help": "Draw landmarks on the ouput faces for debugging purposes."})
+        argument_list.append({
+            "opts": ("-sp", "--singleprocess"),
+            "action": "store_true",
+            "default": False,
+            "backend": "nvidia",
+            "group": "settings",
+            "help": "Don't run extraction in parallel. Will run each part of the extraction "
+                    "process separately (one after the other) rather than all at the smae time. "
+                    "Useful if VRAM is at a premium."})
+        argument_list.append({
+            "opts": ("-s", "--skip-existing"),
+            "action": "store_true",
+            "dest": "skip_existing",
+            "group": "settings",
+            "default": False,
+            "help": "Skips frames that have already been extracted and exist in the alignments "
+                    "file"})
+        argument_list.append({
+            "opts": ("-sf", "--skip-existing-faces"),
+            "action": "store_true",
+            "dest": "skip_faces",
+            "group": "settings",
+            "default": False,
+            "help": "Skip frames that already have detected faces in the alignments file"})
         return argument_list
 
 
@@ -764,22 +768,24 @@ class ConvertArgs(ExtractConvertArgs):
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
         argument_list = []
-        argument_list.append({"opts": ("-ref", "--reference-video"),
-                              "action": FileFullPaths,
-                              "dest": "reference_video",
-                              "filetypes": "video",
-                              "type": str,
-                              "group": "data",
-                              "help": "Only required if converting from images to video. Provide "
-                                      "The original video that the source frames were extracted "
-                                      "from (for extracting the fps and audio)."})
-        argument_list.append({"opts": ("-m", "--model-dir"),
-                              "action": DirFullPaths,
-                              "dest": "model_dir",
-                              "required": True,
-                              "group": "data",
-                              "help": "Model directory. The directory containing the trained "
-                                      "model you wish to use for conversion."})
+        argument_list.append({
+            "opts": ("-ref", "--reference-video"),
+            "action": FileFullPaths,
+            "dest": "reference_video",
+            "filetypes": "video",
+            "type": str,
+            "group": "data",
+            "help": "Only required if converting from images to video. Provide The original video "
+                    "that the source frames were extracted from (for extracting the fps and "
+                    "audio)."})
+        argument_list.append({
+            "opts": ("-m", "--model-dir"),
+            "action": DirFullPaths,
+            "dest": "model_dir",
+            "required": True,
+            "group": "data",
+            "help": "Model directory. The directory containing the trained model you wish to use "
+                    "for conversion."})
         argument_list.append({
             "opts": ("-c", "--color-adjustment"),
             "action": Radio,
@@ -810,7 +816,7 @@ class ConvertArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "dest": "mask_type",
-            "choices": ["dfl_full", "components", "extended", "predicted"],
+            "choices": get_available_masks() + ["predicted"],
             "group": "plugins",
             "default": "predicted",
             "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
@@ -822,7 +828,8 @@ class ConvertArgs(ExtractConvertArgs):
                     "further up the forehead. May perform badly on difficult angles."
                     "\nL|facehull: Face cutout based on landmarks."
                     "\nL|predicted: The predicted mask generated from the model. If the model was "
-                    "not trained with a mask then this will fallback to components."
+                    "not trained with a mask then this will fallback to "
+                    "'{}'".format(get_default_mask()) +
                     "\nL|none: Don't use a mask."})
         argument_list.append({
             "opts": ("-sc", "--scaling"),
@@ -836,150 +843,148 @@ class ConvertArgs(ExtractConvertArgs):
                     "'/config/convert.ini' or 'Settings > Configure Convert Plugins':"
                     "\nL|sharpen: Perform sharpening on the final face."
                     "\nL|none: Don't perform any scaling operations."})
-        argument_list.append({"opts": ("-w", "--writer"),
-                              "action": Radio,
-                              "type": str,
-                              "choices": PluginLoader.get_available_convert_plugins("writer",
-                                                                                    False),
-                              "group": "plugins",
-                              "default": "opencv",
-                              "help": "R|The plugin to use to output the converted images. The "
-                                      "writers are configurable in '/config/convert.ini' or "
-                                      "'Settings > Configure Convert Plugins:'"
-                                      "\nL|ffmpeg: [video] Writes out the convert straight to "
-                                      "video. When the input is a series of images then the "
-                                      "'-ref' (--reference-video) parameter must be set."
-                                      "\nL|gif: [animated image] Create an animated gif."
-                                      "\nL|opencv: [images] The fastest image writer, but less "
-                                      "options and formats than other plugins."
-                                      "\nL|pillow: [images] Slower than opencv, but has more "
-                                      "options and supports more formats."})
-        argument_list.append({"opts": ("-osc", "--output-scale"),
-                              "dest": "output_scale",
-                              "action": Slider,
-                              "type": int,
-                              "default": 100,
-                              "min_max": (25, 400),
-                              "rounding": 1,
-                              "group": "Frame Processing",
-                              "help": "Scale the final output frames by this amount. 100%% will "
-                                      "output the frames at source dimensions. 50%% at half size "
-                                      "200%% at double size"})
-        argument_list.append({"opts": ("-fr", "--frame-ranges"),
-                              "nargs": "+",
-                              "type": str,
-                              "group": "Frame Processing",
-                              "help": "Frame ranges to apply transfer to e.g. For frames 10 to 50 "
-                                      "and 90 to 100 use --frame-ranges 10-50 90-100. Frames "
-                                      "falling outside of the selected range will be discarded "
-                                      "unless '-k' (--keep-unchanged) is selected. NB: If you are "
-                                      "converting from images, then the filenames must end with "
-                                      "the frame-number!"})
-        argument_list.append({"opts": ("-a", "--input-aligned-dir"),
-                              "action": DirFullPaths,
-                              "dest": "input_aligned_dir",
-                              "group": "Face Processing",
-                              "default": None,
-                              "help": "If you have not cleansed your alignments file, then you "
-                                      "can filter out faces by defining a folder here that "
-                                      "contains the faces extracted from your input files/video. "
-                                      "If this folder is defined, then only faces that exist "
-                                      "within your alignments file and also exist within the "
-                                      "specified folder will be converted. Leaving this blank "
-                                      "will convert all faces that exist within the alignments "
-                                      "file."})
-        argument_list.append({"opts": ("-n", "--nfilter"),
-                              "action": FilesFullPaths,
-                              "filetypes": "image",
-                              "dest": "nfilter",
-                              "nargs": "+",
-                              "default": None,
-                              "group": "Face Processing",
-                              "help": "Optionally filter out people who you do not wish to "
-                                      "process by passing in an image of that person. Should be a "
-                                      "front portrait with a single person in the image. Multiple "
-                                      "images can be added space separated. NB: Using face filter "
-                                      "will significantly decrease extraction speed and its "
-                                      "accuracy cannot be guaranteed."})
-        argument_list.append({"opts": ("-f", "--filter"),
-                              "action": FilesFullPaths,
-                              "filetypes": "image",
-                              "dest": "filter",
-                              "nargs": "+",
-                              "default": None,
-                              "group": "Face Processing",
-                              "help": "Optionally select people you wish to process by passing in "
-                                      "an image of that person. Should be a front portrait with a "
-                                      "single person in the image. Multiple images can be added "
-                                      "space separated. NB: Using face filter will significantly "
-                                      "decrease extraction speed and its accuracy cannot be "
-                                      "guaranteed."})
-        argument_list.append({"opts": ("-l", "--ref_threshold"),
-                              "action": Slider,
-                              "min_max": (0.01, 0.99),
-                              "rounding": 2,
-                              "type": float,
-                              "dest": "ref_threshold",
-                              "default": 0.4,
-                              "group": "Face Processing",
-                              "help": "For use with the optional nfilter/filter files. Threshold "
-                                      "for positive face recognition. Lower values are stricter. "
-                                      "NB: Using face filter will significantly decrease "
-                                      "extraction speed and its accuracy cannot be "
-                                      "guaranteed."})
-
-        argument_list.append({"opts": ("-j", "--jobs"),
-                              "dest": "jobs",
-                              "action": Slider,
-                              "group": "settings",
-                              "type": int,
-                              "default": 0,
-                              "min_max": (0, 40),
-                              "rounding": 1,
-                              "help": "The maximum number of parallel processes for performing "
-                                      "conversion. Converting images is system RAM heavy so it is "
-                                      "possible to run out of memory if you have a lot of "
-                                      "processes and not enough RAM to accommodate them all. "
-                                      "Setting this to 0 will use the maximum available. No "
-                                      "matter what you set this to, it will never attempt to use "
-                                      "more processes than are available on your system. If "
-                                      "singleprocess is enabled this setting will be ignored."})
-        argument_list.append({"opts": ("-g", "--gpus"),
-                              "type": int,
-                              "backend": "nvidia",
-                              "action": Slider,
-                              "min_max": (1, 10),
-                              "rounding": 1,
-                              "group": "settings",
-                              "default": 1,
-                              "help": "Number of GPUs to use for conversion"})
-        argument_list.append({"opts": ("-t", "--trainer"),
-                              "type": str.lower,
-                              "choices": PluginLoader.get_available_models(),
-                              "group": "settings",
-                              "help": "[LEGACY] This only needs to be selected if a legacy "
-                                      "model is being loaded or if there are multiple models in "
-                                      "the model folder"})
-        argument_list.append({"opts": ("-k", "--keep-unchanged"),
-                              "action": "store_true",
-                              "dest": "keep_unchanged",
-                              "group": "Frame Processing",
-                              "default": False,
-                              "help": "When used with --frame-ranges outputs the unchanged frames "
-                                      "that are not processed instead of discarding them."})
-        argument_list.append({"opts": ("-s", "--swap-model"),
-                              "action": "store_true",
-                              "dest": "swap_model",
-                              "group": "settings",
-                              "default": False,
-                              "help": "Swap the model. Instead converting from of A -> B, "
-                                      "converts B -> A"})
-        argument_list.append({"opts": ("-sp", "--singleprocess"),
-                              "action": "store_true",
-                              "group": "settings",
-                              "default": False,
-                              "help": "Disable multiprocessing. Slower but less resource "
-                                      "intensive."})
+        argument_list.append({
+            "opts": ("-w", "--writer"),
+            "action": Radio,
+            "type": str,
+            "choices": PluginLoader.get_available_convert_plugins("writer", False),
+            "group": "plugins",
+            "default": "opencv",
+            "help": "R|The plugin to use to output the converted images. The writers are "
+                    "configurable in '/config/convert.ini' or 'Settings > Configure Convert "
+                    "Plugins:'"
+                    "\nL|ffmpeg: [video] Writes out the convert straight to video. When the input "
+                    "is a series of images then the '-ref' (--reference-video) parameter must be "
+                    "set."
+                    "\nL|gif: [animated image] Create an animated gif."
+                    "\nL|opencv: [images] The fastest image writer, but less options and formats "
+                    "than other plugins."
+                    "\nL|pillow: [images] Slower than opencv, but has more options and supports "
+                    "more formats."})
+        argument_list.append({
+            "opts": ("-osc", "--output-scale"),
+            "dest": "output_scale",
+            "action": Slider,
+            "type": int,
+            "default": 100,
+            "min_max": (25, 400),
+            "rounding": 1,
+            "group": "Frame Processing",
+            "help": "Scale the final output frames by this amount. 100%% will output the frames "
+                    "at source dimensions. 50%% at half size 200%% at double size"})
+        argument_list.append({
+            "opts": ("-fr", "--frame-ranges"),
+            "nargs": "+",
+            "type": str,
+            "group": "Frame Processing",
+            "help": "Frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use "
+                    "--frame-ranges 10-50 90-100. Frames falling outside of the selected range "
+                    "will be discarded unless '-k' (--keep-unchanged) is selected. NB: If you are "
+                    "converting from images, then the filenames must end with the frame-number!"})
+        argument_list.append({
+            "opts": ("-a", "--input-aligned-dir"),
+            "action": DirFullPaths,
+            "dest": "input_aligned_dir",
+            "group": "Face Processing",
+            "default": None,
+            "help": "If you have not cleansed your alignments file, then you can filter out faces "
+                    "by defining a folder here that contains the faces extracted from your input "
+                    "files/video. If this folder is defined, then only faces that exist within "
+                    "your alignments file and also exist within the specified folder will be "
+                    "converted. Leaving this blank will convert all faces that exist within the "
+                    "alignments file."})
+        argument_list.append({
+            "opts": ("-n", "--nfilter"),
+            "action": FilesFullPaths,
+            "filetypes": "image",
+            "dest": "nfilter",
+            "nargs": "+",
+            "default": None,
+            "group": "Face Processing",
+            "help": "Optionally filter out people who you do not wish to process by passing in an "
+                    "image of that person. Should be a front portrait with a single person in the "
+                    "image. Multiple images can be added space separated. NB: Using face filter "
+                    "will significantly decrease extraction speed and its accuracy cannot be "
+                    "guaranteed."})
+        argument_list.append({
+            "opts": ("-f", "--filter"),
+            "action": FilesFullPaths,
+            "filetypes": "image",
+            "dest": "filter",
+            "nargs": "+",
+            "default": None,
+            "group": "Face Processing",
+            "help": "Optionally select people you wish to process by passing in an image of that "
+                    "person. Should be a front portrait with a single person in the image. "
+                    "Multiple images can be added space separated. NB: Using face filter will "
+                    "significantly decrease extraction speed and its accuracy cannot be "
+                    "guaranteed."})
+        argument_list.append({
+            "opts": ("-l", "--ref_threshold"),
+            "action": Slider,
+            "min_max": (0.01, 0.99),
+            "rounding": 2,
+            "type": float,
+            "dest": "ref_threshold",
+            "default": 0.4,
+            "group": "Face Processing",
+            "help": "For use with the optional nfilter/filter files. Threshold for positive face "
+                    "recognition. Lower values are stricter. NB: Using face filter will "
+                    "significantly decrease extraction speed and its accuracy cannot be "
+                    "guaranteed."})
+        argument_list.append({
+            "opts": ("-j", "--jobs"),
+            "dest": "jobs",
+            "action": Slider,
+            "group": "settings",
+            "type": int,
+            "default": 0,
+            "min_max": (0, 40),
+            "rounding": 1,
+            "help": "The maximum number of parallel processes for performing conversion. "
+                    "Converting images is system RAM heavy so it is possible to run out of memory "
+                    "if you have a lot of processes and not enough RAM to accommodate them all. "
+                    "Setting this to 0 will use the maximum available. No matter what you set "
+                    "this to, it will never attempt to use more processes than are available on "
+                    "your system. If singleprocess is enabled this setting will be ignored."})
+        argument_list.append({
+            "opts": ("-g", "--gpus"),
+            "type": int,
+            "backend": "nvidia",
+            "action": Slider,
+            "min_max": (1, 10),
+            "rounding": 1,
+            "group": "settings",
+            "default": 1,
+            "help": "Number of GPUs to use for conversion"})
+        argument_list.append({
+            "opts": ("-t", "--trainer"),
+            "type": str.lower,
+            "choices": PluginLoader.get_available_models(),
+            "group": "settings",
+            "help": "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
+                    "if there are multiple models in the model folder"})
+        argument_list.append({
+            "opts": ("-k", "--keep-unchanged"),
+            "action": "store_true",
+            "dest": "keep_unchanged",
+            "group": "Frame Processing",
+            "default": False,
+            "help": "When used with --frame-ranges outputs the unchanged frames that are not "
+                    "processed instead of discarding them."})
+        argument_list.append({
+            "opts": ("-s", "--swap-model"),
+            "action": "store_true",
+            "dest": "swap_model",
+            "group": "settings",
+            "default": False,
+            "help": "Swap the model. Instead converting from of A -> B, converts B -> A"})
+        argument_list.append({
+            "opts": ("-sp", "--singleprocess"),
+            "action": "store_true",
+            "group": "settings",
+            "default": False,
+            "help": "Disable multiprocessing. Slower but less resource intensive."})
         return argument_list
 
 
@@ -1270,10 +1275,10 @@ class GuiArgs(FaceSwapArgs):
         """ Put the arguments in a list so that they are accessible from both
         argparse and gui """
         argument_list = []
-        argument_list.append({"opts": ("-d", "--debug"),
-                              "action": "store_true",
-                              "dest": "debug",
-                              "default": False,
-                              "help": "Output to Shell console instead of "
-                                      "GUI console"})
+        argument_list.append({
+            "opts": ("-d", "--debug"),
+            "action": "store_true",
+            "dest": "debug",
+            "default": False,
+            "help": "Output to Shell console instead of GUI console"})
         return argument_list

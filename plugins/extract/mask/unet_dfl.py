@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-""" UNET DFL face mask plugin """
+""" UNET DFL face mask plugin
+
+Architecture and Pre-Trained Model based on...
+TernausNet: U-Net with VGG11 Encoder Pre-Trained on ImageNet for Image Segmentation
+https://arxiv.org/abs/1801.05746
+https://github.com/ternaus/TernausNet
+
+Source Implementation and fine-tune training....
+https://github.com/iperov/DeepFaceLab/blob/master/nnlib/TernausNet.py
+
+Model file sourced from...
+https://github.com/iperov/DeepFaceLab/blob/master/nnlib/FANSeg_256_full_face.h5
+"""
 
 import numpy as np
 from lib.model.session import KSession
@@ -15,8 +27,8 @@ class Mask(Masker):
         self.name = "U-Net"
         self.input_size = 256
         self.vram = 3440
-        self.vram_warnings = 1024  # TODO determine
-        self.vram_per_batch = 64  # TODO determine
+        self.vram_warnings = 256
+        self.vram_per_batch = 48
         self.batchsize = self.config["batch-size"]
 
     def init_model(self):

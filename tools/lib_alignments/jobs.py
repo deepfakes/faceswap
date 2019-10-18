@@ -257,6 +257,93 @@ class Check():
             os.rename(src, dst)
 
 
+class Dfl():
+    """ Reformat Alignment file """
+    def __init__(self, alignments, arguments):
+        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        self.alignments = alignments
+        if self.alignments.file != "dfl.fsa":
+            logger.error("Alignments file must be specified as 'dfl' to reformat dfl alignmnets")
+            exit(0)
+        logger.debug("Loading DFL faces")
+        self.faces = Faces(arguments.faces_dir)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def process(self):
+        """ Run reformat """
+        logger.info("[REFORMAT DFL ALIGNMENTS]")  # Tidy up cli output
+        self.alignments.data = self.load_dfl()
+        self.alignments.file = self.alignments.get_location(self.faces.folder, "alignments")
+        self.alignments.save()
+
+    def load_dfl(self):
+        """ Load alignments from DeepFaceLab and format for Faceswap """
+        alignments = dict()
+        for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
+            if face["face_extension"] not in (".png", ".jpg"):
+                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
+                continue
+            f_hash = face["face_hash"]
+            fullpath = os.path.join(self.faces.folder, face["face_fullname"])
+            dfl = self.get_dfl_alignment(fullpath)
+
+            if not dfl:
+                continue
+
+            self.convert_dfl_alignment(dfl, f_hash, alignments)
+        return alignments
+
+    @staticmethod
+    def get_dfl_alignment(filename):
+        """ Process the alignment of one face """
+        ext = os.path.splitext(filename)[1]
+
+        if ext.lower() in (".jpg", ".jpeg"):
+            img = Image.open(filename)
+            try:
+                dfl_alignments = pickle.loads(img.app["APP15"])
+                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
+                                                 for n in dfl_alignments["source_rect"]]
+                return dfl_alignments
+            except pickle.UnpicklingError:
+                return None
+
+        with open(filename, "rb") as dfl:
+            header = dfl.read(8)
+            if header != b"\x89PNG\r\n\x1a\n":
+                logger.error("No Valid PNG header: %s", filename)
+                return None
+            while True:
+                chunk_start = dfl.tell()
+                chunk_hdr = dfl.read(8)
+                if not chunk_hdr:
+                    break
+                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
+                dfl.seek(chunk_start, os.SEEK_SET)
+                if chunk_name == b"fcWp":
+                    chunk = dfl.read(chunk_length + 12)
+                    retval = pickle.loads(chunk[8:-4])
+                    logger.trace("Loaded DFL Alignment: (filename: '%s', alignment: %s",
+                                 filename, retval)
+                    return retval
+                dfl.seek(chunk_length+12, os.SEEK_CUR)
+            logger.error("Couldn't find DFL alignments: %s", filename)
+
+    @staticmethod
+    def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
+        """ Add DFL Alignments to alignments in Faceswap format """
+        sourcefile = dfl_alignments["source_filename"]
+        left, top, right, bottom = dfl_alignments["source_rect"]
+        alignment = {"x": left,
+                     "w": right - left,
+                     "y": top,
+                     "h": bottom - top,
+                     "hash": f_hash,
+                     "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="uint8")}
+        logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
+        alignments.setdefault(sourcefile, list()).append(alignment)
+
+
 class Draw():
     """ Draw Alignments on passed in images """
     def __init__(self, alignments, arguments):
@@ -515,92 +602,6 @@ class Merge():
         self.final_alignments.file = filename
 
 
-class Reformat():
-    """ Reformat Alignment file """
-    def __init__(self, alignments, arguments):
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        if self.alignments.file == "dfl.json":
-            logger.debug("Loading DFL faces")
-            self.faces = Faces(arguments.faces_dir)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self):
-        """ Run reformat """
-        logger.info("[REFORMAT ALIGNMENTS]")  # Tidy up cli output
-        if self.alignments.file == "dfl.json":
-            self.alignments.data = self.load_dfl()
-            self.alignments.file = self.alignments.get_location(self.faces.folder, "alignments")
-        self.alignments.save()
-
-    def load_dfl(self):
-        """ Load alignments from DeepFaceLab and format for Faceswap """
-        alignments = dict()
-        for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
-            if face["face_extension"] not in (".png", ".jpg"):
-                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
-                continue
-            f_hash = face["face_hash"]
-            fullpath = os.path.join(self.faces.folder, face["face_fullname"])
-            dfl = self.get_dfl_alignment(fullpath)
-
-            if not dfl:
-                continue
-
-            self.convert_dfl_alignment(dfl, f_hash, alignments)
-        return alignments
-
-    @staticmethod
-    def get_dfl_alignment(filename):
-        """ Process the alignment of one face """
-        ext = os.path.splitext(filename)[1]
-
-        if ext.lower() in (".jpg", ".jpeg"):
-            img = Image.open(filename)
-            try:
-                dfl_alignments = pickle.loads(img.app["APP15"])
-                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
-                                                 for n in dfl_alignments["source_rect"]]
-                return dfl_alignments
-            except pickle.UnpicklingError:
-                return None
-
-        with open(filename, "rb") as dfl:
-            header = dfl.read(8)
-            if header != b"\x89PNG\r\n\x1a\n":
-                logger.error("No Valid PNG header: %s", filename)
-                return None
-            while True:
-                chunk_start = dfl.tell()
-                chunk_hdr = dfl.read(8)
-                if not chunk_hdr:
-                    break
-                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
-                dfl.seek(chunk_start, os.SEEK_SET)
-                if chunk_name == b"fcWp":
-                    chunk = dfl.read(chunk_length + 12)
-                    retval = pickle.loads(chunk[8:-4])
-                    logger.trace("Loaded DFL Alignment: (filename: '%s', alignment: %s",
-                                 filename, retval)
-                    return retval
-                dfl.seek(chunk_length+12, os.SEEK_CUR)
-            logger.error("Couldn't find DFL alignments: %s", filename)
-
-    @staticmethod
-    def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
-        """ Add DFL Alignments to alignments in Faceswap format """
-        sourcefile = dfl_alignments["source_filename"]
-        left, top, right, bottom = dfl_alignments["source_rect"]
-        alignment = {"x": left,
-                     "w": right - left,
-                     "y": top,
-                     "h": bottom - top,
-                     "hash": f_hash,
-                     "landmarks_xy": dfl_alignments["source_landmarks"]}
-        logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
-        alignments.setdefault(sourcefile, list()).append(alignment)
-
-
 class RemoveAlignments():
     """ Remove items from alignments file """
     def __init__(self, alignments, arguments):
@@ -755,12 +756,10 @@ class Rename():
 
 
 class Sort():
-    """ Sort alignments' index by the order they appear in
-        an image """
+    """ Sort alignments' index by the order they appear in an image """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.alignments = alignments
-        self.axis = arguments.job.replace("sort-", "")
         self.faces = self.get_faces(arguments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -791,7 +790,7 @@ class Sort():
             if count <= 1:
                 logger.trace("0 or 1 face in frame. Not sorting: '%s'", frame)
                 continue
-            sorted_alignments = sorted([item for item in alignments], key=lambda x: (x[self.axis]))
+            sorted_alignments = sorted([item for item in alignments], key=lambda x: (x["x"]))
             if sorted_alignments == alignments:
                 logger.trace("Alignments already in correct order. Not sorting: '%s'", frame)
                 continue

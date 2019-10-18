@@ -227,7 +227,7 @@ class _PickleSerializer(Serializer):
         return pickle.loads(data)
 
 
-class _NPYSerializer(Serializer):  # pylint:disable=abstract-method
+class _NPYSerializer(Serializer):
     """ NPY Serializer """
     def __init__(self):
         super().__init__()
@@ -330,7 +330,7 @@ def get_serializer_from_filename(filename):
 
     if extension == ".json":
         retval = _JSONSerializer()
-    elif extension == ".p":
+    elif extension in (".p", ".pickle"):
         retval = _PickleSerializer()
     elif extension == ".npy":
         retval = _NPYSerializer()

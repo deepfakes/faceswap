@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-""" VGG Obstructed face mask plugin """
+""" VGG Obstructed face mask plugin
+
+Architecture and Pre-Trained Model based on...
+On Face Segmentation, Face Swapping, and Face Perception
+https://arxiv.org/abs/1704.06729
+
+Source Implementation...
+https://github.com/YuvalNirkin/face_segmentation
+
+Model file sourced from...
+https://github.com/YuvalNirkin/face_segmentation/releases/download/1.0/face_seg_fcn8s.zip
+
+Caffe model reimplemented in Keras by Kyle Vrooman
+"""
 
 import numpy as np
 from lib.model.session import KSession
@@ -14,9 +27,9 @@ class Mask(Masker):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "VGG Obstructed"
         self.input_size = 500
-        self.vram = 3000  # TODO determine
-        self.vram_warnings = 1024  # TODO determine
-        self.vram_per_batch = 64  # TODO determine
+        self.vram = 3936
+        self.vram_warnings = 1088  # at BS 1. OOMs at higher batchsizes
+        self.vram_per_batch = 208
         self.batchsize = self.config["batch-size"]
 
     def init_model(self):

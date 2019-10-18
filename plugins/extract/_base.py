@@ -18,12 +18,12 @@ from ._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Cpu mode
+# TODO CPU mode
 # TODO Run with warnings mode
 
 
 def _get_config(plugin_name, configfile=None):
-    """ Return the config for the requested model
+    """ Return the configuration for the requested model
 
     Parameters
     ----------
@@ -31,12 +31,12 @@ def _get_config(plugin_name, configfile=None):
         The module name of the child plugin.
     configfile: str, optional
         Path to a :file:`./config/<plugin_type>.ini` file for this plugin. Default: use system
-        config.
+        configuration.
 
     Returns
     -------
     config_dict, dict
-       A dictionary of configuration items from the config file
+       A dictionary of configuration items from the configuration file
     """
     return Config(plugin_name, configfile=configfile).config_dict
 
@@ -190,7 +190,7 @@ class Extractor():
         For Detect:
             the expected output for the ``prediction`` key of the :attr:`batch` dict should be a
             ``list`` of :attr:`batchsize` of detected face points. These points should be either
-            a ``list``, ``tuple`` or ``numpy.array`` with the first 4 items being the `left`,
+            a ``list``, ``tuple`` or ``numpy.ndarray`` with the first 4 items being the `left`,
             `top`, `right`, `bottom` points, in that order
         """
         raise NotImplementedError
@@ -209,18 +209,18 @@ class Extractor():
         -----
         For Align:
             The key ``landmarks`` must be returned in the :attr:`batch` ``dict`` from this method.
-            This should be a ``list`` or ``numpy.array`` of :attr:`batchsize` containing a
-            ``list``, ``tuple`` or ``numpy.array`` of `(x, y)` co-ords of the 68 point landmarks
-            as calculated from the :attr:`model`.
+            This should be a ``list`` or ``numpy.ndarray`` of :attr:`batchsize` containing a
+            ``list``, ``tuple`` or ``numpy.ndarray`` of `(x, y)` coordinates of the 68 point
+            landmarks as calculated from the :attr:`model`.
         """
         raise NotImplementedError
 
     def _predict(self, batch):
         """ **Override method** (at `<plugin_type>` level)
 
-        This method is overridable at the `<plugin_type>` level (ie.
+        This method should be overridden at the `<plugin_type>` level (IE.
         ``plugins.extract.detect._base`` or ``plugins.extract.align._base``) and should not
-        be overriden within plugins themselves.
+        be overridden within plugins themselves.
 
         It acts as a wrapper for the plugin's ``self.predict`` method and handles any
         predict processing that is consistent for all plugins within the `plugin_type`
@@ -235,9 +235,9 @@ class Extractor():
     def finalize(self, batch):
         """ **Override method** (at `<plugin_type>` level)
 
-        This method is overridable at the `<plugin_type>` level (ie.
+        This method should be overridden at the `<plugin_type>` level (IE.
         :mod:`plugins.extract.detect._base` or :mod:`plugins.extract.align._base`) and should not
-        be overriden within plugins themselves.
+        be overridden within plugins themselves.
 
         Handles consistent finalization for all plugins that exist within that plugin type. Its
         input is always the output from :func:`process_output()`
@@ -252,9 +252,9 @@ class Extractor():
     def get_batch(self, queue):
         """ **Override method** (at `<plugin_type>` level)
 
-        This method is overridable at the `<plugin_type>` level (ie.
+        This method should be overridden at the `<plugin_type>` level (IE.
         :mod:`plugins.extract.detect._base` or :mod:`plugins.extract.align._base`) and should not
-        be overriden within plugins themselves.
+        be overridden within plugins themselves.
 
         Get items from the queue in batches of :attr:`batchsize`
 
@@ -316,13 +316,13 @@ class Extractor():
 
     # <<< PLUGIN INITIALIZATION >>> #
     def initialize(self, *args, **kwargs):
-        """ Inititalize the extractor plugin
+        """ Initialize the extractor plugin
 
             Should be called from :mod:`~plugins.extract.pipeline`
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        logger.info("Initializing %s in %s phase...", self.name, self._plugin_type)
+        logger.info("Initializing %s (%s)...", self.name, self._plugin_type.title())
         self.queue_size = 1
         self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
         self._compile_threads()
@@ -341,11 +341,11 @@ class Extractor():
                 raise FaceswapError(msg) from err
             raise err
         logger.info("Initialized %s (%s) with batchsize of %s",
-                    self.name, self._plugin_type, self.batchsize)
+                    self.name, self._plugin_type.title(), self.batchsize)
 
     def _add_queues(self, in_queue, out_queue, queues):
         """ Add the queues
-            in_queue and out_queue should be pre-created queue manager queues
+            in_queue and out_queue should be previously created queue manager queues.
             queues should be a list of queue names """
         self._queues["in"] = in_queue
         self._queues["out"] = out_queue
@@ -440,14 +440,14 @@ class Extractor():
 
     # <<< MISC UTILITY METHODS >>> #
     def _convert_color(self, image):
-        """ Convert the image to the correct color format """
+        """ Convert the image to the correct color format and strip alpha channel """
         logger.trace("Converting image to color format: %s", self.colorformat)
         if self.colorformat == "RGB":
-            cvt_image = image[:, :, ::-1].copy()
+            cvt_image = image[..., 2::-1].copy()
         elif self.colorformat == "GRAY":
-            cvt_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)  # pylint:disable=no-member
+            cvt_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)
         else:
-            cvt_image = image.copy()
+            cvt_image = image[..., :3].copy()
         return cvt_image
 
     @staticmethod

@@ -3,8 +3,8 @@
 import logging
 
 from lib.utils import set_system_verbosity
-from .lib_alignments import (AlignmentData, Check, Draw, # noqa pylint: disable=unused-import
-                             Extract, Manual, Merge, Reformat, Rename,
+from .lib_alignments import (AlignmentData, Check, Dfl, Draw, # noqa pylint: disable=unused-import
+                             Extract, Manual, Merge, Rename,
                              RemoveAlignments, Sort, Spatial, UpdateHashes)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -42,8 +42,6 @@ class Alignments():
             job = UpdateHashes
         elif self.args.job.startswith("remove-"):
             job = RemoveAlignments
-        elif self.args.job.startswith("sort-"):
-            job = Sort
         elif self.args.job in("missing-alignments", "missing-frames",
                               "multi-faces", "leftover-faces", "no-faces"):
             job = Check

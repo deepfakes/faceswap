@@ -85,7 +85,7 @@ class Detector(Extractor):
 
         >>> {'filename': [<filenames of source frames>],
         >>>  'image': [<source images>],
-        >>>  'scaled_image': <np.array of images standardized for prediction>,
+        >>>  'scaled_image': <numpy.ndarray of images standardized for prediction>,
         >>>  'scale': [<scaling factors for each image>],
         >>>  'pad': [<padding for each image>],
         >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
@@ -228,7 +228,7 @@ class Detector(Extractor):
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def _compile_detection_image(self, input_image):
         """ Compile the detection image for feeding into the model"""
-        image = self._convert_color(input_image[..., :3])
+        image = self._convert_color(input_image)
 
         image_size = image.shape[:2]
         scale = self._set_scale(image_size)

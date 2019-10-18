@@ -60,9 +60,9 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile)
-        self.input_size = 256  # Overide for model specific input_size
-        self.blur_kernel = 5  # Overide for model specific blur_kernel size
-        self.coverage_ratio = 1.0  # Overide for model specific coverage_ratio
+        self.input_size = 256  # Override for model specific input_size
+        self.blur_kernel = 5  # Override for model specific blur_kernel size
+        self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
         self._plugin_type = "mask"
         self._storage_name = self.__module__.split(".")[-1].replace("_", "-")
@@ -78,7 +78,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        To ensure consistent batchsizes for masker the items are split into separate items for
+        To ensure consistent batch sizes for masker the items are split into separate items for
         each :class:`lib.faces_detect.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
@@ -117,6 +117,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 self._queues["out"].put(item)
                 continue
             for f_idx, face in enumerate(item["detected_faces"]):
+                face.image = self._convert_color(item["image"])
                 face.load_feed_face(face.image,
                                     size=self.input_size,
                                     coverage_ratio=1.0,
@@ -197,7 +198,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         #    predicted = batch["prediction"]
         # predicted[predicted < 0.04] = 0.0
         # predicted[predicted > 0.96] = 1.0
-        # TODO Convert landmarks_xy to numpy arrays
         for mask, face in zip(batch["prediction"], batch["detected_faces"]):
             face.add_mask(self._storage_name,
                           mask,
@@ -205,7 +205,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                           (face.image.shape[1], face.image.shape[0]),
                           face.feed_interpolators[1],
                           storage_size=self._storage_size)
-            face.feed = None
+            face.feed = dict()
 
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val

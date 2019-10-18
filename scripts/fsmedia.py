@@ -323,11 +323,8 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
                 size, padding)
-            feature_mask = cv2.blur(  # pylint: disable=no-member
-                feature_mask, (10, 10))
-            isolated_face = cv2.multiply(  # pylint: disable=no-member
-                feature_mask,
-                resized_face.astype(float)).astype(np.uint8)
+            feature_mask = cv2.blur(feature_mask, (10, 10))
+            isolated_face = cv2.multiply(feature_mask, resized_face.astype(float)).astype(np.uint8)
             blurry, focus_measure = self.is_blurry(isolated_face)
 
             if blurry:
@@ -340,7 +337,7 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
     def is_blurry(self, image):
         """ Convert to grayscale, and compute the focus measure of the image using the
             Variance of Laplacian method """
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         focus_measure = self.variance_of_laplacian(gray)
 
         # if the focus measure is less than the supplied threshold,
@@ -353,7 +350,7 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
     def variance_of_laplacian(image):
         """ Compute the Laplacian of the image and then return the focus
             measure, which is simply the variance of the Laplacian """
-        retval = cv2.Laplacian(image, cv2.CV_64F).var()  # pylint: disable=no-member
+        retval = cv2.Laplacian(image, cv2.CV_64F).var()
         logger.trace("Returning: %s", retval)
         return retval
 
@@ -370,8 +367,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
                          detected_face["file_location"].parts[-1], idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(face.feed_landmarks,  # pylint: disable=no-member
-                           (pos_x, pos_y), 2, (0, 0, 255, 255), -1)
+                cv2.circle(face.aligned_face, (pos_x, pos_y), 2, (0, 0, 255), -1)
 
 
 class FaceFilter(PostProcessAction):

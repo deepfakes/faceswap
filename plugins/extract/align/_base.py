@@ -75,7 +75,7 @@ class Aligner(Extractor):
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        To ensure consistent batchsizes for aligner the items are split into separate items for
+        To ensure consistent batch sizes for aligner the items are split into separate items for
         each :class:`lib.faces_detect.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
@@ -183,14 +183,10 @@ class Aligner(Extractor):
 
         """
 
-        generator = zip(batch["detected_faces"],
-                        batch["filename"],
-                        batch["image"],
-                        batch["landmarks"])
-        for face, filename, image, landmarks in generator:
-            face.landmarks_xy = [(int(round(pt[0])), int(round(pt[1]))) for pt in landmarks]
-            face.image = image
-            face.filename = filename
+        for face, landmarks in zip(batch["detected_faces"], batch["landmarks"]):
+            if not isinstance(landmarks, np.ndarray):
+                landmarks = np.array(landmarks)
+            face.landmarks_xy = np.rint(landmarks).astype("int32")
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()
@@ -218,7 +214,7 @@ class Aligner(Extractor):
     def _normalize_faces(self, faces):
         """ Normalizes the face for feeding into model
 
-        The normalization method is dictated by the cli argument:
+        The normalization method is dictated by the command line argument:
             -nh (--normalization)
         """
         if self.normalize_method is None:
@@ -243,13 +239,13 @@ class Aligner(Extractor):
     def _normalize_hist(face):
         """ Equalize the RGB histogram channels """
         for chan in range(3):
-            face[:, :, chan] = cv2.equalizeHist(face[:, :, chan])  # pylint: disable=no-member
+            face[:, :, chan] = cv2.equalizeHist(face[:, :, chan])
         return face
 
     @staticmethod
     def _normalize_clahe(face):
         """ Perform Contrast Limited Adaptive Histogram Equalization """
-        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+        clahe = cv2.createCLAHE(clipLimit=2.0,
                                 tileGridSize=(4, 4))
         for chan in range(3):
             face[:, :, chan] = clahe.apply(face[:, :, chan])

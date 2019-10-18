@@ -140,7 +140,7 @@ class Align(Aligner):
 
     @staticmethod
     def pad_image(box, image):
-        """Pad image if facebox falls outside of boundaries """
+        """Pad image if face-box falls outside of boundaries """
         width, height = image.shape[:2]
         pad_l = 1 - box[0] if box[0] < 0 else 0
         pad_t = 1 - box[1] if box[1] < 0 else 0
@@ -178,6 +178,5 @@ class Align(Aligner):
             points *= (roi[2] - roi[0])
             points[:, 0] += roi[0]
             points[:, 1] += roi[1]
-            landmarks = np.rint(points).astype("uint").tolist()
-            batch.setdefault("landmarks", []).append(landmarks)
+            batch.setdefault("landmarks", []).append(points)
         logger.trace("Predicted Landmarks: %s", batch["landmarks"])

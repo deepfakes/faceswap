@@ -14,8 +14,8 @@ from urllib.request import urlretrieve
 import os
 from os.path import join as pathjoin, expanduser
 
-fail_count = 0
-test_count = 0
+FAIL_COUNT = 0
+TEST_COUNT = 0
 _COLORS = {
     "FAIL": "\033[1;31m",
     "OK": "\033[1;32m",
@@ -26,8 +26,10 @@ _COLORS = {
 
 
 def print_colored(text, color="OK", bold=False):
-    # This might not work on windows,
-    # altho travis runs windows stuff in git bash, so it might ?
+    """ Print colored text
+    This might not work on windows,
+    although travis runs windows stuff in git bash, so it might ?
+    """
     color = _COLORS.get(color, color)
     print("%s%s%s%s" % (
         color, "" if not bold else _COLORS["BOLD"], text, _COLORS["ENDC"]
@@ -35,33 +37,38 @@ def print_colored(text, color="OK", bold=False):
 
 
 def print_ok(text):
+    """ Print ok in colored text """
     print_colored(text, "OK", True)
 
 
 def print_fail(text):
+    """ Print fail in colored text """
     print_colored(text, "FAIL", True)
 
 
 def print_status(text):
+    """ Print status in colored text """
     print_colored(text, "STATUS", True)
 
 
 def run_test(name, cmd):
-    global fail_count, test_count
+    """ run a test """
+    global FAIL_COUNT, TEST_COUNT  # pylint:disable=global-statement
     print_status("[?] running %s" % name)
     print("Cmd: %s" % " ".join(cmd))
-    test_count += 1
+    TEST_COUNT += 1
     try:
         check_call(cmd)
         print_ok("[+] Test success")
         return True
-    except CalledProcessError as e:
-        print_fail("[-] Test failed with %s" % e)
-        fail_count += 1
+    except CalledProcessError as err:
+        print_fail("[-] Test failed with %s" % err)
+        FAIL_COUNT += 1
         return False
 
 
 def download_file(url, filename):  # TODO: retry
+    """ Download a file from given url """
     if os.path.isfile(filename):
         print_status("[?] '%s' already cached as '%s'" % (url, filename))
         return filename
@@ -69,12 +76,13 @@ def download_file(url, filename):  # TODO: retry
         print_status("[?] Downloading '%s' to '%s'" % (url, filename))
         video, _ = urlretrieve(url, filename)
         return video
-    except urllib.error.URLError as e:
-        print_fail("[-] Failed downloading: %s" % e)
+    except urllib.error.URLError as err:
+        print_fail("[-] Failed downloading: %s" % err)
         return None
 
 
 def extract_args(detector, aligner, in_path, out_path, args=None):
+    """ Extraction command """
     py_exe = sys.executable
     _extract_args = "%s faceswap.py extract -i %s -o %s -D %s -A %s" % (
         py_exe, in_path, out_path, detector, aligner
@@ -84,16 +92,18 @@ def extract_args(detector, aligner, in_path, out_path, args=None):
     return _extract_args.split()
 
 
-def train_args(model, model_path, faces, alignments, iterations=5, bs=8, extra_args=""):
+def train_args(model, model_path, faces, alignments, iterations=5, batchsize=8, extra_args=""):
+    """ Train command """
     py_exe = sys.executable
     args = "%s faceswap.py train -A %s -ala %s -B %s -alb %s -m %s -t %s -bs %i -it %s %s" % (
         py_exe, faces, alignments, faces,
-        alignments, model_path, model, bs, iterations, extra_args
+        alignments, model_path, model, batchsize, iterations, extra_args
     )
     return args.split()
 
 
 def convert_args(in_path, out_path, model_path, writer, args=None):
+    """ Convert command """
     py_exe = sys.executable
     conv_args = "%s faceswap.py convert -i %s -o %s -m %s -w %s" % (
         py_exe, in_path, out_path, model_path, writer
@@ -104,6 +114,7 @@ def convert_args(in_path, out_path, model_path, writer, args=None):
 
 
 def sort_args(in_path, out_path, sortby="face", groupby="hist", method="rename"):
+    """ Sort command """
     py_exe = sys.executable
     _sort_args = "%s tools.py sort -i %s -o %s -s %s -fp %s -g %s -k" % (
         py_exe, in_path, out_path, sortby, method, groupby
@@ -111,7 +122,8 @@ def sort_args(in_path, out_path, sortby="face", groupby="hist", method="rename")
     return _sort_args.split()
 
 
-if __name__ == '__main__':
+def main():
+    """ Main testing script """
     vid_src = "https://faceswap.dev/data/test.mp4"
     img_src = "https://archive.org/download/GPN-2003-00070/GPN-2003-00070.jpg"
     base_dir = pathjoin(expanduser("~"), "cache", "tests")
@@ -136,7 +148,7 @@ if __name__ == '__main__':
     if not img_path:
         print_fail("[-] Aborting")
         exit(1)
-    img_extract = run_test(
+    run_test(
         "Extraction images with cv2-dnn detector and cv2-dnn aligner.",
         extract_args("Cv2-Dnn", "Cv2-Dnn", img_base, pathjoin(img_base, "faces"))
     )
@@ -193,9 +205,13 @@ if __name__ == '__main__':
             )
         )
 
-    if fail_count == 0:
-        print_ok("[+] Failed %i/%i tests." % (fail_count, test_count))
+    if FAIL_COUNT == 0:
+        print_ok("[+] Failed %i/%i tests." % (FAIL_COUNT, TEST_COUNT))
         exit(0)
     else:
-        print_fail("[-] Failed %i/%i tests." % (fail_count, test_count))
+        print_fail("[-] Failed %i/%i tests." % (FAIL_COUNT, TEST_COUNT))
         exit(1)
+
+
+if __name__ == '__main__':
+    main()
