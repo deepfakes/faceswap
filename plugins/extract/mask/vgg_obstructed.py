@@ -29,7 +29,7 @@ class Mask(Masker):
         self.input_size = 500
         self.vram = 3936
         self.vram_warnings = 1088  # at BS 1. OOMs at higher batchsizes
-        self.vram_per_batch = 208
+        self.vram_per_batch = 304
         self.batchsize = self.config["batch-size"]
 
     def init_model(self):

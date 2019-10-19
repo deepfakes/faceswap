@@ -68,7 +68,7 @@ class Extractor():
         self._flow = ["detect", "align", "mask"]
         self.phase = self._flow[0]
         self._queue_size = 32
-        self._vram_buffer = 320  # Leave a buffer for VRAM allocation
+        self._vram_buffer = 256  # Leave a buffer for VRAM allocation
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner, configfile, normalize_method)
         self._mask = self._load_mask(masker, configfile)
@@ -230,6 +230,37 @@ class Extractor():
 
     # <<< INTERNAL METHODS >>> #
     @property
+    def _parallel_scaling(self):
+        """ dict: key is number of parallel plugins being loaded, value is the scaling factor that
+        the total base vram for those plugins should be scaled by
+
+        Notes
+        -----
+        VRAM for parallel plugins does not stack in a linear manner. Calculating the precise
+        scaling for any given plugin combination is non trivial, however the following are
+        calculations based on running 2-5 plugins in parallel using s3fd, fan, unet, vgg-clear
+        and vgg-obstructed. The worst ratio is selected for each combination, plus a litle extra
+        to ensure that vram is not used up.
+
+        If OOM errors are being reported, then these ratios should be relaxed some more
+        """
+        retval = {2: 0.7,
+                  3: 0.55,
+                  4: 0.5,
+                  5: 0.4}
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _total_vram_required(self):
+        """ Return vram required for all phases plus the buffer """
+        vrams = [getattr(self, "_{}".format(p)).vram for p in self._flow]
+        vram_required_count = sum(1 for p in vrams if p > 0)
+        retval = (sum(vrams) * self._parallel_scaling[vram_required_count]) + self._vram_buffer
+        logger.trace(retval)
+        return retval
+
+    @property
     def _next_phase(self):
         """ Return the next phase from the flow list """
         retval = self._flow[self._flow.index(self.phase) + 1]
@@ -240,13 +271,6 @@ class Extractor():
     def _final_phase(self):
         """ Return the final phase from the flow list """
         retval = self._flow[-1]
-        logger.trace(retval)
-        return retval
-
-    @property
-    def _total_vram_required(self):
-        """ Return vram required for all phases plus the buffer """
-        retval = sum([getattr(self, "_{}".format(p)).vram for p in self._flow]) + self._vram_buffer
         logger.trace(retval)
         return retval
 

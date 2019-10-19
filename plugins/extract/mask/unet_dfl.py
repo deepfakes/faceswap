@@ -26,9 +26,9 @@ class Mask(Masker):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "U-Net"
         self.input_size = 256
-        self.vram = 3440
+        self.vram = 3424
         self.vram_warnings = 256
-        self.vram_per_batch = 48
+        self.vram_per_batch = 80
         self.batchsize = self.config["batch-size"]
 
     def init_model(self):
