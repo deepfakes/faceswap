@@ -165,16 +165,17 @@ class TrainerBase():
 
     def log_wandb(self, loss, samples):
         """ Log losses and samples on Weights & Biases """
-        if not self.model.training_opts["wandb_logs"]:
-            return None
-        if samples is not None:
-            wandb.log({"samples": wandb.Image(samples[:, :, ::-1])}, commit=False)
-        wandb.log({'Loss {}'.format(side.capitalize()): loss[side][0]
-                  for side in sorted(loss.keys())})
+        if self.model.iterations % 100 == 1:  # limit network usage
+            wandb.log({'iteration': self.model.iterations}, commit=False)
+            if samples is not None:
+                wandb.log({"samples": wandb.Image(samples[:, :, ::-1])}, commit=False)
+            wandb.log({'Loss {}'.format(side.capitalize()): loss[side][0]
+                      for side in sorted(loss.keys())})
 
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Train a batch """
         logger.trace("Training one step: (iteration: %s)", self.model.iterations)
+        do_wandb = self.model.training_opts["wandb_logs"]
         do_preview = viewer is not None
         do_timelapse = timelapse_kwargs is not None
         snapshot_interval = self.model.training_opts.get("snapshot_interval", 0)
@@ -187,10 +188,10 @@ class TrainerBase():
             for side, batcher in self.batchers.items():
                 if self.pingpong.active and side != self.pingpong.side:
                     continue
-                loss[side] = batcher.train_one_batch(do_preview)
-                if not do_preview and not do_timelapse:
+                loss[side] = batcher.train_one_batch(do_preview or do_wandb)
+                if not do_preview and not do_timelapse and not do_wandb:
                     continue
-                if do_preview:
+                if do_preview or do_wandb:
                     self.samples.images[side] = batcher.compile_sample(None)
                 if do_timelapse:
                     self.timelapse.get_sample(side, timelapse_kwargs)
@@ -209,7 +210,9 @@ class TrainerBase():
                 self.print_loss(self.pingpong.loss)
 
             samples = self.samples.show_sample()
-            self.log_wandb(loss, samples)
+
+            if do_wandb:
+                self.log_wandb(loss, samples)
 
             if do_preview:
                 if samples is not None:
