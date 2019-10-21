@@ -57,10 +57,8 @@ class Alignments(AlignmentsBase):
         self.args = arguments
         self.is_extract = is_extract
         folder, filename = self.set_folder_filename(input_is_video)
-        serializer = self.set_serializer()
         super().__init__(folder,
-                         filename=filename,
-                         serializer=serializer)
+                         filename=filename)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_folder_filename(self, input_is_video):
@@ -78,19 +76,6 @@ class Alignments(AlignmentsBase):
             filename = "alignments"
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
-
-    def set_serializer(self):
-        """ Set the serializer to be used for loading and
-            saving alignments """
-        if hasattr(self.args, "serializer") and self.args.serializer:
-            logger.debug("Serializer provided: '%s'", self.args.serializer)
-            serializer = self.args.serializer
-        else:
-            # If there is a full filename then this will be overriden
-            # by filename extension
-            serializer = "json"
-            logger.debug("No Serializer defaulting to: '%s'", serializer)
-        return serializer
 
     def load(self):
         """ Override  parent loader to handle skip existing on extract """
@@ -338,11 +323,8 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
             feature_mask = extractor.get_feature_mask(
                 aligned_landmarks / size,
                 size, padding)
-            feature_mask = cv2.blur(  # pylint: disable=no-member
-                feature_mask, (10, 10))
-            isolated_face = cv2.multiply(  # pylint: disable=no-member
-                feature_mask,
-                resized_face.astype(float)).astype(np.uint8)
+            feature_mask = cv2.blur(feature_mask, (10, 10))
+            isolated_face = cv2.multiply(feature_mask, resized_face.astype(float)).astype(np.uint8)
             blurry, focus_measure = self.is_blurry(isolated_face)
 
             if blurry:
@@ -355,7 +337,7 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
     def is_blurry(self, image):
         """ Convert to grayscale, and compute the focus measure of the image using the
             Variance of Laplacian method """
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         focus_measure = self.variance_of_laplacian(gray)
 
         # if the focus measure is less than the supplied threshold,
@@ -368,7 +350,7 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
     def variance_of_laplacian(image):
         """ Compute the Laplacian of the image and then return the focus
             measure, which is simply the variance of the Laplacian """
-        retval = cv2.Laplacian(image, cv2.CV_64F).var()  # pylint: disable=no-member
+        retval = cv2.Laplacian(image, cv2.CV_64F).var()
         logger.trace("Returning: %s", retval)
         return retval
 
@@ -385,9 +367,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
                          detected_face["file_location"].parts[-1], idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(  # pylint: disable=no-member
-                    face.aligned_face,
-                    (pos_x, pos_y), 2, (0, 0, 255), -1)
+                cv2.circle(face.aligned_face, (pos_x, pos_y), 2, (0, 0, 255), -1)
 
 
 class FaceFilter(PostProcessAction):

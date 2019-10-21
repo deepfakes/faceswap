@@ -31,13 +31,16 @@ class AlignmentsArgs(FaceSwapArgs):
             "opts": ("-j", "--job"),
             "action": Radio,
             "type": str,
-            "choices": ("draw", "extract", "manual", "merge", "missing-alignments",
-                        "missing-frames", "legacy", "leftover-faces", "multi-faces", "no-faces",
-                        "reformat", "remove-faces", "remove-frames", "rename", "sort-x", "sort-y",
-                        "spatial", "update-hashes"),
+            "choices": ("dfl", "draw", "extract", "manual", "merge", "missing-alignments",
+                        "missing-frames", "leftover-faces", "multi-faces", "no-faces",
+                        "remove-faces", "remove-frames", "rename", "sort", "spatial",
+                        "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform. "
                     "NB: All actions require an alignments file (-a) to be passed in."
+                    "\nL|'dfl': Create an alignments file from faces extracted from DeepFaceLab. "
+                    "Specify 'dfl' as the 'alignments file' entry and the folder containing the "
+                    "dfl faces as the 'faces folder' ('-a dfl -fc <source faces folder>'"
                     "\nL|'draw': Draw landmarks on frames in the selected folder/video. A "
                     "subfolder will be created within the frames folder to hold the output." +
                     frames_dir +
@@ -54,33 +57,22 @@ class AlignmentsArgs(FaceSwapArgs):
                     "alignments file." + output_opts + frames_dir +
                     "\nL|'missing-frames': Identify frames in the alignments file that do not "
                     "appear within the frames folder/video." + output_opts + frames_dir +
-                    "\nL|'legacy': This updates legacy alignments to the latest format by "
-                    "rotating the landmarks and bounding boxes and adding face_hashes." +
-                    frames_and_faces_dir +
                     "\nL|'leftover-faces': Identify faces in the faces folder that do not exist "
                     "in the alignments file." + output_opts + faces_dir +
                     "\nL|'multi-faces': Identify where multiple faces exist within the alignments "
                     "file." + output_opts + frames_or_faces_dir +
                     "\nL|'no-faces': Identify frames that exist within the alignment file but no "
                     "faces were detected." + output_opts + frames_dir +
-                    "\nL|'reformat': Save a copy of alignments file in a different format. "
-                    "Specify a format with the -fmt option. Alignments can be converted from "
-                    "DeepFaceLab by specifing: '-a dfl -fc <source faces folder>'"
                     "\nL|'remove-faces': Remove deleted faces from an alignments file. The "
-                    "original alignments file will be backed up. A different file format for the "
-                    "alignments file can optionally be specified (-fmt)." + faces_dir +
+                    "original alignments file will be backed up." + faces_dir +
                     "\nL|'remove-frames': Remove deleted frames from an alignments file. The "
-                    "original alignments file will be backed up. A different file format for "
-                    "the alignments file can optionally be specified (-fmt)." + frames_dir +
+                    "original alignments file will be backed up." + frames_dir +
                     "\nL|'rename' - Rename faces to correspond with their parent frame and "
                     "position index in the alignments file (i.e. how they are named after running "
                     "extract)." + faces_dir +
-                    "\nL|'sort-x': Re-index the alignments from left to right. For alignments "
+                    "\nL|'sort': Re-index the alignments from left to right. For alignments "
                     "with multiple faces this will ensure that the left-most face is at index 0 "
                     "Optionally pass in a faces folder (-fc) to also rename extracted faces."
-                    "\nL|'sort-y': Re-index the alignments from top to bottom. For alignments "
-                    "with multiple faces this will ensure that the top-most face is at index 0. "
-                    "Optionally pass in a faces folder (-fc) to also  rename extracted faces."
                     "\nL|'spatial': Perform spatial and temporal filtering to smooth alignments "
                     "(EXPERIMENTAL!)"
                     "\nL|'update-hashes': Recalculate the face hashes. Only use this if you have "
@@ -109,12 +101,6 @@ class AlignmentsArgs(FaceSwapArgs):
                               "group": "data",
                               "help": "Directory containing source frames "
                                       "that faces were extracted from."})
-        argument_list.append({"opts": ("-fmt", "--alignment_format"),
-                              "type": str,
-                              "choices": ("json", "pickle", "yaml"),
-                              "group": "data",
-                              "help": "The file format to save the alignment "
-                                      "data in. Defaults to same as source."})
         argument_list.append({
             "opts": ("-o", "--output"),
             "action": Radio,

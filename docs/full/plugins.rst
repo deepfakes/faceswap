@@ -7,6 +7,7 @@ Subpackages
 .. toctree::
 
    plugins.extract
+   plugins.plugin_loader
 
 Module contents
 ---------------

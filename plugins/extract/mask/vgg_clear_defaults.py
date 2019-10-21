@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap FAN Alignments plugin.
+    The default options for the faceswap VGG clear plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -44,18 +44,18 @@
 
 
 _HELPTEXT = (
-    "FAN Aligner options.Fast on GPU, slow on CPU. Best aligner."
+    "VGG_Clear options. Mask designed to provide smart segmentation of mostly frontal faces clear "
+    "of obstructions.\nProfile faces and obstructions may result in sub-par performance."
     )
 
 
 _DEFAULTS = {
     "batch-size": {
-        "default": 12,
+        "default": 6,
         "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
                 "but setting it too high can harm performance.\n"
                 "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-                "accomodate then this will automatically be lowered."
-                "\n\tAMD users: A batchsize of 8 requires about 4 GB vram.",
+                "accomodate then this will automatically be lowered.",
         "datatype": int,
         "rounding": 1,
         "min_max": (1, 64),

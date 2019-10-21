@@ -23,16 +23,15 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class AlignmentData(Alignments):
     """ Class to hold the alignment data """
 
-    def __init__(self, alignments_file, destination_format):
-        logger.debug("Initializing %s: (alignments file: '%s', destination_format: '%s')",
-                     self.__class__.__name__, alignments_file, destination_format)
+    def __init__(self, alignments_file):
+        logger.debug("Initializing %s: (alignments file: '%s')",
+                     self.__class__.__name__, alignments_file)
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
         if filename.lower() == "dfl":
-            self.set_dfl(destination_format)
+            self.file = filename
             return
         super().__init__(folder, filename=filename)
-        self.set_destination_format(destination_format)
         logger.verbose("%s items loaded", self.frames_count)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -43,46 +42,13 @@ class AlignmentData(Alignments):
         if filename.lower() == "dfl":
             folder = None
             filename = "dfl"
-            logger.info("Using extracted pngs for alignments")
+            logger.info("Using extracted DFL faces for alignments")
         elif not os.path.isfile(alignments_file):
             logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
             exit(0)
         if folder:
             logger.verbose("Alignments file exists at '%s'", alignments_file)
         return folder, filename
-
-    def set_dfl(self, destination_format):
-        """ Set the alignments for dfl alignments """
-        logger.debug("Alignments are DFL format")
-        self.file = "dfl"
-        self.set_destination_format(destination_format)
-
-    def set_destination_format(self, destination_format):
-        """ Standardize the destination format to the correct extension """
-        extensions = {".json": "json",
-                      ".p": "pickle",
-                      ".yml": "yaml",
-                      ".yaml": "yaml"}
-        dst_fmt = None
-        file_ext = os.path.splitext(self.file)[1].lower()
-        logger.debug("File extension: '%s'", file_ext)
-
-        if destination_format is not None:
-            dst_fmt = destination_format
-        elif self.file == "dfl":
-            dst_fmt = "json"
-        elif file_ext in extensions.keys():
-            dst_fmt = extensions[file_ext]
-        else:
-            logger.error("'%s' is not a supported serializer. Exiting", file_ext)
-            exit(0)
-
-        logger.verbose("Destination format set to '%s'", dst_fmt)
-
-        self.serializer = self.get_serializer("", dst_fmt)
-        filename = os.path.splitext(self.file)[0]
-        self.file = "{}.{}".format(filename, self.serializer.file_extension)
-        logger.debug("Destination file: '%s'", self.file)
 
     def save(self):
         """ Backup copy of old alignments and save new alignments """

@@ -125,5 +125,5 @@ def get_matrix_scaling(mat):
 
 def get_align_mat(face):
     """ Return the alignment Matrix """
-    mat_umeyama = umeyama(np.array(face.landmarks_xy[17:]), True)[0:2]
+    mat_umeyama = umeyama(face.landmarks_xy[17:], True)[0:2]
     return mat_umeyama

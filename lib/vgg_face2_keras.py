@@ -41,7 +41,7 @@ class VGGFace2():
     def get_model(self, git_model_id, model_filename, backend):
         """ Check if model is available, if not, download and unzip it """
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        cache_path = os.path.join(root_path, "plugins", "extract", ".cache")
+        cache_path = os.path.join(root_path, "plugins", "extract", "recognition", ".cache")
         model = GetModel(model_filename, cache_path, git_model_id).model_path
         if backend == "CPU":
             if os.environ.get("KERAS_BACKEND", "") == "plaidml.keras.backend":
@@ -63,7 +63,7 @@ class VGGFace2():
         """ Return encodings for given image from vgg_face """
         if face.shape[0] != self.input_size:
             face = self.resize_face(face)
-        face = np.expand_dims(face - self.average_img, axis=0)
+        face = face[None, :, :, :3] - self.average_img
         preds = self.model.predict(face)
         return preds[0, :]
 
