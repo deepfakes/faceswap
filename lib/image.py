@@ -140,6 +140,45 @@ def read_image_hash(filename):
     return image_hash
 
 
+def read_image_hash_batch(filenames):
+    """ Return the `sha` hash of a batch of images
+
+    Leverages multi-threading to load multiple images from disk at the same time
+    leading to vastly reduced image read times. Creates a generator to retrieve filenames
+    with their hashes as they are calculated.
+
+    Notes
+    -----
+    The order of returned values is non-deterministic so will most likely not be returned in the
+    same order as the filenames
+
+    Parameters
+    ----------
+    filenames: list
+        A list of ``str`` full paths to the images to be loaded.
+    show_progress: bool, optional
+        Display a progress bar. Default: False
+
+    Yields
+    -------
+    tuple: (`filename`, :func:`hashlib.hexdigest()` representation of the `sha1` hash of the image)
+    Example
+    -------
+    >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
+    >>> for filename, hash in read_image_hash_batch(image_filenames):
+    >>>         <do something>
+    """
+    logger.trace("Requested batch: '%s'", filenames)
+    executor = futures.ThreadPoolExecutor()
+    with executor:
+        read_hashes = {executor.submit(read_image_hash, filename): filename
+                       for filename in filenames}
+        for future in futures.as_completed(read_hashes):
+            retval = (read_hashes[future], future.result())
+            logger.trace("Yielding: %s", retval)
+            yield retval
+
+
 def encode_image_with_hash(image, extension):
     """ Encode an image, and get the encoded image back with its `sha1` hash.
 

@@ -14,7 +14,8 @@ from tqdm import tqdm
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import count_frames_and_secs, encode_image_with_hash, read_image, read_image_hash
+from lib.image import (count_frames_and_secs, encode_image_with_hash, read_image,
+                       read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -171,15 +172,18 @@ class Faces(MediaLoader):
     def process_folder(self):
         """ Iterate through the faces dir pulling out various information """
         logger.info("Loading file list from %s", self.folder)
-        for face in tqdm(os.listdir(self.folder), desc="Reading Face Hashes"):
-            if not self.valid_extension(face):
-                continue
-            filename = os.path.splitext(face)[0]
-            file_extension = os.path.splitext(face)[1]
-            face_hash = read_image_hash(os.path.join(self.folder, face))
-            retval = {"face_fullname": face,
-                      "face_name": filename,
-                      "face_extension": file_extension,
+
+        filelist = [os.path.join(self.folder, face)
+                    for face in os.listdir(self.folder)
+                    if self.valid_extension(face)]
+        for fullpath, face_hash in tqdm(read_image_hash_batch(filelist),
+                                        total=len(filelist),
+                                        desc="Reading Face Hashes"):
+            filename = os.path.basename(fullpath)
+            face_name, extension = os.path.splitext(filename)
+            retval = {"face_fullname": filename,
+                      "face_name": face_name,
+                      "face_extension": extension,
                       "face_hash": face_hash}
             logger.trace(retval)
             yield retval
