@@ -13,7 +13,7 @@ import numpy as np
 
 from PIL import Image, ImageDraw, ImageTk
 
-from lib.Serializer import JSONSerializer
+from lib.serializer import get_serializer
 
 from ._config import Config as UserConfig
 from ._redirector import WidgetRedirector
@@ -643,7 +643,7 @@ class Config():
         self.scaling_factor = scaling_factor
         self.pathcache = pathcache
         self.statusbar = statusbar
-        self.serializer = JSONSerializer
+        self.serializer = get_serializer("json")
         self.tk_vars = self.set_tk_vars()
         self.user_config = UserConfig(None)
         self.user_config_dict = self.user_config.config_dict
@@ -740,13 +740,14 @@ class Config():
                 msg = "File does not exist: '{}'".format(filename)
                 logger.error(msg)
                 return
-            with open(filename, "r") as cfgfile:
-                cfg = self.serializer.unmarshal(cfgfile.read())
+            cfg = self.serializer.load(filename)
         else:
             cfgfile = FileHandler("open", "config").retfile
             if not cfgfile:
                 return
-            cfg = self.serializer.unmarshal(cfgfile.read())
+            filename = cfgfile.name
+            cfgfile.close()
+            cfg = self.serializer.load(filename)
 
         if not command and len(cfg.keys()) == 1:
             command = list(cfg.keys())[0]
@@ -764,8 +765,8 @@ class Config():
             else:
                 self.command_notebook.select(self.command_tabs["tools"])
                 self.command_notebook.tools_notebook.select(self.tools_command_tabs[command])
-        self.add_to_recent(cfgfile.name, command)
-        logger.debug("Loaded config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+        self.add_to_recent(filename, command)
+        logger.debug("Loaded config: (command: '%s', filename: '%s')", command, filename)
 
     def get_command_options(self, cfg, command):
         """ return the saved options for the requested
@@ -796,11 +797,12 @@ class Config():
         cfgfile = FileHandler("save", "config").retfile
         if not cfgfile:
             return
-        cfg = self.cli_opts.get_option_values(command)
-        cfgfile.write(self.serializer.marshal(cfg))
+        filename = cfgfile.name
         cfgfile.close()
-        self.add_to_recent(cfgfile.name, command)
-        logger.debug("Saved config: (command: '%s', cfgfile: '%s')", command, cfgfile)
+        cfg = self.cli_opts.get_option_values(command)
+        self.serializer.save(filename, cfg)
+        self.add_to_recent(filename, command)
+        logger.debug("Saved config: (command: '%s', filename: '%s')", command, filename)
 
     def add_to_recent(self, filename, command):
         """ Add to recent files """
@@ -809,8 +811,7 @@ class Config():
         if not os.path.exists(recent_filename) or os.path.getsize(recent_filename) == 0:
             recent_files = list()
         else:
-            with open(recent_filename, "rb") as inp:
-                recent_files = self.serializer.unmarshal(inp.read().decode("utf-8"))
+            recent_files = self.serializer.load(recent_filename)
         logger.debug("Initial recent files: %s", recent_files)
         filenames = [recent[0] for recent in recent_files]
         if filename in filenames:
@@ -819,9 +820,7 @@ class Config():
         recent_files.insert(0, (filename, command))
         recent_files = recent_files[:20]
         logger.debug("Final recent files: %s", recent_files)
-        recent_json = self.serializer.marshal(recent_files)
-        with open(recent_filename, "wb") as out:
-            out.write(recent_json.encode("utf-8"))
+        self.serializer.save(recent_filename, recent_files)
 
 
 class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
