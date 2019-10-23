@@ -273,7 +273,8 @@ class DetectedFace():
         logger.trace(padding)
         return padding
 
-    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
+    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
+                       is_aligned_face=False):
         """ Align a face in the correct dimensions for feeding into a model.
 
         Parameters
@@ -286,6 +287,9 @@ class DetectedFace():
             the ratio of the extracted image that was used for training. Default: `0.625`
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        is_aligned_face: bool, optional
+            Indicates that the :attr:`image` is an aligned face rather than a frame.
+            Default: ``False``
 
         Notes
         -----
@@ -293,13 +297,21 @@ class DetectedFace():
             - :func:`feed_face`
             - :func:`feed_interpolators`
         """
-        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s)",
-                     size, coverage_ratio, dtype)
+        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s, "
+                     "is_aligned_face: %s)", size, coverage_ratio, dtype, is_aligned_face)
 
         self.feed["size"] = size
         self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
         self.feed["matrix"] = get_align_mat(self)
-        face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
+        if is_aligned_face:
+            original_size = image.shape[0]
+            interp = cv2.INTER_CUBIC if original_size < size else cv2.INTER_AREA
+            face = cv2.resize(image, (size, size), interpolation=interp)
+        else:
+            face = AlignerExtract().transform(image,
+                                              self.feed["matrix"],
+                                              size,
+                                              self.feed["padding"])
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
@@ -510,11 +522,22 @@ class Mask():
         self._frame_dims = None
         self._interpolator = None
 
+        self._blur_kernel = 0
+        self._threshold = 0.0
+
     @property
     def mask(self):
-        """ numpy.ndarray: The mask at the size of :attr:`stored_size` """
-        return np.frombuffer(decompress(self._mask),
-                             dtype="uint8").reshape((self.stored_size, self.stored_size, 1))
+        """ numpy.ndarray: The mask at the size of :attr:`stored_size` with any requested blurring
+        and threshold amount applied."""
+        dims = (self.stored_size, self.stored_size, 1)
+        mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
+        if self._threshold != 0.0:
+            mask[mask < self._threshold] = 0.0
+            mask[mask > 255.0 - self._threshold] = 255.0
+        if self._blur_kernel != 0:
+            mask = cv2.GaussianBlur(mask, (self._blur_kernel, self._blur_kernel), 0)[..., None]
+        logger.trace("mask shape: %s", mask.shape)
+        return mask
 
     @property
     def full_frame_mask(self):
@@ -557,6 +580,22 @@ class Mask():
                            (self.stored_size, self.stored_size),
                            interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
         self._mask = compress(mask)
+
+    def set_blur_kernel_and_threshold(self, blur_kernel=0, threshold=0):
+        """ Set the internal blur kernel and threshold amount for returned masks
+
+        Parameters
+        ----------
+        blur_kernel: int, optional
+            The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
+            blurring. Default: 0
+        threshold: int, optional
+            The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
+            Default: 0
+        """
+        logger.trace("blur_kernel: %s, threshold: %s", blur_kernel, threshold)
+        self._blur_kernel = blur_kernel
+        self._threshold = (threshold / 100.0) * 255.0
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
         """ Adjust the affine matrix for the mask's storage size

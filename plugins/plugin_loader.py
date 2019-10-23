@@ -164,14 +164,15 @@ class PluginLoader():
         return getattr(module, ttl)
 
     @staticmethod
-    def get_available_extractors(extractor_type):
+    def get_available_extractors(extractor_type, add_none=False):
         """ Return a list of available extractors of the given type
 
         Parameters
         ----------
         extractor_type: {'aligner', 'detector', 'masker'}
             The type of extractor to return the plugins for
-
+        add_none: bool, optional
+            Append "none" to the list of returned plugins. Default: False
         Returns
         -------
         list:
@@ -186,6 +187,8 @@ class PluginLoader():
                             and not item.name.endswith("defaults.py")
                             and item.name.endswith(".py")
                             and item.name != "manual.py")
+        if add_none:
+            extractors.insert(0, "none")
         return extractors
 
     @staticmethod

@@ -5,8 +5,8 @@ Return a requested detector/aligner pipeline
 Tensorflow does not like to release GPU VRAM, so parallel plugins need to be managed to work
 together.
 
-This module sets up a pipeline for the extraction workflow, loading align and detect plugins
-either in parallel or in series, giving easy access to input and output.
+This module sets up a pipeline for the extraction workflow, loading detect, align and mask
+plugins either in parallel or in series, giving easy access to input and output.
 
  """
 
@@ -50,6 +50,9 @@ class Extractor():
     normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
         Used to set the :attr:`~plugins.extract.align.normalize_method` attribute. Normalize the
         images fed to the aligner.Default: ``None``
+    image_is_aligned: bool, optional
+        Used to set the :attr:`~plugins.extract.mask.image_is_aligned` attribute. Indicates to the
+        masker that the fed in image is an aligned face rather than a frame.Default: ``False``
 
     Attributes
     ----------
@@ -59,19 +62,19 @@ class Extractor():
     """
     def __init__(self, detector, aligner, masker, configfile=None,
                  multiprocess=False, rotate_images=None, min_size=20,
-                 normalize_method=None):
+                 normalize_method=None, image_is_aligned=False):
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, "
                      "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s)",
+                     "normalize_method: %s, image_is_aligned: %s)",
                      self.__class__.__name__, detector, aligner, masker, configfile,
-                     multiprocess, rotate_images, min_size, normalize_method)
-        self._flow = ["detect", "align", "mask"]
+                     multiprocess, rotate_images, min_size, normalize_method, image_is_aligned)
+        self._flow = self._set_flow(detector, aligner, masker)
         self.phase = self._flow[0]
         self._queue_size = 32
         self._vram_buffer = 256  # Leave a buffer for VRAM allocation
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner, configfile, normalize_method)
-        self._mask = self._load_mask(masker, configfile)
+        self._mask = self._load_mask(masker, image_is_aligned, configfile)
         self._is_parallel = self._set_parallel_processing(multiprocess)
         self._set_extractor_batchsize()
         self._queues = self._add_queues()
@@ -239,7 +242,7 @@ class Extractor():
         VRAM for parallel plugins does not stack in a linear manner. Calculating the precise
         scaling for any given plugin combination is non trivial, however the following are
         calculations based on running 2-5 plugins in parallel using s3fd, fan, unet, vgg-clear
-        and vgg-obstructed. The worst ratio is selected for each combination, plus a litle extra
+        and vgg-obstructed. The worst ratio is selected for each combination, plus a little extra
         to ensure that vram is not used up.
 
         If OOM errors are being reported, then these ratios should be relaxed some more
@@ -302,6 +305,20 @@ class Extractor():
         logger.trace("Active plugins: %s", retval)
         return retval
 
+    @staticmethod
+    def _set_flow(detector, aligner, masker):
+        """ Set the flow list based on the input plugins """
+        logger.debug("detector: %s, aligner: %s, masker: %s", detector, aligner, masker)
+        retval = []
+        if detector is not None and detector.lower() != "none":
+            retval.append("detect")
+        if aligner is not None and aligner.lower() != "none":
+            retval.append("align")
+        if masker is not None and masker.lower() != "none":
+            retval.append("mask")
+        logger.debug("flow: %s", retval)
+        return retval
+
     def _add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
@@ -350,6 +367,9 @@ class Extractor():
     @staticmethod
     def _load_align(aligner, configfile, normalize_method):
         """ Set global arguments and load aligner plugin """
+        if aligner is None or aligner.lower() == "none":
+            logger.debug("No aligner selected. Returning None")
+            return None
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
         aligner = PluginLoader.get_aligner(aligner_name)(configfile=configfile,
@@ -359,6 +379,9 @@ class Extractor():
     @staticmethod
     def _load_detect(detector, rotation, min_size, configfile):
         """ Set global arguments and load detector plugin """
+        if detector is None or detector.lower() == "none":
+            logger.debug("No detector selected. Returning None")
+            return None
         detector_name = detector.replace("-", "_").lower()
         logger.debug("Loading Detector: '%s'", detector_name)
         detector = PluginLoader.get_detector(detector_name)(rotation=rotation,
@@ -367,11 +390,15 @@ class Extractor():
         return detector
 
     @staticmethod
-    def _load_mask(masker, configfile):
+    def _load_mask(masker, image_is_aligned, configfile):
         """ Set global arguments and load masker plugin """
+        if masker is None or masker.lower() == "none":
+            logger.debug("No masker selected. Returning None")
+            return None
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
-        masker = PluginLoader.get_masker(masker_name)(configfile=configfile)
+        masker = PluginLoader.get_masker(masker_name)(image_is_aligned=image_is_aligned,
+                                                      configfile=configfile)
         return masker
 
     def _launch_plugin(self, phase):

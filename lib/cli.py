@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class ScriptExecutor():
     """ Loads the relevant script modules and executes the script.
-        This class is initialised in each of the argparsers for the relevant
+        This class is initialized in each of the argparsers for the relevant
         command, then execute script is called within their set_default
         function. """
 
@@ -80,7 +80,7 @@ class ScriptExecutor():
             tkinter app is available on their machine. If not
             exit gracefully.
 
-            This avoids having to import every tk function
+            This avoids having to import every tkinter function
             within the GUI in a wrapper and potentially spamming
             traceback errors to console """
 
@@ -321,9 +321,9 @@ class FullHelpArgumentParser(argparse.ArgumentParser):
 
 class SmartFormatter(argparse.HelpFormatter):
     """ Smart formatter for allowing raw formatting in help
-        text and lists in the helptext
+        text and lists in the help text
 
-        To use: prefix the help item with "R|" to overide
+        To use: prefix the help item with "R|" to override
         default formatting. List items can be marked with "L|"
         at the start of a newline
 
@@ -566,14 +566,13 @@ class ExtractArgs(ExtractConvertArgs):
             "opts": ("-M", "--masker"),
             "action": Radio,
             "type": str.lower,
-            "choices": PluginLoader.get_available_extractors("mask"),
+            "choices": PluginLoader.get_available_extractors("mask", add_none=True),
             "default": "extended",
             "group": "Plugins",
             "help": "R|Masker to use. NB: Masker is not currently used by the rest of the process "
                     "but this will store a mask in the alignments file for use when it has been "
                     "implemented."
-                    "\nL|none: An array of all ones is created to provide a 4th channel that will "
-                    "not mask any portion of the image."
+                    "\nL|none: Don't use a mask."
                     "\nL|components: Mask designed to provide facial segmentation based on the "
                     "positioning of landmark locations. A convex hull is constructed around the "
                     "exterior of the landmarks to create a mask."

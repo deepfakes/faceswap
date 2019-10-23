@@ -36,16 +36,14 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
+    image_is_aligned: bool, optional
+        Indicates that the passed in image is an aligned face rather than a frame.
+        Default: ``False``
 
     Other Parameters
     ----------------
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
-
-    Attributes
-    ----------
-    blur_kernel, int
-        The size of the kernel for applying gaussian blur to the output of the mask
 
     See Also
     --------
@@ -55,16 +53,17 @@ class Masker(Extractor):  # pylint:disable=abstract-method
     plugins.extract.align._base : Aligner parent class for extraction plugins.
     """
 
-    def __init__(self, git_model_id=None, model_filename=None, configfile=None):
+    def __init__(self, git_model_id=None, model_filename=None, configfile=None,
+                 image_is_aligned=False):
         logger.debug("Initializing %s: (configfile: %s, )", self.__class__.__name__, configfile)
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile)
         self.input_size = 256  # Override for model specific input_size
-        self.blur_kernel = 5  # Override for model specific blur_kernel size
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
         self._plugin_type = "mask"
+        self._image_is_aligned = image_is_aligned
         self._storage_name = self.__module__.split(".")[-1].replace("_", "-")
         self._storage_size = 128  # Size to store masks at. Leave this at default
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
@@ -121,7 +120,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 face.load_feed_face(face.image,
                                     size=self.input_size,
                                     coverage_ratio=1.0,
-                                    dtype="float32")
+                                    dtype="float32",
+                                    is_aligned_face=self._image_is_aligned)
                 batch.setdefault("detected_faces", []).append(face)
                 batch.setdefault("filename", []).append(item["filename"])
                 batch.setdefault("image", []).append(item["image"])
@@ -190,14 +190,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             :class:`lib.faces_detect.DetectedFace` objects.
 
         """
-        # TODO Migrate these settings to retrieval rather than storage
-        # if self.blur_kernel is not None:
-        #    predicted = np.array([cv2.GaussianBlur(mask, (self.blur_kernel, self.blur_kernel), 0)
-        #                          for mask in batch["prediction"]])
-        # else:
-        #    predicted = batch["prediction"]
-        # predicted[predicted < 0.04] = 0.0
-        # predicted[predicted > 0.96] = 1.0
         for mask, face in zip(batch["prediction"], batch["detected_faces"]):
             face.add_mask(self._storage_name,
                           mask,
