@@ -7,18 +7,24 @@
 
     A training_opts dictionary can be set in the corresponding model.
     Accepted values:
-        alignments:         dict containing paths to alignments files for keys 'a' and 'b'
-        preview_scaling:    How much to scale the preview out by
-        training_size:      Size of the training images
-        coverage_ratio:     Ratio of face to be cropped out for training
-        mask_type:          Type of mask to use. See lib.model.masks for valid mask names.
-                            Set to None for not used
-        no_logs:            Disable tensorboard logging
-        snapshot_interval:  Interval for saving model snapshots
-        warp_to_landmarks:  Use random_warp_landmarks instead of random_warp
-        augment_color:      Perform random shifting of L*a*b* colors
-        no_flip:            Don't perform a random flip on the image
-        pingpong:           Train each side seperately per save iteration rather than together
+        alignments:             dict containing paths to alignments files for keys 'a' and 'b'
+        preview_scaling:        How much to scale the preview out by
+        training_size:          Size of the training images
+        coverage_ratio:         Ratio of face to be cropped out for training
+        mask_type:              The type of mask to select from the alignments file
+        mask_blur_kernel:       The size of the kernel to use for gaussian blurring the mask
+        mask_threshold:         The threshold for min/maxing mask to 0/100
+        learn_mask:             Whether the mask should be trained in the model
+        penalized_mask_loss:    Whether the mask should be penalized from loss
+        no_logs:                Disable tensorboard logging
+        snapshot_interval:      Interval for saving model snapshots
+        warp_to_landmarks:      Use random_warp_landmarks instead of random_warp
+        augment_color:          Perform random shifting of L*a*b* colors
+        no_flip:                Don't perform a random flip on the image
+        pingpong:               Train each side seperately per save iteration rather than together
+
+
+
 """
 
 import logging
@@ -30,9 +36,11 @@ import numpy as np
 
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tqdm import tqdm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
+from lib.image import read_image_hash_batch
 from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
@@ -89,24 +97,32 @@ class TrainerBase():
     @property
     def landmarks_required(self):
         """ Return True if Landmarks are required """
-        opts = self.model.training_opts
-        retval = bool(opts.get("mask_type", None) or opts["warp_to_landmarks"])
+        retval = self.model.training_opts["warp_to_landmarks"]
         logger.debug(retval)
         return retval
 
     @property
     def use_mask(self):
         """ Return True if a mask is requested """
-        retval = bool(self.model.training_opts.get("mask_type", None))
+        retval = (self.model.training_opts["learn_mask"] or
+                  self.model.training_opts["penalized_mask_loss"])
         logger.debug(retval)
         return retval
 
     def process_training_opts(self):
         """ Override for processing model specific training options """
         logger.debug(self.model.training_opts)
+        if not self.landmarks_required and not self.use_mask:
+            return
+
+        alignments = TrainingAlignments(self.model.training_opts, self.images)
         if self.landmarks_required:
-            landmarks = Landmarks(self.model.training_opts).landmarks
-            self.model.training_opts["landmarks"] = landmarks
+            logger.debug("Adding landmarks to training opts dict")
+            self.model.training_opts["landmarks"] = alignments.landmarks
+
+        if self.use_mask:
+            logger.debug("Adding masks to training opts dict")
+            self.model.training_opts["masks"] = alignments.masks
 
     def set_tensorboard(self):
         """ Set up tensorboard callback """
@@ -176,10 +192,11 @@ class TrainerBase():
             for side, batcher in self.batchers.items():
                 if self.pingpong.active and side != self.pingpong.side:
                     continue
-                loss[side] = batcher.train_one_batch(do_preview)
+                loss[side] = batcher.train_one_batch()
                 if not do_preview and not do_timelapse:
                     continue
                 if do_preview:
+                    batcher.generate_preview(do_preview)
                     self.samples.images[side] = batcher.compile_sample(None)
                 if do_timelapse:
                     self.timelapse.get_sample(side, timelapse_kwargs)
@@ -247,13 +264,14 @@ class Batcher():
         self.config = config
         self.target = None
         self.samples = None
-        self.mask = None
+        self.masks = None
 
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
 
         self.preview_feed = None
         self.timelapse_feed = None
+        self.set_preview_feed()
 
     def load_generator(self):
         """ Pass arguments to TrainingDataGenerator and return object """
@@ -267,12 +285,12 @@ class Batcher():
                                           self.config)
         return generator
 
-    def train_one_batch(self, do_preview):
+    def train_one_batch(self):
         """ Train a batch """
         logger.trace("Training one step: (side: %s)", self.side)
-        batch = self.get_next(do_preview)
+        model_inputs, model_targets = self.get_next()
         try:
-            loss = self.model.predictors[self.side].train_on_batch(*batch)
+            loss = self.model.predictors[self.side].train_on_batch(model_inputs, model_targets)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -288,31 +306,30 @@ class Batcher():
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self, do_preview):
+    def get_next(self):
         """ Return the next batch from the generator
-            Items should come out as: (warped, target [, mask]) """
+            Items should be returned as as: ([model_inputs], [model_targets]) """
+        logger.trace("Generating targets")
         batch = next(self.feed)
-        if self.use_mask:
-            batch = [[batch["feed"], batch["masks"]], batch["targets"] + [batch["masks"]]]
-        else:
-            batch = [batch["feed"], batch["targets"]]
-        self.generate_preview(do_preview)
-        return batch
+        # TODO Move this to model or property
+        targets_use_mask = self.model.training_opts["learn_mask"]
+        # TODO Check if this migration of 2 lists to 1 list is correct
+        model_inputs = batch["feed"] + batch["masks"] if self.use_mask else batch["feed"]
+        model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
+        return model_inputs, model_targets
 
     def generate_preview(self, do_preview):
         """ Generate the preview if a preview iteration """
         if not do_preview:
             self.samples = None
             self.target = None
+            self.masks = None
             return
         logger.debug("Generating preview")
-        if self.preview_feed is None:
-            self.set_preview_feed()
         batch = next(self.preview_feed)
         self.samples = batch["samples"]
-        self.target = [batch["targets"][self.model.largest_face_index]]
-        if self.use_mask:
-            self.target += [batch["masks"]]
+        self.target = batch["targets"][self.model.largest_face_index]
+        self.masks = batch["masks"][0]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -327,27 +344,27 @@ class Batcher():
                                                                is_preview=True)
         logger.debug("Set preview feed. Batchsize: %s", batchsize)
 
-    def compile_sample(self, batch_size, samples=None, images=None):
+    def compile_sample(self, batch_size, samples=None, images=None, masks=None):
         """ Training samples to display in the viewer """
         num_images = self.config.get("preview_images", 14)
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
-        retval = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
-        if self.use_mask:
-            retval.extend(tgt[0:num_images] for tgt in images)
-        else:
-            retval.extend(images[0:num_images])
+        masks = masks if masks is not None else self.masks
+        samples = samples if samples is not None else self.samples
+        retval = [samples[0:num_images], images[0:num_images], masks[0:num_images]]
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
         batchsize = len(batch["samples"])
-        images = [batch["targets"][self.model.largest_face_index]]
-        if self.use_mask:
-            images = images + [batch["masks"]]
-        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
+        images = batch["targets"][self.model.largest_face_index]
+        masks = batch["masks"][0]
+        sample = self.compile_sample(batchsize,
+                                     samples=batch["samples"],
+                                     images=images,
+                                     masks=masks)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -416,7 +433,7 @@ class Samples():
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
         figure = stack_images(figure)
-        figure = np.vstack((header, figure))
+        figure = np.concatenate((header, figure), axis=0)
 
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
@@ -429,10 +446,8 @@ class Samples():
             return sample
         logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                      side, sample.shape, target_size, scale)
-        interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA  # pylint: disable=no-member
-        retval = np.array([cv2.resize(img,  # pylint: disable=no-member
-                                      (target_size, target_size),
-                                      interpn)
+        interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
+        retval = np.array([cv2.resize(img, (target_size, target_size), interpn)
                            for img in sample])
         logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
         return retval
@@ -484,27 +499,10 @@ class Samples():
         length = target_size // 4
         t_l, b_r = (padding, full_size - padding)
         for img in images:
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (t_l, t_l),
-                          (t_l + length, t_l + length),
-                          color,
-                          3)
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (b_r, t_l),
-                          (b_r - length, t_l + length),
-                          color,
-                          3)
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (b_r, b_r),
-                          (b_r - length,
-                           b_r - length),
-                          color,
-                          3)
-            cv2.rectangle(img,  # pylint: disable=no-member
-                          (t_l, b_r),
-                          (t_l + length, b_r - length),
-                          color,
-                          3)
+            cv2.rectangle(img, (t_l, t_l), (t_l + length, t_l + length), color, 3)
+            cv2.rectangle(img, (b_r, t_l), (b_r - length, t_l + length), color, 3)
+            cv2.rectangle(img, (b_r, b_r), (b_r - length, b_r - length), color, 3)
+            cv2.rectangle(img, (t_l, b_r), (t_l + length, b_r - length), color, 3)
             new_images.append(img)
         retval = np.array(new_images)
         logger.debug("Overlayed background. Shape: %s", retval.shape)
@@ -518,9 +516,7 @@ class Samples():
         for mask in masks3:
             mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
         for previews in faces:
-            images = np.array([cv2.addWeighted(img, 1.0,  # pylint: disable=no-member
-                                               masks3[idx], 0.3,
-                                               0)
+            images = np.array([cv2.addWeighted(img, 1.0, masks3[idx], 0.3, 0)
                                for idx, img in enumerate(previews)])
             retval.append(images)
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])
@@ -533,7 +529,7 @@ class Samples():
         new_images = list()
         for idx, img in enumerate(backgrounds):
             img[offset:offset + foregrounds[idx].shape[0],
-                offset:offset + foregrounds[idx].shape[1]] = foregrounds[idx]
+                offset:offset + foregrounds[idx].shape[1], :3] = foregrounds[idx]
             new_images.append(img)
         retval = np.array(new_images)
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
@@ -548,14 +544,11 @@ class Samples():
         height = int(64 * self.scaling)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
-        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+        font = cv2.FONT_HERSHEY_SIMPLEX
         texts = ["{} ({})".format(titles[0], side),
                  "{0} > {0}".format(titles[0]),
                  "{} > {}".format(titles[0], titles[1])]
-        text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
-                                      font,
-                                      self.scaling * 0.8,
-                                      1)[0]
+        text_sizes = [cv2.getTextSize(texts[idx], font, self.scaling * 0.8, 1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
         text_x = [int((width - text_sizes[idx][0]) / 2) + width * idx
@@ -564,14 +557,14 @@ class Samples():
                      texts, text_sizes, text_x, text_y)
         header_box = np.ones((height, total_width, 3), np.float32)
         for idx, text in enumerate(texts):
-            cv2.putText(header_box,  # pylint: disable=no-member
+            cv2.putText(header_box,
                         text,
                         (text_x[idx], text_y),
                         font,
                         self.scaling * 0.8,
                         (0, 0, 0),
                         1,
-                        lineType=cv2.LINE_AA)  # pylint: disable=no-member
+                        lineType=cv2.LINE_AA)
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 
@@ -625,18 +618,18 @@ class Timelapse():
 
     def output_timelapse(self):
         """ Set the timelapse dictionary """
-        logger.debug("Ouputting timelapse")
+        logger.debug("Ouputting time-lapse")
         image = self.samples.show_sample()
         if image is None:
             return
         filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
 
-        cv2.imwrite(filename, image)  # pylint: disable=no-member
+        cv2.imwrite(filename, image)
         logger.debug("Created timelapse: '%s'", filename)
 
 
 class PingPong():
-    """ Side switcher for pingpong training """
+    """ Side switcher for ping-pong training """
     def __init__(self, model, sides):
         logger.debug("Initializing %s: (model: '%s')", self.__class__.__name__, model)
         self.active = model.training_opts.get("pingpong", False)
@@ -647,7 +640,7 @@ class PingPong():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def switch(self):
-        """ Switch pingpong side """
+        """ Switch ping-pong side """
         if not self.active:
             return
         retval = [side for side in self.sides if side != self.side][0]
@@ -661,35 +654,131 @@ class PingPong():
         self.model.reset_pingpong()
 
 
-class Landmarks():
-    """ Set Landmarks for training into the model's training options"""
-    def __init__(self, training_opts):
-        logger.debug("Initializing %s: (training_opts: '%s')",
-                     self.__class__.__name__, training_opts)
-        self.size = training_opts.get("training_size", 256)
-        self.paths = training_opts["alignments"]
-        self.landmarks = self.get_alignments()
+class TrainingAlignments():
+    """ Get Landmarks and required mask from alignments file """
+    def __init__(self, training_opts, image_list):
+        logger.debug("Initializing %s: (training_opts: '%s', image counts: %s)",
+                     self.__class__.__name__, training_opts,
+                     {k: len(v) for k, v in image_list.items()})
+        self._training_opts = training_opts
+        self._hashes = self._get_image_hashes(image_list)
+        self._detected_faces = self._load_alignments()
+        self._check_all_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_alignments(self):
-        """ Obtain the landmarks for each faceset """
-        landmarks = dict()
-        for side, fullpath in self.paths.items():
+    @property
+    def landmarks(self):
+        """dict: The transformed landmarks for each face set """
+        retval = {side: self._transform_landmarks(detected_faces)
+                  for side, detected_faces in self._detected_faces.items()}
+        logger.trace(retval)
+        return retval
+
+    @property
+    def masks(self):
+        """dict: The mask objects of requested mask_type for each face set """
+        retval = {side: self._get_masks(detected_faces)
+                  for side, detected_faces in self._detected_faces.items()}
+        logger.trace(retval)
+        return retval
+
+    # Load alignments
+    @staticmethod
+    def _get_image_hashes(image_list):
+        """ Return the hashes for all images used for training """
+        hashes = {key: dict(hashes=[], filenames=[]) for key in image_list}
+        pbar = tqdm(desc="Reading training images",
+                    total=sum(len(val) for val in image_list.values()))
+        for side, filelist in image_list.items():
+            logger.debug("side: %s, file count: %s", side, len(filelist))
+            for filename, hsh in read_image_hash_batch(filelist):
+                hashes[side]["hashes"].append(hsh)
+                hashes[side]["filenames"].append(filename)
+                pbar.update(1)
+        pbar.close()
+        logger.trace(hashes)
+        return hashes
+
+    def _load_alignments(self):
+        """ Load the alignments as list of detected faces for each side in a dict """
+        logger.debug("Loading alignments")
+        retval = dict()
+        for side, fullpath in self._training_opts["alignments"].items():
+            logger.debug("side: '%s', path: '%s'", side, fullpath)
             path, filename = os.path.split(fullpath)
             alignments = Alignments(path, filename=filename)
-            landmarks[side] = self.transform_landmarks(alignments)
-        return landmarks
+            retval[side] = self._to_detected_faces(alignments, side)
+        logger.debug("Returning: %s", {k: len(v) for k, v in retval.items()})
+        return retval
 
-    def transform_landmarks(self, alignments):
-        """ For each face transform landmarks and return """
-        landmarks = dict()
-        for _, faces, _, _ in alignments.yield_faces():
-            for face in faces:
+    def _to_detected_faces(self, alignments, side):
+        """ Return a list of :class:`lib.faces_detect.DetectedFace` objects from a
+        :class:'lib.alignments.Alignments' object
+
+        Filter the detected faces to only those that exist in the training folders
+        """
+        skip_count = 0
+        side_hashes = set(self._hashes[side]["hashes"])
+        detected_faces = []
+        for frame_name, faces, _, _ in alignments.yield_faces():
+            for idx, face in enumerate(faces):
+                if face["hash"] not in side_hashes:
+                    skip_count += 1
+                    logger.verbose("Skipping alignment for non-existant face in frame '%s' idx: "
+                                   "%s", frame_name, idx)
+                    continue
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
-                detected_face.load_aligned(None, size=self.size)
-                landmarks[detected_face.hash] = detected_face.aligned_landmarks
+                detected_faces.append(detected_face)
+        logger.debug("Detected Faces count: %s, Skipped faces count: %s",
+                     len(detected_faces), skip_count)
+        if skip_count != 0:
+            logger.warning("%s alignments have been removed as their corresponding faces do not "
+                           "exist in the input folder for side %s. Run in verbose mode if you "
+                           "wish to see which alignments have been excluded.",
+                           skip_count, side.upper())
+        return detected_faces
+
+    def _check_all_faces(self):
+        """ Ensure that all faces in the training folder exist in the alignments file.
+            If not, output missing filenames """
+        logger.debug("Checking faces exist in alignments")
+        missing_alignments = dict()
+        for side, train_hashes in self._hashes.items():
+            align_hashes = set(face.hash for face in self._detected_faces[side])
+            if not align_hashes.issuperset(train_hashes["hashes"]):
+                missing_alignments[side] = [
+                    os.path.basename(filename)
+                    for hsh, filename in zip(train_hashes["hashes"], train_hashes["filenames"])
+                    if hsh not in align_hashes]
+        if missing_alignments:
+            msg = ("There are faces in your training folder(s) which do not exist in your "
+                   "alignments file. Training cannot continue. See above for a full list of "
+                   "files missing alignments.")
+            for side, filelist in missing_alignments.items():
+                logger.error("Faces missing alignments for side %s: %s",
+                             side.capitalize(), filelist)
+            raise FaceswapError(msg)
+
+    # Get landmarks
+    def _transform_landmarks(self, detected_faces):
+        """ For each face transform landmarks and return """
+        landmarks = dict()
+        for face in detected_faces:
+            face.load_aligned(None, size=self._training_opts["training_size"])
+            landmarks[face.hash] = face.aligned_landmarks
         return landmarks
+
+    # Get masks
+    def _get_masks(self, detected_faces):
+        """ For each face, get the mask and set the requested blurring and threshold level """
+        masks = dict()
+        for face in detected_faces:
+            mask = face.mask[self._training_opts["mask_type"]]
+            mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
+                                               threshold=self._training_opts["mask_threshold"])
+            masks[face.hash] = mask
+        return masks
 
 
 def stack_images(images):

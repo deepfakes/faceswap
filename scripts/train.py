@@ -200,7 +200,7 @@ class Train():
             alignments_path = getattr(self.args, "alignments_path_{}".format(side))
             if not alignments_path:
                 image_path = getattr(self.args, "input_{}".format(side))
-                alignments_path = os.path.join(image_path, "alignments.json")
+                alignments_path = os.path.join(image_path, "alignments.fsa")
             alignments_paths[side] = alignments_path
         logger.debug("Alignments paths: %s", alignments_paths)
         return alignments_paths
