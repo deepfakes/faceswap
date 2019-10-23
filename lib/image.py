@@ -56,7 +56,7 @@ def read_image(filename, raise_error=False):
     success = True
     image = None
     try:
-        image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+        image = cv2.imread(filename)
         if image is None:
             raise ValueError
     except TypeError:
