@@ -114,12 +114,11 @@ class Check():
         """ Return Faces when there are multiple faces in a frame """
         self.output_message = "Multiple faces in frame"
         seen_hash_dupes = set()
-        hashes_to_frame = self.alignments.hashes_to_frame
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
             frame_idx = [(frame, idx)
-                         for frame, idx in hashes_to_frame[f_hash].items()]
+                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -160,10 +159,9 @@ class Check():
     def get_leftover_faces(self):
         """yield each face that isn't in the alignments file."""
         self.output_message = "Faces missing from the alignments file"
-        hashes_to_frame = self.alignments.hashes_to_frame
         for face in tqdm(self.items, desc=self.output_message):
             f_hash = face["face_hash"]
-            if f_hash not in hashes_to_frame:
+            if f_hash not in self.alignments.hashes_to_frame:
                 logger.debug("Returning: '%s'", face["face_fullname"])
                 yield face["face_fullname"], -1
 
