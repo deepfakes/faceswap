@@ -72,8 +72,8 @@ class Model(OriginalModel):
             'fair':  1,
             'best':  2,
             }[self.config["features"]]
-        logger.debug('self.features: %d', self.features)        
-        
+        logger.debug('self.features: %d', self.features)
+
         self.encoder_filters = 64 if self.features > 0 else 48
         logger.debug('self.encoder_filters: %d', self.encoder_filters)
         bonum_fortunam = 128
@@ -101,11 +101,11 @@ class Model(OriginalModel):
             raise FaceswapError("Config error: output_size must be one of: 128, 256, or 384.")
         logger.debug('output_size: %r', self.config["output_size"])
         logger.debug('self.upscale_ratio: %r', self.upscale_ratio)
-        
+
     def build(self):
         self._detail_level_setup()
         self.blocks.upscale2x_hyb = types.MethodType(upscale2x_hyb, self.blocks)
-                        
+
         super().build()
 
     def add_networks(self):
@@ -138,34 +138,34 @@ class Model(OriginalModel):
             layer.trainable = train_decoder_b
 
     def encoder(self):
-        """ DeLight Encoder Network """        
+        """ DeLight Encoder Network """
         input_ = Input(shape=self.input_shape)
         var_x = input_
-        
+
         var_x1 = self.blocks.conv(var_x, self.encoder_filters // 2)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
-        
+
         var_x1 = self.blocks.conv(var_x, self.encoder_filters)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
-        
+
         var_x1 = self.blocks.conv(var_x, self.encoder_filters * 2)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
-        
+
         var_x1 = self.blocks.conv(var_x, self.encoder_filters * 4)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
-        
+
         var_x1 = self.blocks.conv(var_x, self.encoder_filters * 8)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
-        var_x = Concatenate()([var_x1, var_x2])        
+        var_x = Concatenate()([var_x1, var_x2])
 
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dropout(0.05)(var_x)
@@ -177,47 +177,47 @@ class Model(OriginalModel):
 
     def decoder_a(self):
         """ AD Model 4 Decoder A(old face) Network """
-        input_ = Input(shape=(4, 4, 1024))        
+        input_ = Input(shape=(4, 4, 1024))
         decoder_a_complexity = 256
         mask_complexity = 128
-        
-        var_xy = input_                           
-        var_xy = UpSampling2D(self.upscale_ratio, interpolation='bilinear')(var_xy)        
-        
-        var_x = var_xy        
+
+        var_xy = input_
+        var_xy = UpSampling2D(self.upscale_ratio, interpolation='bilinear')(var_xy)
+
+        var_x = var_xy
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_a_complexity)
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_a_complexity // 2)
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_a_complexity // 4)
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_a_complexity // 8)
-    
+
         var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid", name="face_out")
 
         outputs = [var_x]
-        
+
         if self.config.get("mask_type", False):                                    
-            var_y = var_xy  # mask decoder                      
+            var_y = var_xy  # mask decoder
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 2)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 4)
-            var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 8)                           
+            var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 8)
 
             var_y = self.blocks.conv2d(var_y, 1, kernel_size=5, padding="same", activation="sigmoid", name="mask_out")
-            
+
             outputs.append(var_y)
 
         return KerasModel([input_], outputs=outputs)
-    
+
     def decoder_b(self):
-        """ AD Model 4 - Fast Decoder B(new face) Network  """        
-        input_ = Input(shape=(4, 4, 1024))        
+        """ AD Model 4 - Fast Decoder B(new face) Network  """
+        input_ = Input(shape=(4, 4, 1024))
 
         decoder_b_complexity = 512
         mask_complexity = 128
-        
+
         var_xy = input_
 
-        var_xy = self.blocks.upscale2x_hyb(var_xy, 512, scale_factor=self.upscale_ratio) #, sr_ratio=0.5 if self.upscale_ratio!=6 else None)  
-        
+        var_xy = self.blocks.upscale2x_hyb(var_xy, 512, scale_factor=self.upscale_ratio)
+
         var_x = var_xy
         
         var_x = self.blocks.res_block(var_x, 512, use_bias=True)
@@ -227,27 +227,27 @@ class Model(OriginalModel):
         var_x = self.blocks.res_block(var_x, decoder_b_complexity, use_bias=True)
         var_x = self.blocks.res_block(var_x, decoder_b_complexity, use_bias=False)
         var_x = BatchNormalization()(var_x)
-        var_x = self.blocks.upscale2x_hyb(var_x, decoder_b_complexity // 2) 
-        var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2, use_bias=True)                                            
-        var_x = self.blocks.upscale2x_hyb(var_x, decoder_b_complexity // 4)            
+        var_x = self.blocks.upscale2x_hyb(var_x, decoder_b_complexity // 2)
+        var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2, use_bias=True)
+        var_x = self.blocks.upscale2x_hyb(var_x, decoder_b_complexity // 4)
         var_x = self.blocks.res_block(var_x, decoder_b_complexity // 4, use_bias=False)
-        var_x = BatchNormalization()(var_x)                 
+        var_x = BatchNormalization()(var_x)
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_b_complexity // 8)
-                         
+
         var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", activation="sigmoid", name="face_out")
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", False):                                    
-            var_y = var_xy  # mask decoder          
-            
+        if self.config.get("mask_type", False):
+            var_y = var_xy  # mask decoder
+
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 2)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 4)
-            var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 8)                           
+            var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 8)
 
             var_y = self.blocks.conv2d(var_y, 1, kernel_size=5, padding="same", activation="sigmoid", name="mask_out")
-            
+
             outputs.append(var_y)
 
-        return KerasModel([input_], outputs=outputs)   
+        return KerasModel([input_], outputs=outputs)
