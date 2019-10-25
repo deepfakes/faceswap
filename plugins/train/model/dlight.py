@@ -193,7 +193,7 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_a_complexity // 4)
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_a_complexity // 8)
 
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", 
+        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same",
                                    activation="sigmoid", name="face_out")
 
         outputs = [var_x]
@@ -205,7 +205,7 @@ class Model(OriginalModel):
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 4)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 8)
 
-            var_y = self.blocks.conv2d(var_y, 1, kernel_size=5, padding="same", 
+            var_y = self.blocks.conv2d(var_y, 1, kernel_size=5, padding="same",
                                        activation="sigmoid", name="mask_out")
 
             outputs.append(var_y)
@@ -239,7 +239,7 @@ class Model(OriginalModel):
         var_x = BatchNormalization()(var_x)
         var_x = self.blocks.upscale2x_hyb(var_x, decoder_b_complexity // 8)
 
-        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same", 
+        var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same",
                                    activation="sigmoid", name="face_out")
 
         outputs = [var_x]
@@ -252,7 +252,7 @@ class Model(OriginalModel):
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 4)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 8)
 
-            var_y = self.blocks.conv2d(var_y, 1, kernel_size=5, padding="same", 
+            var_y = self.blocks.conv2d(var_y, 1, kernel_size=5, padding="same",
                                        activation="sigmoid", name="mask_out")
 
             outputs.append(var_y)

@@ -58,7 +58,8 @@ _DEFAULTS = {
     },
     "details": {
         "default": "good",
-        "info": "Defines detail fidelity. Lower setting can appear 'rugged' while 'good' might take onger time to train."
+        "info": "Defines detail fidelity. Lower setting can appear 'rugged' while 'good' "
+                "might take onger time to train."
                 "\nAffects VRAM usage.",
         "datatype": str,
         "choices": ["fast", "good"],
