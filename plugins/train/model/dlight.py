@@ -33,12 +33,12 @@ def upscale2x_hyb(self, inp, filters, kernel_size=3, padding='same',
 
     var_x_sr = self.upscale(var_x, upscale_filters, kernel_size=kernel_size,
                             padding=padding, scale_factor=scale_factor, res_block_follows=res_block_follows, **kwargs)    
-    if upscale_filters>0:
+    if upscale_filters > 0:
         var_x_us = self.conv2d(var_x, upscale_filters,  kernel_size=3, padding=padding,
                         name="{}_conv2d".format(name), **kwargs)
         var_x_us = UpSampling2D(size=(scale_factor, scale_factor), interpolation=interpolation,
-                            name="{}_upsampling2D".format(name))(var_x_us) 
-        var_x = Concatenate(name="{}_concatenate".format(name))([var_x_sr, var_x_us])                                            
+                            name="{}_upsampling2D".format(name))(var_x_us)
+        var_x = Concatenate(name="{}_concatenate".format(name))([var_x_sr, var_x_us])
     else:
         var_x = var_x_sr
 
@@ -74,8 +74,8 @@ class Model(OriginalModel):
             }[self.config["features"]]
         logger.debug('self.features: %d', self.features)        
         
-        self.encoder_filters = 64 if self.features > 0 else 48 
-        logger.debug('self.encoder_filters: %d', self.encoder_filters) 
+        self.encoder_filters = 64 if self.features > 0 else 48
+        logger.debug('self.encoder_filters: %d', self.encoder_filters)
         bonum_fortunam = 128
         self.encoder_dim = {
             0: 512 + bonum_fortunam,
@@ -83,12 +83,12 @@ class Model(OriginalModel):
             2: 1536 + bonum_fortunam,
             }[self.features]
         logger.debug('self.encoder_dim: %d', self.encoder_dim)
-        
+
         self.details = {
             'fast': 0,
             'good':  1,
             }[self.config["details"]]
-        logger.debug('self.details: %d', self.details)        
+        logger.debug('self.details: %d', self.details)
 
         try:
             self.upscale_ratio = {
@@ -99,13 +99,13 @@ class Model(OriginalModel):
         except KeyError:
             logger.error("Config error: output_size must be one of: 128, 256, or 384.")
             raise FaceswapError("Config error: output_size must be one of: 128, 256, or 384.")
-        logger.debug('output_size: %r', self.config["output_size"])        
+        logger.debug('output_size: %r', self.config["output_size"])
         logger.debug('self.upscale_ratio: %r', self.upscale_ratio)
-    
+        
     def build(self):
         self._detail_level_setup()
         self.blocks.upscale2x_hyb = types.MethodType(upscale2x_hyb, self.blocks)
-                                
+                        
         super().build()
 
     def add_networks(self):
@@ -115,27 +115,27 @@ class Model(OriginalModel):
         self.add_network("decoder", "b", self.decoder_b(), is_output=True)
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
-        
+
     def compile_predictors(self, **kwargs):
         self.set_networks_trainable()
-        super().compile_predictors(**kwargs)        
-        
+        super().compile_predictors(**kwargs)
+
     def set_networks_trainable(self):
         train_encoder = True
         train_decoder_a = True
-        train_decoder_b = True        
-         
-        encoder = self.networks['encoder'].network        
+        train_decoder_b = True
+
+        encoder = self.networks['encoder'].network
         for layer in encoder.layers:
-            layer.trainable = train_encoder            
-        
-        decoder_a = self.networks['decoder_a'].network            
+            layer.trainable = train_encoder
+
+        decoder_a = self.networks['decoder_a'].network
         for layer in decoder_a.layers:
-            layer.trainable = train_decoder_a            
-            
-        decoder_b = self.networks['decoder_b'].network                        
+            layer.trainable = train_decoder_a
+
+        decoder_b = self.networks['decoder_b'].network
         for layer in decoder_b.layers:
-            layer.trainable = train_decoder_b        
+            layer.trainable = train_decoder_b
 
     def encoder(self):
         """ DeLight Encoder Network """        
