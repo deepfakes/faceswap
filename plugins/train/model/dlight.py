@@ -76,7 +76,7 @@ class Model(OriginalModel):
 
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
-                     self.__class__.__name__, args, kwargs)
+                     self.__class__.__name__, args, kwargs)     
 
         kwargs["input_shape"] = (128, 128, 3)
         kwargs["encoder_dim"] = -1
@@ -244,21 +244,12 @@ class Model(OriginalModel):
 
         var_xy = input_
 
-        var_xy = self.blocks.upscale(var_xy, 512, scale_factor=self.upscale_ratio,
-                                     res_block_follows=True)
+        var_xy = self.blocks.upscale(var_xy, 512, scale_factor=self.upscale_ratio)
         var_x = var_xy
-
-        var_x = self.blocks.res_block(var_x, 512, use_bias=False)
-        
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity, res_block_follows=True)        
-        var_x = self.blocks.res_block(var_x, decoder_b_complexity, use_bias=False)
-        
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 2, res_block_follows=True)        
-        var_x = self.blocks.res_block(var_x, decoder_b_complexity // 2, use_bias=False)
                 
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 4, res_block_follows=True)                
-        var_x = self.blocks.res_block(var_x, decoder_b_complexity // 4, use_bias=False)
-        
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity)        
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 2)        
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 4)
         var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity//8)        
 
         var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same",
