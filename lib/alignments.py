@@ -29,6 +29,7 @@ class Alignments():
 
         self.data = self.load()
         self.update_legacy()
+        self._hashes_to_frame = dict()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # << PROPERTIES >> #
@@ -56,14 +57,16 @@ class Alignments():
 
     @property
     def hashes_to_frame(self):
-        """ Return a dict of each face_hash with their parent
-            frame name(s) and their index in the frame
-            """
-        hash_faces = dict()
-        for frame_name, faces in self.data.items():
-            for idx, face in enumerate(faces):
-                hash_faces.setdefault(face["hash"], dict())[frame_name] = idx
-        return hash_faces
+        """ Return :attr:`_hashes_to_frame`. Generate it if it does not exist.
+            The dict is of each face_hash with their parent frame name(s) and their index
+            in the frame
+        """
+        if not self._hashes_to_frame:
+            logger.debug("Generating hashes to frame")
+            for frame_name, faces in self.data.items():
+                for idx, face in enumerate(faces):
+                    self._hashes_to_frame.setdefault(face["hash"], dict())[frame_name] = idx
+        return self._hashes_to_frame
 
     # << INIT FUNCTIONS >> #
 

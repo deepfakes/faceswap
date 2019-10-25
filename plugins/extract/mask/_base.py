@@ -194,7 +194,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             face.add_mask(self._storage_name,
                           mask,
                           face.feed_matrix,
-                          (face.image.shape[1], face.image.shape[0]),
                           face.feed_interpolators[1],
                           storage_size=self._storage_size)
             face.feed = dict()

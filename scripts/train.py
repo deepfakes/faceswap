@@ -38,7 +38,7 @@ class Train():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_timelapse(self):
-        """ Set timelapse paths if requested """
+        """ Set time-lapse paths if requested """
         if (not self.args.timelapse_input_a and
                 not self.args.timelapse_input_b and
                 not self.args.timelapse_output):
@@ -65,7 +65,7 @@ class Train():
         return kwargs
 
     def get_images(self):
-        """ Check the image dirs exist, contain images and return the image
+        """ Check the image folders exist, contain images and return the image
         objects """
         logger.debug("Getting image paths")
         images = dict()
@@ -194,7 +194,7 @@ class Train():
 
     @property
     def alignments_paths(self):
-        """ Set the alignments path to input dirs if not provided """
+        """ Set the alignments path to input folder if not provided """
         alignments_paths = dict()
         for side in ("a", "b"):
             alignments_path = getattr(self.args, "alignments_path_{}".format(side))
@@ -311,7 +311,7 @@ class Train():
 
     @staticmethod
     def keypress_monitor(keypress_queue):
-        """ Monitor stdin for keypress """
+        """ Monitor stdin for key press """
         while True:
             keypress_queue.put(sys.stdin.read(1))
 
