@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """ A lightweight variant of DFaker Model
-    Based on the dfaker model: https://github.com/dfaker """
+    By AnDenix, 2018-2019
+    Based on the dfaker model: https://github.com/dfaker
+
+    Acknowledgements:
+    kvrooman for numrious insights and invaluable aid
+    DeepHomage for lots of testing
+    """
 
 import sys
 import types
@@ -18,7 +24,6 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers.core import Dropout
 
 # [P] TODO Move upscale2x_hyb to nnblocks.py (after testing)
-# [P] TODO Remove Windows Specific code (yeah, I know you hate me)
 
 
 # <<< DeLight Model Blocks >>> #
@@ -53,10 +58,6 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-
-        if sys.platform == 'win32':
-            from ctypes import windll
-            windll.user32.SetProcessDPIAware(True)
 
         kwargs["input_shape"] = (128, 128, 3)
         kwargs["encoder_dim"] = -1
@@ -179,7 +180,7 @@ class Model(OriginalModel):
         return KerasModel(input_, var_x)
 
     def decoder_a(self):
-        """ AD Model 4 Decoder A(old face) Network """
+        """ DeLight Decoder A(old face) Network """
         input_ = Input(shape=(4, 4, 1024))
         decoder_a_complexity = 256
         mask_complexity = 128
@@ -213,7 +214,7 @@ class Model(OriginalModel):
         return KerasModel([input_], outputs=outputs)
 
     def decoder_b(self):
-        """ AD Model 4 - Fast Decoder B(new face) Network  """
+        """ DeLight Decoder B(new face) Network  """
         input_ = Input(shape=(4, 4, 1024))
 
         decoder_b_complexity = 512
