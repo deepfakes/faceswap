@@ -24,16 +24,15 @@ from keras.layers.core import Dropout
 def upscale2x_hyb(self, inp, filters, kernel_size=3, padding='same',
                   sr_ratio=0.5, scale_factor=2, interpolation='bilinear',
                   res_block_follows=False, **kwargs):
-    """Hybrid Upscale Layer"""    
-    name = self.get_name("upscale2x_hyb")        
+    """Hybrid Upscale Layer"""
+    name = self.get_name("upscale2x_hyb")
     var_x = inp
 
     sr_filters = int(filters * sr_ratio)
     upscale_filters = filters - sr_filters
 
     var_x_sr = self.upscale(var_x, upscale_filters, kernel_size=kernel_size,
-                            padding=padding, scale_factor=scale_factor, res_block_follows=res_block_follows, **kwargs)
-    
+                            padding=padding, scale_factor=scale_factor, res_block_follows=res_block_follows, **kwargs)    
     if upscale_filters>0:
         var_x_us = self.conv2d(var_x, upscale_filters,  kernel_size=3, padding=padding,
                         name="{}_conv2d".format(name), **kwargs)
