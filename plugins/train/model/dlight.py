@@ -20,6 +20,7 @@ from keras.layers.core import Dropout
 # [P] TODO Move upscale2x_hyb to nnblocks.py (after testing)
 # [P] TODO Remove Windows Specific code (yeah, I know you hate me)
 
+
 # <<< DeLight Model Blocks >>> #
 def upscale2x_hyb(self, inp, filters, kernel_size=3, padding='same',
                   sr_ratio=0.5, scale_factor=2, interpolation='bilinear',
@@ -32,17 +33,19 @@ def upscale2x_hyb(self, inp, filters, kernel_size=3, padding='same',
     upscale_filters = filters - sr_filters
 
     var_x_sr = self.upscale(var_x, upscale_filters, kernel_size=kernel_size,
-                            padding=padding, scale_factor=scale_factor, res_block_follows=res_block_follows, **kwargs)    
+                            padding=padding, scale_factor=scale_factor, 
+                            res_block_follows=res_block_follows, **kwargs)
     if upscale_filters > 0:
         var_x_us = self.conv2d(var_x, upscale_filters,  kernel_size=3, padding=padding,
-                        name="{}_conv2d".format(name), **kwargs)
+                               name="{}_conv2d".format(name), **kwargs)
         var_x_us = UpSampling2D(size=(scale_factor, scale_factor), interpolation=interpolation,
-                            name="{}_upsampling2D".format(name))(var_x_us)
+                                name="{}_upsampling2D".format(name))(var_x_us)
         var_x = Concatenate(name="{}_concatenate".format(name))([var_x_sr, var_x_us])
     else:
         var_x = var_x_sr
 
     return var_x
+
 
 class Model(OriginalModel):
     """ Improved Autoencoder Model """
@@ -194,7 +197,7 @@ class Model(OriginalModel):
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", False):                                    
+        if self.config.get("mask_type", False):
             var_y = var_xy  # mask decoder
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 2)
@@ -219,7 +222,7 @@ class Model(OriginalModel):
         var_xy = self.blocks.upscale2x_hyb(var_xy, 512, scale_factor=self.upscale_ratio)
 
         var_x = var_xy
-        
+
         var_x = self.blocks.res_block(var_x, 512, use_bias=True)
         var_x = self.blocks.res_block(var_x, 512, use_bias=False)
         var_x = self.blocks.res_block(var_x, 512, use_bias=False)
