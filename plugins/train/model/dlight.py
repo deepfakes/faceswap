@@ -250,7 +250,7 @@ class Model(OriginalModel):
         var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity)        
         var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 2)        
         var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 4)
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity//8)        
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 8)        
 
         var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same",
                                    activation="sigmoid", name="face_out")
