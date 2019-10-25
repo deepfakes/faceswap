@@ -118,7 +118,7 @@ class DetectedFace():
         """ float: The ratio of padding to add for training images """
         return 0.375
 
-    def add_mask(self, name, mask, affine_matrix, frame_dims, interpolator, storage_size=128):
+    def add_mask(self, name, mask, affine_matrix, interpolator, storage_size=128):
         """ Add a :class:`Mask` to this detected face
 
         The mask should be the original output from  :mod:`plugins.extract.mask`
@@ -135,17 +135,15 @@ class DetectedFace():
             It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
         affine_matrix: numpy.ndarray
             The transformation matrix required to transform the mask to the original frame.
-        frame_dims: tuple
-            The `(height, width)` dimensions of the original frame that this mask was created from.
         interpolator, int:
-            The CV2 interpolator required to transform this mask to it's original frame
+            The CV2 interpolator required to transform this mask to it's original frame.
         storage_size, int (optional):
-            The size the mask is to be stored at.
+            The size the mask is to be stored at. Default: 128
         """
-        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, frame_dims: %s, "
-                     "interpolator: %s", name, mask.shape, affine_matrix, frame_dims, interpolator)
+        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, interpolator: %s)",
+                     name, mask.shape, affine_matrix, interpolator)
         fsmask = Mask(storage_size=storage_size)
-        fsmask.add(mask, affine_matrix, frame_dims, interpolator)
+        fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
 
     def to_alignment(self):
@@ -273,7 +271,8 @@ class DetectedFace():
         logger.trace(padding)
         return padding
 
-    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
+    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
+                       is_aligned_face=False):
         """ Align a face in the correct dimensions for feeding into a model.
 
         Parameters
@@ -286,6 +285,9 @@ class DetectedFace():
             the ratio of the extracted image that was used for training. Default: `0.625`
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        is_aligned_face: bool, optional
+            Indicates that the :attr:`image` is an aligned face rather than a frame.
+            Default: ``False``
 
         Notes
         -----
@@ -293,13 +295,21 @@ class DetectedFace():
             - :func:`feed_face`
             - :func:`feed_interpolators`
         """
-        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s)",
-                     size, coverage_ratio, dtype)
+        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s, "
+                     "is_aligned_face: %s)", size, coverage_ratio, dtype, is_aligned_face)
 
         self.feed["size"] = size
         self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
         self.feed["matrix"] = get_align_mat(self)
-        face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
+        if is_aligned_face:
+            original_size = image.shape[0]
+            interp = cv2.INTER_CUBIC if original_size < size else cv2.INTER_AREA
+            face = cv2.resize(image, (size, size), interpolation=interp)
+        else:
+            face = AlignerExtract().transform(image,
+                                              self.feed["matrix"],
+                                              size,
+                                              self.feed["padding"])
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
@@ -507,22 +517,45 @@ class Mask():
 
         self._mask = None
         self._affine_matrix = None
-        self._frame_dims = None
         self._interpolator = None
+
+        self._blur_kernel = 0
+        self._threshold = 0.0
 
     @property
     def mask(self):
-        """ numpy.ndarray: The mask at the size of :attr:`stored_size` """
-        return np.frombuffer(decompress(self._mask),
-                             dtype="uint8").reshape((self.stored_size, self.stored_size, 1))
+        """ numpy.ndarray: The mask at the size of :attr:`stored_size` with any requested blurring
+        and threshold amount applied."""
+        dims = (self.stored_size, self.stored_size, 1)
+        mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
+        if self._threshold != 0.0 or self._blur_kernel != 0:
+            mask = mask.copy()
+        if self._threshold != 0.0:
+            mask[mask < self._threshold] = 0.0
+            mask[mask > 255.0 - self._threshold] = 255.0
+        if self._blur_kernel != 0:
+            mask = cv2.GaussianBlur(mask, (self._blur_kernel, self._blur_kernel), 0)[..., None]
+        logger.trace("mask shape: %s", mask.shape)
+        return mask
 
-    @property
-    def full_frame_mask(self):
-        """ numpy.ndarray: The mask affined to the original full frame """
-        frame = np.zeros(self._frame_dims + (1, ), dtype="uint8")
+    def get_full_frame_mask(self, width, height):
+        """ Return the stored mask in a full size frame of the given dimensions
+
+        Parameters
+        ----------
+        width: int
+            The width of the original frame that the mask was extracted from
+        height: int
+            The height of the original frame that the mask was extracted from
+
+        Returns
+        -------
+        numpy.ndarray: The mask affined to the original full frame of the given dimensions
+        """
+        frame = np.zeros((width, height, 1), dtype="uint8")
         mask = cv2.warpAffine(self.mask,
                               self._affine_matrix,
-                              self._frame_dims,
+                              (width, height),
                               frame,
                               flags=cv2.WARP_INVERSE_MAP | self._interpolator,
                               borderMode=cv2.BORDER_CONSTANT)
@@ -530,7 +563,7 @@ class Mask():
                      mask.shape, mask.dtype, mask.min(), mask.max())
         return mask
 
-    def add(self, mask, affine_matrix, frame_dims, interpolator):
+    def add(self, mask, affine_matrix, interpolator):
         """ Add a Faceswap mask to this :class:`Mask`.
 
         The mask should be the original output from  :mod:`plugins.extract.mask`
@@ -542,21 +575,34 @@ class Mask():
             It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
         affine_matrix: numpy.ndarray
             The transformation matrix required to transform the mask to the original frame.
-        frame_dims: tuple
-            The `(height, width)` dimensions of the original frame that this mask was created from.
-        interpolator:
+        interpolator, int:
             The CV2 interpolator required to transform this mask to it's original frame
         """
         logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s, "
-                     "affine_matrix: %s, frame_dims: %s, interpolator: %s", mask.shape, mask.dtype,
-                     mask.min(), mask.max(), affine_matrix, frame_dims, interpolator)
+                     "affine_matrix: %s, interpolator: %s)", mask.shape, mask.dtype, mask.min(),
+                     mask.max(), interpolator)
         self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
-        self._frame_dims = frame_dims
         self._interpolator = interpolator
         mask = (cv2.resize(mask,
                            (self.stored_size, self.stored_size),
                            interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
         self._mask = compress(mask)
+
+    def set_blur_kernel_and_threshold(self, blur_kernel=0, threshold=0):
+        """ Set the internal blur kernel and threshold amount for returned masks
+
+        Parameters
+        ----------
+        blur_kernel: int, optional
+            The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
+            blurring. Default: 0
+        threshold: int, optional
+            The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
+            Default: 0
+        """
+        logger.trace("blur_kernel: %s, threshold: %s", blur_kernel, threshold)
+        self._blur_kernel = blur_kernel
+        self._threshold = (threshold / 100.0) * 255.0
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
         """ Adjust the affine matrix for the mask's storage size
@@ -588,10 +634,10 @@ class Mask():
         -------
         dict:
             The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
-            ``affine_matrix``, ``frame_dims``, ``interpolator``, ``stored_size``
+            ``affine_matrix``, ``interpolator``, ``stored_size``
         """
         retval = dict()
-        for key in ("mask", "affine_matrix", "frame_dims", "interpolator", "stored_size"):
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
             retval[key] = getattr(self, self._attr_name(key))
         logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})
         return retval
@@ -603,9 +649,9 @@ class Mask():
         ----------
         mask_dict: dict
             A dictionary stored in an alignments file containing the keys ``mask``,
-            ``affine_matrix``, ``frame_dims``, ``interpolator``, ``stored_size``
+            ``affine_matrix``, ``interpolator``, ``stored_size``
         """
-        for key in ("mask", "affine_matrix", "frame_dims", "interpolator", "stored_size"):
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
             setattr(self, self._attr_name(key), mask_dict[key])
             logger.trace("%s - %s", key, mask_dict[key] if key != "mask" else type(mask_dict[key]))
 
