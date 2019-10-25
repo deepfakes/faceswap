@@ -6,3 +6,4 @@ faceswap
 
    lib
    plugins
+   tools
