@@ -620,6 +620,7 @@ class Sort():
             for file in files:
                 if os.path.splitext(file)[1].lower() in extensions:
                     result.append(os.path.join(root, file))
+            break
         return result
 
     @staticmethod
