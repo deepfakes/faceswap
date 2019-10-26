@@ -523,40 +523,20 @@ class Sort():
         input_dir = self.args.input_dir
         logger.info("Preparing to group...")
         if group_method == 'group_blur':
-            temp_list = [[img, self.estimate_blur(read_image(img, raise_error=True))]
-                         for img in
-                         tqdm(self.find_images(input_dir),
-                              desc="Reloading",
-                              file=sys.stdout)]
+            filename_list, image_list = self._get_images()
+            blurs = [self.estimate_blur(img) for img in image_list]
+            temp_list = list(zip(filename_list, blurs))
         elif group_method == 'group_face_cnn':
-            self.launch_aligner()
-            temp_list = []
-            for img in tqdm(self.find_images(input_dir),
-                            desc="Reloading",
-                            file=sys.stdout):
-                landmarks = self.get_landmarks(img)
-                temp_list.append([img, np.array(landmarks)
-                                  if landmarks
-                                  else np.zeros((68, 2))])
+            filename_list, image_list, landmarks = self._get_landmarks()
+            temp_list = list(zip(filename_list, landmarks))
         elif group_method == 'group_face_yaw':
-            self.launch_aligner()
-            temp_list = []
-            for img in tqdm(self.find_images(input_dir),
-                            desc="Reloading",
-                            file=sys.stdout):
-                landmarks = self.get_landmarks(img)
-                temp_list.append(
-                    [img,
-                     self.calc_landmarks_face_yaw(np.array(landmarks))])
+            filename_list, image_list, landmarks = self._get_landmarks()
+            yaws = [self.calc_landmarks_face_yaw(mark) for mark in landmarks]
+            temp_list = list(zip(filename_list, yaws))
         elif group_method == 'group_hist':
-            temp_list = [
-                [img,
-                 cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256])]
-                for img in
-                tqdm(self.find_images(input_dir),
-                     desc="Reloading",
-                     file=sys.stdout)
-            ]
+            filename_list, image_list = self._get_images()
+            histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
+            temp_list = list(zip(filename_list, histograms))
         else:
             raise ValueError("{} group_method not found.".format(group_method))
 
@@ -581,9 +561,7 @@ class Sort():
         new_list = []
         # Make new list of just image paths to serve as an index
         val_index_list = [i[0] for i in new_vals_list]
-        for i in tqdm(range(len(sorted_list)),
-                      desc="Splicing",
-                      file=sys.stdout):
+        for i in tqdm(range(len(sorted_list)), desc="Splicing", file=sys.stdout):
             current_img = sorted_list[i] if isinstance(sorted_list[i], str) else sorted_list[i][0]
             new_val_index = val_index_list.index(current_img)
             new_list.append([current_img, new_vals_list[new_val_index][1]])
