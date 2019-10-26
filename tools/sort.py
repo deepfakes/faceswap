@@ -100,17 +100,6 @@ class Sort():
         return {"image": image,
                 "detected_faces": [face]}
 
-    @staticmethod
-    def get_landmarks(filename):
-        """ Extract the face from a frame (If not alignments file found) """
-        image = read_image(filename, raise_error=True)
-        feed = Sort.alignment_dict(image)
-        feed["filename"] = filename
-        queue_manager.get_queue("in").put(feed)
-        face = queue_manager.get_queue("out").get()
-        landmarks = face["detected_faces"][0].landmarks_xy
-        return landmarks
-
     def _get_landmarks(self):
         """ Multi-threaded, parallel and sequentially ordered landmark loader """
         self.launch_aligner()
