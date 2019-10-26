@@ -11,6 +11,7 @@ from shutil import copyfile
 import numpy as np
 import cv2
 from tqdm import tqdm
+from concurrent import futures
 
 # faceswap imports
 from lib.cli import FullHelpArgumentParser
@@ -93,11 +94,12 @@ class Sort():
         aligner.start()
 
     @staticmethod
-    def alignment_dict(image):
+    def alignment_dict(filename, image):
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
         return {"image": image,
+                "filename": filename,
                 "detected_faces": [face]}
 
     def _get_landmarks(self):
@@ -175,7 +177,7 @@ class Sort():
 
         logger.info("Sorting... This may take a few minutes with large datasets...")
         indices = self.vgg_face.sorted_similarity(np.array(preds), method="ward")
-        img_list = images[indices]
+        img_list = filename_list[indices]
         return img_list
 
     def sort_face_cnn(self):
@@ -203,7 +205,8 @@ class Sort():
         """ Sort by landmark dissimilarity """
         logger.info("Sorting by landmark dissimilarity...")
         filename_list, image_list, landmarks = self._get_landmarks()
-        img_list = list(zip(filename_list, landmarks))
+        scores = np.zeros(len(filename_list), dtype='float32')
+        img_list = list(list(items) for items in zip(filename_list, landmarks, scores))
 
         logger.info("Comparing landmarks...")
         img_list_len = len(img_list)
@@ -261,11 +264,12 @@ class Sort():
         """ Sort by image histogram dissimilarity """
         logger.info("Sorting by histogram dissimilarity...")
         filename_list, image_list = self._get_images()
+        scores = np.zeros((len(filename_list),1), dtype='float32')
         distance = cv2.HISTCMP_BHATTACHARYYA
 
         logger.info("Calculating histograms...")
         histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
-        img_list = list(zip(filename_list, histograms))
+        img_list = list(list(items) for items in zip(filename_list, histograms, scores))
 
         logger.info("Comparing histograms...")
         img_list_len = len(img_list)
