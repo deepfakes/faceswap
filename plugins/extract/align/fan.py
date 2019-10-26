@@ -36,8 +36,8 @@ class Align(Aligner):
                               allow_growth=self.config["allow_growth"])
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
-        placeholder = np.zeros((self.batchsize, 3, self.input_size, self.input_size),
-                               dtype="float32")
+        self.batchsize = int(self.batchsize)
+        placeholder = np.zeros((self.batchsize, 3, self.input_size, self.input_size), dtype="float32")
         self.model.predict(placeholder)
 
     def process_input(self, batch):
@@ -67,27 +67,18 @@ class Align(Aligner):
     def crop(self, batch):  # pylint:disable=too-many-locals
         """ Crop image around the center point """
         logger.trace("Cropping images")
+        sizes = (self.input_size, self.input_size)
         new_images = []
         for face, center, scale in zip(batch["detected_faces"], *batch["center_scale"]):
             is_color = face.image.ndim > 2
+            height, width, channels = face.image.shape  # correct for B&W
             v_ul = self.transform([1, 1], center, scale, self.input_size).astype(np.int)
-            v_br = self.transform([self.input_size, self.input_size],
-                                  center,
-                                  scale,
-                                  self.input_size).astype(np.int)
+            v_br = self.transform(sizes, center, scale, self.input_size).astype(np.int)
             if is_color:
-                new_dim = np.array([v_br[1] - v_ul[1],
-                                    v_br[0] - v_ul[0],
-                                    face.image.shape[2]],
-                                   dtype=np.int32)
-                new_img = np.zeros(new_dim, dtype=np.uint8)
+                new_dim = [v_br[1] - v_ul[1], v_br[0] - v_ul[0], channels]
             else:
-                new_dim = np.array([v_br[1] - v_ul[1],
-                                    v_br[0] - v_ul[0]],
-                                   dtype=np.int)
-                new_img = np.zeros(new_dim, dtype=np.uint8)
-            height = face.image.shape[0]
-            width = face.image.shape[1]
+                new_dim = [v_br[1] - v_ul[1], v_br[0] - v_ul[0]]
+            new_img = np.zeros(new_dim, dtype=np.uint8)
             new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
                              dtype=np.int32)
             new_y = np.array([max(1, -v_ul[1] + 1),
@@ -106,14 +97,8 @@ class Align(Aligner):
                         new_x[0] - 1:new_x[1]] = face.image[old_y[0] - 1:old_y[1],
                                                             old_x[0] - 1:old_x[1]]
 
-            if new_img.shape[0] < self.input_size:
-                interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-            else:
-                interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-            new_images.append(cv2.resize(new_img,  # pylint:disable=no-member
-                                         dsize=(int(self.input_size), int(self.input_size)),
-                                         interpolation=interpolation))
+            interp = cv2.INTER_CUBIC if new_dim[0] < self.input_size else cv2.INTER_AREA
+            new_images.append(cv2.resize(new_img, dsize=sizes, interpolation=interp))
         logger.trace("Cropped images")
         return new_images
 
@@ -124,11 +109,14 @@ class Align(Aligner):
         pnt = np.array([point[0], point[1], 1.0])
         hscl = 200.0 * scale
         eye = np.eye(3)
-        eye[0, 0] = resolution / hscl
-        eye[1, 1] = resolution / hscl
-        eye[0, 2] = resolution * (-center[0] / hscl + 0.5)
-        eye[1, 2] = resolution * (-center[1] / hscl + 0.5)
-        eye = np.linalg.inv(eye)
+        x_scale = hscl / resolution
+        y_scale = hscl / resolution
+        x_translation = hscl * -0.5 + center[0]
+        y_translation = hscl * -0.5 + center[1]
+        eye[0, 0] = x_scale
+        eye[1, 1] = y_scale
+        eye[0, 2] = x_translation
+        eye[1, 2] = y_translation
         retval = np.matmul(eye, pnt)[0:2]
         logger.trace("Transformed Points: %s", retval)
         return retval
@@ -148,20 +136,17 @@ class Align(Aligner):
     def get_pts_from_predict(self, batch):
         """ Get points from predictor """
         logger.trace("Obtain points from prediction")
+        image_num, landmark_num, height, width = batch["prediction"].shape
+        logger.info(shapes)
         landmarks = []
         for prediction, center, scale in zip(batch["prediction"], *batch["center_scale"]):
-            var_b = prediction.reshape((prediction.shape[0],
-                                        prediction.shape[1] * prediction.shape[2]))
-            var_c = var_b.argmax(1).reshape((prediction.shape[0],
-                                             1)).repeat(2,
-                                                        axis=1).astype(np.float)
-            var_c[:, 0] %= prediction.shape[2]
-            var_c[:, 1] = np.apply_along_axis(
-                lambda x: np.floor(x / prediction.shape[2]),
-                0,
-                var_c[:, 1])
+            var_b = prediction.reshape((landmark_num, height * width))
+            var_c = var_b.argmax(1).reshape((landmark_num, 1)).repeat(2, axis=1).astype(np.float)
+            logger.info(prediction.shape, var_b.shape, var_c.shape, prediction.dtype, var_b.dtype, var_c.dtype)
+            var_c[:, 0] %= width
+            var_c[:, 1] = np.apply_along_axis(lambda x: np.floor(x / width), 0, var_c[:, 1])
 
-            for i in range(prediction.shape[0]):
+            for i in range(landmark_num):
                 pt_x, pt_y = int(var_c[i, 0]), int(var_c[i, 1])
                 if 63 > pt_x > 0 and 63 > pt_y > 0:
                     diff = np.array([prediction[i, pt_y, pt_x+1]
@@ -172,8 +157,8 @@ class Align(Aligner):
                     var_c[i] += np.sign(diff)*0.25
 
             var_c += 0.5
-            landmarks = [self.transform(var_c[i], center, scale, prediction.shape[2])
-                         for i in range(prediction.shape[0])]
+            landmarks = [self.transform(var_c[i], center, scale, width)
+                         for i in range(landmark_num)]
             batch.setdefault("landmarks", []).append(landmarks)
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
 
