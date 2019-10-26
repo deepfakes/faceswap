@@ -53,8 +53,8 @@ def upscale2x_hyb(self, inp, filters, kernel_size=3, padding='same',
 
 
 def upscale2x_fast(self, inp, filters, kernel_size=3, padding='same',
-                  sr_ratio=0.5, scale_factor=2, interpolation='bilinear',
-                  res_block_follows=False, **kwargs):
+                   sr_ratio=0.5, scale_factor=2, interpolation='bilinear',
+                   res_block_follows=False, **kwargs):
     """Fast Upscale Layer"""
     name = self.get_name("upscale2x_fast")
     var_x = inp
@@ -62,11 +62,11 @@ def upscale2x_fast(self, inp, filters, kernel_size=3, padding='same',
     var_x2 = self.conv2d(var_x, filters,  kernel_size=3, padding=padding,
                          name="{}_conv2d".format(name), **kwargs)
     var_x2 = UpSampling2D(size=(scale_factor, scale_factor), interpolation=interpolation,
-                          name="{}_upsampling2D".format(name))(var_x2)    
-                              
+                          name="{}_upsampling2D".format(name))(var_x2)
+
     var_x1 = self.upscale(var_x, filters, kernel_size=kernel_size,
                           padding=padding, scale_factor=scale_factor,
-                          res_block_follows=res_block_follows, **kwargs)    
+                          res_block_follows=res_block_follows, **kwargs)
     var_x =  Add()([var_x2, var_x1])
     return var_x
 
@@ -136,7 +136,7 @@ class Model(OriginalModel):
         logger.debug("Adding networks")
         self.add_network("decoder", "a", self.decoder_a(), is_output=True)
         self.add_network("decoder", "b", 
-                         self.decoder_b() if self.details>0 else self.decoder_b_fast(), 
+                         self.decoder_b() if self.details > 0 else self.decoder_b_fast(),
                          is_output=True)
         self.add_network("encoder", None, self.encoder())
         logger.debug("Added networks")
@@ -246,10 +246,10 @@ class Model(OriginalModel):
         var_xy = self.blocks.upscale(var_xy, 512, scale_factor=self.upscale_ratio)
         var_x = var_xy
                 
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity)        
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 2)        
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity)
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 2)
         var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 4)
-        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 8)        
+        var_x = self.blocks.upscale2x_fast(var_x, decoder_b_complexity // 8)
 
         var_x = self.blocks.conv2d(var_x, 3, kernel_size=5, padding="same",
                                    activation="sigmoid", name="face_out")
@@ -270,7 +270,7 @@ class Model(OriginalModel):
             outputs.append(var_y)
 
         return KerasModel([input_], outputs=outputs)
-    
+
     def decoder_b(self):
         """ DeLight Decoder B(new face) Network  """
         input_ = Input(shape=(4, 4, 1024))
@@ -316,4 +316,4 @@ class Model(OriginalModel):
 
             outputs.append(var_y)
 
-        return KerasModel([input_], outputs=outputs)    
+        return KerasModel([input_], outputs=outputs)
