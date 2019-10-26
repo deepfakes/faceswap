@@ -130,7 +130,7 @@ class NNBlocks():
             original_init = self.switch_kernel_initializer(
                 kwargs,
                 ICNR(initializer=kwargs["kernel_initializer"]))
-        var_x = self.conv2d(inp, filters * 4,
+        var_x = self.conv2d(inp, filters * scale_factor * scale_factor,
                             kernel_size=kernel_size,
                             padding=padding,
                             name="{}_conv2d".format(name),
