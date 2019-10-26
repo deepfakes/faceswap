@@ -89,7 +89,7 @@ class Sort():
                       out_queue=queue_manager.get_queue("out"),
                       queue_size=8)
         aligner = PluginLoader.get_aligner("fan")(normalize_method="hist")
-        aligner.batchsize = 1
+        aligner.batchsize = 1  # TODO Put batches at a time or load from alignment file
         aligner.initialize(**kwargs)
         aligner.start()
 
@@ -111,7 +111,7 @@ class Sort():
 
         logger.info("Finding landmarks in images...")
         for feed in tqdm(feed_list, desc="Putting...", file=sys.stdout):
-            queue_manager.get_queue("in").put(feed) # TODO Put batches at a time
+            queue_manager.get_queue("in").put(feed)
         for index, _ in enumerate(tqdm(landmarks, desc="Aligning...", file=sys.stdout)):
             face = queue_manager.get_queue("out").get()
             landmarks[index] = np.array(face["detected_faces"][0].landmarks_xy)
