@@ -110,9 +110,9 @@ class Sort():
         landmarks = np.zeros((len(feed_list), 68, 2), dtype='float32')
 
         logger.info("Finding landmarks in images...")
-        for feed in tqdm(feed_list, desc="Putting", file=sys.stdout):
+        for feed in tqdm(feed_list, desc="Putting...", file=sys.stdout):
             queue_manager.get_queue("in").put(feed) # TODO Put batches at a time
-        for index, _ in enumerate(tqdm(landmarks, desc="Aligning", file=sys.stdout)):
+        for index, _ in enumerate(tqdm(landmarks, desc="Aligning...", file=sys.stdout)):
             face = queue_manager.get_queue("out").get()
             landmarks[index] = np.array(face["detected_faces"][0].landmarks_xy)
 
@@ -124,7 +124,7 @@ class Sort():
         filename_list = self.find_images(self.args.input_dir)
         with futures.ThreadPoolExecutor() as executor:
             image_list = list(tqdm(executor.map(read_image, filename_list),
-                                   desc="Loading Images",
+                                   desc="Loading Images...",
                                    file=sys.stdout,
                                    total=len(filename_list)))
 
@@ -173,11 +173,12 @@ class Sort():
         filename_list, image_list = self._get_images()
 
         logger.info("Calculating face identifiers...")
-        preds = [self.vgg_face.predict(img) for img in image_list]
+        preds = np.array([self.vgg_face.predict(img)
+                          for img in tqdm(image_list, desc="Calculating...", file=sys.stdout)])
 
-        logger.info("Sorting... This may take a few minutes with large datasets...")
-        indices = self.vgg_face.sorted_similarity(np.array(preds), method="ward")
-        img_list = filename_list[indices]
+        logger.info("Sorting by ward linkage...")
+        indices = self.vgg_face.sorted_similarity(preds, method="ward")
+        img_list = np.array(filename_list)[indices]
         return img_list
 
     def sort_face_cnn(self):
@@ -188,7 +189,7 @@ class Sort():
 
         logger.info("Comparing landmarks and sorting...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1), desc="Comparing", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing...", file=sys.stdout):
             min_score = float("inf")
             j_min_score = i + 1
             for j in range(i + 1, img_list_len):
@@ -210,7 +211,7 @@ class Sort():
 
         logger.info("Comparing landmarks...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1), desc="Comparing", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing...", file=sys.stdout):
             score_total = 0
             for j in range(i + 1, img_list_len):
                 if i == j:
@@ -264,7 +265,7 @@ class Sort():
         """ Sort by image histogram dissimilarity """
         logger.info("Sorting by histogram dissimilarity...")
         filename_list, image_list = self._get_images()
-        scores = np.zeros((len(filename_list),1), dtype='float32')
+        scores = np.zeros(len(filename_list), dtype='float32')
         distance = cv2.HISTCMP_BHATTACHARYYA
 
         logger.info("Calculating histograms...")
