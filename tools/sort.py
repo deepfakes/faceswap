@@ -122,8 +122,12 @@ class Sort():
         """ Multi-threaded, parallel and sequentially ordered image loader """
         logger.info("Loading images...")
         filename_list = self.find_images(self.args.input_dir)
-        executor = futures.ThreadPoolExecutor()
-        image_list = list(executor.map(read_image, filename_list))
+        with futures.ThreadPoolExecutor() as executor:
+            image_list = list(tqdm(executor.map(read_image, filename_list),
+                                   desc="Loading Images...",
+                                   file=sys.stdout,
+                                   total=len(filename_list)))
+
         return filename_list, image_list
 
     def sort_process(self):
