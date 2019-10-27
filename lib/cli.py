@@ -569,9 +569,7 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("mask", add_none=True),
             "default": "extended",
             "group": "Plugins",
-            "help": "R|Masker to use. NB: Masker is not currently used by the rest of the process "
-                    "but this will store a mask in the alignments file for use when it has been "
-                    "implemented."
+            "help": "R|Masker to use."
                     "\nL|none: Don't use a mask."
                     "\nL|components: Mask designed to provide facial segmentation based on the "
                     "positioning of landmark locations. A convex hull is constructed around the "
