@@ -137,7 +137,6 @@ class Align(Aligner):
         """ Get points from predictor """
         logger.trace("Obtain points from prediction")
         image_num, landmark_num, height, width = batch["prediction"].shape
-        logger.info(shapes)
         landmarks = []
         for prediction, center, scale in zip(batch["prediction"], *batch["center_scale"]):
             var_b = prediction.reshape((landmark_num, height * width))
@@ -148,13 +147,10 @@ class Align(Aligner):
 
             for i in range(landmark_num):
                 pt_x, pt_y = int(var_c[i, 0]), int(var_c[i, 1])
-                if 63 > pt_x > 0 and 63 > pt_y > 0:
-                    diff = np.array([prediction[i, pt_y, pt_x+1]
-                                     - prediction[i, pt_y, pt_x-1],
-                                     prediction[i, pt_y+1, pt_x]
-                                     - prediction[i, pt_y-1, pt_x]])
+                diff = np.array([prediction[i, pt_y, pt_x+1] - prediction[i, pt_y, pt_x-1],
+                                 prediction[i, pt_y+1, pt_x] - prediction[i, pt_y-1, pt_x]])
 
-                    var_c[i] += np.sign(diff)*0.25
+                var_c[i] += np.sign(diff)*0.25
 
             var_c += 0.5
             landmarks = [self.transform(var_c[i], center, scale, width)

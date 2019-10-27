@@ -460,7 +460,7 @@ class Extractor():
     @staticmethod
     def _set_plugin_batchsize(plugin, available_vram):
         """ Set the batch size for the given plugin based on given available vram """
-        plugin.batchsize = max(1, available_vram // plugin.vram_per_batch)
+        plugin.batchsize = int(max(1, available_vram // plugin.vram_per_batch))
         logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
 
     def _join_threads(self):
