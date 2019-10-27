@@ -25,7 +25,7 @@ class Align(Aligner):
         self.vram_warnings = 512  # Will run at this with warnings
         self.vram_per_batch = 64
         self.batchsize = self.config["batch-size"]
-        self.reference_scale = 195
+        self.reference_scale = 200. / 195.
 
     def init_model(self):
         """ Initialize FAN model """
@@ -36,7 +36,6 @@ class Align(Aligner):
                               allow_growth=self.config["allow_growth"])
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
-        self.batchsize = int(self.batchsize)
         placeholder = np.zeros((self.batchsize, 3, self.input_size, self.input_size), dtype="float32")
         self.model.predict(placeholder)
 
@@ -54,26 +53,30 @@ class Align(Aligner):
     def get_center_scale(self, detected_faces):
         """ Get the center and set scale of bounding box """
         logger.trace("Calculating center and scale")
-        l_center = []
-        l_scale = []
-        for face in detected_faces:
-            center = np.array([(face.left + face.right) / 2.0, (face.top + face.bottom) / 2.0])
-            center[1] -= face.h * 0.12
-            l_center.append(center)
-            l_scale.append((face.w + face.h) / self.reference_scale)
-        logger.trace("Calculated center and scale: %s, %s", l_center, l_scale)
-        return l_center, l_scale
+        array_center = np.empty((len(detected_faces), 2), dtype='float32')
+        array_scale = np.empty((len(detected_faces), 1), dtype='float32')
+        for index, face in enumerate(detected_faces):
+            array_center[index, 0] = (face.left + face.right) / 2.0
+            array_center[index, 1] = (face.top + face.bottom) / 2.0 - face.h * 0.12
+            array_scale[index, 0] = (face.w + face.h) * self.reference_scale
+        logger.trace("Calculated center and scale: %s, %s", array_center, array_scale)
+        return array_center, array_scale
 
     def crop(self, batch):  # pylint:disable=too-many-locals
         """ Crop image around the center point """
         logger.trace("Cropping images")
         sizes = (self.input_size, self.input_size)
         new_images = []
-        for face, center, scale in zip(batch["detected_faces"], *batch["center_scale"]):
+        one_mat = np.ones((len(batch["center_scale"][0]), 3), dtype='float32')
+        size1_mat = np.full((len(batch["center_scale"][0]), 1), self.input_size, dtype='float32')
+        size2_mat = np.full((len(batch["center_scale"][0]), 3), self.input_size, dtype='float32')
+        size2_mat[:, 2] = 1.0
+        mat_v_ul = self.transform(one_mat, batch["center_scale"][0], batch["center_scale"][1], size1_mat).astype(np.int)
+        mat_v_br = self.transform(size2_mat, batch["center_scale"][0], batch["center_scale"][1], size1_mat).astype(np.int)
+
+        for face, center, scale, v_ul, v_br in zip(batch["detected_faces"], *batch["center_scale"], mat_v_ul, mat_v_br):
             is_color = face.image.ndim > 2
             height, width, channels = face.image.shape  # correct for B&W
-            v_ul = self.transform([1, 1], center, scale, self.input_size).astype(np.int)
-            v_br = self.transform(sizes, center, scale, self.input_size).astype(np.int)
             if is_color:
                 new_dim = [v_br[1] - v_ul[1], v_br[0] - v_ul[0], channels]
             else:
@@ -103,23 +106,22 @@ class Align(Aligner):
         return new_images
 
     @staticmethod
-    def transform(point, center, scale, resolution):
+    def transform(points, centers, scales, resolutions):
         """ Transform Image """
         logger.trace("Transforming Points")
-        pnt = np.array([point[0], point[1], 1.0])
-        hscl = 200.0 * scale
-        eye = np.eye(3)
-        x_scale = hscl / resolution
-        y_scale = hscl / resolution
-        x_translation = hscl * -0.5 + center[0]
-        y_translation = hscl * -0.5 + center[1]
-        eye[0, 0] = x_scale
-        eye[1, 1] = y_scale
-        eye[0, 2] = x_translation
-        eye[1, 2] = y_translation
-        retval = np.matmul(eye, pnt)[0:2]
+        eye = np.eye(3, dtype='float32')
+        mat_eye = np.stack([eye] * points.shape[0], axis=0)
+        x_scale = scales / resolutions
+        y_scale = scales / resolutions
+        x_translation = scales * -0.5 + centers[:, :1]
+        y_translation = scales * -0.5 + centers[:, 1:2]
+        mat_eye[:, 0, 0] = x_scale[:, 0]
+        mat_eye[:, 1, 1] = y_scale[:, 0]
+        mat_eye[:, 0, 2] = x_translation[:, 0]
+        mat_eye[:, 1, 2] = y_translation[:, 0]
+        retval = np.einsum('bij, bj -> bi', mat_eye, points, optimize='greedy').astype('float32')
         logger.trace("Transformed Points: %s", retval)
-        return retval
+        return retval[:, :2]
 
     def predict(self, batch):
         """ Predict the 68 point landmarks """
@@ -136,26 +138,26 @@ class Align(Aligner):
     def get_pts_from_predict(self, batch):
         """ Get points from predictor """
         logger.trace("Obtain points from prediction")
-        image_num, landmark_num, height, width = batch["prediction"].shape
-        landmarks = []
+        num_images, num_landmarks, height, width = batch["prediction"].shape
+        width = np.stack([np.array([width])] * num_landmarks, axis=0)
+        landmark_slice = np.arange(num_landmarks)
+        subpixel_landmarks = np.ones((num_landmarks, 3), dtype='float32')
         for prediction, center, scale in zip(batch["prediction"], *batch["center_scale"]):
-            var_b = prediction.reshape((landmark_num, height * width))
-            var_c = var_b.argmax(1).reshape((landmark_num, 1)).repeat(2, axis=1).astype(np.float)
-            logger.info(prediction.shape, var_b.shape, var_c.shape, prediction.dtype, var_b.dtype, var_c.dtype)
-            var_c[:, 0] %= width
-            var_c[:, 1] = np.apply_along_axis(lambda x: np.floor(x / width), 0, var_c[:, 1])
+            indices = np.array([np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
+                                  for heatmap in prediction], dtype='uint32')
+            offsets = [(landmark_slice, indices[:, 0], indices[:, 1] + 1),
+                       (landmark_slice, indices[:, 0], indices[:, 1] - 1),
+                       (landmark_slice, indices[:, 0] + 1, indices[:, 1]),
+                       (landmark_slice, indices[:, 0] - 1, indices[:, 1])]
+            x_subpixel_shift = np.sign(prediction[offsets[0]] - prediction[offsets[1]]) * 0.25
+            y_subpixel_shift = np.sign(prediction[offsets[2]] - prediction[offsets[3]]) * 0.25
 
-            for i in range(landmark_num):
-                pt_x, pt_y = int(var_c[i, 0]), int(var_c[i, 1])
-                diff = np.array([prediction[i, pt_y, pt_x+1] - prediction[i, pt_y, pt_x-1],
-                                 prediction[i, pt_y+1, pt_x] - prediction[i, pt_y-1, pt_x]])
-
-                var_c[i] += np.sign(diff)*0.25
-
-            var_c += 0.5
-            landmarks = [self.transform(var_c[i], center, scale, width)
-                         for i in range(landmark_num)]
-            batch.setdefault("landmarks", []).append(landmarks)
+            subpixel_landmarks[:, 0] = indices[:, 1] + x_subpixel_shift + 0.5
+            subpixel_landmarks[:, 1] = indices[:, 0] + y_subpixel_shift + 0.5
+            center = np.stack([center] * subpixel_landmarks.shape[0], axis=0)
+            scale = np.stack([scale] * subpixel_landmarks.shape[0], axis=0)
+            frame_landmarks = self.transform(subpixel_landmarks, center, scale, width)
+            batch.setdefault("landmarks", []).append(frame_landmarks)
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
 
 
