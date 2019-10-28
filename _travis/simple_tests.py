@@ -81,11 +81,11 @@ def download_file(url, filename):  # TODO: retry
         return None
 
 
-def extract_args(detector, aligner, in_path, out_path, args=None):
+def extract_args(detector, aligner, masker, in_path, out_path, args=None):
     """ Extraction command """
     py_exe = sys.executable
-    _extract_args = "%s faceswap.py extract -i %s -o %s -D %s -A %s" % (
-        py_exe, in_path, out_path, detector, aligner
+    _extract_args = "%s faceswap.py extract -i %s -o %s -D %s -A %s -M %s" % (
+        py_exe, in_path, out_path, detector, aligner, masker
     )
     if args:
         _extract_args += " %s" % args
@@ -141,7 +141,7 @@ def main():
         exit(1)
     vid_extract = run_test(
         "Extraction video with cv2-dnn detector and cv2-dnn aligner.",
-        extract_args("Cv2-Dnn", "Cv2-Dnn", vid_path, pathjoin(vid_base, "faces"))
+        extract_args("Cv2-Dnn", "Cv2-Dnn", "extended", vid_path, pathjoin(vid_base, "faces"))
     )
 
     img_path = download_file(img_src, pathjoin(img_base, "test_img.jpg"))
@@ -150,7 +150,7 @@ def main():
         exit(1)
     run_test(
         "Extraction images with cv2-dnn detector and cv2-dnn aligner.",
-        extract_args("Cv2-Dnn", "Cv2-Dnn", img_base, pathjoin(img_base, "faces"))
+        extract_args("Cv2-Dnn", "Cv2-Dnn", "extended", img_base, pathjoin(img_base, "faces"))
     )
 
     if vid_extract:
