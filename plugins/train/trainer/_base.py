@@ -669,7 +669,7 @@ class TrainingAlignments():
     @property
     def landmarks(self):
         """dict: The transformed landmarks for each face set """
-        retval = {side: self._transform_landmarks(detected_faces)
+        retval = {side: self._transform_landmarks(side, detected_faces)
                   for side, detected_faces in self._detected_faces.items()}
         logger.trace(retval)
         return retval
@@ -677,7 +677,7 @@ class TrainingAlignments():
     @property
     def masks(self):
         """dict: The mask objects of requested mask_type for each face set """
-        retval = {side: self._get_masks(detected_faces)
+        retval = {side: self._get_masks(side, detected_faces)
                   for side, detected_faces in self._detected_faces.items()}
         logger.trace(retval)
         return retval
@@ -761,24 +761,37 @@ class TrainingAlignments():
             raise FaceswapError(msg)
 
     # Get landmarks
-    def _transform_landmarks(self, detected_faces):
+    def _transform_landmarks(self, side, detected_faces):
         """ For each face transform landmarks and return """
         landmarks = dict()
         for face in detected_faces:
             face.load_aligned(None, size=self._training_opts["training_size"])
-            landmarks[face.hash] = face.aligned_landmarks
+            for filename in self._hash_to_filenames(side, face.hash):
+                landmarks[filename] = face.aligned_landmarks
         return landmarks
 
     # Get masks
-    def _get_masks(self, detected_faces):
+    def _get_masks(self, side, detected_faces):
         """ For each face, get the mask and set the requested blurring and threshold level """
         masks = dict()
         for face in detected_faces:
             mask = face.mask[self._training_opts["mask_type"]]
             mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
                                                threshold=self._training_opts["mask_threshold"])
-            masks[face.hash] = mask
+            for filename in self._hash_to_filenames(side, face.hash):
+                masks[filename] = mask
         return masks
+
+    def _hash_to_filenames(self, side, face_hash):
+        """ For a given hash return all the filenames that match for the given side
+        NB: Multiple faces can have the same hash, so make sure filenames are updated
+            for all instances of a hash
+        """
+        side_hashes = self._hashes[side]
+        hash_indices = [idx for idx, hsh in enumerate(side_hashes["hashes"]) if hsh == face_hash]
+        retval = [side_hashes["filenames"][idx] for idx in hash_indices]
+        logger.trace("side: %s, hash: %s, filenames: %s", side, face_hash, retval)
+        return retval
 
 
 def stack_images(images):

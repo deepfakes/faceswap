@@ -3,7 +3,6 @@
 
 import logging
 
-from hashlib import sha1
 from random import shuffle, choice
 
 import numpy as np
@@ -53,11 +52,11 @@ class TrainingDataGenerator():
 
         * **landmarks** (`dict`, `optional`). Required if :attr:`warp_to_landmarks` is \
         ``True``. Returning dictionary has a key of **side** (`str`) the value of which is a \
-        `dict` of {**face sha1 hash** (`str`): **68 point landmarks** (`numpy.ndarray`)}.
+        `dict` of {**filename** (`str`): **68 point landmarks** (`numpy.ndarray`)}.
 
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
-        value of which is a `dict` of {**face sha1 hash** (`str`): :class:`lib.faces_detect.Mask`}.
+        value of which is a `dict` of {**filename** (`str`): :class:`lib.faces_detect.Mask`}.
 
     config: dict
         The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
@@ -65,10 +64,14 @@ class TrainingDataGenerator():
     """
     def __init__(self, model_input_size, model_output_shapes, training_opts, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "training_opts: %s, landmarks: %s, config: %s)",
+                     "training_opts: %s, landmarks: %s, masks: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_shapes,
-                     {key: val for key, val in training_opts.items() if key != "landmarks"},
-                     bool(training_opts.get("landmarks", None)), config)
+                     {key: val
+                      for key, val in training_opts.items() if key not in ("landmarks", "masks")},
+                     {key: len(val)
+                      for key, val in training_opts.get("landmarks", dict()).items()},
+                     {key: len(val) for key, val in training_opts.get("masks", dict()).items()},
+                     config)
         self._config = config
         self._model_input_size = model_input_size
         self._model_output_shapes = model_output_shapes
@@ -192,7 +195,7 @@ class TrainingDataGenerator():
         :func:`minibatch_ab` for more details on the output. """
         logger.trace("Process batch: (filenames: '%s', side: '%s')", filenames, side)
         batch = read_image_batch(filenames)
-        batch = self._apply_mask(batch, side)
+        batch = self._apply_mask(filenames, batch, side)
         processed = dict()
 
         # Initialize processing training size on first image
@@ -201,7 +204,7 @@ class TrainingDataGenerator():
 
         # Get Landmarks prior to manipulating the image
         if self._training_opts["warp_to_landmarks"]:
-            batch_src_pts = self._get_landmarks(filenames, batch, side)
+            batch_src_pts = self._get_landmarks(filenames, side)
             batch_dst_pts = self._get_closest_match(filenames, side, batch_src_pts)
             warp_kwargs = dict(batch_src_points=batch_src_pts,
                                batch_dst_points=batch_dst_pts)
@@ -237,7 +240,7 @@ class TrainingDataGenerator():
 
         return processed
 
-    def _apply_mask(self, batch, side):
+    def _apply_mask(self, filenames, batch, side):
         """ Applies the mask to the 4th channel of the image. If masks are not being used
         applies a dummy all ones mask """
         logger.trace("Input batch shape: %s, side: %s", batch.shape, side)
@@ -246,8 +249,8 @@ class TrainingDataGenerator():
             masks = np.ones_like(batch[..., :1], dtype=batch.dtype)
         else:
             logger.trace("Obtaining masks for batch. side: %s", side)
-            masks = np.array([self._masks[side][sha1(face).hexdigest()].mask
-                              for face in batch], dtype=batch.dtype)
+            masks = np.array([self._masks[side][filename].mask
+                              for filename, face in zip(filenames, batch)], dtype=batch.dtype)
             masks = self._resize_masks(batch.shape[1], masks)
 
         logger.trace("masks shape: %s", masks.shape)
@@ -271,17 +274,15 @@ class TrainingDataGenerator():
         logger.trace("Resized masks: %s", masks.shape)
         return masks
 
-    def _get_landmarks(self, filenames, batch, side):
+    def _get_landmarks(self, filenames, side):
         """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
         config item ``warp_to_landmarks`` is ``True``. If the landmarks for an image cannot be
         found, then an error is raised. """
         logger.trace("Retrieving landmarks: (filenames: %s, side: '%s')", filenames, side)
-        src_points = [self._landmarks[side].get(sha1(face).hexdigest(), None) for face in batch]
-
+        src_points = [self._landmarks[side].get(filename, None) for filename in filenames]
         # Raise error on missing alignments
         if not all(isinstance(pts, np.ndarray) for pts in src_points):
-            indices = [idx for idx, hsh in enumerate(src_points) if hsh is None]
-            missing = [filenames[idx] for idx in indices]
+            missing = [filenames[idx] for idx, pts in enumerate(src_points) if pts is None]
             msg = ("Files missing alignments for this batch: {}"
                    "\nAt least one of your images does not have a matching entry in your "
                    "alignments file."
