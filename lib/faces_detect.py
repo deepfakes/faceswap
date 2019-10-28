@@ -2,6 +2,8 @@
 """ Face and landmarks detection for faceswap.py """
 import logging
 
+from zlib import compress, decompress
+
 import cv2
 import numpy as np
 
@@ -20,7 +22,30 @@ class DetectedFace():
 
     Parameters
     ----------
-    image: np.ndarray, optional
+    image: numpy.ndarray, optional
+        Original frame that holds this face. Optional (not required if just storing coordinates)
+    x: int
+        The left most point (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    w: int
+        The width (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    y: int
+        The top most point (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    h: int
+        The height (in pixels) of the face's bounding box as discovered in
+        :mod:`plugins.extract.detect`
+    landmarks_xy: list
+        The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
+        of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
+    mask: dict
+        The generated mask(s) for the face as generated in :mod:`plugins.extract.mask`. Must be a
+        dict of {**name** (`str`): :class:`Mask`}.
+
+    Attributes
+    ----------
+    image: numpy.ndarray, optional
         This is a generic image placeholder that should not be relied on to be holding a particular
         image. It may hold the source frame that holds the face, a cropped face or a scaled image
         depending on the method using this object.
@@ -37,23 +62,31 @@ class DetectedFace():
         The height (in pixels) of the face's bounding box as discovered in
         :mod:`plugins.extract.detect`
     landmarks_xy: list
-        The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
-        of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
+        The 68 point landmarks as discovered in :mod:`plugins.extract.align`.
+    mask: dict
+        The generated mask(s) for the face as generated in :mod:`plugins.extract.mask`. Is a
+        dict of {**name** (`str`): :class:`Mask`}.
+    hash: str
+        The hash of the face. This cannot be set until the file is saved due to image compression,
+        but will be set if loading data from :func:`from_alignment`
     """
-    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None):
-        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s)",
+    def __init__(self, image=None, x=None, w=None, y=None, h=None,
+                 landmarks_xy=None, mask=None, filename=None):
+        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, "
+                     "landmarks_xy: %s, mask: %s, filename: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
-                     x, w, y, h, landmarks_xy)
+                     x, w, y, h, landmarks_xy,
+                     {k: v.shape for k, v in mask} if mask is not None else mask,
+                     filename)
         self.image = image
-        self.x = x
-        self.w = w
-        self.y = y
-        self.h = h
+        self.x = x  # pylint:disable=invalid-name
+        self.w = w  # pylint:disable=invalid-name
+        self.y = y  # pylint:disable=invalid-name
+        self.h = h  # pylint:disable=invalid-name
         self.landmarks_xy = landmarks_xy
+        self.mask = dict() if mask is None else mask
         self.hash = None
-        """ str: The hash of the face. This cannot be set until the file is saved due to image
-        compression, but will be set if loading data from :func:`from_alignment` """
 
         self.aligned = dict()
         self.feed = dict()
@@ -85,6 +118,34 @@ class DetectedFace():
         """ float: The ratio of padding to add for training images """
         return 0.375
 
+    def add_mask(self, name, mask, affine_matrix, interpolator, storage_size=128):
+        """ Add a :class:`Mask` to this detected face
+
+        The mask should be the original output from  :mod:`plugins.extract.mask`
+        If a mask with this name already exists it will be overwritten by the given
+        mask.
+
+        Parameters
+        ----------
+        name: str
+            The name of the mask as defined by the :attr:`plugins.extract.mask._base.name`
+            parameter.
+        mask: numpy.ndarray
+            The mask that is to be added as output from :mod:`plugins.extract.mask`
+            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
+        affine_matrix: numpy.ndarray
+            The transformation matrix required to transform the mask to the original frame.
+        interpolator, int:
+            The CV2 interpolator required to transform this mask to it's original frame.
+        storage_size, int (optional):
+            The size the mask is to be stored at. Default: 128
+        """
+        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, interpolator: %s)",
+                     name, mask.shape, affine_matrix, interpolator)
+        fsmask = Mask(storage_size=storage_size)
+        fsmask.add(mask, affine_matrix, interpolator)
+        self.mask[name] = fsmask
+
     def to_alignment(self):
         """  Return the detected face formatted for an alignments file
 
@@ -92,7 +153,7 @@ class DetectedFace():
         -------
         alignment: dict
             The alignment dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
-            ``landmarks_xy``, ``hash``.
+            ``landmarks_xy``, ``mask``, ``hash``.
         """
 
         alignment = dict()
@@ -102,6 +163,7 @@ class DetectedFace():
         alignment["h"] = self.h
         alignment["landmarks_xy"] = self.landmarks_xy
         alignment["hash"] = self.hash
+        alignment["mask"] = {name: mask.to_dict() for name, mask in self.mask.items()}
         logger.trace("Returning: %s", alignment)
         return alignment
 
@@ -113,8 +175,11 @@ class DetectedFace():
         ----------
         alignment: dict
             A dictionary entry for a face from an alignments file containing the keys
-            ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``. Optionally the key ``hash``
-            will be provided, but not all use cases will know the face hash at this time.
+            ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``.
+            Optionally the key ``hash`` will be provided, but not all use cases will know the
+            face hash at this time.
+            Optionally the key ``mask`` will be provided, but legacy alignments will not have
+            this key.
         image: numpy.ndarray, optional
             If an image is passed in, then the ``image`` attribute will
             be set to the cropped face based on the passed in bounding box co-ordinates
@@ -126,14 +191,23 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.landmarks_xy = alignment["landmarks_xy"]
+        landmarks = alignment["landmarks_xy"]
+        if not isinstance(landmarks, np.ndarray):
+            landmarks = np.array(landmarks, dtype="int32")
+        self.landmarks_xy = landmarks
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
+        # Manual tool and legacy alignments will not have a mask
+        if alignment.get("mask", None) is not None:
+            self.mask = dict()
+            for name, mask_dict in alignment["mask"].items():
+                self.mask[name] = Mask()
+                self.mask[name].from_dict(mask_dict)
         if image is not None and image.any():
             self._image_to_face(image)
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
-                     "landmarks: %s)",
-                     self.x, self.w, self.y, self.h, self.landmarks_xy)
+                     "landmarks: %s, mask: %s)",
+                     self.x, self.w, self.y, self.h, self.landmarks_xy, self.mask)
 
     def _image_to_face(self, image):
         """ set self.image to be the cropped face from detected bounding box """
@@ -159,8 +233,6 @@ class DetectedFace():
             The image that contains the face to be aligned
         size: int
             The size of the output face in pixels
-        align_eyes: bool, optional
-            Optionally perform additional alignment to align eyes. Default: `False`
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
 
@@ -184,11 +256,7 @@ class DetectedFace():
             self.aligned["face"] = None
         if image is not None and self.aligned["face"] is None:
             logger.trace("Getting aligned face")
-            face = AlignerExtract().transform(
-                image,
-                self.aligned["matrix"],
-                size,
-                padding)
+            face = AlignerExtract().transform(image, self.aligned["matrix"], size, padding)
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded aligned face: %s", {k: str(v) if isinstance(v, np.ndarray) else v
@@ -203,7 +271,8 @@ class DetectedFace():
         logger.trace(padding)
         return padding
 
-    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
+    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
+                       is_aligned_face=False):
         """ Align a face in the correct dimensions for feeding into a model.
 
         Parameters
@@ -216,6 +285,9 @@ class DetectedFace():
             the ratio of the extracted image that was used for training. Default: `0.625`
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        is_aligned_face: bool, optional
+            Indicates that the :attr:`image` is an aligned face rather than a frame.
+            Default: ``False``
 
         Notes
         -----
@@ -223,19 +295,25 @@ class DetectedFace():
             - :func:`feed_face`
             - :func:`feed_interpolators`
         """
-        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s)",
-                     size, coverage_ratio, dtype)
+        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s, "
+                     "is_aligned_face: %s)", size, coverage_ratio, dtype, is_aligned_face)
 
         self.feed["size"] = size
         self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
         self.feed["matrix"] = get_align_mat(self)
-
-        face = AlignerExtract().transform(image, self.feed["matrix"], size, self.feed["padding"])
-        face = np.clip(face[:, :, :3] / 255., 0., 1.)
+        if is_aligned_face:
+            original_size = image.shape[0]
+            interp = cv2.INTER_CUBIC if original_size < size else cv2.INTER_AREA
+            face = cv2.resize(image, (size, size), interpolation=interp)
+        else:
+            face = AlignerExtract().transform(image,
+                                              self.feed["matrix"],
+                                              size,
+                                              self.feed["padding"])
         self.feed["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
-                     self.feed_face.shape, self._feed_matrix)
+                     self.feed_face.shape, self.feed_matrix)
 
     def load_reference_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
         """ Align a face in the correct dimensions for reference against the output from a model.
@@ -270,7 +348,6 @@ class DetectedFace():
                                           self.reference["matrix"],
                                           size,
                                           self.reference["padding"])
-        face = np.clip(face[:, :, :3] / 255., 0., 1.)
         self.reference["face"] = face if dtype is None else face.astype(dtype)
 
         logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",
@@ -336,7 +413,21 @@ class DetectedFace():
         return self.feed["face"]
 
     @property
-    def _feed_matrix(self):
+    def feed_landmarks(self):
+        """ numpy.ndarray: The 68 point landmarks location transposed to the feed face box.
+        Only available after :func:`load_reference_face` has been called, otherwise returns
+        ``None``"""
+        if not self.feed:
+            return None
+        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
+                                                      self.feed["matrix"],
+                                                      self.feed["size"],
+                                                      self.feed["padding"])
+        logger.trace("Returning: %s", landmarks)
+        return landmarks
+
+    @property
+    def feed_matrix(self):
         """ numpy.ndarray: The adjusted matrix face sized for feeding into a model. Only available
         after :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """
         if not self.feed:
@@ -354,7 +445,7 @@ class DetectedFace():
         ``None``"""
         if not self.feed:
             return None
-        return get_matrix_scaling(self._feed_matrix)
+        return get_matrix_scaling(self.feed_matrix)
 
     @property
     def reference_face(self):
@@ -381,7 +472,7 @@ class DetectedFace():
 
     @property
     def reference_matrix(self):
-        """ numpy.ndarray: The adjusted matrix face sized for refence against a face coming out of
+        """ numpy.ndarray: The adjusted matrix face sized for reference against a face coming out of
          a model. Only available after :func:`load_reference_face` has been called, otherwise
          returns ``None``"""
         if not self.reference:
@@ -402,87 +493,182 @@ class DetectedFace():
         return get_matrix_scaling(self.reference_matrix)
 
 
-def rotate_landmarks(face, rotation_matrix):
-    """ Rotates the 68 point landmarks and detection bounding box around the given rotation matrix.
+class Mask():
+    """ Face Mask information and convenience methods
 
-    Paramaters
+    Holds a Faceswap mask as generated from :mod:`plugins.extract.mask` and the information
+    required to transform it to its original frame.
+
+    Holds convenience methods to handle the warping, storing and retrieval of the mask.
+
+    Parameters
     ----------
-    face: DetectedFace or dict
-        A :class:`DetectedFace` or an `alignments file` ``dict`` containing the 68 point landmarks
-        and the `x`, `w`, `y`, `h` detection bounding box points.
-    rotation_matrix: numpy.ndarray
-        The rotation matrix to rotate the given object by.
+    storage_size: int, optional
+        The size (in pixels) that the mask should be stored at. Default: 128.
 
-    Returns
-    -------
-    DetectedFace or dict
-        The rotated :class:`DetectedFace` or `alignments file` ``dict`` with the landmarks and
-        detection bounding box points rotated by the given matrix. The return type is the same as
-        the input type for ``face``
+    Attributes
+    ----------
+    stored_size: int
+        The size, in pixels, of the stored mask across its height and width.
     """
-    logger.trace("Rotating landmarks: (rotation_matrix: %s, type(face): %s",
-                 rotation_matrix, type(face))
-    rotated_landmarks = None
-    # Detected Face Object
-    if isinstance(face, DetectedFace):
-        bounding_box = [[face.x, face.y],
-                        [face.x + face.w, face.y],
-                        [face.x + face.w, face.y + face.h],
-                        [face.x, face.y + face.h]]
-        landmarks = face.landmarks_xy
 
-    # Alignments Dict
-    elif isinstance(face, dict) and "x" in face:
-        bounding_box = [[face.get("x", 0), face.get("y", 0)],
-                        [face.get("x", 0) + face.get("w", 0),
-                         face.get("y", 0)],
-                        [face.get("x", 0) + face.get("w", 0),
-                         face.get("y", 0) + face.get("h", 0)],
-                        [face.get("x", 0),
-                         face.get("y", 0) + face.get("h", 0)]]
-        landmarks = face.get("landmarks_xy", list())
+    def __init__(self, storage_size=128):
+        self.stored_size = storage_size
 
-    else:
-        raise ValueError("Unsupported face type")
+        self._mask = None
+        self._affine_matrix = None
+        self._interpolator = None
 
-    logger.trace("Original landmarks: %s", landmarks)
+        self._blur_kernel = 0
+        self._threshold = 0.0
 
-    rotation_matrix = cv2.invertAffineTransform(
-        rotation_matrix)
-    rotated = list()
-    for item in (bounding_box, landmarks):
-        if not item:
-            continue
-        points = np.array(item, np.int32)
-        points = np.expand_dims(points, axis=0)
-        transformed = cv2.transform(points,
-                                    rotation_matrix).astype(np.int32)
-        rotated.append(transformed.squeeze())
+    @property
+    def mask(self):
+        """ numpy.ndarray: The mask at the size of :attr:`stored_size` with any requested blurring
+        and threshold amount applied."""
+        dims = (self.stored_size, self.stored_size, 1)
+        mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
+        if self._threshold != 0.0 or self._blur_kernel != 0:
+            mask = mask.copy()
+        if self._threshold != 0.0:
+            mask[mask < self._threshold] = 0.0
+            mask[mask > 255.0 - self._threshold] = 255.0
+        if self._blur_kernel != 0:
+            mask = cv2.GaussianBlur(mask, (self._blur_kernel, self._blur_kernel), 0)[..., None]
+        logger.trace("mask shape: %s", mask.shape)
+        return mask
 
-    # Bounding box should follow x, y planes, so get min/max
-    # for non-90 degree rotations
-    pt_x = min([pnt[0] for pnt in rotated[0]])
-    pt_y = min([pnt[1] for pnt in rotated[0]])
-    pt_x1 = max([pnt[0] for pnt in rotated[0]])
-    pt_y1 = max([pnt[1] for pnt in rotated[0]])
-    width = pt_x1 - pt_x
-    height = pt_y1 - pt_y
+    def get_full_frame_mask(self, width, height):
+        """ Return the stored mask in a full size frame of the given dimensions
 
-    if isinstance(face, DetectedFace):
-        face.x = int(pt_x)
-        face.y = int(pt_y)
-        face.w = int(width)
-        face.h = int(height)
-        face.r = 0
-        if len(rotated) > 1:
-            rotated_landmarks = [tuple(point) for point in rotated[1].tolist()]
-            face.landmarks_xy = rotated_landmarks
-    else:
-        face["left"] = int(pt_x)
-        face["top"] = int(pt_y)
-        face["right"] = int(pt_x1)
-        face["bottom"] = int(pt_y1)
-        rotated_landmarks = face
+        Parameters
+        ----------
+        width: int
+            The width of the original frame that the mask was extracted from
+        height: int
+            The height of the original frame that the mask was extracted from
 
-    logger.trace("Rotated landmarks: %s", rotated_landmarks)
-    return face
+        Returns
+        -------
+        numpy.ndarray: The mask affined to the original full frame of the given dimensions
+        """
+        frame = np.zeros((width, height, 1), dtype="uint8")
+        mask = cv2.warpAffine(self.mask,
+                              self._affine_matrix,
+                              (width, height),
+                              frame,
+                              flags=cv2.WARP_INVERSE_MAP | self._interpolator,
+                              borderMode=cv2.BORDER_CONSTANT)
+        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s",
+                     mask.shape, mask.dtype, mask.min(), mask.max())
+        return mask
+
+    def add(self, mask, affine_matrix, interpolator):
+        """ Add a Faceswap mask to this :class:`Mask`.
+
+        The mask should be the original output from  :mod:`plugins.extract.mask`
+
+        Parameters
+        ----------
+        mask: numpy.ndarray
+            The mask that is to be added as output from :mod:`plugins.extract.mask`
+            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
+        affine_matrix: numpy.ndarray
+            The transformation matrix required to transform the mask to the original frame.
+        interpolator, int:
+            The CV2 interpolator required to transform this mask to it's original frame
+        """
+        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s, "
+                     "affine_matrix: %s, interpolator: %s)", mask.shape, mask.dtype, mask.min(),
+                     mask.max(), interpolator)
+        self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
+        self._interpolator = interpolator
+        mask = (cv2.resize(mask,
+                           (self.stored_size, self.stored_size),
+                           interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
+        self._mask = compress(mask)
+
+    def set_blur_kernel_and_threshold(self, blur_kernel=0, threshold=0):
+        """ Set the internal blur kernel and threshold amount for returned masks
+
+        Parameters
+        ----------
+        blur_kernel: int, optional
+            The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
+            blurring. Default: 0
+        threshold: int, optional
+            The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
+            Default: 0
+        """
+        logger.trace("blur_kernel: %s, threshold: %s", blur_kernel, threshold)
+        self._blur_kernel = blur_kernel
+        self._threshold = (threshold / 100.0) * 255.0
+
+    def _adjust_affine_matrix(self, mask_size, affine_matrix):
+        """ Adjust the affine matrix for the mask's storage size
+
+        Parameters
+        ----------
+        mask_size: int
+            The original size of the mask.
+        affine_matrix: numpy.ndarray
+            The affine matrix to transform the mask at original size to the parent frame.
+
+        Returns
+        -------
+        affine_matrix: numpy,ndarray
+            The affine matrix adjusted for the mask at its stored dimensions.
+        """
+        zoom = self.stored_size / mask_size
+        zoom_mat = np.array([[zoom, 0, 0.], [0, zoom, 0.]])
+        adjust_mat = np.dot(zoom_mat, np.concatenate((affine_matrix, np.array([[0., 0., 1.]]))))
+        logger.trace("storage_size: %s, mask_size: %s, zoom: %s, original matrix: %s, "
+                     "adjusted_matrix: %s", self.stored_size, mask_size, zoom, affine_matrix.shape,
+                     adjust_mat.shape)
+        return adjust_mat
+
+    def to_dict(self):
+        """ Convert the mask to a dictionary for saving to an alignments file
+
+        Returns
+        -------
+        dict:
+            The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
+            ``affine_matrix``, ``interpolator``, ``stored_size``
+        """
+        retval = dict()
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
+            retval[key] = getattr(self, self._attr_name(key))
+        logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})
+        return retval
+
+    def from_dict(self, mask_dict):
+        """ Populates the :class:`Mask` from a dictionary loaded from an alignments file.
+
+        Parameters
+        ----------
+        mask_dict: dict
+            A dictionary stored in an alignments file containing the keys ``mask``,
+            ``affine_matrix``, ``interpolator``, ``stored_size``
+        """
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
+            setattr(self, self._attr_name(key), mask_dict[key])
+            logger.trace("%s - %s", key, mask_dict[key] if key != "mask" else type(mask_dict[key]))
+
+    @staticmethod
+    def _attr_name(dict_key):
+        """ The :class:`Mask` attribute name for the given dictionary key
+
+        Parameters
+        ----------
+        dict_key: str
+            The key name from an alignments dictionary
+
+        Returns
+        -------
+        attribute_name: str
+            The attribute name for the given key for :class:`Mask`
+        """
+        retval = "_{}".format(dict_key) if dict_key != "stored_size" else dict_key
+        logger.trace("dict_key: %s, attribute_name: %s", dict_key, retval)
+        return retval

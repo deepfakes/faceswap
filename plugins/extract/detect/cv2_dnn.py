@@ -15,6 +15,7 @@ class Detect(Detector):
         self.name = "cv2-DNN Detector"
         self.input_size = 300
         self.vram = 0  # CPU Only. Doesn't use VRAM
+        self.vram_per_batch = 0
         self.batchsize = 1
         self.confidence = self.config["confidence"] / 100
 

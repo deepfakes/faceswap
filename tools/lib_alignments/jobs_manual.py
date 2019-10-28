@@ -9,7 +9,7 @@ import numpy as np
 
 from lib.queue_manager import queue_manager
 from plugins.extract.pipeline import Extractor
-from . import Annotate, ExtractedFaces, Frames, Legacy
+from . import Annotate, ExtractedFaces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -454,10 +454,6 @@ class Manual():
 
     def process(self):
         """ Process manual extraction """
-        legacy = Legacy(self.alignments, self.arguments,
-                        frames=self.frames, child_process=True)
-        legacy.process()
-
         logger.info("[MANUAL PROCESSING]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
         self.interface = Interface(self.alignments, self.frames)
@@ -785,11 +781,11 @@ class MouseHandler():
     def init_extractor(self):
         """ Initialize Aligner """
         logger.debug("Initialize Extractor")
-        extractor = Extractor("manual", "fan", multiprocess=True, normalize_method="hist")
+        extractor = Extractor("manual", "fan", "none", multiprocess=True, normalize_method="hist")
         self.queues["in"] = extractor.input_queue
         # Set the batchsizes to 1
-        extractor.set_batchsize("detector", 1)
-        extractor.set_batchsize("aligner", 1)
+        for plugin_type in ("detect", "align", "mask"):
+            extractor.set_batchsize(plugin_type, 1)
         extractor.launch()
         logger.debug("Initialized Extractor")
         return extractor

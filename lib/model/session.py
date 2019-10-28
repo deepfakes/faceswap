@@ -4,10 +4,12 @@
 import logging
 
 import tensorflow as tf
+from keras.layers import Activation
+from tensorflow.python import errors_impl as tf_error  # pylint:disable=no-name-in-module
 from keras.models import load_model as k_load_model, Model
 import numpy as np
 
-from lib.utils import get_backend
+from lib.utils import get_backend, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -110,8 +112,15 @@ class KSession():
         config = tf.ConfigProto()
         if allow_growth and get_backend() == "nvidia":
             config.gpu_options.allow_growth = True  # pylint:disable=no-member
-        session = tf.Session(graph=tf.Graph(), config=config)
-        logger.debug("Creating tf.session: (graph: %s, session: %s, config: %s)",
+        try:
+            session = tf.Session(graph=tf.Graph(), config=config)
+        except tf_error.InternalError as err:
+            if "driver version is insufficient" in str(err):
+                msg = ("Your Nvidia Graphics Driver is insufficient for running Faceswap. "
+                       "Please upgrade to the latest version.")
+                raise FaceswapError(msg) from err
+            raise err
+        logger.debug("Created tf.session: (graph: %s, session: %s, config: %s)",
                      session.graph, session, config)
         return session
 
@@ -165,3 +174,19 @@ class KSession():
             with self._session.as_default():  # pylint: disable=not-context-manager
                 with self._session.graph.as_default():
                     self._model.load_weights(self._model_path)
+
+    def append_softmax_activation(self, layer_index=-1):
+        """ Append a softmax activation layer to a model
+
+        Occasionally a softmax activation layer needs to be added to a model's output.
+        This is a convenience fuction to append this layer to the loaded model.
+
+        Parameters
+        ----------
+        layer_index: int, optional
+            The layer index of the model to select the output from to use as an input to the
+            softmax activation layer. Default: -1 (The final layer of the model)
+        """
+        logger.debug("Appending Softmax Activation to model: (layer_index: %s)", layer_index)
+        softmax = Activation("softmax", name="softmax")(self._model.layers[layer_index].output)
+        self._model = Model(inputs=self._model.input, outputs=[softmax])

@@ -132,7 +132,7 @@ class Environment():
         if self.is_admin:
             self.output.info("Running as Root/Admin")
         else:
-            self.output.warning("Running without root/admin privileges")
+            self.output.info("Running without root/admin privileges")
 
     def check_system(self):
         """ Check the system """

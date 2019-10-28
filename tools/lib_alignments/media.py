@@ -14,7 +14,8 @@ from tqdm import tqdm
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import count_frames_and_secs, encode_image_with_hash, read_image, read_image_hash
+from lib.image import (count_frames_and_secs, encode_image_with_hash, read_image,
+                       read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -23,16 +24,15 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class AlignmentData(Alignments):
     """ Class to hold the alignment data """
 
-    def __init__(self, alignments_file, destination_format):
-        logger.debug("Initializing %s: (alignments file: '%s', destination_format: '%s')",
-                     self.__class__.__name__, alignments_file, destination_format)
+    def __init__(self, alignments_file):
+        logger.debug("Initializing %s: (alignments file: '%s')",
+                     self.__class__.__name__, alignments_file)
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
         if filename.lower() == "dfl":
-            self.set_dfl(destination_format)
+            self.file = filename
             return
         super().__init__(folder, filename=filename)
-        self.set_destination_format(destination_format)
         logger.verbose("%s items loaded", self.frames_count)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -43,46 +43,13 @@ class AlignmentData(Alignments):
         if filename.lower() == "dfl":
             folder = None
             filename = "dfl"
-            logger.info("Using extracted pngs for alignments")
+            logger.info("Using extracted DFL faces for alignments")
         elif not os.path.isfile(alignments_file):
             logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
             exit(0)
         if folder:
             logger.verbose("Alignments file exists at '%s'", alignments_file)
         return folder, filename
-
-    def set_dfl(self, destination_format):
-        """ Set the alignments for dfl alignments """
-        logger.debug("Alignments are DFL format")
-        self.file = "dfl"
-        self.set_destination_format(destination_format)
-
-    def set_destination_format(self, destination_format):
-        """ Standardize the destination format to the correct extension """
-        extensions = {".json": "json",
-                      ".p": "pickle",
-                      ".yml": "yaml",
-                      ".yaml": "yaml"}
-        dst_fmt = None
-        file_ext = os.path.splitext(self.file)[1].lower()
-        logger.debug("File extension: '%s'", file_ext)
-
-        if destination_format is not None:
-            dst_fmt = destination_format
-        elif self.file == "dfl":
-            dst_fmt = "json"
-        elif file_ext in extensions.keys():
-            dst_fmt = extensions[file_ext]
-        else:
-            logger.error("'%s' is not a supported serializer. Exiting", file_ext)
-            exit(0)
-
-        logger.verbose("Destination format set to '%s'", dst_fmt)
-
-        self.serializer = self.get_serializer("", dst_fmt)
-        filename = os.path.splitext(self.file)[0]
-        self.file = "{}.{}".format(filename, self.serializer.ext)
-        logger.debug("Destination file: '%s'", self.file)
 
     def save(self):
         """ Backup copy of old alignments and save new alignments """
@@ -205,15 +172,18 @@ class Faces(MediaLoader):
     def process_folder(self):
         """ Iterate through the faces dir pulling out various information """
         logger.info("Loading file list from %s", self.folder)
-        for face in tqdm(os.listdir(self.folder), desc="Reading Face Hashes"):
-            if not self.valid_extension(face):
-                continue
-            filename = os.path.splitext(face)[0]
-            file_extension = os.path.splitext(face)[1]
-            face_hash = read_image_hash(os.path.join(self.folder, face))
-            retval = {"face_fullname": face,
-                      "face_name": filename,
-                      "face_extension": file_extension,
+
+        filelist = [os.path.join(self.folder, face)
+                    for face in os.listdir(self.folder)
+                    if self.valid_extension(face)]
+        for fullpath, face_hash in tqdm(read_image_hash_batch(filelist),
+                                        total=len(filelist),
+                                        desc="Reading Face Hashes"):
+            filename = os.path.basename(fullpath)
+            face_name, extension = os.path.splitext(filename)
+            retval = {"face_fullname": filename,
+                      "face_name": face_name,
+                      "face_extension": extension,
                       "face_hash": face_hash}
             logger.trace(retval)
             yield retval
@@ -364,15 +334,15 @@ class ExtractedFaces():
             out_file.write(img)
         return f_hash
 
-    def align_eyes(self, face, image):
+    @staticmethod
+    def align_eyes(face, image):
         """ Re-extract a face with the pupils forced to be absolutely horizontally aligned """
         umeyama_landmarks = face.aligned_landmarks
-        leftEyeCenter = umeyama_landmarks[42:48].mean(axis=0)
-        rightEyeCenter = umeyama_landmarks[36:42].mean(axis=0)
-        eyesCenter = umeyama_landmarks[36:48].mean(axis=0)
-        dY = rightEyeCenter[1] - leftEyeCenter[1]
-        dX = rightEyeCenter[0] - leftEyeCenter[0]
-        theta = np.pi - np.arctan2(dY, dX)
+        left_eye_center = umeyama_landmarks[42:48].mean(axis=0)
+        right_eye_center = umeyama_landmarks[36:42].mean(axis=0)
+        d_y = right_eye_center[1] - left_eye_center[1]
+        d_x = right_eye_center[0] - left_eye_center[0]
+        theta = np.pi - np.arctan2(d_y, d_x)
         rot_cos = np.cos(theta)
         rot_sin = np.sin(theta)
         rotation_matrix = np.array([[rot_cos, -rot_sin, 0.],

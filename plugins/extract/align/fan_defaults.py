@@ -50,7 +50,7 @@ _HELPTEXT = (
 
 _DEFAULTS = {
     "batch-size": {
-        "default": 8,
+        "default": 12,
         "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
                 "but setting it too high can harm performance.\n"
                 "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
