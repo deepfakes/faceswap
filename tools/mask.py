@@ -33,8 +33,6 @@ class Mask():
     """
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: %s", self.__class__.__name__, arguments)
-        print(type(arguments))
-        exit(0)
         set_system_verbosity(arguments.loglevel)
         self._update_type = arguments.processing
         self._input_is_faces = arguments.input_type == "faces"
