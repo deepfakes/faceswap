@@ -595,13 +595,17 @@ class Mask():
         ----------
         blur_kernel: int, optional
             The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
-            blurring. Default: 0
+            blurring. Should be odd, if an even number is passed in (outside of 0) then it is
+            rounded up to the next odd number. Default: 0
         threshold: int, optional
             The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
             Default: 0
         """
         logger.trace("blur_kernel: %s, threshold: %s", blur_kernel, threshold)
-        self._blur_kernel = blur_kernel
+        if blur_kernel == 0 or blur_kernel % 2 == 1:
+            self._blur_kernel = blur_kernel
+        else:
+            self._blur_kernel = blur_kernel + 1
         self._threshold = (threshold / 100.0) * 255.0
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
