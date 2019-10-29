@@ -78,12 +78,10 @@ class Alignments():
             # Reformat legacy alignments file
             filename = self.update_file_format(folder, filename)
             logger.debug("Updated legacy alignments. New filename: '%s'", filename)
-        elif not extension:
+        else:
             filename = "{}.{}".format(filename, self.serializer.file_extension)
             logger.debug("File extension set from serializer: '%s'",
                          self.serializer.file_extension)
-        elif extension != ".fsa":
-            raise FaceswapError("{} is not a valid alignments file".format(filename))
         location = os.path.join(str(folder), filename)
         if not os.path.exists(location):
             # Test for old format alignments files and reformat if they exist
@@ -208,10 +206,10 @@ class Alignments():
         self.data[frame][idx] = alignment
 
     def filter_hashes(self, hashlist, filter_out=False):
-        """ Filter in or out faces that match the hashlist
+        """ Filter in or out faces that match the hash list
 
-            filter_out=True: Remove faces that match in the hashlist
-            filter_out=False: Remove faces that are not in the hashlist
+            filter_out=True: Remove faces that match in the hash list
+            filter_out=False: Remove faces that are not in the hash list
         """
         hashset = set(hashlist)
         for filename, frame in self.data.items():
