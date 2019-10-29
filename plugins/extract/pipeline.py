@@ -247,7 +247,9 @@ class Extractor():
 
         If OOM errors are being reported, then these ratios should be relaxed some more
         """
-        retval = {2: 0.7,
+        retval = {0: 1.0,
+                  1: 1.0,
+                  2: 0.7,
                   3: 0.55,
                   4: 0.5,
                   5: 0.4}

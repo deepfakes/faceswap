@@ -781,10 +781,10 @@ class MouseHandler():
     def init_extractor(self):
         """ Initialize Aligner """
         logger.debug("Initialize Extractor")
-        extractor = Extractor("manual", "fan", "none", multiprocess=True, normalize_method="hist")
+        extractor = Extractor("manual", "fan", None, multiprocess=True, normalize_method="hist")
         self.queues["in"] = extractor.input_queue
         # Set the batchsizes to 1
-        for plugin_type in ("detect", "align", "mask"):
+        for plugin_type in ("detect", "align"):
             extractor.set_batchsize(plugin_type, 1)
         extractor.launch()
         logger.debug("Initialized Extractor")
@@ -923,6 +923,8 @@ class MouseHandler():
                                "manual_face": self.media["bounding_box"]})
         detected_face = next(self.extractor.detected_faces())["detected_faces"][0]
         alignment = detected_face.to_alignment()
+        # Mask will now be incorrect for updated landmarks so delete
+        alignment["mask"] = dict()
 
         frame = self.media["frame_id"]
 
