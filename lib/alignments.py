@@ -206,10 +206,10 @@ class Alignments():
         self.data[frame][idx] = alignment
 
     def filter_hashes(self, hashlist, filter_out=False):
-        """ Filter in or out faces that match the hashlist
+        """ Filter in or out faces that match the hash list
 
-            filter_out=True: Remove faces that match in the hashlist
-            filter_out=False: Remove faces that are not in the hashlist
+            filter_out=True: Remove faces that match in the hash list
+            filter_out=False: Remove faces that are not in the hash list
         """
         hashset = set(hashlist)
         for filename, frame in self.data.items():

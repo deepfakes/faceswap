@@ -443,12 +443,16 @@ class Extractor():
                 logger.debug("Plugin requirements within threshold: (plugin_required: %sMB, "
                              "vram_free: %sMB)", plugin_required, vram_free)
                 return
-            # Hacky split across 3 plugins
-            available_vram = (vram_free - self._total_vram_required) // 3
+            # Hacky split across plugins that use vram
+            gpu_plugin_count = sum([1 for plugin in self._all_plugins if plugin.vram != 0])
+            available_vram = (vram_free - self._total_vram_required) // gpu_plugin_count
             for plugin in self._all_plugins:
-                self._set_plugin_batchsize(plugin, available_vram)
+                if plugin.vram != 0:
+                    self._set_plugin_batchsize(plugin, available_vram)
         else:
             for plugin in self._all_plugins:
+                if plugin.vram == 0:
+                    continue
                 vram_required = plugin.vram + self._vram_buffer
                 batch_required = plugin.vram_per_batch * plugin.batchsize
                 plugin_required = vram_required + batch_required
@@ -461,9 +465,13 @@ class Extractor():
 
     @staticmethod
     def _set_plugin_batchsize(plugin, available_vram):
-        """ Set the batch size for the given plugin based on given available vram """
-        plugin.batchsize = int(max(1, available_vram // plugin.vram_per_batch))
-        logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
+        """ Set the batch size for the given plugin based on given available vram.
+        Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
+        zero division error.
+        """
+        if plugin.vram_per_batch != 0:
+            plugin.batchsize = int(max(1, available_vram // plugin.vram_per_batch))
+            logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
 
     def _join_threads(self):
         """ Join threads for current pass """
