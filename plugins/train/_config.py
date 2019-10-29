@@ -96,12 +96,13 @@ class Config(FaceswapConfig):
                  "testing for further description. Profile faces may result in sub-par "
                  "performance.")
         self.add_item(
-            section=section, title="mask_blur_kernel", datatype=int, min_max=(0, 8),
+            section=section, title="mask_blur_kernel", datatype=int, min_max=(0, 9),
             rounding=1, default=3, group="mask",
             info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
                  "edges of the mask, which can help with poorly calculated masks and give less "
                  "of a hard edge to the predicted mask. The size is in pixels (calculated from "
-                 "a 128px mask). Set to 0 to not apply gaussian blur.")
+                 "a 128px mask). Set to 0 to not apply gaussian blur. This value should be odd, "
+                 "if an even number is passed in then it will be rounded to the next odd number.")
         self.add_item(
             section=section, title="mask_threshold", datatype=int, default=4,
             min_max=(0, 50), rounding=1, group="mask",
