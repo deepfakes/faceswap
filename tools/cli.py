@@ -521,12 +521,14 @@ class MaskArgs(FaceSwapArgs):
             "action": Slider,
             "type": int,
             "group": "output",
-            "min_max": (0, 8),
+            "min_max": (0, 9),
             "default": 3,
             "rounding": 1,
             "help": "Apply gaussian blur to the mask output. Has the effect of smoothing the "
-                    "edges of the mask giving less of a hard edge. the size is in pixels. NB: "
-                    "Only effects the output preview. Set to 0 for off"})
+                    "edges of the mask giving less of a hard edge. the size is in pixels. This "
+                    "value should be odd, if an even number is passed in then it will be rounded "
+                    "to the next odd number. NB: Only effects the output preview. Set to 0 for "
+                    "off"})
         argument_list.append({
             "opts": ("-t", "--threshold"),
             "action": Slider,

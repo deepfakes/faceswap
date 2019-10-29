@@ -11,6 +11,7 @@ from shutil import copyfile
 import numpy as np
 import cv2
 from tqdm import tqdm
+from concurrent import futures
 
 # faceswap imports
 from lib.cli import FullHelpArgumentParser
@@ -88,28 +89,46 @@ class Sort():
                       out_queue=queue_manager.get_queue("out"),
                       queue_size=8)
         aligner = PluginLoader.get_aligner("fan")(normalize_method="hist")
-        aligner.batchsize = 1
+        aligner.batchsize = 1  # TODO Put batches at a time or load from alignment file
         aligner.initialize(**kwargs)
         aligner.start()
 
     @staticmethod
-    def alignment_dict(image):
+    def alignment_dict(filename, image):
         """ Set the image to a dict for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
         return {"image": image,
+                "filename": filename,
                 "detected_faces": [face]}
 
-    @staticmethod
-    def get_landmarks(filename):
-        """ Extract the face from a frame (If not alignments file found) """
-        image = read_image(filename, raise_error=True)
-        feed = Sort.alignment_dict(image)
-        feed["filename"] = filename
-        queue_manager.get_queue("in").put(feed)
-        face = queue_manager.get_queue("out").get()
-        landmarks = face["detected_faces"][0].landmarks_xy
-        return landmarks
+    def _get_landmarks(self):
+        """ Multi-threaded, parallel and sequentially ordered landmark loader """
+        self.launch_aligner()
+        filename_list, image_list = self._get_images()
+        feed_list = list(map(Sort.alignment_dict, filename_list, image_list))
+        landmarks = np.zeros((len(feed_list), 68, 2), dtype='float32')
+
+        logger.info("Finding landmarks in images...")
+        for feed in tqdm(feed_list, desc="Putting...", file=sys.stdout):
+            queue_manager.get_queue("in").put(feed)
+        for index, _ in enumerate(tqdm(landmarks, desc="Aligning...", file=sys.stdout)):
+            face = queue_manager.get_queue("out").get()
+            landmarks[index] = np.array(face["detected_faces"][0].landmarks_xy)
+
+        return filename_list, image_list, landmarks
+
+    def _get_images(self):
+        """ Multi-threaded, parallel and sequentially ordered image loader """
+        logger.info("Loading images...")
+        filename_list = self.find_images(self.args.input_dir)
+        with futures.ThreadPoolExecutor() as executor:
+            image_list = list(tqdm(executor.map(read_image, filename_list),
+                                   desc="Loading Images...",
+                                   file=sys.stdout,
+                                   total=len(filename_list)))
+
+        return filename_list, image_list
 
     def sort_process(self):
         """
@@ -137,180 +156,134 @@ class Sort():
     # Methods for sorting
     def sort_blur(self):
         """ Sort by blur amount """
-        input_dir = self.args.input_dir
+        logger.info("Sorting by estimated image blur...")
+        filename_list, image_list = self._get_images()
 
-        logger.info("Sorting by blur...")
-        img_list = [[img, self.estimate_blur(img)]
-                    for img in
-                    tqdm(self.find_images(input_dir),
-                         desc="Loading",
-                         file=sys.stdout)]
+        logger.info("Estimating blur...")
+        blurs = [self.estimate_blur(img) for img in image_list]
+
         logger.info("Sorting...")
-
-        img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
-
+        matched_list = list(zip(filename_list, blurs))
+        img_list = sorted(matched_list, key=operator.itemgetter(1), reverse=True)
         return img_list
 
     def sort_face(self):
-        """ Sort by face similarity """
-        input_dir = self.args.input_dir
+        """ Sort by identity similarity """
+        logger.info("Sorting by identity similarity...")
+        filename_list, image_list = self._get_images()
 
-        logger.info("Sorting by face similarity...")
+        logger.info("Calculating face identifiers...")
+        preds = np.array([self.vgg_face.predict(img)
+                          for img in tqdm(image_list, desc="Calculating...", file=sys.stdout)])
 
-        images = np.array(self.find_images(input_dir))
-        preds = np.array([self.vgg_face.predict(read_image(img, raise_error=True))
-                          for img in tqdm(images, desc="loading", file=sys.stdout)])
-        logger.info("Sorting. Depending on ths size of your dataset, this may take a few "
-                    "minutes...")
+        logger.info("Sorting by ward linkage...")
         indices = self.vgg_face.sorted_similarity(preds, method="ward")
-        img_list = images[indices]
+        img_list = np.array(filename_list)[indices]
         return img_list
 
     def sort_face_cnn(self):
-        """ Sort by CNN similarity """
-        self.launch_aligner()
-        input_dir = self.args.input_dir
+        """ Sort by landmark similarity """
+        logger.info("Sorting by landmark similarity...")
+        filename_list, image_list, landmarks = self._get_landmarks()
+        img_list = list(zip(filename_list, landmarks))
 
-        logger.info("Sorting by face-cnn similarity...")
-        img_list = []
-        for img in tqdm(self.find_images(input_dir),
-                        desc="Loading",
-                        file=sys.stdout):
-            landmarks = self.get_landmarks(img)
-            img_list.append([img, np.array(landmarks)
-                             if landmarks
-                             else np.zeros((68, 2))])
-
-        queue_manager.terminate_queues()
+        logger.info("Comparing landmarks and sorting...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1),
-                      desc="Sorting",
-                      file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing...", file=sys.stdout):
             min_score = float("inf")
             j_min_score = i + 1
-            for j in range(i + 1, len(img_list)):
+            for j in range(i + 1, img_list_len):
                 fl1 = img_list[i][1]
                 fl2 = img_list[j][1]
                 score = np.sum(np.absolute((fl2 - fl1).flatten()))
-
                 if score < min_score:
                     min_score = score
                     j_min_score = j
-            (img_list[i + 1],
-             img_list[j_min_score]) = (img_list[j_min_score],
-                                       img_list[i + 1])
+            (img_list[i + 1], img_list[j_min_score]) = (img_list[j_min_score], img_list[i + 1])
         return img_list
 
     def sort_face_cnn_dissim(self):
-        """ Sort by CNN dissimilarity """
-        self.launch_aligner()
-        input_dir = self.args.input_dir
+        """ Sort by landmark dissimilarity """
+        logger.info("Sorting by landmark dissimilarity...")
+        filename_list, image_list, landmarks = self._get_landmarks()
+        scores = np.zeros(len(filename_list), dtype='float32')
+        img_list = list(list(items) for items in zip(filename_list, landmarks, scores))
 
-        logger.info("Sorting by face-cnn dissimilarity...")
-
-        img_list = []
-        for img in tqdm(self.find_images(input_dir),
-                        desc="Loading",
-                        file=sys.stdout):
-            landmarks = self.get_landmarks(img)
-            img_list.append([img, np.array(landmarks)
-                             if landmarks
-                             else np.zeros((68, 2)), 0])
-
+        logger.info("Comparing landmarks...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1),
-                      desc="Sorting",
-                      file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing...", file=sys.stdout):
             score_total = 0
-            for j in range(i + 1, len(img_list)):
+            for j in range(i + 1, img_list_len):
                 if i == j:
                     continue
                 fl1 = img_list[i][1]
                 fl2 = img_list[j][1]
                 score_total += np.sum(np.absolute((fl2 - fl1).flatten()))
-
             img_list[i][2] = score_total
 
         logger.info("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
-
         return img_list
 
     def sort_face_yaw(self):
-        """ Sort by yaw of face """
-        self.launch_aligner()
-        input_dir = self.args.input_dir
+        """ Sort by estimated face yaw angle """
+        logger.info("Sorting by estimated face yaw angle..")
+        filename_list, image_list, landmarks = self._get_landmarks()
 
-        img_list = []
-        for img in tqdm(self.find_images(input_dir),
-                        desc="Loading",
-                        file=sys.stdout):
-            landmarks = self.get_landmarks(img)
-            img_list.append(
-                [img, self.calc_landmarks_face_yaw(np.array(landmarks))])
+        logger.info("Estimating yaw...")
+        yaws = [self.calc_landmarks_face_yaw(mark) for mark in landmarks]
 
-        logger.info("Sorting by face-yaw...")
-        img_list = sorted(img_list, key=operator.itemgetter(1), reverse=True)
-
+        logger.info("Sorting...")
+        matched_list = list(zip(filename_list, yaws))
+        img_list = sorted(matched_list, key=operator.itemgetter(1), reverse=True)
         return img_list
 
     def sort_hist(self):
-        """ Sort by histogram of face similarity """
-        input_dir = self.args.input_dir
-
+        """ Sort by image histogram similarity """
         logger.info("Sorting by histogram similarity...")
+        filename_list, image_list = self._get_images()
+        distance = cv2.HISTCMP_BHATTACHARYYA
 
-        img_list = [
-            [img, cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256])]
-            for img in
-            tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
-        ]
+        logger.info("Calculating histograms...")
+        histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
+        img_list = list(zip(filename_list, histograms))
 
+        logger.info("Comparing histograms and sorting...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1), desc="Sorting",
-                      file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing", file=sys.stdout):
             min_score = float("inf")
             j_min_score = i + 1
-            for j in range(i + 1, len(img_list)):
-                score = cv2.compareHist(img_list[i][1],
-                                        img_list[j][1],
-                                        cv2.HISTCMP_BHATTACHARYYA)
+            for j in range(i + 1, img_list_len):
+                score = cv2.compareHist(img_list[i][1], img_list[j][1], distance)
                 if score < min_score:
                     min_score = score
                     j_min_score = j
-            (img_list[i + 1],
-             img_list[j_min_score]) = (img_list[j_min_score],
-                                       img_list[i + 1])
+            (img_list[i + 1], img_list[j_min_score]) = (img_list[j_min_score], img_list[i + 1])
         return img_list
 
     def sort_hist_dissim(self):
-        """ Sort by histigram of face dissimilarity """
-        input_dir = self.args.input_dir
-
+        """ Sort by image histogram dissimilarity """
         logger.info("Sorting by histogram dissimilarity...")
+        filename_list, image_list = self._get_images()
+        scores = np.zeros(len(filename_list), dtype='float32')
+        distance = cv2.HISTCMP_BHATTACHARYYA
 
-        img_list = [
-            [img,
-             cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256]), 0]
-            for img in
-            tqdm(self.find_images(input_dir), desc="Loading", file=sys.stdout)
-        ]
+        logger.info("Calculating histograms...")
+        histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
+        img_list = list(list(items) for items in zip(filename_list, histograms, scores))
 
+        logger.info("Comparing histograms...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len), desc="Sorting", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len), desc="Comparing", file=sys.stdout):
             score_total = 0
             for j in range(0, img_list_len):
                 if i == j:
                     continue
-                score_total += cv2.compareHist(img_list[i][1],
-                                               img_list[j][1],
-                                               cv2.HISTCMP_BHATTACHARYYA)
-
+                score_total += cv2.compareHist(img_list[i][1], img_list[j][1], distance)
             img_list[i][2] = score_total
 
         logger.info("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
-
         return img_list
 
     # Methods for grouping
@@ -544,40 +517,20 @@ class Sort():
         input_dir = self.args.input_dir
         logger.info("Preparing to group...")
         if group_method == 'group_blur':
-            temp_list = [[img, self.estimate_blur(read_image(img, raise_error=True))]
-                         for img in
-                         tqdm(self.find_images(input_dir),
-                              desc="Reloading",
-                              file=sys.stdout)]
+            filename_list, image_list = self._get_images()
+            blurs = [self.estimate_blur(img) for img in image_list]
+            temp_list = list(zip(filename_list, blurs))
         elif group_method == 'group_face_cnn':
-            self.launch_aligner()
-            temp_list = []
-            for img in tqdm(self.find_images(input_dir),
-                            desc="Reloading",
-                            file=sys.stdout):
-                landmarks = self.get_landmarks(img)
-                temp_list.append([img, np.array(landmarks)
-                                  if landmarks
-                                  else np.zeros((68, 2))])
+            filename_list, image_list, landmarks = self._get_landmarks()
+            temp_list = list(zip(filename_list, landmarks))
         elif group_method == 'group_face_yaw':
-            self.launch_aligner()
-            temp_list = []
-            for img in tqdm(self.find_images(input_dir),
-                            desc="Reloading",
-                            file=sys.stdout):
-                landmarks = self.get_landmarks(img)
-                temp_list.append(
-                    [img,
-                     self.calc_landmarks_face_yaw(np.array(landmarks))])
+            filename_list, image_list, landmarks = self._get_landmarks()
+            yaws = [self.calc_landmarks_face_yaw(mark) for mark in landmarks]
+            temp_list = list(zip(filename_list, yaws))
         elif group_method == 'group_hist':
-            temp_list = [
-                [img,
-                 cv2.calcHist([read_image(img, raise_error=True)], [0], None, [256], [0, 256])]
-                for img in
-                tqdm(self.find_images(input_dir),
-                     desc="Reloading",
-                     file=sys.stdout)
-            ]
+            filename_list, image_list = self._get_images()
+            histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
+            temp_list = list(zip(filename_list, histograms))
         else:
             raise ValueError("{} group_method not found.".format(group_method))
 
@@ -602,9 +555,7 @@ class Sort():
         new_list = []
         # Make new list of just image paths to serve as an index
         val_index_list = [i[0] for i in new_vals_list]
-        for i in tqdm(range(len(sorted_list)),
-                      desc="Splicing",
-                      file=sys.stdout):
+        for i in tqdm(range(len(sorted_list)), desc="Splicing", file=sys.stdout):
             current_img = sorted_list[i] if isinstance(sorted_list[i], str) else sorted_list[i][0]
             new_val_index = val_index_list.index(current_img)
             new_list.append([current_img, new_vals_list[new_val_index][1]])
@@ -624,12 +575,11 @@ class Sort():
         return result
 
     @staticmethod
-    def estimate_blur(image_file):
+    def estimate_blur(image):
         """
         Estimate the amount of blur an image has with the variance of the Laplacian.
         Normalize by pixel number to offset the effect of image size on pixel gradients & variance
         """
-        image = read_image(image_file, raise_error=True)
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
