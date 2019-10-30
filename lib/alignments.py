@@ -78,6 +78,8 @@ class Alignments():
             # Reformat legacy alignments file
             filename = self.update_file_format(folder, filename)
             logger.debug("Updated legacy alignments. New filename: '%s'", filename)
+        if extension[1:] == self.serializer.file_extension:
+            logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
             filename = "{}.{}".format(filename, self.serializer.file_extension)
             logger.debug("File extension set from serializer: '%s'",
