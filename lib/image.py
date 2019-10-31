@@ -262,26 +262,40 @@ def batch_convert_color(batch, colorspace):
 # <<< VIDEO UTILS >>> #
 # ################### #
 
-def count_frames(filename):
+def count_frames(filename, fast=False):
     """ Count the number of frames in a video file
 
-    Unfortunately there is no guaranteed accurate way to get a count of video frames
-    without iterating through the video.
+    There is no guaranteed accurate way to get a count of video frames without iterating through
+    a video and decoding every frame.
 
-    This counts the frames, displaying a progress bar to keep the user abreast of progress
+    :func:`count_frames` can return an accurate count (albeit fairly slowly) or a possibly less
+    accurate count, depending on the :attr:`fast` parameter. A progress bar is displayed.
 
     Parameters
     ----------
     filename: str
         Full path to the video to return the frame count from.
+    fast: bool, optional
+        Whether to count the frames without decoding them. This is significantly faster but
+        accuracy is not guaranteed. Default: ``False``.
 
     Returns
     -------
-    int: The number of frames in the given video file.
+    int:
+        The number of frames in the given video file.
+
+    Example
+    -------
+    >>> filename = "/path/to/video.mp4"
+    >>> frame_count = count_frames(filename)
     """
     assert isinstance(filename, str), "Video path must be a string"
 
-    cmd = [im_ffm.get_ffmpeg_exe(), "-i", filename, "-map", "0:v:0", "-f", "null", "-"]
+    cmd = [im_ffm.get_ffmpeg_exe(), "-i", filename, "-map", "0:v:0"]
+    if fast:
+        cmd.extend(["-c", "copy"])
+    cmd.extend(["-f", "null", "-"])
+
     logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
     process = subprocess.Popen(cmd,
                                stderr=subprocess.STDOUT,
