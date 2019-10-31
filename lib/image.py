@@ -289,6 +289,7 @@ def count_frames(filename, fast=False):
     >>> filename = "/path/to/video.mp4"
     >>> frame_count = count_frames(filename)
     """
+    logger.debug("filename: %s, fast: %s", filename, fast)
     assert isinstance(filename, str), "Video path must be a string"
 
     cmd = [im_ffm.get_ffmpeg_exe(), "-i", filename, "-map", "0:v:0"]
