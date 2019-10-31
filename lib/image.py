@@ -4,7 +4,6 @@
 import logging
 import subprocess
 import os
-import sys
 
 from concurrent import futures
 from hashlib import sha1
@@ -13,6 +12,7 @@ import cv2
 import imageio
 import imageio_ffmpeg as im_ffm
 import numpy as np
+from tqdm import tqdm
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager, QueueEmpty
@@ -262,91 +262,65 @@ def batch_convert_color(batch, colorspace):
 # <<< VIDEO UTILS >>> #
 # ################### #
 
-def count_frames_and_secs(filename, timeout=90):
-    """ Count the number of frames and seconds in a video file.
+def count_frames(filename):
+    """ Count the number of frames in a video file
 
-    Adapted From :mod:`ffmpeg_imageio` to handle the issue of ffmpeg occasionally hanging
-    inside a sub-process.
+    Unfortunately there is no guaranteed accurate way to get a count of video frames
+    without iterating through the video.
 
-    If the operation times out then the process will try to read the data again, up to a total
-    of 3 times. If the data still cannot be read then an exception will be raised.
-
-    Note that this operation can be quite slow for large files.
+    This counts the frames, displaying a progress bar to keep the user abreast of progress
 
     Parameters
     ----------
     filename: str
-        Full path to the video to be analyzed.
-    timeout: str, optional
-        The amount of time in seconds to wait for the video data before aborting.
-        Default: ``60``
+        Full path to the video to return the frame count from.
 
     Returns
     -------
-    frames: int
-        The number of frames in the given video file.
-    secs: float
-        The duration, in seconds, of the given video file.
-
-    Example
-    -------
-    >>> video = "/path/to/video.mp4"
-    >>> frames, secs = count_frames_and_secs(video)
+    int: The number of frames in the given video file.
     """
-    # https://stackoverflow.com/questions/2017843/fetch-frame-count-with-ffmpeg
-
     assert isinstance(filename, str), "Video path must be a string"
-    exe = im_ffm.get_ffmpeg_exe()
-    iswin = sys.platform.startswith("win")
-    logger.debug("iswin: '%s'", iswin)
-    cmd = [exe, "-i", filename, "-map", "0:v:0", "-c", "copy", "-f", "null", "-"]
+
+    cmd = [im_ffm.get_ffmpeg_exe(), "-i", filename, "-map", "0:v:0", "-f", "null", "-"]
     logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
-    attempts = 3
-    for attempt in range(attempts):
-        try:
-            logger.debug("attempt: %s of %s", attempt + 1, attempts)
-            out = subprocess.check_output(cmd,
-                                          stderr=subprocess.STDOUT,
-                                          shell=iswin,
-                                          timeout=timeout)
-            logger.debug("Succesfully communicated with FFMPEG")
+    process = subprocess.Popen(cmd,
+                               stderr=subprocess.STDOUT,
+                               stdout=subprocess.PIPE,
+                               universal_newlines=True)
+    pbar = None
+    duration = None
+    init_tqdm = False
+    update = 0
+    frames = 0
+    while True:
+        output = process.stdout.readline().strip()
+        if output == "" and process.poll() is not None:
             break
-        except subprocess.CalledProcessError as err:
-            out = err.output.decode(errors="ignore")
-            raise RuntimeError("FFMEG call failed with {}:\n{}".format(err.returncode, out))
-        except subprocess.TimeoutExpired as err:
-            this_attempt = attempt + 1
-            if this_attempt == attempts:
-                msg = ("FFMPEG hung while attempting to obtain the frame count. "
-                       "Sometimes this issue resolves itself, so you can try running again. "
-                       "Otherwise use the Effmpeg Tool to extract the frames from your video into "
-                       "a folder, and then run the requested Faceswap process on that folder.")
-                raise FaceswapError(msg) from err
-            logger.warning("FFMPEG hung while attempting to obtain the frame count. "
-                           "Retrying %s of %s", this_attempt + 1, attempts)
-            continue
 
-    # Note that other than with the sub-process calls below, ffmpeg wont hang here.
-    # Worst case Python will stop/crash and ffmpeg will continue running until done.
-
-    nframes = nsecs = None
-    for line in reversed(out.splitlines()):
-        if not line.startswith(b"frame="):
-            continue
-        line = line.decode(errors="ignore")
-        logger.debug("frame line: '%s'", line)
-        idx = line.find("frame=")
-        if idx >= 0:
-            splitframes = line[idx:].split("=", 1)[-1].lstrip().split(" ", 1)[0].strip()
-            nframes = int(splitframes)
-        idx = line.find("time=")
-        if idx >= 0:
-            splittime = line[idx:].split("=", 1)[-1].lstrip().split(" ", 1)[0].strip()
-            nsecs = convert_to_secs(*splittime.split(":"))
-        logger.debug("nframes: %s, nsecs: %s", nframes, nsecs)
-        return nframes, nsecs
-
-    raise RuntimeError("Could not get number of frames")
+        if output.startswith("Duration:"):
+            logger.debug("Duration line: %s", output)
+            idx = output.find("Duration:") + len("Duration:")
+            duration = int(convert_to_secs(*output[idx:].split(",", 1)[0].strip().split(":")))
+            logger.debug("duration: %s", duration)
+        if output.startswith("frame="):
+            logger.debug("frame line: %s", output)
+            if not init_tqdm:
+                logger.debug("Initializing tqdm")
+                pbar = tqdm(desc="Counting Video Frames", total=duration, unit="secs")
+                init_tqdm = True
+            time_idx = output.find("time=") + len("time=")
+            frame_idx = output.find("frame=") + len("frame=")
+            frames = int(output[frame_idx:].strip().split(" ")[0].strip())
+            vid_time = int(convert_to_secs(*output[time_idx:].split(" ")[0].strip().split(":")))
+            logger.debug("frames: %s, vid_time: %s", frames, vid_time)
+            prev_update = update
+            update = vid_time
+            pbar.update(update - prev_update)
+    if pbar is not None:
+        pbar.close()
+    return_code = process.poll()
+    logger.debug("Return code: %s, frames: %s", return_code, frames)
+    return frames
 
 
 class BackgroundIO():
@@ -400,7 +374,7 @@ class BackgroundIO():
         self._task = task.lower()
         self._is_video = self._check_input()
         self._input = self.location if self._is_video else get_image_paths(self.location)
-        self._count = count_frames_and_secs(self._input)[0] if self._is_video else len(self._input)
+        self._count = count_frames(self._input) if self._is_video else len(self._input)
         self._queue = queue_manager.get_queue(name="{}_{}".format(self.__class__.__name__,
                                                                   self._task),
                                               maxsize=queue_size)
