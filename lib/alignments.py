@@ -81,7 +81,7 @@ class Alignments():
         if extension[1:] == self.serializer.file_extension:
             logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
-            filename = "{}.{}".format(filename, self.serializer.file_extension)
+            filename = "{}.{}".format(os.path.splitext(filename)[0], self.serializer.file_extension)
             logger.debug("File extension set from serializer: '%s'",
                          self.serializer.file_extension)
         location = os.path.join(str(folder), filename)
