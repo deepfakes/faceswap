@@ -126,7 +126,7 @@ class Images():
     def count_images(self):
         """ Number of images or frames """
         if self.is_video:
-            retval = int(count_frames(self.args.input_dir))
+            retval = int(count_frames(self.args.input_dir, fast=True))
         else:
             retval = len(self.input_images)
         return retval
