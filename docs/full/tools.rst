@@ -1,18 +1,17 @@
-plugins package
-===============
+tools package
+=============
 
 Subpackages
 -----------
 
 .. toctree::
 
-   plugins.extract
-   plugins.plugin_loader
+   tools.mask
 
 Module contents
 ---------------
 
-.. automodule:: plugins
+.. automodule:: tools
    :members:
    :undoc-members:
    :show-inheritance:

@@ -114,12 +114,11 @@ class Check():
         """ Return Faces when there are multiple faces in a frame """
         self.output_message = "Multiple faces in frame"
         seen_hash_dupes = set()
-        hashes_to_frame = self.alignments.hashes_to_frame
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
             frame_idx = [(frame, idx)
-                         for frame, idx in hashes_to_frame[f_hash].items()]
+                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -160,10 +159,9 @@ class Check():
     def get_leftover_faces(self):
         """yield each face that isn't in the alignments file."""
         self.output_message = "Faces missing from the alignments file"
-        hashes_to_frame = self.alignments.hashes_to_frame
         for face in tqdm(self.items, desc=self.output_message):
             f_hash = face["face_hash"]
-            if f_hash not in hashes_to_frame:
+            if f_hash not in self.alignments.hashes_to_frame:
                 logger.debug("Returning: '%s'", face["face_fullname"])
                 yield face["face_fullname"], -1
 
@@ -257,6 +255,93 @@ class Check():
             os.rename(src, dst)
 
 
+class Dfl():
+    """ Reformat Alignment file """
+    def __init__(self, alignments, arguments):
+        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        self.alignments = alignments
+        if self.alignments.file != "dfl.fsa":
+            logger.error("Alignments file must be specified as 'dfl' to reformat dfl alignmnets")
+            exit(0)
+        logger.debug("Loading DFL faces")
+        self.faces = Faces(arguments.faces_dir)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def process(self):
+        """ Run reformat """
+        logger.info("[REFORMAT DFL ALIGNMENTS]")  # Tidy up cli output
+        self.alignments.data = self.load_dfl()
+        self.alignments.file = self.alignments.get_location(self.faces.folder, "alignments")
+        self.alignments.save()
+
+    def load_dfl(self):
+        """ Load alignments from DeepFaceLab and format for Faceswap """
+        alignments = dict()
+        for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
+            if face["face_extension"] not in (".png", ".jpg"):
+                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
+                continue
+            f_hash = face["face_hash"]
+            fullpath = os.path.join(self.faces.folder, face["face_fullname"])
+            dfl = self.get_dfl_alignment(fullpath)
+
+            if not dfl:
+                continue
+
+            self.convert_dfl_alignment(dfl, f_hash, alignments)
+        return alignments
+
+    @staticmethod
+    def get_dfl_alignment(filename):
+        """ Process the alignment of one face """
+        ext = os.path.splitext(filename)[1]
+
+        if ext.lower() in (".jpg", ".jpeg"):
+            img = Image.open(filename)
+            try:
+                dfl_alignments = pickle.loads(img.app["APP15"])
+                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
+                                                 for n in dfl_alignments["source_rect"]]
+                return dfl_alignments
+            except pickle.UnpicklingError:
+                return None
+
+        with open(filename, "rb") as dfl:
+            header = dfl.read(8)
+            if header != b"\x89PNG\r\n\x1a\n":
+                logger.error("No Valid PNG header: %s", filename)
+                return None
+            while True:
+                chunk_start = dfl.tell()
+                chunk_hdr = dfl.read(8)
+                if not chunk_hdr:
+                    break
+                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
+                dfl.seek(chunk_start, os.SEEK_SET)
+                if chunk_name == b"fcWp":
+                    chunk = dfl.read(chunk_length + 12)
+                    retval = pickle.loads(chunk[8:-4])
+                    logger.trace("Loaded DFL Alignment: (filename: '%s', alignment: %s",
+                                 filename, retval)
+                    return retval
+                dfl.seek(chunk_length+12, os.SEEK_CUR)
+            logger.error("Couldn't find DFL alignments: %s", filename)
+
+    @staticmethod
+    def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
+        """ Add DFL Alignments to alignments in Faceswap format """
+        sourcefile = dfl_alignments["source_filename"]
+        left, top, right, bottom = dfl_alignments["source_rect"]
+        alignment = {"x": left,
+                     "w": right - left,
+                     "y": top,
+                     "h": bottom - top,
+                     "hash": f_hash,
+                     "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="uint8")}
+        logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
+        alignments.setdefault(sourcefile, list()).append(alignment)
+
+
 class Draw():
     """ Draw Alignments on passed in images """
     def __init__(self, alignments, arguments):
@@ -283,9 +368,6 @@ class Draw():
 
     def process(self):
         """ Run the draw alignments process """
-        legacy = Legacy(self.alignments, None, frames=self.frames, child_process=True)
-        legacy.process()
-
         logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
         self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
         frames_drawn = 0
@@ -414,74 +496,6 @@ class Extract():
         return valid_faces
 
 
-class Legacy():
-    """ Update legacy alignments:
-        - Rotate landmarks and bounding boxes on legacy alignments
-          and remove the 'r' parameter
-        - Add face hashes to alignments file
-    """
-
-    def __init__(self, alignments, arguments, frames=None, faces=None, child_process=False):
-        logger.debug("Initializing %s: (arguments: %s, child_process: %s)",
-                     self.__class__.__name__, arguments, child_process)
-        self.alignments = alignments
-        if child_process:
-            self.frames = frames
-            self.faces = faces
-        else:
-            self.frames = Frames(arguments.frames_dir)
-            self.faces = Faces(arguments.faces_dir)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self):
-        """ Run the rotate alignments process """
-        rotated = self.alignments.get_legacy_rotation()
-        hashes = self.alignments.get_legacy_no_hashes()
-        if (not self.frames or not rotated) and (not self.faces or not hashes):
-            return
-        logger.info("[UPDATE LEGACY LANDMARKS]")  # Tidy up cli output
-        if rotated and self.frames:
-            logger.info("Legacy rotated frames found. Converting...")
-            self.rotate_landmarks(rotated)
-            self.alignments.save()
-        if hashes and self.faces:
-            logger.info("Legacy alignments found. Adding Face Hashes...")
-            self.add_hashes(hashes)
-            self.alignments.save()
-
-    def rotate_landmarks(self, rotated):
-        """ Rotate the landmarks """
-        for rotate_item in tqdm(rotated, desc="Rotating Landmarks"):
-            frame = self.frames.get(rotate_item, None)
-            if frame is None:
-                continue
-            self.alignments.rotate_existing_landmarks(rotate_item, frame)
-
-    def add_hashes(self, hashes):
-        """ Add Face Hashes to the alignments file """
-        all_faces = dict()
-        logger.info("Getting original filenames, indexes and hashes...")
-        for face in self.faces.file_list_sorted:
-            filename = face["face_name"]
-            extension = face["face_extension"]
-            if "_" not in face["face_name"]:
-                logger.warning("Unable to determine index of file. Skipping: '%s'", filename)
-                continue
-            index = filename[filename.rfind("_") + 1:]
-            if not index.isdigit():
-                logger.warning("Unable to determine index of file. Skipping: '%s'", filename)
-                continue
-            orig_frame = filename[:filename.rfind("_")] + extension
-            all_faces.setdefault(orig_frame, dict())[int(index)] = face["face_hash"]
-
-        logger.info("Updating hashes to alignments...")
-        for frame in hashes:
-            if frame not in all_faces.keys():
-                logger.warning("Skipping missing frame: '%s'", frame)
-                continue
-            self.alignments.add_face_hashes(frame, all_faces[frame])
-
-
 class Merge():
     """ Merge two alignments files into one """
     def __init__(self, alignments, arguments):
@@ -586,92 +600,6 @@ class Merge():
         self.final_alignments.file = filename
 
 
-class Reformat():
-    """ Reformat Alignment file """
-    def __init__(self, alignments, arguments):
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        if self.alignments.file == "dfl.json":
-            logger.debug("Loading DFL faces")
-            self.faces = Faces(arguments.faces_dir)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self):
-        """ Run reformat """
-        logger.info("[REFORMAT ALIGNMENTS]")  # Tidy up cli output
-        if self.alignments.file == "dfl.json":
-            self.alignments.data = self.load_dfl()
-            self.alignments.file = self.alignments.get_location(self.faces.folder, "alignments")
-        self.alignments.save()
-
-    def load_dfl(self):
-        """ Load alignments from DeepFaceLab and format for Faceswap """
-        alignments = dict()
-        for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
-            if face["face_extension"] not in (".png", ".jpg"):
-                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
-                continue
-            f_hash = face["face_hash"]
-            fullpath = os.path.join(self.faces.folder, face["face_fullname"])
-            dfl = self.get_dfl_alignment(fullpath)
-
-            if not dfl:
-                continue
-
-            self.convert_dfl_alignment(dfl, f_hash, alignments)
-        return alignments
-
-    @staticmethod
-    def get_dfl_alignment(filename):
-        """ Process the alignment of one face """
-        ext = os.path.splitext(filename)[1]
-
-        if ext.lower() in (".jpg", ".jpeg"):
-            img = Image.open(filename)
-            try:
-                dfl_alignments = pickle.loads(img.app["APP15"])
-                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
-                                                 for n in dfl_alignments["source_rect"]]
-                return dfl_alignments
-            except pickle.UnpicklingError:
-                return None
-
-        with open(filename, "rb") as dfl:
-            header = dfl.read(8)
-            if header != b"\x89PNG\r\n\x1a\n":
-                logger.error("No Valid PNG header: %s", filename)
-                return None
-            while True:
-                chunk_start = dfl.tell()
-                chunk_hdr = dfl.read(8)
-                if not chunk_hdr:
-                    break
-                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
-                dfl.seek(chunk_start, os.SEEK_SET)
-                if chunk_name == b"fcWp":
-                    chunk = dfl.read(chunk_length + 12)
-                    retval = pickle.loads(chunk[8:-4])
-                    logger.trace("Loaded DFL Alignment: (filename: '%s', alignment: %s",
-                                 filename, retval)
-                    return retval
-                dfl.seek(chunk_length+12, os.SEEK_CUR)
-            logger.error("Couldn't find DFL alignments: %s", filename)
-
-    @staticmethod
-    def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
-        """ Add DFL Alignments to alignments in Faceswap format """
-        sourcefile = dfl_alignments["source_filename"]
-        left, top, right, bottom = dfl_alignments["source_rect"]
-        alignment = {"x": left,
-                     "w": right - left,
-                     "y": top,
-                     "h": bottom - top,
-                     "hash": f_hash,
-                     "landmarks_xy": dfl_alignments["source_landmarks"]}
-        logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
-        alignments.setdefault(sourcefile, list()).append(alignment)
-
-
 class RemoveAlignments():
     """ Remove items from alignments file """
     def __init__(self, alignments, arguments):
@@ -693,10 +621,6 @@ class RemoveAlignments():
 
     def process(self):
         """ run removal """
-        if self.type == "faces":
-            legacy = Legacy(self.alignments, None, faces=self.items, child_process=True)
-            legacy.process()
-
         logger.info("[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
         del_count = 0
         task = getattr(self, "remove_{}".format(self.type))
@@ -830,48 +754,30 @@ class Rename():
 
 
 class Sort():
-    """ Sort alignments' index by the order they appear in
-        an image """
+    """ Sort alignments' index by the order they appear in an image """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.alignments = alignments
-        self.axis = arguments.job.replace("sort-", "")
         self.faces = self.get_faces(arguments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_faces(self, arguments):
-        """ If faces argument is specified, load faces_dir
-            otherwise return None """
+    @staticmethod
+    def get_faces(arguments):
+        """ If faces argument is specified, load faces_dir otherwise return None """
         if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
             return None
         faces = Faces(arguments.faces_dir)
-        legacy = Legacy(self.alignments, None, faces=faces, child_process=True)
-        legacy.process()
         return faces
 
     def process(self):
         """ Execute the sort process """
         logger.info("[SORT INDEXES]")  # Tidy up cli output
-        self.check_legacy()
         reindexed = self.reindex_faces()
         if reindexed:
             self.alignments.save()
         if self.faces:
             rename = Rename(self.alignments, None, self.faces)
             rename.process()
-
-    def check_legacy(self):
-        """ Legacy rotated alignments will not have the correct x, y
-            positions. Faces without hashes won't process.
-            Check for these and generate a warning and exit """
-        rotated = self.alignments.get_legacy_rotation()
-        hashes = self.alignments.get_legacy_no_hashes()
-        if rotated or hashes:
-            logger.error("Legacy alignments found. Sort cannot continue. You should run legacy "
-                         "tool to update the file prior to running sort: 'python tools.py "
-                         "alignments -j legacy -a <alignments_file> -fr <frames_folder> -fc "
-                         "<faces_folder>'")
-            exit(0)
 
     def reindex_faces(self):
         """ Re-Index the faces """
@@ -882,7 +788,7 @@ class Sort():
             if count <= 1:
                 logger.trace("0 or 1 face in frame. Not sorting: '%s'", frame)
                 continue
-            sorted_alignments = sorted([item for item in alignments], key=lambda x: (x[self.axis]))
+            sorted_alignments = sorted([item for item in alignments], key=lambda x: (x["x"]))
             if sorted_alignments == alignments:
                 logger.trace("Alignments already in correct order. Not sorting: '%s'", frame)
                 continue

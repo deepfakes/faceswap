@@ -23,9 +23,9 @@ class Detect(Detector):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "S3FD"
         self.input_size = 640
-        self.vram = 4096
+        self.vram = 4112
         self.vram_warnings = 1024  # Will run at this with warnings
-        self.vram_per_batch = 128
+        self.vram_per_batch = 208
         self.batchsize = self.config["batch-size"]
 
     def init_model(self):

@@ -676,12 +676,7 @@ class Landmarks():
         landmarks = dict()
         for side, fullpath in self.paths.items():
             path, filename = os.path.split(fullpath)
-            filename, extension = os.path.splitext(filename)
-            serializer = extension[1:]
-            alignments = Alignments(
-                path,
-                filename=filename,
-                serializer=serializer)
+            alignments = Alignments(path, filename=filename)
             landmarks[side] = self.transform_landmarks(alignments)
         return landmarks
 

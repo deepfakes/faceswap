@@ -11,7 +11,7 @@ from tqdm import tqdm
 from lib.image import encode_image_with_hash
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import get_folder, deprecation_warning
+from lib.utils import get_folder
 from plugins.extract.pipeline import Extractor
 from scripts.fsmedia import Alignments, Images, PostProcess, Utils
 
@@ -34,6 +34,7 @@ class Extract():
         normalization = None if self.args.normalization == "none" else self.args.normalization
         self.extractor = Extractor(self.args.detector,
                                    self.args.aligner,
+                                   self.args.masker,
                                    configfile=configfile,
                                    multiprocess=not self.args.singleprocess,
                                    rotate_images=self.args.rotate_images,
@@ -103,7 +104,7 @@ class Extract():
                 logger.trace("Skipping image: '%s'", filename)
                 continue
             item = {"filename": filename,
-                    "image": image}
+                    "image": image[..., :3]}
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -255,7 +256,6 @@ class Extract():
 
             face = detected_face["face"]
             resized_face = face.aligned_face
-
             face.hash, img = encode_image_with_hash(resized_face, extension)
             self.save_queue.put((out_filename, img))
             final_faces.append(face.to_alignment())
