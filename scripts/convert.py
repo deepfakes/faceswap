@@ -130,6 +130,9 @@ class Convert():
             if self.disk_io.completion_event.is_set():
                 logger.debug("DiskIO completion event set. Joining Pool")
                 break
+            if self.patch_threads.completed():
+                logger.debug("All patch threads completed")
+                break
             sleep(1)
         self.patch_threads.join()
 

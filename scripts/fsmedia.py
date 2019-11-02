@@ -16,7 +16,7 @@ import numpy as np
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
-from lib.image import count_frames_and_secs, read_image
+from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_folder, get_image_paths, set_system_verbosity,
                        _video_extensions)
 
@@ -126,7 +126,7 @@ class Images():
     def count_images(self):
         """ Number of images or frames """
         if self.is_video:
-            retval = int(count_frames_and_secs(self.args.input_dir)[0])
+            retval = int(count_frames(self.args.input_dir, fast=True))
         else:
             retval = len(self.input_images)
         return retval

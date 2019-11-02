@@ -14,7 +14,7 @@ from tqdm import tqdm
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import (count_frames_and_secs, encode_image_with_hash, read_image,
+from lib.image import (count_frames, encode_image_with_hash, read_image,
                        read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
 
@@ -81,7 +81,7 @@ class MediaLoader():
         if self._count is not None:
             return self._count
         if self.is_video:
-            self._count = int(count_frames_and_secs(self.folder)[0])
+            self._count = int(count_frames(self.folder))
         else:
             self._count = len(self.file_list_sorted)
         return self._count
