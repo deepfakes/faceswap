@@ -10,7 +10,7 @@ from keras import backend as K
 
 from lib.model.session import KSession
 from ._base import Aligner, logger
-import timeit
+
 
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
@@ -36,24 +36,15 @@ class Align(Aligner):
                               allow_growth=self.config["allow_growth"])
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
-        placeholder = np.zeros((self.batchsize, 3, self.input_size, self.input_size), dtype="float32")
+        placeholder_shape = (self.batchsize, 3, self.input_size, self.input_size)
+        placeholder = np.zeros(placeholder_shape, dtype="float32")
         self.model.predict(placeholder)
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        logger.trace("Aligning faces around center")
+        logger.debug("Aligning faces around center")
         batch["center_scale"] = self.get_center_scale(batch["detected_faces"])
         faces = self.crop(batch)
-        # start test comparision
-        def wrapper(func, *args, **kwargs):
-            def wrapped():
-                return func(*args, **kwargs)
-            return wrapped
-
-        wrapped = wrapper(self.crop, batch)
-        timer = timeit.timeit(wrapped, number=1000)
-        print("\nNew Time: ", timer)
-        # end test comparision
         logger.trace("Aligned image around center")
         faces = self._normalize_faces(faces)
         batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2)) / 255.0
@@ -61,8 +52,9 @@ class Align(Aligner):
 
     def get_center_scale(self, detected_faces):
         """ Get the center and set scale of bounding box """
-        logger.trace("Calculating center and scale")
+        logger.debug("Calculating center and scale")
         center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
+        # TODO modify detected face to hold this data as a matrix
         for index, face in enumerate(detected_faces):
             x_center = (face.left + face.right) / 2.0
             y_center = (face.top + face.bottom) / 2.0 - face.h * 0.12
@@ -75,31 +67,31 @@ class Align(Aligner):
 
     def crop(self, batch):  # pylint:disable=too-many-locals
         """ Crop image around the center point """
-        logger.trace("Cropping images")
+        logger.debug("Cropping images")
         sizes = (self.input_size, self.input_size)
         batch_shape = batch["center_scale"].shape[:2]
         resolutions = np.full(batch_shape, self.input_size, dtype='float32')
         matrix_ones = np.ones(batch_shape + (3,), dtype='float32')
         matrix_size = np.full(batch_shape + (3,), self.input_size, dtype='float32')
         matrix_size[..., 2] = 1.0
-        upper_left = self.transform(matrix_ones, batch["center_scale"], resolutions).astype(np.int)
-        bot_right = self.transform(matrix_size, batch["center_scale"], resolutions).astype(np.int)
+        upper_left = self.transform(matrix_ones, batch["center_scale"], resolutions)
+        bot_right = self.transform(matrix_size, batch["center_scale"], resolutions)
 
+        # TODO second pass .. convert to matrix
         new_images = []
         for face, ul, br in zip(batch["detected_faces"], upper_left, bot_right):
             height, width = face.image.shape[:2]
             channels = 3 if face.image.ndim > 2 else 1
-            br_width, br_height = br[0]
-            ul_width, ul_height = ul[0]
-            new_dim = [br_height - ul_height, br_width - ul_width, channels]
-            new_img = np.zeros(new_dim, dtype=np.uint8)
+            br_width, br_height = br[0].astype('int32')
+            ul_width, ul_height = ul[0].astype('int32')
+            new_dim = (br_height - ul_height, br_width - ul_width, channels)
+            new_img = np.empty(new_dim, dtype=np.uint8)
 
-            new_x = np.array([max(0, -ul_width), min(br_width, width) - ul_width], dtype=np.int32)
-            new_y = np.array([max(0, -ul_height), min(br_height, height) - ul_height], dtype=np.int32)
-            old_x = np.array([max(0, ul_width), min(br_width, width)], dtype=np.int32)
-            old_y = np.array([max(0, ul_height), min(br_height, height)], dtype=np.int32)
-
-            new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]] = face.image[old_y[0]:old_y[1], old_x[0]:old_x[1]]
+            new_x = slice(max(0, -ul_width), min(br_width, width) - ul_width)
+            new_y = slice(max(0, -ul_height), min(br_height, height) - ul_height)
+            old_x = slice(max(0, ul_width), min(br_width, width))
+            old_y = slice(max(0, ul_height), min(br_height, height))
+            new_img[new_y, new_x] = face.image[old_y, old_x]
 
             interp = cv2.INTER_CUBIC if new_dim[0] < self.input_size else cv2.INTER_AREA
             new_images.append(cv2.resize(new_img, dsize=sizes, interpolation=interp))
@@ -109,27 +101,25 @@ class Align(Aligner):
     @staticmethod
     def transform(points, center_scales, resolutions):
         """ Transform Image """
-        logger.trace("Transforming Points")
-        centers = center_scales[..., :2]
-        scales = center_scales[..., 2]
-        eye = np.eye(3, dtype='float32')
-        mat_eye = np.stack([eye] * points.shape[1], axis=0)
-        mat_eye = np.stack([mat_eye] * points.shape[0], axis=0)
-        x_scale = scales / resolutions
-        y_scale = scales / resolutions
-        x_translation = scales * -0.5 + centers[:, :, 0]
-        y_translation = scales * -0.5 + centers[:, :, 1]
-        mat_eye[:, :, 0, 0] = x_scale
-        mat_eye[:, :, 1, 1] = y_scale
-        mat_eye[:, :, 0, 2] = x_translation
-        mat_eye[:, :, 1, 2] = y_translation
-        retval = np.einsum('abij, abj -> abi', mat_eye, points, optimize='greedy')[:, :, :2]
+        logger.debug("Transforming Points")
+        num_images, num_landmarks = points.shape[:2]
+        transform_matrix = np.eye(3, dtype='float32')
+        transform_matrix = np.repeat(transform_matrix[None, :], num_landmarks, axis=0)
+        transform_matrix = np.repeat(transform_matrix[None, :, :], num_images, axis=0)
+        scales = center_scales[:, :, 2] / resolutions
+        translations = center_scales[..., 2:3] * -0.5 + center_scales[..., :2]
+        transform_matrix[:, :, 0, 0] = scales  # x scale
+        transform_matrix[:, :, 1, 1] = scales  # y scale
+        transform_matrix[:, :, 0, 2] = translations[:, :, 0]  # x translation
+        transform_matrix[:, :, 1, 2] = translations[:, :, 1]  # y translation
+        new_points = np.einsum('abij, abj -> abi', transform_matrix, points, optimize='greedy')
+        retval = new_points[:, :, :2].astype('float32')
         logger.trace("Transformed Points: %s", retval)
-        return retval.astype('float32')
+        return retval
 
     def predict(self, batch):
         """ Predict the 68 point landmarks """
-        logger.trace("Predicting Landmarks")
+        logger.debug("Predicting Landmarks")
         batch["prediction"] = self.model.predict(batch["feed"])[-1]
         logger.trace([pred.shape for pred in batch["prediction"]])
         return batch
@@ -141,26 +131,26 @@ class Align(Aligner):
 
     def get_pts_from_predict(self, batch):
         """ Get points from predictor """
-        logger.trace("Obtain points from prediction")
+        logger.debug("Obtain points from prediction")
         num_images, num_landmarks, height, width = batch["prediction"].shape
         image_slice = np.repeat(np.arange(num_images)[:, None], num_landmarks, axis=1)
         landmark_slice = np.repeat(np.arange(num_landmarks)[None, :], num_images, axis=0)
-        width = np.full((num_images, num_landmarks), 64, dtype=np.int32)
+        resolution = np.full((num_images, num_landmarks), 64, dtype='int32')
         subpixel_landmarks = np.ones((num_images, num_landmarks, 3), dtype='float32')
-        indices = np.empty((num_images, num_landmarks, 2), dtype='uint32')
-        for index, prediction in enumerate(batch["prediction"]):
-            indices[index] = np.array([np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
-                                      for heatmap in prediction], dtype='uint32')
 
-        offsets = [(image_slice, landmark_slice, indices[:, :, 0], indices[:, :, 1] + 1),
-                   (image_slice, landmark_slice, indices[:, :, 0], indices[:, :, 1] - 1),
-                   (image_slice, landmark_slice, indices[:, :, 0] + 1, indices[:, :, 1]),
-                   (image_slice, landmark_slice, indices[:, :, 0] - 1, indices[:, :, 1])]
-        x_subpixel_shift = np.sign(batch["prediction"][offsets[0]] - batch["prediction"][offsets[1]]) * 0.25
-        y_subpixel_shift = np.sign(batch["prediction"][offsets[2]] - batch["prediction"][offsets[3]]) * 0.25
-        subpixel_landmarks[:, :, 0] = indices[:, :, 1] + x_subpixel_shift + 0.5
-        subpixel_landmarks[:, :, 1] = indices[:, :, 0] + y_subpixel_shift + 0.5
-        batch["landmarks"] = self.transform(subpixel_landmarks, batch["center_scale"], width)
+        flat_indices = batch["prediction"].reshape(num_images, num_landmarks, -1).argmax(-1)
+        indices = np.array(np.unravel_index(flat_indices, (height, width)))
+        offsets = [(image_slice, landmark_slice, indices[0], indices[1] + 1),
+                   (image_slice, landmark_slice, indices[0], indices[1] - 1),
+                   (image_slice, landmark_slice, indices[0] + 1, indices[1]),
+                   (image_slice, landmark_slice, indices[0] - 1, indices[1])]
+        x_subpixel_shift = batch["prediction"][offsets[0]] - batch["prediction"][offsets[1]]
+        y_subpixel_shift = batch["prediction"][offsets[2]] - batch["prediction"][offsets[3]]
+        # TODO improve rudimentary subpixel logic to centroid of 3x3 window algorithm
+        subpixel_landmarks[:, :, 0] = indices[1] + np.sign(x_subpixel_shift) * 0.25 + 0.5
+        subpixel_landmarks[:, :, 1] = indices[0] + np.sign(y_subpixel_shift) * 0.25 + 0.5
+
+        batch["landmarks"] = self.transform(subpixel_landmarks, batch["center_scale"], resolution)
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
 
 
