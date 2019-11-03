@@ -337,7 +337,7 @@ class Dfl():
                      "y": top,
                      "h": bottom - top,
                      "hash": f_hash,
-                     "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="uint8")}
+                     "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="float32")}
         logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
         alignments.setdefault(sourcefile, list()).append(alignment)
 
@@ -951,7 +951,7 @@ class Spatial():
         logger.debug("Update alignments")
         for idx, frame in tqdm(self.mappings.items(), desc="Updating"):
             logger.trace("Updating: (frame: %s)", frame)
-            landmarks_update = landmarks[:, :, idx].astype(int)
+            landmarks_update = landmarks[:, :, idx]
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
             self.alignments.data[frame][0]["landmarks_xy"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)

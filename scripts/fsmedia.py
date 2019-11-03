@@ -239,8 +239,7 @@ class PostProcess():
         """ Set the post processing actions """
         postprocess_items = dict()
         # Debug Landmarks
-        if (hasattr(self.args, 'debug_landmarks')
-                and self.args.debug_landmarks):
+        if (hasattr(self.args, 'debug_landmarks') and self.args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
 
         # Blurry Face
@@ -320,12 +319,10 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
             resized_face = face.aligned_face
             size = face.aligned["size"]
             padding = int(size * 0.1875)
-            feature_mask = extractor.get_feature_mask(
-                aligned_landmarks / size,
-                size, padding)
+            feature_mask = extractor.get_feature_mask(aligned_landmarks / size, size, padding)
             feature_mask = cv2.blur(feature_mask, (10, 10))
-            isolated_face = cv2.multiply(feature_mask, resized_face.astype(float)).astype(np.uint8)
-            blurry, focus_measure = self.is_blurry(isolated_face)
+            isolated_face = cv2.multiply(feature_mask, resized_face.astype('float32'))
+            blurry, focus_measure = self.is_blurry(isolated_face.astype('uint8'))
 
             if blurry:
                 blur_folder = detected_face["file_location"].parts[:-1]

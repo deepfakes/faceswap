@@ -33,7 +33,7 @@ class Mask(Masker):
             parts = self.parse_parts(np.array(face.feed_landmarks))
             for item in parts:
                 item = np.concatenate(item)
-                hull = cv2.convexHull(item).astype("int32")  # pylint: disable=no-member
+                hull = cv2.convexHull(item).astype("int32")
                 cv2.fillConvexPoly(mask, hull, 1.0, lineType=cv2.LINE_AA)
         batch["prediction"] = batch["feed"]
         return batch

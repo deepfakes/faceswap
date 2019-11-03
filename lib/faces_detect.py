@@ -193,7 +193,7 @@ class DetectedFace():
         self.h = alignment["h"]
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
-            landmarks = np.array(landmarks, dtype="int32")
+            landmarks = np.array(landmarks, dtype="float32")
         self.landmarks_xy = landmarks
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)

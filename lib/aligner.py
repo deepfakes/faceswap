@@ -83,10 +83,10 @@ class Extract():
         mouth_points = aligned_landmarks_68[48:68].tolist()
         # TODO remove excessive reshapes and flattens
 
-        l_eye = np.array(l_eye_points + l_brow_points).reshape((-1, 2)).astype(int).flatten()
-        r_eye = np.array(r_eye_points + r_brow_points).reshape((-1, 2)).astype(int).flatten()
+        l_eye = np.array(l_eye_points + l_brow_points).reshape((-1, 2)).astype('int32').flatten()
+        r_eye = np.array(r_eye_points + r_brow_points).reshape((-1, 2)).astype('int32').flatten()
         mouth = np.array(mouth_points + nose_points + chin_points)
-        mouth = mouth.reshape((-1, 2)).astype(int).flatten()
+        mouth = mouth.reshape((-1, 2)).astype('int32').flatten()
         l_eye_hull = cv2.convexHull(l_eye.reshape((-1, 2)))
         r_eye_hull = cv2.convexHull(r_eye.reshape((-1, 2)))
         mouth_hull = cv2.convexHull(mouth.reshape((-1, 2)))
