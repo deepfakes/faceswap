@@ -13,6 +13,7 @@
 !Dockerfile*
 !requirements*
 !.install/
+!.install/linux
 !.install/windows
 !docs
 !docs/full
