@@ -66,7 +66,7 @@ class Annotate():
         """ Draw the facial landmarks """
         color = self.colors[color_id]
         for alignment in self.alignments:
-            landmarks = alignment["landmarks_xy"]
+            landmarks = alignment["landmarks_xy"].astype("int32")
             logger.trace("Drawing Landmarks: (landmarks: %s, color: %s, radius: %s)",
                          landmarks, color, radius)
             for (pos_x, pos_y) in landmarks:
