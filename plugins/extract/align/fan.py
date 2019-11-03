@@ -10,7 +10,7 @@ from keras import backend as K
 
 from lib.model.session import KSession
 from ._base import Aligner, logger
-
+import timeit
 
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
@@ -41,10 +41,19 @@ class Align(Aligner):
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        # TODO Batching
         logger.trace("Aligning faces around center")
         batch["center_scale"] = self.get_center_scale(batch["detected_faces"])
         faces = self.crop(batch)
+        # start test comparision
+        def wrapper(func, *args, **kwargs):
+            def wrapped():
+                return func(*args, **kwargs)
+            return wrapped
+
+        wrapped = wrapper(self.crop, batch)
+        timer = timeit.timeit(wrapped, number=1000)
+        print("\nNew Time: ", timer)
+        # end test comparision
         logger.trace("Aligned image around center")
         faces = self._normalize_faces(faces)
         batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2)) / 255.0
@@ -53,52 +62,44 @@ class Align(Aligner):
     def get_center_scale(self, detected_faces):
         """ Get the center and set scale of bounding box """
         logger.trace("Calculating center and scale")
-        array_center = np.empty((len(detected_faces), 2), dtype='float32')
-        array_scale = np.empty((len(detected_faces), 1), dtype='float32')
+        center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
         for index, face in enumerate(detected_faces):
-            array_center[index, 0] = (face.left + face.right) / 2.0
-            array_center[index, 1] = (face.top + face.bottom) / 2.0 - face.h * 0.12
-            array_scale[index, 0] = (face.w + face.h) * self.reference_scale
-        logger.trace("Calculated center and scale: %s, %s", array_center, array_scale)
-        return array_center, array_scale
+            x_center = (face.left + face.right) / 2.0
+            y_center = (face.top + face.bottom) / 2.0 - face.h * 0.12
+            scale = (face.w + face.h) * self.reference_scale
+            center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
+            center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
+            center_scale[index, :, 2] = np.full(68, scale, dtype='float32')
+        logger.trace("Calculated center and scale: %s, %s", center_scale)
+        return center_scale
 
     def crop(self, batch):  # pylint:disable=too-many-locals
         """ Crop image around the center point """
         logger.trace("Cropping images")
         sizes = (self.input_size, self.input_size)
-        new_images = []
-        one_mat = np.ones((len(batch["center_scale"][0]), 3), dtype='float32')
-        size1_mat = np.full((len(batch["center_scale"][0]), 1), self.input_size, dtype='float32')
-        size2_mat = np.full((len(batch["center_scale"][0]), 3), self.input_size, dtype='float32')
-        size2_mat[:, 2] = 1.0
-        mat_v_ul = self.transform(one_mat, batch["center_scale"][0], batch["center_scale"][1], size1_mat).astype(np.int)
-        mat_v_br = self.transform(size2_mat, batch["center_scale"][0], batch["center_scale"][1], size1_mat).astype(np.int)
+        batch_shape = batch["center_scale"].shape[:2]
+        resolutions = np.full(batch_shape, self.input_size, dtype='float32')
+        matrix_ones = np.ones(batch_shape + (3,), dtype='float32')
+        matrix_size = np.full(batch_shape + (3,), self.input_size, dtype='float32')
+        matrix_size[..., 2] = 1.0
+        upper_left = self.transform(matrix_ones, batch["center_scale"], resolutions).astype(np.int)
+        bot_right = self.transform(matrix_size, batch["center_scale"], resolutions).astype(np.int)
 
-        for face, center, scale, v_ul, v_br in zip(batch["detected_faces"], *batch["center_scale"], mat_v_ul, mat_v_br):
-            is_color = face.image.ndim > 2
-            height, width, channels = face.image.shape  # correct for B&W
-            if is_color:
-                new_dim = [v_br[1] - v_ul[1], v_br[0] - v_ul[0], channels]
-            else:
-                new_dim = [v_br[1] - v_ul[1], v_br[0] - v_ul[0]]
+        new_images = []
+        for face, ul, br in zip(batch["detected_faces"], upper_left, bot_right):
+            height, width = face.image.shape[:2]
+            channels = 3 if face.image.ndim > 2 else 1
+            br_width, br_height = br[0]
+            ul_width, ul_height = ul[0]
+            new_dim = [br_height - ul_height, br_width - ul_width, channels]
             new_img = np.zeros(new_dim, dtype=np.uint8)
-            new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
-                             dtype=np.int32)
-            new_y = np.array([max(1, -v_ul[1] + 1),
-                              min(v_br[1], height) - v_ul[1]],
-                             dtype=np.int32)
-            old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
-                             dtype=np.int32)
-            old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
-                             dtype=np.int32)
-            if is_color:
-                new_img[new_y[0] - 1:new_y[1],
-                        new_x[0] - 1:new_x[1]] = face.image[old_y[0] - 1:old_y[1],
-                                                            old_x[0] - 1:old_x[1], :]
-            else:
-                new_img[new_y[0] - 1:new_y[1],
-                        new_x[0] - 1:new_x[1]] = face.image[old_y[0] - 1:old_y[1],
-                                                            old_x[0] - 1:old_x[1]]
+
+            new_x = np.array([max(0, -ul_width), min(br_width, width) - ul_width], dtype=np.int32)
+            new_y = np.array([max(0, -ul_height), min(br_height, height) - ul_height], dtype=np.int32)
+            old_x = np.array([max(0, ul_width), min(br_width, width)], dtype=np.int32)
+            old_y = np.array([max(0, ul_height), min(br_height, height)], dtype=np.int32)
+
+            new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]] = face.image[old_y[0]:old_y[1], old_x[0]:old_x[1]]
 
             interp = cv2.INTER_CUBIC if new_dim[0] < self.input_size else cv2.INTER_AREA
             new_images.append(cv2.resize(new_img, dsize=sizes, interpolation=interp))
@@ -106,22 +107,25 @@ class Align(Aligner):
         return new_images
 
     @staticmethod
-    def transform(points, centers, scales, resolutions):
+    def transform(points, center_scales, resolutions):
         """ Transform Image """
         logger.trace("Transforming Points")
+        centers = center_scales[..., :2]
+        scales = center_scales[..., 2]
         eye = np.eye(3, dtype='float32')
-        mat_eye = np.stack([eye] * points.shape[0], axis=0)
+        mat_eye = np.stack([eye] * points.shape[1], axis=0)
+        mat_eye = np.stack([mat_eye] * points.shape[0], axis=0)
         x_scale = scales / resolutions
         y_scale = scales / resolutions
-        x_translation = scales * -0.5 + centers[:, :1]
-        y_translation = scales * -0.5 + centers[:, 1:2]
-        mat_eye[:, 0, 0] = x_scale[:, 0]
-        mat_eye[:, 1, 1] = y_scale[:, 0]
-        mat_eye[:, 0, 2] = x_translation[:, 0]
-        mat_eye[:, 1, 2] = y_translation[:, 0]
-        retval = np.einsum('bij, bj -> bi', mat_eye, points, optimize='greedy').astype('float32')
+        x_translation = scales * -0.5 + centers[:, :, 0]
+        y_translation = scales * -0.5 + centers[:, :, 1]
+        mat_eye[:, :, 0, 0] = x_scale
+        mat_eye[:, :, 1, 1] = y_scale
+        mat_eye[:, :, 0, 2] = x_translation
+        mat_eye[:, :, 1, 2] = y_translation
+        retval = np.einsum('abij, abj -> abi', mat_eye, points, optimize='greedy')[:, :, :2]
         logger.trace("Transformed Points: %s", retval)
-        return retval[:, :2]
+        return retval.astype('float32')
 
     def predict(self, batch):
         """ Predict the 68 point landmarks """
@@ -139,25 +143,24 @@ class Align(Aligner):
         """ Get points from predictor """
         logger.trace("Obtain points from prediction")
         num_images, num_landmarks, height, width = batch["prediction"].shape
-        width = np.stack([np.array([width])] * num_landmarks, axis=0)
-        landmark_slice = np.arange(num_landmarks)
-        subpixel_landmarks = np.ones((num_landmarks, 3), dtype='float32')
-        for prediction, center, scale in zip(batch["prediction"], *batch["center_scale"]):
-            indices = np.array([np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
-                                  for heatmap in prediction], dtype='uint32')
-            offsets = [(landmark_slice, indices[:, 0], indices[:, 1] + 1),
-                       (landmark_slice, indices[:, 0], indices[:, 1] - 1),
-                       (landmark_slice, indices[:, 0] + 1, indices[:, 1]),
-                       (landmark_slice, indices[:, 0] - 1, indices[:, 1])]
-            x_subpixel_shift = np.sign(prediction[offsets[0]] - prediction[offsets[1]]) * 0.25
-            y_subpixel_shift = np.sign(prediction[offsets[2]] - prediction[offsets[3]]) * 0.25
+        image_slice = np.repeat(np.arange(num_images)[:, None], num_landmarks, axis=1)
+        landmark_slice = np.repeat(np.arange(num_landmarks)[None, :], num_images, axis=0)
+        width = np.full((num_images, num_landmarks), 64, dtype=np.int32)
+        subpixel_landmarks = np.ones((num_images, num_landmarks, 3), dtype='float32')
+        indices = np.empty((num_images, num_landmarks, 2), dtype='uint32')
+        for index, prediction in enumerate(batch["prediction"]):
+            indices[index] = np.array([np.unravel_index(np.argmax(heatmap, axis=None), heatmap.shape)
+                                      for heatmap in prediction], dtype='uint32')
 
-            subpixel_landmarks[:, 0] = indices[:, 1] + x_subpixel_shift + 0.5
-            subpixel_landmarks[:, 1] = indices[:, 0] + y_subpixel_shift + 0.5
-            center = np.stack([center] * subpixel_landmarks.shape[0], axis=0)
-            scale = np.stack([scale] * subpixel_landmarks.shape[0], axis=0)
-            frame_landmarks = self.transform(subpixel_landmarks, center, scale, width)
-            batch.setdefault("landmarks", []).append(frame_landmarks)
+        offsets = [(image_slice, landmark_slice, indices[:, :, 0], indices[:, :, 1] + 1),
+                   (image_slice, landmark_slice, indices[:, :, 0], indices[:, :, 1] - 1),
+                   (image_slice, landmark_slice, indices[:, :, 0] + 1, indices[:, :, 1]),
+                   (image_slice, landmark_slice, indices[:, :, 0] - 1, indices[:, :, 1])]
+        x_subpixel_shift = np.sign(batch["prediction"][offsets[0]] - batch["prediction"][offsets[1]]) * 0.25
+        y_subpixel_shift = np.sign(batch["prediction"][offsets[2]] - batch["prediction"][offsets[3]]) * 0.25
+        subpixel_landmarks[:, :, 0] = indices[:, :, 1] + x_subpixel_shift + 0.5
+        subpixel_landmarks[:, :, 1] = indices[:, :, 0] + y_subpixel_shift + 0.5
+        batch["landmarks"] = self.transform(subpixel_landmarks, batch["center_scale"], width)
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
 
 
