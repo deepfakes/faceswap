@@ -1,35 +1,35 @@
 # Installing faceswap
-- [Installing faceswap](#Installing-faceswap)
-- [Prerequisites](#Prerequisites)
-  - [Hardware Requirements](#Hardware-Requirements)
-  - [Supported operating systems](#Supported-operating-systems)
-- [Important before you proceed](#Important-before-you-proceed)
-- [Windows Install Guide](#Windows-Install-Guide)
-  - [Installer](#Installer)
-  - [Manual Install](#Manual-Install)
-  - [Prerequisites](#Prerequisites-1)
-    - [Anaconda](#Anaconda)
-    - [Git](#Git)
-  - [Setup](#Setup)
-    - [Anaconda](#Anaconda-1)
-      - [Set up a virtual environment](#Set-up-a-virtual-environment)
-      - [Entering your virtual environment](#Entering-your-virtual-environment)
+- [Installing faceswap](#installing-faceswap)
+- [Prerequisites](#prerequisites)
+  - [Hardware Requirements](#hardware-requirements)
+  - [Supported operating systems](#supported-operating-systems)
+- [Important before you proceed](#important-before-you-proceed)
+- [Linux and Windows Install Guide](#linux-and-windows-install-guide)
+  - [Installer](#installer)
+  - [Manual Install](#manual-install)
+  - [Prerequisites](#prerequisites-1)
+    - [Anaconda](#anaconda)
+    - [Git](#git)
+  - [Setup](#setup)
+    - [Anaconda](#anaconda-1)
+      - [Set up a virtual environment](#set-up-a-virtual-environment)
+      - [Entering your virtual environment](#entering-your-virtual-environment)
     - [faceswap](#faceswap)
-      - [Easy install](#Easy-install)
-      - [Manual install](#Manual-install)
-  - [Running faceswap](#Running-faceswap)
-  - [Create a desktop shortcut](#Create-a-desktop-shortcut)
-  - [Updating faceswap](#Updating-faceswap)
-- [General Install Guide](#General-Install-Guide)
-  - [Installing dependencies](#Installing-dependencies)
-    - [Git](#Git-1)
-    - [Python](#Python)
-    - [Virtual Environment](#Virtual-Environment)
-  - [Getting the faceswap code](#Getting-the-faceswap-code)
-  - [Setup](#Setup-1)
-    - [About some of the options](#About-some-of-the-options)
-  - [Run the project](#Run-the-project)
-  - [Notes](#Notes)
+      - [Easy install](#easy-install)
+      - [Manual install](#manual-install)
+  - [Running faceswap](#running-faceswap)
+  - [Create a desktop shortcut](#create-a-desktop-shortcut)
+  - [Updating faceswap](#updating-faceswap)
+- [General Install Guide](#general-install-guide)
+  - [Installing dependencies](#installing-dependencies)
+    - [Git](#git-1)
+    - [Python](#python)
+    - [Virtual Environment](#virtual-environment)
+  - [Getting the faceswap code](#getting-the-faceswap-code)
+  - [Setup](#setup-1)
+    - [About some of the options](#about-some-of-the-options)
+  - [Run the project](#run-the-project)
+  - [Notes](#notes)
 
 # Prerequisites
 Machine learning essentially involves a ton of trial and error. You're letting a program try millions of different settings to land on an algorithm that sort of does what you want it to do. This process is really really slow unless you have the hardware required to speed this up. 
@@ -64,10 +64,10 @@ Alternatively, there is a docker image that is based on Debian.
 
 The developers are also not responsible for any damage you might cause to your own computer.
 
-# Windows Install Guide
+# Linux and Windows Install Guide
 
 ## Installer
-Windows now has an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
+Windows and Linux now both have an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
 
 If you have issues with the installer then read on for the more manual way to install faceswap on Windows.
 
