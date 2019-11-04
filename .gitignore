@@ -8,6 +8,7 @@
 !*.png
 !*.py
 !*.rst
+!*.sh
 !*.txt
 !.cache
 !Dockerfile*
