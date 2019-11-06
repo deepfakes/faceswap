@@ -964,6 +964,15 @@ class ConvertArgs(ExtractConvertArgs):
             "help": "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
                     "if there are multiple models in the model folder"})
         argument_list.append({
+            "opts": ("-ag", "--allow-growth"),
+            "action": "store_true",
+            "dest": "allow_growth",
+            "group": "settings",
+            "default": False,
+            "backend": "nvidia",
+            "help": "Sets allow_growth option of Tensorflow to spare memory on some "
+                    "configurations."})
+        argument_list.append({
             "opts": ("-k", "--keep-unchanged"),
             "action": "store_true",
             "dest": "keep_unchanged",

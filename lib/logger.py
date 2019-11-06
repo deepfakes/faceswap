@@ -161,7 +161,7 @@ def get_loglevel(loglevel):
 def crash_log():
     """ Write debug_buffer to a crash log on crash """
     from lib.sysinfo import sysinfo
-    path = os.getcwd()
+    path = os.path.dirname(os.path.realpath(sys.argv[0]))
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
 
     freeze_log = list(debug_buffer)
