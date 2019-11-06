@@ -92,7 +92,7 @@ class FileHandler():
         """ Set the filetypes for opening/saving """
         all_files = ("All files", "*.*")
         filetypes = {"default": (all_files,),
-                     "alignments": [("Faceswap Alignments", "*.fsa"),
+                     "alignments": [("Faceswap Alignments", "*.fsa *.json"),
                                     all_files],
                      "config": [("Faceswap GUI config files", "*.fsw"), all_files],
                      "csv": [("Comma separated values", "*.csv"), all_files],
