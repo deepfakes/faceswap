@@ -201,6 +201,13 @@ class PreviewArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Swap the model. Instead of A -> B, "
                                       "swap B -> A"})
+        argument_list.append({"opts": ("-ag", "--allow-growth"),
+                              "action": "store_true",
+                              "dest": "allow_growth",
+                              "default": False,
+                              "backend": "nvidia",
+                              "help": "Sets allow_growth option of Tensorflow to spare memory "
+                              "on some configurations."})
 
         return argument_list
 
