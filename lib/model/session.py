@@ -111,7 +111,7 @@ class KSession():
         self.graph = tf.Graph()
         config = tf.ConfigProto()
         if allow_growth and get_backend() == "nvidia":
-            config.gpu_options.allow_growth = True  # pylint:disable=no-member
+            config.gpu_options.allow_growth = True
         try:
             session = tf.Session(graph=tf.Graph(), config=config)
         except tf_error.InternalError as err:

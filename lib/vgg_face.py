@@ -40,7 +40,7 @@ class VGGFace():
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         cache_path = os.path.join(root_path, "plugins", "extract", "recognition", ".cache")
         model = GetModel(model_filename, cache_path, git_model_id).model_path
-        model = cv2.dnn.readNetFromCaffe(model[1], model[0])  # pylint: disable=no-member
+        model = cv2.dnn.readNetFromCaffe(model[1], model[0])
         model.setPreferableTarget(self.get_backend(backend))
         return model
 
@@ -50,14 +50,14 @@ class VGGFace():
         if backend == "OPENCL":
             logger.info("Using OpenCL backend. If the process runs, you can safely ignore any of "
                         "the failure messages.")
-        retval = getattr(cv2.dnn, "DNN_TARGET_{}".format(backend))  # pylint: disable=no-member
+        retval = getattr(cv2.dnn, "DNN_TARGET_{}".format(backend))
         return retval
 
     def predict(self, face):
         """ Return encodings for given image from vgg_face """
         if face.shape[0] != self.input_size:
             face = self.resize_face(face)
-        blob = cv2.dnn.blobFromImage(face[..., :3],  # pylint: disable=no-member
+        blob = cv2.dnn.blobFromImage(face[..., :3],
                                      1.0,
                                      (self.input_size, self.input_size),
                                      self.average_img,
@@ -69,14 +69,9 @@ class VGGFace():
 
     def resize_face(self, face):
         """ Resize incoming face to model_input_size """
-        if face.shape[0] < self.input_size:
-            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-        else:
-            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-        face = cv2.resize(face,  # pylint:disable=no-member
-                          dsize=(self.input_size, self.input_size),
-                          interpolation=interpolation)
+        sizes = (self.input_size, self.input_size)
+        interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA
+        face = cv2.resize(face, dsize=sizes, interpolation=interpolation)
         return face
 
     @staticmethod
