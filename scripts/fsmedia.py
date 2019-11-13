@@ -314,7 +314,7 @@ class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-met
 
         for idx, detected_face in enumerate(output_item["detected_faces"]):
             frame_name = detected_face["file_location"].parts[-1]
-            face = detected_face["face"]
+            face = detected_face.aligned_face
             logger.trace("Checking for blurriness. Frame: '%s', Face: %s", frame_name, idx)
             aligned_landmarks = face.aligned_landmarks
             resized_face = face.aligned_face
@@ -362,7 +362,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
     def process(self, output_item):
         """ Draw landmarks on image """
         for idx, detected_face in enumerate(output_item["detected_faces"]):
-            face = detected_face["face"]
+            face = detected_face.aligned_face
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
                          detected_face["file_location"].parts[-1], idx)
             aligned_landmarks = face.aligned_landmarks

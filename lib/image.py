@@ -415,7 +415,8 @@ class ImageIO():
     def close(self):
         """ Closes down and joins the internal threads """
         logger.debug("Received Close")
-        self._thread.join()
+        if self._thread is not None:
+            self._thread.join()
         logger.debug("Closed")
 
 
